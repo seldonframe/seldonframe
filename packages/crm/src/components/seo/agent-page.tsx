@@ -28,6 +28,7 @@ import { MarketplaceStyles } from "@/components/marketplace/marketplace-styles";
 import { MarketplaceIcon } from "@/components/marketplace/marketplace-icons";
 import { MKT, SURFACE_META, mcpEndpointFor, mcpSnippetFor } from "@/components/marketplace/marketplace-data";
 import { AgentPageCta } from "@/components/seo/agent-page-cta";
+import { ToolLogoRow } from "@/components/seo/tool-marks";
 import {
   composePageCopy,
   deployHrefFor,
@@ -42,33 +43,15 @@ export type AgentPageProps = {
   vertical?: Vertical;
 };
 
-/** The 3-step "how it works" — phrased generically so it reads right for any
- *  job, with the agent's surface woven into step 1. */
-function howItWorksSteps(job: AgentJob): { title: string; body: string }[] {
-  const primarySurface = job.surfaces[0];
-  const surfaceLabel = SURFACE_META[primarySurface].label.toLowerCase();
-  return [
-    {
-      title: "Deploy in about 60 seconds",
-      body: `Describe your business once. We spin up a real hosted workspace and instantiate your ${job.name}, grounded in your services, hours, and pricing — ready over ${surfaceLabel}.`,
-    },
-    {
-      title: "It handles the work",
-      body: `Your ${job.name} ${job.verticalLede} — using your real calendar and data, and escalating only what genuinely needs you. It never invents a fact, a price, or a slot.`,
-    },
-    {
-      title: "Everything stays connected",
-      body: "Every conversation, booking, and contact is logged to your CRM in real time, so nothing falls through the cracks and follow-up is one click.",
-    },
-  ];
-}
-
 export function AgentPage({ job, vertical }: AgentPageProps): ReactElement {
   const copy = composePageCopy(job, vertical);
   const deployHref = deployHrefFor(job, vertical);
   const mcpEndpoint = mcpEndpointFor(job.marketplaceSlug ?? job.slug);
   const mcpSnippet = mcpSnippetFor(job.marketplaceSlug ?? job.slug);
-  const steps = howItWorksSteps(job);
+  // The 3-step "How it works" + the integrations it touches come straight from
+  // the registry (lib/seo/agent-pages.ts) — written per agent, so the visual is
+  // specific, not generic. (Task B)
+  const steps = job.howItWorks;
   const related = relatedJobsForVertical(job.slug, 5);
   const verticalLabel = vertical ? vertical.plural : "your business";
 
@@ -220,37 +203,73 @@ export function AgentPage({ job, vertical }: AgentPageProps): ReactElement {
           </ul>
         </section>
 
-        {/* ── HOW IT WORKS (3 steps) ── */}
+        {/* ── HOW IT WORKS (3-step visual — registry-driven, on-brand) ── */}
         <section style={SECTION}>
           <h2 style={H2}>How it works</h2>
-          <ol style={{ margin: 0, padding: 0, listStyle: "none", display: "grid", gap: 16, maxWidth: 720 }}>
+          <p style={{ margin: "-6px 0 20px", fontSize: 15, color: "rgba(34,29,23,0.6)", maxWidth: 600 }}>
+            From trigger to done — in three steps, working 24/7 in the background.
+          </p>
+          <ol className="sf-ap-howit" style={{ margin: 0, padding: 0, listStyle: "none" }}>
             {steps.map((step, i) => (
-              <li key={step.title} style={{ display: "flex", gap: 16, alignItems: "flex-start" }}>
+              <li
+                key={step.label}
+                className="sf-ap-stepcard sf-rise"
+                style={{
+                  position: "relative",
+                  background: "#fff",
+                  border: "1px solid rgba(34,29,23,0.10)",
+                  borderRadius: 16,
+                  padding: "20px 18px 18px",
+                  boxShadow: "0 1px 2px rgba(34,29,23,0.04)",
+                  minWidth: 0,
+                  // staggered entrance — subtle, CSS-only (no client JS)
+                  animationDelay: `${i * 90}ms`,
+                }}
+              >
+                {/* numbered token */}
                 <span
                   style={{
-                    width: 36,
-                    height: 36,
-                    borderRadius: 11,
-                    flex: "none",
-                    background: "rgba(0,137,123,0.10)",
-                    color: MKT.green,
-                    fontWeight: 700,
-                    fontFamily: MKT.fontMono,
-                    fontSize: 16,
-                    display: "flex",
+                    display: "inline-flex",
                     alignItems: "center",
                     justifyContent: "center",
+                    width: 34,
+                    height: 34,
+                    borderRadius: 10,
+                    background: MKT.green,
+                    color: "#fff",
+                    fontWeight: 700,
+                    fontFamily: MKT.fontMono,
+                    fontSize: 15,
+                    boxShadow: "0 6px 16px rgba(0,137,123,0.28)",
                   }}
                 >
                   {i + 1}
                 </span>
-                <div>
-                  <div style={{ fontSize: 16.5, fontWeight: 700, letterSpacing: "-0.01em" }}>{step.title}</div>
-                  <p style={{ margin: "4px 0 0", fontSize: 15, lineHeight: 1.55, color: "rgba(34,29,23,0.72)" }}>{step.body}</p>
+                {/* connector arrow into the next step (desktop only — the scoped
+                    CSS reveals it ≥640px and hides it when the grid stacks) */}
+                {i < steps.length - 1 ? (
+                  <span className="sf-ap-step-arrow" aria-hidden style={{ color: "rgba(0,137,123,0.5)" }}>
+                    <MarketplaceIcon name="arrowRight" size={18} stroke={2.4} />
+                  </span>
+                ) : null}
+                <div style={{ marginTop: 13, fontSize: 16, fontWeight: 700, letterSpacing: "-0.01em", lineHeight: 1.25 }}>
+                  {step.label}
                 </div>
+                <p style={{ margin: "6px 0 0", fontSize: 14.5, lineHeight: 1.5, color: "rgba(34,29,23,0.7)" }}>
+                  {step.detail}
+                </p>
               </li>
             ))}
           </ol>
+        </section>
+
+        {/* ── WORKS WITH (real tool/brand logos) ── */}
+        <section style={SECTION}>
+          <h2 style={{ ...H2, marginBottom: 6 }}>Works with</h2>
+          <p style={{ margin: "0 0 16px", fontSize: 15, color: "rgba(34,29,23,0.6)", maxWidth: 600 }}>
+            It plugs into the tools you already use — no new accounts to learn.
+          </p>
+          <ToolLogoRow tools={job.tools} />
         </section>
 
         {/* ── SURFACES (pills) ── */}
@@ -421,13 +440,24 @@ const AGENT_PAGE_CSS = `
   .sf-ap-related{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:12px}
   .sf-ap-howit{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:14px}
   .sf-ap-works{display:flex;flex-wrap:wrap;gap:10px}
+  .sf-ap-stepcard{transition:transform .2s cubic-bezier(0.22,1,0.36,1),box-shadow .2s,border-color .2s}
+  .sf-ap-stepcard:hover{transform:translateY(-3px);box-shadow:0 2px 4px rgba(34,29,23,0.05),0 18px 36px rgba(34,29,23,0.10);border-color:rgba(0,137,123,0.3)}
+  /* connector arrow: hidden by default (stacked/mobile), shown + floated into the
+     gutter between cards on desktop where the 3-col grid actually has a gutter. */
   .sf-ap-step-arrow{display:none}
+  @media (min-width:641px){
+    .sf-ap-step-arrow{display:flex;position:absolute;top:30px;right:-19px;z-index:1;align-items:center;justify-content:center;width:30px;height:18px;animation:sfFloat 2.6s ease-in-out infinite}
+  }
   @media (max-width:640px){
     .sf-ap-main{padding:20px 18px 56px !important}
     .sf-ap-h1{font-size:32px !important;line-height:1.08 !important}
     .sf-ap-stat{font-size:18px !important}
     .sf-ap-related{grid-template-columns:1fr}
     .sf-ap-howit{grid-template-columns:1fr}
+  }
+  @media (prefers-reduced-motion:reduce){
+    .sf-ap-step-arrow{animation:none}
+    .sf-agentpage .sf-rise{animation:none}
   }
 `;
 

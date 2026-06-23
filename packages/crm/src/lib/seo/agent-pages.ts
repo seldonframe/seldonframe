@@ -42,6 +42,38 @@ export type FaqItem = { q: string; a: string };
  *  marketplace SurfaceKey union (kept local so this module has no UI import). */
 export type AgentSurface = "voice" | "chat" | "sms" | "email";
 
+/**
+ * One step in the agent's "How it works" 3-step visual (Task B). `label` is the
+ * short headline ("Job marked done"); `detail` is the one-line explanation. Pure
+ * data — the template (agent-page.tsx) renders the numbered visual from these.
+ */
+export type HowItWorksStep = { label: string; detail: string };
+
+/**
+ * The brand-mark keys the "Works with" row knows how to render. Kept as a const
+ * tuple (single source of truth) so the registry references marks by a stable
+ * string and the renderer (components/seo/tool-marks.tsx) + the spec validate
+ * against the SAME set — a typo'd mark fails the test, never ships a broken logo.
+ */
+export const TOOL_MARK_KEYS = [
+  "google",
+  "google-business",
+  "google-calendar",
+  "gmail",
+  "sms",
+  "phone",
+  "facebook",
+  "website",
+  "crm",
+  "postiz",
+] as const;
+
+export type ToolMark = (typeof TOOL_MARK_KEYS)[number];
+
+/** A named integration the agent touches — rendered as a recognizable brand mark
+ *  (or a tasteful labeled chip) in the "Works with" row. */
+export type ToolRef = { name: string; mark: ToolMark };
+
 /** One "job" an agent does — the Tier-1 page subject. */
 export type AgentJob = {
   /** URL slug — the `[job]` route param. Stable, lowercase, hyphenated. */
@@ -60,6 +92,11 @@ export type AgentJob = {
   painStat: CitedStat;
   /** 3-6 plain bullets: what the agent actually does (answer-shaped prose). */
   whatItDoes: string[];
+  /** EXACTLY 3 steps for the "How it works" visual — written for THIS agent. */
+  howItWorks: HowItWorksStep[];
+  /** ≥1 integration the agent touches — rendered as real brand marks in the
+   *  "Works with" row (Google Business Profile, SMS, Calendar, Gmail, …). */
+  tools: ToolRef[];
   /** ≥3 FAQ entries — also serialized to schema.org FAQPage JSON-LD. */
   faq: FaqItem[];
   /** Surfaces this agent works over (voice/chat/sms/email pills + schema). */
@@ -105,6 +142,17 @@ export const AGENT_JOBS: AgentJob[] = [
       "Checks your real calendar and books the appointment, then texts a confirmation.",
       "Gives an honest price range for 'how much' questions — never a made-up number.",
       "Takes a detailed message and escalates anything that genuinely needs a human.",
+    ],
+    howItWorks: [
+      { label: "Your phone rings", detail: "A call comes in — after hours, mid-job, or while every line is busy." },
+      { label: "The agent answers on the first ring", detail: "It greets the caller, answers their questions, and checks your real calendar." },
+      { label: "The job gets booked", detail: "It books the appointment, texts a confirmation, and logs everything to your CRM." },
+    ],
+    tools: [
+      { name: "Phone / SIP", mark: "phone" },
+      { name: "SMS", mark: "sms" },
+      { name: "Google Calendar", mark: "google-calendar" },
+      { name: "Your CRM", mark: "crm" },
     ],
     faq: [
       {
@@ -152,6 +200,17 @@ export const AGENT_JOBS: AgentJob[] = [
       "Routes an unhappy customer to you privately first, before they post publicly.",
       "Logs who was asked and who responded so you can see your review velocity climb.",
     ],
+    howItWorks: [
+      { label: "Job marked done", detail: "The moment you close out a job, the agent knows the experience is fresh." },
+      { label: "Agent texts a 1-tap review link", detail: "At the perfect moment it sends a warm, personal ask with a one-tap link." },
+      { label: "5-star review posts", detail: "Happy customers leave a rating in ~20 seconds; unhappy ones route to you privately first." },
+    ],
+    tools: [
+      { name: "Google Business Profile", mark: "google-business" },
+      { name: "SMS", mark: "sms" },
+      { name: "Gmail", mark: "gmail" },
+      { name: "Facebook", mark: "facebook" },
+    ],
     faq: [
       {
         q: "When does it ask customers for a review?",
@@ -194,6 +253,17 @@ export const AGENT_JOBS: AgentJob[] = [
       "Books the appointment or routes a hot lead to you before they call a competitor.",
       "Logs every recovered call so you can see how many would have been lost.",
     ],
+    howItWorks: [
+      { label: "A call goes unanswered", detail: "You're on a job or it's after hours — the call would normally die in voicemail." },
+      { label: "Agent texts back in seconds", detail: "It instantly texts: 'Sorry we missed you — how can we help?' and starts a real conversation." },
+      { label: "The lead stays alive", detail: "It captures what they need and books them, before they call the next company." },
+    ],
+    tools: [
+      { name: "SMS", mark: "sms" },
+      { name: "Phone", mark: "phone" },
+      { name: "Google Calendar", mark: "google-calendar" },
+      { name: "Your CRM", mark: "crm" },
+    ],
     faq: [
       {
         q: "What is missed-call text-back?",
@@ -234,6 +304,17 @@ export const AGENT_JOBS: AgentJob[] = [
       "Asks a few focused qualifying questions — one at a time, never an interrogation.",
       "Books the qualified leads on the spot or routes them straight to you.",
       "Works your forms, ads, and missed calls from a single playbook.",
+    ],
+    howItWorks: [
+      { label: "A new lead comes in", detail: "Someone submits a form, clicks an ad, or leaves a missed call." },
+      { label: "Agent replies in under 60 seconds", detail: "It reaches out while you're still their first thought and asks a few focused questions." },
+      { label: "Hot leads get booked", detail: "It books the qualified ones on the spot or routes them to you, fully captured." },
+    ],
+    tools: [
+      { name: "Lead forms", mark: "website" },
+      { name: "SMS", mark: "sms" },
+      { name: "Gmail", mark: "gmail" },
+      { name: "Google Calendar", mark: "google-calendar" },
     ],
     faq: [
       {
@@ -277,6 +358,17 @@ export const AGENT_JOBS: AgentJob[] = [
       "Routes or hands off the rest with the right expectation set — never over-promises.",
       "Logs the full intake to your CRM so follow-up is effortless.",
     ],
+    howItWorks: [
+      { label: "A prospect reaches out", detail: "Someone starts a chat or fills out intake on your site." },
+      { label: "Agent asks the questions that matter", detail: "Need, timeline, scope, and contact — one at a time, never an interrogation." },
+      { label: "Only the good leads reach you", detail: "It books or routes the real fits and logs the full intake to your CRM." },
+    ],
+    tools: [
+      { name: "Website chat", mark: "website" },
+      { name: "Gmail", mark: "gmail" },
+      { name: "Google Calendar", mark: "google-calendar" },
+      { name: "Your CRM", mark: "crm" },
+    ],
     faq: [
       {
         q: "How does the AI qualify a lead?",
@@ -317,6 +409,17 @@ export const AGENT_JOBS: AgentJob[] = [
       "Handles reschedules and cancellations cleanly, without interrupting your day.",
       "Sends reminders ahead of the appointment to cut no-shows.",
       "Never double-books and never invents a slot, duration, or policy.",
+    ],
+    howItWorks: [
+      { label: "Someone wants a time", detail: "A customer asks to book, reschedule, or cancel — by chat, text, or phone." },
+      { label: "Agent checks your real calendar", detail: "It offers the soonest open slots and confirms the details back before finalizing." },
+      { label: "Booked, with a reminder set", detail: "It books against your real availability and sends reminders that cut no-shows." },
+    ],
+    tools: [
+      { name: "Google Calendar", mark: "google-calendar" },
+      { name: "SMS", mark: "sms" },
+      { name: "Phone", mark: "phone" },
+      { name: "Your CRM", mark: "crm" },
     ],
     faq: [
       {
@@ -360,6 +463,17 @@ export const AGENT_JOBS: AgentJob[] = [
       "Books an estimate or site visit, or routes the lead with their contact captured.",
       "Follows up so quotes stop going cold in your inbox.",
     ],
+    howItWorks: [
+      { label: "Someone asks 'how much?'", detail: "A prospect describes the job — service, size, location, and timeline." },
+      { label: "Agent gives an honest ballpark", detail: "It ranges the job from what it actually knows and says a human confirms the exact figure." },
+      { label: "The follow-up gets booked", detail: "It books an estimate or site visit and follows up so the quote never goes cold." },
+    ],
+    tools: [
+      { name: "Website chat", mark: "website" },
+      { name: "Gmail", mark: "gmail" },
+      { name: "Google Calendar", mark: "google-calendar" },
+      { name: "Your CRM", mark: "crm" },
+    ],
     faq: [
       {
         q: "Does it give an exact price?",
@@ -401,6 +515,17 @@ export const AGENT_JOBS: AgentJob[] = [
       "Books the return visit right in the conversation.",
       "Respects do-not-contact instantly and never nags.",
       "Tracks reactivations so you can see revenue recovered from dormant customers.",
+    ],
+    howItWorks: [
+      { label: "A customer goes quiet", detail: "The agent watches your list for people who haven't been back in a while." },
+      { label: "Agent reaches out with a reason", detail: "Not just a discount — a seasonal tune-up, a maintenance reminder, a relevant check-in." },
+      { label: "The return visit gets booked", detail: "It books the comeback right in the thread and respects do-not-contact instantly." },
+    ],
+    tools: [
+      { name: "SMS", mark: "sms" },
+      { name: "Gmail", mark: "gmail" },
+      { name: "Google Calendar", mark: "google-calendar" },
+      { name: "Your CRM", mark: "crm" },
     ],
     faq: [
       {
@@ -444,6 +569,16 @@ export const AGENT_JOBS: AgentJob[] = [
       "Keeps claims honest — never promises reach or results you can't back up.",
       "Hands finished copy to you to post, or publishes via a connected scheduler.",
     ],
+    howItWorks: [
+      { label: "You set the brand once", detail: "It learns your business's voice, services, and the cadence you want to keep." },
+      { label: "Agent drafts on-brand posts", detail: "It writes captions in your voice with variations and a tight set of relevant hashtags." },
+      { label: "Posts go out on schedule", detail: "It hands you finished copy to post, or schedules and publishes via a connected tool." },
+    ],
+    tools: [
+      { name: "Postiz scheduler", mark: "postiz" },
+      { name: "Facebook", mark: "facebook" },
+      { name: "Gmail", mark: "gmail" },
+    ],
     faq: [
       {
         q: "Does it write the posts for me?",
@@ -485,6 +620,17 @@ export const AGENT_JOBS: AgentJob[] = [
       "Captures the visitor's name and contact before handing off, so follow-up is easy.",
       "Escalates anything it can't resolve to a human, with full context.",
       "Works on your existing site without a rebuild.",
+    ],
+    howItWorks: [
+      { label: "A visitor lands on your site", detail: "The chat widget is already there — no rebuild, embedded on your existing site." },
+      { label: "Agent answers from what you know", detail: "Hours, services, pricing, service area — and it can book, reschedule, or cancel in the chat." },
+      { label: "Booked or handed off", detail: "It books the appointment, or captures the visitor's details and escalates to you with full context." },
+    ],
+    tools: [
+      { name: "Website chat", mark: "website" },
+      { name: "Google Calendar", mark: "google-calendar" },
+      { name: "Gmail", mark: "gmail" },
+      { name: "Your CRM", mark: "crm" },
     ],
     faq: [
       {

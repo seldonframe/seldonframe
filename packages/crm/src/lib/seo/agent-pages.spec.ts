@@ -19,8 +19,11 @@ import {
   deployHrefFor,
   relatedJobsForVertical,
   resolveStarterIdForCanonicalAgent,
+  TOOL_MARK_KEYS,
   type AgentJob,
 } from "./agent-pages";
+
+const TOOL_MARKS = new Set<string>(TOOL_MARK_KEYS);
 import { VERTICALS, getVertical } from "./verticals";
 import { STARTER_TEMPLATES } from "@/lib/agent-templates/starter-pack";
 import { getArchetype } from "@/lib/agents/archetypes";
@@ -157,6 +160,36 @@ for (const job of AGENT_JOBS) {
       );
     }
     assert.ok(job.mcpToolHint.trim().length > 0, `${job.slug}: empty mcpToolHint`);
+  });
+
+  // ── "How it works" 3-step visual (Task B) ──
+  test(`job '${job.slug}' has EXACTLY 3 howItWorks steps with non-empty label + detail`, () => {
+    assert.ok(Array.isArray(job.howItWorks), `${job.slug}: missing howItWorks`);
+    assert.equal(
+      job.howItWorks.length,
+      3,
+      `${job.slug}: howItWorks must be exactly 3 steps, got ${job.howItWorks.length}`,
+    );
+    for (const step of job.howItWorks) {
+      assert.ok(step.label.trim().length > 0, `${job.slug}: empty howItWorks label`);
+      assert.ok(
+        step.detail.trim().length > 8,
+        `${job.slug}: howItWorks detail too short to be useful`,
+      );
+    }
+  });
+
+  // ── "Works with" tool logos (Task B) ──
+  test(`job '${job.slug}' names ≥1 tool, each with a valid mark + non-empty name`, () => {
+    assert.ok(Array.isArray(job.tools), `${job.slug}: missing tools`);
+    assert.ok(job.tools.length >= 1, `${job.slug}: must name at least one tool`);
+    for (const tool of job.tools) {
+      assert.ok(tool.name.trim().length > 0, `${job.slug}: empty tool name`);
+      assert.ok(
+        TOOL_MARKS.has(tool.mark),
+        `${job.slug}: tool '${tool.name}' has unknown mark '${tool.mark}'`,
+      );
+    }
   });
 }
 
