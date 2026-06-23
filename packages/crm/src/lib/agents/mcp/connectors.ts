@@ -10,8 +10,8 @@
 // Two kinds:
 //   - "vetted": a connector SeldonFrame ships and trusts. The endpoint is baked
 //     into VETTED_CONNECTORS (the operator never types a URL — just an API key).
-//     v1 vetted = Postiz (social publishing). Adding a vetted connector = one
-//     entry here, no other code.
+//     Vetted = Postiz (social) + Rube (Composio, 500+ apps via one key).
+//     Adding a vetted connector = one entry here, no other code.
 //   - "byo": the operator pastes any hosted MCP endpoint + a bearer key. The
 //     endpoint MUST be HTTPS (rejected otherwise — see resolveConnectorEndpoint).
 //
@@ -66,7 +66,10 @@ export type VettedConnector = {
   secretService: string;
 };
 
-/** The shipped, trusted connectors. v1: Postiz only. */
+/** The shipped, trusted connectors. Postiz (social) + Rube (Composio's
+ *  universal MCP — 500+ apps behind one bearer key; Composio owns each app's
+ *  OAuth, so SeldonFrame never touches CASA). Adding a vetted connector = one
+ *  entry here, no other code (the Studio picker reads this list). */
 export const VETTED_CONNECTORS: readonly VettedConnector[] = [
   {
     id: "postiz",
@@ -74,6 +77,18 @@ export const VETTED_CONNECTORS: readonly VettedConnector[] = [
     endpoint: "https://api.postiz.com/mcp",
     authType: "bearer",
     secretService: "postiz",
+  },
+  {
+    // Rube by Composio — a single hosted MCP server fronting 500+ apps (Gmail,
+    // Slack, Notion, GitHub, Google Calendar, HubSpot…). The builder generates
+    // a bearer token at rube.app → Use Rube → MCP URL → Generate token, and
+    // pastes it like any vetted key; Composio manages each app's OAuth on its
+    // side. Streamable HTTP — which our inline MCP client already speaks.
+    id: "rube",
+    label: "Rube — 500+ apps (Composio)",
+    endpoint: "https://rube.app/mcp",
+    authType: "bearer",
+    secretService: "rube",
   },
 ] as const;
 
