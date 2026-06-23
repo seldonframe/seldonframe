@@ -654,6 +654,46 @@ export const AGENT_JOBS: AgentJob[] = [
   },
 ];
 
+// ─── shared value-frame FAQ (the $100M-offer value block, Task C) ─────────────
+//
+// Appended to EVERY agent page's FAQ (Tier-1 and Tier-2) in addition to the
+// job's own questions, so a visitor learns exactly how it works, what's
+// required, the cost, and the ROI — framed (Alex Hormozi value-equation style)
+// to pull toward sign-up, but honest and plain. Because composePageCopy appends
+// this to `copy.faq`, it flows automatically into the schema.org FAQPage JSON-LD
+// the template builds from that same array (GEO-friendly: clear, citable Q/A).
+//
+// These state the REAL, current pricing facts (the value-frame spec asserts the
+// $29/mo + 14-day-trial + 60-seconds claims are present), so the page never
+// drifts from the product. Data-driven + reused across all pages — no per-page
+// duplication.
+export const VALUE_FRAME_FAQ: FaqItem[] = [
+  {
+    q: "How does it actually work?",
+    a: "Paste your website URL. We build you a real hosted workspace with this agent already running — grounded in your actual services, hours, and pricing, pulled from your site. It's live in about 60 seconds, and you can talk to it right away.",
+  },
+  {
+    q: "What do I need to get started?",
+    a: "A SeldonFrame account and your own AI key — if you already use ChatGPT, Claude, or Gemini, you have one. For phone calls or texts you'll add a number. That's it: no code, no setup project, no integration work.",
+  },
+  {
+    q: "How much does it cost?",
+    a: "$29/mo flat, with unlimited workspaces and a 14-day free trial — no card to start. Your AI key is billed by the provider directly at cost (usually pennies a day); we never mark it up or add a usage tax on top.",
+  },
+  {
+    q: "How much can it save me?",
+    a: "One recovered review, one booked job, or one caught missed call usually pays for the whole month many times over. It works 24/7 for pennies a day — a fraction of what an employee or an agency retainer costs to do the same job, without the gaps.",
+  },
+  {
+    q: "Why SeldonFrame instead of hiring someone or building it myself?",
+    a: "It's live in about 60 seconds instead of the weeks a hire or a DIY build takes, and it's grounded in YOUR business through the Soul — your real services, hours, and pricing — so it never sounds generic or makes things up. And you own it: it's your workspace, your data, your agent.",
+  },
+  {
+    q: "Is it really live in 60 seconds?",
+    a: "Yes. Paste a URL and watch it build — workspace, site, booking, and this agent, grounded in your business, ready in about a minute. No demo call, no onboarding queue.",
+  },
+];
+
 // ─── lookups ──────────────────────────────────────────────────────────────────
 
 /** Find a job by slug, or throw. Pure — no DB. */
@@ -807,7 +847,9 @@ export function composePageCopy(job: AgentJob, vertical?: Vertical): ComposedPag
       h1: job.h1,
       metaDescription: clampDescription(job.oneLiner),
       intro: `${job.oneLiner} ${job.painStat.text} ${aOrAn(job.name)} ${job.name} fixes that — and you can deploy a working one in about 60 seconds, grounded in your own business.`,
-      faq: job.faq,
+      // The job's own FAQ, then the shared value-frame block (Task C). The
+      // append flows into the FAQPage JSON-LD the template builds from `faq`.
+      faq: [...job.faq, ...VALUE_FRAME_FAQ],
     };
   }
 
@@ -816,9 +858,15 @@ export function composePageCopy(job: AgentJob, vertical?: Vertical): ComposedPag
   const intro = `For ${vertical.plural}, ${vertical.painHook}. ${aOrAn(job.name)} ${job.name} closes that gap: it ${job.verticalLede}. ${job.painStat.text} Deploy one for your ${ownBusinessPhrase(vertical)} in about 60 seconds, grounded in your own services, hours, and pricing — including ${vertical.exampleService}.`;
 
   // Localize only the first FAQ question to the trade; answers already generalize.
-  const faq: FaqItem[] = job.faq.map((item, i) =>
-    i === 0 ? { q: `${item.q} (for ${vertical.plural})`, a: item.a } : item,
-  );
+  // The shared value-frame block is appended AFTER, unchanged (it's vertical-
+  // agnostic by design) so every page — Tier-1 and Tier-2 — carries it and it
+  // flows into the FAQPage JSON-LD.
+  const faq: FaqItem[] = [
+    ...job.faq.map((item, i) =>
+      i === 0 ? { q: `${item.q} (for ${vertical.plural})`, a: item.a } : item,
+    ),
+    ...VALUE_FRAME_FAQ,
+  ];
 
   return {
     title: `${job.name} for ${pluralCased} — ${shortPromise(job)} | SeldonFrame`,

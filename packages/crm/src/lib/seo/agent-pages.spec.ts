@@ -20,6 +20,7 @@ import {
   relatedJobsForVertical,
   resolveStarterIdForCanonicalAgent,
   TOOL_MARK_KEYS,
+  VALUE_FRAME_FAQ,
   type AgentJob,
 } from "./agent-pages";
 
@@ -244,7 +245,43 @@ test("Tier-1 composition uses the job's own h1 and a stat-backed intro", () => {
   // The cited stat text is woven into the intro (GEO answer-shaping).
   assert.ok(copy.intro.includes(job.painStat.text), "Tier-1 intro should weave the cited stat");
   assert.ok(copy.metaDescription.length <= 160, "meta description should be ≤160 chars");
-  assert.equal(copy.faq.length, job.faq.length);
+  // The composed FAQ is the job's own FAQ PLUS the shared value-frame block.
+  assert.equal(copy.faq.length, job.faq.length + VALUE_FRAME_FAQ.length);
+});
+
+// ─── value-frame FAQ (Task C) ──────────────────────────────────────────────────
+//
+// The shared Hormozi-style value frame (how it works · requirements · cost · ROI
+// · why-not-DIY · live-in-60s) must be appended to EVERY agent page's faq set so
+// it flows into the schema.org FAQPage JSON-LD the template builds from copy.faq.
+
+test("VALUE_FRAME_FAQ covers the 6 value questions and is well-formed", () => {
+  assert.ok(VALUE_FRAME_FAQ.length >= 6, `expected ≥6 value-frame entries, got ${VALUE_FRAME_FAQ.length}`);
+  for (const item of VALUE_FRAME_FAQ) {
+    assert.ok(item.q.trim().length > 0, "empty value-frame question");
+    assert.ok(item.a.trim().length > 20, "value-frame answer too short");
+  }
+  // The cost answer states the real, current pricing facts (GEO-citable).
+  const joined = VALUE_FRAME_FAQ.map((f) => `${f.q} ${f.a}`).join(" ");
+  assert.match(joined, /\$29\/mo|\$29 \/mo|\$29 a month/i, "cost frame must state $29/mo");
+  assert.match(joined, /14-day|14 day/i, "cost frame must state the 14-day free trial");
+  assert.match(joined, /60 seconds|60s|in about a minute/i, "must promise live in ~60 seconds");
+});
+
+test("every rendered page's faq set includes the full value-frame block (Tier-1 + Tier-2)", () => {
+  const valueQs = new Set(VALUE_FRAME_FAQ.map((f) => f.q));
+  for (const job of AGENT_JOBS) {
+    for (const copy of [composePageCopy(job), composePageCopy(job, getVertical("plumbers"))]) {
+      const haveQs = new Set(copy.faq.map((f) => f.q));
+      for (const q of valueQs) {
+        assert.ok(haveQs.has(q), `${job.slug}: rendered faq is missing value-frame entry "${q}"`);
+      }
+      // The job's own FAQ is still present too (value frame is additive, appended last).
+      assert.ok(copy.faq.length >= job.faq.length + VALUE_FRAME_FAQ.length, `${job.slug}: value frame not appended`);
+      const tail = copy.faq.slice(-VALUE_FRAME_FAQ.length).map((f) => f.q);
+      assert.deepEqual(tail, VALUE_FRAME_FAQ.map((f) => f.q), `${job.slug}: value frame should be appended at the end`);
+    }
+  }
 });
 
 test("Tier-2 composition tailors the headline + intro to the vertical", () => {
