@@ -239,3 +239,51 @@ export async function listMarketplaceAgentsFromDb(
 ): Promise<MarketplaceAgentRow[]> {
   return listMarketplaceAgents(filters, buildDefaultListAgentsDeps());
 }
+
+// ─── get-one published agent listing by slug (ACP checkout) ──────────────────
+
+/** A single published kind='agent' listing resolved for ACP checkout: the
+ *  fields needed to price a line item + attribute the (recorded) fee to the
+ *  creator org. `creatorOrgId` is the agent's owner (the seller). */
+export type AgentListingForCheckout = {
+  slug: string;
+  name: string;
+  priceCents: number;
+  niche: string;
+  creatorOrgId: string;
+};
+
+/**
+ * Resolve ONE published kind='agent' listing by slug for ACP checkout. Returns
+ * null when the slug doesn't resolve to a published agent listing. Lazy-imports
+ * the db so unit tests that don't hit this never touch Postgres (the ACP handler
+ * is tested with a fake resolver). `price` is the listing's one-time price in
+ * cents; the caller decides checkout-eligibility (price > 0 → enable_checkout).
+ */
+export async function getPublishedAgentListingBySlug(
+  slug: string,
+): Promise<AgentListingForCheckout | null> {
+  const { db } = await import("@/db");
+  const { marketplaceListings } = await import("@/db/schema/marketplace");
+  const { and, eq } = await import("drizzle-orm");
+  const [row] = await db
+    .select({
+      slug: marketplaceListings.slug,
+      name: marketplaceListings.name,
+      price: marketplaceListings.price,
+      niche: marketplaceListings.niche,
+      creatorOrgId: marketplaceListings.creatorOrgId,
+      kind: marketplaceListings.kind,
+    })
+    .from(marketplaceListings)
+    .where(and(eq(marketplaceListings.slug, slug), eq(marketplaceListings.isPublished, true)))
+    .limit(1);
+  if (!row || row.kind !== "agent") return null;
+  return {
+    slug: row.slug,
+    name: row.name,
+    priceCents: row.price ?? 0,
+    niche: row.niche,
+    creatorOrgId: row.creatorOrgId,
+  };
+}
