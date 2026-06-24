@@ -27,6 +27,8 @@ import {
   unbindTemplateConnector,
   setTemplateConnectorTools,
   refreshTemplateConnector,
+  setTemplateComposioToolkits,
+  COMPOSIO_BINDING_ID,
   type TemplateConnectorDeps,
 } from "../../../src/lib/agent-templates/mcp-actions";
 import type {
@@ -299,6 +301,123 @@ describe("refreshTemplateConnector", () => {
     const result = await refreshTemplateConnector(
       { orgId: "builder-1", templateId: "tmpl-1", connectorId: "postiz" },
       h.deps,
+    );
+    assert.equal(result.ok, false);
+  });
+});
+
+// ─── setTemplateComposioToolkits (the Studio "Composio apps" picker) ──────────
+//
+// A composio binding carries NO endpoint and NO secret — so the composer is a
+// pure blueprint write: it never calls storeSecret / discoverTools. We assert it
+// writes ONE kind:"composio" binding (fixed id) with the catalog-filtered
+// toolkits + a curated default tool allowlist, leaves other bindings alone, and
+// removes the binding when the selection goes empty.
+describe("setTemplateComposioToolkits — per-agent Composio apps", () => {
+  test("writes one composio binding with the selected toolkits + default tools (no secret/discovery)", async () => {
+    const h = harness();
+    const result = await setTemplateComposioToolkits(
+      { orgId: "builder-1", templateId: "tmpl-1", toolkits: ["gmail", "slack"] },
+      h.deps,
+    );
+    assert.equal(result.ok, true);
+    if (!result.ok) return;
+    assert.equal(result.toolkitCount, 2);
+    assert.ok(result.toolCount > 0);
+
+    // Never touched the bearer-store or discovery seams.
+    assert.deepEqual(h.stored, []);
+    assert.deepEqual(h.discoveredFrom, []);
+
+    const saved = h.savedConnectors ?? [];
+    assert.equal(saved.length, 1);
+    const binding = saved[0];
+    assert.equal(binding.id, COMPOSIO_BINDING_ID);
+    assert.equal(binding.kind, "composio");
+    if (binding.kind !== "composio") return;
+    assert.deepEqual(binding.enabledToolkits, ["gmail", "slack"]);
+    // Curated defaults seeded the allowlist (e.g. GMAIL_SEND_EMAIL + SLACK_SEND_MESSAGE).
+    assert.ok(binding.enabledTools.includes("GMAIL_SEND_EMAIL"));
+    assert.ok(binding.enabledTools.includes("SLACK_SEND_MESSAGE"));
+    // Cached tool schemas mirror the allowlist (so the picker can list names).
+    assert.equal((binding.tools ?? []).length, binding.enabledTools.length);
+  });
+
+  test("filters non-catalog toolkits + de-dupes, lowercasing slugs", async () => {
+    const h = harness();
+    const result = await setTemplateComposioToolkits(
+      {
+        orgId: "builder-1",
+        templateId: "tmpl-1",
+        toolkits: ["Gmail", "gmail", "definitely-not-a-toolkit"],
+      },
+      h.deps,
+    );
+    assert.equal(result.ok, true);
+    if (!result.ok) return;
+    const binding = (h.savedConnectors ?? [])[0];
+    assert.equal(binding.kind, "composio");
+    if (binding.kind !== "composio") return;
+    assert.deepEqual(binding.enabledToolkits, ["gmail"]);
+  });
+
+  test("an explicit enabledTools override replaces the curated default", async () => {
+    const h = harness();
+    await setTemplateComposioToolkits(
+      {
+        orgId: "builder-1",
+        templateId: "tmpl-1",
+        toolkits: ["gmail"],
+        enabledTools: ["GMAIL_FETCH_EMAILS"],
+      },
+      h.deps,
+    );
+    const binding = (h.savedConnectors ?? [])[0];
+    assert.equal(binding.kind, "composio");
+    if (binding.kind !== "composio") return;
+    assert.deepEqual(binding.enabledTools, ["GMAIL_FETCH_EMAILS"]);
+  });
+
+  test("empty selection removes the composio binding, preserving vetted/byo bindings", async () => {
+    const existing: ConnectorBinding[] = [
+      { id: "postiz", kind: "vetted", serviceName: "postiz", enabledTools: ["schedulePost"] },
+      { id: COMPOSIO_BINDING_ID, kind: "composio", enabledToolkits: ["gmail"], enabledTools: ["GMAIL_SEND_EMAIL"] },
+    ];
+    const h = harness({ capabilities: [], connectors: existing });
+    const result = await setTemplateComposioToolkits(
+      { orgId: "builder-1", templateId: "tmpl-1", toolkits: [] },
+      h.deps,
+    );
+    assert.equal(result.ok, true);
+    if (!result.ok) return;
+    assert.equal(result.removed, true);
+    const saved = h.savedConnectors ?? [];
+    // Composio binding gone; the vetted Postiz binding untouched.
+    assert.equal(saved.find((b) => b.kind === "composio"), undefined);
+    assert.ok(saved.some((b) => b.id === "postiz"));
+  });
+
+  test("re-selecting upserts (one composio binding, never duplicates) and widens toolkits", async () => {
+    const existing: ConnectorBinding[] = [
+      { id: COMPOSIO_BINDING_ID, kind: "composio", enabledToolkits: ["gmail"], enabledTools: ["GMAIL_SEND_EMAIL"] },
+    ];
+    const h = harness({ capabilities: [], connectors: existing });
+    await setTemplateComposioToolkits(
+      { orgId: "builder-1", templateId: "tmpl-1", toolkits: ["gmail", "hubspot"] },
+      h.deps,
+    );
+    const saved = (h.savedConnectors ?? []).filter((b) => b.kind === "composio");
+    assert.equal(saved.length, 1);
+    const binding = saved[0];
+    if (binding.kind !== "composio") return;
+    assert.deepEqual(binding.enabledToolkits, ["gmail", "hubspot"]);
+  });
+
+  test("missing template → error (blueprint not loaded)", async () => {
+    const h = harness();
+    const result = await setTemplateComposioToolkits(
+      { orgId: "builder-1", templateId: "tmpl-1", toolkits: ["gmail"] },
+      { ...h.deps, loadBlueprint: async () => null },
     );
     assert.equal(result.ok, false);
   });

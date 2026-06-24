@@ -33,7 +33,16 @@ import {
   type ConnectorBinding,
   type McpToolSchema,
 } from "@/lib/agents/mcp/connectors";
+import {
+  defaultToolsForToolkits,
+  isCatalogToolkit,
+} from "@/lib/integrations/composio/catalog";
 import type { AgentBlueprint } from "@/db/schema/agents";
+
+/** The stable binding id for an agent's single Composio binding. One agent has
+ *  at most one composio binding (it carries the union of enabled toolkits), so a
+ *  fixed id makes the merge an idempotent upsert. */
+export const COMPOSIO_BINDING_ID = "composio";
 
 /** Injected seams so the composition is unit-testable with no DB / network. The
  *  thin "use server" wrappers supply the real implementations (encrypted-secret
@@ -219,4 +228,91 @@ export async function refreshTemplateConnector(
   await deps.saveConnectors(connectors);
 
   return { ok: true, toolCount: tools.length };
+}
+
+// ─── Composio toolkit binding (managed-session) ──────────────────────────────
+//
+// Unlike vetted/byo (which store a bearer + discover tools at bind time), a
+// composio binding carries NO endpoint and NO secret — the MCP URL + x-api-key
+// are resolved live from the workspace session at runtime. So binding it is a
+// pure blueprint write: set the chosen toolkits + the per-tool allowlist. We seed
+// the allowlist from the curated catalog defaults (or a caller subset) and cache
+// minimal tool schemas so the Studio picker can list/toggle the tool names.
+
+export type SetComposioToolkitsResult =
+  | { ok: true; toolkitCount: number; toolCount: number; removed?: boolean }
+  | { ok: false; error: string };
+
+/**
+ * Set (upsert) the agent's single Composio binding to the given toolkits.
+ *   - `toolkits` empty  → REMOVE the composio binding entirely (no Composio apps
+ *     for this agent).
+ *   - otherwise         → write one `kind:"composio"` binding (fixed id) whose
+ *     `enabledToolkits` is the catalog-filtered selection and whose
+ *     `enabledTools` defaults to the union of those toolkits' curated tools
+ *     (or `enabledTools` when the caller supplies an explicit subset).
+ *
+ * Pure over injected deps (loadBlueprint/saveConnectors) — unit-testable with no
+ * DB / network. Reuses mergeConnectorBinding / removeConnectorBinding so the
+ * other (vetted/byo) bindings on the blueprint are untouched.
+ */
+export async function setTemplateComposioToolkits(
+  input: {
+    orgId: string;
+    templateId: string;
+    toolkits: string[];
+    /** Optional explicit per-tool allowlist override. When omitted the curated
+     *  defaults for the selected toolkits are used. */
+    enabledTools?: string[];
+  },
+  deps: Pick<TemplateConnectorDeps, "loadBlueprint" | "saveConnectors">,
+): Promise<SetComposioToolkitsResult> {
+  const blueprint = await deps.loadBlueprint();
+  if (!blueprint) return { ok: false, error: "template_not_found" };
+
+  const existing = blueprint.connectors ?? [];
+
+  // Catalog-filter + de-dupe the requested toolkits (drop anything not curated).
+  const toolkits: string[] = [];
+  const seen = new Set<string>();
+  for (const slug of input.toolkits) {
+    const norm = slug.trim().toLowerCase();
+    if (!isCatalogToolkit(norm) || seen.has(norm)) continue;
+    seen.add(norm);
+    toolkits.push(norm);
+  }
+
+  // Empty selection → remove the composio binding (other bindings preserved).
+  if (toolkits.length === 0) {
+    const connectors = removeConnectorBinding(existing, COMPOSIO_BINDING_ID);
+    await deps.saveConnectors(connectors);
+    return { ok: true, toolkitCount: 0, toolCount: 0, removed: true };
+  }
+
+  const enabledTools =
+    input.enabledTools && input.enabledTools.length > 0
+      ? input.enabledTools
+      : defaultToolsForToolkits(toolkits);
+
+  // Cache a minimal schema per enabled tool so the picker lists tool names with a
+  // permissive shape (the live MCP server is the real authority on the schema).
+  const tools: McpToolSchema[] = enabledTools.map((name) => ({
+    name,
+    description: `Composio tool ${name}.`,
+    inputSchema: { type: "object", additionalProperties: true },
+  }));
+
+  const binding: ConnectorBinding = {
+    id: COMPOSIO_BINDING_ID,
+    kind: "composio",
+    enabledToolkits: toolkits,
+    enabledTools,
+    tools,
+    discoveredAt: new Date().toISOString(),
+  };
+
+  const connectors = mergeConnectorBinding(existing, binding);
+  await deps.saveConnectors(connectors);
+
+  return { ok: true, toolkitCount: toolkits.length, toolCount: enabledTools.length };
 }

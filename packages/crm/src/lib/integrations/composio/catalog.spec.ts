@@ -10,6 +10,7 @@ import {
   COMPOSIO_TOOLKIT_SLUGS,
   getComposioToolkit,
   isCatalogToolkit,
+  defaultToolsForToolkits,
 } from "./catalog";
 import { mapToolkitConnections } from "./client";
 
@@ -49,6 +50,29 @@ test("getComposioToolkit is case-insensitive and trims", () => {
 test("isCatalogToolkit gate", () => {
   assert.ok(isCatalogToolkit("hubspot"));
   assert.ok(!isCatalogToolkit("github"));
+});
+
+// ─── defaultToolsForToolkits (the curated per-toolkit allowlist) ──────────────
+
+test("defaultToolsForToolkits returns the union of curated tools, deduped + order-stable", () => {
+  const tools = defaultToolsForToolkits(["gmail", "slack"]);
+  assert.ok(tools.includes("GMAIL_SEND_EMAIL"));
+  assert.ok(tools.includes("SLACK_SEND_MESSAGE"));
+  // Every slug follows the {TOOLKIT}_{ACTION} convention.
+  for (const t of tools) assert.match(t, /^[A-Z0-9]+_[A-Z0-9_]+$/);
+  // Dedup: union of two distinct toolkits has no repeats.
+  assert.equal(new Set(tools).size, tools.length);
+});
+
+test("defaultToolsForToolkits is case-insensitive and ignores unknown toolkits", () => {
+  const tools = defaultToolsForToolkits(["GMAIL", "definitely-not-real"]);
+  assert.ok(tools.includes("GMAIL_SEND_EMAIL"));
+  // Only gmail's curated tools (no junk from the unknown slug).
+  assert.ok(tools.every((t) => t.startsWith("GMAIL_")));
+});
+
+test("defaultToolsForToolkits([]) is empty", () => {
+  assert.deepEqual(defaultToolsForToolkits([]), []);
 });
 
 // ─── mapToolkitConnections (pure) ─────────────────────────────────────────────
