@@ -8,9 +8,12 @@
 // so it can export non-async values. The route imports buildRealDeps() and
 // hands the result to handleChatGptRpc.
 //
-// MONEY-SAFETY: deploy() NEVER charges. Free agents (price === 0) clone inline;
-// paid agents (price > 0) return a claim URL to the public marketplace page —
-// no Stripe call exists on this path.
+// MONEY-SAFETY + COMMERCE-FREE: deploy() NEVER charges. The ChatGPT app surface
+// is deliberately commerce-free for OpenAI's physical-goods-only policy — browse
+// returns ONLY free agents (price === 0), deploy installs only free agents, and
+// a paid slug returns a friendly "add it from your dashboard" message with NO
+// purchase link. No Stripe call, no checkout, no outbound purchase direction —
+// so the app's "links/directs users out to make purchases" answer is NO.
 
 import { and, eq } from "drizzle-orm";
 import { db } from "@/db";
@@ -139,13 +142,13 @@ async function deploy(input: { workspaceToken: string; slug: string }): Promise<
     return { ok: false, error: `No published agent found with slug "${input.slug}". Try browse_marketplace first.` };
   }
 
-  // PAID → claim URL only. NEVER charge from this path.
+  // PAID → NOT added from ChatGPT, and NO purchase link. The app stays
+  // commerce-free (OpenAI physical-goods-only policy); premium agents are added
+  // later from the SeldonFrame dashboard, never sold or linked-to in-chat.
   if ((listing.price ?? 0) > 0) {
     return {
-      ok: true,
-      paid: true,
-      name: listing.name,
-      claimUrl: `${APP_URL}/marketplace/${listing.slug}`,
+      ok: false,
+      error: `"${listing.name}" is a premium agent and can't be added from ChatGPT. Build or keep your free workspace, then add premium agents anytime from your SeldonFrame dashboard.`,
     };
   }
 
@@ -194,8 +197,12 @@ async function deploy(input: { workspaceToken: string; slug: string }): Promise<
 export function buildRealDeps(ip: string): ChatGptMcpDeps {
   return {
     buildWorkspace: (args) => buildWorkspace(ip, args),
-    browse: (filters) =>
-      listMarketplaceAgentsFromDb({ q: filters.query, niche: filters.niche }),
+    browse: async (filters) => {
+      const rows = await listMarketplaceAgentsFromDb({ q: filters.query, niche: filters.niche });
+      // FREE agents only — the ChatGPT app surfaces no paid items + no purchase
+      // direction (commerce-free for OpenAI's physical-goods-only policy).
+      return rows.filter((r) => (r.price ?? 0) === 0);
+    },
     deploy,
     now: () => new Date(),
   };
