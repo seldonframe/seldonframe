@@ -17,6 +17,7 @@
 import type {
   BookingMode,
   Deployment,
+  DeploymentCalendarRef,
   DeploymentClientContact,
   DeploymentClientContext,
   DeploymentStatus,
@@ -392,6 +393,10 @@ export type DeploymentPatch = Partial<{
   /** When the agency invited the client to portal access. Set by the
    *  portal-invite action; re-invite updates it. */
   portalInvitedAt: Date | null;
+  /** The client's external-calendar binding (Composio Google/Outlook). Set by the
+   *  gated calendar-connect callback after OAuth; null clears it. Deliberately NOT
+   *  accepted by CreateDeploymentSchema — only this gated writer sets it. */
+  calendarRef: DeploymentCalendarRef | null;
 }>;
 
 export type UpdateDeploymentInput = {
@@ -458,6 +463,9 @@ export async function updateDeployment(
   }
   if (p.portalInvitedAt !== undefined) {
     patch.portalInvitedAt = p.portalInvitedAt;
+  }
+  if (p.calendarRef !== undefined) {
+    patch.calendarRef = p.calendarRef;
   }
 
   const updated = await update(input.id, patch);

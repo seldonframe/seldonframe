@@ -15,6 +15,7 @@ export type BookingMode = "native" | "external_link" | "api_mcp" | "cal_com";
 export type AgentBookingBehavior =
   | "book_native" // run the existing availability + booking chain
   | "handoff_link" // share externalBookingUrl + capture the lead
+  | "book_external" // read availability + book into the client's connected external calendar
   | "handoff_followup"; // capture the lead; scheduling follows out of band
 
 export type BookingProviderInfo = {
@@ -48,11 +49,11 @@ export const BOOKING_PROVIDERS: readonly BookingProviderInfo[] = [
   },
   {
     id: "api_mcp",
-    label: "Connect via API / MCP",
+    label: "Book into the client's Google/Outlook",
     description:
-      "Bind the agent to the client's own calendar or booking tool over API/MCP. Coming with the connector directory.",
-    status: "coming_soon",
-    agentBehavior: "handoff_followup",
+      "The agent reads availability and books straight into the client's connected Google or Outlook calendar (via Composio). Connect the calendar after deploy.",
+    status: "available",
+    agentBehavior: "book_external",
     requiresUrl: false,
   },
   {

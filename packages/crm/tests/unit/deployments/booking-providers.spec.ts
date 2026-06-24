@@ -8,10 +8,11 @@ import {
   type BookingMode,
 } from "../../../src/lib/deployments/booking-providers";
 
-test("native + external_link are available; api_mcp + cal_com are coming_soon", () => {
+test("native + external_link + api_mcp are available; cal_com is coming_soon", () => {
   assert.equal(getBookingProvider("native").status, "available");
   assert.equal(getBookingProvider("external_link").status, "available");
-  assert.equal(getBookingProvider("api_mcp").status, "coming_soon");
+  // api_mcp promoted to the available "book into the client's calendar" mode.
+  assert.equal(getBookingProvider("api_mcp").status, "available");
   assert.equal(getBookingProvider("cal_com").status, "coming_soon");
 });
 
@@ -20,7 +21,7 @@ test("every provider has label, description, and agentBehavior", () => {
     assert.ok(p.label.length > 0, `${p.id} label`);
     assert.ok(p.description.length > 0, `${p.id} description`);
     assert.ok(
-      ["book_native", "handoff_link", "handoff_followup"].includes(p.agentBehavior),
+      ["book_native", "handoff_link", "book_external", "handoff_followup"].includes(p.agentBehavior),
       `${p.id} agentBehavior`,
     );
   }
