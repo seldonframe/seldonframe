@@ -37,6 +37,7 @@ import {
   instantiateStarter,
   buildDefaultInstantiateDeps,
 } from "@/lib/agent-templates/starter-pack";
+import { runR1LandingStep } from "@/lib/landing/r1-landing-step";
 import { validateRawWorkspaceToken } from "@/lib/auth/workspace-token";
 import { checkRateLimit } from "@/lib/utils/rate-limit";
 import type {
@@ -109,14 +110,46 @@ async function buildWorkspace(ip: string, args: BuildWorkspaceArgs): Promise<Bui
     description: args.description ?? null,
   });
 
+  // Upgrade the generic seed landing to the archetype-themed R-framework
+  // landing — the SAME step /clients/new runs (run-create-from-url.ts) right
+  // after createAnonymousWorkspace. Without it the public page is the basic
+  // "Trusted Local Service" default instead of the vertical-specific design
+  // (bold-urgency for HVAC/plumbing, clinical-trust for dental, …). Best-effort
+  // and keyed on the platform Anthropic key (the same fallback the URL flow
+  // uses); runR1LandingStep never throws, so on any failure the seed landing
+  // simply remains and we fall back to the subdomain URL below.
+  let r1Ok = false;
+  const platformKey = process.env.ANTHROPIC_API_KEY?.trim();
+  if (platformKey) {
+    const r1 = await runR1LandingStep({
+      workspaceId: result.orgId,
+      facts: {
+        business_name: result.name,
+        city: args.city ?? "",
+        state: args.state ?? "",
+        phone: args.phone ?? "",
+        services: [],
+        business_description: args.description ?? "",
+      },
+      byokKey: platformKey,
+    });
+    r1Ok = r1.ok;
+  }
+
   const urls = buildWorkspaceUrls(result.slug, WORKSPACE_BASE_DOMAIN, result.orgId);
   // The single-click, token-scoped admin URL (no signup; 7-day token).
   const structured = buildStructuredWorkspaceUrls(result.slug, WORKSPACE_BASE_DOMAIN, result.orgId, {
     bearerToken: result.bearerToken,
   });
 
+  // The R-framework landing renders at /w/<slug> — the SAME public URL
+  // /clients/new surfaces (ready/page.tsx: `${APP_BASE}/w/${slug}`). Point the
+  // operator there when it rendered; otherwise fall back to the subdomain home
+  // (which still serves the seed landing, never a 404).
+  const publicUrl = r1Ok ? `${APP_URL}/w/${result.slug}` : urls.home;
+
   return {
-    url: urls.home,
+    url: publicUrl,
     claimUrl: structured.admin_url ?? undefined,
     workspaceToken: result.bearerToken,
   };
