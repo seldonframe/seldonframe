@@ -21,8 +21,9 @@
 //
 // SECURITY: HTTPS-only endpoints (an http:// endpoint is rejected before any
 // network call); a per-call AbortController timeout (default 20s) so a hung
-// MCP server never wedges the agent turn; the bearer key is sent as an
-// Authorization header and is NEVER logged here. Errors (non-2xx, malformed
+// MCP server never wedges the agent turn; a non-empty bearer key is sent as an
+// Authorization header (and a caller `headers` map — e.g. Composio's
+// `x-api-key` — is forwarded), NEVER logged here. Errors (non-2xx, malformed
 // JSON, JSON-RPC error, tool isError) are mapped to thrown Errors — the
 // caller (wrap-tool) try/catches them into a tool_result so the agent loop
 // never crashes.
@@ -52,8 +53,15 @@ export type McpClient = {
 export type CreateMcpClientOptions = {
   /** The MCP server endpoint. MUST be https:// (http is rejected). */
   endpoint: string;
-  /** Bearer token sent as `Authorization: Bearer <bearer>`. */
-  bearer: string;
+  /** Bearer token sent as `Authorization: Bearer <bearer>`. OPTIONAL: when
+   *  empty/omitted, NO Authorization header is emitted (so a connector that
+   *  authenticates purely via `headers` — e.g. Composio's `x-api-key` — isn't
+   *  given a bogus `Authorization: Bearer `). */
+  bearer?: string;
+  /** Extra request headers merged into every call (e.g. `{ "x-api-key": … }`).
+   *  Merged BEFORE the managed content-type/accept/authorization so it can never
+   *  override the JSON-RPC content negotiation. */
+  headers?: Record<string, string>;
   /** Injectable fetch (tests pass a fake; default = global fetch). */
   fetchImpl?: typeof fetch;
   /** Per-call timeout in ms (AbortController). Default 20s. */
@@ -140,7 +148,9 @@ async function parseRpcBody(res: Response): Promise<JsonRpcResponse> {
 }
 
 export function createMcpClient(options: CreateMcpClientOptions): McpClient {
-  const { endpoint, bearer } = options;
+  const { endpoint } = options;
+  const bearer = options.bearer ?? "";
+  const extraHeaders = options.headers;
   const fetchImpl = options.fetchImpl ?? fetch;
   const timeoutMs = options.timeoutMs ?? DEFAULT_TIMEOUT_MS;
 
@@ -169,11 +179,20 @@ export function createMcpClient(options: CreateMcpClientOptions): McpClient {
       payload.id = nextId++;
     }
 
+    // Caller-supplied headers (e.g. Composio's `x-api-key`) ride FIRST, then the
+    // managed JSON-RPC negotiation headers overwrite any collision so the
+    // transport contract can never be broken by an override. `Authorization` is
+    // emitted ONLY for a non-empty bearer — keeping the existing vetted/byo
+    // bearer connectors byte-for-byte identical while letting a headers-only
+    // (Composio) connector authenticate without a bogus `Authorization: Bearer `.
     const headers: Record<string, string> = {
+      ...(extraHeaders ?? {}),
       "content-type": "application/json",
       accept: "application/json, text/event-stream",
-      authorization: `Bearer ${bearer}`,
     };
+    if (bearer) {
+      headers.authorization = `Bearer ${bearer}`;
+    }
     if (sessionId) {
       headers["mcp-session-id"] = sessionId;
     }
