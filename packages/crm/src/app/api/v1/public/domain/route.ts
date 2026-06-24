@@ -68,10 +68,17 @@ export async function GET(request: Request) {
     return NextResponse.json({ ok: true, org: null });
   }
 
+  // Exclude the internal 'r1' R-framework row. The public home is ALWAYS served
+  // at the conventional 'home' slug — the /s/[orgSlug]/[...slug] page loads the
+  // r1 payload there via its isHomePage branch. Returning 'r1' here made the
+  // proxy rewrite the subdomain root to /s/<slug>/r1, which the page does NOT
+  // treat as home → it fell through to a legacy lookup that 404s, so every r1
+  // workspace served the marketing-chrome 404 at its subdomain instead of the
+  // archetype landing.
   const [landing] = await db
     .select({ slug: landingPages.slug })
     .from(landingPages)
-    .where(sql`${landingPages.orgId} = ${org.id}`)
+    .where(sql`${landingPages.orgId} = ${org.id} and ${landingPages.slug} <> 'r1'`)
     .orderBy(sql`${landingPages.updatedAt} desc`)
     .limit(1);
 

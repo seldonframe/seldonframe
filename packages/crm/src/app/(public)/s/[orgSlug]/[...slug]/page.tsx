@@ -40,9 +40,12 @@ type PageProps = {
   params: Promise<{ orgSlug: string; slug: string[] }>;
 };
 
-/** True when the request targets the workspace home page. */
+/** True when the request targets the workspace home page. "r1" is included as
+ *  defense-in-depth: the R-framework landing IS the home, so if the proxy ever
+ *  rewrites the subdomain root to /s/<slug>/r1 (e.g. a stale default or cached
+ *  rewrite), we still render the r1 landing here instead of 404-ing. */
 function isHomePage(pageSlug: string): boolean {
-  return pageSlug === "home" || pageSlug === "" || pageSlug === "/";
+  return pageSlug === "home" || pageSlug === "" || pageSlug === "/" || pageSlug === "r1";
 }
 
 export async function generateMetadata({ params }: PageProps): Promise<Metadata> {
