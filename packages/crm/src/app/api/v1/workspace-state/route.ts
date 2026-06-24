@@ -16,7 +16,7 @@
 // remains available — this is sugar for the "what's in this workspace?"
 // case which is overwhelmingly the most common question.
 
-import { and, count, desc, eq, gte, sql } from "drizzle-orm";
+import { and, count, desc, eq, gte, inArray, sql } from "drizzle-orm";
 import { NextResponse } from "next/server";
 import { db } from "@/db";
 import {
@@ -28,6 +28,7 @@ import {
   contacts,
   deals,
   organizations,
+  workspaceSecrets,
 } from "@/db/schema";
 import { guardApiRequest } from "@/lib/api/guard";
 
@@ -200,6 +201,26 @@ export async function GET(request: Request) {
   const baseDomain =
     process.env.WORKSPACE_BASE_DOMAIN?.trim() || "app.seldonframe.com";
 
+  // 5. Composio (managed-OAuth app connections) configured probe. Cheap:
+  // "configured" = the platform key is set (env) OR this workspace stored a BYO
+  // Composio key / has an active session secret. The secret check is a single
+  // indexed lookup (workspace_secrets has a (workspace_id, service_name) index),
+  // skipped entirely when the platform env key is present.
+  let composioConfigured = Boolean(process.env.COMPOSIO_API_KEY?.trim());
+  if (!composioConfigured) {
+    const secretRow = await db
+      .select({ id: workspaceSecrets.id })
+      .from(workspaceSecrets)
+      .where(
+        and(
+          eq(workspaceSecrets.workspaceId, orgId),
+          inArray(workspaceSecrets.serviceName, ["composio", "composio_session"]),
+        ),
+      )
+      .limit(1);
+    composioConfigured = secretRow.length > 0;
+  }
+
   // 6. Compose response. Designed to be self-explanatory to an LLM:
   // each section answers a question Claude Code would otherwise have
   // to ask via separate tool calls.
@@ -224,6 +245,10 @@ export async function GET(request: Request) {
       resend: { configured: isConfigured("resend") },
       kit: { configured: isConfigured("kit") },
       mailchimp: { configured: isConfigured("mailchimp") },
+      // Composio managed-OAuth app connections (Gmail/Calendar/Slack/…).
+      // configured = platform COMPOSIO_API_KEY set OR a BYO composio key /
+      // active session secret exists for this workspace.
+      composio: { configured: composioConfigured },
     },
     agents: agentStats,
     counts: {
