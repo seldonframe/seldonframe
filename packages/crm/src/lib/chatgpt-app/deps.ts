@@ -132,6 +132,11 @@ async function buildWorkspace(ip: string, args: BuildWorkspaceArgs): Promise<Bui
         business_description: args.description ?? "",
       },
       byokKey: platformKey,
+      // Keep the keyless tool call snappy (MCP clients can time out): the main
+      // landing is what matters in chat. Per-service detail sub-pages are extra
+      // LLM calls — skip them here; the operator can regenerate the full
+      // multi-page site later from the dashboard.
+      skipServicePages: true,
     });
     r1Ok = r1.ok;
   }

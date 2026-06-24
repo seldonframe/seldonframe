@@ -89,6 +89,16 @@ export async function runR1LandingStep(args: {
   facts: ExtractedBusinessFacts;
   byokKey: string;
   themeMode?: ThemeModeChoice;
+  /**
+   * Skip the per-service detail-page generation (step 4). Each service page is
+   * its own LLM call, so skipping them materially cuts wall-clock for latency-
+   * sensitive callers — e.g. the keyless ChatGPT-app build_workspace tool, where
+   * a long synchronous tool call risks an MCP client timeout. The main landing
+   * is unaffected: ServicesGrid simply renders non-linking cards, and the
+   * operator can regenerate the full multi-page site later. Defaults to false,
+   * so the URL/paste onboarding flows keep generating service pages.
+   */
+  skipServicePages?: boolean;
 }): Promise<R1LandingStepResult> {
   const { workspaceId, facts, byokKey } = args;
 
@@ -124,27 +134,29 @@ export async function runR1LandingStep(args: {
     // the whole build. validateSiteTree is used as a final gate to keep only
     // structurally valid pages (generateServicePages already runs it per-page
     // internally, so this filters out any that slipped through on a bad payload).
-    try {
-      const servicePages = await generateServicePages({
-        gridServices: payload.services.services,
-        facts,
-        vertical,
-        archetype,
-        byokKey,
-      });
-      const valid = servicePages.filter(
-        (p) => validateSiteTree({ servicePages: [p] }).valid,
-      );
-      if (valid.length) payload.servicePages = valid;
-    } catch (err) {
-      console.warn(
-        JSON.stringify({
-          event: "r1_service_pages_failed",
-          workspace_id: workspaceId,
-          message:
-            err instanceof Error ? err.message.slice(0, 300) : String(err),
-        }),
-      );
+    if (!args.skipServicePages) {
+      try {
+        const servicePages = await generateServicePages({
+          gridServices: payload.services.services,
+          facts,
+          vertical,
+          archetype,
+          byokKey,
+        });
+        const valid = servicePages.filter(
+          (p) => validateSiteTree({ servicePages: [p] }).valid,
+        );
+        if (valid.length) payload.servicePages = valid;
+      } catch (err) {
+        console.warn(
+          JSON.stringify({
+            event: "r1_service_pages_failed",
+            workspace_id: workspaceId,
+            message:
+              err instanceof Error ? err.message.slice(0, 300) : String(err),
+          }),
+        );
+      }
     }
 
     // Step 5 (P4): Navbar booking CTA — rewriteR1Hrefs maps "/book" → the
