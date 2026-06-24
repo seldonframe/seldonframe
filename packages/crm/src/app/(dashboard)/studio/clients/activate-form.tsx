@@ -25,11 +25,12 @@
 
 import { useState, useTransition } from "react";
 import Link from "next/link";
-import { Phone, Pause, Loader2, ChevronDown, ChevronUp, Sparkles, KeyRound } from "lucide-react";
+import { Phone, Pause, Loader2, ChevronDown, ChevronUp, Sparkles, KeyRound, Trash2 } from "lucide-react";
 import {
   activateDeploymentAction,
   pauseDeploymentAction,
   provisionDeploymentNumberAction,
+  cancelDeploymentAction,
   inviteClientToPortalAction,
 } from "@/lib/deployments/actions";
 import { deriveAreaCode } from "@/lib/deployments/margin";
@@ -42,7 +43,8 @@ type ProvisionErrorCode =
   | "no_numbers_available"
   | "provisioning_unavailable"
   | "attach_failed"
-  | "deployment_not_found";
+  | "deployment_not_found"
+  | "phone_in_use";
 
 // ─── ActivateForm ─────────────────────────────────────────────────────────────
 
@@ -155,7 +157,13 @@ export function ActivateForm({ deploymentId, contactPhone }: ActivateFormProps) 
             </label>
             <p className="text-[11px] leading-relaxed text-muted-foreground">
               We&apos;ll buy a local number in your Twilio account and connect it
-              to your voice agent automatically.
+              to your voice agent automatically. Need to connect Twilio first?{" "}
+              <Link
+                href="/settings/integrations"
+                className="font-medium text-primary underline-offset-2 hover:underline"
+              >
+                Open Settings → Integrations
+              </Link>
             </p>
             <div className="flex gap-2">
               <input
@@ -255,6 +263,8 @@ function provisionErrorCopy(error: ProvisionErrorCode): string {
   switch (error) {
     case "no_numbers_available":
       return "No numbers free in that area code — try another.";
+    case "phone_in_use":
+      return "That number is already assigned to another client.";
     case "needs_telephony":
       return "Connect Twilio and set your voice trunk in Settings.";
     case "invalid_area_code":
@@ -324,6 +334,76 @@ export function PauseButton({ deploymentId, phoneNumber }: PauseButtonProps) {
           <Pause className="size-3.5" />
         )}
         Pause
+      </button>
+      {error && (
+        <p className="text-[11px] text-rose-600 dark:text-rose-400">{error}</p>
+      )}
+    </div>
+  );
+}
+
+// ─── CancelButton ─────────────────────────────────────────────────────────────
+//
+// Cancel a deployment (active OR paused) and RELEASE its number. For a
+// SeldonFrame-provisioned number this frees it from the builder's Twilio account
+// (so they stop paying for it AND can reuse it on another client); BYO numbers
+// are left untouched. Confirms first — cancel is not reversible. Wraps the
+// already-built cancelDeploymentAction (release-on-cancel + client-org archive).
+
+type CancelButtonProps = {
+  deploymentId: string;
+  /** Shown in the confirm copy so the operator knows which number gets freed. */
+  phoneNumber: string | null;
+};
+
+export function CancelButton({ deploymentId, phoneNumber }: CancelButtonProps) {
+  const [canceled, setCanceled] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+  const [isPending, startTransition] = useTransition();
+
+  function handleCancel() {
+    const msg = phoneNumber
+      ? `Cancel this client and release ${phoneNumber}? The number is freed from your Twilio account and can be reused. This can't be undone.`
+      : "Cancel this client deployment? This can't be undone.";
+    if (typeof window !== "undefined" && !window.confirm(msg)) return;
+    setError(null);
+    startTransition(async () => {
+      const result = await cancelDeploymentAction({ deploymentId });
+      if (result.ok) {
+        setCanceled(true);
+      } else {
+        setError("Couldn't cancel — please try again.");
+      }
+    });
+  }
+
+  if (canceled) {
+    return (
+      <span className="rounded-full bg-muted px-3 py-0.5 text-[11px] font-medium text-muted-foreground">
+        canceled
+      </span>
+    );
+  }
+
+  return (
+    <div className="flex flex-col items-end gap-1">
+      <button
+        type="button"
+        onClick={handleCancel}
+        disabled={isPending}
+        title={
+          phoneNumber
+            ? "Cancel this client and release its number"
+            : "Cancel this client deployment"
+        }
+        className="crm-button-secondary flex h-8 items-center gap-1.5 px-3 text-sm text-rose-600 disabled:opacity-50 dark:text-rose-400"
+      >
+        {isPending ? (
+          <Loader2 className="size-3.5 animate-spin" />
+        ) : (
+          <Trash2 className="size-3.5" />
+        )}
+        {phoneNumber ? "Cancel & release" : "Cancel"}
       </button>
       {error && (
         <p className="text-[11px] text-rose-600 dark:text-rose-400">{error}</p>

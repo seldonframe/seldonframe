@@ -43,7 +43,7 @@ import {
   ProvisionDeploymentNumberSchema,
   CancelDeploymentSchema,
 } from "./schema";
-import { isE164, isAreaCode } from "./margin";
+import { isE164, isAreaCode, isPhoneInUseError } from "./margin";
 import { mapSoulToClientContext } from "./client-context";
 import { compileSoulService } from "@/lib/soul-compiler/service";
 import { resolveBuilderClaudeKey } from "./client-context-server";
@@ -227,14 +227,9 @@ export async function activateDeploymentAction(
     revalidatePath("/studio/clients");
     return { ok: true };
   } catch (err) {
-    // Map the Postgres unique-constraint violation to a typed error.
-    // pg/neon throws an error with code '23505' (unique_violation).
-    const isUniqueViolation =
-      err instanceof Error &&
-      ("code" in err
-        ? (err as unknown as { code: string }).code === "23505"
-        : err.message.includes("unique") || err.message.includes("duplicate"));
-    if (isUniqueViolation) return { ok: false, error: "phone_in_use" };
+    // A duplicate phone_number write (the partial unique index) surfaces as a
+    // friendly typed error rather than an unhandled throw.
+    if (isPhoneInUseError(err)) return { ok: false, error: "phone_in_use" };
     throw err;
   }
 }
@@ -292,7 +287,8 @@ export type ProvisionDeploymentNumberActionResult =
         | "no_numbers_available"
         | "provisioning_unavailable"
         | "attach_failed"
-        | "deployment_not_found";
+        | "deployment_not_found"
+        | "phone_in_use";
     };
 
 /**
@@ -348,23 +344,32 @@ export async function provisionDeploymentNumberAction(input: {
   const appBaseUrl =
     process.env.NEXT_PUBLIC_APP_URL?.trim() || "https://app.seldonframe.com";
 
-  const result = await provisionVoiceNumber(
-    {
-      client,
-      loadDeployment: (id) => getDeployment(id),
-      updateDeployment: async (id, patch) => {
-        const res = await updateDeployment({ id, patch });
-        return res.ok ? res.deployment : null;
+  let result: Awaited<ReturnType<typeof provisionVoiceNumber>>;
+  try {
+    result = await provisionVoiceNumber(
+      {
+        client,
+        loadDeployment: (id) => getDeployment(id),
+        updateDeployment: async (id, patch) => {
+          const res = await updateDeployment({ id, patch });
+          return res.ok ? res.deployment : null;
+        },
+        friendlyName: (d) => d.clientName,
+        smsUrl: `${appBaseUrl}/api/webhooks/twilio/sms`,
       },
-      friendlyName: (d) => d.clientName,
-      smsUrl: `${appBaseUrl}/api/webhooks/twilio/sms`,
-    },
-    {
-      deploymentId: parsed.data.deploymentId,
-      areaCode: parsed.data.areaCode,
-      trunkSid: telephony.voiceTrunkSid,
-    },
-  );
+      {
+        deploymentId: parsed.data.deploymentId,
+        areaCode: parsed.data.areaCode,
+        trunkSid: telephony.voiceTrunkSid,
+      },
+    );
+  } catch (err) {
+    // A duplicate phone_number (the partial unique index, e.g. a number already
+    // assigned to another deployment) would otherwise throw out of the action
+    // and render the generic error page. Surface it as a friendly typed error.
+    if (isPhoneInUseError(err)) return { ok: false, error: "phone_in_use" };
+    throw err;
+  }
 
   if (!result.ok) {
     return { ok: false, error: result.error };

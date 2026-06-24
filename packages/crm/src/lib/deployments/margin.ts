@@ -140,6 +140,20 @@ export function isE164(phone: unknown): phone is string {
   return /^\+[1-9]\d{7,14}$/.test(phone);
 }
 
+/**
+ * True iff `err` is a Postgres unique-constraint violation (code 23505). Used to
+ * map a duplicate `phone_number` write into a friendly "that number is already
+ * assigned" result instead of letting the server action throw an unhandled error
+ * (which renders the generic error page). Pure + driver-tolerant: pg/neon expose
+ * `.code`, but we also sniff the message as a fallback.
+ */
+export function isPhoneInUseError(err: unknown): boolean {
+  if (!(err instanceof Error)) return false;
+  if ("code" in err && (err as { code?: unknown }).code === "23505") return true;
+  const m = err.message.toLowerCase();
+  return m.includes("unique") || m.includes("duplicate");
+}
+
 // ─── area-code helpers (voice-number provisioning) ───────────────────────────
 
 /** True iff `value` is a US/NANP area code — exactly 3 digits, first 2–9. Pure. */

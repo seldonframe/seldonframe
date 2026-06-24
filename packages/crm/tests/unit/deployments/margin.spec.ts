@@ -19,7 +19,36 @@ import {
   DEFAULT_SELDONFRAME_FEE_PCT,
   DEFAULT_TELEPHONY_CENTS,
   DEFAULT_LLM_CENTS,
+  isPhoneInUseError,
 } from "../../../src/lib/deployments/margin";
+
+describe("isPhoneInUseError", () => {
+  test("true for a Postgres 23505 unique violation (by code)", () => {
+    const err = Object.assign(new Error("duplicate key value"), { code: "23505" });
+    assert.equal(isPhoneInUseError(err), true);
+  });
+
+  test("true when only the message names a unique/duplicate violation", () => {
+    assert.equal(
+      isPhoneInUseError(
+        new Error('duplicate key value violates unique constraint "deployments_phone_number_uniq"'),
+      ),
+      true,
+    );
+    assert.equal(isPhoneInUseError(new Error("UNIQUE constraint failed")), true);
+  });
+
+  test("false for an unrelated error (incl. a different pg code)", () => {
+    assert.equal(isPhoneInUseError(new Error("connection reset")), false);
+    assert.equal(isPhoneInUseError(Object.assign(new Error("fk fail"), { code: "23503" })), false);
+  });
+
+  test("false for non-Error values", () => {
+    assert.equal(isPhoneInUseError("23505"), false);
+    assert.equal(isPhoneInUseError(null), false);
+    assert.equal(isPhoneInUseError(undefined), false);
+  });
+});
 
 // ---------------------------------------------------------------------
 // computeDeploymentMargin
