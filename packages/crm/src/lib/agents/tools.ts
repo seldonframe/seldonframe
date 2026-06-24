@@ -18,6 +18,13 @@ import { db } from "@/db";
 import { activities, agents, bookings, contacts, users } from "@/db/schema";
 import { listPublicBookingSlotsAction } from "@/lib/bookings/actions";
 import type { AgentBlueprint } from "@/db/schema/agents";
+import type {
+  CalendarBackend,
+  CalendarBinding,
+} from "@/lib/agents/booking/calendar-backend";
+import { resolveCalendarBackend } from "@/lib/agents/booking/calendar-backend";
+import { makeNativeCalendarBackend } from "@/lib/agents/booking/native-calendar-backend";
+import { makeComposioCalendarBackend } from "@/lib/agents/booking/composio-calendar-backend";
 
 export type ToolExecuteContext = {
   orgId: string;
@@ -50,6 +57,15 @@ export type ToolExecuteContext = {
   booking?: {
     mode: import("@/lib/deployments/booking-providers").BookingMode;
     externalUrl?: string | null;
+    /** ICP-3 pluggable calendar backend (Task 4). When `binding.mode` is
+     *  `book_external` AND the client's calendar is connected
+     *  (`calendarRef.accountId`), the native booking tools route through the
+     *  CalendarBackend seam — booking into / reading availability from the
+     *  CLIENT's own Google/Outlook calendar via Composio, behind the exact same
+     *  tool surface. Absent (or any other binding mode) keeps the byte-for-byte
+     *  native path. The `mode` field above is the legacy handoff selector
+     *  (external_link/api_mcp/cal_com) and is independent of this binding. */
+    binding?: CalendarBinding;
   };
 };
 
@@ -204,6 +220,94 @@ export function labelSlots(slots: readonly string[], timeZone: string): LabeledS
   return slots.map((iso) => ({ iso, label: formatSlotLabel(iso, timeZone) }));
 }
 
+// ─── pluggable calendar backend wiring (ICP-3, Task 4) ─────────────────────
+//
+// The booking tools talk to a CalendarBackend (find availability / create
+// event) rather than hard-wiring the native booking store. resolveCalendarBackend
+// picks the backend from the deployment's `ctx.booking.binding`:
+//   - book_external + a CONNECTED calendar → the Composio backend (books into
+//     the CLIENT's own Google/Outlook calendar over MCP)
+//   - anything else (native, or book_external before the OAuth connect lands)
+//     → the native backend (the existing booking chain)
+//
+// This factory builds the ResolveDeps. makeNative wraps the SAME availability
+// + submit primitives the native tool path uses today; makeComposio dials a
+// fresh Composio MCP session per call (lazily — no network until used).
+
+/** Build the ResolveDeps for resolveCalendarBackend from a tool context.
+ *  `listSlots` / `submitBooking` are the native primitives (injected so tests
+ *  can fake them). The Composio backend resolves a live session lazily inside
+ *  its own callTool, so constructing this does NO network work. */
+export function buildCalendarBackendDeps(
+  ctx: ToolExecuteContext,
+  bookingSlug: string,
+  nativeSubmit: NativeBackendSubmit,
+  nativeListSlots: NativeBackendListSlots,
+): {
+  makeNative: () => CalendarBackend;
+  makeComposio: (
+    ref: NonNullable<CalendarBinding["calendarRef"]>,
+  ) => CalendarBackend;
+} {
+  return {
+    makeNative: () =>
+      makeNativeCalendarBackend({
+        orgSlug: ctx.orgSlug,
+        bookingSlug,
+        listSlots: nativeListSlots,
+        submitBooking: nativeSubmit,
+      }),
+    makeComposio: (ref) =>
+      makeComposioCalendarBackend({
+        provider: ref.provider,
+        accountId: ref.accountId,
+        calendarId: ref.calendarId,
+        callTool: async (slug, args) => {
+          // Lazy server-only import: the composio client + inline MCP client
+          // pull Node-runtime deps, so keep them off the module's eager graph
+          // (the tools module loads in the agent runtime and on the edge-ish
+          // realtime path). No network until callTool actually fires.
+          const [{ ensureSession }, { createMcpClient }] = await Promise.all([
+            import("@/lib/integrations/composio/client"),
+            import("@/lib/agents/mcp/client"),
+          ]);
+          const session = await ensureSession(ctx.orgId, [ref.provider]);
+          if (!session) throw new Error("composio_session_unavailable");
+          const client = createMcpClient({
+            endpoint: session.mcpUrl,
+            headers: session.mcpHeaders,
+            bearer: "",
+          });
+          return client.callTool(slug, args);
+        },
+      }),
+  };
+}
+
+/** The native availability primitive shape (matches makeNativeCalendarBackend's
+ *  `listSlots` dep, i.e. listPublicBookingSlotsAction). */
+type NativeBackendListSlots = (a: {
+  orgSlug: string;
+  bookingSlug: string;
+  date: string;
+}) => Promise<{
+  slots: string[];
+  durationMinutes: number;
+  workspaceTimezone?: string;
+}>;
+
+/** The native submit primitive shape (matches makeNativeCalendarBackend's
+ *  `submitBooking` dep). Returns the backend's typed `{ ok, bookingId, error }`. */
+type NativeBackendSubmit = (a: {
+  orgSlug: string;
+  bookingSlug: string;
+  fullName: string;
+  email?: string;
+  notes?: string;
+  startsAt: string;
+  intakeResponses?: Record<string, string>;
+}) => Promise<{ ok: boolean; bookingId?: string; error?: string }>;
+
 export const lookUpAvailability: AgentTool<
   z.infer<typeof lookUpAvailabilityInput>,
   // Native result, OR a booking-mode handoff (ICP-3, deployed agents on a
@@ -255,6 +359,51 @@ export const lookUpAvailability: AgentTool<
     }
     // mode === "native": existing code path continues unchanged ↓
     const bookingSlug = input.bookingSlug ?? "default";
+
+    // ── pluggable-backend availability (ICP-3, Task 4) ──
+    // When this deployment books into the CLIENT's own connected calendar
+    // (binding.mode === "book_external" AND a connected calendarRef), ask that
+    // backend for the day's free slots FIRST. If it returns nothing (the
+    // composio adapter degrades to [] on any error / unrecognized shape), we
+    // FALL THROUGH to the existing native availability walk so the agent always
+    // has times to offer. resolveCalendarBackend itself returns the native
+    // backend until the calendar is actually connected, so this only fires for a
+    // truly book_external + connected deployment.
+    if (ctx.booking?.binding?.mode === "book_external") {
+      const backendDeps = buildCalendarBackendDeps(
+        ctx,
+        bookingSlug,
+        // The native primitives are only reached on fallback (makeNative) — the
+        // book_external path uses the composio backend. submitBooking is unused
+        // by findDayAvailability, so a throwing stub documents that.
+        async () => {
+          throw new Error("submit not used in availability lookup");
+        },
+        (a) => listPublicBookingSlotsAction(a),
+      );
+      const backend = resolveCalendarBackend(ctx.booking.binding, backendDeps);
+      const tz = ctx.timezone ?? "UTC";
+      try {
+        const { slots: externalSlots } = await backend.findDayAvailability({
+          date: input.date,
+          durationMinutes: 30,
+          timezone: tz,
+        });
+        if (externalSlots.length > 0) {
+          return {
+            slots: externalSlots,
+            durationMinutes: 30,
+            date: input.date,
+            timezone: tz,
+          };
+        }
+        // externalSlots empty → fall through to native availability below.
+      } catch {
+        // Backend threw despite its fail-soft contract — never break the call;
+        // fall through to native availability below.
+      }
+    }
+
     // Parse the requested start date as a UTC noon moment so the walk
     // is stable across DST (it just increments by 24h in pure UTC).
     const startDate = new Date(`${input.date}T12:00:00Z`);
@@ -415,9 +564,26 @@ export type SubmitPublicBookingArgs = {
 /** Injectable DB seam for book_appointment — lets the unit test assert the
  *  args that reach submitPublicBookingAction (email passthrough, phone folded
  *  into intakeResponses) without a live database. Mirrors RescheduleDeps /
- *  CancelDeps. */
+ *  CancelDeps.
+ *
+ *  `resolveBackend` is the ICP-3 (Task 4) pluggable-calendar seam: given the
+ *  deployment's binding and the resolved ResolveDeps, it returns the
+ *  CalendarBackend the confirmed booking writes through. It defaults to the real
+ *  `resolveCalendarBackend` (native-or-composio), and is overridable so a test
+ *  can inject a fake backend without any network. It is consulted ONLY on the
+ *  book_external path — the native path keeps calling `submitBooking` directly,
+ *  byte-for-byte unchanged. */
 export type BookAppointmentDeps = {
   submitBooking: (args: SubmitPublicBookingArgs) => Promise<unknown>;
+  resolveBackend?: (
+    binding: CalendarBinding | undefined,
+    deps: {
+      makeNative: () => CalendarBackend;
+      makeComposio: (
+        ref: NonNullable<CalendarBinding["calendarRef"]>,
+      ) => CalendarBackend;
+    },
+  ) => CalendarBackend;
 };
 
 function defaultBookAppointmentDeps(): BookAppointmentDeps {
@@ -429,6 +595,7 @@ function defaultBookAppointmentDeps(): BookAppointmentDeps {
       const { submitPublicBookingAction } = await import("@/lib/bookings/actions");
       return submitPublicBookingAction(args);
     },
+    resolveBackend: resolveCalendarBackend,
   };
 }
 
@@ -596,17 +763,78 @@ export const bookAppointment: AgentTool<
       // handoff to a payment flow which v1.26 doesn't model). When email is
       // absent we pass "" — the submit action treats empty email as "resolve
       // the contact by phone" and stores null for the email columns.
-      await deps.submitBooking({
-        orgSlug: ctx.orgSlug,
-        bookingSlug: input.bookingSlug ?? "default",
-        fullName: input.fullName,
-        email: input.email ?? "",
-        notes: input.notes || undefined,
-        startsAt: input.slotIso,
-        intakeResponses:
-          Object.keys(intakeResponses).length > 0 ? intakeResponses : undefined,
-      });
-      return { ok: true };
+      const bookingSlug = input.bookingSlug ?? "default";
+      const intakeArg =
+        Object.keys(intakeResponses).length > 0 ? intakeResponses : undefined;
+
+      // The native booking write — the EXISTING path, byte-for-byte. Reused both
+      // for the native deployment AND as the book_external fallback below, so the
+      // args + return shape are guaranteed identical. Returns { ok: true } today.
+      const writeNative = async () => {
+        await deps.submitBooking({
+          orgSlug: ctx.orgSlug,
+          bookingSlug,
+          fullName: input.fullName,
+          email: input.email ?? "",
+          notes: input.notes || undefined,
+          startsAt: input.slotIso,
+          intakeResponses: intakeArg,
+        });
+        return { ok: true } as { ok: boolean; bookingId?: string };
+      };
+
+      // ── pluggable-backend write (ICP-3, Task 4) ──
+      // ONLY when this deployment books into the CLIENT's own connected calendar
+      // (binding.mode === "book_external"). Native + every legacy handoff mode
+      // skip this block entirely and use writeNative() below — so the native
+      // path is unchanged. resolveCalendarBackend still returns native until the
+      // calendar is actually connected (no calendarRef.accountId), so even a
+      // book_external deployment falls back cleanly pre-connect.
+      if (ctx.booking?.binding?.mode === "book_external") {
+        const resolveBackend = deps.resolveBackend ?? resolveCalendarBackend;
+        const backendDeps = buildCalendarBackendDeps(
+          ctx,
+          bookingSlug,
+          // makeNative's submitBooking → the SAME native submit the tool uses.
+          // Adapts the tool's `Promise<unknown>` submit to the backend's typed
+          // `{ ok }` contract so makeNative().createEvent works if ever used.
+          async (a) => {
+            await deps.submitBooking(a as SubmitPublicBookingArgs);
+            return { ok: true };
+          },
+          (a) => listPublicBookingSlotsAction(a),
+        );
+        const backend = resolveBackend(ctx.booking.binding, backendDeps);
+        const res = await backend.createEvent({
+          startIso: input.slotIso,
+          durationMinutes: 30,
+          timezone: ctx.timezone ?? "UTC",
+          // Prefer an explicit service from intake, else the booking type slug.
+          title: intakeResponses.service || bookingSlug,
+          attendee: {
+            name: input.fullName,
+            email: input.email,
+            phone: intakeResponses.phone,
+          },
+          notes: input.notes || undefined,
+        });
+        if (res.ok) {
+          return { ok: true, bookingId: res.eventRef };
+        }
+        // External backend failed → fall back to the native booking store so a
+        // live call never drops. Structured log for ops visibility.
+        console.warn(
+          JSON.stringify({
+            event: "booking_external_fallback",
+            orgId: ctx.orgId,
+            reason: res.error,
+          }),
+        );
+        return writeNative();
+      }
+
+      // Native (and every legacy handoff mode that reached here): unchanged.
+      return writeNative();
     } catch (err) {
       return {
         ok: false,
