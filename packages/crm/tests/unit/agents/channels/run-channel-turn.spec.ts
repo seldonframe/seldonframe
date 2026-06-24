@@ -50,9 +50,43 @@ describe("resolveInboundAgent", () => {
     assert.deepEqual(resolved, {
       agentId: "agent-client-default",
       orgId: "client-org-1",
+      // ICP-3 Task 6 — the deployment-first path now carries the calendar
+      // binding so chat/SMS/email book like voice. This deployment has no
+      // bookingMode set → deploymentToBinding yields the native default.
+      bookingBinding: { mode: "native" },
     });
     // Deployment matched first → the workspace resolver must NOT run.
     assert.equal(workspaceResolverCalled, false);
+  });
+
+  test("deployment with a CONNECTED calendar → resolved agent carries a book_external binding", async () => {
+    // ICP-3 Task 6 — a deployment that books into the client's own Google
+    // calendar (api_mcp + connected calendarRef) threads a book_external
+    // binding through to executeTurn so chat/SMS/email route through the same
+    // CalendarBackend seam as voice.
+    const deps: ResolveInboundAgentDeps = {
+      resolveDeploymentByNumber: async () => ({
+        clientOrgId: "client-org-7",
+        bookingMode: "api_mcp",
+        externalBookingUrl: null,
+        calendarRef: { provider: "googlecalendar", accountId: "ca_7", calendarId: "primary" },
+      }),
+      resolveOrgByFromNumber: async () => null,
+      loadDefaultAgent: async (orgId) =>
+        orgId === "client-org-7"
+          ? { agentId: "agent-client-7", orgId: "client-org-7" }
+          : null,
+    };
+
+    const resolved = await resolveInboundAgent(deps, "+18335550100");
+    assert.deepEqual(resolved, {
+      agentId: "agent-client-7",
+      orgId: "client-org-7",
+      bookingBinding: {
+        mode: "book_external",
+        calendarRef: { provider: "googlecalendar", accountId: "ca_7", calendarId: "primary" },
+      },
+    });
   });
 
   test("deployment match but clientOrgId null → falls through to workspace resolver", async () => {

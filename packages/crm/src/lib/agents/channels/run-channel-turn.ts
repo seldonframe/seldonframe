@@ -27,16 +27,36 @@
 // and NOT a "use server" action; its only async-boundary callees are injected.
 
 import type { ChannelAdapter, InboundMessage } from "./channel-adapter";
+import type { CalendarBinding } from "@/lib/agents/booking/calendar-backend";
+import { deploymentToBinding } from "@/lib/deployments/booking-binding";
 
 export type { ChannelAdapter, InboundMessage } from "./channel-adapter";
 
 // ─── resolveInboundAgent ──────────────────────────────────────────────────
 
-/** What the resolver yields: the agent to run + the org its writes land in. */
-export type ResolvedAgent = { agentId: string; orgId: string } | null;
+/** What the resolver yields: the agent to run + the org its writes land in, plus
+ *  the deployment's calendar binding when this resolved via the deployment-first
+ *  path (so executeTurn books into the client's calendar exactly like voice).
+ *  bookingBinding is absent for the workspace fall-through → ctx.booking stays
+ *  undefined (native default, unchanged). */
+export type ResolvedAgent =
+  | { agentId: string; orgId: string; bookingBinding?: CalendarBinding }
+  | null;
 
-/** The minimal deployment slice the resolver needs (just the client-org link). */
-type DeploymentClientSlice = { clientOrgId: string | null } | null;
+/** The minimal deployment slice the resolver needs: the client-org link (to pick
+ *  the agent + retarget writes) plus the booking-config fields deploymentToBinding
+ *  reads (so the binding carries the client's connected calendar). */
+type DeploymentClientSlice =
+  | {
+      clientOrgId: string | null;
+      // The booking-config fields deploymentToBinding reads. Optional so existing
+      // resolver test-deps that only return { clientOrgId } still satisfy the
+      // type; the call site fills the bookingMode key before mapping.
+      bookingMode?: string | null;
+      externalBookingUrl?: string | null;
+      calendarRef?: { provider?: string | null; accountId?: string | null; calendarId?: string | null } | null;
+    }
+  | null;
 
 export type ResolveInboundAgentDeps = {
   /** Match the dialed/texted number to an ACTIVE deployment (client front-office
@@ -57,7 +77,14 @@ function buildDefaultResolveDeps(): ResolveInboundAgentDeps {
         "@/lib/agents/voice/resolve-deployment-by-number"
       );
       const row = await resolveDeploymentByNumber(toHandle);
-      return row ? { clientOrgId: row.clientOrgId } : null;
+      return row
+        ? {
+            clientOrgId: row.clientOrgId,
+            bookingMode: row.bookingMode,
+            externalBookingUrl: row.externalBookingUrl,
+            calendarRef: row.calendarRef,
+          }
+        : null;
     },
     resolveOrgByFromNumber: async (toHandle) => {
       const { db } = await import("@/db");
@@ -118,7 +145,20 @@ export async function resolveInboundAgent(
     const deployment = await deps.resolveDeploymentByNumber(toHandle);
     if (deployment?.clientOrgId) {
       const agent = await deps.loadDefaultAgent(deployment.clientOrgId);
-      if (agent) return agent;
+      if (agent) {
+        // Carry the deployment's calendar binding so chat/SMS/email book into the
+        // client's connected calendar exactly like voice. deploymentToBinding
+        // falls back to native when the calendar isn't connected, so this is safe
+        // even before OAuth completes. Construct an explicit BindingSource (the
+        // bookingMode key is always present, value may be null) so the mapper
+        // accepts it regardless of the slice's optional fields.
+        const bookingBinding = deploymentToBinding({
+          bookingMode: deployment.bookingMode ?? null,
+          externalBookingUrl: deployment.externalBookingUrl ?? null,
+          calendarRef: deployment.calendarRef ?? null,
+        });
+        return { ...agent, bookingBinding };
+      }
       // Deployment matched but the client org has no default agent yet — fall
       // through to the workspace resolver below rather than dropping the message.
     }
@@ -163,10 +203,12 @@ export type RunChannelTurnDeps = {
   resolveInboundAgent: (toHandle: string) => Promise<ResolvedAgent>;
   /** Get-or-create the active agentConversations thread, returning its id. */
   getOrCreateConversation: (args: GetOrCreateConversationArgs) => Promise<string>;
-  /** The canonical agent loop. */
+  /** The canonical agent loop. bookingBinding is threaded for deployment-resolved
+   *  agents so chat/SMS/email book into the client's calendar like voice. */
   executeTurn: (input: {
     conversationId: string;
     userMessage: string;
+    bookingBinding?: CalendarBinding;
   }) => Promise<ExecuteTurnResult>;
 };
 
@@ -288,6 +330,11 @@ export async function runChannelTurn(
     result = await deps.executeTurn({
       conversationId,
       userMessage: inbound.text,
+      // Deployment-resolved agents carry the client's calendar binding; workspace
+      // agents omit it entirely → executeTurn input is byte-for-byte unchanged and
+      // ctx.booking stays undefined (native default). Conditional spread keeps the
+      // key absent (not `undefined`) when there's no binding.
+      ...(agent.bookingBinding ? { bookingBinding: agent.bookingBinding } : {}),
     });
   } catch (err) {
     console.error(

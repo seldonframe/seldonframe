@@ -18,6 +18,7 @@ import { eq } from "drizzle-orm";
 import { toE164 } from "@/lib/sms/providers";
 import type {
   DeploymentClientContext,
+  DeploymentCalendarRef,
   BookingMode,
 } from "@/db/schema/deployments";
 
@@ -38,6 +39,11 @@ export type DeploymentNumberRow = {
   bookingMode: BookingMode;
   /** The client's own booking URL — only meaningful for external_link. */
   externalBookingUrl: string | null;
+  /** The client's connected calendar (provider + accountId + calendarId), set
+   *  once the OAuth connect finishes. Threaded into the CalendarBinding so a
+   *  book_external deployment can route into the client's own calendar; null
+   *  until connected → deploymentToBinding falls the binding back to native. */
+  calendarRef: DeploymentCalendarRef | null;
   /** The auto-provisioned CLIENT workspace (org) this deployment writes into.
    *  Front-office bridge: when set, ALL of the deployed agent's writes
    *  (bookings/contacts/messages/transcripts) retarget to this org. Null for
@@ -100,6 +106,7 @@ function buildDefaultDeps(): ResolveDeploymentDeps {
           clientContext: deployments.clientContext,
           bookingMode: deployments.bookingMode,
           externalBookingUrl: deployments.externalBookingUrl,
+          calendarRef: deployments.calendarRef,
           clientOrgId: deployments.clientOrgId,
           clientOrgSlug: organizations.slug,
           phoneNumber: deployments.phoneNumber,

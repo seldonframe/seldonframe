@@ -44,6 +44,7 @@ import {
   type AgentTool,
   type ToolExecuteContext,
 } from "./tools";
+import type { CalendarBinding } from "@/lib/agents/booking/calendar-backend";
 
 const MODEL = process.env.ANTHROPIC_AGENT_MODEL?.trim() || "claude-sonnet-4-5-20250929";
 const MAX_TURN_ITERATIONS = 6; // tool-call cap per single turn (catches loops)
@@ -69,6 +70,24 @@ type ExecuteTurnResult =
     }
   | { ok: false; reason: string; fallbackMessage: string };
 
+/** Pure mapper: a deployment's runtime CalendarBinding → the `ctx.booking` slice
+ *  the booking tools read. The legacy `mode` field is the handoff selector and
+ *  just needs a valid BookingMode value: `external_link` for the link-handoff
+ *  binding, otherwise `native` (book_external still routes through the seam via
+ *  `binding`, NOT this mode). `binding` is what the CalendarBackend seam reads.
+ *  Returns undefined for no binding so `ctx.booking` stays undefined for
+ *  workspace/operator agents (the byte-for-byte native default). */
+export function bindingToCtxBooking(
+  binding: CalendarBinding | undefined,
+): ToolExecuteContext["booking"] {
+  if (!binding) return undefined;
+  return {
+    mode: binding.mode === "external_link" ? "external_link" : "native",
+    externalUrl: binding.externalUrl ?? null,
+    binding,
+  };
+}
+
 export async function executeTurn(input: {
   conversationId: string;
   userMessage: string;
@@ -76,6 +95,12 @@ export async function executeTurn(input: {
    *  fixtures (e.g. poisoned FAQ entries) without mutating the DB. The
    *  override replaces agent.blueprint for this turn only. */
   blueprintOverride?: AgentBlueprint;
+  /** DEPLOYED-agent only (ICP-3). The deployment's runtime calendar binding,
+   *  derived by run-channel-turn via deploymentToBinding. Threaded onto
+   *  `ctx.booking` so the chat/SMS/email booking tools branch identically to
+   *  voice. Absent for workspace/operator agents → ctx.booking stays undefined
+   *  (native default, unchanged behavior). */
+  bookingBinding?: CalendarBinding;
 }): Promise<ExecuteTurnResult> {
   const t0 = Date.now();
 
@@ -370,6 +395,9 @@ export async function executeTurn(input: {
         agentId: agent.id,
         conversationId: conv.id,
         testMode: conv.status === "test",
+        // ICP-3 — deployed-agent calendar binding (chat/SMS/email parity with
+        // voice). Undefined for workspace agents → ctx.booking stays undefined.
+        booking: bindingToCtxBooking(input.bookingBinding),
       };
       try {
         const output = await (tool as AgentTool<unknown, unknown>).execute(parsed.data, ctx);
