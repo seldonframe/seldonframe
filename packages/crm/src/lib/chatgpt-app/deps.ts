@@ -27,10 +27,16 @@ import {
 } from "@/lib/billing/anonymous-workspace";
 import {
   buildInstalledAgentTemplate,
+  listMarketplaceAgentsFromDb,
   type AgentListingForBuyer,
+  type MarketplaceAgentRow,
 } from "@/lib/marketplace/agent-listings";
-import { listMarketplaceAgentsFromDb } from "@/lib/marketplace/agent-listings";
 import { resolveUniqueTemplateSlug } from "@/lib/agent-templates/store";
+import {
+  STARTER_TEMPLATES,
+  instantiateStarter,
+  buildDefaultInstantiateDeps,
+} from "@/lib/agent-templates/starter-pack";
 import { validateRawWorkspaceToken } from "@/lib/auth/workspace-token";
 import { checkRateLimit } from "@/lib/utils/rate-limit";
 import type {
@@ -43,6 +49,27 @@ import { assembleWorkspaceSource, type BuildWorkspaceArgs } from "./chatgpt-mcp-
 const WORKSPACE_BASE_DOMAIN =
   process.env.WORKSPACE_BASE_DOMAIN?.trim() || "app.seldonframe.com";
 const APP_URL = (process.env.NEXT_PUBLIC_APP_URL || "https://app.seldonframe.com").replace(/\/$/, "");
+
+// The curated FREE starter agents (the 6 SeldonFrame house starters) mapped to
+// the marketplace row shape, so browse_marketplace ALWAYS returns real,
+// deployable agents — even before any marketplace listing is published. They are
+// always free; deploy_agent forks them via instantiateStarter.
+const STARTER_ROWS: MarketplaceAgentRow[] = STARTER_TEMPLATES.map((s) => ({
+  id: s.id,
+  slug: s.id,
+  name: s.name,
+  description: s.summary,
+  niche: s.category,
+  tags: [],
+  price: 0,
+  agentType: s.type,
+  installCount: 0,
+  rating: 0,
+  reviewCount: 0,
+  isFeatured: false,
+  previewImageUrl: null,
+}));
+const STARTER_IDS = new Set(STARTER_TEMPLATES.map((s) => s.id));
 
 /** A friendly Error whose message surfaces to ChatGPT as a tool isError result
  *  (the handler catches throws → tool-level error, never a transport 500). */
@@ -126,6 +153,24 @@ async function deploy(input: { workspaceToken: string; slug: string }): Promise<
   }
   const orgId = resolved.orgId;
 
+  // Curated FREE starter agent? Fork it into the workspace via instantiateStarter
+  // (no marketplace listing required — these are always available + always free).
+  const starter = STARTER_TEMPLATES.find((s) => s.id === input.slug);
+  if (starter) {
+    const res = await instantiateStarter(
+      { builderOrgId: orgId, starterId: starter.id },
+      buildDefaultInstantiateDeps(),
+    );
+    if (!res.ok) {
+      return { ok: false, error: "Could not add that agent — please try again." };
+    }
+    return {
+      ok: true,
+      name: starter.name,
+      url: `${APP_URL}/admin/${encodeURIComponent(orgId)}?token=${encodeURIComponent(input.workspaceToken)}`,
+    };
+  }
+
   const [listing] = await db
     .select(DEPLOY_LISTING_COLUMNS)
     .from(marketplaceListings)
@@ -198,10 +243,21 @@ export function buildRealDeps(ip: string): ChatGptMcpDeps {
   return {
     buildWorkspace: (args) => buildWorkspace(ip, args),
     browse: async (filters) => {
-      const rows = await listMarketplaceAgentsFromDb({ q: filters.query, niche: filters.niche });
-      // FREE agents only — the ChatGPT app surfaces no paid items + no purchase
-      // direction (commerce-free for OpenAI's physical-goods-only policy).
-      return rows.filter((r) => (r.price ?? 0) === 0);
+      const q = filters.query?.trim().toLowerCase();
+      const niche = filters.niche?.trim().toLowerCase();
+      // Always-available curated FREE starter agents first (so the app is never
+      // empty — even with zero published marketplace listings).
+      const starters = STARTER_ROWS.filter((r) => {
+        if (niche && r.niche.toLowerCase() !== niche) return false;
+        if (q && !`${r.name} ${r.description ?? ""}`.toLowerCase().includes(q)) return false;
+        return true;
+      });
+      // Plus any FREE published marketplace listings (paid excluded — the app is
+      // commerce-free; any starter-id collision de-dupes to the starter).
+      const listings = (
+        await listMarketplaceAgentsFromDb({ q: filters.query, niche: filters.niche })
+      ).filter((r) => (r.price ?? 0) === 0 && !STARTER_IDS.has(r.slug));
+      return [...starters, ...listings];
     },
     deploy,
     now: () => new Date(),
