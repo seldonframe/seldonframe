@@ -604,5 +604,54 @@ export function registerCrmEventListeners() {
     });
   });
 
+  // 2026-06-23 — Composio inbound-trigger bridge. The Composio webhook
+  // (app/api/webhooks/composio/route.ts) verifies the signature, maps the V3
+  // payload to a `composio.<toolkit>.<event>` SeldonEvent, and emits it. Here we
+  // catch every such event and fan it out to the deployed archetype agents whose
+  // specTemplate.trigger.event matches — exactly like the booking.created bridge,
+  // but the event types are dynamic (composio.gmail.new_message, …) so we match
+  // on the `composio.` prefix via onAny rather than a fixed bus.on.
+  //
+  // orgId can't ride the in-memory bus's emit-options, so the mapper embeds it in
+  // `data._composio.orgId` (see lib/integrations/composio/webhook.ts). The matcher
+  // is permissive (null) — composio triggers carry no natural resource-id like an
+  // appointmentTypeId, so any deployed agent listening for the event fires.
+  bus.onAny(async (event) => {
+    if (!event.type.startsWith("composio.")) return;
+
+    const data = (event.data ?? {}) as Record<string, unknown>;
+    const composioMeta =
+      (data._composio as Record<string, unknown> | undefined) ?? {};
+    const orgId =
+      typeof composioMeta.orgId === "string" ? composioMeta.orgId : null;
+    if (!orgId) {
+      console.warn(
+        JSON.stringify({ action: "event.composio.no_org", type: event.type }),
+      );
+      return;
+    }
+
+    console.log(
+      JSON.stringify({ action: "event.composio.dispatch", type: event.type, orgId }),
+    );
+
+    try {
+      await dispatchEventToDeployedAgents({
+        orgId,
+        triggerEventType: event.type,
+        triggerEventId: null,
+        triggerPayload: data,
+        // Permissive match: composio triggers have no resource-id matcher.
+        matcherPlaceholder: null,
+        matcherValue: null,
+      });
+    } catch (err) {
+      console.warn(
+        `[listeners] dispatchEventToDeployedAgents ${event.type} failed:`,
+        err,
+      );
+    }
+  });
+
   listenersRegistered = true;
 }
