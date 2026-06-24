@@ -76,6 +76,8 @@ const AGENCY_CORE_HREFS = [
   "/emails",
   "/deals",
   "/proposals",
+  // Composio managed-OAuth Connect surface (System group).
+  "/integrations",
   "/docs",
   "/settings",
 ];
@@ -229,6 +231,32 @@ describe("buildNavGroups — super-admin", () => {
 });
 
 // ---------------------------------------------------------------------
+// Integrations (Composio managed-OAuth Connect surface)
+// ---------------------------------------------------------------------
+
+describe("buildNavGroups — Integrations entry", () => {
+  test("agency nav surfaces /integrations once, labelled 'Integrations', in System", () => {
+    const groups = buildNavGroups(baseInput());
+    assert.equal(countHref(groups, "/integrations"), 1);
+    const item = findItem(groups, "/integrations");
+    assert.equal(item?.label, "Integrations");
+    // It lives in the System group (where Settings/Docs live).
+    const sys = groups.find((g) => g.title === "SYSTEM");
+    assert.ok(sys?.items.some((i) => i.href === "/integrations"), "Integrations must be in System");
+  });
+
+  test("a client-workspace operator can reach /integrations to connect their apps", () => {
+    const groups = buildNavGroups(baseInput({ sessionType: "inside-client-workspace" }));
+    assert.equal(countHref(groups, "/integrations"), 1);
+  });
+
+  test("Integrations respects super-admin-independent visibility (always present for agency)", () => {
+    const groups = buildNavGroups(baseInput({ isSuperAdmin: false }));
+    assert.equal(hasHref(groups, "/integrations"), true);
+  });
+});
+
+// ---------------------------------------------------------------------
 // Operator-portal session (sub-tenant magic-link operator)
 // ---------------------------------------------------------------------
 
@@ -241,7 +269,7 @@ describe("buildNavGroups — operator-portal session", () => {
 
   test("never shows agency-level surfaces (Clients, Proposals, Automations, Docs, Settings)", () => {
     const groups = buildNavGroups(baseInput({ sessionType: "operator-portal", workspaceCount: 5, isSuperAdmin: true }));
-    for (const href of ["/clients", "/proposals", "/automations", "/studio/agents", "/docs", "/settings", "/super-admin", "/emails", "/forms", "/conversations"]) {
+    for (const href of ["/clients", "/proposals", "/automations", "/studio/agents", "/integrations", "/docs", "/settings", "/super-admin", "/emails", "/forms", "/conversations"]) {
       assert.equal(hasHref(groups, href), false, `${href} must never appear in the operator portal`);
     }
   });
@@ -260,7 +288,7 @@ describe("buildNavGroups — operator-portal session", () => {
 describe("buildNavGroups — inside-client-workspace session", () => {
   test("renders the full client workspace surface set", () => {
     const groups = buildNavGroups(baseInput({ sessionType: "inside-client-workspace" }));
-    for (const href of ["/dashboard", "/contacts", "/deals", "/bookings", "/conversations", "/emails", "/forms", "/automations", "/settings"]) {
+    for (const href of ["/dashboard", "/contacts", "/deals", "/bookings", "/conversations", "/emails", "/forms", "/automations", "/integrations", "/settings"]) {
       assert.equal(hasHref(groups, href), true, `${href} should be reachable inside a client workspace`);
     }
   });
