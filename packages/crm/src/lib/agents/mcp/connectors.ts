@@ -7,13 +7,18 @@
 // time the action resolves the endpoint here, stores the bearer key encrypted
 // under `serviceName`, discovers the tools, and caches them on the binding.
 //
-// Two kinds:
+// Three kinds:
 //   - "vetted": a connector SeldonFrame ships and trusts. The endpoint is baked
 //     into VETTED_CONNECTORS (the operator never types a URL — just an API key).
 //     Vetted = Postiz (social) + Rube (Composio, 500+ apps via one key).
 //     Adding a vetted connector = one entry here, no other code.
 //   - "byo": the operator pastes any hosted MCP endpoint + a bearer key. The
 //     endpoint MUST be HTTPS (rejected otherwise — see resolveConnectorEndpoint).
+//   - "composio": a per-workspace MANAGED Composio session. Unlike vetted/byo it
+//     carries neither an endpoint nor a stored secret — the MCP URL and its
+//     `x-api-key` header are resolved LIVE from the workspace session at runtime
+//     (lib/integrations/composio). It declares `enabledToolkits` (which Composio
+//     apps) + `enabledTools` (the per-tool allowlist).
 //
 // SECURITY: HTTPS-only is enforced for BYO endpoints at resolve time, so even a
 // stale/poisoned binding can never be dialed over http://. Vetted endpoints are
@@ -52,6 +57,23 @@ export type ConnectorBinding =
       /** Operator-supplied MCP endpoint. MUST be https://. */
       endpoint: string;
       enabledTools: string[];
+      tools?: McpToolSchema[];
+      discoveredAt?: string;
+    }
+  | {
+      // Composio — a per-workspace MANAGED session (not a stored bearer). The
+      // binding carries NO endpoint and NO secret: both the MCP URL and its
+      // `x-api-key` header are resolved live from the workspace's Composio
+      // session at runtime (lib/integrations/composio). `enabledToolkits` is the
+      // set of Composio toolkits this agent may use (gmail, slack, …);
+      // `enabledTools` is the per-tool allowlist (namespaced `composio__<tool>`).
+      id: string;
+      kind: "composio";
+      /** Composio toolkit slugs enabled for this agent (drives the session). */
+      enabledToolkits: string[];
+      /** Allowlist — only these tool names are wrapped into AgentTools. */
+      enabledTools: string[];
+      /** Tools discovered at bind/refresh time (cached, not live). */
       tools?: McpToolSchema[];
       discoveredAt?: string;
     };
@@ -124,12 +146,24 @@ export function resolveConnectorEndpoint(binding: ConnectorBinding): string {
     // Vetted endpoints are hard-coded HTTPS; assert anyway as defense-in-depth.
     return assertHttpsEndpoint(vetted.endpoint);
   }
+  if (binding.kind === "composio") {
+    // Composio endpoints are resolved live from the session, never from the
+    // binding — this function must not be called for a composio binding.
+    throw new Error(
+      "Composio connector endpoints are resolved from the live session, not the binding",
+    );
+  }
   // byo
   return assertHttpsEndpoint(binding.endpoint);
 }
 
-/** The encrypted-secret service name for a binding (key for getSecretValue). */
+/** The encrypted-secret service name for a binding (key for getSecretValue).
+ *  Composio bindings have no stored secret (the key is resolved per-workspace),
+ *  so this throws for them — they take the live-session path instead. */
 export function connectorSecretService(binding: ConnectorBinding): string {
+  if (binding.kind === "composio") {
+    throw new Error("Composio connector bindings have no stored secret service");
+  }
   return binding.serviceName;
 }
 
@@ -182,6 +216,18 @@ export const connectorBindingSchema: z.ZodType<ConnectorBinding> = z
           .refine((u) => u.startsWith("https://"), {
             message: "BYO MCP endpoint must use https://",
           }),
+        enabledTools: z.array(z.string().min(1).max(128)).max(MAX_ENABLED_TOOLS),
+        tools: z.array(mcpToolSchemaSchema).max(MAX_CACHED_TOOLS).optional(),
+        discoveredAt: z.string().optional(),
+      })
+      .strict(),
+    z
+      .object({
+        // Composio managed-session binding — no endpoint, no secret. Bounds the
+        // toolkit allowlist too so the blueprint jsonb stays small.
+        id: z.string().min(1).max(64),
+        kind: z.literal("composio"),
+        enabledToolkits: z.array(z.string().min(1).max(64)).max(MAX_CONNECTORS),
         enabledTools: z.array(z.string().min(1).max(128)).max(MAX_ENABLED_TOOLS),
         tools: z.array(mcpToolSchemaSchema).max(MAX_CACHED_TOOLS).optional(),
         discoveredAt: z.string().optional(),

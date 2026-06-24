@@ -28,6 +28,7 @@ import {
   Plus,
   Phone,
   MessageSquare,
+  Check,
 } from "lucide-react";
 import {
   saveAgentTemplateBlueprintAction,
@@ -38,6 +39,7 @@ import {
   unbindTemplateConnectorAction,
   setTemplateConnectorToolsAction,
   refreshTemplateConnectorAction,
+  setTemplateComposioToolkitsAction,
 } from "@/lib/agent-templates/template-mcp-server";
 import type { AgentSurface } from "@/lib/agent-templates/store";
 import type { ConnectorBinding } from "@/lib/agents/mcp/connectors";
@@ -61,6 +63,9 @@ type QuoteRange = { service: string; low: string; high: string };
 /** Minimal serializable vetted-connector descriptor passed from the server. */
 type VettedConnectorOption = { id: string; label: string; secretService: string };
 
+/** Minimal serializable Composio toolkit descriptor for the per-agent picker. */
+type ComposioToolkitOption = { slug: string; label: string };
+
 type Props = {
   templateId: string;
   surface: AgentSurface;
@@ -76,6 +81,8 @@ type Props = {
   allCapabilities: string[];
   /** The shipped vetted connectors (id + label + secret service) for the Add form. */
   vettedConnectors: VettedConnectorOption[];
+  /** The curated Composio toolkit catalog for the per-agent "Composio apps" picker. */
+  composioCatalog: ComposioToolkitOption[];
 };
 
 // ─── surface-aware copy ────────────────────────────────────────────────────
@@ -379,6 +386,7 @@ export function AgentTemplateEditor(props: Props) {
         surface={props.surface}
         initialConnectors={props.initialBlueprint.connectors}
         vettedConnectors={props.vettedConnectors}
+        composioCatalog={props.composioCatalog}
       />
 
       {/* FAQ */}
@@ -616,18 +624,27 @@ function ConnectorsCard({
   surface,
   initialConnectors,
   vettedConnectors,
+  composioCatalog,
 }: {
   templateId: string;
   surface: AgentSurface;
   initialConnectors: ConnectorBinding[];
   vettedConnectors: VettedConnectorOption[];
+  composioCatalog: ComposioToolkitOption[];
 }) {
   const router = useRouter();
   const isVoice = surface === "voice";
 
   // Bound connectors render from props (server is source of truth); after each
   // mutation we router.refresh() so the server re-supplies the canonical list.
-  const connectors = initialConnectors;
+  // The single managed Composio binding is rendered by its own picker below, so
+  // exclude it from the generic vetted/byo connector list.
+  const connectors = initialConnectors.filter((b) => b.kind !== "composio");
+  const composioBinding = initialConnectors.find((b) => b.kind === "composio");
+  const composioEnabledToolkits =
+    composioBinding && composioBinding.kind === "composio"
+      ? composioBinding.enabledToolkits
+      : [];
 
   // ── Add-connector form state ──
   const [adding, setAdding] = useState(false);
@@ -719,6 +736,14 @@ function ConnectorsCard({
           or email.
         </p>
       )}
+
+      {/* Composio apps — per-agent managed-app picker (Phase 3) */}
+      <ComposioAppsSection
+        templateId={templateId}
+        catalog={composioCatalog}
+        initialEnabled={composioEnabledToolkits}
+        onChanged={() => router.refresh()}
+      />
 
       {/* Bound connectors */}
       {connectors.length === 0 ? (
@@ -849,6 +874,115 @@ function ConnectorsCard({
   );
 }
 
+// ─── Composio apps (per-agent managed-app picker) ───────────────────────────
+//
+// A multiselect of the curated Composio toolkit catalog. Selecting apps persists
+// ONE kind:"composio" binding on the template blueprint (enabledToolkits + a
+// curated default tool allowlist); deselecting all removes it. The accounts
+// themselves are connected once, workspace-wide, in Settings → Integrations —
+// this only declares WHICH connected apps THIS agent may use. Optimistic toggle;
+// router.refresh() reconciles with the server.
+function ComposioAppsSection({
+  templateId,
+  catalog,
+  initialEnabled,
+  onChanged,
+}: {
+  templateId: string;
+  catalog: ComposioToolkitOption[];
+  initialEnabled: string[];
+  onChanged: () => void;
+}) {
+  const [enabled, setEnabled] = useState<string[]>(initialEnabled);
+  const [busy, startBusy] = useTransition();
+  const [error, setError] = useState<string | null>(null);
+
+  // Re-seed when the server re-supplies props (after a refresh).
+  useEffect(() => {
+    setEnabled(initialEnabled);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [initialEnabled.join(",")]);
+
+  const toggle = (slug: string) => {
+    const next = enabled.includes(slug)
+      ? enabled.filter((s) => s !== slug)
+      : [...enabled, slug];
+    setEnabled(next);
+    setError(null);
+    startBusy(async () => {
+      const result = await setTemplateComposioToolkitsAction({
+        templateId,
+        toolkits: next,
+      });
+      if (!result.ok) {
+        setEnabled(enabled); // revert
+        setError(
+          result.error === "unauthorized"
+            ? "You don't have access to this template."
+            : "Couldn't update apps.",
+        );
+        return;
+      }
+      onChanged();
+    });
+  };
+
+  return (
+    <div className="mt-4 rounded-lg border bg-background p-4">
+      <div className="flex items-start gap-2">
+        <span
+          aria-hidden
+          className="inline-flex size-7 shrink-0 items-center justify-center rounded-md bg-indigo-500/10 text-indigo-500 dark:text-indigo-400"
+        >
+          <Plug className="size-3.5" />
+        </span>
+        <div className="min-w-0 flex-1">
+          <h3 className="text-sm font-semibold text-foreground">Composio apps</h3>
+          <p className="mt-0.5 text-xs text-muted-foreground">
+            Pick the apps this agent may act in (Gmail, Calendar, Slack, HubSpot
+            …). Connect the accounts once in{" "}
+            <span className="font-medium text-foreground">
+              Settings → Integrations
+            </span>
+            .
+          </p>
+        </div>
+      </div>
+
+      <div className="mt-3 flex flex-wrap gap-2">
+        {catalog.map((tk) => {
+          const on = enabled.includes(tk.slug);
+          return (
+            <button
+              key={tk.slug}
+              type="button"
+              onClick={() => toggle(tk.slug)}
+              disabled={busy}
+              aria-pressed={on}
+              className={`inline-flex items-center gap-1.5 rounded-full border px-3 py-1.5 text-xs font-medium transition-colors disabled:opacity-60 ${
+                on
+                  ? "border-indigo-500/40 bg-indigo-500/10 text-indigo-600 dark:text-indigo-300"
+                  : "bg-background text-muted-foreground hover:bg-muted/50"
+              }`}
+            >
+              {on ? (
+                <Check className="size-3.5" aria-hidden />
+              ) : (
+                <Plus className="size-3.5" aria-hidden />
+              )}
+              {tk.label}
+            </button>
+          );
+        })}
+      </div>
+
+      {error && (
+        <p className="mt-2 text-xs text-rose-600 dark:text-rose-400">{error}</p>
+      )}
+    </div>
+  );
+}
+
 /** One bound connector: label + tool-count badge, expandable per-tool enable
  *  checkboxes (setTemplateConnectorToolsAction), Refresh + Remove. Optimistic on
  *  the toggle; router.refresh() reconciles with the server. */
@@ -873,7 +1007,9 @@ function ConnectorRow({
       ? binding.id === "postiz"
         ? "Postiz"
         : binding.id
-      : `Custom: ${hostOf(binding.endpoint)}`;
+      : binding.kind === "composio"
+        ? `Composio: ${binding.enabledToolkits.join(", ") || "apps"}`
+        : `Custom: ${hostOf(binding.endpoint)}`;
 
   const toggleTool = (name: string) => {
     const next = enabled.includes(name)

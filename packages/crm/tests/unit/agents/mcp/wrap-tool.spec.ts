@@ -43,7 +43,12 @@ const LIST_TOOL: McpToolSchema = {
   inputSchema: { type: "object" },
 };
 
-function postizBinding(enabled: string[], tools: McpToolSchema[]): ConnectorBinding {
+// wrapMcpTool only handles the static (vetted/byo) kinds — composio takes the
+// live-session path — so this helper returns the narrowed type it accepts.
+function postizBinding(
+  enabled: string[],
+  tools: McpToolSchema[],
+): Exclude<ConnectorBinding, { kind: "composio" }> {
   return { id: "postiz", kind: "vetted", serviceName: "postiz", enabledTools: enabled, tools };
 }
 

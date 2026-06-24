@@ -172,7 +172,11 @@ export function buildNavGroups(input: BuildNavInput): NavGroup[] {
       },
       {
         title: "SYSTEM",
-        items: filterHidden([{ href: "/settings", label: "Settings", icon: "Settings" }, ...superAdminItems]),
+        items: filterHidden([
+          { href: "/integrations", label: "Integrations", icon: "Puzzle" },
+          { href: "/settings", label: "Settings", icon: "Settings" },
+          ...superAdminItems,
+        ]),
       },
     ].filter((group) => group.items.length > 0);
   }
@@ -238,6 +242,10 @@ export function buildNavGroups(input: BuildNavInput): NavGroup[] {
     {
       title: "SYSTEM",
       items: filterHidden([
+        // Integrations — the in-product managed-OAuth Connect surface
+        // (Composio: connect Gmail / Calendar / Slack / HubSpot / … so
+        // agents can act in the operator's real apps).
+        { href: "/integrations", label: "Integrations", icon: "Puzzle" },
         { href: "/docs", label: "Docs", icon: "BookOpen" },
         { href: "https://discord.gg/sbVUu976NW", label: "Discord", icon: "MessageCircle", external: true },
         { href: "/settings", label: "Settings", icon: "Settings" },

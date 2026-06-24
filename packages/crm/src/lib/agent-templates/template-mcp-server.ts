@@ -31,10 +31,12 @@ import {
   unbindTemplateConnector,
   setTemplateConnectorTools,
   refreshTemplateConnector,
+  setTemplateComposioToolkits,
   type TemplateConnectorDeps,
   type BindTemplateConnectorResult,
   type TemplateConnectorMutationResult,
   type RefreshTemplateConnectorResult,
+  type SetComposioToolkitsResult,
 } from "./mcp-actions";
 
 /**
@@ -164,6 +166,34 @@ export async function refreshTemplateConnectorAction(input: {
 
   const result = await refreshTemplateConnector(
     { orgId, templateId: input.templateId, connectorId: input.connectorId },
+    realTemplateConnectorDeps({ templateId: input.templateId, orgId }),
+  );
+  if (result.ok) revalidateEditor(input.templateId);
+  return result;
+}
+
+/**
+ * Set the agent's Composio toolkit selection (Studio "Composio apps" picker).
+ * Writes ONE `kind:"composio"` binding (or removes it when the selection is
+ * empty). Org-guarded; reuses the template load/save seam — no secret, no
+ * discovery (Composio tools resolve live from the workspace session at runtime).
+ */
+export async function setTemplateComposioToolkitsAction(input: {
+  templateId: string;
+  toolkits: string[];
+  enabledTools?: string[];
+}): Promise<SetComposioToolkitsResult> {
+  assertWritable();
+  const orgId = await getOrgId();
+  if (!orgId) return { ok: false, error: "unauthorized" };
+
+  const result = await setTemplateComposioToolkits(
+    {
+      orgId,
+      templateId: input.templateId,
+      toolkits: input.toolkits,
+      enabledTools: input.enabledTools,
+    },
     realTemplateConnectorDeps({ templateId: input.templateId, orgId }),
   );
   if (result.ok) revalidateEditor(input.templateId);
