@@ -142,8 +142,10 @@ export async function unbindMcpConnectorAction(input: {
   if (!result.ok) return { ok: false, error: result.error };
 
   // Best-effort: drop the stored key so it isn't left dangling. rotateSecret
-  // deletes the row (and mints a fresh capture link we ignore here).
-  if (target) {
+  // deletes the row (and mints a fresh capture link we ignore here). Composio
+  // bindings have no stored secret (the key is the per-workspace Composio key,
+  // shared across toolkits) — skip them.
+  if (target && target.kind !== "composio") {
     try {
       await rotateSecret({ workspaceId: orgId, serviceName: target.serviceName });
     } catch {
@@ -174,6 +176,11 @@ export async function refreshMcpConnectorAction(input: {
   const existing = blueprint.connectors ?? [];
   const binding = existing.find((b) => b.id === input.connectorId);
   if (!binding) return { ok: false, error: "connector_not_bound" };
+  // Composio bindings refresh via the live session (lib/integrations/composio),
+  // not this stored-bearer path — they have no endpoint/serviceName.
+  if (binding.kind === "composio") {
+    return { ok: false, error: "composio_connector_refresh_unsupported" };
+  }
 
   let endpoint: string;
   try {

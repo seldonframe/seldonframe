@@ -129,7 +129,9 @@ export async function unbindTemplateConnector(
   const connectors = removeConnectorBinding(existing, input.connectorId);
   await deps.saveConnectors(connectors);
 
-  if (target) {
+  // Composio bindings have no stored secret (the per-workspace Composio key is
+  // shared) — only vetted/byo bindings own a secret to drop.
+  if (target && target.kind !== "composio") {
     try {
       await deps.removeSecret({ workspaceId: input.orgId, serviceName: target.serviceName });
     } catch {
@@ -187,6 +189,10 @@ export async function refreshTemplateConnector(
   const existing = blueprint.connectors ?? [];
   const binding = existing.find((b) => b.id === input.connectorId);
   if (!binding) return { ok: false, error: "connector_not_bound" };
+  // Composio bindings refresh via the live session, not this stored-bearer path.
+  if (binding.kind === "composio") {
+    return { ok: false, error: "composio_connector_refresh_unsupported" };
+  }
 
   let endpoint: string;
   try {

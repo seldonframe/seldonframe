@@ -1415,7 +1415,7 @@ export const ALL_TOOLS: AgentTool[] = [
  *  ALL_TOOLS (same references, same order); otherwise the same filter. Pulling
  *  it into a helper lets getToolsForCapabilities stay obviously-identical on the
  *  no-connectors path (it just returns this). */
-function nativeToolsForCapabilities(
+export function nativeToolsForCapabilities(
   capabilities: string[] | undefined,
 ): AgentTool[] {
   if (!capabilities || capabilities.length === 0) {
@@ -1433,6 +1433,14 @@ export type GetToolsOptions = {
   /** Injectable MCP deps (default = real encrypted-secret read + inline client).
    *  Tests pass fakes so no network/DB is touched. */
   mcpDeps?: import("./mcp/wrap-tool").WrapMcpDeps;
+  /** Injectable Composio deps (default = real session adapter + inline client).
+   *  Tests pass fakes/stubs so no network/DB is touched. */
+  composioDeps?: import("@/lib/integrations/composio/connector").ComposioWrapDeps;
+  /** Injectable Composio-key presence check (default = real resolver). Returns
+   *  true when the workspace has a usable Composio key (BYO or platform). When
+   *  false, composio bindings are dropped entirely (fail-closed to native-only,
+   *  so the model never even sees the toolkit's tools). */
+  hasComposioKey?: (orgId: string) => Promise<boolean>;
 };
 
 /** Lazily-built default MCP deps: read the bearer from the encrypted
@@ -1451,6 +1459,24 @@ async function defaultMcpDeps(): Promise<
       getSecretValue({ workspaceId: orgId, serviceName, skipAccessCheck: true }),
     makeClient: (endpoint, bearer) => createMcpClient({ endpoint, bearer }),
   };
+}
+
+/** Lazily-built default Composio wrap deps (real session adapter + inline
+ *  client). Imported lazily so the native-only hot path never loads Composio. */
+async function defaultComposioWrapDeps(): Promise<
+  import("@/lib/integrations/composio/connector").ComposioWrapDeps
+> {
+  const { defaultComposioWrapDeps: build } = await import(
+    "@/lib/integrations/composio/connector"
+  );
+  return build();
+}
+
+/** Default Composio-key presence probe (BYO secret or platform env). */
+async function defaultHasComposioKey(orgId: string): Promise<boolean> {
+  const { resolveComposioKey } = await import("@/lib/integrations/composio/keys");
+  const { source } = await resolveComposioKey(orgId);
+  return source !== "none";
 }
 
 /**
@@ -1479,23 +1505,54 @@ export async function getToolsForCapabilities(
     return native;
   }
 
-  // Connector path. Only reached when an agent actually has bindings.
-  const { wrapMcpTool } = await import("./mcp/wrap-tool");
-  const deps = opts?.mcpDeps ?? (await defaultMcpDeps());
+  // Connector path. Only reached when an agent actually has bindings. Split the
+  // bindings: vetted/byo resolve a static endpoint + stored bearer (wrap-tool);
+  // composio resolves a LIVE per-workspace session (lib/integrations/composio).
+  const staticBindings = connectors.filter(
+    (b): b is Exclude<typeof b, { kind: "composio" }> => b.kind !== "composio",
+  );
+  const composioBindings = connectors.filter((b) => b.kind === "composio");
 
   const wrapped: AgentTool[] = [];
-  for (const binding of connectors) {
-    const cached = binding.tools ?? [];
-    const enabled = new Set(binding.enabledTools);
-    for (const mcpTool of cached) {
-      // Allowlist: only the binding's enabledTools are exposed. A cached but
-      // disabled tool (or an enabled name with no cached schema) is skipped.
-      if (!enabled.has(mcpTool.name)) continue;
-      wrapped.push(wrapMcpTool(binding, mcpTool, deps) as AgentTool);
+
+  if (staticBindings.length > 0) {
+    const { wrapMcpTool } = await import("./mcp/wrap-tool");
+    const deps = opts?.mcpDeps ?? (await defaultMcpDeps());
+    for (const binding of staticBindings) {
+      const cached = binding.tools ?? [];
+      const enabled = new Set(binding.enabledTools);
+      for (const mcpTool of cached) {
+        // Allowlist: only the binding's enabledTools are exposed. A cached but
+        // disabled tool (or an enabled name with no cached schema) is skipped.
+        if (!enabled.has(mcpTool.name)) continue;
+        wrapped.push(wrapMcpTool(binding, mcpTool, deps) as AgentTool);
+      }
     }
   }
 
-  // Natives FIRST (unchanged), then the wrapped MCP tools.
+  if (composioBindings.length > 0) {
+    // FAIL-CLOSED: if the workspace has no Composio key (no platform env + no BYO
+    // secret), drop every composio binding so the agent simply gets its native
+    // tools — no throw, no crash, and the model never sees a composio tool.
+    const orgId = opts?.orgId;
+    const hasKey = orgId
+      ? await (opts?.hasComposioKey ?? defaultHasComposioKey)(orgId)
+      : false;
+    if (hasKey) {
+      const { resolveComposioBinding } = await import(
+        "@/lib/integrations/composio/connector"
+      );
+      const composioDeps =
+        opts?.composioDeps ?? (await defaultComposioWrapDeps());
+      for (const binding of composioBindings) {
+        for (const tool of resolveComposioBinding(binding, composioDeps)) {
+          wrapped.push(tool);
+        }
+      }
+    }
+  }
+
+  // Natives FIRST (unchanged), then the wrapped MCP/Composio tools.
   return [...native, ...wrapped];
 }
 

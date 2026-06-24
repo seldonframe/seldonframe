@@ -52,7 +52,9 @@ const PASS_THROUGH_INPUT = z.record(z.string(), z.unknown());
  * mcpToolSchema supplies the name/description/jsonSchema.
  */
 export function wrapMcpTool(
-  binding: ConnectorBinding,
+  // Composio bindings take the live-session path (lib/integrations/composio),
+  // NOT this stored-secret wrapper — they carry no serviceName/endpoint.
+  binding: Exclude<ConnectorBinding, { kind: "composio" }>,
   mcpTool: McpToolSchema,
   deps: WrapMcpDeps,
 ): AgentTool<Record<string, unknown>, unknown> {

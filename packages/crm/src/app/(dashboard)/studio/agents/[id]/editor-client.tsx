@@ -873,7 +873,9 @@ function ConnectorRow({
       ? binding.id === "postiz"
         ? "Postiz"
         : binding.id
-      : `Custom: ${hostOf(binding.endpoint)}`;
+      : binding.kind === "composio"
+        ? `Composio: ${binding.enabledToolkits.join(", ") || "apps"}`
+        : `Custom: ${hostOf(binding.endpoint)}`;
 
   const toggleTool = (name: string) => {
     const next = enabled.includes(name)
