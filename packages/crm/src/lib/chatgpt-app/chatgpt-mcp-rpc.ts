@@ -58,12 +58,29 @@ const MAX_GENERIC = 500;
 
 // ─── tools/list ──────────────────────────────────────────────────────────────
 
+/** A ChatGPT/Apps-SDK tool descriptor: the shared MCP shape PLUS the two fields
+ *  the ChatGPT app-submission review REQUIRES — `annotations` (the read-only /
+ *  destructive / open-world impact hints; omitting them is a validation error)
+ *  and `outputSchema` (the exact shape of the structuredContent each tool
+ *  returns). */
+export type ChatGptToolDescriptor = McpToolDescriptor & {
+  annotations?: {
+    readOnlyHint?: boolean;
+    destructiveHint?: boolean;
+    openWorldHint?: boolean;
+    idempotentHint?: boolean;
+  };
+  outputSchema?: Record<string, unknown>;
+};
+
 /**
- * The `tools/list` result: the three ChatGPT tools with real MCP inputSchemas.
- * Descriptions are written for an LLM caller (ChatGPT) — each leads with a
- * USE-WHEN so the model knows when to reach for it.
+ * The `tools/list` result: the three ChatGPT tools with real MCP inputSchemas,
+ * impact `annotations` (required for ChatGPT app review), and an `outputSchema`
+ * describing the structuredContent each returns. Descriptions are written for an
+ * LLM caller (ChatGPT) — each leads with a USE-WHEN so the model knows when to
+ * reach for it.
  */
-export function buildChatGptToolsList(): { tools: McpToolDescriptor[] } {
+export function buildChatGptToolsList(): { tools: ChatGptToolDescriptor[] } {
   return {
     tools: [
       {
@@ -99,6 +116,24 @@ export function buildChatGptToolsList(): { tools: McpToolDescriptor[] } {
           },
           required: ["business_name"],
         },
+        // Writes (creates a workspace) + publishes a publicly-visible website →
+        // openWorldHint:true so ChatGPT summarizes the impact before acting.
+        annotations: { readOnlyHint: false, destructiveHint: false, openWorldHint: true },
+        outputSchema: {
+          type: "object",
+          properties: {
+            url: { type: "string", description: "The live public URL of the new workspace." },
+            workspaceToken: {
+              type: "string",
+              description: "Private token to pass to deploy_agent later in this conversation.",
+            },
+            claimUrl: {
+              type: "string",
+              description: "Link to manage/claim the workspace (no signup, 7-day expiry).",
+            },
+          },
+          required: ["url", "workspaceToken"],
+        },
       },
       {
         name: BROWSE_MARKETPLACE_TOOL,
@@ -120,6 +155,29 @@ export function buildChatGptToolsList(): { tools: McpToolDescriptor[] } {
               description: "Filter to one category (e.g. 'home-services', 'reviews', 'scheduling'). Optional.",
             },
           },
+        },
+        // Read-only: lists agents, changes nothing.
+        annotations: { readOnlyHint: true, destructiveHint: false, openWorldHint: false },
+        outputSchema: {
+          type: "object",
+          properties: {
+            agents: {
+              type: "array",
+              description: "The matching marketplace agents.",
+              items: {
+                type: "object",
+                properties: {
+                  slug: { type: "string" },
+                  name: { type: "string" },
+                  description: { type: ["string", "null"] },
+                  niche: { type: "string" },
+                  price: { type: "number", description: "Price in cents; 0 = free." },
+                },
+                required: ["slug", "name", "price"],
+              },
+            },
+          },
+          required: ["agents"],
         },
       },
       {
@@ -143,6 +201,21 @@ export function buildChatGptToolsList(): { tools: McpToolDescriptor[] } {
             },
           },
           required: ["workspace_token", "agent_slug"],
+        },
+        // Writes into the caller's OWN workspace (bounded to our product, not
+        // arbitrary URLs) and never charges → openWorld + destructive both false.
+        annotations: { readOnlyHint: false, destructiveHint: false, openWorldHint: false },
+        outputSchema: {
+          type: "object",
+          properties: {
+            ok: { type: "boolean", description: "Whether the install resolved (false carries a friendly error)." },
+            name: { type: "string" },
+            url: { type: "string", description: "Where to manage the workspace after a free install." },
+            paid: { type: "boolean", description: "True when the agent is paid (returned a claim link, not installed)." },
+            claimUrl: { type: "string", description: "Purchase link for a paid agent." },
+            error: { type: "string" },
+          },
+          required: ["ok"],
         },
       },
     ],

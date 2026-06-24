@@ -66,6 +66,31 @@ describe("buildChatGptToolsList", () => {
     const schema = tool!.inputSchema as { properties: Record<string, unknown>; required?: string[] };
     assert.deepEqual([...(schema.required ?? [])].sort(), ["agent_slug", "workspace_token"]);
   });
+
+  // ChatGPT app review REQUIRES impact annotations + an outputSchema on every
+  // tool (omitting annotations is a validation error → rejection). Lock them in.
+  test("every tool declares boolean impact annotations matching its real behavior", () => {
+    const tools = buildChatGptToolsList().tools;
+    const byName = (n: string) => tools.find((t) => t.name === n)!;
+    for (const tool of tools) {
+      assert.ok(tool.annotations, `${tool.name} is missing annotations`);
+      assert.equal(typeof tool.annotations!.readOnlyHint, "boolean");
+      assert.equal(typeof tool.annotations!.destructiveHint, "boolean");
+      assert.equal(typeof tool.annotations!.openWorldHint, "boolean");
+    }
+    assert.equal(byName("browse_marketplace").annotations!.readOnlyHint, true);
+    assert.equal(byName("build_workspace").annotations!.readOnlyHint, false);
+    assert.equal(byName("build_workspace").annotations!.openWorldHint, true);
+    assert.equal(byName("deploy_agent").annotations!.readOnlyHint, false);
+    assert.equal(byName("deploy_agent").annotations!.destructiveHint, false);
+  });
+
+  test("every tool declares an object outputSchema", () => {
+    for (const tool of buildChatGptToolsList().tools) {
+      assert.ok(tool.outputSchema, `${tool.name} is missing outputSchema`);
+      assert.equal((tool.outputSchema as { type?: string }).type, "object");
+    }
+  });
 });
 
 // ─── parseBuildWorkspaceArgs ─────────────────────────────────────────────────

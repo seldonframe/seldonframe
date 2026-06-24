@@ -108,6 +108,15 @@ describe("handleChatGptRpc — lifecycle", () => {
     assert.equal(result.protocolVersion, MCP_PROTOCOL_VERSION);
   });
 
+  test("initialize → includes descriptive server instructions naming the tool flow", async () => {
+    const { deps } = makeHarness();
+    const out = await handleChatGptRpc(rpc("initialize"), deps);
+    const result = (out.body as { result?: { instructions?: string } }).result!;
+    assert.equal(typeof result.instructions, "string");
+    assert.ok((result.instructions ?? "").length > 50, "instructions should be descriptive");
+    assert.match(result.instructions!, /build_workspace/);
+  });
+
   test("ping → empty result", async () => {
     const { deps } = makeHarness();
     const out = await handleChatGptRpc(rpc("ping"), deps);

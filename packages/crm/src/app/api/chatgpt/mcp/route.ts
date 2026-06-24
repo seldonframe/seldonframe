@@ -33,13 +33,29 @@ import { buildRealDeps } from "@/lib/chatgpt-app/deps";
 // anything (there's no per-user auth to leak).
 const CORS_HEADERS = {
   "Access-Control-Allow-Origin": "*",
-  "Access-Control-Allow-Methods": "POST, OPTIONS",
+  "Access-Control-Allow-Methods": "GET, POST, OPTIONS",
   "Access-Control-Allow-Headers": "Content-Type, Accept, Authorization, Mcp-Session-Id",
   "Access-Control-Max-Age": "86400",
 } as const;
 
 export async function OPTIONS() {
   return new NextResponse(null, { status: 204, headers: CORS_HEADERS });
+}
+
+// ChatGPT's connector wizard probes the MCP URL (and adjacent discovery paths)
+// with a GET while it negotiates. Answer with a tiny health payload so the
+// wizard never sees a 502 mid-connect. (We use NO OAuth in v1 — the server is
+// public — so there is no protected-resource metadata to advertise here.)
+export async function GET() {
+  return NextResponse.json(
+    {
+      name: "SeldonFrame",
+      status: "ok",
+      transport: "mcp/streamable-http",
+      endpoint: "/api/chatgpt/mcp",
+    },
+    { status: 200, headers: CORS_HEADERS },
+  );
 }
 
 /** The caller IP for the build_workspace rate-limit (matches the anonymous

@@ -45,6 +45,12 @@ import {
 } from "./chatgpt-mcp-rpc";
 import type { MarketplaceAgentRow } from "@/lib/marketplace/agent-listings";
 
+/** MCP server `instructions` (returned on initialize). ChatGPT + Codex read this
+ *  alongside the tool metadata to understand the cross-tool flow. Kept concise +
+ *  self-contained in the first ~512 chars per the Apps SDK guidance. */
+export const CHATGPT_SERVER_INSTRUCTIONS =
+  "SeldonFrame builds a complete front office (public website, booking page, intake form, CRM, and AI chatbot) for a local service business from one short description, then lets you add AI agents to it. Typical flow: call build_workspace first to create the workspace and get a workspace_token, then browse_marketplace to list agents, then deploy_agent with that token plus an agent slug. build_workspace needs no login and returns a live public URL. Paid agents return a purchase link — this server never charges a card.";
+
 /** The result of building an anonymous workspace (the route maps the real
  *  createAnonymousWorkspace return onto this). The workspaceToken threads
  *  deploy_agent later in the same conversation. */
@@ -110,7 +116,13 @@ export async function handleChatGptRpc(rawBody: string, deps: ChatGptMcpDeps): P
 
   switch (method) {
     case "initialize":
-      return { status: 200, body: jsonRpcResult(id, buildInitializeResult({ agentName: "SeldonFrame" })) };
+      return {
+        status: 200,
+        body: jsonRpcResult(id, {
+          ...buildInitializeResult({ agentName: "SeldonFrame" }),
+          instructions: CHATGPT_SERVER_INSTRUCTIONS,
+        }),
+      };
 
     case "ping":
       return { status: 200, body: jsonRpcResult(id, {}) };
