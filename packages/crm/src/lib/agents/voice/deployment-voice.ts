@@ -44,6 +44,7 @@ import {
 import { getAgentTemplate } from "@/lib/agent-templates/store";
 import { getOrCreateVoiceAgent } from "./voice-agent";
 import { resolveBookingMode } from "@/lib/deployments/booking-providers";
+import { deploymentToBinding } from "@/lib/deployments/booking-binding";
 
 /** What the webhook needs to run a deployment-routed call. Mirrors the fields
  *  the workspace path threads into runVoiceCall + startVoiceConversation. */
@@ -208,9 +209,18 @@ export async function loadDeploymentVoiceContext(args: {
     //    legacy/unknown stored value back to 'native', so the tool branch always
     //    sees a valid mode. Only the DEPLOYMENT path sets ctx.booking — workspace
     //    agents leave it undefined and keep the unchanged native booking chain.
+    //    `binding` is the pluggable-backend view of the SAME stored config
+    //    (bookingMode [+ calendarRef] → native | external_link | book_external);
+    //    the booking tools read it via resolveCalendarBackend. Derived by the
+    //    shared deploymentToBinding so every surface (voice/chat/SMS/email) maps
+    //    it identically (Task 6 reuses it). mode/externalUrl stay for the
+    //    existing handoff tool branches. The voice row doesn't carry calendarRef
+    //    yet, so book_external currently resolves with calendarRef=null →
+    //    native fallback until calendar-connect threads the ref through.
     booking: {
       mode: resolveBookingMode(args.deployment.bookingMode),
       externalUrl: args.deployment.externalBookingUrl ?? null,
+      binding: deploymentToBinding(args.deployment),
     },
   };
 
