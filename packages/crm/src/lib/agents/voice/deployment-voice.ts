@@ -43,8 +43,8 @@ import {
 } from "./voice-workspace";
 import { getAgentTemplate } from "@/lib/agent-templates/store";
 import { getOrCreateVoiceAgent } from "./voice-agent";
-import { resolveBookingMode } from "@/lib/deployments/booking-providers";
 import { deploymentToBinding } from "@/lib/deployments/booking-binding";
+import { bindingToCtxBooking } from "@/lib/agents/booking/binding-ctx";
 
 /** What the webhook needs to run a deployment-routed call. Mirrors the fields
  *  the workspace path threads into runVoiceCall + startVoiceConversation. */
@@ -206,23 +206,16 @@ export async function loadDeploymentVoiceContext(args: {
     conversationId: deps.generateConversationId(),
     testMode: false,
     timezone: personaInputs.timezone,
-    // 6. Per-deployment booking mode (ICP-3). resolveBookingMode coerces any
-    //    legacy/unknown stored value back to 'native', so the tool branch always
-    //    sees a valid mode. Only the DEPLOYMENT path sets ctx.booking — workspace
-    //    agents leave it undefined and keep the unchanged native booking chain.
-    //    `binding` is the pluggable-backend view of the SAME stored config
-    //    (bookingMode [+ calendarRef] → native | external_link | book_external);
-    //    the booking tools read it via resolveCalendarBackend. Derived by the
-    //    shared deploymentToBinding so every surface (voice/chat/SMS/email) maps
-    //    it identically (Task 6 reuses it). mode/externalUrl stay for the
-    //    existing handoff tool branches. The voice row doesn't carry calendarRef
-    //    yet, so book_external currently resolves with calendarRef=null →
-    //    native fallback until calendar-connect threads the ref through.
-    booking: {
-      mode: resolveBookingMode(args.deployment.bookingMode),
-      externalUrl: args.deployment.externalBookingUrl ?? null,
-      binding: deploymentToBinding(args.deployment),
-    },
+    // 6. Per-deployment booking ctx (ICP-3). Built through the SAME
+    //    deploymentToBinding → bindingToCtxBooking pipeline as chat/SMS/email so
+    //    every surface maps identically: a connected client calendar
+    //    (book_external) lands as mode:"native" + binding, which routes the
+    //    booking tools through resolveCalendarBackend → the Composio adapter.
+    //    Setting mode:"api_mcp" here was the bug — it hit the legacy "followup"
+    //    handoff branch (tools.ts) and the agent took a message instead of
+    //    booking into Google. external_link still maps to its handoff. Only the
+    //    DEPLOYMENT path sets ctx.booking; workspace agents leave it undefined.
+    booking: bindingToCtxBooking(deploymentToBinding(args.deployment)),
   };
 
   return {
