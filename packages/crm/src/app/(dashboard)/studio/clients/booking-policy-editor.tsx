@@ -2,16 +2,17 @@
 //
 // A reusable, controlled editor for a deployment's BookingPolicy: the rules a
 // deployed agent obeys when it books (slot length, buffer, lead time, daily cap,
-// the weekday window + start/end, and the fields it must collect). The agency
+// the PER-DAY business-hours windows, and the fields it must collect). The agency
 // tunes these per-client from the Studio client card (activate-form.tsx renders
 // it inside a collapsible "Booking rules" section).
 //
 // "use client" — owns the controlled field state + the save transition. Seeded
 // with the EFFECTIVE policy (resolveBookingPolicy(...) computed server-side in
 // page.tsx), so the operator sees the values actually in force, not a blank form.
-// On Save it builds the policy object from local state and persists it verbatim
-// via setBookingPolicyAction; the server resolver re-clamps any out-of-range
-// stored value at read time, so light client-side validation is enough here.
+// On Save it builds the policy object (with the per-day `hours` map) from local
+// state and persists it verbatim via setBookingPolicyAction; the server resolver
+// re-clamps any out-of-range stored value at read time, so light client-side
+// validation is enough here.
 //
 // House chrome matches the rest of this folder: crm-button-* classes, the muted
 // label/border styles from activate-form.tsx, useTransition, and the transient
@@ -23,9 +24,12 @@
 import { useState, useTransition, useEffect } from "react";
 import { Check, Loader2, CalendarClock } from "lucide-react";
 import { setBookingPolicyAction } from "@/lib/deployments/actions";
-import type { BookingPolicy } from "@/lib/agents/booking/booking-policy";
+import type {
+  BookingPolicy,
+  DayWindow,
+} from "@/lib/agents/booking/booking-policy";
 
-// The weekday toggle is Sun..Sat → 0..6 (matches BookingPolicy.weekdays).
+// The per-day rows are Sun..Sat → 0..6 (matches BookingPolicy.hours keys).
 const WEEKDAYS: Array<{ idx: number; label: string }> = [
   { idx: 0, label: "Sun" },
   { idx: 1, label: "Mon" },
@@ -35,6 +39,26 @@ const WEEKDAYS: Array<{ idx: number; label: string }> = [
   { idx: 5, label: "Fri" },
   { idx: 6, label: "Sat" },
 ];
+
+// The default window seeded into a row when the operator OPENS a previously
+// closed day (so the time inputs aren't blank). The resolver would clamp a bad
+// window anyway; this just gives a sensible starting point.
+const DEFAULT_OPEN_WINDOW: DayWindow = { start: "09:00", end: "17:00" };
+
+/** One editable per-day row's state: open flag + its window times. Seeded from
+ *  the resolved policy's `hours` (a day present → open with its window; a day
+ *  absent → closed, pre-filled with the default window for when it's opened). */
+type DayRowState = { open: boolean; start: string; end: string };
+
+/** Seed the 7 per-day rows (idx 0..6) from a resolved policy's hours map. */
+function seedDayRows(hours: BookingPolicy["hours"]): DayRowState[] {
+  return WEEKDAYS.map((d) => {
+    const w = hours[d.idx];
+    return w
+      ? { open: true, start: w.start, end: w.end }
+      : { open: false, start: DEFAULT_OPEN_WINDOW.start, end: DEFAULT_OPEN_WINDOW.end };
+  });
+}
 
 // The small known set of required-field chips. Any custom field already present
 // in `initial.requiredFields` is preserved + rendered as its own chip too.
@@ -63,9 +87,10 @@ export function BookingPolicyEditor({
   const [maxPerDay, setMaxPerDay] = useState(
     initial.maxPerDay == null ? "" : String(initial.maxPerDay),
   );
-  const [weekdays, setWeekdays] = useState<number[]>(initial.weekdays);
-  const [startTime, setStartTime] = useState(initial.startTime);
-  const [endTime, setEndTime] = useState(initial.endTime);
+  // Per-day windows: one row per weekday (Sun..Sat), seeded from initial.hours.
+  const [dayRows, setDayRows] = useState<DayRowState[]>(() =>
+    seedDayRows(initial.hours),
+  );
   // Union the known chips with any custom required fields already stored, so a
   // custom field is shown (and stays selected) rather than silently dropped.
   const [requiredFields, setRequiredFields] = useState<string[]>(
@@ -90,11 +115,16 @@ export function BookingPolicyEditor({
     ...requiredFields.filter((f) => !KNOWN_REQUIRED_FIELDS.includes(f)),
   ];
 
-  const toggleWeekday = (idx: number) => {
-    setWeekdays((prev) =>
-      prev.includes(idx)
-        ? prev.filter((d) => d !== idx)
-        : [...prev, idx].sort((a, b) => a - b),
+  // Per-day row mutators. `patchDay` updates one weekday row in place; `toggleDay`
+  // flips its open/closed flag (opening a blank day fills the default window).
+  const patchDay = (idx: number, patch: Partial<DayRowState>) => {
+    setDayRows((prev) =>
+      prev.map((row, i) => (i === idx ? { ...row, ...patch } : row)),
+    );
+  };
+  const toggleDay = (idx: number) => {
+    setDayRows((prev) =>
+      prev.map((row, i) => (i === idx ? { ...row, open: !row.open } : row)),
     );
   };
 
@@ -104,19 +134,34 @@ export function BookingPolicyEditor({
     );
   };
 
-  // Light client-side validation: duration >= 1 and end > start. The server
-  // resolver canonicalizes everything else (clamps buffer/lead, drops bad
-  // weekdays, repairs the window), so we only block the two cases a bad form
-  // could make confusing.
+  // Light client-side validation: duration >= 1, and every OPEN day must have a
+  // window with end > start. The server resolver canonicalizes everything else
+  // (clamps buffer/lead, drops bad windows/days), so we only block the cases a
+  // bad form could make confusing. A day that is open but has end<=start is the
+  // one mistake we surface inline.
   const durationNum = Number(duration);
   const durationValid = Number.isFinite(durationNum) && durationNum >= 1;
-  const windowValid = endTime > startTime;
-  const canSave = durationValid && windowValid && !isSaving;
+  const invalidOpenDays = WEEKDAYS.filter(
+    (d) => dayRows[d.idx]!.open && !(dayRows[d.idx]!.end > dayRows[d.idx]!.start),
+  );
+  const daysValid = invalidOpenDays.length === 0;
+  const canSave = durationValid && daysValid && !isSaving;
 
   const save = () => {
     setError(null);
     setSaved(false);
     if (!canSave) return;
+
+    // Build the per-day hours map from the open rows. Each open day with a valid
+    // window contributes an entry; closed days are simply omitted (= closed). The
+    // booking engine re-clamps on read, so a stray bad window can't break a call.
+    const hours: BookingPolicy["hours"] = {};
+    for (const d of WEEKDAYS) {
+      const row = dayRows[d.idx]!;
+      if (row.open && row.end > row.start) {
+        hours[d.idx] = { start: row.start, end: row.end };
+      }
+    }
 
     // Build the sparse policy object from controlled state. Numbers are coerced;
     // an empty maxPerDay → null (no cap). The booking engine re-clamps on read.
@@ -126,9 +171,7 @@ export function BookingPolicyEditor({
       bufferMinutes: Math.max(0, Math.round(Number(buffer) || 0)),
       leadTimeHours: Math.max(0, Number(leadTime) || 0),
       maxPerDay: maxPerDay.trim() === "" || !(maxNum > 0) ? null : Math.round(maxNum),
-      weekdays,
-      startTime,
-      endTime,
+      hours,
       requiredFields,
     };
 
@@ -186,67 +229,62 @@ export function BookingPolicyEditor({
         </p>
       )}
 
-      {/* Weekday window — multi-select Sun..Sat */}
+      {/* Per-day business hours — one row per weekday (Sun..Sat): an Open/Closed
+          toggle + Start/End times (disabled when closed). A closed day is simply
+          omitted from the saved `hours` map. */}
       <div className="flex flex-col gap-1.5">
         <span className="text-[11px] font-medium uppercase tracking-wide text-muted-foreground">
-          Days the agent books
+          Hours the agent books
         </span>
-        <div className="flex flex-wrap gap-1.5">
+        <div className="flex flex-col gap-1.5">
           {WEEKDAYS.map((d) => {
-            const on = weekdays.includes(d.idx);
+            const row = dayRows[d.idx]!;
+            const rowInvalid = row.open && !(row.end > row.start);
             return (
-              <button
-                key={d.idx}
-                type="button"
-                onClick={() => toggleWeekday(d.idx)}
-                aria-pressed={on}
-                disabled={isSaving}
-                className={`inline-flex h-8 w-11 items-center justify-center rounded-md border text-xs font-medium transition-colors disabled:opacity-60 ${
-                  on
-                    ? "border-indigo-500/40 bg-indigo-500/10 text-indigo-600 dark:text-indigo-300"
-                    : "bg-background text-muted-foreground hover:bg-muted/50"
-                }`}
-              >
-                {d.label}
-              </button>
+              <div key={d.idx} className="flex flex-wrap items-center gap-2">
+                {/* Open/Closed toggle — reuses the chip look from the field chips */}
+                <button
+                  type="button"
+                  onClick={() => toggleDay(d.idx)}
+                  aria-pressed={row.open}
+                  disabled={isSaving}
+                  className={`inline-flex h-8 w-24 items-center justify-center gap-1 rounded-md border text-xs font-medium transition-colors disabled:opacity-60 ${
+                    row.open
+                      ? "border-indigo-500/40 bg-indigo-500/10 text-indigo-600 dark:text-indigo-300"
+                      : "bg-background text-muted-foreground hover:bg-muted/50"
+                  }`}
+                >
+                  <span className="w-8 text-left">{d.label}</span>
+                  <span>{row.open ? "Open" : "Closed"}</span>
+                </button>
+                <input
+                  type="time"
+                  value={row.start}
+                  onChange={(e) => patchDay(d.idx, { start: e.target.value })}
+                  disabled={isSaving || !row.open}
+                  aria-label={`${d.label} start time`}
+                  aria-invalid={rowInvalid}
+                  className="crm-input h-8 w-28 text-sm disabled:opacity-50"
+                />
+                <span className="text-xs text-muted-foreground">to</span>
+                <input
+                  type="time"
+                  value={row.end}
+                  onChange={(e) => patchDay(d.idx, { end: e.target.value })}
+                  disabled={isSaving || !row.open}
+                  aria-label={`${d.label} end time`}
+                  aria-invalid={rowInvalid}
+                  className="crm-input h-8 w-28 text-sm disabled:opacity-50"
+                />
+                {rowInvalid && (
+                  <span className="text-[11px] text-rose-600 dark:text-rose-400">
+                    End must be after start
+                  </span>
+                )}
+              </div>
             );
           })}
         </div>
-      </div>
-
-      {/* Business-hours window — start / end (HH:MM) */}
-      <div className="flex flex-wrap items-end gap-3">
-        <label className="flex flex-col gap-1.5">
-          <span className="text-[11px] font-medium uppercase tracking-wide text-muted-foreground">
-            Start
-          </span>
-          <input
-            type="time"
-            value={startTime}
-            onChange={(e) => setStartTime(e.target.value)}
-            disabled={isSaving}
-            aria-invalid={!windowValid}
-            className="crm-input h-8 w-32 text-sm"
-          />
-        </label>
-        <label className="flex flex-col gap-1.5">
-          <span className="text-[11px] font-medium uppercase tracking-wide text-muted-foreground">
-            End
-          </span>
-          <input
-            type="time"
-            value={endTime}
-            onChange={(e) => setEndTime(e.target.value)}
-            disabled={isSaving}
-            aria-invalid={!windowValid}
-            className="crm-input h-8 w-32 text-sm"
-          />
-        </label>
-        {!windowValid && (
-          <p className="pb-1.5 text-[11px] text-rose-600 dark:text-rose-400">
-            End time must be after the start time.
-          </p>
-        )}
       </div>
 
       {/* Required fields — chip toggles (known set + any custom present) */}

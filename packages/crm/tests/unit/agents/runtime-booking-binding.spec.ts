@@ -62,7 +62,11 @@ describe("bindingToCtxBooking — pure binding → ctx.booking mapper", () => {
       calendarRef: { provider: "googlecalendar", accountId: "ca_1" },
     };
     const policy: BookingPolicy = resolveBookingPolicy(
-      { durationMinutes: 60, weekdays: [2], requiredFields: ["name", "phone", "address"] },
+      {
+        durationMinutes: 60,
+        hours: { 2: { start: "09:00", end: "17:00" } },
+        requiredFields: ["name", "phone", "address"],
+      },
       null,
       "UTC",
     );
@@ -70,7 +74,7 @@ describe("bindingToCtxBooking — pure binding → ctx.booking mapper", () => {
     assert.ok(booking, "expected a ctx.booking slice");
     // The per-client policy rides on ctx.booking.policy for the booking tools.
     assert.equal(booking.policy?.durationMinutes, 60);
-    assert.deepEqual(booking.policy?.weekdays, [2]);
+    assert.deepEqual(booking.policy?.hours, { 2: { start: "09:00", end: "17:00" } });
     assert.deepEqual(booking.policy?.requiredFields, ["name", "phone", "address"]);
     // The binding mapping is unchanged by the added policy arg.
     assert.equal(booking.binding?.mode, "book_external");

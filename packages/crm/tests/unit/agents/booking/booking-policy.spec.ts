@@ -14,9 +14,14 @@ describe("resolveBookingPolicy", () => {
     assert.equal(p.bufferMinutes, 0);
     assert.equal(p.maxPerDay, null);
     assert.equal(p.leadTimeHours, 0);
-    assert.deepEqual(p.weekdays, [1, 2, 3, 4, 5]);
-    assert.equal(p.startTime, "09:00");
-    assert.equal(p.endTime, "17:00");
+    // Mon–Fri 09:00–17:00, Sat/Sun closed (absent).
+    assert.deepEqual(p.hours, {
+      1: { start: "09:00", end: "17:00" },
+      2: { start: "09:00", end: "17:00" },
+      3: { start: "09:00", end: "17:00" },
+      4: { start: "09:00", end: "17:00" },
+      5: { start: "09:00", end: "17:00" },
+    });
     assert.deepEqual(p.requiredFields, ["name", "phone"]);
     assert.equal(p.timezone, "America/Chicago");
   });
@@ -25,27 +30,113 @@ describe("resolveBookingPolicy", () => {
     const p = resolveBookingPolicy();
     assert.equal(p.durationMinutes, SYSTEM_DEFAULTS.durationMinutes);
     assert.equal(p.timezone, "UTC");
-    // returned arrays must be fresh copies, not the shared SYSTEM_DEFAULTS arrays
-    assert.notEqual(p.weekdays, SYSTEM_DEFAULTS.weekdays);
+    // returned containers must be fresh copies, not the shared SYSTEM_DEFAULTS ones
+    assert.notEqual(p.hours, SYSTEM_DEFAULTS.hours);
     assert.notEqual(p.requiredFields, SYSTEM_DEFAULTS.requiredFields);
+    // …and the nested window objects must be copies too (no shared references).
+    assert.notEqual(p.hours[1], SYSTEM_DEFAULTS.hours[1]);
+  });
+
+  // ── backward-compat: legacy uniform-window input → per-day hours map ──
+  test("legacy {weekdays,startTime,endTime} → hours keyed by each weekday", () => {
+    const p = resolveBookingPolicy(
+      { weekdays: [1, 2, 3], startTime: "08:00", endTime: "16:00" },
+      null,
+      "UTC",
+    );
+    assert.deepEqual(p.hours, {
+      1: { start: "08:00", end: "16:00" },
+      2: { start: "08:00", end: "16:00" },
+      3: { start: "08:00", end: "16:00" },
+    });
+    // Days NOT in the legacy weekday set are closed (absent from the map).
+    assert.deepEqual(Object.keys(p.hours).sort(), ["1", "2", "3"]);
+  });
+
+  // ── new shape: per-day hours map, Saturday-only ──
+  test("new {hours:{6:{...}}} → Saturday open 10–2, weekdays closed", () => {
+    const p = resolveBookingPolicy(
+      { hours: { 6: { start: "10:00", end: "14:00" } } },
+      null,
+      "UTC",
+    );
+    assert.deepEqual(p.hours, { 6: { start: "10:00", end: "14:00" } });
+    assert.deepEqual(Object.keys(p.hours), ["6"]); // only Saturday; weekdays closed
+  });
+
+  test("a per-day hours input preserves each day's distinct window", () => {
+    const p = resolveBookingPolicy(
+      {
+        hours: {
+          1: { start: "09:00", end: "17:00" },
+          6: { start: "10:00", end: "14:00" },
+        },
+      },
+      null,
+      "UTC",
+    );
+    assert.deepEqual(p.hours, {
+      1: { start: "09:00", end: "17:00" },
+      6: { start: "10:00", end: "14:00" },
+    });
   });
 
   test("deployment overrides template overrides defaults, field-by-field", () => {
     const p = resolveBookingPolicy(
-      { durationMinutes: 60, maxPerDay: 6 }, // deployment
+      { durationMinutes: 60, maxPerDay: 6 }, // deployment (no hours → falls through)
       {
         durationMinutes: 45,
         bufferMinutes: 15,
         requiredFields: ["name", "phone", "address"],
-      }, // template
+      }, // template (no hours either)
       "UTC",
     );
     assert.equal(p.durationMinutes, 60); // deployment wins
     assert.equal(p.bufferMinutes, 15); // template fills
     assert.equal(p.maxPerDay, 6); // deployment
     assert.deepEqual(p.requiredFields, ["name", "phone", "address"]); // template
-    assert.equal(p.startTime, "09:00"); // system default
-    assert.equal(p.endTime, "17:00"); // system default
+    // Neither input carried hours → system-default Mon–Fri window.
+    assert.deepEqual(p.hours, {
+      1: { start: "09:00", end: "17:00" },
+      2: { start: "09:00", end: "17:00" },
+      3: { start: "09:00", end: "17:00" },
+      4: { start: "09:00", end: "17:00" },
+      5: { start: "09:00", end: "17:00" },
+    });
+  });
+
+  test("deployment hours win WHOLE over template hours (not per-day merged)", () => {
+    const p = resolveBookingPolicy(
+      { hours: { 6: { start: "10:00", end: "14:00" } } }, // deployment: Sat only
+      {
+        hours: {
+          1: { start: "09:00", end: "17:00" },
+          2: { start: "09:00", end: "17:00" },
+        },
+      }, // template: Mon+Tue
+      "UTC",
+    );
+    // Deployment's hours replace the template's entirely — Mon/Tue are NOT merged in.
+    assert.deepEqual(p.hours, { 6: { start: "10:00", end: "14:00" } });
+  });
+
+  test("template hours used when deployment carries none", () => {
+    const p = resolveBookingPolicy(
+      { durationMinutes: 60 }, // deployment: no hours
+      { hours: { 3: { start: "09:00", end: "12:00" } } }, // template: Wed
+      "UTC",
+    );
+    assert.deepEqual(p.hours, { 3: { start: "09:00", end: "12:00" } });
+    assert.equal(p.durationMinutes, 60);
+  });
+
+  test("a deployment's new hours win over a template's LEGACY shape", () => {
+    const p = resolveBookingPolicy(
+      { hours: { 6: { start: "10:00", end: "14:00" } } }, // deployment: new shape
+      { weekdays: [1, 2, 3, 4, 5], startTime: "09:00", endTime: "17:00" }, // template: legacy
+      "UTC",
+    );
+    assert.deepEqual(p.hours, { 6: { start: "10:00", end: "14:00" } });
   });
 
   test("timezone precedence: deployment > template > workspace > 'UTC'", () => {
@@ -65,14 +156,19 @@ describe("resolveBookingPolicy", () => {
     assert.equal(resolveBookingPolicy(null, null, undefined).timezone, "UTC");
   });
 
-  test("clamps invalid values (end<=start, negative, bad tz, out-of-range weekdays)", () => {
+  test("clamps invalid values (bad window dropped, negative, bad tz, out-of-range day key)", () => {
     const p = resolveBookingPolicy(
       {
         durationMinutes: -5,
         bufferMinutes: -10,
-        startTime: "18:00",
-        endTime: "09:00",
-        weekdays: [9, -1, 2],
+        hours: {
+          // valid Tuesday window
+          2: { start: "09:00", end: "17:00" },
+          // invalid (end<=start) → dropped
+          3: { start: "18:00", end: "09:00" },
+          // out-of-range weekday key → dropped
+          9: { start: "09:00", end: "17:00" },
+        } as Record<number, { start: string; end: string }>,
         timezone: "   ",
       },
       null,
@@ -82,11 +178,25 @@ describe("resolveBookingPolicy", () => {
     assert.equal(p.durationMinutes, 1); // -5 rounded/clamped to the floor
     assert.ok(p.bufferMinutes >= 0);
     assert.equal(p.bufferMinutes, 0);
-    assert.ok(p.endTime > p.startTime); // window repaired to a default
-    assert.equal(p.startTime, "09:00");
-    assert.equal(p.endTime, "17:00");
-    assert.deepEqual(p.weekdays, [2]); // out-of-range days dropped, deduped, sorted
+    // Only the valid Tuesday window survives.
+    assert.deepEqual(p.hours, { 2: { start: "09:00", end: "17:00" } });
     assert.equal(p.timezone, "UTC"); // blank tz → workspace tz
+  });
+
+  test("legacy window with end<=start is invalid → falls through to defaults", () => {
+    const p = resolveBookingPolicy(
+      { weekdays: [1, 2, 3], startTime: "18:00", endTime: "09:00" },
+      null,
+      "UTC",
+    );
+    // The bad legacy window yields no hours → fall back to system defaults.
+    assert.deepEqual(p.hours, {
+      1: { start: "09:00", end: "17:00" },
+      2: { start: "09:00", end: "17:00" },
+      3: { start: "09:00", end: "17:00" },
+      4: { start: "09:00", end: "17:00" },
+      5: { start: "09:00", end: "17:00" },
+    });
   });
 
   test("rounds fractional duration/buffer; floors fractional positive maxPerDay", () => {
@@ -105,9 +215,25 @@ describe("resolveBookingPolicy", () => {
     assert.equal(resolveBookingPolicy({ maxPerDay: -3 }, null, "UTC").maxPerDay, null);
   });
 
-  test("weekdays empty after filtering → falls back to default weekdays", () => {
-    const p = resolveBookingPolicy({ weekdays: [9, -2, 1.5] }, null, "UTC");
-    assert.deepEqual(p.weekdays, [1, 2, 3, 4, 5]);
+  test("hours empty after filtering → falls back to default hours", () => {
+    // Every supplied day key is out of range or has a bad window → defaults.
+    const p = resolveBookingPolicy(
+      {
+        hours: {
+          9: { start: "09:00", end: "17:00" },
+          8: { start: "10:00", end: "14:00" },
+        } as Record<number, { start: string; end: string }>,
+      },
+      null,
+      "UTC",
+    );
+    assert.deepEqual(p.hours, {
+      1: { start: "09:00", end: "17:00" },
+      2: { start: "09:00", end: "17:00" },
+      3: { start: "09:00", end: "17:00" },
+      4: { start: "09:00", end: "17:00" },
+      5: { start: "09:00", end: "17:00" },
+    });
   });
 
   test("requiredFields are trimmed, lowercased, de-blanked; empty → default", () => {
@@ -131,9 +257,7 @@ describe("generateCandidateSlots", () => {
       {
         durationMinutes: 60,
         bufferMinutes: 0,
-        startTime: "09:00",
-        endTime: "12:00",
-        weekdays: [3],
+        hours: { 3: { start: "09:00", end: "12:00" } },
         timezone: "UTC",
       },
       null,
@@ -153,9 +277,7 @@ describe("generateCandidateSlots", () => {
       {
         durationMinutes: 30,
         bufferMinutes: 30,
-        startTime: "09:00",
-        endTime: "11:00",
-        weekdays: [3],
+        hours: { 3: { start: "09:00", end: "11:00" } },
         timezone: "UTC",
       },
       null,
@@ -166,9 +288,62 @@ describe("generateCandidateSlots", () => {
     assert.deepEqual(slots, ["2026-07-01T09:00:00.000Z", "2026-07-01T10:00:00.000Z"]);
   });
 
-  test("wrong weekday → []", () => {
-    const policy = resolveBookingPolicy({ weekdays: [1], timezone: "UTC" }, null, "UTC"); // Monday only
-    assert.deepEqual(generateCandidateSlots(policy, "2026-07-01", FAR_PAST), []); // Wed
+  test("closed weekday (absent from hours) → []", () => {
+    // Monday-only policy; 2026-07-01 is a Wednesday → Wed is closed → [].
+    const policy = resolveBookingPolicy(
+      { hours: { 1: { start: "09:00", end: "17:00" } }, timezone: "UTC" },
+      null,
+      "UTC",
+    );
+    assert.deepEqual(generateCandidateSlots(policy, "2026-07-01", FAR_PAST), []);
+  });
+
+  // ── per-day: Saturday open, Sunday closed ──
+  test("Saturday with only {6:{...}} → slots on Saturday", () => {
+    // 2026-07-04 is a Saturday (weekday 6).
+    const policy = resolveBookingPolicy(
+      { hours: { 6: { start: "10:00", end: "14:00" } }, durationMinutes: 60, timezone: "UTC" },
+      null,
+      "UTC",
+    );
+    const slots = generateCandidateSlots(policy, "2026-07-04", FAR_PAST);
+    assert.deepEqual(slots, [
+      "2026-07-04T10:00:00.000Z",
+      "2026-07-04T11:00:00.000Z",
+      "2026-07-04T12:00:00.000Z",
+      "2026-07-04T13:00:00.000Z",
+    ]);
+  });
+
+  test("Sunday with only {6:{...}} (Saturday open) → [] (Sunday closed)", () => {
+    // 2026-07-05 is a Sunday (weekday 0), absent from hours → closed.
+    const policy = resolveBookingPolicy(
+      { hours: { 6: { start: "10:00", end: "14:00" } }, durationMinutes: 60, timezone: "UTC" },
+      null,
+      "UTC",
+    );
+    assert.deepEqual(generateCandidateSlots(policy, "2026-07-05", FAR_PAST), []);
+  });
+
+  test("different per-day windows produce different slot lists", () => {
+    // Saturday 10–12 (60-min → 10:00, 11:00); Wednesday 09–11 (60-min → 09:00, 10:00).
+    const policy = resolveBookingPolicy(
+      {
+        durationMinutes: 60,
+        hours: {
+          3: { start: "09:00", end: "11:00" }, // Wed
+          6: { start: "10:00", end: "12:00" }, // Sat
+        },
+        timezone: "UTC",
+      },
+      null,
+      "UTC",
+    );
+    const wed = generateCandidateSlots(policy, "2026-07-01", FAR_PAST); // Wednesday
+    const sat = generateCandidateSlots(policy, "2026-07-04", FAR_PAST); // Saturday
+    assert.deepEqual(wed, ["2026-07-01T09:00:00.000Z", "2026-07-01T10:00:00.000Z"]);
+    assert.deepEqual(sat, ["2026-07-04T10:00:00.000Z", "2026-07-04T11:00:00.000Z"]);
+    assert.notDeepEqual(wed, sat); // the windows differ → the slots differ
   });
 
   test("fit rule: a slot whose END exceeds windowEnd is excluded", () => {
@@ -176,9 +351,7 @@ describe("generateCandidateSlots", () => {
       {
         durationMinutes: 90,
         bufferMinutes: 0,
-        startTime: "09:00",
-        endTime: "12:00",
-        weekdays: [3],
+        hours: { 3: { start: "09:00", end: "12:00" } },
         timezone: "UTC",
       },
       null,
@@ -193,9 +366,7 @@ describe("generateCandidateSlots", () => {
     const policy = resolveBookingPolicy(
       {
         durationMinutes: 60,
-        startTime: "09:00",
-        endTime: "12:00",
-        weekdays: [3],
+        hours: { 3: { start: "09:00", end: "12:00" } },
         leadTimeHours: 2,
         timezone: "UTC",
       },
@@ -215,9 +386,7 @@ describe("generateCandidateSlots", () => {
     const policy = resolveBookingPolicy(
       {
         durationMinutes: 60,
-        startTime: "09:00",
-        endTime: "12:00",
-        weekdays: [3],
+        hours: { 3: { start: "09:00", end: "12:00" } },
         leadTimeHours: 1,
         timezone: "UTC",
       },
@@ -238,9 +407,7 @@ describe("generateCandidateSlots", () => {
       {
         durationMinutes: 60,
         bufferMinutes: 0,
-        startTime: "09:00",
-        endTime: "12:00",
-        weekdays: [3],
+        hours: { 3: { start: "09:00", end: "12:00" } },
         timezone: "America/Chicago",
       },
       null,
@@ -260,9 +427,7 @@ describe("generateCandidateSlots", () => {
       {
         durationMinutes: 60,
         bufferMinutes: 0,
-        startTime: "09:00",
-        endTime: "11:00",
-        weekdays: [3],
+        hours: { 3: { start: "09:00", end: "11:00" } },
         timezone: "America/Chicago",
       },
       null,
@@ -280,9 +445,9 @@ describe("generateCandidateSlots", () => {
 
   test("weekday is evaluated in the policy timezone, not UTC", () => {
     // 2026-07-05 is a Sunday (weekday 0) in both UTC and Chicago.
-    // Default 30-min duration in a 09:00–10:00 window → two CDT slots (14:00Z, 14:30Z).
+    // 30-min duration in a 09:00–10:00 window → two CDT slots (14:00Z, 14:30Z).
     const sunPolicy = resolveBookingPolicy(
-      { weekdays: [0], startTime: "09:00", endTime: "10:00", timezone: "America/Chicago" },
+      { hours: { 0: { start: "09:00", end: "10:00" } }, timezone: "America/Chicago" },
       null,
       "America/Chicago",
     );
@@ -292,7 +457,7 @@ describe("generateCandidateSlots", () => {
     ]);
     // Same date with a Monday-only policy → []
     const monPolicy = resolveBookingPolicy(
-      { weekdays: [1], startTime: "09:00", endTime: "10:00", timezone: "America/Chicago" },
+      { hours: { 1: { start: "09:00", end: "10:00" } }, timezone: "America/Chicago" },
       null,
       "America/Chicago",
     );
@@ -303,8 +468,9 @@ describe("generateCandidateSlots", () => {
 describe("bookingPolicyFromIntake", () => {
   // The captured shape (clientContext.soul.business_hours): a structured
   // Record<weekday, {enabled, start, end}> as written by buildClientWorkspaceInput
-  // / buildBusinessHoursSoulPatch / the onboarding hours parser.
-  test("structured Mon-Fri 9-5 → weekdays [1..5], 09:00-17:00", () => {
+  // / buildBusinessHoursSoulPatch / the onboarding hours parser. The mapper now
+  // returns the per-day `hours` map directly (each enabled day → its own window).
+  test("structured Mon-Fri 9-5 → hours for weekdays 1..5 at 09:00-17:00", () => {
     const hours = {
       sunday: { enabled: false, start: "09:00", end: "17:00" },
       monday: { enabled: true, start: "09:00", end: "17:00" },
@@ -316,13 +482,17 @@ describe("bookingPolicyFromIntake", () => {
     };
     const out = bookingPolicyFromIntake({ soul: { business_hours: hours } });
     assert.deepEqual(out, {
-      weekdays: [1, 2, 3, 4, 5],
-      startTime: "09:00",
-      endTime: "17:00",
+      hours: {
+        1: { start: "09:00", end: "17:00" },
+        2: { start: "09:00", end: "17:00" },
+        3: { start: "09:00", end: "17:00" },
+        4: { start: "09:00", end: "17:00" },
+        5: { start: "09:00", end: "17:00" },
+      },
     });
   });
 
-  test("structured with a Saturday + closed Sunday derives weekdays incl. Sat", () => {
+  test("structured with a Saturday + closed Sunday → per-day hours PRESERVING the Sat window", () => {
     const hours = {
       monday: { enabled: true, start: "08:00", end: "18:00" },
       tuesday: { enabled: true, start: "08:00", end: "18:00" },
@@ -333,24 +503,33 @@ describe("bookingPolicyFromIntake", () => {
       sunday: { enabled: false, start: "09:00", end: "17:00" },
     };
     const out = bookingPolicyFromIntake({ soul: { business_hours: hours } });
-    // weekdays = every enabled day; the window is the most common enabled window
-    // (Mon-Fri 08:00-18:00 dominates the lone Sat 10:00-14:00).
+    // Each enabled day keeps its OWN window — the Saturday 10–2 is no longer
+    // collapsed into the dominant Mon–Fri window.
     assert.deepEqual(out, {
-      weekdays: [1, 2, 3, 4, 5, 6],
-      startTime: "08:00",
-      endTime: "18:00",
+      hours: {
+        1: { start: "08:00", end: "18:00" },
+        2: { start: "08:00", end: "18:00" },
+        3: { start: "08:00", end: "18:00" },
+        4: { start: "08:00", end: "18:00" },
+        5: { start: "08:00", end: "18:00" },
+        6: { start: "10:00", end: "14:00" },
+      },
     });
   });
 
   test("free-text business_hours is parsed via the onboarding hours parser", () => {
-    // "Mon-Fri 9-5" as a raw string → reuse parseHoursText → weekdays [1..5].
+    // "Mon-Fri 9-5" as a raw string → reuse parseHoursText → hours for 1..5.
     const out = bookingPolicyFromIntake({
       soul: { business_hours: "Mon-Fri 9-5" as unknown as Record<string, unknown> },
     });
     assert.deepEqual(out, {
-      weekdays: [1, 2, 3, 4, 5],
-      startTime: "09:00",
-      endTime: "17:00",
+      hours: {
+        1: { start: "09:00", end: "17:00" },
+        2: { start: "09:00", end: "17:00" },
+        3: { start: "09:00", end: "17:00" },
+        4: { start: "09:00", end: "17:00" },
+        5: { start: "09:00", end: "17:00" },
+      },
     });
   });
 
@@ -362,7 +541,7 @@ describe("bookingPolicyFromIntake", () => {
     assert.deepEqual(bookingPolicyFromIntake({ soul: { business_hours: {} } }), {});
   });
 
-  test("no enabled day → {} (no weekday window to derive)", () => {
+  test("no enabled day → {} (no window to derive)", () => {
     const hours = {
       monday: { enabled: false, start: "09:00", end: "17:00" },
       tuesday: { enabled: false, start: "09:00", end: "17:00" },

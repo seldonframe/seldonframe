@@ -59,6 +59,8 @@ export const TemplateBlueprintPatchSchema = z
     // — every field optional; resolveBookingPolicy clamps anything malformed, so
     // this is a loose allow-list (shape + obvious bounds), not the final guard.
     // Mirrors AgentBlueprint.defaultBookingPolicy (Partial<BookingPolicy>).
+    // Accepts BOTH the new per-day `hours` map AND the legacy uniform-window
+    // fields (resolveBookingPolicy normalizes either to `hours`).
     defaultBookingPolicy: z
       .object({
         durationMinutes: z.number().int().positive().optional(),
@@ -66,6 +68,17 @@ export const TemplateBlueprintPatchSchema = z
         maxPerDay: z.number().int().positive().nullable().optional(),
         leadTimeHours: z.number().min(0).optional(),
         timezone: z.string().min(1).optional(),
+        hours: z
+          .record(
+            z.string().regex(/^[0-6]$/),
+            z
+              .object({
+                start: z.string().regex(/^([01]\d|2[0-3]):[0-5]\d$/),
+                end: z.string().regex(/^([01]\d|2[0-3]):[0-5]\d$/),
+              })
+              .strict(),
+          )
+          .optional(),
         weekdays: z.array(z.number().int().min(0).max(6)).optional(),
         startTime: z.string().regex(/^([01]\d|2[0-3]):[0-5]\d$/).optional(),
         endTime: z.string().regex(/^([01]\d|2[0-3]):[0-5]\d$/).optional(),

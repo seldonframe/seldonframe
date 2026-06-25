@@ -245,15 +245,20 @@ describe("resolveSeededBookingPolicy", () => {
     const out = resolveSeededBookingPolicy(undefined, {
       soul: { business_hours: HOURS_MON_FRI },
     });
+    // The seed is now the per-day `hours` map (one entry per enabled day).
     assert.deepEqual(out, {
-      weekdays: [1, 2, 3, 4, 5],
-      startTime: "09:00",
-      endTime: "17:00",
+      hours: {
+        1: { start: "09:00", end: "17:00" },
+        2: { start: "09:00", end: "17:00" },
+        3: { start: "09:00", end: "17:00" },
+        4: { start: "09:00", end: "17:00" },
+        5: { start: "09:00", end: "17:00" },
+      },
     });
   });
 
   test("an explicit policy WINS over the intake seed (already-set case)", () => {
-    const explicit = { durationMinutes: 60, weekdays: [2] };
+    const explicit = { durationMinutes: 60, hours: { 2: { start: "10:00", end: "16:00" } } };
     const out = resolveSeededBookingPolicy(explicit, {
       soul: { business_hours: HOURS_MON_FRI },
     });
@@ -303,9 +308,13 @@ describe("createDeployment — booking_policy seed", () => {
     assert.ok(inserted, "insert must be called");
     const row: NewDeployment = inserted;
     assert.deepEqual(row.bookingPolicy, {
-      weekdays: [1, 2, 3, 4, 5],
-      startTime: "08:00",
-      endTime: "18:00",
+      hours: {
+        1: { start: "08:00", end: "18:00" },
+        2: { start: "08:00", end: "18:00" },
+        3: { start: "08:00", end: "18:00" },
+        4: { start: "08:00", end: "18:00" },
+        5: { start: "08:00", end: "18:00" },
+      },
     });
   });
 

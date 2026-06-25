@@ -1,15 +1,23 @@
 // Per-client booking rules — the pure policy engine.
 //
 // A deployed agent that books appointments obeys a `BookingPolicy`: appointment
-// length, buffer, daily cap, lead time, business-hours window (weekday set +
-// start/end), timezone, and the fields it must collect before booking. The
-// template (the product) declares sensible DEFAULTS; the deployment (the client's
-// instance) overrides them. This module owns:
-//   - the `BookingPolicy` type + `SYSTEM_DEFAULTS`
+// length, buffer, daily cap, lead time, PER-DAY business-hours windows, timezone,
+// and the fields it must collect before booking. The template (the product)
+// declares sensible DEFAULTS; the deployment (the client's instance) overrides
+// them. This module owns:
+//   - the `BookingPolicy` type (+ `DayWindow`) + `SYSTEM_DEFAULTS`
 //   - `resolveBookingPolicy(deployment?, template?, workspaceTimezone?)` — the
-//     single source of truth: field-by-field precedence + input clamping
+//     single source of truth: field-by-field precedence + input clamping. It
+//     accepts EITHER the per-day `hours` map OR the legacy uniform
+//     `weekdays`+`startTime`+`endTime` shape on each input (backward-compat) and
+//     normalizes to `hours`.
 //   - `generateCandidateSlots(policy, dateISO, now)` — the tz-correct, injected-
 //     clock slot generator the booking tools intersect with real free/busy
+//
+// HOURS MODEL (the evolution): instead of one window applied to every open day,
+// a policy carries `hours: Partial<Record<number, DayWindow>>` keyed by weekday
+// (0=Sun..6=Sat). A weekday present in the map is OPEN with that window; a weekday
+// ABSENT is CLOSED. This expresses "Mon–Fri 9–5, Sat 10–2, Sun closed" directly.
 //
 // Pure: no I/O, no DB, and no clock except the injected `now`. Nothing here may
 // throw on bad input — a live call must always end up with a usable policy and a
@@ -18,33 +26,108 @@
 
 import { parseHoursText } from "@/lib/onboarding/parse-hours";
 
+/** One open day's business-hours window, "HH:MM" 24h, end strictly after start. */
+export type DayWindow = { start: string; end: string };
+
 export type BookingPolicy = {
   durationMinutes: number; // appointment length
   bufferMinutes: number; // gap enforced between bookings
   maxPerDay: number | null; // cap on bookings/day; null = no cap
   leadTimeHours: number; // minimum notice before a slot
   timezone: string; // IANA, e.g. "America/Chicago"
-  weekdays: number[]; // 0=Sun..6=Sat
-  startTime: string; // "HH:MM" 24h
-  endTime: string; // "HH:MM" 24h
+  /** Per-weekday business-hours windows. Key = weekday (0=Sun..6=Sat). A weekday
+   *  PRESENT is open with that window; a weekday ABSENT is closed that day. */
+  hours: Partial<Record<number, DayWindow>>;
   requiredFields: string[]; // collected before booking
 };
 
+/** The legacy uniform-window input shape `resolveBookingPolicy` still accepts on
+ *  each input (deployment / template), alongside the new `hours` map. A stored
+ *  policy written before per-day windows uses these three fields. */
+export type LegacyBookingPolicyHours = {
+  weekdays?: number[]; // 0=Sun..6=Sat
+  startTime?: string; // "HH:MM" 24h
+  endTime?: string; // "HH:MM" 24h
+};
+
+/** What `resolveBookingPolicy` accepts on EACH input: a sparse resolved-shape
+ *  Partial (carrying `hours`) OR the legacy uniform-window fields — or both. */
+export type BookingPolicyInput = Partial<BookingPolicy> & LegacyBookingPolicyHours;
+
 /** Out-of-the-box rules: Mon–Fri 9–5, 30-min slots, no buffer/cap, name+phone.
- *  Timezone is intentionally omitted here — it resolves from the deployment /
- *  template / workspace tz (falling back to "UTC") in `resolveBookingPolicy`. */
+ *  Sat/Sun are absent from `hours` → closed. Timezone is intentionally omitted
+ *  here — it resolves from the deployment / template / workspace tz (falling back
+ *  to "UTC") in `resolveBookingPolicy`. */
 export const SYSTEM_DEFAULTS: Omit<BookingPolicy, "timezone"> = {
   durationMinutes: 30,
   bufferMinutes: 0,
   maxPerDay: null,
   leadTimeHours: 0,
-  weekdays: [1, 2, 3, 4, 5],
-  startTime: "09:00",
-  endTime: "17:00",
+  hours: {
+    1: { start: "09:00", end: "17:00" },
+    2: { start: "09:00", end: "17:00" },
+    3: { start: "09:00", end: "17:00" },
+    4: { start: "09:00", end: "17:00" },
+    5: { start: "09:00", end: "17:00" },
+  },
   requiredFields: ["name", "phone"],
 };
 
 const HHMM = /^([01]\d|2[0-3]):[0-5]\d$/;
+
+/** A fresh deep copy of SYSTEM_DEFAULTS.hours (never share the literal's nested
+ *  objects, so a caller can't mutate the module default). */
+function defaultHours(): Partial<Record<number, DayWindow>> {
+  const out: Partial<Record<number, DayWindow>> = {};
+  for (const [k, v] of Object.entries(SYSTEM_DEFAULTS.hours)) {
+    out[Number(k)] = { start: v!.start, end: v!.end };
+  }
+  return out;
+}
+
+/** Clamp an arbitrary hours map to valid entries: weekday key in 0..6, window a
+ *  valid "HH:MM" with end > start. Bad days are dropped. Returns a fresh object
+ *  (nested windows copied). */
+function clampHours(raw: Partial<Record<number, DayWindow>>): Partial<Record<number, DayWindow>> {
+  const out: Partial<Record<number, DayWindow>> = {};
+  for (const [k, v] of Object.entries(raw)) {
+    const day = Number(k);
+    if (!Number.isInteger(day) || day < 0 || day > 6) continue;
+    if (!v || typeof v !== "object") continue;
+    const start = typeof v.start === "string" ? v.start : "";
+    const end = typeof v.end === "string" ? v.end : "";
+    if (!HHMM.test(start) || !HHMM.test(end) || end <= start) continue;
+    out[day] = { start, end };
+  }
+  return out;
+}
+
+/** Build an hours map from the legacy uniform-window fields: each valid weekday
+ *  gets the SAME {startTime,endTime} window. Returns {} if the window is invalid
+ *  or no weekday survives (so the caller can fall through to the next input). */
+function hoursFromLegacy(legacy: LegacyBookingPolicyHours): Partial<Record<number, DayWindow>> {
+  const { weekdays, startTime, endTime } = legacy;
+  if (!Array.isArray(weekdays)) return {};
+  if (typeof startTime !== "string" || typeof endTime !== "string") return {};
+  if (!HHMM.test(startTime) || !HHMM.test(endTime) || endTime <= startTime) return {};
+  const out: Partial<Record<number, DayWindow>> = {};
+  for (const n of weekdays) {
+    if (!Number.isInteger(n) || n < 0 || n > 6) continue;
+    out[n] = { start: startTime, end: endTime };
+  }
+  return out;
+}
+
+/** Normalize ONE input (deployment / template) to a clamped hours map, accepting
+ *  either shape: an explicit `hours` map wins (clamped); else the legacy
+ *  `weekdays`+`startTime`+`endTime` fields are expanded. Returns {} when the input
+ *  carries no usable window (so precedence can fall through to the next source). */
+function normalizeInputHours(input: BookingPolicyInput): Partial<Record<number, DayWindow>> {
+  if (input.hours && typeof input.hours === "object") {
+    return clampHours(input.hours);
+  }
+  return hoursFromLegacy(input);
+}
 
 /** First non-null/undefined value, or undefined. Used for field-by-field
  *  deployment → template → default precedence. */
@@ -59,18 +142,25 @@ function pick<T>(...vals: (T | null | undefined)[]): T | undefined {
  * (deployment ?? template ?? SYSTEM_DEFAULTS); timezone is
  * deployment ?? template ?? workspace ?? "UTC".
  *
+ * Each input may carry EITHER the per-day `hours` map OR the legacy uniform
+ * `weekdays`+`startTime`+`endTime` fields (backward-compat for stored policies);
+ * both are normalized to a clamped `hours` map. The first input whose normalized
+ * hours are non-empty wins WHOLE (deployment hours are NOT per-day-merged with
+ * the template — kept simple); if neither yields any open day, the resolved hours
+ * fall back to SYSTEM_DEFAULTS.hours.
+ *
  * Every field is CLAMPED so a malformed stored value can never break a call:
  *   - durationMinutes  → rounded, floored at 1
  *   - bufferMinutes    → rounded, floored at 0
  *   - maxPerDay        → positive rounded int, else null (no cap)
  *   - leadTimeHours    → floored at 0
- *   - weekdays         → unique ints in 0..6, sorted; empty → defaults
- *   - start/end        → valid "HH:MM" with end > start, else BOTH reset to 09:00/17:00
+ *   - hours            → keys 0..6 only; each window valid "HH:MM" with end>start,
+ *                        bad days dropped; empty after all inputs → SYSTEM_DEFAULTS
  *   - requiredFields   → trimmed, lowercased, non-empty; empty → defaults
  */
 export function resolveBookingPolicy(
-  deployment?: Partial<BookingPolicy> | null,
-  template?: Partial<BookingPolicy> | null,
+  deployment?: BookingPolicyInput | null,
+  template?: BookingPolicyInput | null,
   workspaceTimezone?: string,
 ): BookingPolicy {
   const d = deployment ?? {};
@@ -93,17 +183,15 @@ export function resolveBookingPolicy(
     pick(d.leadTimeHours, t.leadTimeHours, SYSTEM_DEFAULTS.leadTimeHours)!,
   );
 
-  const weekdaysRaw = pick(d.weekdays, t.weekdays, SYSTEM_DEFAULTS.weekdays)!;
-  const weekdays = [
-    ...new Set(weekdaysRaw.filter((n) => Number.isInteger(n) && n >= 0 && n <= 6)),
-  ].sort((a, b) => a - b);
-
-  let startTime = pick(d.startTime, t.startTime, SYSTEM_DEFAULTS.startTime)!;
-  let endTime = pick(d.endTime, t.endTime, SYSTEM_DEFAULTS.endTime)!;
-  if (!HHMM.test(startTime) || !HHMM.test(endTime) || endTime <= startTime) {
-    startTime = SYSTEM_DEFAULTS.startTime;
-    endTime = SYSTEM_DEFAULTS.endTime;
-  }
+  // Hours: normalize each input (accepting either shape) to a clamped map, then
+  // take the first non-empty one WHOLE (deployment beats template beats default).
+  const dHours = normalizeInputHours(d);
+  const tHours = normalizeInputHours(t);
+  const hours = Object.keys(dHours).length
+    ? dHours
+    : Object.keys(tHours).length
+      ? tHours
+      : defaultHours();
 
   const reqRaw = pick(d.requiredFields, t.requiredFields, SYSTEM_DEFAULTS.requiredFields)!;
   const requiredFields = reqRaw.map((s) => String(s).trim().toLowerCase()).filter(Boolean);
@@ -116,9 +204,7 @@ export function resolveBookingPolicy(
     maxPerDay,
     leadTimeHours,
     timezone: tz,
-    weekdays: weekdays.length ? weekdays : [...SYSTEM_DEFAULTS.weekdays],
-    startTime,
-    endTime,
+    hours,
     requiredFields: requiredFields.length ? requiredFields : [...SYSTEM_DEFAULTS.requiredFields],
   };
 }
@@ -216,9 +302,11 @@ function hhmmToMinutes(hhmm: string): number {
  * Generate the candidate booking-slot start instants (UTC ISO strings) for the
  * calendar date `dateISO` ("YYYY-MM-DD"), under `policy`, relative to `now`:
  *
- *   - If `dateISO`'s weekday IN `policy.timezone` ∉ `policy.weekdays` → [].
- *   - Slots start at `startTime` and step by `durationMinutes + bufferMinutes`.
- *   - A slot is kept only if it FITS: `start + durationMinutes <= endTime`
+ *   - The date's weekday IN `policy.timezone` is looked up in `policy.hours`. If
+ *     that weekday is ABSENT (closed) → []. Otherwise that day's `{start,end}`
+ *     window is used (each day may have a DIFFERENT window).
+ *   - Slots start at the day's `start` and step by `durationMinutes + bufferMinutes`.
+ *   - A slot is kept only if it FITS: `start + durationMinutes <= end`
  *     (a slot whose end would exceed the window end is excluded).
  *   - A slot is kept only if `start >= now + leadTimeHours` (inclusive boundary).
  *   - Returned ascending, as `.toISOString()` UTC strings.
@@ -238,10 +326,11 @@ export function generateCandidateSlots(
   const day = Number(m[3]);
 
   const weekday = weekdayInTz(year, month, day, policy.timezone);
-  if (!policy.weekdays.includes(weekday)) return [];
+  const window = policy.hours[weekday];
+  if (!window) return []; // weekday closed (absent from the hours map)
 
-  const startMin = hhmmToMinutes(policy.startTime);
-  const endMin = hhmmToMinutes(policy.endTime);
+  const startMin = hhmmToMinutes(window.start);
+  const endMin = hhmmToMinutes(window.end);
   const step = policy.durationMinutes + policy.bufferMinutes;
   if (step <= 0) return []; // defensive; resolver guarantees duration >= 1
 
@@ -297,13 +386,13 @@ export function slotFitsFreeWindows(
 //   { monday: { enabled: true, start: "09:00", end: "17:00" }, ... }
 // (full lowercase weekday names; per-day enabled + "HH:MM" window).
 //
-// `bookingPolicyFromIntake` maps that into the THREE BookingPolicy fields it can
-// confidently derive from hours — `weekdays`, `startTime`, `endTime` — and
-// nothing else. A BookingPolicy carries a SINGLE window (not per-day), so we
-// take every enabled day for `weekdays` and the MOST COMMON enabled-day window
-// for start/end. It returns a sparse Partial (`{}` when nothing parses), so the
-// deploy seam can merge it under resolveBookingPolicy without overriding fields
-// it didn't derive. Pure — no I/O.
+// `bookingPolicyFromIntake` maps that into the ONE BookingPolicy field it can
+// confidently derive from hours — the per-day `hours` map — and nothing else.
+// Each enabled day becomes an `hours[weekday] = {start,end}` entry (its own
+// window, preserved exactly — a Sat 10–2 stays 10–2 even when weekdays are 9–5).
+// It returns a sparse Partial (`{}` when nothing parses), so the deploy seam can
+// merge it under resolveBookingPolicy without overriding fields it didn't derive.
+// Pure — no I/O.
 // ---------------------------------------------------------------------------
 
 /** The captured-intake shape this reads — the persisted client context's narrow
@@ -349,17 +438,15 @@ function enabledDaysFromStructured(hours: Record<string, unknown>): EnabledDay[]
 }
 
 /**
- * Derive the BookingPolicy hours fields a client's captured intake confidently
+ * Derive the BookingPolicy `hours` map a client's captured intake confidently
  * implies. Reads `intake.soul.business_hours`:
  *   - a structured per-day Record → used directly;
  *   - a free-text string → parsed via the onboarding `parseHoursText`.
- * Then collapses the enabled days into `{ weekdays, startTime, endTime }`:
- *   - `weekdays` = every enabled day (0=Sun..6=Sat), deduped + sorted;
- *   - `startTime`/`endTime` = the most common enabled-day window (ties resolve
- *     to the earliest start, then earliest end — deterministic).
+ * Each enabled day becomes an `hours[weekday] = {start,end}` entry, PRESERVING
+ * that day's own window (so e.g. Sat 10:00–14:00 stays 10–2 next to Mon–Fri 9–5).
  *
- * Returns ONLY those three fields, and ONLY when at least one valid enabled day
- * exists; otherwise `{}`. Never throws. Pure.
+ * Returns `{ hours }`, and ONLY when at least one valid enabled day exists;
+ * otherwise `{}`. Never throws. Pure.
  */
 export function bookingPolicyFromIntake(
   intake: BookingPolicyIntake,
@@ -380,23 +467,12 @@ export function bookingPolicyFromIntake(
   const enabled = enabledDaysFromStructured(structured);
   if (enabled.length === 0) return {};
 
-  const weekdays = [...new Set(enabled.map((d) => d.weekday))].sort((a, b) => a - b);
-
-  // Pick the dominant window: tally `start-end` keys, then choose the most
-  // frequent (ties → earliest start, then earliest end) so the result is stable.
-  const counts = new Map<string, { count: number; start: string; end: string }>();
+  // Each enabled day → its own window, keyed by weekday (last one wins on a dup,
+  // which the structured Record can't produce anyway since keys are unique).
+  const hours: Partial<Record<number, DayWindow>> = {};
   for (const d of enabled) {
-    const key = `${d.start}-${d.end}`;
-    const cur = counts.get(key);
-    if (cur) cur.count += 1;
-    else counts.set(key, { count: 1, start: d.start, end: d.end });
+    hours[d.weekday] = { start: d.start, end: d.end };
   }
-  const dominant = [...counts.values()].sort(
-    (a, b) =>
-      b.count - a.count ||
-      (a.start < b.start ? -1 : a.start > b.start ? 1 : 0) ||
-      (a.end < b.end ? -1 : a.end > b.end ? 1 : 0),
-  )[0];
 
-  return { weekdays, startTime: dominant.start, endTime: dominant.end };
+  return { hours };
 }

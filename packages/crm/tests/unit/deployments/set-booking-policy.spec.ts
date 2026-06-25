@@ -43,9 +43,7 @@ function fakeDeployment(over: Partial<Deployment> = {}): Deployment {
 
 const POLICY: Partial<BookingPolicy> = {
   durationMinutes: 60,
-  weekdays: [2], // Tuesday only
-  startTime: "10:00",
-  endTime: "16:00",
+  hours: { 2: { start: "10:00", end: "16:00" } }, // Tuesday only, 10–4
 };
 
 describe("setBookingPolicyAction", () => {
