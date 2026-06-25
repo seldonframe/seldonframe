@@ -906,6 +906,14 @@ function BookingModeChooser({
         })}
       </div>
 
+      {value === "api_mcp" && (
+        <p className="rounded-lg border border-dashed bg-muted/30 px-4 py-2.5 text-[11px] leading-relaxed text-muted-foreground">
+          <CalendarClock className="mb-0.5 mr-1 inline size-3.5 text-indigo-500 dark:text-indigo-400" />
+          You&apos;ll connect the client&apos;s Google/Outlook calendar from the
+          Clients screen after you deploy.
+        </p>
+      )}
+
       {value === "external_link" && (
         <div className="rounded-lg border bg-background p-4">
           <Field label="Their booking link" required>

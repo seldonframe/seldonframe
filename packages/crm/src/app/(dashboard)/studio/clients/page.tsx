@@ -19,11 +19,24 @@ import { listDeployments } from "@/lib/deployments/store";
 import { formatCentsMonthly, formatDeploymentSurface } from "@/lib/deployments/margin";
 import { StudioTabs } from "../studio-tabs";
 import { DeploymentStatusBadge } from "./status-badge";
-import { ActivateForm, PauseButton, PortalInviteButton, CancelButton } from "./activate-form";
+import {
+  ActivateForm,
+  PauseButton,
+  PortalInviteButton,
+  CancelButton,
+  ConnectCalendarButton,
+} from "./activate-form";
 
 export const dynamic = "force-dynamic";
 
-export default async function StudioClientsPage() {
+export default async function StudioClientsPage({
+  searchParams,
+}: {
+  searchParams: Promise<{ calendar?: string }>;
+}) {
+  // The calendar-connect callback bounces back here with ?calendar=connected|error
+  // (the pill state already reflects success; this is a one-line confirmation).
+  const { calendar } = await searchParams;
   const orgId = await getOrgId();
   if (!orgId) {
     return (
@@ -42,6 +55,17 @@ export default async function StudioClientsPage() {
   return (
     <section className="animate-page-enter space-y-5">
       <StudioTabs />
+
+      {calendar === "connected" && (
+        <p className="rounded-lg border border-emerald-500/30 bg-emerald-500/5 px-4 py-2 text-sm text-emerald-700 dark:text-emerald-400">
+          ✓ Calendar connected — the agent now books into the client&apos;s calendar.
+        </p>
+      )}
+      {calendar === "error" && (
+        <p className="rounded-lg border border-rose-500/30 bg-rose-500/5 px-4 py-2 text-sm text-rose-600 dark:text-rose-400">
+          Calendar connection failed — try again.
+        </p>
+      )}
 
       <div className="flex flex-wrap items-start justify-between gap-3">
         <div>
@@ -102,7 +126,15 @@ export default async function StudioClientsPage() {
                   />
                 )}
                 {d.status === "active" && (
-                  <div className="flex items-start gap-2">
+                  <div className="flex flex-wrap items-start justify-end gap-2">
+                    {/* Connect the client's external calendar — only for api_mcp
+                        bookings (native / external_link never book externally). */}
+                    {d.bookingMode === "api_mcp" && (
+                      <ConnectCalendarButton
+                        deploymentId={d.id}
+                        connected={Boolean(d.calendarRef?.accountId)}
+                      />
+                    )}
                     <PortalInviteButton
                       deploymentId={d.id}
                       clientOrgId={d.clientOrgId}
@@ -113,7 +145,13 @@ export default async function StudioClientsPage() {
                   </div>
                 )}
                 {d.status === "paused" && (
-                  <div className="flex items-start gap-2">
+                  <div className="flex flex-wrap items-start justify-end gap-2">
+                    {d.bookingMode === "api_mcp" && (
+                      <ConnectCalendarButton
+                        deploymentId={d.id}
+                        connected={Boolean(d.calendarRef?.accountId)}
+                      />
+                    )}
                     <CancelButton deploymentId={d.id} phoneNumber={d.phoneNumber} />
                   </div>
                 )}

@@ -25,7 +25,7 @@
 
 import { useState, useTransition } from "react";
 import Link from "next/link";
-import { Phone, Pause, Loader2, ChevronDown, ChevronUp, Sparkles, KeyRound, Trash2 } from "lucide-react";
+import { Phone, Pause, Loader2, ChevronDown, ChevronUp, Sparkles, KeyRound, Trash2, CalendarClock, Link2, Check } from "lucide-react";
 import {
   activateDeploymentAction,
   pauseDeploymentAction,
@@ -33,6 +33,10 @@ import {
   cancelDeploymentAction,
   inviteClientToPortalAction,
 } from "@/lib/deployments/actions";
+import {
+  startCalendarConnect,
+  type CalendarToolkit,
+} from "@/lib/deployments/connect-calendar";
 import { deriveAreaCode } from "@/lib/deployments/margin";
 
 type ProvisionErrorCode =
@@ -407,6 +411,161 @@ export function CancelButton({ deploymentId, phoneNumber }: CancelButtonProps) {
       </button>
       {error && (
         <p className="text-[11px] text-rose-600 dark:text-rose-400">{error}</p>
+      )}
+    </div>
+  );
+}
+
+// ─── ConnectCalendarButton ─────────────────────────────────────────────────────
+//
+// ICP-3 "pluggable booking backend" Task 10 — bind an `api_mcp` deployment's
+// calendarRef from the Clients card. Shown ONLY for bookingMode === 'api_mcp'
+// (see page.tsx); native / external_link bookings never render it.
+//
+//   not connected → pick a toolkit (Google / Outlook), then "Connect calendar":
+//     startCalendarConnect returns a Composio OAuth URL the AGENCY follows
+//     (window.location) — OR "Copy link" to send the client so they authorize
+//     their OWN calendar. The callback persists calendarRef + bounces back to
+//     /studio/clients?calendar=connected|error.
+//   connected (calendarRef.accountId set) → a static emerald pill, no button.
+//
+// Same chrome as the rest of this file: crm-button-* classes, useTransition,
+// inline error/success copy.
+
+/** The toolkit options offered (catalog slugs from connect-calendar.ts). */
+const CALENDAR_TOOLKIT_OPTIONS: Array<{ id: CalendarToolkit; label: string }> = [
+  { id: "googlecalendar", label: "Google" },
+  { id: "outlook", label: "Outlook" },
+];
+
+/** Map a startCalendarConnect error code to operator-facing copy. Pure. */
+export function connectCalendarErrorCopy(
+  error: "unauthorized" | "not_found" | "no_client_org" | "invalid_toolkit" | "connect_failed",
+): string {
+  switch (error) {
+    case "no_client_org":
+      return "The client workspace isn't ready yet.";
+    case "connect_failed":
+      return "Couldn't start the calendar connection — try again.";
+    case "invalid_toolkit":
+      return "Pick Google or Outlook to connect.";
+    case "not_found":
+      return "Deployment not found.";
+    case "unauthorized":
+      return "You don't have access to this deployment.";
+    default:
+      return "Couldn't start the calendar connection — try again.";
+  }
+}
+
+type ConnectCalendarButtonProps = {
+  deploymentId: string;
+  /** True once calendarRef.accountId is set — renders the connected pill. */
+  connected: boolean;
+};
+
+export function ConnectCalendarButton({ deploymentId, connected }: ConnectCalendarButtonProps) {
+  const [toolkit, setToolkit] = useState<CalendarToolkit>("googlecalendar");
+  const [error, setError] = useState<string | null>(null);
+  const [copied, setCopied] = useState(false);
+  const [isPending, startTransition] = useTransition();
+
+  // Already bound — a static pill, no controls.
+  if (connected) {
+    return (
+      <span className="inline-flex items-center gap-1 rounded-full bg-emerald-500/15 px-3 py-0.5 text-[11px] font-medium text-emerald-700 dark:text-emerald-400">
+        <CalendarClock className="size-3" />
+        Calendar connected
+      </span>
+    );
+  }
+
+  // Redirect the AGENCY through the OAuth flow.
+  function handleConnect() {
+    setError(null);
+    setCopied(false);
+    startTransition(async () => {
+      const r = await startCalendarConnect({ deploymentId, toolkit });
+      if (r.ok) {
+        window.location.href = r.redirectUrl;
+      } else {
+        setError(connectCalendarErrorCopy(r.error));
+      }
+    });
+  }
+
+  // Generate the SAME OAuth link but copy it for the agency to send the client,
+  // so the client can authorize their own calendar.
+  function handleCopyLink() {
+    setError(null);
+    setCopied(false);
+    startTransition(async () => {
+      const r = await startCalendarConnect({ deploymentId, toolkit });
+      if (!r.ok) {
+        setError(connectCalendarErrorCopy(r.error));
+        return;
+      }
+      try {
+        await navigator.clipboard.writeText(r.redirectUrl);
+        setCopied(true);
+      } catch {
+        // Clipboard blocked (no permission / insecure context) — show the link.
+        setError(`Copy this link to send the client: ${r.redirectUrl}`);
+      }
+    });
+  }
+
+  return (
+    <div className="flex flex-col items-end gap-1.5">
+      <div className="flex items-center gap-1.5">
+        {/* Toolkit choice — two compact toggle buttons. */}
+        <div className="inline-flex overflow-hidden rounded-md border" role="group" aria-label="Calendar provider">
+          {CALENDAR_TOOLKIT_OPTIONS.map((opt) => {
+            const active = opt.id === toolkit;
+            return (
+              <button
+                key={opt.id}
+                type="button"
+                onClick={() => setToolkit(opt.id)}
+                aria-pressed={active}
+                disabled={isPending}
+                className={`px-2 py-1 text-[11px] font-medium transition-colors disabled:opacity-50 ${
+                  active
+                    ? "bg-primary text-primary-foreground"
+                    : "bg-background text-muted-foreground hover:bg-muted/50"
+                }`}
+              >
+                {opt.label}
+              </button>
+            );
+          })}
+        </div>
+        <button
+          type="button"
+          onClick={handleConnect}
+          disabled={isPending}
+          title="Connect the client's calendar so the agent books into it"
+          className="crm-button-primary flex h-8 items-center gap-1.5 px-3 text-sm disabled:opacity-50"
+        >
+          {isPending ? (
+            <Loader2 className="size-3.5 animate-spin" />
+          ) : (
+            <CalendarClock className="size-3.5" />
+          )}
+          Connect calendar
+        </button>
+      </div>
+      <button
+        type="button"
+        onClick={handleCopyLink}
+        disabled={isPending}
+        className="inline-flex items-center gap-1 text-[11px] font-medium text-muted-foreground hover:text-foreground disabled:opacity-50"
+      >
+        {copied ? <Check className="size-3 text-emerald-600 dark:text-emerald-400" /> : <Link2 className="size-3" />}
+        {copied ? "Link copied — send it to the client." : "Copy link to send to the client"}
+      </button>
+      {error && (
+        <p className="max-w-[18rem] break-words text-right text-[11px] text-rose-600 dark:text-rose-400">{error}</p>
       )}
     </div>
   );

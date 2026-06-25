@@ -104,6 +104,8 @@ function buildDefaultListDeps(): ListDeploymentsDeps {
           templateName: agentTemplates.name,
           clientOrgId: deployments.clientOrgId,
           portalInvitedAt: deployments.portalInvitedAt,
+          bookingMode: deployments.bookingMode,
+          calendarRef: deployments.calendarRef,
         })
         .from(deployments)
         .leftJoin(
@@ -346,6 +348,13 @@ export type DeploymentListItem = {
   clientOrgId: string | null;
   /** When the client was invited to portal access (null = never). */
   portalInvitedAt: Date | null;
+  /** How the deployed agent books (native | external_link | api_mcp | cal_com).
+   *  The Clients card shows the "Connect calendar" affordance only for api_mcp. */
+  bookingMode: BookingMode;
+  /** The client's external-calendar binding (Composio Google/Outlook), set once
+   *  the calendar-connect callback persists it. Null = not yet connected; the
+   *  card reads `calendarRef.accountId` to decide connected vs. not. */
+  calendarRef: DeploymentCalendarRef | null;
 };
 
 /** List a builder's deployments, most-recently-updated first, with template name. */
