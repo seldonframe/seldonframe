@@ -1,0 +1,152 @@
+// Per-deployment agent persona — the pure customization resolver.
+//
+// A builder ships ONE agent template (the product). Each client/buyer deploys a
+// copy and customizes their own instance's client-facing persona — greeting,
+// TTS voice, and business info — WITHOUT the builder cloning the template per
+// client. The template holds DEFAULTS that may carry `{placeholders}` (e.g. the
+// greeting "Thanks for calling {business_name}!"); the deployment holds the
+// per-client overrides. This module owns:
+//   - the `DeploymentCustomization` type (+ `DeploymentBusinessInfo`)
+//   - `fillPlaceholders(text, vars)` — substitute `{token}`s from the client's
+//     business info, dropping unknown/blank tokens CLEANLY (so the agent never
+//     reads a literal "{business_name}" aloud)
+//   - `resolveDeploymentPersona(args)` — the single source of truth for the
+//     EFFECTIVE persona the voice + chat runtimes use: greeting/prompt/voiceId/
+//     businessName, applying override-or-placeholder-fill precedence.
+//
+// Booking rules are the sibling layer (`deployments.booking_policy` +
+// `resolveBookingPolicy`); this is the parallel "everything-else" persona layer.
+//
+// Pure: no I/O, no DB, no clock. Nothing here throws — a live call must always
+// end up with a usable persona, so missing/blank inputs degrade to a clean
+// result rather than an error or a leaked placeholder.
+
+/** A client's business facts, used to fill the template's `{placeholders}` and
+ *  to ground the agent. Every field optional — a deployment fills what it knows. */
+export type DeploymentBusinessInfo = {
+  name?: string;
+  hours?: string;
+  address?: string;
+  phone?: string;
+  email?: string;
+};
+
+/** A deployment's per-client persona overrides over the agent template default.
+ *  `greeting` is a FULL override of the spoken/written greeting; `voiceId` a TTS
+ *  voice override; `businessInfo` the facts that fill the template's placeholders
+ *  (and from which the effective business name is derived). */
+export type DeploymentCustomization = {
+  greeting?: string;
+  voiceId?: string;
+  businessInfo?: DeploymentBusinessInfo;
+};
+
+/** Tolerant placeholder matcher: `{token}` with optional inner whitespace and a
+ *  token of word-chars/spaces, so `{business_name}`, `{Business Name}`, and
+ *  `{ business name }` all match. Non-greedy so adjacent tokens don't merge. */
+const TOKEN_RE = /\{\s*([\w ]+?)\s*\}/g;
+
+/** Normalize a raw token to its canonical key: lowercase, runs of whitespace →
+ *  single underscore. `"Business Name"`, `" business name "`, and `"business_name"`
+ *  all canonicalize to `business_name`. */
+function normalizeKey(raw: string): string {
+  return raw.trim().toLowerCase().replace(/\s+/g, "_");
+}
+
+/** Tidy the wreckage left after a token is removed: collapse any run of spaces to
+ *  one, strip a space sitting directly before sentence punctuation, and trim. This
+ *  is what turns "Thanks for calling !" → "Thanks for calling!" and
+ *  "have a great ." → "have a great." after a blank token is dropped. */
+function tidy(text: string): string {
+  return text
+    .replace(/[ \t]{2,}/g, " ") // collapse double (+) spaces from a removed token
+    .replace(/\s+([,.!?;:])/g, "$1") // drop a space dangling before punctuation
+    .trim();
+}
+
+/**
+ * Replace every `{token}` in `text` using `vars`, then tidy the result.
+ *
+ *   - A token canonicalizes to a key (lowercase, spaces → underscores). If
+ *     `vars[key]` is a NON-EMPTY string (after trim) → substitute it verbatim.
+ *   - An unknown token, or one whose value is blank/undefined → REMOVED (replaced
+ *     with empty string). The agent must NEVER read a literal `{token}` aloud.
+ *   - After substitution the whole string is tidied (collapse double spaces, strip
+ *     a space before punctuation, trim) so a dropped token leaves no scar.
+ *
+ * Pure; never throws. Text with no tokens is returned tidied (effectively
+ * unchanged for normal prose).
+ */
+export function fillPlaceholders(text: string, vars: Record<string, string | undefined>): string {
+  const replaced = text.replace(TOKEN_RE, (_match, rawToken: string) => {
+    const key = normalizeKey(rawToken);
+    const value = vars[key];
+    if (typeof value === "string" && value.trim() !== "") return value;
+    return ""; // unknown or blank → drop the placeholder entirely
+  });
+  return tidy(replaced);
+}
+
+/** First non-empty trimmed string, else null. Used for override → fallback chains. */
+function firstNonEmpty(...vals: (string | null | undefined)[]): string | null {
+  for (const v of vals) {
+    if (typeof v === "string" && v.trim() !== "") return v.trim();
+  }
+  return null;
+}
+
+/**
+ * Resolve the EFFECTIVE persona the runtime speaks/writes AS the client, from the
+ * agent-template defaults and the deployment's customization.
+ *
+ *   - `businessName` = `customization.businessInfo.name` ?? `clientName` (trimmed),
+ *     else null. This is the canonical name everything else grounds on.
+ *   - `vars` is built from `businessInfo` (with `business_name` taken from the
+ *     resolved `businessName`); only non-empty fields are included, so an absent
+ *     field's token gets DROPPED rather than filled with blank.
+ *   - `greeting` = the deployment's full `greeting` override (trimmed) if present;
+ *     else the template greeting with its placeholders filled; else null.
+ *   - `prompt` = the template script with its placeholders filled, else null. This
+ *     is what kills the live "thanks for calling {business name}, have a great day"
+ *     leak — the script's tokens are filled (or cleanly dropped) before runtime.
+ *   - `voiceId` = the deployment's `voiceId` override (trimmed) ?? the template
+ *     voice ?? null.
+ *
+ * Pure; never throws. Callers fall back to today's values when a field is null.
+ */
+export function resolveDeploymentPersona(args: {
+  templateGreeting?: string | null;
+  templateScript?: string | null;
+  templateVoiceId?: string | null;
+  customization?: DeploymentCustomization | null;
+  clientName?: string | null;
+}): { greeting: string | null; prompt: string | null; voiceId: string | null; businessName: string | null } {
+  const { templateGreeting, templateScript, templateVoiceId, customization, clientName } = args;
+  const info = customization?.businessInfo;
+
+  const businessName = firstNonEmpty(info?.name, clientName);
+
+  // Build the placeholder vars from the client's business info. `business_name`
+  // uses the resolved businessName (so the clientName fallback also fills it).
+  // Only non-empty values are added → an absent field's token is dropped.
+  const vars: Record<string, string | undefined> = {};
+  const add = (key: string, value: string | null | undefined) => {
+    if (typeof value === "string" && value.trim() !== "") vars[key] = value.trim();
+  };
+  add("business_name", businessName);
+  add("hours", info?.hours);
+  add("address", info?.address);
+  add("phone", info?.phone);
+  add("email", info?.email);
+
+  const greetingOverride = firstNonEmpty(customization?.greeting);
+  const greeting =
+    greetingOverride ??
+    (templateGreeting ? fillPlaceholders(templateGreeting, vars) : null);
+
+  const prompt = templateScript ? fillPlaceholders(templateScript, vars) : null;
+
+  const voiceId = firstNonEmpty(customization?.voiceId, templateVoiceId);
+
+  return { greeting, prompt, voiceId, businessName };
+}
