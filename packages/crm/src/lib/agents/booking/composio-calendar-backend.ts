@@ -123,12 +123,35 @@ export function makeComposioCalendarBackend(deps: ComposioBackendDeps): Calendar
           timezone: q.timezone,
         });
         const windows = extractFreeWindows(res);
-        if (windows.length === 0) return { slots: [] };
         const slots = windows.flatMap((w) =>
           quantizeWindow(w, q.durationMinutes, q.timezone),
         );
+        // DIAGNOSTIC (T12 live-smoke): log the RAW Composio response + parse
+        // results so we can see whether find-free-slots returns data we don't
+        // parse vs. genuinely no free windows. Remove once the shape is confirmed.
+        console.log(
+          JSON.stringify({
+            event: "composio_find_free_slots",
+            slug: slug.free,
+            date: q.date,
+            windows: windows.length,
+            slots: slots.length,
+            raw:
+              typeof res === "string"
+                ? res.slice(0, 900)
+                : JSON.stringify(res ?? null).slice(0, 900),
+          }),
+        );
+        if (slots.length === 0) return { slots: [] };
         return { slots };
-      } catch {
+      } catch (e) {
+        console.log(
+          JSON.stringify({
+            event: "composio_find_free_slots_error",
+            slug: slug.free,
+            error: e instanceof Error ? e.message.slice(0, 400) : String(e),
+          }),
+        );
         // Empty = caller falls back to native availability.
         return { slots: [] };
       }
