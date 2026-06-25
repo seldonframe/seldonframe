@@ -225,6 +225,13 @@
       "when": 1782257721433,
       "tag": "0031_medical_chameleon",
       "breakpoints": true
+    },
+    {
+      "idx": 32,
+      "version": "7",
+      "when": 1782404327471,
+      "tag": "0032_pink_maggott",
+      "breakpoints": true
     }
   ]
 }

@@ -119,6 +119,12 @@ export type AgentBlueprint = {
    *  the agency never gets duplicate agents on re-run. Undefined for agents
    *  created any other way. Stored in the jsonb blueprint — no migration. */
   sourceTemplateId?: string;
+  /** 2026-06-25 (per-client booking policy) — a TEMPLATE's recommended booking
+   *  rules (slot length / hours / buffer / lead time / required fields). Sparse:
+   *  only the fields the builder set. resolveBookingPolicy layers the
+   *  deployment's own `booking_policy` over this, then over the system defaults.
+   *  Stored in the jsonb blueprint — no migration. */
+  defaultBookingPolicy?: Partial<import("@/lib/agents/booking/booking-policy").BookingPolicy>;
 };
 
 export const agents = pgTable(

@@ -111,6 +111,10 @@ export const deployments = pgTable(
     /** The client's OWN booking page URL — only meaningful when
      *  bookingMode === 'external_link'; the deployed agent hands this off. */
     externalBookingUrl: text("external_booking_url"),
+    /** Per-client booking rules (slot length / hours / buffer / lead time /
+     *  required fields). Sparse override merged over the template default by
+     *  resolveBookingPolicy; nullable — absent → template/system defaults. */
+    bookingPolicy: jsonb("booking_policy").$type<Partial<import("@/lib/agents/booking/booking-policy").BookingPolicy>>(),
     /** The CLIENT's business context (narrow soul + FAQ), captured at deploy
      *  time so the deployed agent speaks AS the client. Nullable — absent →
      *  the agent falls back to naming the client only (clientName). */

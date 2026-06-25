@@ -55,6 +55,24 @@ export const TemplateBlueprintPatchSchema = z
     // exact same rules the agent-scoped path uses. Stored on blueprint.connectors
     // (jsonb — no migration); the runtime seam (getToolsForCapabilities) reads it.
     connectors: connectorBindingsSchema.optional(),
+    // The template's RECOMMENDED booking rules (per-client booking policy). Sparse
+    // — every field optional; resolveBookingPolicy clamps anything malformed, so
+    // this is a loose allow-list (shape + obvious bounds), not the final guard.
+    // Mirrors AgentBlueprint.defaultBookingPolicy (Partial<BookingPolicy>).
+    defaultBookingPolicy: z
+      .object({
+        durationMinutes: z.number().int().positive().optional(),
+        bufferMinutes: z.number().int().min(0).optional(),
+        maxPerDay: z.number().int().positive().nullable().optional(),
+        leadTimeHours: z.number().min(0).optional(),
+        timezone: z.string().min(1).optional(),
+        weekdays: z.array(z.number().int().min(0).max(6)).optional(),
+        startTime: z.string().regex(/^([01]\d|2[0-3]):[0-5]\d$/).optional(),
+        endTime: z.string().regex(/^([01]\d|2[0-3]):[0-5]\d$/).optional(),
+        requiredFields: z.array(z.string()).optional(),
+      })
+      .strict()
+      .optional(),
   })
   .strict();
 
