@@ -8,8 +8,13 @@
 import type { CalendarBinding } from "@/lib/agents/booking/calendar-backend";
 
 /** The deployment fields the binding depends on (structural — works for the full
- *  Deployment row and any subset). */
+ *  Deployment row and any subset). `id` (the deployment = the Composio entity)
+ *  and `builderOrgId` (the agency = the Composio key org) are carried into the
+ *  book_external calendarRef so the runtime re-opens the session under the same
+ *  key/entity. */
 export type BindingSource = {
+  id: string;
+  builderOrgId: string;
   bookingMode: string | null | undefined;
   externalBookingUrl?: string | null;
   calendarRef?: { provider?: string | null; accountId?: string | null; calendarId?: string | null } | null;
@@ -33,7 +38,15 @@ export function deploymentToBinding(d: BindingSource): CalendarBinding {
     const provider: "googlecalendar" | "outlook" | null =
       raw === "googlecalendar" || raw === "outlook" ? raw : null;
     const calendarRef = provider && ref?.accountId
-      ? { provider, accountId: ref.accountId, calendarId: ref.calendarId ?? undefined }
+      ? {
+          provider,
+          accountId: ref.accountId,
+          calendarId: ref.calendarId ?? undefined,
+          // ownerOrgId = the agency (Composio key); entityUserId = the deployment
+          // id (the Composio entity the connected account lives under).
+          ownerOrgId: d.builderOrgId,
+          entityUserId: d.id,
+        }
       : null;
     return { mode: "book_external", calendarRef };
   }

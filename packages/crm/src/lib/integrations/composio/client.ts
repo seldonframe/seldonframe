@@ -12,6 +12,13 @@
 // serviceName "composio_session" so we reuse it across requests (composio.use);
 // on a 404/expiry we transparently recreate it.
 //
+// PER-DEPLOYMENT ENTITY: callers that bind a deployment's calendar pass
+// `entityUserId` (the deployment id). When set, the session is created under
+// THAT user_id rather than the org's, so each client's connected calendar is
+// isolated under one agency API key. Entity-scoped calls NEVER touch the
+// org-level cached session id (that cache is keyed by org, not entity) — they
+// always `composio.create(entityUserId, …)` fresh.
+//
 // SECURITY: the Composio API key is resolved per-workspace (BYO secret else
 // platform env) and is NEVER logged. `session.mcp.headers` (the `x-api-key`
 // header the MCP endpoint requires) is handed to the inline MCP client at
@@ -74,13 +81,27 @@ export async function composioForOrg(orgId: string): Promise<Composio | null> {
 export async function ensureSession(
   orgId: string,
   toolkits: string[],
-  opts?: { client?: Composio | null; actorUserId?: string | null },
+  opts?: {
+    client?: Composio | null;
+    actorUserId?: string | null;
+    /** The Composio ENTITY (user_id) to scope to — the deployment id. When set,
+     *  the session is created under this id, bypassing the org-level cache. */
+    entityUserId?: string | null;
+  },
 ): Promise<ComposioSessionInfo | null> {
   const composio =
     opts?.client !== undefined ? opts.client : await composioForOrg(orgId);
   if (!composio) return null;
 
   const requested = toolkits.length > 0 ? toolkits : [...COMPOSIO_TOOLKIT_SLUGS];
+
+  // Entity-scoped (per-deployment) sessions NEVER use the org-level cache —
+  // that cached id belongs to the org's user_id, not this entity. Always create
+  // fresh under the entity id (no read, no write of the org session secret).
+  if (opts?.entityUserId) {
+    const created = await composio.create(opts.entityUserId, { toolkits: requested });
+    return toSessionInfo(created);
+  }
 
   // Try to reuse a cached session id.
   const cachedId = await getSecretValue({
@@ -141,29 +162,41 @@ function toSessionInfo(session: {
  */
 export async function listConnections(
   orgId: string,
-  opts?: { client?: Composio | null; actorUserId?: string | null },
+  opts?: {
+    client?: Composio | null;
+    actorUserId?: string | null;
+    /** The Composio ENTITY (user_id) to scope to — the deployment id. When set,
+     *  connections are listed under this id, bypassing the org-level cache. */
+    entityUserId?: string | null;
+  },
 ): Promise<ToolkitConnection[]> {
   const composio =
     opts?.client !== undefined ? opts.client : await composioForOrg(orgId);
   if (!composio) return [];
 
-  const cachedId = await getSecretValue({
-    workspaceId: orgId,
-    serviceName: SESSION_SECRET_SERVICE,
-    skipAccessCheck: true,
-  });
-
   let session: Awaited<ReturnType<Composio["create"]>>;
-  if (cachedId) {
-    try {
-      session = await composio.use(cachedId);
-    } catch {
+  if (opts?.entityUserId) {
+    // Entity-scoped: always create fresh under the entity id, never the org
+    // cache (the callback verifies against THIS deployment entity's accounts).
+    session = await composio.create(opts.entityUserId, { toolkits: [...COMPOSIO_TOOLKIT_SLUGS] });
+  } else {
+    const cachedId = await getSecretValue({
+      workspaceId: orgId,
+      serviceName: SESSION_SECRET_SERVICE,
+      skipAccessCheck: true,
+    });
+
+    if (cachedId) {
+      try {
+        session = await composio.use(cachedId);
+      } catch {
+        session = await composio.create(orgId, { toolkits: [...COMPOSIO_TOOLKIT_SLUGS] });
+        await persistSessionId(orgId, session.sessionId, opts?.actorUserId);
+      }
+    } else {
       session = await composio.create(orgId, { toolkits: [...COMPOSIO_TOOLKIT_SLUGS] });
       await persistSessionId(orgId, session.sessionId, opts?.actorUserId);
     }
-  } else {
-    session = await composio.create(orgId, { toolkits: [...COMPOSIO_TOOLKIT_SLUGS] });
-    await persistSessionId(orgId, session.sessionId, opts?.actorUserId);
   }
 
   const details = await session.toolkits();
@@ -202,7 +235,13 @@ export async function createConnectLink(
   orgId: string,
   toolkit: string,
   callbackUrl: string,
-  opts?: { client?: Composio | null; actorUserId?: string | null },
+  opts?: {
+    client?: Composio | null;
+    actorUserId?: string | null;
+    /** The Composio ENTITY (user_id) to scope the connect to — the deployment
+     *  id. Threaded into ensureSession so the consent lands under this entity. */
+    entityUserId?: string | null;
+  },
 ): Promise<{ redirectUrl: string | null }> {
   const session = await ensureSession(orgId, [...COMPOSIO_TOOLKIT_SLUGS], opts);
   if (!session) return { redirectUrl: null };

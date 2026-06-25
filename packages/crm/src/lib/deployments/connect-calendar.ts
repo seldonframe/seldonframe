@@ -1,18 +1,19 @@
-// ICP-3 "pluggable booking backend" Task 9 — the client-scoped calendar CONNECT
-// action (the agency side of binding a deployment's calendarRef).
+// ICP-3 "pluggable booking backend" Task 9 — the calendar CONNECT action (the
+// agency side of binding a deployment's calendarRef).
 //
-// Tasks 1-8 made the runtime book into deployment.calendarRef
-// ({provider, accountId, calendarId}) once it's set. This action lets the AGENCY
-// connect that calendar: it generates a Composio managed-OAuth connect link
-// scoped to the CLIENT org (the Composio user_id IS the org uuid), with a
-// callback URL that carries the deployment id + toolkit. The OAuth return lands
-// on app/api/deployments/[id]/calendar/callback, which verifies the connection
-// against the client org's LIVE connections before persisting calendarRef.
+// AGENCY-KEY + PER-DEPLOYMENT-ENTITY model: Studio deployments never provision a
+// client workspace (deployment.clientOrgId is null in prod), so the connect is
+// scoped to the AGENCY (deployment.builderOrgId — which holds the Composio API
+// KEY) while the Composio ENTITY (user_id) is the DEPLOYMENT id. That isolates
+// each client's Google/Outlook under one agency key with no provisioning and no
+// multi-account ambiguity. The connect link carries the deployment id + toolkit
+// in its callback; the OAuth return lands on
+// app/api/deployments/[id]/calendar/callback, which verifies the connection
+// against the deployment-entity's LIVE connections before persisting calendarRef.
 //
-// SECURITY: the connect link is scoped to deployment.clientOrgId, never the
-// builder's org — so the resulting connected account lives under the CLIENT's
-// Composio user_id and the unauthenticated callback can re-derive ownership from
-// it (see the callback's listConnections check).
+// SECURITY: the connected account lives under the DEPLOYMENT entity's user_id
+// (not the agency's own org user_id), so the unauthenticated callback re-derives
+// ownership by listing that entity's connections (see the listConnections check).
 //
 // "use server" — this file exports ONLY async functions (+ an `export type`),
 // per scripts/check-use-server.sh. The DI default-deps builder is a NON-exported
@@ -51,6 +52,7 @@ export type StartCalendarConnectDeps = {
     orgId: string,
     toolkit: string,
     callbackUrl: string,
+    opts?: { entityUserId?: string | null },
   ) => Promise<{ redirectUrl: string | null }>;
 };
 
@@ -58,15 +60,18 @@ export type StartCalendarConnectDeps = {
 const CALENDAR_TOOLKITS = new Set<string>(["googlecalendar", "outlook"]);
 
 /**
- * Start a client-scoped calendar Connect flow for a deployment.
+ * Start a calendar Connect flow for a deployment (agency-key + per-deployment
+ * entity).
  *
  *   getOrgId → toolkit allow-list → getDeployment (+ builder org guard) →
- *   require clientOrgId → createConnectLink(clientOrgId, toolkit, callbackUrl).
+ *   createConnectLink(builderOrgId, toolkit, callbackUrl, { entityUserId: id }).
  *
- * The connect link is scoped to the CLIENT org (the Composio user_id), and the
- * callback URL carries the deployment id + toolkit so the (unauthenticated)
- * callback route can re-scope + verify the resulting connection before it
- * persists calendarRef.
+ * The Composio API KEY is the AGENCY's (deployment.builderOrgId); the Composio
+ * ENTITY (user_id) is the DEPLOYMENT id, so each client's calendar is isolated
+ * under one key with no client-workspace provisioning. The callback URL carries
+ * the deployment id + toolkit so the (unauthenticated) callback route re-scopes
+ * to the same entity + verifies the resulting connection before persisting
+ * calendarRef.
  *
  * @param deps - optional DI (tests inject fakes; defaults are the real impls).
  */
@@ -93,20 +98,16 @@ export async function startCalendarConnect(
     return { ok: false, error: "not_found" };
   }
 
-  // The client workspace must be provisioned first — the calendar belongs to the
-  // client org's Composio user_id, so without it there is nothing to scope to.
-  if (!deployment.clientOrgId) {
-    return { ok: false, error: "no_client_org" };
-  }
-
   const appUrl =
     process.env.NEXT_PUBLIC_APP_URL?.trim() || "https://app.seldonframe.com";
   const callbackUrl = `${appUrl}/api/deployments/${input.deploymentId}/calendar/callback?toolkit=${input.toolkit}`;
 
+  // Key = the agency org; entity (Composio user_id) = the deployment id.
   const { redirectUrl } = await connect(
-    deployment.clientOrgId,
+    deployment.builderOrgId,
     input.toolkit,
     callbackUrl,
+    { entityUserId: input.deploymentId },
   );
   if (!redirectUrl) return { ok: false, error: "connect_failed" };
   return { ok: true, redirectUrl };

@@ -66,6 +66,8 @@ describe("resolveInboundAgent", () => {
     // CalendarBackend seam as voice.
     const deps: ResolveInboundAgentDeps = {
       resolveDeploymentByNumber: async () => ({
+        id: "dep-7",
+        builderOrgId: "agency-7",
         clientOrgId: "client-org-7",
         bookingMode: "api_mcp",
         externalBookingUrl: null,
@@ -84,7 +86,16 @@ describe("resolveInboundAgent", () => {
       orgId: "client-org-7",
       bookingBinding: {
         mode: "book_external",
-        calendarRef: { provider: "googlecalendar", accountId: "ca_7", calendarId: "primary" },
+        // ownerOrgId (the agency, Composio key) + entityUserId (the deployment,
+        // Composio entity) thread through so chat/SMS/email re-open the same
+        // connected calendar session as voice.
+        calendarRef: {
+          provider: "googlecalendar",
+          accountId: "ca_7",
+          calendarId: "primary",
+          ownerOrgId: "agency-7",
+          entityUserId: "dep-7",
+        },
       },
     });
   });

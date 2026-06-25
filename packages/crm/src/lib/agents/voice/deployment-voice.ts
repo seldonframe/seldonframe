@@ -108,6 +108,7 @@ function buildDefaultDeps(): DeploymentVoiceDeps {
 export async function loadDeploymentVoiceContext(args: {
   deployment: Pick<
     Deployment,
+    | "id"
     | "builderOrgId"
     | "agentTemplateId"
     | "clientName"

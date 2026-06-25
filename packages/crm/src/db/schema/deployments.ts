@@ -38,6 +38,13 @@ export type DeploymentCalendarRef = {
   provider?: string;
   accountId?: string;
   calendarId?: string;
+  /** The org holding the Composio API KEY this connection was made under — the
+   *  AGENCY (deployment.builderOrgId). The runtime resolves the key from here so
+   *  the deployed agent can re-open the session. Additive to the jsonb $type. */
+  ownerOrgId?: string;
+  /** The Composio ENTITY (user_id) the connected account lives under — the
+   *  deployment id, so each client's calendar is isolated under one agency key. */
+  entityUserId?: string;
 };
 
 /** A single service the CLIENT offers — name + optional one-line description.

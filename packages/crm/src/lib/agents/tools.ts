@@ -271,7 +271,14 @@ export function buildCalendarBackendDeps(
             import("@/lib/integrations/composio/client"),
             import("@/lib/agents/mcp/client"),
           ]);
-          const session = await ensureSession(ctx.orgId, [ref.provider]);
+          // Agency-key + per-deployment-entity: the calendar was connected under
+          // the agency's Composio KEY (ref.ownerOrgId) with the DEPLOYMENT id as
+          // the entity (ref.entityUserId). Re-open the session under both so the
+          // booking lands in the same connected calendar. Fall back to ctx.orgId
+          // (legacy refs without ownerOrgId resolve the key from the running org).
+          const session = await ensureSession(ref.ownerOrgId ?? ctx.orgId, [ref.provider], {
+            entityUserId: ref.entityUserId,
+          });
           if (!session) throw new Error("composio_session_unavailable");
           const client = createMcpClient({
             endpoint: session.mcpUrl,

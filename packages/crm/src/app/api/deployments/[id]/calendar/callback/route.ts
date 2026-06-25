@@ -3,20 +3,21 @@
 //   GET /api/deployments/[id]/calendar/callback?toolkit=…&status=…&connected_account_id=…
 //
 // Composio redirects the operator here after the hosted consent screen
-// (startCalendarConnect built this URL, scoped to the deployment's CLIENT org).
+// (startCalendarConnect built this URL: agency KEY, deployment-id ENTITY).
 // On a VERIFIED connection we persist the deployment's calendarRef so the agent
 // books into the client's Google/Outlook; otherwise we bounce back to the
 // Clients screen with ?calendar=error.
 //
 // SECURITY — this endpoint is UNAUTHENTICATED (it's an OAuth redirect target, no
 // session). We therefore NEVER trust the query params for the binding. We load
-// the deployment, then call listConnections(deployment.clientOrgId) and require a
-// LIVE connection under that client org whose connectedAccountId === the param
-// AND whose slug === the toolkit param. A forged callback with a random account
-// id fails this check (it isn't in the client org's connections) → no persist.
-// This binds the deployment only to a genuine connection under its own client
-// org's Composio user_id. The whole handler is wrapped in try/catch so the OAuth
-// return is never answered with a 500 — any throw redirects to ?calendar=error.
+// the deployment, then call listConnections(deployment.builderOrgId, {
+// entityUserId: deploymentId }) and require a LIVE connection under THAT
+// deployment entity whose connectedAccountId === the param AND whose slug ===
+// the toolkit param. A forged callback with a random account id fails this check
+// (it isn't in the deployment entity's connections) → no persist. This binds the
+// deployment only to a genuine connection under its own per-deployment Composio
+// user_id. The whole handler is wrapped in try/catch so the OAuth return is
+// never answered with a 500 — any throw redirects to ?calendar=error.
 //
 // Runtime: listConnections transitively imports the Composio Node SDK, so this
 // route MUST run on the Node runtime.
@@ -51,23 +52,27 @@ function isActiveStatus(status: string | null): boolean {
  *   - the toolkit param is a known calendar toolkit, AND
  *   - the status param is active/connected, AND
  *   - an accountId is present, AND
- *   - that accountId is found among the CLIENT org's live connections with
- *     `connected === true` and a matching toolkit slug.
+ *   - that accountId is found among the deployment ENTITY's live connections
+ *     with `connected === true` and a matching toolkit slug.
  * Otherwise `{ error: "not_verified" }` — the route then redirects to
  * ?calendar=error and persists nothing.
  *
- * `connections` MUST be the result of listConnections(deployment.clientOrgId) so
- * membership proves the account lives under this deployment's own client-org
- * Composio user_id (the anti-forgery property).
+ * `connections` MUST be the result of
+ * listConnections(deployment.builderOrgId, { entityUserId }) so membership
+ * proves the account lives under this deployment's own per-deployment Composio
+ * user_id (the anti-forgery property). The persisted ref carries `ownerOrgId`
+ * (the agency key org) + `entityUserId` (the deployment id) so the runtime can
+ * reconnect under the same key/entity.
  */
 export function resolveCalendarRefFromCallback(args: {
-  deployment: Pick<Deployment, "clientOrgId">;
+  deployment: Pick<Deployment, "builderOrgId">;
+  entityUserId: string;
   toolkit: string | null;
   status: string | null;
   accountId: string | null;
   connections: ToolkitConnection[];
 }): { calendarRef: DeploymentCalendarRef } | { error: "not_verified" } {
-  const { toolkit, status, accountId, connections } = args;
+  const { deployment, entityUserId, toolkit, status, accountId, connections } = args;
 
   if (!toolkit || !CALENDAR_TOOLKITS.has(toolkit)) return { error: "not_verified" };
   if (!accountId) return { error: "not_verified" };
@@ -82,7 +87,13 @@ export function resolveCalendarRefFromCallback(args: {
   if (!match) return { error: "not_verified" };
 
   return {
-    calendarRef: { provider: toolkit, accountId, calendarId: "primary" },
+    calendarRef: {
+      provider: toolkit,
+      accountId,
+      calendarId: "primary",
+      ownerOrgId: deployment.builderOrgId,
+      entityUserId,
+    },
   };
 }
 
@@ -108,14 +119,18 @@ export async function GET(
       url.searchParams.get("connectedAccountId");
 
     const deployment = await getDeployment(id);
-    if (!deployment || !deployment.clientOrgId) {
+    if (!deployment) {
       return NextResponse.redirect(clientsUrl(appUrl, "error"));
     }
 
-    // SECURITY: verify against the CLIENT org's live connections before persisting.
-    const connections = await listConnections(deployment.clientOrgId);
+    // SECURITY: verify against the deployment ENTITY's live connections (agency
+    // KEY = builderOrgId, ENTITY = deployment id) before persisting.
+    const connections = await listConnections(deployment.builderOrgId, {
+      entityUserId: id,
+    });
     const resolved = resolveCalendarRefFromCallback({
       deployment,
+      entityUserId: id,
       toolkit,
       status,
       accountId,

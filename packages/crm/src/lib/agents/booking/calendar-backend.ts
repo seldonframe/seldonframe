@@ -18,8 +18,17 @@
 export type CalendarBinding = {
   mode: "native" | "external_link" | "book_external";
   externalUrl?: string | null;
-  // present only for book_external once the client's calendar is connected:
-  calendarRef?: { provider: "googlecalendar" | "outlook"; accountId: string; calendarId?: string } | null;
+  // present only for book_external once the client's calendar is connected.
+  // ownerOrgId = the agency org holding the Composio key; entityUserId = the
+  // deployment id (the Composio entity the connected account lives under) — both
+  // carried so the runtime re-opens the right session under one agency key.
+  calendarRef?: {
+    provider: "googlecalendar" | "outlook";
+    accountId: string;
+    calendarId?: string;
+    ownerOrgId?: string;
+    entityUserId?: string;
+  } | null;
 };
 
 export type AvailabilityQuery = { date: string; durationMinutes: number; timezone: string };

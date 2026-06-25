@@ -1,14 +1,16 @@
-// Task 9 — client-scoped calendar CONNECT flow.
+// Task 9 — calendar CONNECT flow (agency-key + per-deployment-entity).
 //
 // Two units under test, both DI'd so this runs with NO DB / NO network:
 //   1. startCalendarConnect (the "use server" action) — org guard, toolkit
-//      validation, no-client-org guard, and the happy-path createConnectLink call
-//      (scoped to the CLIENT org, with a callback URL carrying deploymentId +
-//      toolkit). The action takes an optional 2nd `deps` arg defaulting to the
-//      real getOrgId / getDeployment / createConnectLink.
+//      validation, and the happy-path createConnectLink call (scoped to the
+//      AGENCY org = the Composio KEY, with { entityUserId: deploymentId } = the
+//      Composio ENTITY, and a callback URL carrying deploymentId + toolkit). The
+//      action takes an optional 2nd `deps` arg defaulting to the real getOrgId /
+//      getDeployment / createConnectLink.
 //   2. resolveCalendarRefFromCallback (the pure security helper the unauthenticated
 //      callback route wraps) — persist ONLY when the query-param account id is a
-//      REAL, connected account under the deployment's own client-org connections.
+//      REAL, connected account under the deployment ENTITY's own connections, and
+//      stamp the persisted ref with ownerOrgId (agency) + entityUserId (deployment).
 //
 // Run:
 //   node --import tsx --test tests/unit/deployments/connect-calendar.spec.ts
@@ -95,28 +97,23 @@ describe("startCalendarConnect", () => {
     assert.deepEqual(res, { ok: false, error: "not_found" });
   });
 
-  test("no_client_org when the client workspace is not provisioned", async () => {
-    const res = await startCalendarConnect(
-      { deploymentId: "dep_1", toolkit: "googlecalendar" },
-      {
-        getOrgId: async () => "builder_1",
-        getDeployment: async () => deployment({ clientOrgId: null }),
-        createConnectLink: async () => ({ redirectUrl: "https://x" }),
-      },
-    );
-    assert.deepEqual(res, { ok: false, error: "no_client_org" });
-  });
-
-  test("happy path: scopes the connect link to the CLIENT org + returns redirectUrl", async () => {
-    const calls: Array<{ orgId: string; toolkit: string; callbackUrl: string }> = [];
+  test("happy path: scopes the connect link to the AGENCY key + deployment entity", async () => {
+    const calls: Array<{
+      orgId: string;
+      toolkit: string;
+      callbackUrl: string;
+      entityUserId?: string | null;
+    }> = [];
+    // clientOrgId is null on purpose — prod Studio deployments never provision a
+    // client workspace, and the connect must work anyway.
     const res = await startCalendarConnect(
       { deploymentId: "dep_42", toolkit: "googlecalendar" },
       {
         getOrgId: async () => "builder_1",
         getDeployment: async () =>
-          deployment({ id: "dep_42", builderOrgId: "builder_1", clientOrgId: "client_99" }),
-        createConnectLink: async (orgId, toolkit, callbackUrl) => {
-          calls.push({ orgId, toolkit, callbackUrl });
+          deployment({ id: "dep_42", builderOrgId: "builder_1", clientOrgId: null }),
+        createConnectLink: async (orgId, toolkit, callbackUrl, opts) => {
+          calls.push({ orgId, toolkit, callbackUrl, entityUserId: opts?.entityUserId });
           return { redirectUrl: "https://consent.composio/abc" };
         },
       },
@@ -124,9 +121,9 @@ describe("startCalendarConnect", () => {
 
     assert.deepEqual(res, { ok: true, redirectUrl: "https://consent.composio/abc" });
     assert.equal(calls.length, 1);
-    // SECURITY: the connect link is scoped to the CLIENT org (the Composio user_id),
-    // never the builder's org.
-    assert.equal(calls[0].orgId, "client_99");
+    // KEY = the agency (builder) org; ENTITY (Composio user_id) = the deployment id.
+    assert.equal(calls[0].orgId, "builder_1");
+    assert.equal(calls[0].entityUserId, "dep_42");
     assert.equal(calls[0].toolkit, "googlecalendar");
     // Callback carries the deployment id + toolkit so the callback can re-scope.
     assert.ok(
@@ -155,24 +152,33 @@ describe("startCalendarConnect", () => {
 // ── 2. resolveCalendarRefFromCallback (pure security helper) ──────────────────
 
 describe("resolveCalendarRefFromCallback", () => {
-  const dep = deployment({ clientOrgId: "client_1" });
+  const dep = deployment({ builderOrgId: "builder_1" });
 
-  test("account found + connected under the client org → calendarRef", () => {
+  test("account found + connected under the deployment entity → calendarRef (stamped owner + entity)", () => {
     const out = resolveCalendarRefFromCallback({
       deployment: dep,
+      entityUserId: "dep_1",
       toolkit: "googlecalendar",
       status: "ACTIVE",
       accountId: "ca_real",
       connections: [conn({ connectedAccountId: "ca_real", slug: "googlecalendar", connected: true })],
     });
     assert.deepEqual(out, {
-      calendarRef: { provider: "googlecalendar", accountId: "ca_real", calendarId: "primary" },
+      calendarRef: {
+        provider: "googlecalendar",
+        accountId: "ca_real",
+        calendarId: "primary",
+        // ownerOrgId = the agency (Composio key); entityUserId = the deployment.
+        ownerOrgId: "builder_1",
+        entityUserId: "dep_1",
+      },
     });
   });
 
-  test("account id NOT in the client org's live connections → error (forged callback)", () => {
+  test("account id NOT in the deployment entity's live connections → error (forged callback)", () => {
     const out = resolveCalendarRefFromCallback({
       deployment: dep,
+      entityUserId: "dep_1",
       toolkit: "googlecalendar",
       status: "ACTIVE",
       accountId: "ca_forged",
@@ -184,6 +190,7 @@ describe("resolveCalendarRefFromCallback", () => {
   test("missing account id → error", () => {
     const out = resolveCalendarRefFromCallback({
       deployment: dep,
+      entityUserId: "dep_1",
       toolkit: "googlecalendar",
       status: "ACTIVE",
       accountId: null,
@@ -195,6 +202,7 @@ describe("resolveCalendarRefFromCallback", () => {
   test("matching id but not connected (isActive false) → error", () => {
     const out = resolveCalendarRefFromCallback({
       deployment: dep,
+      entityUserId: "dep_1",
       toolkit: "googlecalendar",
       status: "ACTIVE",
       accountId: "ca_real",
@@ -206,6 +214,7 @@ describe("resolveCalendarRefFromCallback", () => {
   test("matching id + connected but WRONG toolkit slug → error", () => {
     const out = resolveCalendarRefFromCallback({
       deployment: dep,
+      entityUserId: "dep_1",
       toolkit: "outlook",
       status: "ACTIVE",
       accountId: "ca_real",
@@ -217,6 +226,7 @@ describe("resolveCalendarRefFromCallback", () => {
   test("invalid toolkit in the callback param → error (never persists)", () => {
     const out = resolveCalendarRefFromCallback({
       deployment: dep,
+      entityUserId: "dep_1",
       toolkit: "gmail",
       status: "ACTIVE",
       accountId: "ca_real",

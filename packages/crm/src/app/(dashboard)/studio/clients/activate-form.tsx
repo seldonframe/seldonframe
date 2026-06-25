@@ -438,13 +438,18 @@ const CALENDAR_TOOLKIT_OPTIONS: Array<{ id: CalendarToolkit; label: string }> = 
   { id: "outlook", label: "Outlook" },
 ];
 
-/** Map a startCalendarConnect error code to operator-facing copy. Pure. */
+/** Map a startCalendarConnect error code to operator-facing copy. Pure.
+ *  `no_client_org` is RETAINED in the union for type-compat with
+ *  StartCalendarConnectResult, but the agency-key/per-deployment-entity connect
+ *  no longer requires a client workspace, so the action never returns it. */
 export function connectCalendarErrorCopy(
   error: "unauthorized" | "not_found" | "no_client_org" | "invalid_toolkit" | "connect_failed",
 ): string {
   switch (error) {
     case "no_client_org":
-      return "The client workspace isn't ready yet.";
+      // Unreachable today (connect works without a client org); kept for the
+      // exhaustive union. Generic retry copy rather than the old "not ready".
+      return "Couldn't start the calendar connection — try again.";
     case "connect_failed":
       return "Couldn't start the calendar connection — try again.";
     case "invalid_toolkit":

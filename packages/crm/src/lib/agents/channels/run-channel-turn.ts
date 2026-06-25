@@ -52,6 +52,10 @@ type DeploymentClientSlice =
       // The booking-config fields deploymentToBinding reads. Optional so existing
       // resolver test-deps that only return { clientOrgId } still satisfy the
       // type; the call site fills the bookingMode key before mapping.
+      // id (the Composio entity) + builderOrgId (the Composio key org) are
+      // carried so book_external's calendarRef can re-open the session.
+      id?: string;
+      builderOrgId?: string;
       bookingMode?: string | null;
       externalBookingUrl?: string | null;
       calendarRef?: { provider?: string | null; accountId?: string | null; calendarId?: string | null } | null;
@@ -79,6 +83,8 @@ function buildDefaultResolveDeps(): ResolveInboundAgentDeps {
       const row = await resolveDeploymentByNumber(toHandle);
       return row
         ? {
+            id: row.id,
+            builderOrgId: row.builderOrgId,
             clientOrgId: row.clientOrgId,
             bookingMode: row.bookingMode,
             externalBookingUrl: row.externalBookingUrl,
@@ -153,6 +159,12 @@ export async function resolveInboundAgent(
         // bookingMode key is always present, value may be null) so the mapper
         // accepts it regardless of the slice's optional fields.
         const bookingBinding = deploymentToBinding({
+          // id (Composio entity) + builderOrgId (Composio key org) carry into the
+          // book_external calendarRef; the resolver only reached here on a matched
+          // deployment row, so both are present (fallbacks satisfy the structural
+          // optionality of DeploymentClientSlice).
+          id: deployment.id ?? "",
+          builderOrgId: deployment.builderOrgId ?? "",
           bookingMode: deployment.bookingMode ?? null,
           externalBookingUrl: deployment.externalBookingUrl ?? null,
           calendarRef: deployment.calendarRef ?? null,
