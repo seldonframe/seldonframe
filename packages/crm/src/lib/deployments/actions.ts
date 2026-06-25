@@ -43,6 +43,7 @@ import {
   ProvisionDeploymentNumberSchema,
   CancelDeploymentSchema,
   SetBookingPolicySchema,
+  SetDeploymentCustomizationSchema,
 } from "./schema";
 import { isE164, isAreaCode, isPhoneInUseError } from "./margin";
 import { mapSoulToClientContext } from "./client-context";
@@ -50,6 +51,7 @@ import { compileSoulService } from "@/lib/soul-compiler/service";
 import { resolveBuilderClaudeKey } from "./client-context-server";
 import type { DeploymentClientContext } from "@/db/schema/deployments";
 import type { BookingPolicy } from "@/lib/agents/booking/booking-policy";
+import type { DeploymentCustomization } from "@/lib/agents/persona/deployment-customization";
 import type { SoulV4 } from "@/lib/soul-compiler/schema";
 import { resolveBuilderTelephony } from "@/lib/telephony/config";
 import { createTwilioTelephonyClient } from "@/lib/telephony/twilio-client";
@@ -634,6 +636,67 @@ export async function setBookingPolicyAction(
   const result = await updateDeployment({
     id: parsed.data.deploymentId,
     patch: { bookingPolicy: parsed.data.policy },
+    deps: _deps,
+  });
+  if (!result.ok) {
+    return { ok: false, error: result.error === "deployment_not_found" ? "not_found" : "update_failed" };
+  }
+  (_deps?.revalidate ?? revalidatePath)("/studio/clients");
+  return { ok: true };
+}
+
+// ─── setDeploymentCustomizationAction ────────────────────────────────────────
+
+export type SetDeploymentCustomizationActionResult =
+  | { ok: true }
+  | { ok: false; error: "unauthorized" | "not_found" | "update_failed" };
+
+/**
+ * Set (or clear) a deployment's per-client agent-persona override — the
+ * greeting / TTS voice / business-info facts the agency edits on the client
+ * card. Org-guarded: verifies the deployment's builder_org_id matches the
+ * current operator's org. Mirrors setBookingPolicyAction's shape (assertWritable
+ * → getOrgId → load + org-guard → updateDeployment → revalidatePath). The
+ * customization is persisted verbatim; the persona resolver
+ * (resolveDeploymentPersona) tolerates any blank/absent field at read time, and
+ * a `null` customization clears the override (→ the template's defaults).
+ *
+ * @param _deps - optional DI; injected in unit tests to avoid DB + Next.js
+ *   session. getOrgId defaults to the real session resolver.
+ */
+export async function setDeploymentCustomizationAction(
+  input: { deploymentId: string; customization: Partial<DeploymentCustomization> | null },
+  _deps?: Partial<
+    UpdateDeploymentDeps & {
+      getOrgId: () => Promise<string | null>;
+      findDeploymentById: (id: string) => Promise<import("@/db/schema/deployments").Deployment | null>;
+      /** The cache-revalidation effect; defaults to Next's revalidatePath. DI'd
+       *  in unit tests (the real one throws outside a request scope). */
+      revalidate: (path: string) => void;
+    }
+  >,
+): Promise<SetDeploymentCustomizationActionResult> {
+  assertWritable();
+
+  const resolveOrgId = _deps?.getOrgId ?? getOrgId;
+  const orgId = await resolveOrgId();
+  if (!orgId) return { ok: false, error: "unauthorized" };
+
+  const parsed = SetDeploymentCustomizationSchema.safeParse(input);
+  if (!parsed.success) return { ok: false, error: "not_found" };
+
+  // Org guard: load the deployment and verify ownership.
+  const existing = await getDeployment(
+    parsed.data.deploymentId,
+    _deps ? { findById: _deps.findDeploymentById ?? _deps.findById } : undefined,
+  );
+  if (!existing || existing.builderOrgId !== orgId) {
+    return { ok: false, error: "not_found" };
+  }
+
+  const result = await updateDeployment({
+    id: parsed.data.deploymentId,
+    patch: { customization: parsed.data.customization },
     deps: _deps,
   });
   if (!result.ok) {

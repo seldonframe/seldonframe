@@ -207,3 +207,42 @@ export const SetBookingPolicySchema = z
   .strict();
 
 export type SetBookingPolicyInput = z.infer<typeof SetBookingPolicySchema>;
+
+// ─── SetDeploymentCustomizationSchema ────────────────────────────────────────
+// Used by setDeploymentCustomizationAction (actions.ts). Validates the deployment
+// id and the sparse per-client agent-persona override the agency edits on the
+// client card: a greeting full-override, a TTS voice id, and the business-info
+// facts that fill the template's `{placeholders}`. Every field is OPTIONAL (a
+// Partial) and bounded so the row can't bloat / hold junk types; the persona
+// resolver (resolveDeploymentPersona) tolerates any blank/absent field at read
+// time. `null` clears the override (→ the template's defaults). Same "use server"
+// split rationale as the schemas above (this zod object can't live in actions.ts).
+
+const BusinessInfoSchema = z
+  .object({
+    name: z.string().max(200).optional(),
+    hours: z.string().max(400).optional(),
+    address: z.string().max(300).optional(),
+    phone: z.string().max(40).optional(),
+    email: z.string().max(200).optional(),
+  })
+  .strict();
+
+const DeploymentCustomizationSchema = z
+  .object({
+    greeting: z.string().max(2000).optional(),
+    voiceId: z.string().max(60).optional(),
+    businessInfo: BusinessInfoSchema.optional(),
+  })
+  .strict();
+
+export const SetDeploymentCustomizationSchema = z
+  .object({
+    deploymentId: z.string().uuid(),
+    customization: DeploymentCustomizationSchema.nullable(),
+  })
+  .strict();
+
+export type SetDeploymentCustomizationInput = z.infer<
+  typeof SetDeploymentCustomizationSchema
+>;

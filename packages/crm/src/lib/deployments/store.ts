@@ -27,6 +27,7 @@ import type {
 import type { AgentTemplate } from "@/db/schema/agent-templates";
 import type { BookingPolicy } from "@/lib/agents/booking/booking-policy";
 import { bookingPolicyFromIntake } from "@/lib/agents/booking/booking-policy";
+import type { DeploymentCustomization } from "@/lib/agents/persona/deployment-customization";
 import { isDeploymentStatus, isDeploymentSurface } from "./margin";
 
 // ─── injectable deps (lazy DB — never imported in unit tests) ─────────────────
@@ -109,6 +110,7 @@ function buildDefaultListDeps(): ListDeploymentsDeps {
           bookingMode: deployments.bookingMode,
           calendarRef: deployments.calendarRef,
           bookingPolicy: deployments.bookingPolicy,
+          customization: deployments.customization,
         })
         .from(deployments)
         .leftJoin(
@@ -397,6 +399,10 @@ export type DeploymentListItem = {
    *  null = no override (→ template/system defaults). The Clients card seeds the
    *  BookingPolicyEditor with `resolveBookingPolicy(this, null, undefined)`. */
   bookingPolicy: Partial<BookingPolicy> | null;
+  /** The per-client agent-persona override (greeting / voiceId / businessInfo) —
+   *  null = no override (→ the template's defaults). The Clients card seeds the
+   *  DeploymentCustomizationEditor directly with this value. */
+  customization: Partial<DeploymentCustomization> | null;
 };
 
 /** List a builder's deployments, most-recently-updated first, with template name. */
@@ -454,6 +460,12 @@ export type DeploymentPatch = Partial<{
    *  null clears it (→ template/system defaults). Persisted verbatim — the engine
    *  clamps any malformed stored value at read time. */
   bookingPolicy: Partial<BookingPolicy> | null;
+  /** The per-client agent-persona override (greeting / TTS voiceId / businessInfo
+   *  that fills the template's `{placeholders}`) — a sparse
+   *  Partial<DeploymentCustomization> resolved over the template default by
+   *  resolveDeploymentPersona. Set by the gated setDeploymentCustomizationAction;
+   *  null clears it (→ the template's defaults). Persisted verbatim. */
+  customization: Partial<DeploymentCustomization> | null;
 }>;
 
 export type UpdateDeploymentInput = {
@@ -526,6 +538,9 @@ export async function updateDeployment(
   }
   if (p.bookingPolicy !== undefined) {
     patch.bookingPolicy = p.bookingPolicy;
+  }
+  if (p.customization !== undefined) {
+    patch.customization = p.customization;
   }
 
   const updated = await update(input.id, patch);

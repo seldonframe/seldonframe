@@ -39,7 +39,9 @@ import {
 } from "@/lib/deployments/connect-calendar";
 import { deriveAreaCode } from "@/lib/deployments/margin";
 import { BookingPolicyEditor } from "./booking-policy-editor";
+import { DeploymentCustomizationEditor } from "./deployment-customization-editor";
 import type { BookingPolicy } from "@/lib/agents/booking/booking-policy";
+import type { DeploymentCustomization } from "@/lib/agents/persona/deployment-customization";
 
 type ProvisionErrorCode =
   | "unauthorized"
@@ -705,6 +707,50 @@ export function BookingRulesSection({
       {open && (
         <div className="mt-3">
           <BookingPolicyEditor deploymentId={deploymentId} initial={initialPolicy} />
+        </div>
+      )}
+    </div>
+  );
+}
+
+// ─── CustomizationSection ──────────────────────────────────────────────────────
+//
+// A collapsible "Agent customization" panel wrapping the reusable
+// DeploymentCustomizationEditor, shown on a deployment card for every agent that
+// SPEAKS (a conversational surface — phone / embed / link). The text-only
+// surfaces (sms / email) and non-conversational cases are excluded by the caller
+// (page.tsx). Sits NEXT TO "Booking rules" and mirrors its chrome exactly:
+// collapsed by default, the same ChevronDown/Up + muted label toggle. The editor
+// is seeded with the deployment's stored `customization` (passed from page.tsx).
+
+type CustomizationSectionProps = {
+  deploymentId: string;
+  /** The deployment's stored customization (sparse Partial) — null = no override
+   *  yet (→ the template's defaults). */
+  initial: Partial<DeploymentCustomization> | null;
+};
+
+export function CustomizationSection({
+  deploymentId,
+  initial,
+}: CustomizationSectionProps) {
+  const [open, setOpen] = useState(false);
+
+  return (
+    <div className="mt-3 border-t pt-3">
+      <button
+        type="button"
+        onClick={() => setOpen((v) => !v)}
+        aria-expanded={open}
+        className="flex items-center gap-1.5 text-[11px] font-medium uppercase tracking-wide text-muted-foreground hover:text-foreground"
+      >
+        <Sparkles className="size-3" aria-hidden />
+        Agent customization
+        {open ? <ChevronUp className="size-3" /> : <ChevronDown className="size-3" />}
+      </button>
+      {open && (
+        <div className="mt-3">
+          <DeploymentCustomizationEditor deploymentId={deploymentId} initial={initial} />
         </div>
       )}
     </div>

@@ -27,6 +27,7 @@ import {
   CancelButton,
   ConnectCalendarButton,
   BookingRulesSection,
+  CustomizationSection,
 } from "./activate-form";
 
 export const dynamic = "force-dynamic";
@@ -173,6 +174,20 @@ export default async function StudioClientsPage({
                     null,
                     undefined,
                   )}
+                />
+              )}
+
+              {/* Per-client agent customization — greeting / TTS voice / business
+                  info, for every agent that SPEAKS: a conversational surface
+                  (phone / embed / link). The text-only surfaces (sms / email)
+                  don't get a spoken persona here. Seed with the deployment's
+                  stored customization (null = no override → template defaults). */}
+              {(d.surface === "phone" ||
+                d.surface === "embed" ||
+                d.surface === "link") && (
+                <CustomizationSection
+                  deploymentId={d.id}
+                  initial={d.customization ?? null}
                 />
               )}
             </article>
