@@ -42,12 +42,14 @@ import {
   PauseDeploymentSchema,
   ProvisionDeploymentNumberSchema,
   CancelDeploymentSchema,
+  SetBookingPolicySchema,
 } from "./schema";
 import { isE164, isAreaCode, isPhoneInUseError } from "./margin";
 import { mapSoulToClientContext } from "./client-context";
 import { compileSoulService } from "@/lib/soul-compiler/service";
 import { resolveBuilderClaudeKey } from "./client-context-server";
 import type { DeploymentClientContext } from "@/db/schema/deployments";
+import type { BookingPolicy } from "@/lib/agents/booking/booking-policy";
 import type { SoulV4 } from "@/lib/soul-compiler/schema";
 import { resolveBuilderTelephony } from "@/lib/telephony/config";
 import { createTwilioTelephonyClient } from "@/lib/telephony/twilio-client";
@@ -577,6 +579,67 @@ export async function cancelDeploymentAction(
     return { ok: false, error: result.error === "deployment_not_found" ? "not_found" : "update_failed" };
   }
   revalidatePath("/studio/clients");
+  return { ok: true };
+}
+
+// ─── setBookingPolicyAction ──────────────────────────────────────────────────
+
+export type SetBookingPolicyActionResult =
+  | { ok: true }
+  | { ok: false; error: "unauthorized" | "not_found" | "update_failed" };
+
+/**
+ * Set (or clear) a deployment's per-client booking policy — the sparse override
+ * the agency edits on the client card. Org-guarded: verifies the deployment's
+ * builder_org_id matches the current operator's org. Mirrors
+ * cancelDeploymentAction's shape (assertWritable → getOrgId → load + org-guard →
+ * updateDeployment → revalidatePath). The policy is persisted verbatim; the
+ * booking engine (resolveBookingPolicy) re-clamps any malformed stored value at
+ * read time, and a `null` policy clears the override (→ template/system
+ * defaults).
+ *
+ * @param _deps - optional DI; injected in unit tests to avoid DB + Next.js
+ *   session. getOrgId defaults to the real session resolver.
+ */
+export async function setBookingPolicyAction(
+  input: { deploymentId: string; policy: Partial<BookingPolicy> },
+  _deps?: Partial<
+    UpdateDeploymentDeps & {
+      getOrgId: () => Promise<string | null>;
+      findDeploymentById: (id: string) => Promise<import("@/db/schema/deployments").Deployment | null>;
+      /** The cache-revalidation effect; defaults to Next's revalidatePath. DI'd
+       *  in unit tests (the real one throws outside a request scope). */
+      revalidate: (path: string) => void;
+    }
+  >,
+): Promise<SetBookingPolicyActionResult> {
+  assertWritable();
+
+  const resolveOrgId = _deps?.getOrgId ?? getOrgId;
+  const orgId = await resolveOrgId();
+  if (!orgId) return { ok: false, error: "unauthorized" };
+
+  const parsed = SetBookingPolicySchema.safeParse(input);
+  if (!parsed.success) return { ok: false, error: "not_found" };
+
+  // Org guard: load the deployment and verify ownership.
+  const existing = await getDeployment(
+    parsed.data.deploymentId,
+    _deps ? { findById: _deps.findDeploymentById ?? _deps.findById } : undefined,
+  );
+  if (!existing || existing.builderOrgId !== orgId) {
+    return { ok: false, error: "not_found" };
+  }
+
+  const result = await updateDeployment({
+    id: parsed.data.deploymentId,
+    patch: { bookingPolicy: parsed.data.policy },
+    deps: _deps,
+  });
+  if (!result.ok) {
+    return { ok: false, error: result.error === "deployment_not_found" ? "not_found" : "update_failed" };
+  }
+  (_deps?.revalidate ?? revalidatePath)("/studio/clients");
   return { ok: true };
 }
 

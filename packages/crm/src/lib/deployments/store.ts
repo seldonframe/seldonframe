@@ -25,6 +25,8 @@ import type {
   NewDeployment,
 } from "@/db/schema/deployments";
 import type { AgentTemplate } from "@/db/schema/agent-templates";
+import type { BookingPolicy } from "@/lib/agents/booking/booking-policy";
+import { bookingPolicyFromIntake } from "@/lib/agents/booking/booking-policy";
 import { isDeploymentStatus, isDeploymentSurface } from "./margin";
 
 // ─── injectable deps (lazy DB — never imported in unit tests) ─────────────────
@@ -175,6 +177,10 @@ export type CreateDeploymentInput = {
   /** The client's own booking URL — persisted ONLY for bookingMode
    *  'external_link'; any other mode drops it (never store a stray URL). */
   externalBookingUrl?: string | null;
+  /** An explicit per-client booking policy. When provided it is persisted as-is
+   *  and WINS over the intake-derived seed (the "already set" case). When absent
+   *  the store seeds it from the captured clientContext hours (see below). */
+  bookingPolicy?: Partial<BookingPolicy> | null;
   deps?: Partial<CreateDeploymentDeps>;
 };
 
@@ -230,6 +236,17 @@ export async function createDeployment(
       ? input.externalBookingUrl?.trim() || null
       : null;
 
+  // Seed the per-client booking policy from the captured intake hours, UNLESS an
+  // explicit policy was passed (which wins — the "already set" case). The seed is
+  // a sparse Partial<BookingPolicy> derived purely from clientContext.soul
+  // .business_hours (weekday window only); resolveBookingPolicy merges it over the
+  // template default at runtime. Collapses to null when nothing parses so a blank
+  // capture leaves the column null (→ template/system defaults), never {}.
+  const bookingPolicy = resolveSeededBookingPolicy(
+    input.bookingPolicy,
+    clientContext,
+  );
+
   const values: NewDeployment = {
     builderOrgId,
     agentTemplateId: input.agentTemplateId,
@@ -240,6 +257,7 @@ export async function createDeployment(
     priceCents,
     bookingMode,
     externalBookingUrl,
+    bookingPolicy,
     // Draft only — provisioning + billing activate this later (gated).
     status: "draft" satisfies DeploymentStatus,
   };
@@ -326,6 +344,25 @@ export function normalizeClientContext(
   return Object.keys(out).length > 0 ? out : undefined;
 }
 
+/**
+ * Resolve the booking_policy column value at create time:
+ *   - an EXPLICIT policy (non-empty Partial) is persisted as-is and wins (the
+ *     "already set" case the seed must not clobber);
+ *   - otherwise it is SEEDED from the captured client context's hours via
+ *     bookingPolicyFromIntake (weekday window only);
+ *   - collapses to `null` when neither yields a usable field, so a blank capture
+ *     leaves the column null (→ template/system defaults), never `{}`.
+ * Pure.
+ */
+export function resolveSeededBookingPolicy(
+  explicit: Partial<BookingPolicy> | null | undefined,
+  clientContext: DeploymentClientContext | undefined,
+): Partial<BookingPolicy> | null {
+  if (explicit && Object.keys(explicit).length > 0) return explicit;
+  const seeded = bookingPolicyFromIntake(clientContext ?? null);
+  return Object.keys(seeded).length > 0 ? seeded : null;
+}
+
 // ─── listDeployments ─────────────────────────────────────────────────────────
 
 /** A deployment row enriched with the template name for the Clients screen. */
@@ -406,6 +443,12 @@ export type DeploymentPatch = Partial<{
    *  gated calendar-connect callback after OAuth; null clears it. Deliberately NOT
    *  accepted by CreateDeploymentSchema — only this gated writer sets it. */
   calendarRef: DeploymentCalendarRef | null;
+  /** The per-client booking policy (slot length / hours / buffer / lead time /
+   *  required fields) — a sparse Partial<BookingPolicy> merged over the template
+   *  default by resolveBookingPolicy. Set by the gated setBookingPolicyAction;
+   *  null clears it (→ template/system defaults). Persisted verbatim — the engine
+   *  clamps any malformed stored value at read time. */
+  bookingPolicy: Partial<BookingPolicy> | null;
 }>;
 
 export type UpdateDeploymentInput = {
@@ -475,6 +518,9 @@ export async function updateDeployment(
   }
   if (p.calendarRef !== undefined) {
     patch.calendarRef = p.calendarRef;
+  }
+  if (p.bookingPolicy !== undefined) {
+    patch.bookingPolicy = p.bookingPolicy;
   }
 
   const updated = await update(input.id, patch);

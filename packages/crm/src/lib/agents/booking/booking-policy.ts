@@ -16,6 +16,8 @@
 // sane slot list, so invalid stored values are clamped to safe defaults rather
 // than rejected.
 
+import { parseHoursText } from "@/lib/onboarding/parse-hours";
+
 export type BookingPolicy = {
   durationMinutes: number; // appointment length
   bufferMinutes: number; // gap enforced between bookings
@@ -283,4 +285,118 @@ export function slotFitsFreeWindows(
     if (startMs >= wStart && endMs <= wEnd) return true;
   }
   return false;
+}
+
+// ---------------------------------------------------------------------------
+// Seed a BookingPolicy from a client's captured intake
+//
+// At deploy time we already captured the client's weekly hours into
+// `clientContext.soul.business_hours` (see deployments/client-context.ts +
+// client-workspace-seed.ts). That capture is the SAME structured shape the
+// onboarding hours parser and buildBusinessHoursSoulPatch write:
+//   { monday: { enabled: true, start: "09:00", end: "17:00" }, ... }
+// (full lowercase weekday names; per-day enabled + "HH:MM" window).
+//
+// `bookingPolicyFromIntake` maps that into the THREE BookingPolicy fields it can
+// confidently derive from hours — `weekdays`, `startTime`, `endTime` — and
+// nothing else. A BookingPolicy carries a SINGLE window (not per-day), so we
+// take every enabled day for `weekdays` and the MOST COMMON enabled-day window
+// for start/end. It returns a sparse Partial (`{}` when nothing parses), so the
+// deploy seam can merge it under resolveBookingPolicy without overriding fields
+// it didn't derive. Pure — no I/O.
+// ---------------------------------------------------------------------------
+
+/** The captured-intake shape this reads — the persisted client context's narrow
+ *  soul. We only touch `soul.business_hours`; everything else is ignored. The
+ *  hours value is either the structured per-day Record (the canonical capture)
+ *  or a raw free-text string (which we route through the onboarding parser). */
+type BookingPolicyIntake = {
+  soul?: {
+    business_hours?: Record<string, unknown> | string | null;
+  } | null;
+} | null | undefined;
+
+const INTAKE_WEEKDAY_INDEX: Record<string, number> = {
+  sunday: 0,
+  monday: 1,
+  tuesday: 2,
+  wednesday: 3,
+  thursday: 4,
+  friday: 5,
+  saturday: 6,
+};
+
+/** One enabled day's window, validated to "HH:MM" with end > start. */
+type EnabledDay = { weekday: number; start: string; end: string };
+
+/** Extract the enabled days (weekday + valid window) from a STRUCTURED per-day
+ *  hours Record. Reads defensively: a non-object day, a non-boolean `enabled`,
+ *  a malformed "HH:MM", or end<=start is skipped. Returns [] when none survive. */
+function enabledDaysFromStructured(hours: Record<string, unknown>): EnabledDay[] {
+  const out: EnabledDay[] = [];
+  for (const [key, raw] of Object.entries(hours)) {
+    const weekday = INTAKE_WEEKDAY_INDEX[key.toLowerCase()];
+    if (weekday === undefined) continue;
+    if (!raw || typeof raw !== "object") continue;
+    const entry = raw as { enabled?: unknown; start?: unknown; end?: unknown };
+    if (entry.enabled !== true) continue;
+    const start = typeof entry.start === "string" ? entry.start.trim() : "";
+    const end = typeof entry.end === "string" ? entry.end.trim() : "";
+    if (!HHMM.test(start) || !HHMM.test(end) || end <= start) continue;
+    out.push({ weekday, start, end });
+  }
+  return out;
+}
+
+/**
+ * Derive the BookingPolicy hours fields a client's captured intake confidently
+ * implies. Reads `intake.soul.business_hours`:
+ *   - a structured per-day Record → used directly;
+ *   - a free-text string → parsed via the onboarding `parseHoursText`.
+ * Then collapses the enabled days into `{ weekdays, startTime, endTime }`:
+ *   - `weekdays` = every enabled day (0=Sun..6=Sat), deduped + sorted;
+ *   - `startTime`/`endTime` = the most common enabled-day window (ties resolve
+ *     to the earliest start, then earliest end — deterministic).
+ *
+ * Returns ONLY those three fields, and ONLY when at least one valid enabled day
+ * exists; otherwise `{}`. Never throws. Pure.
+ */
+export function bookingPolicyFromIntake(
+  intake: BookingPolicyIntake,
+): Partial<BookingPolicy> {
+  const raw = intake?.soul?.business_hours;
+  if (raw === null || raw === undefined) return {};
+
+  // Normalize either input form to the structured per-day shape, then read the
+  // enabled days off it. A string routes through the existing onboarding parser
+  // (its WeeklyAvailability output is exactly the structured shape we read).
+  const structured: Record<string, unknown> =
+    typeof raw === "string"
+      ? (parseHoursText(raw) as unknown as Record<string, unknown>)
+      : typeof raw === "object"
+        ? raw
+        : {};
+
+  const enabled = enabledDaysFromStructured(structured);
+  if (enabled.length === 0) return {};
+
+  const weekdays = [...new Set(enabled.map((d) => d.weekday))].sort((a, b) => a - b);
+
+  // Pick the dominant window: tally `start-end` keys, then choose the most
+  // frequent (ties → earliest start, then earliest end) so the result is stable.
+  const counts = new Map<string, { count: number; start: string; end: string }>();
+  for (const d of enabled) {
+    const key = `${d.start}-${d.end}`;
+    const cur = counts.get(key);
+    if (cur) cur.count += 1;
+    else counts.set(key, { count: 1, start: d.start, end: d.end });
+  }
+  const dominant = [...counts.values()].sort(
+    (a, b) =>
+      b.count - a.count ||
+      (a.start < b.start ? -1 : a.start > b.start ? 1 : 0) ||
+      (a.end < b.end ? -1 : a.end > b.end ? 1 : 0),
+  )[0];
+
+  return { weekdays, startTime: dominant.start, endTime: dominant.end };
 }

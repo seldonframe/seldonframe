@@ -1,6 +1,7 @@
 import { describe, test } from "node:test";
 import assert from "node:assert/strict";
 import {
+  bookingPolicyFromIntake,
   generateCandidateSlots,
   resolveBookingPolicy,
   SYSTEM_DEFAULTS,
@@ -296,5 +297,90 @@ describe("generateCandidateSlots", () => {
       "America/Chicago",
     );
     assert.deepEqual(generateCandidateSlots(monPolicy, "2026-07-05", FAR_PAST), []);
+  });
+});
+
+describe("bookingPolicyFromIntake", () => {
+  // The captured shape (clientContext.soul.business_hours): a structured
+  // Record<weekday, {enabled, start, end}> as written by buildClientWorkspaceInput
+  // / buildBusinessHoursSoulPatch / the onboarding hours parser.
+  test("structured Mon-Fri 9-5 → weekdays [1..5], 09:00-17:00", () => {
+    const hours = {
+      sunday: { enabled: false, start: "09:00", end: "17:00" },
+      monday: { enabled: true, start: "09:00", end: "17:00" },
+      tuesday: { enabled: true, start: "09:00", end: "17:00" },
+      wednesday: { enabled: true, start: "09:00", end: "17:00" },
+      thursday: { enabled: true, start: "09:00", end: "17:00" },
+      friday: { enabled: true, start: "09:00", end: "17:00" },
+      saturday: { enabled: false, start: "09:00", end: "17:00" },
+    };
+    const out = bookingPolicyFromIntake({ soul: { business_hours: hours } });
+    assert.deepEqual(out, {
+      weekdays: [1, 2, 3, 4, 5],
+      startTime: "09:00",
+      endTime: "17:00",
+    });
+  });
+
+  test("structured with a Saturday + closed Sunday derives weekdays incl. Sat", () => {
+    const hours = {
+      monday: { enabled: true, start: "08:00", end: "18:00" },
+      tuesday: { enabled: true, start: "08:00", end: "18:00" },
+      wednesday: { enabled: true, start: "08:00", end: "18:00" },
+      thursday: { enabled: true, start: "08:00", end: "18:00" },
+      friday: { enabled: true, start: "08:00", end: "18:00" },
+      saturday: { enabled: true, start: "10:00", end: "14:00" },
+      sunday: { enabled: false, start: "09:00", end: "17:00" },
+    };
+    const out = bookingPolicyFromIntake({ soul: { business_hours: hours } });
+    // weekdays = every enabled day; the window is the most common enabled window
+    // (Mon-Fri 08:00-18:00 dominates the lone Sat 10:00-14:00).
+    assert.deepEqual(out, {
+      weekdays: [1, 2, 3, 4, 5, 6],
+      startTime: "08:00",
+      endTime: "18:00",
+    });
+  });
+
+  test("free-text business_hours is parsed via the onboarding hours parser", () => {
+    // "Mon-Fri 9-5" as a raw string → reuse parseHoursText → weekdays [1..5].
+    const out = bookingPolicyFromIntake({
+      soul: { business_hours: "Mon-Fri 9-5" as unknown as Record<string, unknown> },
+    });
+    assert.deepEqual(out, {
+      weekdays: [1, 2, 3, 4, 5],
+      startTime: "09:00",
+      endTime: "17:00",
+    });
+  });
+
+  test("empty / absent intake → {} (nothing confidently derived)", () => {
+    assert.deepEqual(bookingPolicyFromIntake(null), {});
+    assert.deepEqual(bookingPolicyFromIntake(undefined), {});
+    assert.deepEqual(bookingPolicyFromIntake({}), {});
+    assert.deepEqual(bookingPolicyFromIntake({ soul: {} }), {});
+    assert.deepEqual(bookingPolicyFromIntake({ soul: { business_hours: {} } }), {});
+  });
+
+  test("no enabled day → {} (no weekday window to derive)", () => {
+    const hours = {
+      monday: { enabled: false, start: "09:00", end: "17:00" },
+      tuesday: { enabled: false, start: "09:00", end: "17:00" },
+    };
+    assert.deepEqual(bookingPolicyFromIntake({ soul: { business_hours: hours } }), {});
+  });
+
+  test("malformed structured entries are ignored; nothing usable → {}", () => {
+    const hours = {
+      monday: { enabled: true, start: "nope", end: "" },
+      tuesday: "garbage",
+      wednesday: { enabled: "yes", start: "09:00", end: "17:00" },
+    };
+    assert.deepEqual(
+      bookingPolicyFromIntake({
+        soul: { business_hours: hours as unknown as Record<string, unknown> },
+      }),
+      {},
+    );
   });
 });

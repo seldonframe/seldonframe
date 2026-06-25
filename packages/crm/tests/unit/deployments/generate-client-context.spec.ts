@@ -20,6 +20,7 @@ import assert from "node:assert/strict";
 import {
   createDeployment,
   normalizeClientContext,
+  resolveSeededBookingPolicy,
   type CreateDeploymentDeps,
 } from "../../../src/lib/deployments/store";
 import { CreateDeploymentSchema } from "../../../src/lib/deployments/schema";
@@ -224,5 +225,109 @@ describe("createDeployment — clientContext persistence", () => {
     assert.ok(inserted, "insert must be called");
     const row: NewDeployment = inserted;
     assert.equal(row.clientContext, undefined);
+  });
+});
+
+// ── 4. booking_policy seeded from intake at create time ────────────────────────
+
+describe("resolveSeededBookingPolicy", () => {
+  const HOURS_MON_FRI = {
+    monday: { enabled: true, start: "09:00", end: "17:00" },
+    tuesday: { enabled: true, start: "09:00", end: "17:00" },
+    wednesday: { enabled: true, start: "09:00", end: "17:00" },
+    thursday: { enabled: true, start: "09:00", end: "17:00" },
+    friday: { enabled: true, start: "09:00", end: "17:00" },
+    saturday: { enabled: false, start: "09:00", end: "17:00" },
+    sunday: { enabled: false, start: "09:00", end: "17:00" },
+  };
+
+  test("seeds from captured hours when no explicit policy is given", () => {
+    const out = resolveSeededBookingPolicy(undefined, {
+      soul: { business_hours: HOURS_MON_FRI },
+    });
+    assert.deepEqual(out, {
+      weekdays: [1, 2, 3, 4, 5],
+      startTime: "09:00",
+      endTime: "17:00",
+    });
+  });
+
+  test("an explicit policy WINS over the intake seed (already-set case)", () => {
+    const explicit = { durationMinutes: 60, weekdays: [2] };
+    const out = resolveSeededBookingPolicy(explicit, {
+      soul: { business_hours: HOURS_MON_FRI },
+    });
+    assert.deepEqual(out, explicit);
+  });
+
+  test("no hours + no explicit → null (column left null → defaults)", () => {
+    assert.equal(resolveSeededBookingPolicy(undefined, undefined), null);
+    assert.equal(resolveSeededBookingPolicy(undefined, { soul: {} }), null);
+    assert.equal(resolveSeededBookingPolicy({}, undefined), null); // empty explicit ignored
+  });
+});
+
+describe("createDeployment — booking_policy seed", () => {
+  test("seeds booking_policy on the inserted row from captured hours", async () => {
+    let inserted: NewDeployment | null = null;
+    const deps: CreateDeploymentDeps = {
+      findTemplateById: async () => fakeTemplate(),
+      insert: async (values) => {
+        inserted = values;
+        return { ...(values as object), id: "dep-1" } as Deployment;
+      },
+    };
+
+    const result = await createDeployment({
+      builderOrgId: "builder-1",
+      agentTemplateId: "tmpl-1",
+      clientName: "Acme Plumbing",
+      clientContext: {
+        soul: {
+          businessName: "Acme",
+          business_hours: {
+            monday: { enabled: true, start: "08:00", end: "18:00" },
+            tuesday: { enabled: true, start: "08:00", end: "18:00" },
+            wednesday: { enabled: true, start: "08:00", end: "18:00" },
+            thursday: { enabled: true, start: "08:00", end: "18:00" },
+            friday: { enabled: true, start: "08:00", end: "18:00" },
+            saturday: { enabled: false, start: "09:00", end: "17:00" },
+            sunday: { enabled: false, start: "09:00", end: "17:00" },
+          },
+        },
+      },
+      deps,
+    });
+
+    assert.equal(result.ok, true);
+    assert.ok(inserted, "insert must be called");
+    const row: NewDeployment = inserted;
+    assert.deepEqual(row.bookingPolicy, {
+      weekdays: [1, 2, 3, 4, 5],
+      startTime: "08:00",
+      endTime: "18:00",
+    });
+  });
+
+  test("no captured hours → bookingPolicy is null on the row", async () => {
+    let inserted: NewDeployment | null = null;
+    const deps: CreateDeploymentDeps = {
+      findTemplateById: async () => fakeTemplate(),
+      insert: async (values) => {
+        inserted = values;
+        return { ...(values as object), id: "dep-1" } as Deployment;
+      },
+    };
+
+    await createDeployment({
+      builderOrgId: "builder-1",
+      agentTemplateId: "tmpl-1",
+      clientName: "Acme Plumbing",
+      clientContext: { soul: { businessName: "Acme" } },
+      deps,
+    });
+
+    const row = inserted as unknown as NewDeployment;
+    assert.equal(row.bookingPolicy, null);
   });
 });

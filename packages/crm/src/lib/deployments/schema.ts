@@ -157,3 +157,34 @@ export const CancelDeploymentSchema = z
   .strict();
 
 export type CancelDeploymentInput = z.infer<typeof CancelDeploymentSchema>;
+
+// ─── SetBookingPolicySchema ──────────────────────────────────────────────────
+// Used by setBookingPolicyAction (actions.ts). Validates the deployment id and
+// the sparse per-client BookingPolicy override the agency edits on the client
+// card. Every policy field is OPTIONAL (a Partial) and bounded; the booking
+// engine (resolveBookingPolicy) re-clamps any out-of-range stored value at read
+// time, so this layer only needs to keep the row from bloating / holding junk
+// types. `null` clears the override (→ template/system defaults).
+
+const BookingPolicySchema = z
+  .object({
+    durationMinutes: z.number().int().min(1).max(1440).optional(),
+    bufferMinutes: z.number().int().min(0).max(1440).optional(),
+    maxPerDay: z.number().int().min(1).max(1000).nullable().optional(),
+    leadTimeHours: z.number().min(0).max(8760).optional(),
+    timezone: z.string().max(64).optional(),
+    weekdays: z.array(z.number().int().min(0).max(6)).max(7).optional(),
+    startTime: z.string().regex(/^([01]\d|2[0-3]):[0-5]\d$/).optional(),
+    endTime: z.string().regex(/^([01]\d|2[0-3]):[0-5]\d$/).optional(),
+    requiredFields: z.array(z.string().min(1).max(60)).max(20).optional(),
+  })
+  .strict();
+
+export const SetBookingPolicySchema = z
+  .object({
+    deploymentId: z.string().uuid(),
+    policy: BookingPolicySchema.nullable(),
+  })
+  .strict();
+
+export type SetBookingPolicyInput = z.infer<typeof SetBookingPolicySchema>;
