@@ -146,12 +146,51 @@ export function makeComposioCalendarBackend(deps: ComposioBackendDeps): Calendar
           attendees: input.attendee.email ? [input.attendee.email] : [],
           description: input.notes ?? "",
         });
-        return res?.successful
-          ? { ok: true, eventRef: String(res.data?.id ?? "") }
-          : { ok: false, error: "create_failed" };
+        // The MCP client (createMcpClient.callTool) THROWS on a tool error /
+        // isError:true, so a RETURN here means the event was created. We still
+        // honor an explicit SDK-shape `successful:false` defensively. The event
+        // id is extracted from whichever response shape Composio returns (SDK
+        // {data.id} or MCP {content:[{text}]}); a missing id is non-fatal (the
+        // event exists). T12 confirms the exact live MCP content shape.
+        if (res && typeof res === "object" && (res as { successful?: unknown }).successful === false) {
+          return { ok: false, error: "create_failed" };
+        }
+        return { ok: true, eventRef: extractEventId(res) };
       } catch (e) {
         return { ok: false, error: e instanceof Error ? e.message.slice(0, 200) : "composio_error" };
       }
     },
   };
+}
+
+/** Best-effort event-id extraction across Composio response shapes: the SDK
+ *  `{data:{id}}` / `{id}` / `{response_data:{id}}` and the MCP `{content:[{text}]}`
+ *  (text is usually JSON carrying the created event). Returns "" when no id is
+ *  discoverable — the event still exists (callTool throws on real failure). The
+ *  exact live MCP content shape is confirmed in T12. */
+function extractEventId(res: unknown): string {
+  if (!res || typeof res !== "object") return "";
+  const r = res as Record<string, unknown>;
+  const data = r.data as Record<string, unknown> | undefined;
+  const responseData = r.response_data as Record<string, unknown> | undefined;
+  if (data?.id != null) return String(data.id);
+  if (r.id != null) return String(r.id);
+  if (responseData?.id != null) return String(responseData.id);
+  const content = r.content;
+  if (Array.isArray(content)) {
+    const textPart = content.find(
+      (c): c is { text: string } => typeof (c as { text?: unknown })?.text === "string",
+    );
+    if (textPart) {
+      try {
+        const parsed = JSON.parse(textPart.text) as Record<string, unknown>;
+        const pData = parsed.data as Record<string, unknown> | undefined;
+        const pResp = parsed.response_data as Record<string, unknown> | undefined;
+        return String(parsed.id ?? pData?.id ?? pResp?.id ?? "");
+      } catch {
+        // text isn't JSON — no id to extract.
+      }
+    }
+  }
+  return "";
 }

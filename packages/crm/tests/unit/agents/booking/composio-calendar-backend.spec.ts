@@ -46,3 +46,20 @@ test("findDayAvailability returns {slots:[]} on error (never throws)", async () 
   const r = await be.findDayAvailability({ date: "2026-07-01", durationMinutes: 30, timezone: "UTC" });
   assert.deepEqual(r, { slots: [] });
 });
+
+// T11 reconcile: the real createMcpClient.callTool THROWS on failure and returns
+// the MCP { content, isError } shape on success — so a non-throwing return MUST
+// be treated as success, with the event id extracted from the content JSON.
+test("createEvent treats a returned MCP {content,isError:false} as success + extracts id", async () => {
+  const be = makeComposioCalendarBackend({ provider: "googlecalendar", accountId: "ca_1",
+    callTool: async () => ({ content: [{ type: "text", text: JSON.stringify({ id: "evt_mcp" }) }], isError: false }) });
+  const r = await be.createEvent({ startIso: "x", durationMinutes: 30, timezone: "UTC", title: "t", attendee: { name: "P" } });
+  assert.deepEqual(r, { ok: true, eventRef: "evt_mcp" });
+});
+
+test("createEvent succeeds with empty eventRef when the MCP content has no id (event still created)", async () => {
+  const be = makeComposioCalendarBackend({ provider: "googlecalendar", accountId: "ca_1",
+    callTool: async () => ({ content: [{ type: "text", text: "Event created" }] }) });
+  const r = await be.createEvent({ startIso: "x", durationMinutes: 30, timezone: "UTC", title: "t", attendee: { name: "P" } });
+  assert.deepEqual(r, { ok: true, eventRef: "" });
+});

@@ -111,6 +111,10 @@ const DEFAULT_TOOLS_BY_TOOLKIT: Record<string, readonly string[]> = {
   gmail: ["GMAIL_SEND_EMAIL", "GMAIL_FETCH_EMAILS", "GMAIL_CREATE_EMAIL_DRAFT"],
   googlecalendar: [
     "GOOGLECALENDAR_CREATE_EVENT",
+    // Free/busy lookup for the pluggable booking backend (availability). The
+    // exact slug is confirmed against the live Composio catalog in T12; if it
+    // differs, the booking adapter fails soft to native availability.
+    "GOOGLECALENDAR_FIND_FREE_SLOTS",
     "GOOGLECALENDAR_FIND_EVENT",
     "GOOGLECALENDAR_LIST_EVENTS",
   ],
@@ -135,6 +139,8 @@ const DEFAULT_TOOLS_BY_TOOLKIT: Record<string, readonly string[]> = {
     "OUTLOOK_SEND_EMAIL",
     "OUTLOOK_LIST_MESSAGES",
     "OUTLOOK_CALENDAR_CREATE_EVENT",
+    // Free/busy lookup (booking backend availability) — live-confirmed in T12.
+    "OUTLOOK_CALENDAR_GET_SCHEDULE",
   ],
 };
 
