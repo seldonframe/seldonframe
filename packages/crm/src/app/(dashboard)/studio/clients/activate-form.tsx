@@ -25,7 +25,7 @@
 
 import { useState, useTransition } from "react";
 import Link from "next/link";
-import { Phone, Pause, Loader2, ChevronDown, ChevronUp, Sparkles, KeyRound, Trash2, CalendarClock, Link2, Check } from "lucide-react";
+import { Phone, Pause, Loader2, ChevronDown, ChevronUp, Sparkles, KeyRound, Trash2, CalendarClock, Link2, Check, SlidersHorizontal } from "lucide-react";
 import {
   activateDeploymentAction,
   pauseDeploymentAction,
@@ -38,6 +38,8 @@ import {
   type CalendarToolkit,
 } from "@/lib/deployments/connect-calendar";
 import { deriveAreaCode } from "@/lib/deployments/margin";
+import { BookingPolicyEditor } from "./booking-policy-editor";
+import type { BookingPolicy } from "@/lib/agents/booking/booking-policy";
 
 type ProvisionErrorCode =
   | "unauthorized"
@@ -659,6 +661,51 @@ export function PortalInviteButton({
       )}
       {error && (
         <p className="text-[11px] text-rose-600 dark:text-rose-400">{error}</p>
+      )}
+    </div>
+  );
+}
+
+// ─── BookingRulesSection ───────────────────────────────────────────────────────
+//
+// A collapsible "Booking rules" panel wrapping the reusable BookingPolicyEditor,
+// shown on a deployment card for every agent that BOOKS (native / api_mcp /
+// cal_com). external_link is excluded by the caller (page.tsx) — that agent hands
+// the booking off to the client's own page, so there are no rules to tune here.
+//
+// The panel is collapsed by default (these are advanced, rarely-touched knobs);
+// the toggle button mirrors the file's other expandable controls (ChevronDown/Up
+// + muted label chrome). The editor is seeded with the EFFECTIVE policy resolved
+// server-side in page.tsx, so the operator sees the values actually in force.
+
+type BookingRulesSectionProps = {
+  deploymentId: string;
+  /** The resolved effective policy (resolveBookingPolicy(...) from page.tsx). */
+  initialPolicy: BookingPolicy;
+};
+
+export function BookingRulesSection({
+  deploymentId,
+  initialPolicy,
+}: BookingRulesSectionProps) {
+  const [open, setOpen] = useState(false);
+
+  return (
+    <div className="mt-3 border-t pt-3">
+      <button
+        type="button"
+        onClick={() => setOpen((v) => !v)}
+        aria-expanded={open}
+        className="flex items-center gap-1.5 text-[11px] font-medium uppercase tracking-wide text-muted-foreground hover:text-foreground"
+      >
+        <SlidersHorizontal className="size-3" aria-hidden />
+        Booking rules
+        {open ? <ChevronUp className="size-3" /> : <ChevronDown className="size-3" />}
+      </button>
+      {open && (
+        <div className="mt-3">
+          <BookingPolicyEditor deploymentId={deploymentId} initial={initialPolicy} />
+        </div>
       )}
     </div>
   );

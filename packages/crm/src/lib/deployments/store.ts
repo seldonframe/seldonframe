@@ -108,6 +108,7 @@ function buildDefaultListDeps(): ListDeploymentsDeps {
           portalInvitedAt: deployments.portalInvitedAt,
           bookingMode: deployments.bookingMode,
           calendarRef: deployments.calendarRef,
+          bookingPolicy: deployments.bookingPolicy,
         })
         .from(deployments)
         .leftJoin(
@@ -392,6 +393,10 @@ export type DeploymentListItem = {
    *  the calendar-connect callback persists it. Null = not yet connected; the
    *  card reads `calendarRef.accountId` to decide connected vs. not. */
   calendarRef: DeploymentCalendarRef | null;
+  /** The per-client booking-policy override (sparse Partial<BookingPolicy>) —
+   *  null = no override (→ template/system defaults). The Clients card seeds the
+   *  BookingPolicyEditor with `resolveBookingPolicy(this, null, undefined)`. */
+  bookingPolicy: Partial<BookingPolicy> | null;
 };
 
 /** List a builder's deployments, most-recently-updated first, with template name. */

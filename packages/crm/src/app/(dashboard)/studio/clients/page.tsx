@@ -17,6 +17,7 @@ import { Users } from "lucide-react";
 import { getOrgId } from "@/lib/auth/helpers";
 import { listDeployments } from "@/lib/deployments/store";
 import { formatCentsMonthly, formatDeploymentSurface } from "@/lib/deployments/margin";
+import { resolveBookingPolicy } from "@/lib/agents/booking/booking-policy";
 import { StudioTabs } from "../studio-tabs";
 import { DeploymentStatusBadge } from "./status-badge";
 import {
@@ -25,6 +26,7 @@ import {
   PortalInviteButton,
   CancelButton,
   ConnectCalendarButton,
+  BookingRulesSection,
 } from "./activate-form";
 
 export const dynamic = "force-dynamic";
@@ -156,6 +158,23 @@ export default async function StudioClientsPage({
                   </div>
                 )}
               </div>
+
+              {/* Per-client booking rules — every agent that BOOKS (native /
+                  api_mcp / cal_com). external_link hands off to the client's own
+                  page, so there are no rules to tune there. Seed with the
+                  EFFECTIVE policy (deployment override ?? system defaults); the
+                  template default + workspace tz aren't fetched on this list
+                  query, and the resolver fills them safely. */}
+              {d.bookingMode !== "external_link" && (
+                <BookingRulesSection
+                  deploymentId={d.id}
+                  initialPolicy={resolveBookingPolicy(
+                    d.bookingPolicy ?? null,
+                    null,
+                    undefined,
+                  )}
+                />
+              )}
             </article>
           ))}
         </div>
