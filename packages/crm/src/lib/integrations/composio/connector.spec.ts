@@ -21,7 +21,6 @@ import {
   nativeToolsForCapabilities,
   type GetToolsOptions,
 } from "@/lib/agents/tools";
-import type { ComposioSessionInfo } from "./client";
 
 // ─── zod / shape ──────────────────────────────────────────────────────────────
 
@@ -55,36 +54,26 @@ test("composio binding rejects an endpoint/serviceName (strict, no smuggling)", 
 
 // ─── resolveComposioBinding (pure) ────────────────────────────────────────────
 
-/** A wrap-deps stub that records makeClient calls and never hits the network. */
-function stubDeps(session: ComposioSessionInfo | null) {
-  const ensured: Array<{ orgId: string; toolkits: string[] }> = [];
-  const made: Array<{ endpoint: string; headers: Record<string, string> }> = [];
-  const called: Array<{ name: string; args: Record<string, unknown> }> = [];
+/** A wrap-deps stub that records executeTool calls and never hits the network.
+ *  `available=false` simulates a workspace with no Composio key (executeTool
+ *  throws the same "not configured" message the real SDK path does). */
+function stubDeps(available = true) {
+  const called: Array<{ orgId: string; toolName: string; args: Record<string, unknown> }> = [];
   const deps: ComposioWrapDeps = {
-    ensureSession: async (orgId, toolkits) => {
-      ensured.push({ orgId, toolkits });
-      return session;
-    },
-    makeClient: (endpoint, headers) => {
-      made.push({ endpoint, headers });
-      return {
-        initialize: async () => {},
-        listTools: async () => [],
-        callTool: async (name, args) => {
-          called.push({ name, args });
-          return { ok: true, name };
-        },
-      };
+    executeTool: async (orgId, toolName, args) => {
+      if (!available) {
+        throw new Error(
+          "Composio is not configured for this workspace (no API key) — connect it in Integrations.",
+        );
+      }
+      called.push({ orgId, toolName, args });
+      // The default path returns res.data on success; mirror that here with a
+      // recognizable payload so the executor's return is asserted unwrapped.
+      return { ok: true, toolName };
     },
   };
-  return { deps, ensured, made, called };
+  return { deps, called };
 }
-
-const SESSION: ComposioSessionInfo = {
-  sessionId: "sess_1",
-  mcpUrl: "https://mcp.composio.dev/abc",
-  mcpHeaders: { "x-api-key": "key-123" },
-};
 
 test("empty enabledTools → zero wrapped tools", () => {
   const binding: ComposioBinding = {
@@ -93,7 +82,7 @@ test("empty enabledTools → zero wrapped tools", () => {
     enabledToolkits: ["gmail"],
     enabledTools: [],
   };
-  const { deps } = stubDeps(SESSION);
+  const { deps } = stubDeps();
   assert.deepEqual(resolveComposioBinding(binding, deps), []);
 });
 
@@ -111,7 +100,7 @@ test("wraps each enabled tool, namespaced composio__<tool>, with cached schema",
       },
     ],
   };
-  const { deps } = stubDeps(SESSION);
+  const { deps } = stubDeps();
   const tools = resolveComposioBinding(binding, deps);
   assert.equal(tools.length, 1);
   assert.equal(tools[0].name, "composio__GMAIL_SEND_EMAIL");
@@ -122,14 +111,14 @@ test("wraps each enabled tool, namespaced composio__<tool>, with cached schema",
   });
 });
 
-test("executor ensures the session and dials the MCP client with x-api-key", async () => {
+test("executor calls executeTool(orgId, slug, input) — the real action slug, NOT a router meta-tool — and returns its result", async () => {
   const binding: ComposioBinding = {
     id: "cmp_1",
     kind: "composio",
     enabledToolkits: ["gmail"],
     enabledTools: ["GMAIL_SEND_EMAIL"],
   };
-  const { deps, ensured, made, called } = stubDeps(SESSION);
+  const { deps, called } = stubDeps();
   const [tool] = resolveComposioBinding(binding, deps);
   const ctx = {
     orgId: "org-uuid",
@@ -140,22 +129,25 @@ test("executor ensures the session and dials the MCP client with x-api-key", asy
   } as Parameters<typeof tool.execute>[1];
   const res = await tool.execute({ to: "x@y.com" }, ctx);
 
-  assert.deepEqual(ensured, [{ orgId: "org-uuid", toolkits: ["gmail"] }]);
-  assert.deepEqual(made, [
-    { endpoint: "https://mcp.composio.dev/abc", headers: { "x-api-key": "key-123" } },
+  // Exactly one execute, with (ctx.orgId, the bare action slug, the input).
+  assert.deepEqual(called, [
+    { orgId: "org-uuid", toolName: "GMAIL_SEND_EMAIL", args: { to: "x@y.com" } },
   ]);
-  assert.deepEqual(called, [{ name: "GMAIL_SEND_EMAIL", args: { to: "x@y.com" } }]);
-  assert.deepEqual(res, { ok: true, name: "GMAIL_SEND_EMAIL" });
+  // We invoke the DIRECT toolkit action — never the agentic-router meta-tools.
+  assert.notEqual(called[0].toolName, "COMPOSIO_MULTI_EXECUTE_TOOL");
+  assert.notEqual(called[0].toolName, "COMPOSIO_SEARCH_TOOLS");
+  // The wrapped tool returns executeTool's result unchanged (already unwrapped).
+  assert.deepEqual(res, { ok: true, toolName: "GMAIL_SEND_EMAIL" });
 });
 
-test("executor throws (mapped to tool_result upstream) when no session/key", async () => {
+test("executor throws (mapped to tool_result upstream) when no key (executeTool throws)", async () => {
   const binding: ComposioBinding = {
     id: "cmp_1",
     kind: "composio",
     enabledToolkits: ["gmail"],
     enabledTools: ["GMAIL_SEND_EMAIL"],
   };
-  const { deps } = stubDeps(null); // ensureSession → null (no key)
+  const { deps } = stubDeps(false); // no Composio key → executeTool throws
   const [tool] = resolveComposioBinding(binding, deps);
   const ctx = {
     orgId: "org-uuid",
@@ -189,7 +181,7 @@ test("composio binding with a key resolves + appends after natives", async () =>
     enabledToolkits: ["gmail"],
     enabledTools: ["GMAIL_SEND_EMAIL"],
   };
-  const { deps } = stubDeps(SESSION);
+  const { deps } = stubDeps();
   const opts: GetToolsOptions = {
     orgId: "org-uuid",
     connectors: [binding],
@@ -217,11 +209,8 @@ test("FAIL-CLOSED: composio binding with NO key → native-only (model never see
     orgId: "org-uuid",
     connectors: [binding],
     composioDeps: {
-      ensureSession: async () => {
+      executeTool: async () => {
         depsTouched = true;
-        return null;
-      },
-      makeClient: () => {
         throw new Error("should not be called");
       },
     },
