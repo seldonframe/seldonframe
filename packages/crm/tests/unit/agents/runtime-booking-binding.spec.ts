@@ -16,7 +16,7 @@
 import { describe, test } from "node:test";
 import assert from "node:assert/strict";
 
-import { bindingToCtxBooking } from "../../../src/lib/agents/runtime";
+import { bindingToCtxBooking } from "../../../src/lib/agents/booking/binding-ctx";
 import type { CalendarBinding } from "../../../src/lib/agents/booking/calendar-backend";
 import {
   runChannelTurn,
