@@ -23,6 +23,7 @@ import {
   type RunChannelTurnDeps,
   type ChannelAdapter,
   type InboundMessage,
+  type ResolvedAgent,
 } from "../../../../src/lib/agents/channels/run-channel-turn";
 
 // ─── resolveInboundAgent ──────────────────────────────────────────────────
@@ -341,6 +342,97 @@ describe("runChannelTurn", () => {
     // the whole turn — report handled with the conversation id.
     const res = await runChannelTurn(deps, makeInbound(), adapter);
     assert.deepEqual(res, { handled: true, conversationId: "conv-x" });
+  });
+
+  // ── per-deployment persona (P1) ─────────────────────────────────────────
+  // The deployment-first path resolves the EFFECTIVE greeting + prompt
+  // (deployment override OR template default with {placeholders} filled/dropped)
+  // and threads them to executeTurn so the client agent speaks AS the client and
+  // the script never leaks a literal {business name}. Gated on bookingBinding
+  // (the deployment-first marker); the workspace path threads NO persona.
+  type PersonaArg = { greeting: string | null; prompt: string | null } | undefined;
+
+  function capturePersonaDeps(agent: ResolvedAgent, capture: (p: PersonaArg) => void): RunChannelTurnDeps {
+    return {
+      resolveInboundAgent: async () => agent,
+      getOrCreateConversation: async () => "conv-persona",
+      executeTurn: async (arg: { persona?: { greeting: string | null; prompt: string | null } }) => {
+        capture(arg.persona);
+        return { ok: true, assistantMessage: "ok" };
+      },
+    };
+  }
+
+  test("customization.greeting → executeTurn receives persona.greeting = the override", async () => {
+    let persona: PersonaArg;
+    const deps = capturePersonaDeps(
+      {
+        agentId: "a",
+        orgId: "client-org-1",
+        bookingBinding: { mode: "native" },
+        customization: { greeting: "Hey there, Max ABC here!" },
+        templateGreeting: "Thanks for calling {business_name}!",
+        clientName: "Bright Smile Dental",
+      },
+      (p) => (persona = p),
+    );
+    const res = await runChannelTurn(deps, makeInbound(), { sendReply: async () => {} });
+    assert.equal(res.handled, true);
+    assert.equal(persona?.greeting, "Hey there, Max ABC here!");
+  });
+
+  test("template greeting {business_name} fills from customization.businessInfo.name", async () => {
+    let persona: PersonaArg;
+    const deps = capturePersonaDeps(
+      {
+        agentId: "a",
+        orgId: "client-org-1",
+        bookingBinding: { mode: "native" },
+        customization: { businessInfo: { name: "Max ABC" } },
+        templateGreeting: "Thanks for calling {business_name}!",
+        clientName: "Fallback Co",
+      },
+      (p) => (persona = p),
+    );
+    await runChannelTurn(deps, makeInbound(), { sendReply: async () => {} });
+    assert.equal(persona?.greeting, "Thanks for calling Max ABC!");
+  });
+
+  test("template script {business name} + no businessInfo → persona.prompt has NO literal { (leak fix)", async () => {
+    let persona: PersonaArg;
+    const deps = capturePersonaDeps(
+      {
+        agentId: "a",
+        orgId: "client-org-1",
+        bookingBinding: { mode: "native" },
+        // No businessInfo → business_name fills from clientName; {time_of_day}
+        // has no var → dropped. The resolved prompt must carry zero braces.
+        templateScript:
+          "You are the receptionist for {business name}. Close with: have a great {time_of_day}.",
+        clientName: "Bright Smile Dental",
+      },
+      (p) => (persona = p),
+    );
+    await runChannelTurn(deps, makeInbound(), { sendReply: async () => {} });
+    assert.ok(persona?.prompt);
+    assert.match(persona!.prompt!, /You are the receptionist for Bright Smile Dental\./);
+    assert.match(persona!.prompt!, /have a great\./);
+    assert.doesNotMatch(persona!.prompt!, /[{}]/);
+  });
+
+  test("workspace agent (no bookingBinding) → executeTurn receives NO persona (unchanged)", async () => {
+    let sawPersonaKey = true;
+    const deps: RunChannelTurnDeps = {
+      // No bookingBinding → the workspace fall-through. No persona must be threaded.
+      resolveInboundAgent: async () => ({ agentId: "a", orgId: "ws-org" }),
+      getOrCreateConversation: async () => "conv-ws",
+      executeTurn: async (arg: { persona?: unknown }) => {
+        sawPersonaKey = "persona" in arg;
+        return { ok: true, assistantMessage: "ok" };
+      },
+    };
+    await runChannelTurn(deps, makeInbound(), { sendReply: async () => {} });
+    assert.equal(sawPersonaKey, false, "no persona key on the workspace path");
   });
 
   test("email channel routes identically (toHandle/fromHandle are addresses)", async () => {

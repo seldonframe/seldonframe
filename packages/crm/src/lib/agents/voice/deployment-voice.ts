@@ -46,6 +46,7 @@ import { getOrCreateVoiceAgent } from "./voice-agent";
 import { deploymentToBinding } from "@/lib/deployments/booking-binding";
 import { bindingToCtxBooking } from "@/lib/agents/booking/binding-ctx";
 import { resolveBookingPolicy } from "@/lib/agents/booking/booking-policy";
+import { resolveDeploymentPersona } from "@/lib/agents/persona/deployment-customization";
 
 /** What the webhook needs to run a deployment-routed call. Mirrors the fields
  *  the workspace path threads into runVoiceCall + startVoiceConversation. */
@@ -117,6 +118,7 @@ export async function loadDeploymentVoiceContext(args: {
     | "bookingMode"
     | "externalBookingUrl"
     | "bookingPolicy"
+    | "customization"
     | "clientOrgId"
   > & {
     /** The client org's slug, left-joined by resolveDeploymentByNumber. The
@@ -162,10 +164,35 @@ export async function loadDeploymentVoiceContext(args: {
     ...(clientContext?.soul ?? {}),
     businessName: clientContext?.soul?.businessName || args.deployment.clientName,
   };
-  const personaBlueprint: AgentBlueprint =
+
+  // Per-deployment persona (P1). Resolve the EFFECTIVE greeting / TTS voice /
+  // script the deployed agent speaks AS the client, from the TEMPLATE defaults
+  // + the deployment's customization. Each field is null when its source is null
+  // → we fall back to today's template value below. The script (the operator's
+  // verbatim customSkillMd) is the one place a literal "{business name}" /
+  // "{time of day}" can leak into the spoken prompt; resolveDeploymentPersona
+  // fills/drops those tokens, which is what fixes the live placeholder leak. The
+  // platform default skill body uses `{{double}}` tokens (rendered elsewhere) and
+  // is NOT touched — so we only override customSkillMd when there WAS one to fill.
+  const persona = resolveDeploymentPersona({
+    templateGreeting: templateBlueprint.greeting ?? null,
+    templateScript: templateBlueprint.customSkillMd ?? null,
+    templateVoiceId: templateBlueprint.voice ?? null,
+    customization: args.deployment.customization,
+    clientName: args.deployment.clientName,
+  });
+
+  const baseBlueprint: AgentBlueprint =
     clientContext?.faq && clientContext.faq.length > 0
       ? { ...templateBlueprint, faq: clientContext.faq }
       : templateBlueprint;
+  // Inject the placeholder-filled script as customSkillMd so composeVoicePersona
+  // emits the FILLED operator prose (leak killed). null → the template had no
+  // customSkillMd; leave it so the default skill body renders, unchanged.
+  const personaBlueprint: AgentBlueprint =
+    persona.prompt !== null
+      ? { ...baseBlueprint, customSkillMd: persona.prompt }
+      : baseBlueprint;
   const instructions = composeVoicePersona({
     soul: clientSoul,
     blueprint: personaBlueprint,
@@ -235,8 +262,10 @@ export async function loadDeploymentVoiceContext(args: {
   return {
     ctx,
     instructions,
-    audioVoice: templateBlueprint.voice,
-    greeting: templateBlueprint.greeting,
+    // Per-deployment overrides (P1): the client's own TTS voice + spoken greeting
+    // when set, else the template default (null → fall back, byte-for-byte today).
+    audioVoice: persona.voiceId ?? templateBlueprint.voice,
+    greeting: persona.greeting ?? templateBlueprint.greeting,
     // Transcript persists to the SAME org the writes target — the client org
     // when provisioned, else the builder org (unchanged).
     transcriptOrgId: targetOrgId,

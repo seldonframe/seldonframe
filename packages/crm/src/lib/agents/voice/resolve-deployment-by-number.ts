@@ -22,6 +22,7 @@ import type {
   BookingMode,
 } from "@/db/schema/deployments";
 import type { BookingPolicy } from "@/lib/agents/booking/booking-policy";
+import type { DeploymentCustomization } from "@/lib/agents/persona/deployment-customization";
 
 /** The slice of a deployments row this resolver needs. */
 export type DeploymentNumberRow = {
@@ -44,6 +45,12 @@ export type DeploymentNumberRow = {
    *  buffer / lead time / max-per-day / required fields). Sparse; resolved over
    *  the template default + system defaults. Threaded onto ctx.booking.policy. */
   bookingPolicy: Partial<BookingPolicy> | null;
+  /** The client's per-deployment persona override (greeting / TTS voice /
+   *  business facts). Sparse; resolved over the template defaults by
+   *  resolveDeploymentPersona so the deployed agent greets in the client's own
+   *  greeting/voice and the script's `{placeholders}` are filled. Nullable —
+   *  absent → the template defaults stand (placeholders filled from clientName). */
+  customization: Partial<DeploymentCustomization> | null;
   /** The client's connected calendar (provider + accountId + calendarId), set
    *  once the OAuth connect finishes. Threaded into the CalendarBinding so a
    *  book_external deployment can route into the client's own calendar; null
@@ -112,6 +119,7 @@ function buildDefaultDeps(): ResolveDeploymentDeps {
           bookingMode: deployments.bookingMode,
           externalBookingUrl: deployments.externalBookingUrl,
           bookingPolicy: deployments.bookingPolicy,
+          customization: deployments.customization,
           calendarRef: deployments.calendarRef,
           clientOrgId: deployments.clientOrgId,
           clientOrgSlug: organizations.slug,

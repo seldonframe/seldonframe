@@ -279,6 +279,137 @@ describe("loadDeploymentVoiceContext — speaks the CLIENT's services + FAQ", ()
   });
 });
 
+describe("loadDeploymentVoiceContext — per-deployment persona (customization)", () => {
+  // P1 (per-deployment customization): the deployed agent's spoken greeting, TTS
+  // voice, and script come from resolveDeploymentPersona(template defaults +
+  // deployment.customization). This locks the three substitutions + the
+  // placeholder-leak fix. baseDeps() supplies a template greeting/voice; the
+  // template here carries a customSkillMd with a {placeholder} so we can prove
+  // the script's tokens are filled/dropped (the live "thanks for calling
+  // {business name}" leak).
+  const FIXED_NOW = new Date("2026-06-01T17:00:00Z");
+
+  // A template whose greeting + script carry {placeholders}. The script is the
+  // operator's verbatim customSkillMd — the one place a literal {token} leaks.
+  const PLACEHOLDER_TEMPLATE: AgentTemplate = {
+    ...TEMPLATE,
+    blueprint: {
+      ...TEMPLATE_BLUEPRINT,
+      greeting: "Thanks for calling {business_name}!",
+      customSkillMd:
+        "You are the receptionist for {business name}. Always close with: have a great {time_of_day}.",
+    } as AgentBlueprint,
+  };
+
+  function placeholderDeps(): DeploymentVoiceDeps {
+    const deps = baseDeps();
+    deps.getAgentTemplate = async () => PLACEHOLDER_TEMPLATE;
+    return deps;
+  }
+
+  test("customization.greeting fully overrides the spoken greeting", async () => {
+    const deployment: Deployment = {
+      ...DEPLOYMENT,
+      customization: { greeting: "Hey there, Max ABC here — how can I help?" },
+    };
+    const result = await loadDeploymentVoiceContext({
+      deployment,
+      now: FIXED_NOW,
+      deps: baseDeps(),
+    });
+    assert.ok(result);
+    assert.equal(result!.greeting, "Hey there, Max ABC here — how can I help?");
+  });
+
+  test("customization.voiceId overrides the TTS voice; absent → template voice", async () => {
+    const withVoice: Deployment = {
+      ...DEPLOYMENT,
+      customization: { voiceId: "shimmer" },
+    };
+    const r1 = await loadDeploymentVoiceContext({ deployment: withVoice, now: FIXED_NOW, deps: baseDeps() });
+    assert.equal(r1!.audioVoice, "shimmer");
+
+    // No voiceId override → the template blueprint voice ("marin") stands.
+    const r2 = await loadDeploymentVoiceContext({
+      deployment: { ...DEPLOYMENT, customization: { greeting: "hi" } },
+      now: FIXED_NOW,
+      deps: baseDeps(),
+    });
+    assert.equal(r2!.audioVoice, "marin");
+  });
+
+  test("template greeting {business_name} fills from customization.businessInfo.name", async () => {
+    const deployment: Deployment = {
+      ...DEPLOYMENT,
+      // No greeting override, but a business name → the template greeting's
+      // {business_name} token is filled with it.
+      customization: { businessInfo: { name: "Max ABC" } },
+    };
+    const result = await loadDeploymentVoiceContext({
+      deployment,
+      now: FIXED_NOW,
+      deps: placeholderDeps(),
+    });
+    assert.ok(result);
+    assert.equal(result!.greeting, "Thanks for calling Max ABC!");
+  });
+
+  test("template greeting {business_name} falls back to clientName when no businessInfo", async () => {
+    // DEPLOYMENT.clientName = "Bright Smile Dental", no customization → the
+    // greeting's {business_name} fills from clientName (never read as a literal).
+    const result = await loadDeploymentVoiceContext({
+      deployment: DEPLOYMENT,
+      now: FIXED_NOW,
+      deps: placeholderDeps(),
+    });
+    assert.ok(result);
+    assert.equal(result!.greeting, "Thanks for calling Bright Smile Dental!");
+    assert.doesNotMatch(result!.greeting!, /[{}]/);
+  });
+
+  test("script {placeholders} are filled/dropped — NO literal { survives in the prompt (leak fix)", async () => {
+    // The template's customSkillMd has {business name} (fills from clientName) and
+    // {time_of_day} (no var → dropped cleanly). The composed instructions must
+    // contain the filled business name and ZERO literal braces. This is the exact
+    // live "thanks for calling BUSINESS NAME, have a great TIME OF DAY" leak.
+    const result = await loadDeploymentVoiceContext({
+      deployment: DEPLOYMENT, // no businessInfo → business_name fills from clientName
+      now: FIXED_NOW,
+      deps: placeholderDeps(),
+    });
+    assert.ok(result);
+    // The {business name} token was filled with the client name…
+    assert.match(result!.instructions, /You are the receptionist for Bright Smile Dental\./);
+    // …the {time_of_day} token (no var) was dropped, leaving clean prose…
+    assert.match(result!.instructions, /have a great\./);
+    // …and the script contributes NO literal single-brace placeholder. (We assert
+    // on the operator-script line specifically — the platform skill body uses
+    // {{double}} tokens that are out of scope for this fill.)
+    const scriptLine = result!.instructions
+      .split("\n")
+      .find((l) => l.includes("You are the receptionist for Bright Smile Dental"));
+    assert.ok(scriptLine, "the filled script line is present");
+    assert.doesNotMatch(scriptLine!, /[{}]/);
+  });
+
+  test("no customization → greeting/voice/instructions are byte-for-byte today's persona", async () => {
+    // The control: with customization:null, the persona equals exactly what the
+    // template produced before this change (greeting + voice verbatim; the
+    // composed instructions identical). DEPLOYMENT.customization is null.
+    const withCustomization = await loadDeploymentVoiceContext({
+      deployment: DEPLOYMENT,
+      now: FIXED_NOW,
+      deps: baseDeps(),
+    });
+    assert.ok(withCustomization);
+    // greeting/voice come straight from the template blueprint (no placeholders).
+    assert.equal(withCustomization!.greeting, "Thanks for calling Bright Smile Dental!");
+    assert.equal(withCustomization!.audioVoice, "marin");
+    // No literal placeholder anywhere in the prompt either.
+    assert.doesNotMatch(withCustomization!.instructions, /\{business/i);
+  });
+});
+
 describe("loadDeploymentVoiceContext — threads the booking mode into ctx", () => {
   // ICP-3: the deployment's bookingMode + externalBookingUrl must land on
   // ctx.booking so the deployed agent's tools can branch (native vs handoff).

@@ -30,6 +30,8 @@ import type { ChannelAdapter, InboundMessage } from "./channel-adapter";
 import type { CalendarBinding } from "@/lib/agents/booking/calendar-backend";
 import type { BookingPolicy } from "@/lib/agents/booking/booking-policy";
 import { resolveBookingPolicy } from "@/lib/agents/booking/booking-policy";
+import type { DeploymentCustomization } from "@/lib/agents/persona/deployment-customization";
+import { resolveDeploymentPersona } from "@/lib/agents/persona/deployment-customization";
 import { deploymentToBinding } from "@/lib/deployments/booking-binding";
 
 export type { ChannelAdapter, InboundMessage } from "./channel-adapter";
@@ -47,7 +49,17 @@ export type { ChannelAdapter, InboundMessage } from "./channel-adapter";
  *  + the client `timezone`. runChannelTurn resolves them with resolveBookingPolicy
  *  and threads the result onto ctx.booking.policy. All optional → the workspace
  *  fall-through (and any resolver that doesn't load them) falls back to system
- *  defaults, unchanged. */
+ *  defaults, unchanged.
+ *
+ *  Per-deployment persona (P1): the deployment-first path may ALSO carry the
+ *  deployment's own `customization` (greeting / business facts) + the template's
+ *  default greeting/script + the client name. runChannelTurn resolves them with
+ *  resolveDeploymentPersona and threads the EFFECTIVE greeting/prompt to
+ *  executeTurn so the client agent speaks as the client and the script's
+ *  `{placeholders}` are filled/dropped (no literal "{business name}" leak). Text
+ *  channels have no TTS voice, so voiceId is intentionally NOT threaded here. All
+ *  optional → the workspace fall-through (and any resolver that doesn't load them)
+ *  leaves the prompt exactly as the agent's own blueprint composes it, unchanged. */
 export type ResolvedAgent =
   | {
       agentId: string;
@@ -56,6 +68,16 @@ export type ResolvedAgent =
       bookingPolicy?: Partial<BookingPolicy> | null;
       templateBookingPolicy?: Partial<BookingPolicy> | null;
       timezone?: string;
+      /** The deployment's per-client persona override (greeting / business facts). */
+      customization?: Partial<DeploymentCustomization> | null;
+      /** The template default greeting (carries `{placeholders}`). */
+      templateGreeting?: string | null;
+      /** The template default script (the operator's verbatim SKILL.md) — the one
+       *  place a literal `{business name}` can leak into the prompt. */
+      templateScript?: string | null;
+      /** The client business name used to fill `{business_name}` when the
+       *  customization doesn't carry one. */
+      clientName?: string | null;
     }
   | null;
 
@@ -75,6 +97,11 @@ type DeploymentClientSlice =
       bookingMode?: string | null;
       externalBookingUrl?: string | null;
       calendarRef?: { provider?: string | null; accountId?: string | null; calendarId?: string | null } | null;
+      // Per-deployment persona (P1). Optional so existing resolver test-deps that
+      // only return { clientOrgId } still satisfy the type; the call site carries
+      // them onto ResolvedAgent so runChannelTurn can resolve the effective persona.
+      customization?: Partial<DeploymentCustomization> | null;
+      clientName?: string | null;
     }
   | null;
 
@@ -185,7 +212,21 @@ export async function resolveInboundAgent(
           externalBookingUrl: deployment.externalBookingUrl ?? null,
           calendarRef: deployment.calendarRef ?? null,
         });
-        return { ...agent, bookingBinding };
+        // Carry the deployment's per-client persona override + client name onto
+        // the resolved agent so runChannelTurn resolves the EFFECTIVE greeting/
+        // prompt (placeholders filled). Both optional on the slice → when a
+        // resolver doesn't load them they're undefined and runChannelTurn falls
+        // back to the agent's own blueprint (workspace path unchanged).
+        return {
+          ...agent,
+          bookingBinding,
+          ...(deployment.customization !== undefined
+            ? { customization: deployment.customization }
+            : {}),
+          ...(deployment.clientName !== undefined
+            ? { clientName: deployment.clientName }
+            : {}),
+        };
       }
       // Deployment matched but the client org has no default agent yet — fall
       // through to the workspace resolver below rather than dropping the message.
@@ -233,12 +274,17 @@ export type RunChannelTurnDeps = {
   getOrCreateConversation: (args: GetOrCreateConversationArgs) => Promise<string>;
   /** The canonical agent loop. bookingBinding is threaded for deployment-resolved
    *  agents so chat/SMS/email book into the client's calendar like voice;
-   *  bookingPolicy is the RESOLVED per-client policy threaded onto ctx.booking. */
+   *  bookingPolicy is the RESOLVED per-client policy threaded onto ctx.booking.
+   *  persona is the RESOLVED per-deployment greeting/prompt (placeholders filled)
+   *  threaded so the deployed client agent speaks AS the client without a literal
+   *  `{token}` leak; absent for workspace agents (prompt = the agent's own
+   *  blueprint, unchanged). */
   executeTurn: (input: {
     conversationId: string;
     userMessage: string;
     bookingBinding?: CalendarBinding;
     bookingPolicy?: BookingPolicy;
+    persona?: { greeting: string | null; prompt: string | null };
   }) => Promise<ExecuteTurnResult>;
 };
 
@@ -376,6 +422,27 @@ export async function runChannelTurn(
               agent.templateBookingPolicy ?? null,
               agent.timezone,
             ),
+          }
+        : {}),
+      // Per-deployment persona (P1): on the deployment path, resolve the EFFECTIVE
+      // greeting + prompt (deployment override OR template default with its
+      // `{placeholders}` filled/dropped) and thread them so the client agent
+      // greets as the client and the script never leaks a literal `{business
+      // name}`. Text channels carry no TTS voice, so voiceId is dropped here.
+      // Gated on the binding (the deployment-first marker) so the workspace path
+      // stays byte-for-byte unchanged (prompt = the agent's own blueprint).
+      ...(agent.bookingBinding
+        ? {
+            persona: (() => {
+              const p = resolveDeploymentPersona({
+                templateGreeting: agent.templateGreeting ?? null,
+                templateScript: agent.templateScript ?? null,
+                templateVoiceId: null, // text channels have no TTS voice
+                customization: agent.customization ?? null,
+                clientName: agent.clientName ?? null,
+              });
+              return { greeting: p.greeting, prompt: p.prompt };
+            })(),
           }
         : {}),
     });
