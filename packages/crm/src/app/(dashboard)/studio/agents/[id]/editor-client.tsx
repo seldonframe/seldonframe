@@ -743,6 +743,7 @@ function ConnectorsCard({
         catalog={composioCatalog}
         initialEnabled={composioEnabledToolkits}
         onChanged={() => router.refresh()}
+        disabled={isVoice}
       />
 
       {/* Bound connectors */}
@@ -879,7 +880,7 @@ function ConnectorsCard({
 // A multiselect of the curated Composio toolkit catalog. Selecting apps persists
 // ONE kind:"composio" binding on the template blueprint (enabledToolkits + a
 // curated default tool allowlist); deselecting all removes it. The accounts
-// themselves are connected once, workspace-wide, in Settings → Integrations —
+// themselves are connected once, workspace-wide, in Integrations (/integrations) —
 // this only declares WHICH connected apps THIS agent may use. Optimistic toggle;
 // router.refresh() reconciles with the server.
 function ComposioAppsSection({
@@ -887,15 +888,19 @@ function ComposioAppsSection({
   catalog,
   initialEnabled,
   onChanged,
+  disabled = false,
 }: {
   templateId: string;
   catalog: ComposioToolkitOption[];
   initialEnabled: string[];
   onChanged: () => void;
+  /** Voice templates can't run connectors — render the picker greyed + inert. */
+  disabled?: boolean;
 }) {
   const [enabled, setEnabled] = useState<string[]>(initialEnabled);
   const [busy, startBusy] = useTransition();
   const [error, setError] = useState<string | null>(null);
+  const [saved, setSaved] = useState(false);
 
   // Re-seed when the server re-supplies props (after a refresh).
   useEffect(() => {
@@ -903,7 +908,15 @@ function ComposioAppsSection({
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [initialEnabled.join(",")]);
 
+  // Flash a transient "Saved ✓" for ~2s after a successful toggle persists.
+  useEffect(() => {
+    if (!saved) return;
+    const t = setTimeout(() => setSaved(false), 2000);
+    return () => clearTimeout(t);
+  }, [saved]);
+
   const toggle = (slug: string) => {
+    if (disabled) return;
     const next = enabled.includes(slug)
       ? enabled.filter((s) => s !== slug)
       : [...enabled, slug];
@@ -923,12 +936,13 @@ function ComposioAppsSection({
         );
         return;
       }
+      setSaved(true);
       onChanged();
     });
   };
 
   return (
-    <div className="mt-4 rounded-lg border bg-background p-4">
+    <div className={`mt-4 rounded-lg border bg-background p-4 ${disabled ? "opacity-60" : ""}`}>
       <div className="flex items-start gap-2">
         <span
           aria-hidden
@@ -937,14 +951,28 @@ function ComposioAppsSection({
           <Plug className="size-3.5" />
         </span>
         <div className="min-w-0 flex-1">
-          <h3 className="text-sm font-semibold text-foreground">Composio apps</h3>
+          <h3 className="flex items-center gap-2 text-sm font-semibold text-foreground">
+            Composio apps
+            {disabled && (
+              <span className="text-[11px] font-normal text-muted-foreground">
+                (not used on voice)
+              </span>
+            )}
+            {saved && !disabled && (
+              <span className="inline-flex items-center gap-1 text-[11px] font-medium text-emerald-600 dark:text-emerald-400">
+                <Check className="size-3" aria-hidden /> Saved
+              </span>
+            )}
+          </h3>
           <p className="mt-0.5 text-xs text-muted-foreground">
             Pick the apps this agent may act in (Gmail, Calendar, Slack, HubSpot
             …). Connect the accounts once in{" "}
-            <span className="font-medium text-foreground">
-              Settings → Integrations
-            </span>
-            .
+            <Link
+              href="/integrations"
+              className="font-medium underline underline-offset-2 hover:opacity-80"
+            >
+              Integrations &rarr;
+            </Link>
           </p>
         </div>
       </div>
@@ -957,7 +985,7 @@ function ComposioAppsSection({
               key={tk.slug}
               type="button"
               onClick={() => toggle(tk.slug)}
-              disabled={busy}
+              disabled={busy || disabled}
               aria-pressed={on}
               className={`inline-flex items-center gap-1.5 rounded-full border px-3 py-1.5 text-xs font-medium transition-colors disabled:opacity-60 ${
                 on
