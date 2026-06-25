@@ -422,12 +422,6 @@ export const lookUpAvailability: AgentTool<
     // real calendar. Off-policy days yield no candidates → [].
     const hasPolicy = Boolean(ctx.booking?.policy);
     const policy = ctx.booking?.policy ?? resolveBookingPolicy(null, null, ctx.timezone);
-    const candidates = generateCandidateSlots(policy, input.date, new Date());
-    /** Cap a slot list at policy.maxPerDay (when a policy is set + a cap exists). */
-    const capToMax = (slots: string[]): string[] =>
-      hasPolicy && typeof policy.maxPerDay === "number"
-        ? slots.slice(0, policy.maxPerDay)
-        : slots;
 
     // ── pluggable-backend availability (ICP-3, Task 4 + P1 policy) ──
     // When this deployment books into the CLIENT's own connected calendar
@@ -455,45 +449,71 @@ export const lookUpAvailability: AgentTool<
       const backend = resolveBackend(ctx.booking.binding, backendDeps);
       const tz = policy.timezone;
       try {
-        // Prefer the explicit free-windows surface (P1); fall back to deriving
-        // windows from findDayAvailability's quantized slots when a backend
-        // doesn't implement findFreeWindows.
-        const windows = backend.findFreeWindows
-          ? await backend.findFreeWindows({
-              date: input.date,
-              durationMinutes: policy.durationMinutes,
-              timezone: tz,
-            })
-          : await backend
-              .findDayAvailability({
-                date: input.date,
+        // Walk forward up to 14 days from input.date, accumulating up to 3
+        // offered slots total. The OLD code checked input.date ONLY, so a call
+        // landing on an off-policy weekday (or late, past the policy window)
+        // yielded zero candidates and the agent said "no availability". We now
+        // mirror the native walk below: for each day we generate that day's
+        // policy candidates and intersect them with THAT day's real free windows.
+        // The day is stepped as a UTC-noon instant so the walk is DST-stable
+        // (it just increments by 24h in pure UTC).
+        const collected: string[] = [];
+        for (let d = 0; d < 14 && collected.length < CHATBOT_SLOT_CAP; d++) {
+          const dayISO = new Date(
+            Date.parse(`${input.date}T12:00:00Z`) + d * 86_400_000,
+          )
+            .toISOString()
+            .slice(0, 10);
+          const dayCandidates = generateCandidateSlots(policy, dayISO, new Date());
+          if (dayCandidates.length === 0) continue; // off-policy weekday / all past
+
+          // Prefer the explicit free-windows surface (P1); fall back to deriving
+          // windows from findDayAvailability's quantized slots when a backend
+          // doesn't implement findFreeWindows. Query THIS day, not input.date.
+          const windows = backend.findFreeWindows
+            ? await backend.findFreeWindows({
+                date: dayISO,
                 durationMinutes: policy.durationMinutes,
                 timezone: tz,
               })
-              .then(({ slots }) =>
-                slots.map((s) => ({
-                  start: s.iso,
-                  end: new Date(
-                    Date.parse(s.iso) + policy.durationMinutes * 60_000,
-                  ).toISOString(),
-                })),
-              );
-        if (windows.length > 0) {
-          const offered = capToMax(
-            candidates.filter((iso) =>
-              slotFitsFreeWindows(iso, policy.durationMinutes, windows),
-            ),
+            : await backend
+                .findDayAvailability({
+                  date: dayISO,
+                  durationMinutes: policy.durationMinutes,
+                  timezone: tz,
+                })
+                .then(({ slots }) =>
+                  slots.map((s) => ({
+                    start: s.iso,
+                    end: new Date(
+                      Date.parse(s.iso) + policy.durationMinutes * 60_000,
+                    ).toISOString(),
+                  })),
+                );
+          if (windows.length === 0) continue;
+
+          let dayFits = dayCandidates.filter((iso) =>
+            slotFitsFreeWindows(iso, policy.durationMinutes, windows),
           );
-          if (offered.length > 0) {
-            return {
-              slots: labelSlots(offered, tz),
-              durationMinutes: policy.durationMinutes,
-              date: input.date,
-              timezone: tz,
-            };
+          // Cap per day at policy.maxPerDay (when a policy is set + a cap exists).
+          if (hasPolicy && typeof policy.maxPerDay === "number") {
+            dayFits = dayFits.slice(0, policy.maxPerDay);
+          }
+          for (const iso of dayFits) {
+            if (collected.length >= CHATBOT_SLOT_CAP) break;
+            collected.push(iso);
           }
         }
-        // No windows / nothing fit → fall through to native availability below.
+        if (collected.length > 0) {
+          return {
+            slots: labelSlots(collected, tz),
+            durationMinutes: policy.durationMinutes,
+            date: input.date,
+            timezone: tz,
+          };
+        }
+        // No day in the 14-day horizon had a free in-policy slot → fall through
+        // to the native availability walk below.
       } catch {
         // Backend threw despite its fail-soft contract — never break the call;
         // fall through to native availability below.
@@ -558,12 +578,26 @@ export const lookUpAvailability: AgentTool<
       },
     });
 
+    // Cap a slot list at policy.maxPerDay (when a policy is set + a cap exists).
+    // The book_external loop above caps inline per day; the native walk below
+    // applies the same cap at its two emit sites.
+    const capToMax = (list: string[]): string[] =>
+      hasPolicy && typeof policy.maxPerDay === "number"
+        ? list.slice(0, policy.maxPerDay)
+        : list;
+
     // A DEPLOYED agent (hasPolicy) whose calendar is connected but has NO native
     // booking config (the action returned empty everywhere) should still offer
     // its policy window for the requested day — the candidates, capped at
     // maxPerDay. Workspace agents skip this (they have no policy window to offer).
-    if (hasPolicy && slots.length === 0 && !nativeConfigSeen && candidates.length > 0) {
-      const offered = capToMax(candidates);
+    const fallbackCandidates = generateCandidateSlots(policy, input.date, new Date());
+    if (
+      hasPolicy &&
+      slots.length === 0 &&
+      !nativeConfigSeen &&
+      fallbackCandidates.length > 0
+    ) {
+      const offered = capToMax(fallbackCandidates);
       return {
         slots: labelSlots(offered, policy.timezone),
         durationMinutes: policy.durationMinutes,

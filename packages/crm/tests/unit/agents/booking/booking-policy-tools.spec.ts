@@ -127,6 +127,109 @@ describe("look_up_availability honors the booking policy window ∩ free/busy", 
   });
 });
 
+describe("look_up_availability walks forward across days (book_external)", () => {
+  // Regression: the book_external branch used to check input.date ONLY. A call
+  // landing on an off-policy day (or late, past the window) then yielded zero
+  // candidates and the agent said "no availability" instead of offering the next
+  // open day. The branch must now walk forward up to 14 days from input.date,
+  // accumulating up to 3 slots, intersecting EACH day's policy candidates with
+  // THAT day's free windows.
+  //
+  // 2026-07-03 = Friday (in policy), 2026-07-04 = Saturday (off policy),
+  // 2026-07-06 = Monday (in policy). Mon–Fri 09:00–17:00, 60-min, UTC.
+  const FRIDAY = "2026-07-03";
+  const SATURDAY = "2026-07-04";
+  const MONDAY = "2026-07-06";
+
+  /** A book_external ctx: Mon–Fri 09:00–17:00, 60-min slots, UTC. */
+  const WALK_CTX: ToolExecuteContext = {
+    orgId: "org-1",
+    orgSlug: "acme",
+    agentId: "agt-1",
+    conversationId: "conv-1",
+    testMode: false,
+    timezone: "UTC",
+    booking: {
+      mode: "native",
+      binding: {
+        mode: "book_external",
+        calendarRef: { provider: "googlecalendar", accountId: "ca_1" },
+      },
+      policy: resolveBookingPolicy(
+        {
+          durationMinutes: 60,
+          weekdays: [1, 2, 3, 4, 5],
+          startTime: "09:00",
+          endTime: "17:00",
+          timezone: "UTC",
+        },
+        null,
+        "UTC",
+      ),
+    },
+  };
+
+  /** A backend whose findFreeWindows returns an all-day free window FOR THE
+   *  QUERIED DATE (any date). This proves the walk fetches per-day windows: a
+   *  Saturday query only yields slots if the tool walks forward to a weekday and
+   *  re-queries free/busy for THAT day. listSlots returns nothing so the native
+   *  fall-through can't be what produces the slots. */
+  const deps: LookUpAvailabilityDeps = {
+    resolveBackend: () => ({
+      findDayAvailability: async () => ({ slots: [] }),
+      createEvent: async () => ({ ok: true as const, eventRef: "evt" }),
+      findFreeWindows: async ({ date }) => [
+        { start: `${date}T00:00:00Z`, end: `${date}T23:59:59Z` },
+      ],
+    }),
+    listSlots: async () => ({ slots: [], durationMinutes: 60 }),
+  };
+
+  test("an in-policy Friday returns same-day slots (all on the Friday)", async () => {
+    const res = (await lookUpAvailability.execute(
+      { date: FRIDAY },
+      WALK_CTX,
+      deps,
+    )) as { slots: { iso: string }[]; durationMinutes: number; date: string };
+
+    assert.ok(res.slots.length >= 1, "offers at least one slot on the in-policy day");
+    assert.equal(res.durationMinutes, 60);
+    assert.equal(res.date, FRIDAY, "echoes the requested start date");
+    // Every offered slot is on the requested Friday (no need to walk).
+    for (const s of res.slots) {
+      assert.ok(s.iso.startsWith(FRIDAY), `slot ${s.iso} is on the requested Friday`);
+    }
+    // Accumulates up to the 3-slot cap.
+    assert.equal(res.slots.length, 3, "accumulates up to 3 slots total");
+  });
+
+  test("an off-policy Saturday WALKS forward to Monday (proves multi-day walk)", async () => {
+    const res = (await lookUpAvailability.execute(
+      { date: SATURDAY },
+      WALK_CTX,
+      deps,
+    )) as { slots: { iso: string }[]; durationMinutes: number; date: string };
+
+    // The OLD single-day behavior would return [] here (Saturday is off policy
+    // → zero candidates → native fall-through is empty). The walk must skip
+    // Sat + Sun and land the first slots on Monday.
+    assert.ok(res.slots.length >= 1, "walks forward and still offers slots");
+    assert.equal(res.date, SATURDAY, "date echoes the original requested start");
+    // No slot may be on the off-policy Sat/Sun; the first open day is Monday.
+    for (const s of res.slots) {
+      assert.ok(
+        !s.iso.startsWith(SATURDAY) && !s.iso.startsWith("2026-07-05"),
+        `slot ${s.iso} must not be on the off-policy weekend`,
+      );
+    }
+    assert.ok(
+      res.slots.every((s) => s.iso.startsWith(MONDAY)),
+      "first available open day after a Sat start is the Monday",
+    );
+    assert.equal(res.slots.length, 3, "still accumulates up to 3 slots after walking");
+  });
+});
+
 describe("book_appointment enforces policy.requiredFields before writing", () => {
   /** A book_external ctx requiring name+phone+address, 60-min slots. */
   const REQUIRED_CTX: ToolExecuteContext = {
