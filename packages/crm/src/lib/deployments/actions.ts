@@ -564,9 +564,13 @@ export async function cancelDeploymentAction(
 
   const result = await updateDeployment({
     id: parsed.data.deploymentId,
-    patch: shouldRelease
-      ? { status: "canceled", phoneNumber: null, phoneNumberSid: null }
-      : { status: "canceled" },
+    // ALWAYS free the number in OUR DB on cancel (null phone_number + _sid).
+    // The partial unique index `deployments_phone_number_uniq` counts ANY
+    // non-null phone_number — even on a canceled row — so leaving it set
+    // permanently locks that number from reuse and the NEXT activation throws a
+    // 23505 unique violation (→ a 500 on /studio/clients). `shouldRelease` gates
+    // only the Twilio CARRIER release above, NOT whether we free our column.
+    patch: { status: "canceled", phoneNumber: null, phoneNumberSid: null },
     deps: _deps,
   });
   if (!result.ok) {
