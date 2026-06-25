@@ -90,6 +90,7 @@ export async function GET(req: Request) {
           }).tools.execute("GOOGLECALENDAR_FIND_FREE_SLOTS", {
             userId: entityUserId,
             connectedAccountId: accountId,
+            dangerouslySkipVersionCheck: true,
             arguments: {
               time_min: `${date}T00:00:00Z`,
               time_max: `${date}T23:59:59Z`,
