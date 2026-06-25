@@ -145,32 +145,9 @@ export function makeComposioCalendarBackend(deps: ComposioBackendDeps): Calendar
         const slots = windows.flatMap((w) =>
           quantizeWindow(w, q.durationMinutes, q.timezone),
         );
-        // DIAGNOSTIC (T12 live-smoke): log the RAW Composio response + parse
-        // results so we can see whether find-free-slots returns data we don't
-        // parse vs. genuinely no free windows. Remove once the shape is confirmed.
-        console.log(
-          JSON.stringify({
-            event: "composio_find_free_slots",
-            slug: slug.free,
-            date: q.date,
-            windows: windows.length,
-            slots: slots.length,
-            raw:
-              typeof res === "string"
-                ? res.slice(0, 900)
-                : JSON.stringify(res ?? null).slice(0, 900),
-          }),
-        );
         if (slots.length === 0) return { slots: [] };
         return { slots };
-      } catch (e) {
-        console.log(
-          JSON.stringify({
-            event: "composio_find_free_slots_error",
-            slug: slug.free,
-            error: e instanceof Error ? e.message.slice(0, 400) : String(e),
-          }),
-        );
+      } catch {
         // Empty = caller falls back to native availability.
         return { slots: [] };
       }
@@ -180,13 +157,26 @@ export function makeComposioCalendarBackend(deps: ComposioBackendDeps): Calendar
       input: CreateEventInput,
     ): Promise<{ ok: true; eventRef: string } | { ok: false; error: string }> {
       try {
+        // Build a meaningful event: "<title> — <caller>" + a details block, so
+        // the calendar entry isn't a bare "default" with no context.
+        const name = input.attendee.name?.trim();
+        const summary = name ? `${input.title} — ${name}` : input.title;
+        const description = [
+          name ? `Booked by ${name}` : null,
+          input.attendee.phone ? `Phone: ${input.attendee.phone}` : null,
+          input.attendee.email ? `Email: ${input.attendee.email}` : null,
+          input.notes ? `Notes: ${input.notes}` : null,
+          "Booked by the AI receptionist via SeldonFrame.",
+        ]
+          .filter(Boolean)
+          .join("\n");
         const res = await deps.callTool(slug.create, {
           calendar_id: calendarId,
           start_datetime: input.startIso,
           event_duration_minutes: input.durationMinutes,
-          summary: input.title,
+          summary,
           attendees: input.attendee.email ? [input.attendee.email] : [],
-          description: input.notes ?? "",
+          description,
         });
         // The MCP client (createMcpClient.callTool) THROWS on a tool error /
         // isError:true, so a RETURN here means the event was created. We still

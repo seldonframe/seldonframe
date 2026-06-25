@@ -816,8 +816,10 @@ export const bookAppointment: AgentTool<
           startIso: input.slotIso,
           durationMinutes: 30,
           timezone: ctx.timezone ?? "UTC",
-          // Prefer an explicit service from intake, else the booking type slug.
-          title: intakeResponses.service || bookingSlug,
+          // Prefer an explicit service from intake, else a clean generic (NOT
+          // the machine booking-slug, which surfaced as a literal "default" on
+          // the calendar event). The adapter appends the caller's name.
+          title: intakeResponses.service || "Appointment",
           attendee: {
             name: input.fullName,
             email: input.email,
