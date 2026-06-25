@@ -70,6 +70,39 @@ export async function GET(req: Request) {
         out.findFreeSlotsError = e instanceof Error ? e.message : String(e);
       }
     }
+
+    // === SDK DIRECT EXECUTION test (the likely fix — bypasses the MCP router) ===
+    try {
+      const { Composio } = await import("@composio/core");
+      const { resolveComposioKey } = await import("@/lib/integrations/composio/keys");
+      const keyRes = await resolveComposioKey(dep.builderOrgId);
+      out.keySource = keyRes.source;
+      if (keyRes.apiKey) {
+        const composio = new Composio({ apiKey: keyRes.apiKey });
+        const toolsApi = (composio as unknown as { tools?: Record<string, unknown> }).tools;
+        out.toolsApiKeys = toolsApi
+          ? Object.getOwnPropertyNames(Object.getPrototypeOf(toolsApi)).filter((k) => k !== "constructor")
+          : null;
+        const accountId = (dep.calendarRef as { accountId?: string } | null)?.accountId;
+        try {
+          out.sdkFindFreeSlots = await (composio as unknown as {
+            tools: { execute: (slug: string, body: unknown) => Promise<unknown> };
+          }).tools.execute("GOOGLECALENDAR_FIND_FREE_SLOTS", {
+            userId: entityUserId,
+            connectedAccountId: accountId,
+            arguments: {
+              time_min: `${date}T00:00:00Z`,
+              time_max: `${date}T23:59:59Z`,
+              timezone: "America/Chicago",
+            },
+          });
+        } catch (e) {
+          out.sdkFindFreeSlotsError = e instanceof Error ? e.message : String(e);
+        }
+      }
+    } catch (e) {
+      out.sdkError = e instanceof Error ? e.message : String(e);
+    }
   } catch (e) {
     out.error = e instanceof Error ? e.message : String(e);
   }
