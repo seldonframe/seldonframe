@@ -45,6 +45,7 @@ import { getAgentTemplate } from "@/lib/agent-templates/store";
 import { getOrCreateVoiceAgent } from "./voice-agent";
 import { deploymentToBinding } from "@/lib/deployments/booking-binding";
 import { bindingToCtxBooking } from "@/lib/agents/booking/binding-ctx";
+import { resolveBookingPolicy } from "@/lib/agents/booking/booking-policy";
 
 /** What the webhook needs to run a deployment-routed call. Mirrors the fields
  *  the workspace path threads into runVoiceCall + startVoiceConversation. */
@@ -115,6 +116,7 @@ export async function loadDeploymentVoiceContext(args: {
     | "clientContext"
     | "bookingMode"
     | "externalBookingUrl"
+    | "bookingPolicy"
     | "clientOrgId"
   > & {
     /** The client org's slug, left-joined by resolveDeploymentByNumber. The
@@ -215,7 +217,19 @@ export async function loadDeploymentVoiceContext(args: {
     //    handoff branch (tools.ts) and the agent took a message instead of
     //    booking into Google. external_link still maps to its handoff. Only the
     //    DEPLOYMENT path sets ctx.booking; workspace agents leave it undefined.
-    booking: bindingToCtxBooking(deploymentToBinding(args.deployment)),
+    //
+    //    Per-client booking policy (P1): resolve the effective policy
+    //    (deployment override → template default → system defaults) in the
+    //    workspace timezone, and thread it onto ctx.booking so the booking tools
+    //    shape their slots + required-fields gate from the client's real rules.
+    booking: bindingToCtxBooking(
+      deploymentToBinding(args.deployment),
+      resolveBookingPolicy(
+        args.deployment.bookingPolicy,
+        templateBlueprint.defaultBookingPolicy ?? null,
+        personaInputs.timezone,
+      ),
+    ),
   };
 
   return {

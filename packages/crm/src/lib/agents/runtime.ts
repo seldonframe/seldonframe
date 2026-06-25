@@ -45,6 +45,7 @@ import {
   type ToolExecuteContext,
 } from "./tools";
 import type { CalendarBinding } from "@/lib/agents/booking/calendar-backend";
+import type { BookingPolicy } from "@/lib/agents/booking/booking-policy";
 import { bindingToCtxBooking } from "@/lib/agents/booking/binding-ctx";
 
 const MODEL = process.env.ANTHROPIC_AGENT_MODEL?.trim() || "claude-sonnet-4-5-20250929";
@@ -88,6 +89,11 @@ export async function executeTurn(input: {
    *  voice. Absent for workspace/operator agents → ctx.booking stays undefined
    *  (native default, unchanged behavior). */
   bookingBinding?: CalendarBinding;
+  /** Per-client booking policy (P1) — the RESOLVED policy run-channel-turn
+   *  derives alongside the binding. Threaded onto ctx.booking.policy so the
+   *  booking tools shape slots + the required-fields gate from the client's
+   *  rules. Absent → the tools fall back to system defaults. */
+  bookingPolicy?: BookingPolicy;
 }): Promise<ExecuteTurnResult> {
   const t0 = Date.now();
 
@@ -384,7 +390,8 @@ export async function executeTurn(input: {
         testMode: conv.status === "test",
         // ICP-3 — deployed-agent calendar binding (chat/SMS/email parity with
         // voice). Undefined for workspace agents → ctx.booking stays undefined.
-        booking: bindingToCtxBooking(input.bookingBinding),
+        // Per-client booking policy threaded alongside (P1).
+        booking: bindingToCtxBooking(input.bookingBinding, input.bookingPolicy),
       };
       try {
         const output = await (tool as AgentTool<unknown, unknown>).execute(parsed.data, ctx);

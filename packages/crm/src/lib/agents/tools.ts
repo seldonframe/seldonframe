@@ -25,6 +25,12 @@ import type {
 import { resolveCalendarBackend } from "@/lib/agents/booking/calendar-backend";
 import { makeNativeCalendarBackend } from "@/lib/agents/booking/native-calendar-backend";
 import { makeComposioCalendarBackend } from "@/lib/agents/booking/composio-calendar-backend";
+import {
+  type BookingPolicy,
+  generateCandidateSlots,
+  resolveBookingPolicy,
+  slotFitsFreeWindows,
+} from "@/lib/agents/booking/booking-policy";
 
 export type ToolExecuteContext = {
   orgId: string;
@@ -66,6 +72,15 @@ export type ToolExecuteContext = {
      *  native path. The `mode` field above is the legacy handoff selector
      *  (external_link/api_mcp/cal_com) and is independent of this binding. */
     binding?: CalendarBinding;
+    /** The RESOLVED per-client booking policy (P1, 2026-06-25): appointment
+     *  duration, buffer, daily cap, lead time, business-hours window
+     *  (weekdays + start/end + tz), and required-fields gate. Threaded by the
+     *  voice + chat/SMS/email callers via resolveBookingPolicy → bindingToCtxBooking.
+     *  look_up_availability shapes its offered slots from this (candidate window ∩
+     *  real free/busy, capped at maxPerDay); book_appointment gates on
+     *  requiredFields + books at policy.durationMinutes. ABSENT → the tools fall
+     *  back to resolveBookingPolicy(null, null, ctx.timezone) (system defaults). */
+    policy?: BookingPolicy;
   };
 };
 
@@ -315,13 +330,41 @@ type NativeBackendSubmit = (a: {
   intakeResponses?: Record<string, string>;
 }) => Promise<{ ok: boolean; bookingId?: string; error?: string }>;
 
+/** Injectable seam for look_up_availability (per-client booking policy, P1):
+ *  lets a unit test inject a fake CalendarBackend (free windows) + a fake native
+ *  list-slots without any network / DB. Defaults are the real
+ *  `resolveCalendarBackend` and `listPublicBookingSlotsAction`. Consulted by both
+ *  the book_external (free-windows ∩ candidates) and native (slots ∩ candidates)
+ *  paths; production passes no deps so the defaults are used unchanged. */
+export type LookUpAvailabilityDeps = {
+  resolveBackend?: (
+    binding: CalendarBinding | undefined,
+    deps: {
+      makeNative: () => CalendarBackend;
+      makeComposio: (
+        ref: NonNullable<CalendarBinding["calendarRef"]>,
+      ) => CalendarBackend;
+    },
+  ) => CalendarBackend;
+  listSlots?: NativeBackendListSlots;
+};
+
 export const lookUpAvailability: AgentTool<
   z.infer<typeof lookUpAvailabilityInput>,
   // Native result, OR a booking-mode handoff (ICP-3, deployed agents on a
   // non-native mode — no slot lookup, just the handoff message/url).
   | { slots: LabeledSlot[]; durationMinutes: number; date: string; timezone: string }
   | { bookingHandoff: "external_link" | "followup"; message: string; url?: string | null }
-> = {
+> & {
+  execute: (
+    input: z.infer<typeof lookUpAvailabilityInput>,
+    ctx: ToolExecuteContext,
+    deps?: LookUpAvailabilityDeps,
+  ) => Promise<
+    | { slots: LabeledSlot[]; durationMinutes: number; date: string; timezone: string }
+    | { bookingHandoff: "external_link" | "followup"; message: string; url?: string | null }
+  >;
+} = {
   name: "look_up_availability",
   description:
     "Get the next available appointment slots starting from a given date. Walks forward day-by-day, accumulating up to 3 slots total across at most 14 days. Returns `slots` as {iso, label} pairs PLUS the workspace `timezone`. `label` is the time already converted to the BUSINESS'S local timezone and ready to read aloud / show (e.g. 'Monday, June 1 at 10:00 AM PDT') — ALWAYS quote the `label`, never the raw `iso`, and never convert times yourself. `iso` is the machine timestamp — pass it VERBATIM to book_appointment as slotIso.",
@@ -341,7 +384,8 @@ export const lookUpAvailability: AgentTool<
     },
     required: ["date"],
   },
-  execute: async (input, ctx) => {
+  execute: async (input, ctx, deps: LookUpAvailabilityDeps = {}) => {
+    const listSlots = deps.listSlots ?? ((a) => listPublicBookingSlotsAction(a));
     // ── booking-mode branch (ICP-3, deployed agents only) ──
     // Workspace/operator agents never set ctx.booking → mode is 'native' and the
     // existing availability chain below runs byte-for-byte unchanged. A deployed
@@ -367,44 +411,89 @@ export const lookUpAvailability: AgentTool<
     // mode === "native": existing code path continues unchanged ↓
     const bookingSlug = input.bookingSlug ?? "default";
 
-    // ── pluggable-backend availability (ICP-3, Task 4) ──
+    // ── per-client booking policy (P1) ──
+    // A DEPLOYED agent's slots are SHAPED by the client's policy (duration /
+    // buffer / hours window / lead time / max-per-day). The policy-shaping below
+    // fires ONLY when a per-client policy is actually threaded onto
+    // ctx.booking.policy — a workspace/operator agent (no ctx.booking) keeps the
+    // byte-for-byte original native walk (no intersection, no cap, duration from
+    // the action). `candidates` are the policy-shaped UTC ISO starts for the
+    // REQUESTED day; an offered slot must be BOTH a candidate AND free on the
+    // real calendar. Off-policy days yield no candidates → [].
+    const hasPolicy = Boolean(ctx.booking?.policy);
+    const policy = ctx.booking?.policy ?? resolveBookingPolicy(null, null, ctx.timezone);
+    const candidates = generateCandidateSlots(policy, input.date, new Date());
+    /** Cap a slot list at policy.maxPerDay (when a policy is set + a cap exists). */
+    const capToMax = (slots: string[]): string[] =>
+      hasPolicy && typeof policy.maxPerDay === "number"
+        ? slots.slice(0, policy.maxPerDay)
+        : slots;
+
+    // ── pluggable-backend availability (ICP-3, Task 4 + P1 policy) ──
     // When this deployment books into the CLIENT's own connected calendar
-    // (binding.mode === "book_external" AND a connected calendarRef), ask that
-    // backend for the day's free slots FIRST. If it returns nothing (the
-    // composio adapter degrades to [] on any error / unrecognized shape), we
-    // FALL THROUGH to the existing native availability walk so the agent always
-    // has times to offer. resolveCalendarBackend itself returns the native
-    // backend until the calendar is actually connected, so this only fires for a
-    // truly book_external + connected deployment.
+    // (binding.mode === "book_external" AND a connected calendarRef), get that
+    // calendar's FREE windows for the day and offer the policy candidates that
+    // FIT inside a free window. If the backend exposes no windows (the composio
+    // adapter degrades to [] on any error / unrecognized shape), FALL THROUGH to
+    // the existing native availability walk so the agent always has times to
+    // offer. resolveCalendarBackend itself returns the native backend until the
+    // calendar is actually connected, so this only fires for a truly
+    // book_external + connected deployment.
     if (ctx.booking?.binding?.mode === "book_external") {
       const backendDeps = buildCalendarBackendDeps(
         ctx,
         bookingSlug,
         // The native primitives are only reached on fallback (makeNative) — the
         // book_external path uses the composio backend. submitBooking is unused
-        // by findDayAvailability, so a throwing stub documents that.
+        // by free-window lookup, so a throwing stub documents that.
         async () => {
           throw new Error("submit not used in availability lookup");
         },
-        (a) => listPublicBookingSlotsAction(a),
+        listSlots,
       );
-      const backend = resolveCalendarBackend(ctx.booking.binding, backendDeps);
-      const tz = ctx.timezone ?? "UTC";
+      const resolveBackend = deps.resolveBackend ?? resolveCalendarBackend;
+      const backend = resolveBackend(ctx.booking.binding, backendDeps);
+      const tz = policy.timezone;
       try {
-        const { slots: externalSlots } = await backend.findDayAvailability({
-          date: input.date,
-          durationMinutes: 30,
-          timezone: tz,
-        });
-        if (externalSlots.length > 0) {
-          return {
-            slots: externalSlots,
-            durationMinutes: 30,
-            date: input.date,
-            timezone: tz,
-          };
+        // Prefer the explicit free-windows surface (P1); fall back to deriving
+        // windows from findDayAvailability's quantized slots when a backend
+        // doesn't implement findFreeWindows.
+        const windows = backend.findFreeWindows
+          ? await backend.findFreeWindows({
+              date: input.date,
+              durationMinutes: policy.durationMinutes,
+              timezone: tz,
+            })
+          : await backend
+              .findDayAvailability({
+                date: input.date,
+                durationMinutes: policy.durationMinutes,
+                timezone: tz,
+              })
+              .then(({ slots }) =>
+                slots.map((s) => ({
+                  start: s.iso,
+                  end: new Date(
+                    Date.parse(s.iso) + policy.durationMinutes * 60_000,
+                  ).toISOString(),
+                })),
+              );
+        if (windows.length > 0) {
+          const offered = capToMax(
+            candidates.filter((iso) =>
+              slotFitsFreeWindows(iso, policy.durationMinutes, windows),
+            ),
+          );
+          if (offered.length > 0) {
+            return {
+              slots: labelSlots(offered, tz),
+              durationMinutes: policy.durationMinutes,
+              date: input.date,
+              timezone: tz,
+            };
+          }
         }
-        // externalSlots empty → fall through to native availability below.
+        // No windows / nothing fit → fall through to native availability below.
       } catch {
         // Backend threw despite its fail-soft contract — never break the call;
         // fall through to native availability below.
@@ -417,30 +506,38 @@ export const lookUpAvailability: AgentTool<
 
     // Track durationMinutes from the first non-empty day we hit. If
     // every queried day is empty (unconfigured availability, fully
-    // booked horizon), fall back to 30 — matches the
-    // listPublicBookingSlotsAction default.
-    let durationMinutes = 30;
+    // booked horizon), fall back to the policy duration.
+    let durationMinutes = policy.durationMinutes;
     let durationSeen = false;
     // Track the workspace timezone so we can label slots in the BUSINESS'S
     // local time (not UTC). listPublicBookingSlotsAction surfaces it as
     // `workspaceTimezone`, but omits it on its empty/early-return paths —
-    // so default to UTC and latch the first real value we see.
-    let timezone = "UTC";
+    // so default to the policy tz and latch the first real value we see.
+    let timezone = policy.timezone;
     let timezoneSeen = false;
+    // Did the native availability action ever report a configuration (a real
+    // duration)? A deployment with a connected calendar but NO native booking
+    // config returns empty everywhere; in that case we still offer the policy
+    // window directly (below) rather than going silent.
+    let nativeConfigSeen = false;
 
     const slots = await findNextAvailableSlots({
       startDate,
       maxSlots: CHATBOT_SLOT_CAP,
       maxDaysToWalk: CHATBOT_WALK_HORIZON_DAYS,
       fetchSlotsForDay: async (date) => {
-        const result = await listPublicBookingSlotsAction({
+        const dayISO = formatDateYYYYMMDD(date);
+        const result = await listSlots({
           orgSlug: ctx.orgSlug,
           bookingSlug,
-          date: formatDateYYYYMMDD(date),
+          date: dayISO,
         });
-        if (!durationSeen && typeof result.durationMinutes === "number") {
-          durationMinutes = result.durationMinutes;
-          durationSeen = true;
+        if (typeof result.durationMinutes === "number") {
+          nativeConfigSeen = true;
+          if (!durationSeen) {
+            durationMinutes = result.durationMinutes;
+            durationSeen = true;
+          }
         }
         // `workspaceTimezone` is absent on the action's early-return paths,
         // so read it defensively (the result type is a union without it).
@@ -449,15 +546,37 @@ export const lookUpAvailability: AgentTool<
           timezone = tz;
           timezoneSeen = true;
         }
-        return result.slots;
+        // No per-client policy (workspace/operator agent) → return the native
+        // slots untouched (byte-for-byte original behavior). With a policy,
+        // intersect: only offer a native slot that is ALSO a policy candidate for
+        // that day (weekday window + duration cadence + lead time).
+        if (!hasPolicy) return result.slots;
+        const dayCandidates = new Set(
+          generateCandidateSlots(policy, dayISO, new Date()),
+        );
+        return result.slots.filter((iso) => dayCandidates.has(iso));
       },
     });
+
+    // A DEPLOYED agent (hasPolicy) whose calendar is connected but has NO native
+    // booking config (the action returned empty everywhere) should still offer
+    // its policy window for the requested day — the candidates, capped at
+    // maxPerDay. Workspace agents skip this (they have no policy window to offer).
+    if (hasPolicy && slots.length === 0 && !nativeConfigSeen && candidates.length > 0) {
+      const offered = capToMax(candidates);
+      return {
+        slots: labelSlots(offered, policy.timezone),
+        durationMinutes: policy.durationMinutes,
+        date: input.date,
+        timezone: policy.timezone,
+      };
+    }
 
     return {
       // Each slot carries the raw `iso` (passed VERBATIM to book_appointment)
       // and a `label` already converted to the workspace timezone for the
       // agent to read aloud — so it can't quote the UTC hour by mistake.
-      slots: labelSlots(slots, timezone),
+      slots: labelSlots(capToMax(slots), timezone),
       durationMinutes,
       // `date` echoes back the START date the LLM requested. The slot
       // ISOs themselves carry the real calendar dates (which may span
@@ -618,10 +737,20 @@ export type BookingHandoffResult = {
   url?: string | null;
 };
 
+/** Per-client booking policy (P1): the result when one or more of the policy's
+ *  `requiredFields` weren't collected yet. NO booking is written — the agent
+ *  reads `message`, asks the caller for the named fields, and re-calls. */
+export type BookingNeedsFieldsResult = {
+  ok: false;
+  needs: string[];
+  message: string;
+};
+
 export const bookAppointment: AgentTool<
   z.infer<typeof bookAppointmentInput>,
   | { ok: boolean; bookingId?: string; testMode?: boolean; error?: string }
   | BookingHandoffResult
+  | BookingNeedsFieldsResult
   | NeedsConfirmation
 > & {
   execute: (
@@ -631,6 +760,7 @@ export const bookAppointment: AgentTool<
   ) => Promise<
     | { ok: boolean; bookingId?: string; testMode?: boolean; error?: string }
     | BookingHandoffResult
+    | BookingNeedsFieldsResult
     | NeedsConfirmation
   >;
 } = {
@@ -733,6 +863,47 @@ export const bookAppointment: AgentTool<
         bookingId: `test-${Date.now()}`,
       };
     }
+
+    // ── required-fields gate (per-client booking policy, P1) ──
+    // The client's policy names the fields that MUST be collected before a
+    // booking is written (e.g. a plumber requires name+phone+address). This is a
+    // DEPLOYED-agent gate: it fires ONLY when a per-client policy is actually
+    // threaded onto ctx.booking.policy. Workspace/operator agents (no
+    // ctx.booking) keep the byte-for-byte original behavior — never gated by the
+    // system-default required fields. When a policy IS present, validate before
+    // any write: a missing/blank field returns the needs-list so the agent asks
+    // the caller and re-calls — never a partial booking. Field → source mapping
+    // mirrors how the write resolves contact info:
+    //   name  → input.fullName
+    //   phone → intakeResponses.phone | input.phone | caller ID (any present)
+    //   email → input.email
+    //   other → intakeResponses[field]
+    const policy = ctx.booking?.policy ?? resolveBookingPolicy(null, null, ctx.timezone);
+    if (ctx.booking?.policy) {
+      const fieldValue = (field: string): string | undefined => {
+        if (field === "name") return input.fullName;
+        if (field === "phone") {
+          return (
+            input.intakeResponses?.phone ??
+            input.phone ??
+            (typeof ctx.callerPhone === "string" ? ctx.callerPhone : undefined)
+          );
+        }
+        if (field === "email") return input.email;
+        return input.intakeResponses?.[field];
+      };
+      const missing = policy.requiredFields.filter(
+        (f) => !(typeof fieldValue(f) === "string" && fieldValue(f)!.trim().length > 0),
+      );
+      if (missing.length > 0) {
+        return {
+          ok: false,
+          needs: missing,
+          message: `Please collect: ${missing.join(", ")}`,
+        };
+      }
+    }
+
     try {
       // voice R1 — thread the workspace's collected intake fields through to
       // submitPublicBookingAction. Phone is folded INTO intakeResponses.phone
@@ -814,8 +985,10 @@ export const bookAppointment: AgentTool<
         const backend = resolveBackend(ctx.booking.binding, backendDeps);
         const res = await backend.createEvent({
           startIso: input.slotIso,
-          durationMinutes: 30,
-          timezone: ctx.timezone ?? "UTC",
+          // Per-client booking policy (P1) — the event runs for the client's
+          // configured appointment length, not a hardcoded 30 minutes.
+          durationMinutes: policy.durationMinutes,
+          timezone: policy.timezone,
           // Prefer an explicit service from intake, else a clean generic (NOT
           // the machine booking-slug, which surfaced as a literal "default" on
           // the calendar event). The adapter appends the caller's name.

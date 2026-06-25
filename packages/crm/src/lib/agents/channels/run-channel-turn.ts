@@ -28,6 +28,8 @@
 
 import type { ChannelAdapter, InboundMessage } from "./channel-adapter";
 import type { CalendarBinding } from "@/lib/agents/booking/calendar-backend";
+import type { BookingPolicy } from "@/lib/agents/booking/booking-policy";
+import { resolveBookingPolicy } from "@/lib/agents/booking/booking-policy";
 import { deploymentToBinding } from "@/lib/deployments/booking-binding";
 
 export type { ChannelAdapter, InboundMessage } from "./channel-adapter";
@@ -38,9 +40,23 @@ export type { ChannelAdapter, InboundMessage } from "./channel-adapter";
  *  the deployment's calendar binding when this resolved via the deployment-first
  *  path (so executeTurn books into the client's calendar exactly like voice).
  *  bookingBinding is absent for the workspace fall-through → ctx.booking stays
- *  undefined (native default, unchanged). */
+ *  undefined (native default, unchanged).
+ *
+ *  Per-client booking policy (P1): the deployment-first path may also carry the
+ *  deployment's own `bookingPolicy` override + the template's `defaultBookingPolicy`
+ *  + the client `timezone`. runChannelTurn resolves them with resolveBookingPolicy
+ *  and threads the result onto ctx.booking.policy. All optional → the workspace
+ *  fall-through (and any resolver that doesn't load them) falls back to system
+ *  defaults, unchanged. */
 export type ResolvedAgent =
-  | { agentId: string; orgId: string; bookingBinding?: CalendarBinding }
+  | {
+      agentId: string;
+      orgId: string;
+      bookingBinding?: CalendarBinding;
+      bookingPolicy?: Partial<BookingPolicy> | null;
+      templateBookingPolicy?: Partial<BookingPolicy> | null;
+      timezone?: string;
+    }
   | null;
 
 /** The minimal deployment slice the resolver needs: the client-org link (to pick
@@ -216,11 +232,13 @@ export type RunChannelTurnDeps = {
   /** Get-or-create the active agentConversations thread, returning its id. */
   getOrCreateConversation: (args: GetOrCreateConversationArgs) => Promise<string>;
   /** The canonical agent loop. bookingBinding is threaded for deployment-resolved
-   *  agents so chat/SMS/email book into the client's calendar like voice. */
+   *  agents so chat/SMS/email book into the client's calendar like voice;
+   *  bookingPolicy is the RESOLVED per-client policy threaded onto ctx.booking. */
   executeTurn: (input: {
     conversationId: string;
     userMessage: string;
     bookingBinding?: CalendarBinding;
+    bookingPolicy?: BookingPolicy;
   }) => Promise<ExecuteTurnResult>;
 };
 
@@ -347,6 +365,19 @@ export async function runChannelTurn(
       // ctx.booking stays undefined (native default). Conditional spread keeps the
       // key absent (not `undefined`) when there's no binding.
       ...(agent.bookingBinding ? { bookingBinding: agent.bookingBinding } : {}),
+      // Per-client booking policy (P1): only the deployment path sets a binding, so
+      // resolve + thread the policy alongside it (deployment override → template
+      // default → system defaults, in the client tz). Omitted on the workspace path
+      // so that input stays byte-for-byte unchanged there.
+      ...(agent.bookingBinding
+        ? {
+            bookingPolicy: resolveBookingPolicy(
+              agent.bookingPolicy ?? null,
+              agent.templateBookingPolicy ?? null,
+              agent.timezone,
+            ),
+          }
+        : {}),
     });
   } catch (err) {
     console.error(

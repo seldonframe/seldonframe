@@ -21,6 +21,7 @@ import type {
   DeploymentCalendarRef,
   BookingMode,
 } from "@/db/schema/deployments";
+import type { BookingPolicy } from "@/lib/agents/booking/booking-policy";
 
 /** The slice of a deployments row this resolver needs. */
 export type DeploymentNumberRow = {
@@ -39,6 +40,10 @@ export type DeploymentNumberRow = {
   bookingMode: BookingMode;
   /** The client's own booking URL — only meaningful for external_link. */
   externalBookingUrl: string | null;
+  /** The client's per-deployment booking policy override (duration / hours /
+   *  buffer / lead time / max-per-day / required fields). Sparse; resolved over
+   *  the template default + system defaults. Threaded onto ctx.booking.policy. */
+  bookingPolicy: Partial<BookingPolicy> | null;
   /** The client's connected calendar (provider + accountId + calendarId), set
    *  once the OAuth connect finishes. Threaded into the CalendarBinding so a
    *  book_external deployment can route into the client's own calendar; null
@@ -106,6 +111,7 @@ function buildDefaultDeps(): ResolveDeploymentDeps {
           clientContext: deployments.clientContext,
           bookingMode: deployments.bookingMode,
           externalBookingUrl: deployments.externalBookingUrl,
+          bookingPolicy: deployments.bookingPolicy,
           calendarRef: deployments.calendarRef,
           clientOrgId: deployments.clientOrgId,
           clientOrgSlug: organizations.slug,

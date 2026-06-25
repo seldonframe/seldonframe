@@ -255,3 +255,32 @@ export function generateCandidateSlots(
   }
   return out;
 }
+
+/**
+ * Does the appointment interval `[iso, iso + durationMin)` lie ENTIRELY inside
+ * at least one of the calendar's free windows? Pure — the booking tool uses this
+ * to intersect policy-shaped candidate slots with a calendar backend's real
+ * free/busy: a candidate is only offered if it both fits the policy window AND
+ * fully fits a free window (so the agent never offers a time that overlaps an
+ * existing event).
+ *
+ * Each window is `{ start, end }` as an ISO string. A window with an unparseable
+ * bound is skipped. An empty `windows` array → false (nothing is free). Never
+ * throws: an unparseable `iso` → false.
+ */
+export function slotFitsFreeWindows(
+  iso: string,
+  durationMin: number,
+  windows: Array<{ start: string; end: string }>,
+): boolean {
+  const startMs = Date.parse(iso);
+  if (Number.isNaN(startMs)) return false;
+  const endMs = startMs + Math.max(1, durationMin) * 60_000;
+  for (const w of windows) {
+    const wStart = Date.parse(w.start);
+    const wEnd = Date.parse(w.end);
+    if (Number.isNaN(wStart) || Number.isNaN(wEnd)) continue;
+    if (startMs >= wStart && endMs <= wEnd) return true;
+  }
+  return false;
+}

@@ -15,6 +15,7 @@ import type {
   AvailabilityQuery,
   CalendarBackend,
   CreateEventInput,
+  FreeWindow,
   LabeledSlot,
 } from "./calendar-backend";
 
@@ -130,27 +131,35 @@ export function makeComposioCalendarBackend(deps: ComposioBackendDeps): Calendar
   const slug = SLUGS[deps.provider];
   const calendarId = deps.calendarId ?? "primary";
 
+  /** Fetch + normalize the day's FREE windows from Composio. Fail-soft: any
+   *  thrown error / unrecognized shape → []. Shared by findDayAvailability (which
+   *  quantizes them into slots) and findFreeWindows (which exposes them raw so the
+   *  booking policy can intersect its candidate slots with real availability). */
+  async function fetchFreeWindows(q: AvailabilityQuery): Promise<FreeWindow[]> {
+    try {
+      const res = await deps.callTool(slug.free, {
+        calendar_id: calendarId,
+        time_min: `${q.date}T00:00:00`,
+        time_max: `${q.date}T23:59:59`,
+        timezone: q.timezone,
+      });
+      return extractFreeWindows(res);
+    } catch {
+      return [];
+    }
+  }
+
   return {
     async findDayAvailability(q: AvailabilityQuery): Promise<{ slots: LabeledSlot[] }> {
-      try {
-        const timeMin = `${q.date}T00:00:00`;
-        const timeMax = `${q.date}T23:59:59`;
-        const res = await deps.callTool(slug.free, {
-          calendar_id: calendarId,
-          time_min: timeMin,
-          time_max: timeMax,
-          timezone: q.timezone,
-        });
-        const windows = extractFreeWindows(res);
-        const slots = windows.flatMap((w) =>
-          quantizeWindow(w, q.durationMinutes, q.timezone),
-        );
-        if (slots.length === 0) return { slots: [] };
-        return { slots };
-      } catch {
-        // Empty = caller falls back to native availability.
-        return { slots: [] };
-      }
+      const windows = await fetchFreeWindows(q);
+      const slots = windows.flatMap((w) =>
+        quantizeWindow(w, q.durationMinutes, q.timezone),
+      );
+      return { slots };
+    },
+
+    async findFreeWindows(q: AvailabilityQuery): Promise<FreeWindow[]> {
+      return fetchFreeWindows(q);
     },
 
     async createEvent(

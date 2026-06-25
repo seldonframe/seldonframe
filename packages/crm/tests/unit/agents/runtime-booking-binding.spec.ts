@@ -19,6 +19,10 @@ import assert from "node:assert/strict";
 import { bindingToCtxBooking } from "../../../src/lib/agents/booking/binding-ctx";
 import type { CalendarBinding } from "../../../src/lib/agents/booking/calendar-backend";
 import {
+  resolveBookingPolicy,
+  type BookingPolicy,
+} from "../../../src/lib/agents/booking/booking-policy";
+import {
   runChannelTurn,
   type RunChannelTurnDeps,
 } from "../../../src/lib/agents/channels/run-channel-turn";
@@ -50,6 +54,36 @@ describe("bindingToCtxBooking — pure binding → ctx.booking mapper", () => {
 
   test("no binding → ctx.booking is undefined (workspace/native default)", () => {
     assert.equal(bindingToCtxBooking(undefined), undefined);
+  });
+
+  test("a resolved policy is attached to ctx.booking.policy", () => {
+    const binding: CalendarBinding = {
+      mode: "book_external",
+      calendarRef: { provider: "googlecalendar", accountId: "ca_1" },
+    };
+    const policy: BookingPolicy = resolveBookingPolicy(
+      { durationMinutes: 60, weekdays: [2], requiredFields: ["name", "phone", "address"] },
+      null,
+      "UTC",
+    );
+    const booking = bindingToCtxBooking(binding, policy);
+    assert.ok(booking, "expected a ctx.booking slice");
+    // The per-client policy rides on ctx.booking.policy for the booking tools.
+    assert.equal(booking.policy?.durationMinutes, 60);
+    assert.deepEqual(booking.policy?.weekdays, [2]);
+    assert.deepEqual(booking.policy?.requiredFields, ["name", "phone", "address"]);
+    // The binding mapping is unchanged by the added policy arg.
+    assert.equal(booking.binding?.mode, "book_external");
+    assert.equal(booking.mode, "native");
+  });
+
+  test("no policy arg → ctx.booking.policy is absent (binding mapping unchanged)", () => {
+    const binding: CalendarBinding = { mode: "external_link", externalUrl: "https://cal.com/x" };
+    const booking = bindingToCtxBooking(binding);
+    assert.ok(booking);
+    assert.equal(booking.policy, undefined);
+    assert.equal(booking.mode, "external_link");
+    assert.equal(booking.externalUrl, "https://cal.com/x");
   });
 });
 

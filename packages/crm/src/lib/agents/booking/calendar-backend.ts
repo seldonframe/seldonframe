@@ -40,9 +40,19 @@ export type CreateEventInput = {
   attendee: { name: string; email?: string; phone?: string }; notes?: string;
 };
 
+/** A contiguous span of calendar free time, ISO start/end. Used by the booking
+ *  policy to intersect candidate slots with a backend's real availability. */
+export type FreeWindow = { start: string; end: string };
+
 export type CalendarBackend = {
   findDayAvailability(q: AvailabilityQuery): Promise<{ slots: LabeledSlot[] }>;
   createEvent(input: CreateEventInput): Promise<{ ok: true; eventRef: string } | { ok: false; error: string }>;
+  /** OPTIONAL (per-client booking policy, P1): return the backend's raw FREE
+   *  windows for the queried day, so the booking tool can offer only the
+   *  policy-shaped candidate slots that also fall inside real availability.
+   *  Backends that can't expose free windows (or fail) omit this / return [] —
+   *  the tool then falls back to its prior behavior. Fail-soft: never throws. */
+  findFreeWindows?(q: AvailabilityQuery): Promise<FreeWindow[]>;
 };
 
 export type ResolveDeps = {
