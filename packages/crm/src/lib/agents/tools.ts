@@ -263,29 +263,29 @@ export function buildCalendarBackendDeps(
         accountId: ref.accountId,
         calendarId: ref.calendarId,
         callTool: async (slug, args) => {
-          // Lazy server-only import: the composio client + inline MCP client
-          // pull Node-runtime deps, so keep them off the module's eager graph
-          // (the tools module loads in the agent runtime and on the edge-ish
-          // realtime path). No network until callTool actually fires.
-          const [{ ensureSession }, { createMcpClient }] = await Promise.all([
-            import("@/lib/integrations/composio/client"),
-            import("@/lib/agents/mcp/client"),
+          // Execute the calendar action via the Composio SDK — NOT the MCP
+          // session. The per-deployment MCP session runs in "tool-router" mode
+          // (it exposes only COMPOSIO_SEARCH_TOOLS / _MULTI_EXECUTE_TOOL, so a
+          // direct callTool("GOOGLECALENDAR_…") 404s "tool not found"). The SDK's
+          // tools.execute hits the action directly: the agency's Composio KEY
+          // (ref.ownerOrgId), the DEPLOYMENT as the entity (ref.entityUserId), and
+          // the specific connected account (ref.accountId).
+          // dangerouslySkipVersionCheck uses the toolkit's latest version (none
+          // pinned). Lazy import keeps the Node SDK off the eager module graph.
+          const [{ Composio }, { resolveComposioKey }] = await Promise.all([
+            import("@composio/core"),
+            import("@/lib/integrations/composio/keys"),
           ]);
-          // Agency-key + per-deployment-entity: the calendar was connected under
-          // the agency's Composio KEY (ref.ownerOrgId) with the DEPLOYMENT id as
-          // the entity (ref.entityUserId). Re-open the session under both so the
-          // booking lands in the same connected calendar. Fall back to ctx.orgId
-          // (legacy refs without ownerOrgId resolve the key from the running org).
-          const session = await ensureSession(ref.ownerOrgId ?? ctx.orgId, [ref.provider], {
-            entityUserId: ref.entityUserId,
+          const keyOrg = ref.ownerOrgId ?? ctx.orgId;
+          const { apiKey } = await resolveComposioKey(keyOrg);
+          if (!apiKey) throw new Error("composio_key_unavailable");
+          const composio = new Composio({ apiKey });
+          return composio.tools.execute(slug, {
+            userId: ref.entityUserId ?? keyOrg,
+            connectedAccountId: ref.accountId,
+            dangerouslySkipVersionCheck: true,
+            arguments: args,
           });
-          if (!session) throw new Error("composio_session_unavailable");
-          const client = createMcpClient({
-            endpoint: session.mcpUrl,
-            headers: session.mcpHeaders,
-            bearer: "",
-          });
-          return client.callTool(slug, args);
         },
       }),
   };

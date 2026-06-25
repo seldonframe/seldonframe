@@ -63,3 +63,27 @@ test("createEvent succeeds with empty eventRef when the MCP content has no id (e
   const r = await be.createEvent({ startIso: "x", durationMinutes: 30, timezone: "UTC", title: "t", attendee: { name: "P" } });
   assert.deepEqual(r, { ok: true, eventRef: "" });
 });
+
+// The REAL GOOGLECALENDAR_FIND_FREE_SLOTS shape (confirmed live via the SDK):
+// { successful, data: { calendars: { <calendarId>: { busy:[…], free:[{start,end}] } } } }
+test("findDayAvailability parses data.calendars.<id>.free into quantized slots", async () => {
+  const be = makeComposioCalendarBackend({
+    provider: "googlecalendar", accountId: "ca_1", calendarId: "primary",
+    callTool: async () => ({
+      successful: true,
+      data: {
+        calendars: {
+          primary: {
+            busy: [{ start: "2026-07-01T14:00:00Z", end: "2026-07-01T14:30:00Z" }],
+            free: [{ start: "2026-07-01T15:00:00Z", end: "2026-07-01T17:00:00Z" }],
+          },
+        },
+      },
+    }),
+  });
+  const r = await be.findDayAvailability({ date: "2026-07-01", durationMinutes: 30, timezone: "UTC" });
+  // 2h free window @ 30-min slots → 15:00, 15:30, 16:00, 16:30
+  assert.equal(r.slots.length, 4);
+  assert.equal(r.slots[0].iso, "2026-07-01T15:00:00.000Z");
+  assert.ok(r.slots[0].label.length > 0);
+});

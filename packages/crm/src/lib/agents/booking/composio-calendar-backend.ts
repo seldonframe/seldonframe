@@ -66,6 +66,25 @@ function formatSlotLabel(iso: string, timeZone: string): string {
  *  shapes. Returns [] for anything unrecognized — the caller then falls back
  *  to native availability. Each window is { start, end } as ISO strings. */
 function extractFreeWindows(res: any): Array<{ start: string; end: string }> {
+  // Google free/busy via `tools.execute("GOOGLECALENDAR_FIND_FREE_SLOTS")`:
+  //   res.data.calendars.<calendarId>.free = [{ start, end }, ...]   (ISO w/ TZ)
+  const calendars = res?.data?.calendars;
+  if (calendars && typeof calendars === "object") {
+    const fromCalendars: Array<{ start: string; end: string }> = [];
+    for (const cal of Object.values(calendars)) {
+      const free = (cal as any)?.free;
+      if (!Array.isArray(free)) continue;
+      for (const w of free) {
+        const start = (w as any)?.start;
+        const end = (w as any)?.end;
+        if (typeof start === "string" && typeof end === "string") {
+          fromCalendars.push({ start, end });
+        }
+      }
+    }
+    if (fromCalendars.length > 0) return fromCalendars;
+  }
+  // Fallbacks for other shapes (Outlook / future actions).
   const candidates: unknown[] = [
     res?.data?.free_slots,
     res?.data?.freeSlots,
