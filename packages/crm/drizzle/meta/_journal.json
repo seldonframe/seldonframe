@@ -232,6 +232,13 @@
       "when": 1782404327471,
       "tag": "0032_pink_maggott",
       "breakpoints": true
+    },
+    {
+      "idx": 33,
+      "version": "7",
+      "when": 1782428872296,
+      "tag": "0033_open_newton_destine",
+      "breakpoints": true
     }
   ]
 }

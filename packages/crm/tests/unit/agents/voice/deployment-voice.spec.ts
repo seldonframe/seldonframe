@@ -44,6 +44,7 @@ const DEPLOYMENT: Deployment = {
   bookingMode: "native",
   externalBookingUrl: null,
   bookingPolicy: null,
+  customization: null,
   clientOrgId: null,
   portalInvitedAt: null,
   priceCents: 0,

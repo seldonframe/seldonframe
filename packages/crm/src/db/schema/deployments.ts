@@ -115,6 +115,10 @@ export const deployments = pgTable(
      *  required fields). Sparse override merged over the template default by
      *  resolveBookingPolicy; nullable — absent → template/system defaults. */
     bookingPolicy: jsonb("booking_policy").$type<Partial<import("@/lib/agents/booking/booking-policy").BookingPolicy>>(),
+    /** Per-client persona overrides (greeting / TTS voice / business facts).
+     *  Sparse override applied by resolveDeploymentPersona; nullable — absent →
+     *  the template defaults (with placeholders filled from clientName). */
+    customization: jsonb("customization").$type<Partial<import("@/lib/agents/persona/deployment-customization").DeploymentCustomization>>(),
     /** The CLIENT's business context (narrow soul + FAQ), captured at deploy
      *  time so the deployed agent speaks AS the client. Nullable — absent →
      *  the agent falls back to naming the client only (clientName). */
