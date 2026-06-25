@@ -14,8 +14,25 @@ test("createEvent calls GOOGLECALENDAR_CREATE_EVENT with mapped args + returns e
   assert.equal(calls[0].args.calendar_id, "primary");
   assert.equal(calls[0].args.start_datetime, "2026-07-01T16:00:00Z");
   assert.equal(calls[0].args.event_duration_minutes, 30);
+  assert.equal(calls[0].args.event_duration_hour, 0);
   assert.deepEqual(calls[0].args.attendees, ["pat@x.com"]);
   assert.deepEqual(r, { ok: true, eventRef: "evt_9" });
+});
+
+test("createEvent splits duration into hours+minutes (Composio caps minutes at 59)", async () => {
+  const calls: any[] = [];
+  const be = makeComposioCalendarBackend({
+    provider: "googlecalendar", accountId: "ca_1", calendarId: "primary",
+    callTool: async (slug, args) => { calls.push(args); return { successful: true, data: { id: "e" } }; },
+  });
+  // 60 min must be 1h/0m (NOT event_duration_minutes:60 → Composio 400s "≤ 59")
+  await be.createEvent({ startIso: "2026-07-01T14:00:00Z", durationMinutes: 60, timezone: "UTC", title: "t", attendee: { name: "P" } });
+  assert.equal(calls[0].event_duration_hour, 1);
+  assert.equal(calls[0].event_duration_minutes, 0);
+  // 90 min → 1h/30m
+  await be.createEvent({ startIso: "2026-07-01T14:00:00Z", durationMinutes: 90, timezone: "UTC", title: "t", attendee: { name: "P" } });
+  assert.equal(calls[1].event_duration_hour, 1);
+  assert.equal(calls[1].event_duration_minutes, 30);
 });
 
 test("createEvent returns {ok:false} when callTool throws (→ native fallback)", async () => {

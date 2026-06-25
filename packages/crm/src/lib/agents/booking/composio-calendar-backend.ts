@@ -182,7 +182,11 @@ export function makeComposioCalendarBackend(deps: ComposioBackendDeps): Calendar
         const res = await deps.callTool(slug.create, {
           calendar_id: calendarId,
           start_datetime: input.startIso,
-          event_duration_minutes: input.durationMinutes,
+          // Composio's GOOGLECALENDAR_CREATE_EVENT caps event_duration_minutes at
+          // 59 (it has a SEPARATE event_duration_hour field) — so a 60-min slot
+          // must be sent as 1h/0m, not 60 minutes (which 400s "≤ 59").
+          event_duration_hour: Math.floor(input.durationMinutes / 60),
+          event_duration_minutes: input.durationMinutes % 60,
           summary,
           attendees: input.attendee.email ? [input.attendee.email] : [],
           description,
