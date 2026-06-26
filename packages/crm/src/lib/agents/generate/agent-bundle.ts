@@ -101,10 +101,36 @@ function deepClone<T>(value: T): T {
   return structuredClone(value);
 }
 
+/**
+ * Short, intent-level skill names → the real STARTER_TEMPLATES id whose rich
+ * prose/persona/tools the assembler should use as the base.
+ *
+ * The classifier (heuristic + LLM) speaks in CONCEPTUAL skill names — e.g. it
+ * emits `"receptionist"` for "answer my phone". But the starter that carries the
+ * polished receptionist persona, the voice tool set, and the SDR playbook is
+ * registered under `"ai-phone-receptionist"`. Without this alias an intent of
+ * `"receptionist"` would miss the starter (skill !== any starter id) and fall to
+ * the generic safe-inbound default — losing all the receptionist prose AND
+ * tripping the "unrecognized skill" warning. The review-requester / speed-to-lead
+ * skills already match their starter ids 1:1, so they need no alias.
+ */
+const SKILL_ALIASES: Record<string, string> = {
+  receptionist: "ai-phone-receptionist",
+};
+
+/** Resolve an intent-level skill name to its canonical starter id (applying
+ *  SKILL_ALIASES). A skill with no alias is returned unchanged. */
+export function resolveSkillAlias(skill: string): string {
+  return SKILL_ALIASES[skill] ?? skill;
+}
+
 /** Find the starter whose id matches the skill (the review-requester /
- *  speed-to-lead starters carry an id equal to the skill slug). */
+ *  speed-to-lead starters carry an id equal to the skill slug). The skill is
+ *  alias-resolved first so a conceptual name like "receptionist" finds the
+ *  "ai-phone-receptionist" starter. */
 function starterForSkill(skill: string): StarterTemplate | undefined {
-  return STARTER_TEMPLATES.find((s) => s.id === skill);
+  const id = resolveSkillAlias(skill);
+  return STARTER_TEMPLATES.find((s) => s.id === id);
 }
 
 /** "underwater-basket-weaver" → "Underwater Basket Weaver". Used for the name of
