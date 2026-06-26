@@ -42,6 +42,7 @@ import {
   recordAgentMemory,
   hasDone,
   type AgentMemoryStore,
+  type AgentMemoryEntry,
 } from "@/lib/agents/memory/agent-memory";
 
 // ─── the event the dispatcher reacts to ──────────────────────────────────────
@@ -152,6 +153,28 @@ export type RunEventAgentResult = {
   throttled: number;
   /** How many failed at send time (swallowed; surfaced here for observability). */
   failed: number;
+  /**
+   * The agent's loop-memory for THIS run, surfaced so callers/logs can OBSERVE
+   * what each acting agent remembered and wrote — the "RunContext as loop-memory"
+   * piece. There is no workflow_runs row for the event-agent path (that's the
+   * archetype dispatcher), so this return summary + the Brain note are the
+   * observable record; `/runs` surfacing is a future follow-up.
+   *
+   * Present ONLY when a `deps.memoryStore` is wired (production =
+   * makeBrainMemoryStoreForOrg). Absent → no store, so there was nothing to
+   * recall/record (legacy behavior). Additive + optional: other run types and
+   * the existing `/runs` render are unaffected.
+   *
+   * Aggregated across every matched agent in the run:
+   *   • `recalled` — the union of entries each acting agent recalled BEFORE
+   *     composing (its prior interaction history for the event's contact);
+   *   • `recorded` — every entry this run appended AFTER a successful send
+   *     (e.g. `review_requested` / `lead_contacted`).
+   */
+  memory?: {
+    recalled: AgentMemoryEntry[];
+    recorded: AgentMemoryEntry[];
+  };
 };
 
 /** Skills that fire at most once per contact (the review ask). Speed-to-lead is
@@ -191,6 +214,10 @@ export async function runEventAgent(
     skipped: 0,
     throttled: 0,
     failed: 0,
+    // Only carry a memory summary when a store is wired (so a no-store run
+    // leaves `memory` absent — there was nothing to recall/record). runOneAgent
+    // pushes the recalled/recorded entries into these arrays as it acts.
+    ...(deps.memoryStore ? { memory: { recalled: [], recorded: [] } } : {}),
   };
 
   // No contact → nothing to reach. (The skills are all 1:1 outbound to the
@@ -288,6 +315,11 @@ async function runOneAgent(
         err instanceof Error ? err.message : String(err),
       );
       recalled = [];
+    }
+    // Surface what this agent recalled on the run summary (observability). Guard
+    // against a misbehaving recall returning a non-array.
+    if (result.memory && Array.isArray(recalled)) {
+      result.memory.recalled.push(...recalled);
     }
   }
 
@@ -402,26 +434,33 @@ async function runOneAgent(
   //    recordAgentMemory never throws, but guard the whole block so a misbehaving
   //    store can never break a send we already completed.
   if (deps.memoryStore) {
+    const at = deps.now ? deps.now().toISOString() : undefined;
+    const entry: AgentMemoryEntry = {
+      ...(at ? { at } : {}),
+      kind: memoryKind,
+      summary: `Sent ${agent.skill} via ${agent.channel} to ${
+        contactName ?? "contact"
+      }`,
+      data: { channel: agent.channel },
+    };
     try {
-      const at = deps.now ? deps.now().toISOString() : undefined;
       await recordAgentMemory(deps.memoryStore, {
         orgId: event.orgId,
         agentKey,
         subjectKey,
-        entry: {
-          ...(at ? { at } : {}),
-          kind: memoryKind,
-          summary: `Sent ${agent.skill} via ${agent.channel} to ${
-            contactName ?? "contact"
-          }`,
-          data: { channel: agent.channel },
-        },
+        entry,
       });
     } catch (err) {
       console.warn(
         `[run-event-agent] recordAgentMemory failed for ${agent.skill}:`,
         err instanceof Error ? err.message : String(err),
       );
+    }
+    // Surface what this agent recorded on the run summary (observability). We add
+    // it after the record attempt; recordAgentMemory is best-effort + never
+    // throws, and the entry IS what we asked the store to persist either way.
+    if (result.memory) {
+      result.memory.recorded.push(entry);
     }
   }
 

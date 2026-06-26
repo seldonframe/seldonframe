@@ -589,3 +589,104 @@ describe("runEventAgent — loop-memory (recall + record)", () => {
     assert.equal(result?.sent, 1);
   });
 });
+
+// ─── T4: the run summary carries the recalled/recorded loop-memory ────────────
+//
+// "RunContext as loop-memory": the event-agent path has no workflow_runs row, so
+// the run's memory is surfaced on the RETURN summary (and a listener log line) so
+// it's OBSERVABLE. These pin:
+//   • an agent that acted → result.memory.recorded holds the entry it wrote
+//     (the same entry persisted to the store), and result.memory.recalled holds
+//     what it recalled before composing;
+//   • a throttled run (memory already hasDone) → recalled surfaces the prior
+//     entry, recorded is empty (nothing was written this run);
+//   • NO memoryStore → result.memory is absent (undefined), no crash.
+
+describe("runEventAgent — T4: run summary carries recalled/recorded memory", () => {
+  test("an agent that acts → summary.memory.recorded shows the written entry; recalled is surfaced", async () => {
+    const mem = makeFakeMemoryStore();
+    const { deps } = makeDeps({
+      findEventAgents: async () => [reviewAgent("sms")],
+      memoryStore: mem.store,
+      now: () => FIXED_NOW,
+    });
+
+    const result = await runEventAgent(bookingCompleted("contact-1"), deps);
+
+    assert.equal(result.sent, 1);
+    // memory is present (a store was wired) and additive.
+    assert.ok(result.memory, "result.memory present when a store is wired");
+    // recalled: empty memory → nothing recalled, but the array exists.
+    assert.ok(Array.isArray(result.memory!.recalled), "recalled is an array");
+    assert.equal(result.memory!.recalled.length, 0, "empty memory → nothing recalled");
+    // recorded: the entry the agent wrote shows up on the summary, and it is the
+    // SAME entry that was persisted to the store.
+    assert.equal(result.memory!.recorded.length, 1, "the written entry is surfaced");
+    const recorded = result.memory!.recorded[0];
+    assert.equal(recorded.kind, "review_requested");
+    assert.equal(recorded.at, FIXED_NOW.toISOString());
+    assert.equal((recorded.data as { channel?: string }).channel, "sms");
+    // It matches what the store actually appended (observability is faithful).
+    assert.equal(mem.appendCalls.length, 1);
+    assert.deepEqual(recorded, mem.appendCalls[0].entry);
+  });
+
+  test("recalled surfaces prior memory; a throttled run records nothing this run", async () => {
+    const prior: AgentMemoryEntry = {
+      kind: "review_requested",
+      summary: "asked earlier",
+      data: { channel: "sms" },
+    };
+    const mem = makeFakeMemoryStore({
+      [memKey("review-requester", "contact-1")]: [prior],
+    });
+    const { deps, smsCalls } = makeDeps({
+      findEventAgents: async () => [reviewAgent("sms")],
+      memoryStore: mem.store,
+      hasAlreadyRequested: async () => false, // recall is the gate
+    });
+
+    const result = await runEventAgent(bookingCompleted("contact-1"), deps);
+
+    assert.equal(smsCalls.length, 0, "throttled by recall");
+    assert.equal(result.throttled, 1);
+    assert.ok(result.memory, "memory present");
+    // The agent recalled the prior entry BEFORE deciding to throttle → it's
+    // surfaced on the summary so a log/operator can see WHY it throttled.
+    assert.equal(result.memory!.recalled.length, 1, "prior memory surfaced");
+    assert.deepEqual(result.memory!.recalled[0], prior);
+    // Nothing was sent, so nothing was recorded this run.
+    assert.equal(result.memory!.recorded.length, 0, "no record on a throttled run");
+  });
+
+  test("NO memoryStore → result.memory is absent (undefined), no crash", async () => {
+    const { deps } = makeDeps({
+      findEventAgents: async () => [reviewAgent("sms")],
+    });
+    assert.equal(deps.memoryStore, undefined, "no store wired");
+
+    const result = await runEventAgent(bookingCompleted("contact-1"), deps);
+
+    assert.equal(result.sent, 1, "still sends");
+    assert.equal(result.memory, undefined, "memory omitted when no store is wired");
+  });
+
+  test("memory aggregates across multiple acting agents in one run", async () => {
+    // review + speed on one contact are DIFFERENT skills (independent throttles)
+    // → both act, so the summary aggregates both recorded entries.
+    const mem = makeFakeMemoryStore();
+    const { deps, smsCalls } = makeDeps({
+      findEventAgents: async () => [reviewAgent("sms"), speedAgent("sms")],
+      memoryStore: mem.store,
+      now: () => FIXED_NOW,
+    });
+
+    const result = await runEventAgent(bookingCompleted("contact-1"), deps);
+
+    assert.equal(smsCalls.length, 2, "both skills send");
+    assert.ok(result.memory);
+    assert.equal(result.memory!.recorded.length, 2, "both records aggregated");
+    const kinds = result.memory!.recorded.map((e) => e.kind).sort();
+    assert.deepEqual(kinds, ["lead_contacted", "review_requested"]);
+  });
+});

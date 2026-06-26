@@ -9,7 +9,7 @@ import { dispatchEventToDeployedAgents } from "@/lib/agents/dispatcher";
 // review-requester ← booking.completed, speed-to-lead ← lead.created. The
 // orchestrator is pure-ish + DI'd; buildRunEventAgentDeps supplies the real
 // agent_templates lookup + the existing sendSms/sendEmail seam.
-import { runEventAgent } from "@/lib/agents/triggers/run-event-agent";
+import { runEventAgent, type RunEventAgentResult } from "@/lib/agents/triggers/run-event-agent";
 import { buildRunEventAgentDeps } from "@/lib/agents/triggers/run-event-agent-deps";
 import { sendTriggeredEmailsForContactEvent, sendWelcomeEmailForContact } from "@/lib/emails/actions";
 import { syncContactToNewsletter } from "@/lib/integrations/newsletter-sync";
@@ -53,6 +53,53 @@ async function resolveOrgIdForBookingId(bookingId: string): Promise<string | nul
     .where(eq(bookings.id, bookingId))
     .limit(1);
   return row?.orgId ?? null;
+}
+
+/**
+ * 2026-06-26 — Agent loop-memory (State), T4. Make an event-agent run TRACEABLE
+ * in logs: there's no workflow_runs row for the event-agent path (that's the
+ * archetype dispatcher), so the durable record is the Brain note + this line.
+ * runEventAgent's return summary now carries the recalled/recorded loop-memory;
+ * we log it (counts, not full bodies) so an operator/engineer can see, for a
+ * fired booking.completed/lead.created, that the agent acted and what it
+ * remembered + wrote. Only logs when an agent actually matched (matched > 0) to
+ * keep the no-op common case quiet. Never throws — logging must not break the
+ * bus handler.
+ */
+function logEventAgentRun(
+  eventType: string,
+  orgId: string,
+  contactId: string | null,
+  result: RunEventAgentResult,
+): void {
+  if (result.matched === 0) return;
+  try {
+    console.info(
+      JSON.stringify({
+        action: "event_agent.run",
+        eventType,
+        orgId,
+        contactId,
+        matched: result.matched,
+        sent: result.sent,
+        skipped: result.skipped,
+        throttled: result.throttled,
+        failed: result.failed,
+        // Loop-memory observability: counts + the stable `kind` tags so the line
+        // is greppable without dumping message bodies. Absent when no memory
+        // store was wired (the summary omits `memory`).
+        memory: result.memory
+          ? {
+              recalled: result.memory.recalled.length,
+              recorded: result.memory.recorded.length,
+              recordedKinds: result.memory.recorded.map((e) => e.kind),
+            }
+          : null,
+      }),
+    );
+  } catch {
+    // best-effort logging — never break the handler.
+  }
 }
 
 let listenersRegistered = false;
@@ -420,7 +467,7 @@ export function registerCrmEventListeners() {
       try {
         const contactId =
           typeof data.contactId === "string" ? data.contactId : null;
-        await runEventAgent(
+        const eventAgentResult = await runEventAgent(
           {
             type: "booking.completed",
             orgId: completedOrgId,
@@ -429,6 +476,7 @@ export function registerCrmEventListeners() {
           },
           buildRunEventAgentDeps(completedOrgId),
         );
+        logEventAgentRun("booking.completed", completedOrgId, contactId, eventAgentResult);
       } catch (err) {
         console.warn(`[listeners] runEventAgent booking.completed failed:`, err);
       }
@@ -456,10 +504,11 @@ export function registerCrmEventListeners() {
     if (!orgId) return;
 
     try {
-      await runEventAgent(
+      const eventAgentResult = await runEventAgent(
         { type: "lead.created", orgId, contactId, payload: data },
         buildRunEventAgentDeps(orgId),
       );
+      logEventAgentRun("lead.created", orgId, contactId, eventAgentResult);
     } catch (err) {
       console.warn(`[listeners] runEventAgent lead.created failed:`, err);
     }
