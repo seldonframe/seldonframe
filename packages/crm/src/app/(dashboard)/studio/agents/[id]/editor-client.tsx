@@ -1531,13 +1531,22 @@ function ConnectorsCard({
         </p>
       )}
 
-      {/* Composio apps — per-agent managed-app picker (Phase 3) */}
+      {/* Apps & tools — per-agent managed-app picker (Phase 3) + the vetted
+          Postiz "post to social" tool. */}
       <ComposioAppsSection
         templateId={templateId}
         catalog={composioCatalog}
         initialEnabled={composioEnabledToolkits}
         onChanged={() => router.refresh()}
         disabled={isVoice}
+        postizBound={connectors.some(
+          (b) => b.kind === "vetted" && b.id === "postiz",
+        )}
+        onAddPostiz={() => {
+          setChoice("postiz");
+          setBindError(null);
+          setAdding(true);
+        }}
       />
 
       {/* Bound connectors */}
@@ -1683,6 +1692,8 @@ function ComposioAppsSection({
   initialEnabled,
   onChanged,
   disabled = false,
+  postizBound = false,
+  onAddPostiz,
 }: {
   templateId: string;
   catalog: ComposioToolkitOption[];
@@ -1690,6 +1701,13 @@ function ComposioAppsSection({
   onChanged: () => void;
   /** Voice templates can't run connectors — render the picker greyed + inert. */
   disabled?: boolean;
+  /** Is the vetted Postiz connector already bound on this template? Drives the
+   *  Postiz chip's on/off state. */
+  postizBound?: boolean;
+  /** Open the add-connector flow pre-selected to Postiz (Postiz is a vetted
+   *  connector — it needs an API key, so it can't be silently toggled like a
+   *  Composio toolkit). No-op when Postiz is already bound. */
+  onAddPostiz?: () => void;
 }) {
   const [enabled, setEnabled] = useState<string[]>(initialEnabled);
   const [busy, startBusy] = useTransition();
@@ -1746,7 +1764,7 @@ function ComposioAppsSection({
         </span>
         <div className="min-w-0 flex-1">
           <h3 className="flex items-center gap-2 text-sm font-semibold text-foreground">
-            Composio apps
+            Apps &amp; tools
             {disabled && (
               <span className="text-[11px] font-normal text-muted-foreground">
                 (not used on voice)
@@ -1759,8 +1777,7 @@ function ComposioAppsSection({
             )}
           </h3>
           <p className="mt-0.5 text-xs text-muted-foreground">
-            Pick the apps this agent may act in (Gmail, Calendar, Slack, HubSpot
-            …). Connect the accounts once in{" "}
+            Pick what this agent can do — connect the accounts once in{" "}
             <Link
               href="/integrations"
               className="font-medium underline underline-offset-2 hover:opacity-80"
@@ -1796,6 +1813,32 @@ function ComposioAppsSection({
             </button>
           );
         })}
+
+        {/* Postiz — a first-class "post to social" tool. It's a VETTED connector
+            (needs an API key), so the chip opens the add-connector flow rather
+            than toggling like a managed Composio app. Shows as enabled once
+            bound. */}
+        <button
+          type="button"
+          onClick={() => {
+            if (disabled || postizBound) return;
+            onAddPostiz?.();
+          }}
+          disabled={busy || disabled || postizBound}
+          aria-pressed={postizBound}
+          className={`inline-flex items-center gap-1.5 rounded-full border px-3 py-1.5 text-xs font-medium transition-colors disabled:opacity-60 ${
+            postizBound
+              ? "border-indigo-500/40 bg-indigo-500/10 text-indigo-600 dark:text-indigo-300"
+              : "bg-background text-muted-foreground hover:bg-muted/50"
+          }`}
+        >
+          {postizBound ? (
+            <Check className="size-3.5" aria-hidden />
+          ) : (
+            <Plus className="size-3.5" aria-hidden />
+          )}
+          Post to social (Postiz)
+        </button>
       </div>
 
       {error && (
@@ -1830,7 +1873,7 @@ function ConnectorRow({
         ? "Postiz"
         : binding.id
       : binding.kind === "composio"
-        ? `Composio: ${binding.enabledToolkits.join(", ") || "apps"}`
+        ? `Apps: ${binding.enabledToolkits.join(", ") || "apps"}`
         : `Custom: ${hostOf(binding.endpoint)}`;
 
   const toggleTool = (name: string) => {

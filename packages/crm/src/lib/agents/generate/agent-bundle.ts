@@ -94,6 +94,34 @@ function fallbackBaseBlueprint(): AgentBlueprint {
   };
 }
 
+// ─── outbound-task fallback (scheduled / event poster, no starter) ───────────
+
+/** A minimal, safe base for an OUTBOUND automated task (e.g. a social poster)
+ *  that has no starter template. Unlike the inbound fallback there's no greeting
+ *  and no conversational capabilities — the agent isn't answering anyone, it runs
+ *  on a trigger and does exactly what the operator's folded instruction says. The
+ *  anti-hallucination ground rule mirrors the house tone so a poster never
+ *  fabricates content. The operator's sentence is appended by foldPromptHint. */
+const OUTBOUND_TASK_PROMPT = `You are an automated agent for a local business. Each time you run, do exactly what the operator instructs below. Never fabricate facts, reviews, prices, or quotes — only use real content. Keep it on-brand and concise.`;
+
+/** The outbound-task base blueprint (deep-copied semantics — it's a fresh object
+ *  per call). No greeting, empty capabilities — see OUTBOUND_TASK_PROMPT. */
+function outboundTaskBaseBlueprint(): AgentBlueprint {
+  return {
+    capabilities: [],
+    customSkillMd: OUTBOUND_TASK_PROMPT,
+  };
+}
+
+/** Should the intent use the OUTBOUND-task base (vs. the inbound fallback) when
+ *  it has no starter? Yes when the skill is the known outbound "social-poster",
+ *  or when the trigger fires on a schedule/event (a non-conversational agent).
+ *  An inbound/unknown skill keeps the conversational inbound fallback. */
+function wantsOutboundBase(skill: string, trigger: AgentTrigger): boolean {
+  if (skill === "social-poster") return true;
+  return trigger.kind === "schedule" || trigger.kind === "event";
+}
+
 // ─── helpers ─────────────────────────────────────────────────────────────────
 
 /** Deep-clone a value so the assembler never mutates a shared source object
@@ -208,14 +236,22 @@ export function assembleAgentBundle(
   const starter = starterForSkill(skill);
   const known = starter !== undefined;
 
-  // 1. base blueprint (deep copy so the source is never mutated).
-  const blueprint: AgentBlueprint = known
-    ? (deepClone(starter!.blueprint) as AgentBlueprint)
-    : fallbackBaseBlueprint();
-
   // 2. trigger — resolveAgentTrigger clamps a malformed shape to the inbound
   //    default, so a bad classification can never produce an illegal trigger.
+  //    Resolved BEFORE the base so a no-starter skill can pick the right base
+  //    (outbound automated task vs. inbound chat fallback) from the trigger.
   const trigger = resolveAgentTrigger(intent.trigger);
+
+  // 1. base blueprint (deep copy so the source is never mutated). A skill with a
+  //    starter uses it; otherwise pick the OUTBOUND-task base for a scheduled/
+  //    event agent (e.g. social-poster) or the conversational inbound fallback.
+  const outbound = !known && wantsOutboundBase(skill, trigger);
+  const blueprint: AgentBlueprint = known
+    ? (deepClone(starter!.blueprint) as AgentBlueprint)
+    : outbound
+      ? outboundTaskBaseBlueprint()
+      : fallbackBaseBlueprint();
+
   blueprint.trigger = trigger;
 
   // 5. resolve the review URL once (ctx wins over the intent's hint).
@@ -269,7 +305,9 @@ export function assembleAgentBundle(
   }
   if (!known) {
     warnings.push(
-      `Unrecognized skill '${skill}' — generated a safe inbound assistant; review before publishing.`,
+      outbound
+        ? `Generated a safe automated-task agent for '${skill}' — review the instructions and connect any tools before publishing.`
+        : `Unrecognized skill '${skill}' — generated a safe inbound assistant; review before publishing.`,
     );
   }
   // Tool-binding warnings (empty in the pure layer; reserved for the action layer).

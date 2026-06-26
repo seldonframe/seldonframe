@@ -393,3 +393,97 @@ describe("assembleAgentBundle — tool binding", () => {
     assert.equal(new Set(ids).size, ids.length, "connectors must be deduped");
   });
 });
+
+// ─── outbound-task fallback (social-poster / scheduled, FIX 2) ────────────────
+//
+// A social-poster (no starter, schedule trigger) must NOT fall to the inbound
+// chat assistant prose (greeting + booking/escalate). It gets a minimal outbound
+// base: no greeting, empty capabilities, an anti-hallucination instruction, and
+// the operator's sentence folded in exactly once. Postiz is bound from the
+// "instagram" keyword. The recognized skills keep their bases byte-for-byte.
+
+describe("assembleAgentBundle — outbound-task fallback (social-poster)", () => {
+  const socialIntent: AgentIntent = {
+    skill: "social-poster",
+    trigger: { kind: "schedule", cron: "0 9 * * 1", channel: "digest" },
+    promptHint: "Post a weekly Instagram highlight of our 5-star reviews",
+  };
+
+  test("uses the outbound base — no greeting, empty capabilities", () => {
+    const b = assembleAgentBundle(socialIntent);
+    assert.equal(b.blueprint.greeting, undefined, "outbound poster has no greeting");
+    assert.deepEqual(
+      b.blueprint.capabilities,
+      [],
+      "outbound poster has empty capabilities (no escalate/booking)",
+    );
+  });
+
+  test("base prose is the outbound automated-task instruction, NOT the inbound assistant", () => {
+    const b = assembleAgentBundle(socialIntent);
+    const md = b.blueprint.customSkillMd ?? "";
+    assert.ok(/automated agent/i.test(md), "expected the automated-task base prose");
+    assert.ok(
+      /never fabricate/i.test(md),
+      "expected the anti-hallucination ground rule",
+    );
+    // It must NOT be the inbound chat fallback prose.
+    assert.ok(
+      !/helpful inbound assistant/i.test(md),
+      "must not use the inbound chat fallback prose",
+    );
+  });
+
+  test("the operator's sentence is folded into the prompt EXACTLY ONCE", () => {
+    const b = assembleAgentBundle(socialIntent);
+    const md = b.blueprint.customSkillMd ?? "";
+    const needle = "Post a weekly Instagram highlight of our 5-star reviews";
+    const occurrences = md.split(needle).length - 1;
+    assert.equal(occurrences, 1, `expected the sentence exactly once, got ${occurrences}`);
+  });
+
+  test("binds the vetted Postiz connector", () => {
+    const b = assembleAgentBundle(socialIntent);
+    assert.ok(b.blueprint.connectors, "expected connectors");
+    const postiz = b.blueprint.connectors.find((c) => c.id === "postiz");
+    assert.ok(postiz && postiz.kind === "vetted", "expected a vetted Postiz binding");
+    assert.equal(
+      postiz.kind === "vetted" ? postiz.serviceName : undefined,
+      "postiz",
+    );
+  });
+
+  test("the schedule trigger from the intent is preserved", () => {
+    const b = assembleAgentBundle(socialIntent);
+    assert.deepEqual(b.blueprint.trigger, {
+      kind: "schedule",
+      cron: "0 9 * * 1",
+      channel: "digest",
+    });
+  });
+
+  test("a non-social scheduled skill also gets the outbound base (no greeting)", () => {
+    // Any no-starter agent firing on a schedule is non-conversational → outbound.
+    const b = assembleAgentBundle({
+      skill: "weekly-digest",
+      trigger: { kind: "schedule", cron: "0 9 * * 1", channel: "digest" },
+      promptHint: "send me a weekly recap of new leads",
+    });
+    assert.equal(b.blueprint.greeting, undefined);
+    assert.deepEqual(b.blueprint.capabilities, []);
+  });
+
+  test("an unknown INBOUND skill still uses the conversational fallback (greeting present)", () => {
+    // Regression guard: only schedule/event (or social-poster) → outbound. An
+    // unknown inbound skill keeps the inbound chat assistant base.
+    const b = assembleAgentBundle({
+      skill: "underwater-basket-weaver",
+      trigger: { kind: "inbound", channel: "chat" },
+    });
+    assert.ok(
+      typeof b.blueprint.greeting === "string" && b.blueprint.greeting.length > 0,
+      "inbound fallback keeps a greeting",
+    );
+    assert.deepEqual(b.blueprint.capabilities, ["escalate_to_human"]);
+  });
+});

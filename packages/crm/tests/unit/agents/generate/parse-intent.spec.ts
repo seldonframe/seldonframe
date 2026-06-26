@@ -22,6 +22,57 @@ import {
   type AgentIntent,
 } from "../../../../src/lib/agents/generate/parse-intent";
 
+// ─── heuristicIntent — social-poster (priority #1) ───────────────────────────
+
+describe("heuristicIntent — social-poster", () => {
+  test("the misfire sentence → social-poster + weekly schedule (NOT review-requester)", () => {
+    // The exact sentence that used to wrongly clone the review-requester because
+    // /review/ matched "5-star reviews". It must now classify as a social poster.
+    const s = "Post a weekly Instagram highlight of our 5-star reviews";
+    const i = heuristicIntent(s);
+    assert.equal(i.skill, "social-poster");
+    assert.deepEqual(i.trigger, {
+      kind: "schedule",
+      cron: "0 9 * * 1",
+      channel: "digest",
+    });
+    // promptHint = the original sentence → a Postiz binding is derivable from it
+    // ("instagram" keyword), and the assembler folds it into the prompt.
+    assert.equal(i.promptHint, s);
+    assert.ok(/instagram/i.test(i.promptHint ?? ""), "promptHint keeps 'Instagram' for Postiz binding");
+    // a sensible Title-Case name derived from the sentence (≤5 words)
+    assert.ok(typeof i.name === "string" && i.name.length > 0, "expected a derived name");
+    assert.ok(i.name!.split(" ").length <= 5, "name capped at ~5 words");
+    assert.ok(/instagram/i.test(i.name!), "name reflects the social network");
+  });
+
+  test("'post to Instagram' (post verb + network) → social-poster", () => {
+    const i = heuristicIntent("post to Instagram every Tuesday");
+    assert.equal(i.skill, "social-poster");
+    assert.equal(i.trigger.kind, "schedule");
+  });
+
+  test("'daily' cadence → cron 0 9 * * * (every day at 9am)", () => {
+    const i = heuristicIntent("publish a daily highlight reel to social media");
+    assert.equal(i.skill, "social-poster");
+    assert.deepEqual(i.trigger, {
+      kind: "schedule",
+      cron: "0 9 * * *",
+      channel: "digest",
+    });
+  });
+
+  test("a standalone cadence with no network still → social-poster (weekly)", () => {
+    const i = heuristicIntent("send me a weekly recap");
+    assert.equal(i.skill, "social-poster");
+    assert.deepEqual(i.trigger, {
+      kind: "schedule",
+      cron: "0 9 * * 1",
+      channel: "digest",
+    });
+  });
+});
+
 // ─── heuristicIntent — review-requester ──────────────────────────────────────
 
 describe("heuristicIntent — review-requester", () => {
@@ -33,6 +84,22 @@ describe("heuristicIntent — review-requester", () => {
       event: "booking.completed",
       channel: "sms",
     });
+  });
+
+  test("'text customers to ask for a Google review after a booking' → review-requester", () => {
+    // The canonical ask-for-review sentence MUST still match the tightened regex.
+    const i = heuristicIntent(
+      "text customers to ask for a Google review after a booking",
+    );
+    assert.equal(i.skill, "review-requester");
+    assert.equal((i.trigger as { event: string }).event, "booking.completed");
+  });
+
+  test("a bare 'reviews' mention with no ask-intent does NOT match review-requester", () => {
+    // "showcase our reviews on the website" mentions reviews but never ASKS for
+    // one — the tightened regex must not classify it as a review-requester.
+    const i = heuristicIntent("showcase our reviews on the website");
+    assert.notEqual(i.skill, "review-requester");
   });
 
   test("the original sentence is preserved as promptHint", () => {

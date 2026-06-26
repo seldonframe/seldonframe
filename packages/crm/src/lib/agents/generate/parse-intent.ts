@@ -35,9 +35,27 @@ export type { AgentIntent };
 
 // ─── keyword tables (priority order matters) ─────────────────────────────────
 
-/** Review-request intent: the operator wants to ask happy customers for a
- *  rating/review after a job. */
-const REVIEW_RE = /review/i;
+/** Social-posting intent — a POST verb aimed at a social network. The operator
+ *  wants the agent to publish/schedule content to social (Postiz). Matched FIRST
+ *  so a content sentence that merely mentions "reviews" ("post our 5-star
+ *  reviews") is classified as a poster, not a review-requester. */
+const POST_VERB_RE = /\b(post|publish|share|schedule)\b/i;
+const SOCIAL_NETWORK_RE = /\b(instagram|facebook|linkedin|tiktok|twitter|reels?|stories|social media|social)\b/i;
+
+/** A standalone cadence — "weekly", "every Monday", "daily", "recap". On its own
+ *  (no social network needed) it implies a scheduled/recap agent. */
+const CADENCE_RE = /\b(weekly|every week|every monday|daily|each (week|day)|recap)\b/i;
+
+/** "daily" → run at 9am every day; everything else (weekly / Monday / a bare
+ *  scheduled cadence) → 9am every Monday. */
+const DAILY_CADENCE_RE = /\b(daily|each day|every day)\b/i;
+
+/** Review-request intent: the operator wants to ASK happy customers for a
+ *  rating/review after a job. TIGHTENED — a bare "review" mention no longer
+ *  matches (so "post our 5-star reviews" is NOT a review-requester); the sentence
+ *  must express an ask-for-review intent. */
+const REVIEW_RE =
+  /\b(ask|request|get|collect|send|solicit)\b[^.]{0,40}\breviews?\b|\breview request\b|\breviews?\s+(from|after)\b/i;
 
 /** A few inbound phrasings strong enough to OVERRIDE a stray "review" mention
  *  (e.g. "answer the phone and route review requests"). Kept narrow so it never
@@ -65,12 +83,18 @@ const URL_RE = /https?:\/\/\S+/i;
  * Classify a sentence into a complete AgentIntent using pure keyword matching
  * (case-insensitive). PRIORITY ORDER (first match wins):
  *
- *   1. /review/ (and not clearly inbound) → review-requester, fires on
- *      booking.completed, channel sms|email.
- *   2. /lead|inquir|missed call|new customer|contact form/ → speed-to-lead,
+ *   1. social-posting / scheduled → social-poster, fires on a `schedule` cron
+ *      (digest channel). Triggered by a post-verb + a social network ("post to
+ *      Instagram"), OR a standalone cadence ("weekly", "daily recap"). Matched
+ *      FIRST so a content sentence that merely mentions "reviews" ("post our
+ *      5-star reviews") classifies as a poster — NOT a review-requester.
+ *   2. ask-for-review (and not clearly inbound) → review-requester, fires on
+ *      booking.completed, channel sms|email. TIGHTENED: a bare "review" mention
+ *      no longer matches; the sentence must ASK for a review.
+ *   3. /lead|inquir|missed call|new customer|contact form/ → speed-to-lead,
  *      fires on lead.created, channel sms|email.
- *   3. /answer|reception|phone|call/ → receptionist, inbound voice.
- *   4. default → receptionist, inbound chat.
+ *   4. /answer|reception|phone|call/ → receptionist, inbound voice.
+ *   5. default → receptionist, inbound chat.
  *
  * The matched trigger is always run through resolveAgentTrigger so the returned
  * intent's trigger is guaranteed valid. promptHint carries the original sentence
@@ -88,8 +112,18 @@ export function heuristicIntent(sentence: string): AgentIntent {
   // The skill + the (pre-resolution) trigger, decided by priority order.
   let skill: string;
   let trigger: AgentTrigger;
+  // A social-poster gets a short Title-Case name derived from the sentence; the
+  // other skills keep the starter's name (so `name` stays undefined here).
+  let name: string | undefined;
 
-  if (REVIEW_RE.test(text) && !CLEARLY_INBOUND_RE.test(text)) {
+  const isSocialPost = POST_VERB_RE.test(text) && SOCIAL_NETWORK_RE.test(text);
+  const isCadence = CADENCE_RE.test(text);
+
+  if (isSocialPost || isCadence) {
+    skill = "social-poster";
+    trigger = { kind: "schedule", cron: deriveCron(text), channel: "digest" };
+    name = deriveSocialName(text);
+  } else if (REVIEW_RE.test(text) && !CLEARLY_INBOUND_RE.test(text)) {
     skill = "review-requester";
     trigger = { kind: "event", event: "booking.completed", channel };
   } else if (LEAD_RE.test(text)) {
@@ -110,6 +144,7 @@ export function heuristicIntent(sentence: string): AgentIntent {
     trigger: resolveAgentTrigger(trigger),
     promptHint: text,
   };
+  if (name) intent.name = name;
   if (reviewUrl) intent.businessHints = { reviewUrl };
 
   return intent;
@@ -200,6 +235,39 @@ export function mergeIntent(
 }
 
 // ─── helpers ─────────────────────────────────────────────────────────────────
+
+/** Derive a cron string for a social-poster/scheduled agent from the sentence.
+ *  "daily" → `0 9 * * *` (9am every day); weekly / Monday / any other recognized
+ *  cadence (and the default) → `0 9 * * 1` (9am every Monday). PURE. */
+function deriveCron(text: string): string {
+  return DAILY_CADENCE_RE.test(text) ? "0 9 * * *" : "0 9 * * 1";
+}
+
+/** Filler words stripped when naming a social-poster from its sentence. */
+const NAME_FILLER = new Set([
+  "a","an","the","of","our","my","your","their","to","for","and","or","on","in",
+  "at","with","into","from","each","every","please","post","posts","posting",
+  "publish","share","schedule","auto","automatically","that","this","we","i",
+  "highlight","highlights",
+]);
+
+/** Derive a short Title-Case label (≤5 words) for a social-poster from the
+ *  operator's sentence — strip filler, keep the salient nouns, cap length. Falls
+ *  back to "Social Post" when nothing salient survives. PURE; never throws.
+ *  e.g. "Post a weekly Instagram highlight of our 5-star reviews" →
+ *  "Weekly Instagram 5 Star Reviews". */
+function deriveSocialName(text: string): string {
+  const words = (typeof text === "string" ? text : "")
+    .replace(/[^\p{L}\p{N}\s-]/gu, " ") // drop punctuation, keep letters/digits/hyphen
+    .split(/[\s-]+/)
+    .filter(Boolean)
+    .filter((w) => !NAME_FILLER.has(w.toLowerCase()));
+  const kept = words.slice(0, 5);
+  if (kept.length === 0) return "Social Post";
+  return kept
+    .map((w) => w.charAt(0).toUpperCase() + w.slice(1).toLowerCase())
+    .join(" ");
+}
 
 /** Pull the first http(s) URL out of a sentence and strip trailing punctuation
  *  (so "...see https://g.page/r/abc/review." → ".../review", no dot). Returns
