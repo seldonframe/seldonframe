@@ -125,6 +125,14 @@ export type AgentBlueprint = {
    *  deployment's own `booking_policy` over this, then over the system defaults.
    *  Stored in the jsonb blueprint — no migration. */
   defaultBookingPolicy?: Partial<import("@/lib/agents/booking/booking-policy").BookingPolicy>;
+  /** 2026-06-25 (unified agent model P1) — what FIRES this agent. An agent is
+   *  Trigger × Skill × Channel; the legacy `channel`/`surface` axis is just the
+   *  inbound point of that space. When set, resolveAgentTrigger uses this; when
+   *  absent it falls back to the `surface`/inbound default (today's behavior,
+   *  byte-for-byte). The resolver CLAMPS any malformed shape, so this is a loose
+   *  hint, not the final guard. Stored in the jsonb blueprint — no migration.
+   *  See lib/agents/triggers/agent-trigger.ts. */
+  trigger?: import("@/lib/agents/triggers/agent-trigger").AgentTrigger;
 };
 
 export const agents = pgTable(

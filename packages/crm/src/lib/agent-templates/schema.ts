@@ -86,6 +86,21 @@ export const TemplateBlueprintPatchSchema = z
       })
       .strict()
       .optional(),
+    // What FIRES this agent (unified agent model P1). The three-arm Trigger
+    // shape: inbound (a call/chat/email/SMS arrives), event (a domain event
+    // fires → outbound), or schedule (a cron cadence fires). LOOSE on purpose —
+    // we accept the shape and let resolveAgentTrigger clamp anything malformed
+    // (wrong channel-for-kind, blank event/cron) to the inbound default at
+    // runtime. Mirrors AgentBlueprint.trigger (jsonb — no migration).
+    trigger: z
+      .object({
+        kind: z.enum(["inbound", "event", "schedule"]),
+        channel: z.string().min(1),
+        event: z.string().optional(),
+        cron: z.string().optional(),
+      })
+      .strict()
+      .optional(),
   })
   .strict();
 
