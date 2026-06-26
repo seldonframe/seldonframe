@@ -43,8 +43,7 @@ import {
   PortalInviteButton,
   CancelButton,
   ConnectCalendarButton,
-  BookingRulesSection,
-  CustomizationSection,
+  ConfigureSection,
   ReviewLinkSection,
 } from "./activate-form";
 
@@ -231,25 +230,17 @@ export default async function StudioClientsPage({
                         )}
                       </div>
 
-                      {/* F1 — booking rules ONLY for agents that BOOK. An OUTBOUND
-                          agent (event/schedule) never books, so we hide the panel
-                          and show a small note instead. external_link hands the
-                          booking off to the client's own page (also no rules). For
-                          everyone else: the per-client booking-rules panel, seeded
-                          with the EFFECTIVE policy (deployment override ?? system
-                          defaults; the template default + workspace tz aren't
-                          fetched on this list query, and the resolver fills them
-                          safely). */}
-                      {d.isOutbound ? (
+                      {/* F1 — an OUTBOUND agent (event/schedule) never books, so we
+                          show a small note instead of booking rules. Its per-client
+                          Google review link — the single most important field for a
+                          review-requester to fire — stays surfaced INLINE here (with
+                          an edit affordance, or a warning when unset), never hidden
+                          behind the Configure disclosure below. */}
+                      {d.isOutbound && (
                         <>
                           <p className="mt-3 border-t pt-3 text-[11px] text-muted-foreground">
                             This agent doesn&apos;t take bookings — it sends on an event.
                           </p>
-                          {/* The per-client Google review link — the single most
-                              important field for a review-requester to fire. Shown
-                              inline with an edit affordance (or a warning when
-                              unset). Seeded with the deployment's stored
-                              customization (null = none yet). */}
                           {isReviewRequester && (
                             <ReviewLinkSection
                               deploymentId={d.id}
@@ -257,36 +248,44 @@ export default async function StudioClientsPage({
                             />
                           )}
                         </>
-                      ) : (
-                        d.bookingMode !== "external_link" && (
-                          <BookingRulesSection
-                            deploymentId={d.id}
-                            initialPolicy={resolveBookingPolicy(
-                              d.bookingPolicy ?? null,
-                              null,
-                              undefined,
-                            )}
-                          />
-                        )
                       )}
 
-                      {/* Per-agent customization — greeting / TTS voice / business
-                          info, for every agent that SPEAKS: a conversational
-                          surface (phone / embed / link). The text-only surfaces
-                          (sms / email) don't get a spoken persona here, and neither
-                          do OUTBOUND agents (event/schedule — they compose a
-                          message, not a live voice). Seed with the deployment's
-                          stored customization (null = no override → template
-                          defaults). */}
-                      {!d.isOutbound &&
-                        (d.surface === "phone" ||
-                          d.surface === "embed" ||
-                          d.surface === "link") && (
-                          <CustomizationSection
-                            deploymentId={d.id}
-                            initial={d.customization ?? null}
-                          />
+                      {/* R3 — ONE "Configure" affordance per agent row: a collapsed
+                          disclosure that edits THIS deployment's per-client settings
+                          inline (no page leave), plus an "Edit agent template →" link
+                          for template-level config. Each flag scopes what the panel
+                          shows:
+                            • customization (greeting / voice / review link / business
+                              info) — agents that SPEAK (phone / embed / link); the
+                              text-only surfaces (sms / email) + OUTBOUND agents don't
+                              get a spoken persona;
+                            • booking rules — agents that BOOK (native / api_mcp /
+                              cal_com); external_link hands booking to the client's own
+                              page (no rules) and OUTBOUND never books.
+                          The booking-rules editor is seeded with the EFFECTIVE policy
+                          (deployment override ?? system defaults; the template default
+                          + workspace tz aren't on this list query, and the resolver
+                          fills them safely). Every control is keyed to d.id, so the
+                          grouped agents on one client card never cross saves. */}
+                      <ConfigureSection
+                        deploymentId={d.id}
+                        agentTemplateId={d.agentTemplateId}
+                        showCustomization={
+                          !d.isOutbound &&
+                          (d.surface === "phone" ||
+                            d.surface === "embed" ||
+                            d.surface === "link")
+                        }
+                        customization={d.customization ?? null}
+                        showBookingRules={
+                          !d.isOutbound && d.bookingMode !== "external_link"
+                        }
+                        bookingPolicy={resolveBookingPolicy(
+                          d.bookingPolicy ?? null,
+                          null,
+                          undefined,
                         )}
+                      />
                     </li>
                   );
                 })}

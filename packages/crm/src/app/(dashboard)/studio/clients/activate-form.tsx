@@ -25,7 +25,7 @@
 
 import { useState, useTransition } from "react";
 import Link from "next/link";
-import { Phone, Pause, Loader2, ChevronDown, ChevronUp, Sparkles, KeyRound, Trash2, CalendarClock, Link2, Check, SlidersHorizontal, Send, Star, AlertTriangle, Pencil } from "lucide-react";
+import { Phone, Pause, Loader2, ChevronDown, ChevronUp, Sparkles, KeyRound, Trash2, CalendarClock, Link2, Check, SlidersHorizontal, Send, Star, AlertTriangle, Pencil, Wrench, ArrowRight } from "lucide-react";
 import {
   activateDeploymentAction,
   activateOutboundDeploymentAction,
@@ -750,95 +750,6 @@ export function PortalInviteButton({
   );
 }
 
-// ─── BookingRulesSection ───────────────────────────────────────────────────────
-//
-// A collapsible "Booking rules" panel wrapping the reusable BookingPolicyEditor,
-// shown on a deployment card for every agent that BOOKS (native / api_mcp /
-// cal_com). external_link is excluded by the caller (page.tsx) — that agent hands
-// the booking off to the client's own page, so there are no rules to tune here.
-//
-// The panel is collapsed by default (these are advanced, rarely-touched knobs);
-// the toggle button mirrors the file's other expandable controls (ChevronDown/Up
-// + muted label chrome). The editor is seeded with the EFFECTIVE policy resolved
-// server-side in page.tsx, so the operator sees the values actually in force.
-
-type BookingRulesSectionProps = {
-  deploymentId: string;
-  /** The resolved effective policy (resolveBookingPolicy(...) from page.tsx). */
-  initialPolicy: BookingPolicy;
-};
-
-export function BookingRulesSection({
-  deploymentId,
-  initialPolicy,
-}: BookingRulesSectionProps) {
-  const [open, setOpen] = useState(false);
-
-  return (
-    <div className="mt-3 border-t pt-3">
-      <button
-        type="button"
-        onClick={() => setOpen((v) => !v)}
-        aria-expanded={open}
-        className="flex items-center gap-1.5 text-[11px] font-medium uppercase tracking-wide text-muted-foreground hover:text-foreground"
-      >
-        <SlidersHorizontal className="size-3" aria-hidden />
-        Booking rules
-        {open ? <ChevronUp className="size-3" /> : <ChevronDown className="size-3" />}
-      </button>
-      {open && (
-        <div className="mt-3">
-          <BookingPolicyEditor deploymentId={deploymentId} initial={initialPolicy} />
-        </div>
-      )}
-    </div>
-  );
-}
-
-// ─── CustomizationSection ──────────────────────────────────────────────────────
-//
-// A collapsible "Agent customization" panel wrapping the reusable
-// DeploymentCustomizationEditor, shown on a deployment card for every agent that
-// SPEAKS (a conversational surface — phone / embed / link). The text-only
-// surfaces (sms / email) and non-conversational cases are excluded by the caller
-// (page.tsx). Sits NEXT TO "Booking rules" and mirrors its chrome exactly:
-// collapsed by default, the same ChevronDown/Up + muted label toggle. The editor
-// is seeded with the deployment's stored `customization` (passed from page.tsx).
-
-type CustomizationSectionProps = {
-  deploymentId: string;
-  /** The deployment's stored customization (sparse Partial) — null = no override
-   *  yet (→ the template's defaults). */
-  initial: Partial<DeploymentCustomization> | null;
-};
-
-export function CustomizationSection({
-  deploymentId,
-  initial,
-}: CustomizationSectionProps) {
-  const [open, setOpen] = useState(false);
-
-  return (
-    <div className="mt-3 border-t pt-3">
-      <button
-        type="button"
-        onClick={() => setOpen((v) => !v)}
-        aria-expanded={open}
-        className="flex items-center gap-1.5 text-[11px] font-medium uppercase tracking-wide text-muted-foreground hover:text-foreground"
-      >
-        <Sparkles className="size-3" aria-hidden />
-        Agent customization
-        {open ? <ChevronUp className="size-3" /> : <ChevronDown className="size-3" />}
-      </button>
-      {open && (
-        <div className="mt-3">
-          <DeploymentCustomizationEditor deploymentId={deploymentId} initial={initial} />
-        </div>
-      )}
-    </div>
-  );
-}
-
 // ─── ReviewLinkSection ─────────────────────────────────────────────────────────
 //
 // The per-client Google review link, surfaced INLINE on a review-requester
@@ -990,6 +901,122 @@ export function ReviewLinkSection({ deploymentId, initial }: ReviewLinkSectionPr
             Business Profile → Reviews → Get more reviews / Share review form.
           </p>
           {error && <p className="text-[11px] text-rose-600 dark:text-rose-400">{error}</p>}
+        </div>
+      )}
+    </div>
+  );
+}
+
+// ─── ConfigureSection ──────────────────────────────────────────────────────────
+//
+// R3 — ONE "Configure" affordance per agent row that lets the operator edit that
+// agent's PER-CLIENT settings inline, without leaving the Clients page. It is the
+// single collapsed disclosure that replaces the separate "Agent customization" +
+// "Booking rules" toggles the card used to render side-by-side: collapsed by
+// default, it expands to the editors that APPLY to this deployment —
+//
+//   • the persona override (DeploymentCustomizationEditor — greeting / voice /
+//     review link / business info) for an agent that SPEAKS (phone / embed /
+//     link); and
+//   • the per-client booking rules (BookingPolicyEditor) for an agent that BOOKS
+//     (native / api_mcp / cal_com — external_link + outbound are excluded by the
+//     caller, which passes the right flags).
+//
+// Those are the PER-CLIENT overrides, edited in place. TEMPLATE-level config (the
+// skill/prompt itself, send-timing, the trigger) is NOT a per-client tweak, so it
+// gets a secondary "Edit agent template →" link to the template editor
+// (/studio/agents/<agentTemplateId>) instead — always shown, so even an outbound
+// agent with no inline overrides still has a clear path to its template.
+//
+// Every control stays keyed to THIS deployment id (the editors take it as a prop),
+// so grouping several agents under one client card never crosses their saves. The
+// review-requester's Google-review link stays surfaced INLINE on the row (its own
+// ReviewLinkSection, above) — it's the one field that must be set for the agent to
+// fire, so it is never hidden behind this disclosure.
+
+type ConfigureSectionProps = {
+  deploymentId: string;
+  /** The template this deployment runs — the "Edit agent template →" target. */
+  agentTemplateId: string;
+  /** Show the persona editor (a speaking surface: phone / embed / link). */
+  showCustomization: boolean;
+  /** The deployment's stored persona override — seeds the customization editor. */
+  customization: Partial<DeploymentCustomization> | null;
+  /** Show the booking-rules editor (a booking surface; never for external_link /
+   *  outbound — the caller decides). */
+  showBookingRules: boolean;
+  /** The resolved effective booking policy — seeds the booking-rules editor. */
+  bookingPolicy: BookingPolicy;
+};
+
+export function ConfigureSection({
+  deploymentId,
+  agentTemplateId,
+  showCustomization,
+  customization,
+  showBookingRules,
+  bookingPolicy,
+}: ConfigureSectionProps) {
+  const [open, setOpen] = useState(false);
+
+  return (
+    <div className="mt-3 border-t pt-3">
+      <button
+        type="button"
+        onClick={() => setOpen((v) => !v)}
+        aria-expanded={open}
+        className="flex items-center gap-1.5 text-[11px] font-medium uppercase tracking-wide text-muted-foreground hover:text-foreground"
+      >
+        <Wrench className="size-3" aria-hidden />
+        Configure
+        {open ? <ChevronUp className="size-3" /> : <ChevronDown className="size-3" />}
+      </button>
+
+      {open && (
+        <div className="mt-3 space-y-5">
+          {/* Per-client persona overrides — greeting / voice / review link /
+              business info. Only for a speaking surface. */}
+          {showCustomization && (
+            <div>
+              <p className="mb-2 flex items-center gap-1.5 text-[11px] font-medium uppercase tracking-wide text-muted-foreground">
+                <Sparkles className="size-3" aria-hidden />
+                Agent customization
+              </p>
+              <DeploymentCustomizationEditor
+                deploymentId={deploymentId}
+                initial={customization}
+              />
+            </div>
+          )}
+
+          {/* Per-client booking rules — slot length / hours / buffer / required
+              fields. Only for a booking surface. */}
+          {showBookingRules && (
+            <div className={showCustomization ? "border-t pt-4" : undefined}>
+              <p className="mb-2 flex items-center gap-1.5 text-[11px] font-medium uppercase tracking-wide text-muted-foreground">
+                <SlidersHorizontal className="size-3" aria-hidden />
+                Booking rules
+              </p>
+              <BookingPolicyEditor deploymentId={deploymentId} initial={bookingPolicy} />
+            </div>
+          )}
+
+          {/* Template-level config (skill / prompt / send-timing / trigger) is NOT
+              a per-client override — it lives in the template editor. Always shown
+              so every agent has a path there, even one with no inline overrides. */}
+          <div className={showCustomization || showBookingRules ? "border-t pt-4" : undefined}>
+            <Link
+              href={`/studio/agents/${agentTemplateId}`}
+              className="inline-flex items-center gap-1 text-xs font-medium text-primary underline-offset-2 hover:underline"
+            >
+              Edit agent template
+              <ArrowRight className="size-3" aria-hidden />
+            </Link>
+            <p className="mt-1 text-[11px] text-muted-foreground">
+              Change the skill, prompt, send-timing, or trigger — applies to every
+              client running this agent.
+            </p>
+          </div>
         </div>
       )}
     </div>

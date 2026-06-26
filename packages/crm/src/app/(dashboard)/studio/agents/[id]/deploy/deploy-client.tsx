@@ -163,11 +163,20 @@ export function DeployFlowClient({
   // clicked Deploy on, so step 1 just confirms it (no roster, no switcher).
   const templateId = initialTemplateId;
 
-  // Step 2 — NEW client vs. ATTACH to an existing one (F3). Defaults to "new"
-  // (today's behavior). "existing" reveals the client picker and attaches the new
-  // agent to that client's workspace — no duplicate client, no second number.
+  // Step 2 — NEW client vs. ATTACH to an existing one (F3). R4: when the builder
+  // already has attachable clients, DEFAULT to "existing" (pre-selected) so the
+  // happy path ATTACHES the new agent to an existing client — deploying a 2nd
+  // agent to "Acme Plumbing" joins the existing org instead of silently spawning a
+  // duplicate 3rd client (the bug seen live). With no existing clients yet there's
+  // nothing to attach to, so it stays "new". "New client" remains one click away
+  // via the toggle, so creating a fresh client is an explicit choice, not the
+  // accidental default.
   const hasExistingClients = existingClients.length > 0;
-  const [clientMode, setClientMode] = useState<"new" | "existing">("new");
+  const [clientMode, setClientMode] = useState<"new" | "existing">(
+    hasExistingClients ? "existing" : "new",
+  );
+  // Pre-select the first (most-recent — the list is newest-first) client, so the
+  // attach target is already chosen the moment the existing path is the default.
   const [existingClientOrgId, setExistingClientOrgId] = useState<string>(
     existingClients[0]?.clientOrgId ?? "",
   );
