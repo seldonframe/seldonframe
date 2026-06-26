@@ -32,12 +32,15 @@ import {
 import { getStarterTemplate } from "../../../../src/lib/agent-templates/starter-pack";
 import type { AgentIntent } from "../../../../src/lib/agents/generate/parse-intent";
 import { parseClassification } from "../../../../src/lib/agents/generate/classify-llm";
+import { makeLlmAgentGrader } from "../../../../src/lib/agents/generate/judge-llm";
+import type { AgentBundle } from "../../../../src/lib/agents/generate/agent-bundle";
 
 // ─── a capturing fake of the injected deps ────────────────────────────────────
 
 function makeDeps(over: {
   orgId?: string | null;
   classify?: GenerateDeps["classify"];
+  judge?: GenerateDeps["judge"];
   createResult?: { ok: true; id: string } | { ok: false; error: string };
 } = {}): {
   deps: GenerateDeps;
@@ -50,6 +53,7 @@ function makeDeps(over: {
       return over.orgId === undefined ? "builder-1" : over.orgId;
     },
     classify: over.classify,
+    judge: over.judge,
     create: async (input) => {
       calls.create.push(input);
       return over.createResult ?? { ok: true, id: "tmpl-new" };
@@ -296,5 +300,182 @@ describe("parseClassification — defensive JSON parse (no network)", () => {
     const out = parseClassification('{"skill":123,"name":"X"}');
     assert.equal(out.skill, undefined);
     assert.equal(out.name, "X");
+  });
+});
+
+// ─── the maker≠checker judge wired into the orchestrator (L5.2 T5) ────────────
+//
+// run-generate.ts runs the (optional, DI'd) judge AFTER the deterministic
+// assembler: an auto-fix lands on the created blueprint; an un-fixable issue
+// surfaces as a warning; NO judge dep is byte-for-byte today's behavior; and a
+// THROWING judge can never block a (safe) generation (judgeGeneratedAgent
+// fails-open). All with an in-memory fake grader — NO real LLM.
+
+describe("runGenerateAgentDraft — judge wiring (auto-fix)", () => {
+  test("a judge trigger fix is reflected in the CREATED template's blueprint", async () => {
+    // The receptionist sentence assembles an INBOUND/voice trigger; the fake
+    // judge rules the user actually wanted an event agent and supplies a
+    // low-risk trigger fix. The created blueprint must carry the FIXED trigger.
+    const judge: GenerateDeps["judge"] = async () => ({
+      ok: false,
+      issues: [
+        {
+          field: "trigger",
+          problem: "the sentence implies a post-booking event, not an inbound call",
+          fix: {
+            trigger: { kind: "event", event: "booking.completed", channel: "sms" },
+          },
+        },
+      ],
+    });
+    const { deps, calls } = makeDeps({ judge });
+
+    const result = await runGenerateAgentDraft(deps, {
+      sentence: "answer my phone when I miss a call",
+    });
+
+    assert.equal(result.ok, true);
+    assert.equal(calls.create.length, 1);
+    // the FIXED trigger landed on the persisted blueprint (not the inbound default)
+    assert.deepEqual(calls.create[0]!.blueprint.trigger, {
+      kind: "event",
+      event: "booking.completed",
+      channel: "sms",
+    });
+  });
+});
+
+describe("runGenerateAgentDraft — judge wiring (un-fixable issue → warning)", () => {
+  test("a judge issue WITHOUT a fix is surfaced in result.warnings", async () => {
+    const PROBLEM = "guardrails look empty for an outbound agent — review before publishing";
+    const judge: GenerateDeps["judge"] = async () => ({
+      ok: false,
+      issues: [{ field: "guardrails", problem: PROBLEM }],
+    });
+    const { deps, calls } = makeDeps({ judge });
+
+    const result = await runGenerateAgentDraft(deps, {
+      sentence: "ask customers for a google review",
+    });
+
+    assert.equal(result.ok, true);
+    if (!result.ok) return;
+    assert.ok(
+      result.warnings.includes(PROBLEM),
+      `expected the un-fixable issue surfaced as a warning, got: ${JSON.stringify(result.warnings)}`,
+    );
+    // an un-fixable issue must NOT mutate the persisted blueprint trigger
+    assert.deepEqual(calls.create[0]!.blueprint.trigger, {
+      kind: "event",
+      event: "booking.completed",
+      channel: "sms",
+    });
+  });
+});
+
+describe("runGenerateAgentDraft — NO judge dep is today's behavior (baseline)", () => {
+  test("without a judge, a fixable-looking sentence keeps the assembler's trigger + only assembler warnings", async () => {
+    // No judge passed. The receptionist sentence must keep its INBOUND/voice
+    // trigger (no judge to rewrite it) and surface ONLY the assembler's warnings.
+    const { deps, calls } = makeDeps(); // no judge
+    const result = await runGenerateAgentDraft(deps, {
+      sentence: "answer my phone when I miss a call",
+    });
+
+    assert.equal(result.ok, true);
+    if (!result.ok) return;
+    // assembler default trigger, untouched
+    assert.deepEqual(calls.create[0]!.blueprint.trigger, {
+      kind: "inbound",
+      channel: "voice",
+    });
+    // receptionist alias resolves cleanly → no unrecognized-skill warning, and
+    // (no judge) no judge-sourced warnings either.
+    assert.deepEqual(result.warnings, [], "no warnings without a judge");
+  });
+});
+
+describe("runGenerateAgentDraft — judge fails OPEN (never blocks)", () => {
+  test("a judge that THROWS still creates the agent (fail-open), blueprint persisted", async () => {
+    const judge: GenerateDeps["judge"] = async () => {
+      throw new Error("LLM judge down");
+    };
+    const { deps, calls } = makeDeps({ judge });
+
+    let result!: GenerateAgentDraftOutput;
+    await assert.doesNotReject(async () => {
+      result = await runGenerateAgentDraft(deps, {
+        sentence: "ask customers for a google review",
+      });
+    });
+
+    assert.equal(result.ok, true, "a throwing judge must not block generation");
+    assert.equal(calls.create.length, 1, "the bundle is still persisted");
+    // the assembler's blueprint survives intact (the throw is swallowed open)
+    assert.deepEqual(calls.create[0]!.blueprint.trigger, {
+      kind: "event",
+      event: "booking.completed",
+      channel: "sms",
+    });
+  });
+});
+
+// ─── makeLlmAgentGrader — real grader factory (defensive parse, fail-open) ────
+
+/** A minimal stand-in for the Anthropic client surface the grader touches
+ *  (`messages.create(...)` → `{ content: [{type:"text", text}] }`). Cast through
+ *  `unknown` to the grader's getClient return type — the grader only ever reads
+ *  the text blocks, so this narrow fake is sufficient. */
+function fakeAnthropicReturningText(text: string): ReturnType<
+  NonNullable<NonNullable<Parameters<typeof makeLlmAgentGrader>[0]>["getClient"]>
+> {
+  return {
+    messages: {
+      create: async () => ({ content: [{ type: "text", text }] }),
+    },
+  } as unknown as ReturnType<
+    NonNullable<NonNullable<Parameters<typeof makeLlmAgentGrader>[0]>["getClient"]>
+  >;
+}
+
+const INBOUND_BUNDLE: AgentBundle = {
+  name: "Front Desk",
+  description: "Answers inbound calls.",
+  blueprint: { trigger: { kind: "inbound", channel: "voice" } },
+  warnings: [],
+};
+
+describe("makeLlmAgentGrader — fails OPEN on a malformed model response", () => {
+  test("a fake client returning malformed JSON → { ok:true, issues:[] }", async () => {
+    // The response is NOT valid judge JSON. The grader must parse defensively and
+    // fail OPEN — never throw, never block.
+    const grader = makeLlmAgentGrader({
+      getClient: () => fakeAnthropicReturningText("totally not json {oops"),
+    });
+
+    const verdict = await grader({ sentence: "answer my phone", bundle: INBOUND_BUNDLE });
+
+    assert.equal(verdict.ok, true, "malformed JSON must fail OPEN");
+    assert.deepEqual(verdict.issues, []);
+  });
+
+  test("a fake client returning WELL-FORMED judge JSON → parsed through", async () => {
+    const grader = makeLlmAgentGrader({
+      getClient: () =>
+        fakeAnthropicReturningText(
+          '{"ok":false,"issues":[{"field":"trigger","problem":"mismatch"}]}',
+        ),
+    });
+    const verdict = await grader({ sentence: "answer my phone", bundle: INBOUND_BUNDLE });
+    assert.equal(verdict.ok, false);
+    assert.equal(verdict.issues.length, 1);
+    assert.equal(verdict.issues[0]!.field, "trigger");
+  });
+
+  test("no client (null) → { ok:true, issues:[] } (no key, generation proceeds)", async () => {
+    const grader = makeLlmAgentGrader({ getClient: () => null });
+    const verdict = await grader({ sentence: "ask for a review", bundle: INBOUND_BUNDLE });
+    assert.equal(verdict.ok, true);
+    assert.deepEqual(verdict.issues, []);
   });
 });

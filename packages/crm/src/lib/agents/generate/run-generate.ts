@@ -25,6 +25,11 @@ import {
   assembleAgentBundle,
   resolveSkillAlias,
 } from "@/lib/agents/generate/agent-bundle";
+import {
+  judgeGeneratedAgent,
+  applyJudgeFixes,
+  type AgentGrader,
+} from "@/lib/agents/generate/judge";
 import { parseAgentIntent, type AgentIntent } from "@/lib/agents/generate/parse-intent";
 import {
   STARTER_TEMPLATES,
@@ -49,12 +54,20 @@ export type CreateAgentDraftInput = {
 /**
  * The injectable effects. `getOrgId` resolves the operator's org from session
  * (null when unauthorized); `classify` is the optional LLM refiner merged over
- * the heuristic (omit it → heuristic only); `create` persists the new template
+ * the heuristic (omit it → heuristic only); `judge` is the optional maker≠checker
+ * grader that reviews the assembled bundle and may auto-fix low-risk plumbing
+ * (omit it → no review, today's behavior); `create` persists the new template
  * and returns its id (or throws / returns an error result on failure).
  */
 export type GenerateDeps = {
   getOrgId: () => Promise<string | null>;
   classify?: (sentence: string) => Promise<Partial<AgentIntent>>;
+  /** Optional maker≠checker grader. When present, runs AFTER the deterministic
+   *  assembler: it reviews the bundle against the sentence, auto-applies the
+   *  allow-listed low-risk fixes (trigger/verify/guardrails/connectors), and
+   *  surfaces the un-fixable issues as warnings. Fail-open — a broken/throwing
+   *  judge NEVER blocks generation (judgeGeneratedAgent guards it). */
+  judge?: AgentGrader;
   create: (
     input: CreateAgentDraftInput,
   ) => Promise<{ ok: true; id: string } | { ok: false; error: string }>;
@@ -98,7 +111,9 @@ function templateTypeForSkill(skill: string): AgentTemplateType {
  *      classify is fail-soft inside parseAgentIntent, so this never throws);
  *   3. assembleAgentBundle(intent, { reviewUrl }) → name/description/blueprint +
  *      warnings, with every safety primitive wired;
- *   4. create the template from the bundle → its id;
+ *   3b. (optional) judge the bundle (maker≠checker) — auto-fix low-risk plumbing,
+ *      surface the rest as warnings. Fail-open; omitted → step skipped entirely;
+ *   4. create the template from the (possibly judge-fixed) bundle → its id;
  *   5. { ok:true, templateId, warnings }.
  *
  * The receptionist alias is applied INSIDE the assembler (resolveSkillAlias in
@@ -119,7 +134,20 @@ export async function runGenerateAgentDraft(
   // so this is safe even when the injected classify explodes.
   const intent = await parseAgentIntent(sentence, { classify: deps.classify });
 
-  const bundle = assembleAgentBundle(intent, { reviewUrl: input.reviewUrl });
+  let bundle = assembleAgentBundle(intent, { reviewUrl: input.reviewUrl });
+
+  // Optional maker≠checker review. judgeGeneratedAgent FAILS OPEN (a throwing or
+  // malformed grader → {ok:true,issues:[]}), so this never blocks the (already
+  // safe) generation. applyJudgeFixes merges only the allow-listed low-risk
+  // fields (trigger/verify/guardrails/connectors); the un-auto-fixed issues
+  // (those without a `fix`) become operator-facing warnings on the bundle.
+  if (deps.judge) {
+    const verdict = await judgeGeneratedAgent({ sentence, bundle }, { grader: deps.judge });
+    bundle = applyJudgeFixes(bundle, verdict);
+    bundle.warnings.push(
+      ...verdict.issues.filter((i) => !i.fix).map((i) => i.problem),
+    );
+  }
 
   const created = await deps.create({
     builderOrgId: orgId,

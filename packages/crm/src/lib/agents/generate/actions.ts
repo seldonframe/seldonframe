@@ -25,6 +25,7 @@ import type { AgentBlueprint } from "@/db/schema/agents";
 import { getOrgId } from "@/lib/auth/helpers";
 import { assertWritable } from "@/lib/demo/server";
 import { llmClassify } from "@/lib/agents/generate/classify-llm";
+import { makeLlmAgentGrader } from "@/lib/agents/generate/judge-llm";
 import {
   runGenerateAgentDraft,
   type GenerateDeps,
@@ -58,6 +59,15 @@ export async function generateAgentDraftAction(
   const deps: GenerateDeps = {
     getOrgId: _deps?.getOrgId ?? getOrgId,
     classify: _deps?.classify ?? llmClassify,
+    // Maker≠checker judge: default ON, trivially disablable via
+    // SF_GENERATOR_JUDGE=off. Fail-open by construction — a missing ANTHROPIC
+    // key makes the grader return {ok:true,issues:[]} and generation proceeds.
+    judge:
+      _deps && "judge" in _deps
+        ? _deps.judge
+        : process.env.SF_GENERATOR_JUDGE === "off"
+          ? undefined
+          : makeLlmAgentGrader(),
     create: _deps?.create ?? defaultCreate,
   };
 
