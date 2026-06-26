@@ -133,61 +133,63 @@ export default async function AgentsStudioPage() {
           </article>
         </div>
       ) : (
-        <div className="space-y-3">
-          {templates.map((tmpl) => {
-            const deployCount = deployCountByTemplate.get(tmpl.id) ?? 0;
-            // The row's trigger chip: resolve blueprint.trigger against the
-            // type-derived surface, then label it ("Inbound · Voice", "After
-            // booking · SMS"). Unset/legacy templates resolve to the inbound
-            // default, so the chip is always present and accurate.
-            const bp = (tmpl.blueprint ?? {}) as AgentBlueprint;
-            const surface = surfaceForType(tmpl.type as AgentTemplateType);
-            const chipLabel = triggerLabel(resolveAgentTrigger(bp.trigger, surface));
-            return (
-              <article key={tmpl.id} className="rounded-xl border bg-card p-5">
-                <div className="flex flex-wrap items-center justify-between gap-3">
-                  <div className="min-w-0">
-                    <div className="flex flex-wrap items-center gap-2">
+        <div className="space-y-6">
+          {/* Create surface FIRST: describe-by-default, then the curated resale
+              menu (fork a starter). The builder's existing roster follows below. */}
+          <DescribeAgent />
+          <StarterPackSection starters={starterCards} />
+
+          {/* Then the builder's already-built agents, under a clear heading. */}
+          <div className="space-y-3 border-t pt-6">
+            <h2 className="text-card-title">Your agents</h2>
+            {templates.map((tmpl) => {
+              const deployCount = deployCountByTemplate.get(tmpl.id) ?? 0;
+              // The row's trigger chip: resolve blueprint.trigger against the
+              // type-derived surface, then label it ("Inbound · Voice", "After
+              // booking · SMS"). Unset/legacy templates resolve to the inbound
+              // default, so the chip is always present and accurate.
+              const bp = (tmpl.blueprint ?? {}) as AgentBlueprint;
+              const surface = surfaceForType(tmpl.type as AgentTemplateType);
+              const chipLabel = triggerLabel(resolveAgentTrigger(bp.trigger, surface));
+              return (
+                <article key={tmpl.id} className="rounded-xl border bg-card p-5">
+                  <div className="flex flex-wrap items-center justify-between gap-3">
+                    <div className="min-w-0">
+                      <div className="flex flex-wrap items-center gap-2">
+                        <Link
+                          href={`/studio/agents/${tmpl.id}`}
+                          className="text-card-title hover:underline"
+                        >
+                          {tmpl.name}
+                        </Link>
+                        <span className="inline-flex items-center rounded-full border bg-background px-2.5 py-0.5 text-xs font-medium text-muted-foreground">
+                          {chipLabel}
+                        </span>
+                      </div>
+                      <p className="text-sm text-muted-foreground">
+                        {formatTemplateType(tmpl.type)} •{" "}
+                        {deployCount === 1
+                          ? "1 deployment"
+                          : `${deployCount} deployments`}
+                        {tmpl.evalScore !== null && (
+                          <> • eval {tmpl.evalScore}</>
+                        )}
+                      </p>
+                    </div>
+                    <div className="flex items-center gap-3">
+                      <TemplateStatusBadge status={tmpl.status} />
                       <Link
                         href={`/studio/agents/${tmpl.id}`}
-                        className="text-card-title hover:underline"
+                        className="crm-button-secondary h-9 px-4 text-sm"
                       >
-                        {tmpl.name}
+                        Configure
                       </Link>
-                      <span className="inline-flex items-center rounded-full border bg-background px-2.5 py-0.5 text-xs font-medium text-muted-foreground">
-                        {chipLabel}
-                      </span>
+                      <DeployButton templateId={tmpl.id} variant="primary" />
                     </div>
-                    <p className="text-sm text-muted-foreground">
-                      {formatTemplateType(tmpl.type)} •{" "}
-                      {deployCount === 1
-                        ? "1 deployment"
-                        : `${deployCount} deployments`}
-                      {tmpl.evalScore !== null && (
-                        <> • eval {tmpl.evalScore}</>
-                      )}
-                    </p>
                   </div>
-                  <div className="flex items-center gap-3">
-                    <TemplateStatusBadge status={tmpl.status} />
-                    <Link
-                      href={`/studio/agents/${tmpl.id}`}
-                      className="crm-button-secondary h-9 px-4 text-sm"
-                    >
-                      Configure
-                    </Link>
-                    <DeployButton templateId={tmpl.id} variant="primary" />
-                  </div>
-                </div>
-              </article>
-            );
-          })}
-
-          {/* Always-available create surface: describe-by-default first, then
-              the resale menu (fork another curated starter) below. */}
-          <div className="space-y-6 border-t pt-6">
-            <DescribeAgent />
-            <StarterPackSection starters={starterCards} />
+                </article>
+              );
+            })}
           </div>
         </div>
       )}

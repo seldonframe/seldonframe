@@ -3,8 +3,9 @@
 // ICP-3 — the Deploy-to-client stepper (client).
 //
 // 4 steps:
-//   1. Confirm the agent (preselected from the URL; switchable among the
-//      builder's templates).
+//   1. Confirm the agent — a single card for the route's [id] (the one the
+//      builder clicked Deploy on). To deploy a different agent, go back to the
+//      Studio; step 1 is confirm-only, not a roster picker.
 //   2. Client details — name (required) + contact. "Connect their calendar" and
 //      "Phone number" are shown as captured INTENT only, labeled "SeldonFrame
 //      provisions on activation". We do NOT call cal.diy or Twilio here.
@@ -133,8 +134,9 @@ const SURFACES: Array<{
 export function DeployFlowClient({ templates, initialTemplateId }: Props) {
   const [step, setStep] = useState<1 | 2 | 3 | 4>(1);
 
-  // Step 1 — agent
-  const [templateId, setTemplateId] = useState(initialTemplateId);
+  // Step 1 — agent. Fixed to the route's [id]: you're deploying the agent you
+  // clicked Deploy on, so step 1 just confirms it (no roster, no switcher).
+  const templateId = initialTemplateId;
 
   // Step 2 — client details
   const [clientName, setClientName] = useState("");
@@ -303,42 +305,41 @@ export function DeployFlowClient({ templates, initialTemplateId }: Props) {
           <div>
             <h2 className="text-card-title">Which agent?</h2>
             <p className="text-xs text-muted-foreground">
-              This is the template you&apos;re deploying. Switch it here if you
-              meant a different one.
+              This is the agent you&apos;re deploying.
             </p>
           </div>
-          <div className="space-y-2">
-            {templates.map((t) => {
-              const active = t.id === templateId;
-              return (
-                <button
-                  key={t.id}
-                  type="button"
-                  onClick={() => setTemplateId(t.id)}
-                  className={`flex w-full items-center gap-3 rounded-lg border p-4 text-left transition-colors ${
-                    active
-                      ? "border-primary bg-primary/5"
-                      : "bg-background hover:bg-muted/50"
-                  }`}
-                  aria-pressed={active}
-                >
-                  <span
-                    className="inline-flex size-9 items-center justify-center rounded-lg bg-indigo-500/10 text-indigo-500 dark:text-indigo-400"
-                    aria-hidden
-                  >
-                    <Bot className="size-5" />
-                  </span>
-                  <span className="min-w-0 flex-1">
-                    <span className="block truncate text-sm font-medium">{t.name}</span>
-                    <span className="block text-xs text-muted-foreground">
-                      {formatTemplateType(t.type)}
-                    </span>
-                  </span>
-                  {active && <Check className="size-4 text-primary" aria-hidden />}
-                </button>
-              );
-            })}
+          {/* Single confirmation card for the route's [id] — NOT the full roster.
+              The deployment always targets this agent; to deploy a different one,
+              the builder goes back to the Studio (secondary link below). */}
+          <div className="flex w-full items-center gap-3 rounded-lg border border-primary bg-primary/5 p-4">
+            <span
+              className="inline-flex size-9 items-center justify-center rounded-lg bg-indigo-500/10 text-indigo-500 dark:text-indigo-400"
+              aria-hidden
+            >
+              <Bot className="size-5" />
+            </span>
+            <span className="min-w-0 flex-1">
+              <span className="block text-[11px] font-medium uppercase tracking-wide text-muted-foreground">
+                You&apos;re deploying
+              </span>
+              <span className="block truncate text-sm font-medium">
+                {selectedTemplate?.name ?? "this agent"}
+              </span>
+              {selectedTemplate && (
+                <span className="block text-xs text-muted-foreground">
+                  {formatTemplateType(selectedTemplate.type)}
+                </span>
+              )}
+            </span>
+            <Check className="size-4 text-primary" aria-hidden />
           </div>
+          <Link
+            href="/studio/agents"
+            className="inline-flex items-center gap-1 text-xs font-medium text-muted-foreground hover:text-foreground"
+          >
+            Deploy a different agent
+            <span aria-hidden>→</span>
+          </Link>
           <StepNav
             onNext={() => setStep(2)}
             nextDisabled={!templateId}
