@@ -87,6 +87,13 @@ export const CreateDeploymentSchema = z
     // The client's own booking page URL — required only for external_link (the
     // refinement below enforces that). Bounded so a row can't bloat.
     externalBookingUrl: z.string().url().max(2000).optional().nullable(),
+    // ATTACH-TO-EXISTING-CLIENT (F3). When present, the new deployment attaches
+    // to this EXISTING client workspace (org) instead of creating a fresh client
+    // — fixing the duplicate-client bug (a 2nd agent no longer spawns a 2nd
+    // "Acme Plumbing"). The action proves the id belongs to the builder's agency
+    // (intersected against listClientOrgsForAgency) before it reaches the store.
+    // Absent → "new client" (today's default). A UUID or absent — never "".
+    existingClientOrgId: z.string().uuid().optional().nullable(),
   })
   .strict()
   // external_link is only useful with a real URL to hand off; demand one. Other

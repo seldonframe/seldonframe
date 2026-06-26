@@ -13,6 +13,7 @@ import Link from "next/link";
 import { ChevronLeft } from "lucide-react";
 import { getOrgId } from "@/lib/auth/helpers";
 import { listAgentTemplates } from "@/lib/agent-templates/store";
+import { listDeployments, groupAttachableClients } from "@/lib/deployments/store";
 import { DeployFlowClient } from "./deploy-client";
 import { StudioTabs } from "../../../studio-tabs";
 
@@ -34,6 +35,12 @@ export default async function DeployTemplatePage({
   const templates = await listAgentTemplates(orgId);
   const selected = templates.find((t) => t.id === id);
   if (!selected) notFound();
+
+  // F3 — the EXISTING clients this builder can attach the new agent to (instead
+  // of always creating a fresh client → the duplicate-"Acme Plumbing" bug). Built
+  // from the builder's own deployments grouped by provisioned clientOrgId, so each
+  // entry carries the client's existing line + the agents already on it.
+  const attachableClients = groupAttachableClients(await listDeployments(orgId));
 
   return (
     <section className="animate-page-enter space-y-5 sm:space-y-6">
@@ -79,6 +86,12 @@ export default async function DeployTemplatePage({
           status: t.status,
         }))}
         initialTemplateId={selected.id}
+        existingClients={attachableClients.map((c) => ({
+          clientOrgId: c.clientOrgId,
+          clientName: c.clientName,
+          phoneNumber: c.phoneNumber,
+          agentNames: c.agentNames,
+        }))}
       />
     </section>
   );

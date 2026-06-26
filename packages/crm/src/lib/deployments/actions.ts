@@ -22,6 +22,8 @@ import {
   getDeployment,
   updateDeployment,
   resolveBuilderAgency,
+  listClientOrgsForAgency,
+  resolveDeploymentClientMode,
   setOrgParentAgency,
   archiveClientOrg,
   loadOrgSlug,
@@ -62,6 +64,27 @@ export type CreateDeploymentActionResult =
   | { ok: true; id: string }
   | { ok: false; error: string };
 
+/** DI seam for createDeploymentAction's attach-to-existing-client resolution
+ *  (F3). Defaults resolve the builder's agency + its client workspaces from the
+ *  store; unit tests inject a fixed allow-list so the action stays DB-free. */
+export type CreateDeploymentActionDeps = {
+  /** The client-org ids the builder's agency is allowed to attach to (the
+   *  agency's own provisioned client workspaces). An attach to any id NOT in this
+   *  set is rejected (client_not_found). */
+  resolveAllowedClientOrgIds: (builderOrgId: string) => Promise<string[]>;
+};
+
+function buildDefaultCreateDeploymentDeps(): CreateDeploymentActionDeps {
+  return {
+    resolveAllowedClientOrgIds: async (builderOrgId) => {
+      const agencyId = await resolveBuilderAgency(builderOrgId);
+      if (!agencyId) return [];
+      const clientOrgs = await listClientOrgsForAgency(agencyId);
+      return clientOrgs.map((o) => o.id);
+    },
+  };
+}
+
 /**
  * Create a deployment (a no-login SMB client) owned by the current operator's
  * org. Validates the payload against the allow-list, then delegates to the
@@ -73,18 +96,24 @@ export type CreateDeploymentActionResult =
  * and billing are activated by LATER, GATED steps (Twilio + Stripe). This action
  * captures intent only.
  */
-export async function createDeploymentAction(input: {
-  agentTemplateId: string;
-  clientName: string;
-  clientContact?: { phone?: string; email?: string; address?: string };
-  clientContext?: DeploymentClientContext;
-  surface?: string;
-  priceCents?: number;
-  /** How the deployed agent books (ICP-3). Defaults to 'native'. */
-  bookingMode?: "native" | "external_link" | "api_mcp" | "cal_com";
-  /** The client's own booking URL — required by the schema for external_link. */
-  externalBookingUrl?: string | null;
-}): Promise<CreateDeploymentActionResult> {
+export async function createDeploymentAction(
+  input: {
+    agentTemplateId: string;
+    clientName: string;
+    clientContact?: { phone?: string; email?: string; address?: string };
+    clientContext?: DeploymentClientContext;
+    surface?: string;
+    priceCents?: number;
+    /** How the deployed agent books (ICP-3). Defaults to 'native'. */
+    bookingMode?: "native" | "external_link" | "api_mcp" | "cal_com";
+    /** The client's own booking URL — required by the schema for external_link. */
+    externalBookingUrl?: string | null;
+    /** Attach-to-existing-client (F3): when set, the new agent joins this EXISTING
+     *  client workspace instead of creating a fresh client. Absent → new client. */
+    existingClientOrgId?: string | null;
+  },
+  _deps?: Partial<CreateDeploymentActionDeps>,
+): Promise<CreateDeploymentActionResult> {
   assertWritable();
 
   const orgId = await getOrgId();
@@ -93,6 +122,26 @@ export async function createDeploymentAction(input: {
   const parsed = CreateDeploymentSchema.safeParse(input);
   if (!parsed.success) {
     return { ok: false, error: `invalid_input: ${parsed.error.message}` };
+  }
+
+  // Attach-to-existing-client (F3). Resolve the agency's OWN client workspaces
+  // and decide the mode: "new" (create a fresh client — today's default) vs.
+  // "attach" (join an existing client, reusing its workspace / soul / number).
+  // An attach to an id that ISN'T one of the agency's clients is a hard reject —
+  // never silently fall back to creating a new client (that would write into a
+  // foreign org or quietly re-introduce the duplicate-client bug).
+  const resolveAllowed =
+    _deps?.resolveAllowedClientOrgIds ??
+    buildDefaultCreateDeploymentDeps().resolveAllowedClientOrgIds;
+  const allowedClientOrgIds = parsed.data.existingClientOrgId
+    ? await resolveAllowed(orgId)
+    : [];
+  const clientMode = resolveDeploymentClientMode(
+    parsed.data.existingClientOrgId,
+    allowedClientOrgIds,
+  );
+  if (clientMode.mode === "error") {
+    return { ok: false, error: "client_not_found" };
   }
 
   const result = await createDeployment({
@@ -105,6 +154,11 @@ export async function createDeploymentAction(input: {
     priceCents: parsed.data.priceCents,
     bookingMode: parsed.data.bookingMode,
     externalBookingUrl: parsed.data.externalBookingUrl,
+    // attach → write the existing clientOrgId onto the row (the idempotent
+    // provisioner then no-ops on activation: no duplicate workspace, no 2nd
+    // number). new → undefined (clientOrgId stays null, provisioned on activate).
+    existingClientOrgId:
+      clientMode.mode === "attach" ? clientMode.clientOrgId : undefined,
   });
 
   if (!result.ok) {

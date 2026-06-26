@@ -197,6 +197,17 @@ export type CreateDeploymentInput = {
    *  and WINS over the intake-derived seed (the "already set" case). When absent
    *  the store seeds it from the captured clientContext hours (see below). */
   bookingPolicy?: Partial<BookingPolicy> | null;
+  /** ATTACH-TO-EXISTING-CLIENT (F3). When set, the new deployment row is created
+   *  pointing at this EXISTING client workspace (org) instead of leaving
+   *  clientOrgId null. Because provisionClientWorkspaceForDeployment is idempotent
+   *  (no-ops when clientOrgId is already set), the attach path never spawns a
+   *  duplicate client workspace or buys a second number — the agent just joins the
+   *  client, reusing its soul / business details / number. The ACTION layer is
+   *  responsible for proving this id belongs to the builder's agency (it is
+   *  intersected against listClientOrgsForAgency before reaching the store); the
+   *  store trusts a pre-validated id here. Absent → today's "new client" behavior
+   *  (clientOrgId null, provisioned on activation). */
+  existingClientOrgId?: string | null;
   deps?: Partial<CreateDeploymentDeps>;
 };
 
@@ -263,6 +274,12 @@ export async function createDeployment(
     clientContext,
   );
 
+  // Attach-to-existing-client (F3): a pre-validated existing clientOrgId is
+  // written onto the row at create time so the idempotent provisioner no-ops on
+  // activation (no duplicate workspace, no second number). A blank/whitespace id
+  // collapses to undefined → today's "new client" path (clientOrgId stays null).
+  const existingClientOrgId = normalizeExistingClientOrgId(input.existingClientOrgId);
+
   const values: NewDeployment = {
     builderOrgId,
     agentTemplateId: input.agentTemplateId,
@@ -274,6 +291,9 @@ export async function createDeployment(
     bookingMode,
     externalBookingUrl,
     bookingPolicy,
+    // Attach path only — null (omitted) for a new client; provisioning fills it
+    // on activation. Set here only when attaching to an existing client workspace.
+    ...(existingClientOrgId ? { clientOrgId: existingClientOrgId } : {}),
     // Draft only — provisioning + billing activate this later (gated).
     status: "draft" satisfies DeploymentStatus,
   };
@@ -379,6 +399,52 @@ export function resolveSeededBookingPolicy(
   return Object.keys(seeded).length > 0 ? seeded : null;
 }
 
+/**
+ * Normalize the attach-to-existing-client id: trim, and collapse a blank /
+ * non-string value to undefined so an empty selection falls back to the "new
+ * client" path (clientOrgId stays null). Pure. The id's OWNERSHIP (does this org
+ * belong to the builder's agency?) is enforced at the action layer, not here.
+ */
+export function normalizeExistingClientOrgId(
+  id: string | null | undefined,
+): string | undefined {
+  if (typeof id !== "string") return undefined;
+  const trimmed = id.trim();
+  return trimmed.length > 0 ? trimmed : undefined;
+}
+
+/**
+ * Decide the deploy's client mode from the (optional) requested existing-client
+ * id and the agency's OWN set of client-org ids (the allow-list). Pure — the
+ * action resolves the allow-list from listClientOrgsForAgency, then calls this:
+ *
+ *   - no id              → { mode: "new" }            (create a fresh client; today's default)
+ *   - id ∈ allowed       → { mode: "attach", clientOrgId }  (join the existing client)
+ *   - id ∉ allowed       → { mode: "error", error: "client_not_found" }
+ *
+ * The ∉-allowed case is a HARD reject (never silently fall back to creating a new
+ * client) so a stale/foreign id can't (a) write into an org outside the agency or
+ * (b) quietly resurrect the duplicate-client bug. Mirrors the intersect guard in
+ * deployAgentTemplateToClientsAction.
+ */
+export type ResolveDeploymentClientMode =
+  | { mode: "new" }
+  | { mode: "attach"; clientOrgId: string }
+  | { mode: "error"; error: "client_not_found" };
+
+export function resolveDeploymentClientMode(
+  requestedClientOrgId: string | null | undefined,
+  allowedClientOrgIds: Iterable<string>,
+): ResolveDeploymentClientMode {
+  const requested = normalizeExistingClientOrgId(requestedClientOrgId);
+  if (!requested) return { mode: "new" };
+  const allowed = allowedClientOrgIds instanceof Set
+    ? allowedClientOrgIds
+    : new Set(allowedClientOrgIds);
+  if (!allowed.has(requested)) return { mode: "error", error: "client_not_found" };
+  return { mode: "attach", clientOrgId: requested };
+}
+
 // ─── listDeployments ─────────────────────────────────────────────────────────
 
 /** A deployment row enriched with the template name for the Clients screen. */
@@ -424,6 +490,63 @@ export type DeploymentListItem = {
    *  from the joined template's blueprint trigger (isOutboundDeployment). */
   isOutbound: boolean;
 };
+
+/** An EXISTING client the builder can attach a new agent to (F3). Derived purely
+ *  from the builder's deployments, grouped by the provisioned clientOrgId. */
+export type AttachableClient = {
+  /** The provisioned client workspace (org) id — written onto the new deployment
+   *  row so the agent attaches instead of spawning a duplicate client. */
+  clientOrgId: string;
+  /** Display name (the most recent deployment's clientName for this org). */
+  clientName: string;
+  /** The client's existing line, if any agent on it already holds one (inbound
+   *  receptionist). Null when no attached agent owns a number. Surfaced read-only
+   *  so the operator sees the new agent will SHARE it (no second number bought). */
+  phoneNumber: string | null;
+  /** The agents already running for this client (template names), for context. */
+  agentNames: string[];
+};
+
+/**
+ * Group a builder's deployments into the set of EXISTING clients a new agent can
+ * ATTACH to (F3). A client is attachable once it has a provisioned `clientOrgId`
+ * (its workspace exists) and is not canceled. One entry per clientOrgId, carrying
+ * the display name, any existing phone number (so the UI shows the shared line),
+ * and the names of agents already on it. Most-recently-updated client first
+ * (input order is assumed newest-first, matching listDeployments). Pure.
+ *
+ * Deployments without a clientOrgId (never activated → no workspace yet) are
+ * skipped: there's nothing to attach to, and the duplicate-client bug only
+ * happens when a real workspace already exists.
+ */
+export function groupAttachableClients(
+  deployments: Pick<
+    DeploymentListItem,
+    "clientOrgId" | "clientName" | "phoneNumber" | "templateName" | "status"
+  >[],
+): AttachableClient[] {
+  const byOrg = new Map<string, AttachableClient>();
+  for (const d of deployments) {
+    const clientOrgId = d.clientOrgId;
+    if (!clientOrgId) continue; // no workspace yet → nothing to attach to
+    if (d.status === "canceled") continue; // a canceled client isn't a live target
+    let entry = byOrg.get(clientOrgId);
+    if (!entry) {
+      entry = {
+        clientOrgId,
+        clientName: d.clientName,
+        phoneNumber: d.phoneNumber ?? null,
+        agentNames: [],
+      };
+      byOrg.set(clientOrgId, entry);
+    }
+    // First non-null number wins (input is newest-first → the latest live line).
+    if (!entry.phoneNumber && d.phoneNumber) entry.phoneNumber = d.phoneNumber;
+    const name = d.templateName?.trim();
+    if (name && !entry.agentNames.includes(name)) entry.agentNames.push(name);
+  }
+  return [...byOrg.values()];
+}
 
 /** List a builder's deployments, most-recently-updated first, with template name. */
 export async function listDeployments(

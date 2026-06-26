@@ -34,6 +34,8 @@ import {
   ChevronDown,
   MessageSquare,
   Mail,
+  Building2,
+  UserPlus,
 } from "lucide-react";
 import {
   createDeploymentAction,
@@ -62,6 +64,17 @@ type TemplateOption = {
 
 type Surface = "phone" | "embed" | "link" | "sms" | "email";
 
+/** An EXISTING client the builder can attach this new agent to (F3) — instead of
+ *  creating a fresh client (which used to spawn a duplicate "Acme Plumbing" on a
+ *  2nd deploy). Derived server-side from the builder's deployments, grouped by
+ *  clientOrgId, so each carries the client's existing line + the agents on it. */
+type ExistingClient = {
+  clientOrgId: string;
+  clientName: string;
+  phoneNumber: string | null;
+  agentNames: string[];
+};
+
 /** Editable row shapes for the optional "Client's business" capture. Kept as
  *  flat strings so the inputs are trivially controlled; assembled into the
  *  typed DeploymentClientContext (dropping blanks) only at submit time. */
@@ -71,6 +84,9 @@ type FaqRow = { q: string; a: string };
 type Props = {
   templates: TemplateOption[];
   initialTemplateId: string;
+  /** The agency's existing clients (attach targets). Empty → only "New client"
+   *  is offered (no existing clients to attach to yet). */
+  existingClients?: ExistingClient[];
 };
 
 /** Assemble the editable rows into a DeploymentClientContext, dropping blank
@@ -131,12 +147,29 @@ const SURFACES: Array<{
   { id: "email", label: "Email", hint: "Inbound email, answered by the same agent.", icon: Mail },
 ];
 
-export function DeployFlowClient({ templates, initialTemplateId }: Props) {
+export function DeployFlowClient({
+  templates,
+  initialTemplateId,
+  existingClients = [],
+}: Props) {
   const [step, setStep] = useState<1 | 2 | 3 | 4>(1);
 
   // Step 1 — agent. Fixed to the route's [id]: you're deploying the agent you
   // clicked Deploy on, so step 1 just confirms it (no roster, no switcher).
   const templateId = initialTemplateId;
+
+  // Step 2 — NEW client vs. ATTACH to an existing one (F3). Defaults to "new"
+  // (today's behavior). "existing" reveals the client picker and attaches the new
+  // agent to that client's workspace — no duplicate client, no second number.
+  const hasExistingClients = existingClients.length > 0;
+  const [clientMode, setClientMode] = useState<"new" | "existing">("new");
+  const [existingClientOrgId, setExistingClientOrgId] = useState<string>(
+    existingClients[0]?.clientOrgId ?? "",
+  );
+  const selectedExistingClient = useMemo(
+    () => existingClients.find((c) => c.clientOrgId === existingClientOrgId) ?? null,
+    [existingClients, existingClientOrgId],
+  );
 
   // Step 2 — client details
   const [clientName, setClientName] = useState("");
@@ -196,8 +229,21 @@ export function DeployFlowClient({ templates, initialTemplateId }: Props) {
 
   const bookingValid = bookingMode !== "external_link" || externalUrlValid;
 
+  // Attaching to an existing client (F3): valid once a client is selected — no
+  // typed name needed (we reuse the existing client's name + workspace).
+  const attaching = clientMode === "existing" && hasExistingClients;
+  // The name the deploy sends: a NEW client uses the typed field; an ATTACH reuses
+  // the selected client's existing name (the store still requires ≥2 chars).
+  const effectiveClientName = attaching
+    ? (selectedExistingClient?.clientName.trim() ?? "")
+    : clientName.trim();
+  // Step 2 is satisfied by EITHER a typed new-client name OR a selected client.
+  const clientStepValid = attaching
+    ? !!selectedExistingClient
+    : clientName.trim().length >= 2;
+
   const canSubmit =
-    clientName.trim().length >= 2 && !!templateId && bookingValid;
+    clientStepValid && effectiveClientName.length >= 2 && !!templateId && bookingValid;
 
   // Auto-fill the client's business from pasted website text / a description.
   // Compiles it server-side, then PRE-FILLS the editable rows (the builder can
@@ -238,11 +284,16 @@ export function DeployFlowClient({ templates, initialTemplateId }: Props) {
       });
       const result = await createDeploymentAction({
         agentTemplateId: templateId,
-        clientName: clientName.trim(),
-        clientContact: {
-          phone: clientPhone.trim() || undefined,
-          email: clientEmail.trim() || undefined,
-        },
+        // ATTACH reuses the selected client's name; NEW uses the typed field.
+        clientName: effectiveClientName,
+        // Contact is only captured for a NEW client — an existing client already
+        // has its contact + soul on its workspace (we don't overwrite them).
+        clientContact: attaching
+          ? undefined
+          : {
+              phone: clientPhone.trim() || undefined,
+              email: clientEmail.trim() || undefined,
+            },
         clientContext,
         surface,
         priceCents,
@@ -251,6 +302,9 @@ export function DeployFlowClient({ templates, initialTemplateId }: Props) {
         // store/schema also drop a stray URL, this just keeps the payload clean).
         externalBookingUrl:
           bookingMode === "external_link" ? externalBookingUrl.trim() : undefined,
+        // F3 — attach this agent to the chosen EXISTING client (its workspace /
+        // soul / number are reused; no duplicate client, no second number bought).
+        existingClientOrgId: attaching ? existingClientOrgId : undefined,
       });
       if (!result.ok) {
         setError(result.error);
@@ -272,12 +326,22 @@ export function DeployFlowClient({ templates, initialTemplateId }: Props) {
             <Check className="size-6" />
           </span>
           <h2 className="text-lg font-semibold">
-            Agent saved for {clientName.trim()}.
+            Agent saved for {effectiveClientName}.
           </h2>
           <p className="text-sm text-muted-foreground">
-            Provisioning the number and billing activates when you connect Twilio
-            and Stripe. Until then this client sits in your book as a draft —
-            nothing is live and no one is charged yet.
+            {attaching ? (
+              <>
+                This agent joins your existing client — it shares their workspace
+                and number, so nothing new is provisioned. It sits as a draft
+                until you activate it.
+              </>
+            ) : (
+              <>
+                Provisioning the number and billing activates when you connect
+                Twilio and Stripe. Until then this client sits in your book as a
+                draft — nothing is live and no one is charged yet.
+              </>
+            )}
           </p>
           <div className="flex flex-wrap justify-center gap-3 pt-2">
             <Link href="/studio/clients" className="crm-button-primary h-10 px-5 text-sm">
@@ -353,11 +417,78 @@ export function DeployFlowClient({ templates, initialTemplateId }: Props) {
           <div>
             <h2 className="text-card-title">Client details</h2>
             <p className="text-xs text-muted-foreground">
-              Who is this agent for? They never log into SeldonFrame — this is
-              your record of the client.
+              {attaching
+                ? "Attach this agent to one of your existing clients — it joins their workspace and shares their number."
+                : "Who is this agent for? They never log into SeldonFrame — this is your record of the client."}
             </p>
           </div>
 
+          {/* ── NEW client vs. ATTACH to an existing one (F3) ── */}
+          {hasExistingClients && (
+            <div
+              role="radiogroup"
+              aria-label="New or existing client"
+              className="grid grid-cols-1 gap-2 sm:grid-cols-2"
+            >
+              <ClientModeCard
+                active={clientMode === "new"}
+                icon={UserPlus}
+                title="New client"
+                hint="Create a fresh client for this agent."
+                onSelect={() => setClientMode("new")}
+              />
+              <ClientModeCard
+                active={attaching}
+                icon={Building2}
+                title="Existing client"
+                hint="Add this agent to a client you already serve."
+                onSelect={() => setClientMode("existing")}
+              />
+            </div>
+          )}
+
+          {/* ── ATTACH: pick the existing client ── */}
+          {attaching ? (
+            <div className="space-y-3">
+              <Field label="Client" required>
+                <select
+                  value={existingClientOrgId}
+                  onChange={(e) => setExistingClientOrgId(e.target.value)}
+                  className="w-full rounded-md border bg-background px-3 py-2 text-sm focus:border-primary focus:outline-none"
+                >
+                  {existingClients.map((c) => (
+                    <option key={c.clientOrgId} value={c.clientOrgId}>
+                      {c.clientName}
+                    </option>
+                  ))}
+                </select>
+              </Field>
+              {selectedExistingClient && (
+                <div className="space-y-1.5 rounded-lg border bg-muted/30 p-4 text-sm">
+                  <div className="flex items-center gap-2 text-muted-foreground">
+                    <Phone className="size-4" aria-hidden />
+                    <span>
+                      {selectedExistingClient.phoneNumber
+                        ? `Shares the client's number ${selectedExistingClient.phoneNumber} — no new number is provisioned.`
+                        : "Sends from the client's number — no new number is provisioned."}
+                    </span>
+                  </div>
+                  {selectedExistingClient.agentNames.length > 0 && (
+                    <div className="flex items-start gap-2 text-muted-foreground">
+                      <Bot className="mt-0.5 size-4" aria-hidden />
+                      <span>
+                        Already running:{" "}
+                        <span className="text-foreground">
+                          {selectedExistingClient.agentNames.join(" · ")}
+                        </span>
+                      </span>
+                    </div>
+                  )}
+                </div>
+              )}
+            </div>
+          ) : (
+            <>
           <div className="space-y-3">
             <Field label="Client name" required>
               <input
@@ -544,11 +675,13 @@ export function DeployFlowClient({ templates, initialTemplateId }: Props) {
               note="SeldonFrame provisions on activation"
             />
           </div>
+            </>
+          )}
 
           <StepNav
             onBack={() => setStep(1)}
             onNext={() => setStep(3)}
-            nextDisabled={clientName.trim().length < 2}
+            nextDisabled={!clientStepValid}
           />
         </div>
       )}
@@ -640,18 +773,37 @@ export function DeployFlowClient({ templates, initialTemplateId }: Props) {
           <div>
             <h2 className="text-card-title">Review</h2>
             <p className="text-xs text-muted-foreground">
-              We&apos;ll save this client as a draft. The number and billing
-              activate later, when you connect Twilio and Stripe.
+              {attaching
+                ? "We'll add this agent to your existing client as a draft — sharing their workspace and number. Nothing new is provisioned."
+                : "We'll save this client as a draft. The number and billing activate later, when you connect Twilio and Stripe."}
             </p>
           </div>
 
           <dl className="divide-y rounded-lg border bg-background text-sm">
             <ReviewRow label="Agent" value={selectedTemplate?.name ?? "—"} />
-            <ReviewRow label="Client" value={clientName.trim() || "—"} />
             <ReviewRow
-              label="Contact"
-              value={[clientPhone.trim(), clientEmail.trim()].filter(Boolean).join(" · ") || "—"}
+              label="Client"
+              value={
+                attaching
+                  ? `${effectiveClientName || "—"} (existing)`
+                  : clientName.trim() || "—"
+              }
             />
+            {attaching ? (
+              <ReviewRow
+                label="Number"
+                value={
+                  selectedExistingClient?.phoneNumber
+                    ? `${selectedExistingClient.phoneNumber} (shared)`
+                    : "Shares the client's number"
+                }
+              />
+            ) : (
+              <ReviewRow
+                label="Contact"
+                value={[clientPhone.trim(), clientEmail.trim()].filter(Boolean).join(" · ") || "—"}
+              />
+            )}
             <ReviewRow label="Surface" value={SURFACES.find((s) => s.id === surface)?.label ?? surface} />
             <ReviewRow
               label="Booking"
@@ -850,6 +1002,41 @@ function PendingRow({
         {note}
       </span>
     </div>
+  );
+}
+
+/** A selectable "New client" / "Existing client" mode card (F3). Mirrors the
+ *  surface/booking selector cards: active = primary border + tint. */
+function ClientModeCard({
+  active,
+  icon: Icon,
+  title,
+  hint,
+  onSelect,
+}: {
+  active: boolean;
+  icon: typeof Phone;
+  title: string;
+  hint: string;
+  onSelect: () => void;
+}) {
+  return (
+    <button
+      type="button"
+      role="radio"
+      aria-checked={active}
+      onClick={onSelect}
+      className={`flex flex-col items-start gap-1 rounded-lg border p-4 text-left transition-colors ${
+        active ? "border-primary bg-primary/5" : "bg-background hover:bg-muted/50"
+      }`}
+    >
+      <span className="flex w-full items-center gap-2">
+        <Icon className="size-5 text-indigo-500 dark:text-indigo-400" aria-hidden />
+        <span className="text-sm font-medium">{title}</span>
+        {active && <Check className="ml-auto size-4 text-primary" aria-hidden />}
+      </span>
+      <span className="text-xs text-muted-foreground">{hint}</span>
+    </button>
   );
 }
 
