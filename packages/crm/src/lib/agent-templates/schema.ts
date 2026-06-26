@@ -101,6 +101,20 @@ export const TemplateBlueprintPatchSchema = z
       })
       .strict()
       .optional(),
+    // The maker≠checker VERIFY RUBRIC (agent loop L2). An ordered list of
+    // deterministic checks that gate the agent's outbound output before send.
+    // LOOSE on purpose — each check is just `{ kind, ... }` (passthrough), so the
+    // editor can carry any of the runtime kinds (max_length / must_include /
+    // must_not_include / …) without this allow-list enumerating them; the runtime
+    // verifyOutput tolerates/clamps unknown shapes (an unknown kind fails THAT
+    // check, never the gate). Mirrors AgentBlueprint.verify (jsonb — no migration).
+    verify: z
+      .object({
+        checks: z
+          .array(z.object({ kind: z.string() }).passthrough())
+          .optional(),
+      })
+      .optional(),
   })
   .strict();
 

@@ -140,6 +140,16 @@ export type AgentBlueprint = {
    *  lib/agents/triggers/run-event-agent.ts). Stored in the jsonb blueprint — no
    *  migration. */
   reviewUrl?: string;
+  /** 2026-06-25 (agent loop L2 verify, T2) — the maker≠checker VERIFY RUBRIC for
+   *  this agent's outbound output. An ordered list of deterministic checks
+   *  (length / must-include the review link or contact name / no leftover
+   *  "{placeholder}") that a separate strict CHECKER runs to gate the message
+   *  before it's sent/saved, so the agent never grades its own homework. When
+   *  absent, defaultRubricForSkill derives a per-skill default; when present, this
+   *  overrides it. The runtime verifyOutput tolerates loose shapes, so this is a
+   *  hint, not the final guard. Stored in the jsonb blueprint — no migration. See
+   *  lib/agents/verify/agent-verify.ts. */
+  verify?: import("@/lib/agents/verify/agent-verify").VerifyRubric;
 };
 
 export const agents = pgTable(
