@@ -1664,3 +1664,206 @@ describe("runDueScheduledEventAgent — replay a due deferred send", () => {
     await assert.doesNotReject(() => runDueScheduledEventAgent(dueReviewSend(), deps));
   });
 });
+
+// ─── ACTION-ONLY agents (P2 / Task 6): the runtime guard ──────────────────────
+//
+// An action-only agent (a poster/logger — `blueprint.actionOnly`) ACTS via its
+// tools and sends NO customer message. The SAFETY-CRITICAL contract these pin:
+//   • when it fires, the messaging seam (sendSms/sendEmail) is NEVER called — a
+//     posting agent must never text a customer, even when the contact is reachable
+//     and a verify rubric is set;
+//   • it is counted on `result.actionOnly`, NOT `result.sent`;
+//   • a loop-memory `action_fired` record IS written (the observable record),
+//     noting the bound tools, and the per-agent daily counter advances;
+//   • the GUARDRAILS gate still applies — a daily-cap-exceeded action-only agent
+//     is BLOCKED (no fire, no `action_fired`, counted on `result.blocked`);
+//   • the LIVE tool execution (actually posting) is P2.1 — the fire is recorded
+//     but no post is made (asserted via the recorded entry's marker).
+// A normal (actionOnly-falsy) review-requester is UNCHANGED (still composes/sends).
+
+/** An action-only agent: fires on the event but sends no customer message. Modeled
+ *  on the review-requester skill (the event maps there) with `actionOnly:true` +
+ *  bound tools. NO reviewUrl is needed — an action-only agent never composes. By
+ *  default carries action-only guardrails (daily cap only, NO quiet hours — what
+ *  defaultGuardrailsForShape({channel:"none"}) yields). */
+function actionOnlyAgent(overrides: Partial<EventAgentMatch> = {}): EventAgentMatch {
+  return {
+    skill: "review-requester",
+    channel: "sms",
+    businessName: "Acme Plumbing",
+    actionOnly: true,
+    connectorIds: ["postiz"],
+    guardrails: { enabled: true, maxPerDayPerAgent: 200 },
+    ...overrides,
+  };
+}
+
+describe("runEventAgent — action-only agents (P2 runtime guard)", () => {
+  test("an action-only agent FIRES but NEVER calls sendSms/sendEmail; counts on actionOnly; writes an action_fired record + advances the daily counter", async () => {
+    const mem = makeFakeMemoryStore();
+    const { deps, smsCalls, emailCalls } = makeDeps({
+      findEventAgents: async () => [actionOnlyAgent()],
+      memoryStore: mem.store,
+      now: () => FIXED_NOW,
+    });
+
+    const result = await runEventAgent(bookingCompleted("contact-1"), deps);
+
+    // SAFETY-CRITICAL: the messaging seam was NOT called — no customer was texted.
+    assert.equal(smsCalls.length, 0, "an action-only agent must NEVER send an SMS");
+    assert.equal(emailCalls.length, 0, "an action-only agent must NEVER send an email");
+
+    // Counted as an action-only fire, not a send.
+    assert.equal(result.matched, 1);
+    assert.equal(result.actionOnly, 1, "the fire is counted on result.actionOnly");
+    assert.equal(result.sent, 0, "nothing was sent to a customer");
+    assert.equal(result.blocked, 0);
+
+    // An `action_fired` record was written to the agent's key (subjectKey = the
+    // agentKey/skill for an action-only agent — it's per-agent, not per-contact).
+    const agentKeyAppends = mem.appendCalls.filter(
+      (c) => c.key === `agents/review-requester/review-requester`,
+    );
+    assert.equal(agentKeyAppends.length, 1, "exactly one action_fired record");
+    assert.equal(agentKeyAppends[0].entry.kind, "action_fired");
+    assert.equal(agentKeyAppends[0].entry.at, FIXED_NOW.toISOString());
+    // The record notes the bound tools + marks live tool-execution as pending (P2.1).
+    const firedData = agentKeyAppends[0].entry.data as {
+      tools?: string[];
+      liveToolExecution?: string;
+      actionOnly?: boolean;
+    };
+    assert.deepEqual(firedData.tools, ["postiz"], "records the bound tools");
+    assert.equal(firedData.liveToolExecution, "pending_p2_1", "live tool-execution is P2.1");
+    assert.equal(firedData.actionOnly, true);
+
+    // The per-agent daily counter advanced (so the daily cap brakes subsequent
+    // fires) — exactly one daily_count append carrying 1, on the stats key.
+    const dateKey = utcDateKey(FIXED_NOW);
+    const statApp = statsAppends(mem.appendCalls, "review-requester", dateKey);
+    assert.equal(statApp.length, 1, "exactly one counter increment on a fire");
+    assert.equal((statApp[0].entry.data as { count?: number }).count, 1);
+
+    // Surfaced on the run summary's recorded list (observability).
+    assert.ok(
+      result.memory?.recorded.some((e) => e.kind === "action_fired"),
+      "action_fired surfaced on result.memory.recorded",
+    );
+  });
+
+  test("SAFETY: an action-only agent sends NOTHING even with a reachable contact AND a verify rubric set", async () => {
+    // A verify rubric + a reachable phone/email would normally drive the messaging
+    // path; an action-only agent must skip ALL of it. (No memoryStore here — the
+    // guard must hold even without loop-memory.)
+    const { deps, smsCalls, emailCalls } = makeDeps({
+      findEventAgents: async () => [
+        actionOnlyAgent({
+          channel: "sms",
+          reviewUrl: REVIEW_URL,
+          verify: { checks: [{ kind: "min_length", min: 1 }] },
+        }),
+      ],
+      now: () => FIXED_NOW,
+    });
+
+    const result = await runEventAgent(bookingCompleted("contact-1"), deps);
+
+    assert.equal(smsCalls.length, 0, "no SMS sent");
+    assert.equal(emailCalls.length, 0, "no email sent");
+    assert.equal(result.actionOnly, 1, "still counted as an action-only fire");
+    assert.equal(result.sent, 0);
+  });
+
+  test("GUARDRAILS still gate: a daily-cap-exceeded action-only agent is BLOCKED (no fire, no send, records guardrail_blocked)", async () => {
+    // Seed the per-agent daily counter for TODAY at the cap. The action-only fire
+    // must be blocked by the daily-cap brake — caps apply to posters too.
+    const dateKey = utcDateKey(FIXED_NOW);
+    const mem = makeFakeMemoryStore({
+      [statsKey("review-requester", dateKey)]: [
+        { kind: "daily_count", summary: "at cap", data: { count: 5 } },
+      ],
+    });
+    const { deps, smsCalls, emailCalls } = makeDeps({
+      findEventAgents: async () => [
+        actionOnlyAgent({ guardrails: { enabled: true, maxPerDayPerAgent: 5 } }),
+      ],
+      memoryStore: mem.store,
+      now: () => FIXED_NOW,
+    });
+
+    const result = await runEventAgent(bookingCompleted("contact-1"), deps);
+
+    // Blocked: no send, no fire counted, blocked counted.
+    assert.equal(smsCalls.length, 0, "blocked → no SMS");
+    assert.equal(emailCalls.length, 0, "blocked → no email");
+    assert.equal(result.actionOnly, 0, "a blocked action-only agent did NOT fire");
+    assert.equal(result.blocked, 1, "counted as blocked");
+    assert.equal(result.sent, 0);
+
+    // A guardrail_blocked record on the agent key; NO action_fired; counter NOT
+    // advanced (a blocked fire does not bump the daily count).
+    const agentKeyAppends = mem.appendCalls.filter(
+      (c) => c.key === `agents/review-requester/review-requester`,
+    );
+    assert.equal(agentKeyAppends.length, 1, "one guardrail_blocked record");
+    assert.equal(agentKeyAppends[0].entry.kind, "guardrail_blocked");
+    assert.equal(
+      (agentKeyAppends[0].entry.data as { reason?: string }).reason,
+      "daily cap",
+    );
+    assert.ok(
+      !agentKeyAppends.some((c) => c.entry.kind === "action_fired"),
+      "no action_fired on a blocked agent",
+    );
+    assert.equal(
+      statsAppends(mem.appendCalls, "review-requester", dateKey).length,
+      0,
+      "blocked fire does not advance the counter",
+    );
+  });
+
+  test("a normal review-requester (actionOnly falsy) is UNCHANGED — still composes + sends", async () => {
+    // The default review path must be byte-for-byte: an SMS is composed + sent and
+    // counted on `sent`, NOT `actionOnly`.
+    const { deps, smsCalls } = makeDeps({
+      findEventAgents: async () => [reviewAgent("sms")],
+      now: () => FIXED_NOW,
+    });
+
+    const result = await runEventAgent(bookingCompleted("contact-1"), deps);
+
+    assert.equal(smsCalls.length, 1, "the normal review path still sends");
+    assert.equal(
+      smsCalls[0].body,
+      composeReviewRequest({
+        contactName: "Jordan",
+        businessName: "Acme Plumbing",
+        reviewUrl: REVIEW_URL,
+        channel: "sms",
+      }).body,
+      "the composed review body is sent unchanged",
+    );
+    assert.equal(result.sent, 1);
+    assert.equal(result.actionOnly, 0, "a messaging agent is not an action-only fire");
+  });
+
+  test("an action-only agent never throws and a sibling messaging agent still fires", async () => {
+    // An action-only agent + a normal review agent (different skill) on one event:
+    // the poster fires (no send), the messenger sends. Proves the action-only
+    // branch returns cleanly and doesn't disturb siblings.
+    const { deps, smsCalls } = makeDeps({
+      findEventAgents: async () => [
+        actionOnlyAgent(),
+        speedAgent("sms"),
+      ],
+      now: () => FIXED_NOW,
+    });
+
+    const result = await runEventAgent(bookingCompleted("contact-1"), deps);
+
+    assert.equal(result.actionOnly, 1, "the poster fired");
+    assert.equal(smsCalls.length, 1, "the messaging sibling still sent");
+    assert.equal(smsCalls[0].skill, "speed-to-lead", "only the messaging agent sent");
+    assert.equal(result.sent, 1);
+  });
+});

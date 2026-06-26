@@ -128,6 +128,25 @@ export type EventAgentMatch = {
    *  is set but no enqueue seam is wired, the orchestrator falls back to sending
    *  immediately (a delay must never silently drop the send). */
   delayMinutes?: number | null;
+  /** 2026-06-26 — Primitive-Composition generator, P2 (Task 6). TRUE when this
+   *  agent ACTS via its tools and sends NO customer message (a poster / logger),
+   *  projected from `blueprint.actionOnly` by the caller. This is the SAFETY-
+   *  CRITICAL flag: when true the orchestrator SKIPS composing/sending the customer
+   *  SMS/email ENTIRELY (a posting agent must never text a customer) — it still
+   *  runs the GUARDRAILS gate (so caps apply), records an `action_fired` loop-memory
+   *  entry, and surfaces the run on `result.actionOnly`. The LIVE tool execution
+   *  (actually invoking Postiz / the bound MCP tool to post) is P2.1 — this fire is
+   *  recorded but does NOT yet post. Absent/false → a messaging agent (today's
+   *  compose/verify/send path, byte-for-byte). */
+  actionOnly?: boolean | null;
+  /** 2026-06-26 — Primitive-Composition generator, P2 (Task 6). The IDs of the
+   *  external tools bound to this agent, projected from `blueprint.connectors` by
+   *  the caller (each binding's `id`). Surfaced ONLY for observability on an
+   *  action-only fire — the structured log + result note which tools the fire is
+   *  meant to drive (so an unbound poster is visible). Ignored on the messaging
+   *  path. Absent/empty → no bound tools (an action-only fire logs "no tools bound",
+   *  the operator-facing signal that the agent can't actually post yet). */
+  connectorIds?: string[] | null;
 };
 
 /** The contact's reachable fields (resolved from contactId by the caller). */
@@ -233,8 +252,18 @@ export type RunEventAgentResult = {
    *  blocked message is NOT sent; the reason is recorded to loop-memory
    *  (`guardrail_blocked` / `verify_blocked` respectively) for observability. The
    *  guardrail gate runs FIRST (after the throttle, before verify), so a
-   *  guardrail-blocked send never reaches verify. */
+   *  guardrail-blocked send never reaches verify. An action-only agent blocked by
+   *  its guardrails (e.g. a daily cap) is also counted here. */
   blocked: number;
+  /** 2026-06-26 — Primitive-Composition generator, P2 (Task 6): how many matched
+   *  agents were ACTION-ONLY fires (`blueprint.actionOnly`) — a poster/logger that
+   *  ran its guardrails + was RECORDED (loop-memory `action_fired`) but sent NO
+   *  customer message. The LIVE tool execution (actually posting via the bound
+   *  tools) is P2.1 — these agents fire + are recorded but do NOT yet post. An
+   *  action-only fire is counted here, NOT in `sent` (nothing was sent to a
+   *  customer); a guardrail-blocked action-only agent is counted in `blocked`, not
+   *  here (it never fired). */
+  actionOnly: number;
   /** How many failed at send time (swallowed; surfaced here for observability). */
   failed: number;
   /**
@@ -347,6 +376,7 @@ export async function runEventAgent(
     throttled: 0,
     scheduled: 0,
     blocked: 0,
+    actionOnly: 0,
     failed: 0,
     // Only carry a memory summary when a store is wired (so a no-store run
     // leaves `memory` absent — there was nothing to recall/record). runOneAgent
@@ -497,6 +527,19 @@ async function runOneAgent(
     if (result.memory && Array.isArray(recalled)) {
       result.memory.recalled.push(...recalled);
     }
+  }
+
+  // 0a. ACTION-ONLY branch (P2 / Task 6). When the agent is a poster/logger
+  //     (`blueprint.actionOnly`), it sends NO customer message — it does its tool
+  //     work and records. This is the SAFETY-CRITICAL guard: a posting agent must
+  //     NEVER text/email a customer when it fires. So we branch HERE — after the
+  //     recall (which the guardrail gate needs) but BEFORE compose/recipient/verify/
+  //     send — into a self-contained handler that runs ONLY the guardrails gate
+  //     (caps still apply) + records the fire. The entire messaging path below is
+  //     left untouched (byte-for-byte) for non-action-only agents.
+  if (agent.actionOnly === true) {
+    await runActionOnlyAgent(event, agent, agentKey, recalled, deps, result);
+    return;
   }
 
   // 1. Compose the message via the matching PURE skill. A review with no URL
@@ -896,6 +939,228 @@ async function runOneAgent(
         `[run-event-agent] markRequested failed for ${agent.skill}:`,
         err instanceof Error ? err.message : String(err),
       );
+    }
+  }
+}
+
+/**
+ * Run a single ACTION-ONLY agent (a poster/logger — `blueprint.actionOnly`). P2 /
+ * Task 6. Mutates `result` with the outcome. NEVER composes or sends a customer
+ * message — that is the safety-critical contract (a posting agent must never text
+ * a customer). Instead it:
+ *   1. runs the GUARDRAILS gate (action-only guardrails from T3 = a daily cap,
+ *      NO quiet hours), so caps still brake a runaway poster. A tripped brake
+ *      BLOCKS the fire (counted on `result.blocked`, recorded `guardrail_blocked`).
+ *   2. records an `action_fired` loop-memory entry (the observable record that the
+ *      agent fired, noting the bound tools) + a structured log line, and advances
+ *      the per-agent daily counter (so the daily cap brakes on subsequent fires).
+ *   3. counts the fire on `result.actionOnly`.
+ *
+ * It does NOT actually invoke the bound tools yet — the LIVE tool execution
+ * (calling Postiz / the bound MCP tool to post) is P2.1. So the agent fires + is
+ * recorded but does NOT yet post; the structured log + the `action_fired` entry
+ * surface the bound tools (`agent.connectorIds`) so an unbound poster is visible.
+ *
+ * Self-contained (it re-derives its own guardrails decision + daily-counter from
+ * the pure helpers) so the messaging path in runOneAgent stays byte-for-byte.
+ * Guarded throughout — an action-only bug must never break sibling agents.
+ */
+async function runActionOnlyAgent(
+  event: FiredEvent,
+  agent: EventAgentMatch,
+  agentKey: string,
+  recalled: AgentMemoryEntry[],
+  deps: RunEventAgentDeps,
+  result: RunEventAgentResult,
+): Promise<void> {
+  // The tools this fire is meant to drive (for the log/record). Empty = unbound →
+  // the operator-facing signal that the agent can't actually post yet.
+  const connectorIds =
+    Array.isArray(agent.connectorIds) && agent.connectorIds.length > 0
+      ? agent.connectorIds.filter((id): id is string => typeof id === "string")
+      : [];
+
+  // `now` bounds BOTH the guardrail decision and the daily-counter date key (and
+  // the increment after a fire) — the same instant, exactly as the messaging path.
+  const now = deps.now?.() ?? new Date();
+
+  // Resolve the per-agent daily counter ONCE (function scope) so the gate can read
+  // it AND we can increment the SAME `_stats/<date>` note after a successful fire.
+  // Only meaningful with a memoryStore (else count = 0, key = null, no increment).
+  let dailyStatsKey: string | null = null;
+  let firedTodayByAgent = 0;
+  if (deps.memoryStore) {
+    let tz = "UTC";
+    if (deps.resolveTimezone) {
+      try {
+        const resolved = await deps.resolveTimezone(event.orgId);
+        if (typeof resolved === "string" && resolved.trim().length > 0) {
+          tz = resolved.trim();
+        }
+      } catch {
+        tz = "UTC";
+      }
+    }
+    dailyStatsKey = dailyStatsSubjectKey(dateKeyInTz(now, tz));
+    try {
+      const statEntries = await recallAgentMemory(deps.memoryStore, {
+        orgId: event.orgId,
+        agentKey,
+        subjectKey: dailyStatsKey,
+      });
+      firedTodayByAgent = maxDailyCount(statEntries);
+    } catch {
+      firedTodayByAgent = 0;
+    }
+  }
+
+  // GUARDRAILS gate. An action-only agent has no quiet hours / per-contact rules by
+  // default (it doesn't message a person), but a daily cap still brakes it. Source:
+  // the agent's own `blueprint.guardrails` (projected as `guardrails`) or, if
+  // absent, the per-skill default. The decision is PURE (evaluateGuardrails never
+  // throws); we feed `now`, the last fire we recalled for this contact, and the
+  // per-agent daily count. A tripped brake BLOCKS the fire. Guarded (fail OPEN so a
+  // brake bug never silently swallows the fire — but never crashes the handler).
+  const guardrails = agent.guardrails ?? defaultGuardrailsForSkill(agent.skill);
+  if (guardrails) {
+    let lastFiredAt: string | null = null;
+    let lastFiredMs = -Infinity;
+    for (const e of recalled) {
+      if (e.kind !== "action_fired") continue;
+      if (typeof e.at !== "string") continue;
+      const ms = Date.parse(e.at);
+      if (Number.isFinite(ms) && ms > lastFiredMs) {
+        lastFiredMs = ms;
+        lastFiredAt = e.at;
+      }
+    }
+
+    let decision = evaluateGuardrails(guardrails, {
+      now,
+      lastSentToContactAt: lastFiredAt,
+      sentTodayByAgent: firedTodayByAgent,
+    });
+    if (typeof decision?.allow !== "boolean") {
+      decision = { allow: true };
+    }
+
+    if (!decision.allow) {
+      // BLOCKED by a brake — do NOT fire. Count it (reusing `blocked`), log the
+      // reason, and record a `guardrail_blocked` entry (so the agent "remembers"
+      // why). Best-effort + guarded. The daily counter is NOT advanced.
+      result.blocked += 1;
+      const reason = decision.reason ?? "guardrail";
+      console.warn(
+        JSON.stringify({
+          action: "event_agent.action_only.guardrail_blocked",
+          orgId: event.orgId,
+          skill: agent.skill,
+          tools: connectorIds,
+          reason,
+        }),
+      );
+      if (deps.memoryStore) {
+        const at = deps.now ? deps.now().toISOString() : undefined;
+        const blockedEntry: AgentMemoryEntry = {
+          ...(at ? { at } : {}),
+          kind: "guardrail_blocked",
+          summary: `Guardrail blocked action-only ${agent.skill}: ${reason}`,
+          data: { reason, actionOnly: true },
+        };
+        try {
+          await recordAgentMemory(deps.memoryStore, {
+            orgId: event.orgId,
+            agentKey,
+            subjectKey: agentKey,
+            entry: blockedEntry,
+          });
+        } catch (err) {
+          console.warn(
+            `[run-event-agent] recordAgentMemory (action_only guardrail_blocked) failed for ${agent.skill}:`,
+            err instanceof Error ? err.message : String(err),
+          );
+        }
+        if (result.memory) {
+          result.memory.recorded.push(blockedEntry);
+        }
+      }
+      return;
+    }
+  }
+
+  // FIRE. We do NOT send a customer message and we do NOT (yet) invoke the bound
+  // tools — that live tool-execution is P2.1.
+  // TODO(P2.1): invoke bound tools (agent.connectorIds → the connector/tool-invoke
+  // seam, e.g. actually call Postiz to post) using the agent's skill as context.
+  // Until then this fire is RECORDED + logged but no post is made.
+  result.actionOnly += 1;
+  console.info(
+    JSON.stringify({
+      action: "event_agent.action_only.fired",
+      orgId: event.orgId,
+      skill: agent.skill,
+      tools: connectorIds,
+      liveToolExecution: "pending_p2_1",
+      note:
+        connectorIds.length > 0
+          ? "action-only fire recorded; live tool execution is P2.1 (no post yet)"
+          : "action-only fire recorded but NO tools bound — connect a tool to post (live execution is P2.1)",
+    }),
+  );
+
+  // Record the fire to loop-memory as an action so a later run/`/runs` can OBSERVE
+  // it. Best-effort + guarded — a misbehaving store must never break the handler.
+  if (deps.memoryStore) {
+    const at = deps.now ? deps.now().toISOString() : undefined;
+    const entry: AgentMemoryEntry = {
+      ...(at ? { at } : {}),
+      kind: "action_fired",
+      summary:
+        connectorIds.length > 0
+          ? `Action-only ${agent.skill} fired (tools: ${connectorIds.join(", ")}); live tool execution pending (P2.1)`
+          : `Action-only ${agent.skill} fired with NO tools bound; live tool execution pending (P2.1)`,
+      data: { actionOnly: true, tools: connectorIds, liveToolExecution: "pending_p2_1" },
+    };
+    try {
+      await recordAgentMemory(deps.memoryStore, {
+        orgId: event.orgId,
+        agentKey,
+        subjectKey: agentKey,
+        entry,
+      });
+    } catch (err) {
+      console.warn(
+        `[run-event-agent] recordAgentMemory (action_fired) failed for ${agent.skill}:`,
+        err instanceof Error ? err.message : String(err),
+      );
+    }
+    if (result.memory) {
+      result.memory.recorded.push(entry);
+    }
+
+    // Advance the per-agent DAILY COUNTER (the budget brake's input) on a fire —
+    // same append-only `daily_count` shape the messaging path uses, so the daily
+    // cap brakes subsequent fires. Best-effort + guarded.
+    if (dailyStatsKey) {
+      const counterEntry: AgentMemoryEntry = {
+        ...(at ? { at } : {}),
+        kind: "daily_count",
+        summary: `Daily action count for ${agent.skill} → ${firedTodayByAgent + 1}`,
+        data: { count: firedTodayByAgent + 1 },
+      };
+      try {
+        await recordAgentMemory(deps.memoryStore, {
+          orgId: event.orgId,
+          agentKey,
+          subjectKey: dailyStatsKey,
+          entry: counterEntry,
+        });
+      } catch (err) {
+        console.warn(
+          `[run-event-agent] recordAgentMemory (action_only daily_count) failed for ${agent.skill}:`,
+          err instanceof Error ? err.message : String(err),
+        );
+      }
     }
   }
 }

@@ -190,6 +190,8 @@ export function buildRunEventAgentDeps(orgId?: string): RunEventAgentDeps {
           reviewUrl?: string;
           verify?: import("@/lib/agents/verify/agent-verify").VerifyRubric;
           guardrails?: import("@/lib/agents/guardrails/agent-guardrails").Guardrails;
+          actionOnly?: boolean;
+          connectors?: import("@/lib/agents/mcp/connectors").ConnectorBinding[];
         };
         const trigger = resolveAgentTrigger(
           blueprint.trigger as Parameters<typeof resolveAgentTrigger>[0],
@@ -256,6 +258,20 @@ export function buildRunEventAgentDeps(orgId?: string): RunEventAgentDeps {
           // non-negative integer). 0 → send immediately (today); > 0 → the
           // orchestrator enqueues a deferred send via enqueueScheduledSend below.
           delayMinutes: resolveSendDelayMinutes(trigger),
+          // 2026-06-26 — Primitive-Composition generator, P2 (Task 6): project the
+          // SAFETY-CRITICAL action-only flag (a poster/logger sends NO customer
+          // message) + the bound-tool ids (for the action-only fire's log/record).
+          // The composer (compose-authored.ts) sets `blueprint.actionOnly` true ⇔
+          // the authored channel is "none". true → the orchestrator skips the
+          // customer compose/send entirely (it never texts a customer), runs only
+          // the guardrails gate, and records the fire. The live tool execution is
+          // P2.1 — the fire is recorded but does not yet post.
+          actionOnly: blueprint.actionOnly === true,
+          connectorIds: Array.isArray(blueprint.connectors)
+            ? blueprint.connectors
+                .map((c) => (c && typeof c.id === "string" ? c.id : null))
+                .filter((id): id is string => id !== null)
+            : [],
         });
       }
       return matches;
