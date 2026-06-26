@@ -36,6 +36,8 @@ import {
   STARTER_TEMPLATES,
   type StarterTemplate,
 } from "@/lib/agent-templates/starter-pack";
+import { bindToolsForIntent } from "@/lib/agents/generate/bind-tools";
+import type { ConnectorBinding } from "@/lib/agents/mcp/connectors";
 
 // ─── public types ────────────────────────────────────────────────────────────
 
@@ -151,6 +153,24 @@ function verifyChannelFor(trigger: AgentTrigger): "sms" | "email" | undefined {
   return trigger.channel === "email" ? "email" : undefined;
 }
 
+/**
+ * Dedupe a list of connector bindings by `kind`+`id`, preserving the FIRST
+ * occurrence (so any connector the base blueprint already carried wins over a
+ * later tool-bound one of the same kind+id) and the original order. Returns a new
+ * array; the inputs are not mutated.
+ */
+function dedupeConnectors(connectors: ConnectorBinding[]): ConnectorBinding[] {
+  const out: ConnectorBinding[] = [];
+  const seen = new Set<string>();
+  for (const c of connectors) {
+    const key = `${c.kind}:${c.id}`;
+    if (seen.has(key)) continue;
+    seen.add(key);
+    out.push(c);
+  }
+  return out;
+}
+
 /** Append the operator's extra instruction to the base prompt as its own line.
  *  An empty/whitespace hint folds nothing (returns the base unchanged). */
 function foldPromptHint(base: string, hint?: string): string {
@@ -174,7 +194,11 @@ function foldPromptHint(base: string, hint?: string): string {
  *      base guardrails if the skill has no defaults;
  *   5. set reviewUrl when a URL is known (ctx wins over the intent's hint);
  *   6. fold a promptHint into the prompt (customSkillMd);
- *   7. compute warnings (no review link for review-requester; unknown skill).
+ *   7. bind the external tools the sentence implies (bindToolsForIntent) onto
+ *      blueprint.connectors — merged with any base connectors, deduped by
+ *      kind+id; a no-tool agent's connectors stay exactly as the base left them;
+ *   8. compute warnings (no review link for review-requester; unknown skill) and
+ *      append the bound tools' warnings (empty in this pure layer).
  */
 export function assembleAgentBundle(
   intent: AgentIntent,
@@ -219,7 +243,24 @@ export function assembleAgentBundle(
     intent.promptHint,
   );
 
-  // 7. warnings — error-proofing surfaced to the operator before publish.
+  // 7. bind the EXTERNAL tools the sentence implies (L5.1). bindToolsForIntent
+  //    runs the keyword catalog over intent.promptHint → ConnectorBinding[].
+  //    Merge them onto whatever the base blueprint already carried, deduped by
+  //    kind+id (base wins), and ONLY assign when there's at least one so a
+  //    no-tool agent keeps connectors exactly as it was (undefined for the
+  //    starters). bound.warnings is [] in this pure layer (I/O warnings — e.g.
+  //    "connect Notion" — are added by the action/wire layer), so the bundle's
+  //    warnings stay empty for a non-tool agent.
+  const bound = bindToolsForIntent(intent);
+  const mergedConnectors = dedupeConnectors([
+    ...(blueprint.connectors ?? []),
+    ...bound.connectors,
+  ]);
+  if (mergedConnectors.length > 0) {
+    blueprint.connectors = mergedConnectors;
+  }
+
+  // 8. warnings — error-proofing surfaced to the operator before publish.
   const warnings: string[] = [];
   if (skill === "review-requester" && !reviewUrl) {
     warnings.push(
@@ -231,6 +272,8 @@ export function assembleAgentBundle(
       `Unrecognized skill '${skill}' — generated a safe inbound assistant; review before publishing.`,
     );
   }
+  // Tool-binding warnings (empty in the pure layer; reserved for the action layer).
+  warnings.push(...bound.warnings);
 
   // name / description: intent override → starter copy → humanized skill.
   const name = intent.name ?? starter?.name ?? humanizeSkill(skill);

@@ -289,3 +289,107 @@ describe("assembleAgentBundle — purity", () => {
     assert.notEqual(b.blueprint.trigger, source.blueprint.trigger);
   });
 });
+
+// ─── tool binding (L5.1 T3) — fold bound connectors into the blueprint ───────
+//
+// assembleAgentBundle runs bindToolsForIntent over the intent's promptHint and
+// merges the resulting ConnectorBinding[] onto blueprint.connectors (deduped by
+// kind+id). A no-tool agent's connectors stay exactly as the base left them
+// (undefined for the starters) and the bundle gains no warnings (the pure bind
+// layer returns warnings: []).
+
+describe("assembleAgentBundle — tool binding", () => {
+  test("a social-post intent binds the vetted Postiz connector", () => {
+    const b = assembleAgentBundle({
+      skill: "social-poster",
+      trigger: { kind: "schedule", cron: "0 9 * * 1", channel: "digest" },
+      promptHint: "post weekly to Instagram",
+    });
+    assert.ok(b.blueprint.connectors, "expected connectors to be set");
+    const postiz = b.blueprint.connectors.find((c) => c.id === "postiz");
+    assert.ok(postiz, "expected a Postiz binding");
+    assert.equal(postiz.kind, "vetted");
+    assert.equal(
+      postiz.kind === "vetted" ? postiz.serviceName : undefined,
+      "postiz",
+    );
+    // resting (pre-discovery) allowlist — empty until the operator connects it.
+    assert.deepEqual(postiz.enabledTools, []);
+  });
+
+  test("a 'log to Notion' intent binds the composio notion toolkit", () => {
+    const b = assembleAgentBundle({
+      skill: "speed-to-lead",
+      trigger: { kind: "event", event: "lead.created", channel: "sms" },
+      promptHint: "log every lead to Notion",
+    });
+    assert.ok(b.blueprint.connectors, "expected connectors to be set");
+    const notion = b.blueprint.connectors.find((c) => c.id === "notion");
+    assert.ok(notion, "expected a Notion binding");
+    assert.equal(notion.kind, "composio");
+    assert.deepEqual(
+      notion.kind === "composio" ? notion.enabledToolkits : undefined,
+      ["notion"],
+    );
+    assert.deepEqual(notion.enabledTools, []);
+  });
+
+  test("tool binding adds no warnings in the pure layer", () => {
+    const b = assembleAgentBundle({
+      skill: "speed-to-lead",
+      trigger: { kind: "event", event: "lead.created", channel: "sms" },
+      promptHint: "log every lead to Notion",
+    });
+    // speed-to-lead needs no review URL, and the pure bind layer returns no
+    // warnings — so the bundle stays warning-free even with a tool bound.
+    assert.deepEqual(b.warnings, []);
+  });
+
+  test("a no-tool agent keeps connectors undefined (no regression)", () => {
+    // review-requester's promptHint has no tool keyword → nothing to bind, so
+    // blueprint.connectors must stay exactly as the base left it (undefined).
+    const b = assembleAgentBundle(reviewIntent({ promptHint: "ask for a 5-star review" }), {
+      reviewUrl: REVIEW_URL,
+    });
+    assert.equal(b.blueprint.connectors, undefined);
+    assert.deepEqual(b.warnings, []);
+  });
+
+  test("a review-requester with no promptHint also has no connectors", () => {
+    const b = assembleAgentBundle(reviewIntent(), { reviewUrl: REVIEW_URL });
+    assert.equal(b.blueprint.connectors, undefined);
+  });
+
+  test("two keywords for the same tool collapse to one deduped binding", () => {
+    // "Instagram" and "Facebook" both map to Postiz — the kind+id dedupe must
+    // leave exactly ONE Postiz binding (no dup of the same kind+id).
+    const b = assembleAgentBundle({
+      skill: "social-poster",
+      trigger: { kind: "schedule", cron: "0 9 * * 1", channel: "digest" },
+      promptHint: "post our highlight to Instagram and Facebook every week",
+    });
+    assert.ok(b.blueprint.connectors, "expected connectors to be set");
+    const postizBindings = b.blueprint.connectors.filter(
+      (c) => c.kind === "vetted" && c.id === "postiz",
+    );
+    assert.equal(
+      postizBindings.length,
+      1,
+      `expected exactly one Postiz binding, got ${postizBindings.length}`,
+    );
+  });
+
+  test("a sentence naming two different tools binds both (deduped, distinct)", () => {
+    const b = assembleAgentBundle({
+      skill: "speed-to-lead",
+      trigger: { kind: "event", event: "lead.created", channel: "sms" },
+      promptHint: "post the win to Instagram and also log every lead to Notion",
+    });
+    assert.ok(b.blueprint.connectors, "expected connectors to be set");
+    const ids = b.blueprint.connectors.map((c) => `${c.kind}:${c.id}`);
+    assert.ok(ids.includes("vetted:postiz"), "expected Postiz");
+    assert.ok(ids.includes("composio:notion"), "expected Notion");
+    // no duplicate kind+id pairs survived the merge dedupe.
+    assert.equal(new Set(ids).size, ids.length, "connectors must be deduped");
+  });
+});
