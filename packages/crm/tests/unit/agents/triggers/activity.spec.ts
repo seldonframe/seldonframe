@@ -81,6 +81,50 @@ describe("summarizeEventAgentActivity", () => {
     assert.equal(rows[1].contactLabel, "Dana Lee");
   });
 
+  test("carries clientLabel onto rows (em dash when absent)", () => {
+    const sends: EventAgentSendRow[] = [
+      {
+        source: "agent:review-requester",
+        channel: "sms",
+        contactName: "Dana Lee",
+        clientLabel: "Acme Plumbing",
+        at: "2026-06-26T10:00:00.000Z",
+      },
+      {
+        // No clientLabel → renders an em dash (builder-org feed, no client).
+        source: "agent:review-requester",
+        channel: "email",
+        contactName: "No Client",
+        at: "2026-06-26T09:00:00.000Z",
+      },
+      {
+        // Blank/whitespace clientLabel also collapses to an em dash.
+        source: "agent:speed-to-lead",
+        channel: "sms",
+        contactName: "Blank Client",
+        clientLabel: "   ",
+        at: "2026-06-26T08:00:00.000Z",
+      },
+    ];
+    const scheduled: EventAgentScheduledRow[] = [
+      {
+        agentSkill: "review-requester",
+        channel: "sms",
+        status: "pending",
+        contactName: "Pending Pat",
+        clientLabel: "Bright Dental",
+        dueAt: "2026-06-26T11:00:00.000Z",
+      },
+    ];
+    const rows = summarizeEventAgentActivity({ sends, scheduled });
+    assert.equal(rows.length, 4);
+    // Newest-first: scheduled (11:00) → send (10:00) → send (09:00) → send (08:00).
+    assert.equal(rows[0].clientLabel, "Bright Dental");
+    assert.equal(rows[1].clientLabel, "Acme Plumbing");
+    assert.equal(rows[2].clientLabel, "—");
+    assert.equal(rows[3].clientLabel, "—");
+  });
+
   test("maps scheduled statuses to outcomes (+ blocked detail)", () => {
     const scheduled: EventAgentScheduledRow[] = [
       {

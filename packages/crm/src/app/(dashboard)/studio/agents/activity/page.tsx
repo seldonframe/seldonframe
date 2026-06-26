@@ -73,6 +73,7 @@ export default async function EventAgentActivityPage() {
               <tr className="border-b text-left text-xs text-muted-foreground">
                 <th className="px-4 py-2.5 font-medium">When</th>
                 <th className="px-4 py-2.5 font-medium">Agent</th>
+                <th className="px-4 py-2.5 font-medium">Client</th>
                 <th className="px-4 py-2.5 font-medium">Channel</th>
                 <th className="px-4 py-2.5 font-medium">Contact</th>
                 <th className="px-4 py-2.5 font-medium">Outcome</th>
@@ -146,6 +147,7 @@ function ActivityRow({ row }: { row: EventAgentActivityRow }) {
           </span>
         )}
       </td>
+      <td className="px-4 py-2.5 text-muted-foreground">{row.clientLabel}</td>
       <td className="px-4 py-2.5 uppercase text-muted-foreground">
         {row.channel}
       </td>

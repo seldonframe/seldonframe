@@ -20,6 +20,7 @@ import { contacts } from "@/db/schema/contacts";
 import { emails } from "@/db/schema/emails";
 import { smsMessages } from "@/db/schema/sms-messages";
 import { eventAgentScheduledSends } from "@/db/schema/event-agent-scheduled-sends";
+import { deployments } from "@/db/schema/deployments";
 import {
   summarizeEventAgentActivity,
   type EventAgentActivityRow,
@@ -45,6 +46,31 @@ function sentIso(sentAt: Date | null, createdAt: Date): string {
 }
 
 /**
+ * Resolve the CLIENT this feed belongs to, or null. A deployed agent retargets
+ * its outbound sends into the auto-provisioned CLIENT workspace (deployments
+ * .clientOrgId), and a `booking.completed` / `lead.created` resolves its orgId
+ * from that client org — so when the feed's `orgId` IS a provisioned client
+ * workspace, every row in the feed belongs to that one client. We look up the
+ * deployment whose `clientOrgId` equals this org and return its `clientName`
+ * (most-recently-updated wins if an org somehow has several). When the org is the
+ * builder's own workspace (not a client), there's no deployment → null → the rows
+ * render "—". Read-only; single indexed lookup per feed (not per row).
+ */
+export async function resolveClientLabelForOrg(
+  orgId: string,
+): Promise<string | null> {
+  if (!orgId) return null;
+  const [row] = await db
+    .select({ clientName: deployments.clientName })
+    .from(deployments)
+    .where(eq(deployments.clientOrgId, orgId))
+    .orderBy(desc(deployments.updatedAt))
+    .limit(1);
+  const name = row?.clientName?.trim();
+  return name ? name : null;
+}
+
+/**
  * Load the org's agent-tagged outbound sends (both channels), newest first.
  * Filters to rows whose `metadata->>'source'` starts with 'agent:' — i.e. the
  * event-agent path's sends (and Send-test sends, which end ':test'). Left-joins
@@ -53,6 +79,7 @@ function sentIso(sentAt: Date | null, createdAt: Date): string {
 export async function loadAgentSends(
   orgId: string,
   limit: number,
+  clientLabel: string | null = null,
 ): Promise<EventAgentSendRow[]> {
   // SMS sends.
   const smsRows = await db
@@ -102,6 +129,7 @@ export async function loadAgentSends(
       channel: "sms" as const,
       contactName: joinName(r.firstName, r.lastName),
       toAddress: r.toAddress,
+      clientLabel,
       at: sentIso(r.sentAt, r.createdAt),
     })),
     ...emailRows.map((r) => ({
@@ -109,6 +137,7 @@ export async function loadAgentSends(
       channel: "email" as const,
       contactName: joinName(r.firstName, r.lastName),
       toAddress: r.toAddress,
+      clientLabel,
       at: sentIso(r.sentAt, r.createdAt),
     })),
   ];
@@ -123,6 +152,7 @@ export async function loadAgentSends(
 export async function loadScheduledSends(
   orgId: string,
   limit: number,
+  clientLabel: string | null = null,
 ): Promise<EventAgentScheduledRow[]> {
   const rows = await db
     .select({
@@ -144,6 +174,7 @@ export async function loadScheduledSends(
     agentSkill: r.agentSkill,
     channel: r.channel,
     contactName: joinName(r.firstName, r.lastName),
+    clientLabel,
     status: r.status,
     dueAt: r.dueAt.toISOString(),
     lastError: r.lastError,
@@ -160,9 +191,15 @@ export async function loadEventAgentActivity(
   orgId: string,
   limit = 50,
 ): Promise<EventAgentActivityRow[]> {
+  // Resolve the feed's client ONCE (a single indexed deployments lookup), then
+  // thread it onto every row — the whole feed shares one client because a single
+  // org's outbound rows all belong to that org (the client workspace, when this
+  // org is one). The two source loads then carry it onto each row they emit. All
+  // three queries run in parallel.
+  const clientLabel = await resolveClientLabelForOrg(orgId);
   const [sends, scheduled] = await Promise.all([
-    loadAgentSends(orgId, limit),
-    loadScheduledSends(orgId, limit),
+    loadAgentSends(orgId, limit, clientLabel),
+    loadScheduledSends(orgId, limit, clientLabel),
   ]);
   return summarizeEventAgentActivity({ sends, scheduled }, limit);
 }

@@ -40,6 +40,11 @@ export type EventAgentActivityRow = {
   /** A human label for the recipient — the contact name when known, else the
    *  raw address (phone/email), else "—". */
   contactLabel: string;
+  /** Which CLIENT this fire belongs to — the deployment's client name when the
+   *  feed's org is a provisioned client workspace (a deployed agent retargets its
+   *  sends into the client org), else "—". Resolved once per feed by the loader
+   *  and carried onto each row from the source's `clientLabel`. */
+  clientLabel: string;
   /** Which bucket this row is. */
   outcome: EventAgentActivityOutcome;
   /** Optional one-line detail: the reason a blocked row failed, or a "(test)" tag
@@ -60,6 +65,10 @@ export type EventAgentSendRow = {
   contactName?: string | null;
   /** The raw destination (toNumber / toEmail), shown when no name is known. */
   toAddress?: string | null;
+  /** The client this send belongs to (the feed org's deployment client name).
+   *  Absent → "—". Resolved per-feed by the loader (same value for every row in a
+   *  single org's feed) and threaded onto the folded row. */
+  clientLabel?: string | null;
   /** When it was sent (sentAt ?? createdAt), ISO. */
   at: string;
 };
@@ -69,6 +78,9 @@ export type EventAgentScheduledRow = {
   agentSkill: string;
   channel: string;
   contactName?: string | null;
+  /** The client this scheduled send belongs to (the feed org's deployment client
+   *  name). Absent → "—". Resolved per-feed by the loader. */
+  clientLabel?: string | null;
   status: "pending" | "sent" | "failed" | "skipped" | string;
   /** When the send is/was due, ISO. */
   dueAt: string;
@@ -118,6 +130,12 @@ function contactLabelFrom(
   return "—";
 }
 
+/** The client label: a trimmed non-empty client name, else an em dash. Pure. */
+function clientLabelFrom(clientLabel: string | null | undefined): string {
+  const name = typeof clientLabel === "string" ? clientLabel.trim() : "";
+  return name || "—";
+}
+
 /** A valid ISO/parseable timestamp's epoch ms, or -Infinity (sorts last). Pure. */
 function ms(at: string): number {
   const n = Date.parse(at);
@@ -155,6 +173,7 @@ export function summarizeEventAgentActivity(
       skill,
       channel: s.channel,
       contactLabel: contactLabelFrom(s.contactName, s.toAddress),
+      clientLabel: clientLabelFrom(s.clientLabel),
       outcome: "sent",
       ...(isTest ? { detail: "Operator test" } : {}),
       isTest,
@@ -172,6 +191,7 @@ export function summarizeEventAgentActivity(
       skill: (sc.agentSkill ?? "").trim(),
       channel: sc.channel,
       contactLabel: contactLabelFrom(sc.contactName, null),
+      clientLabel: clientLabelFrom(sc.clientLabel),
       outcome,
       ...(detail ? { detail } : {}),
       // Scheduled-queue rows are never operator tests (those send immediately).
