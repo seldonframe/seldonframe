@@ -30,7 +30,11 @@ import type { ChannelAdapter, InboundMessage } from "./channel-adapter";
 import type { CalendarBinding } from "@/lib/agents/booking/calendar-backend";
 import type { BookingPolicy } from "@/lib/agents/booking/booking-policy";
 import { resolveBookingPolicy } from "@/lib/agents/booking/booking-policy";
-import type { DeploymentCustomization } from "@/lib/agents/persona/deployment-customization";
+import type {
+  DeploymentCustomization,
+  DeploymentFaqEntry,
+  DeploymentService,
+} from "@/lib/agents/persona/deployment-customization";
 import { resolveDeploymentPersona } from "@/lib/agents/persona/deployment-customization";
 import { deploymentToBinding } from "@/lib/deployments/booking-binding";
 
@@ -284,7 +288,12 @@ export type RunChannelTurnDeps = {
     userMessage: string;
     bookingBinding?: CalendarBinding;
     bookingPolicy?: BookingPolicy;
-    persona?: { greeting: string | null; prompt: string | null };
+    persona?: {
+      greeting: string | null;
+      prompt: string | null;
+      faq: DeploymentFaqEntry[] | null;
+      services: DeploymentService[] | null;
+    };
   }) => Promise<ExecuteTurnResult>;
 };
 
@@ -424,13 +433,18 @@ export async function runChannelTurn(
             ),
           }
         : {}),
-      // Per-deployment persona (P1): on the deployment path, resolve the EFFECTIVE
-      // greeting + prompt (deployment override OR template default with its
-      // `{placeholders}` filled/dropped) and thread them so the client agent
-      // greets as the client and the script never leaks a literal `{business
-      // name}`. Text channels carry no TTS voice, so voiceId is dropped here.
-      // Gated on the binding (the deployment-first marker) so the workspace path
-      // stays byte-for-byte unchanged (prompt = the agent's own blueprint).
+      // Per-deployment persona (P1 resolve + P2 consume): on the deployment path,
+      // resolve the EFFECTIVE greeting + prompt + faq + services (deployment
+      // override OR template default with its `{placeholders}` filled/dropped) and
+      // thread them so the client agent greets as the client, the script never
+      // leaks a literal `{business name}`, and the model grounds on the client's
+      // own FAQ + services. Text channels carry no TTS voice, so voiceId is dropped
+      // here. The resolver's templateFaq/templateServices aren't in scope on the
+      // channel path (the resolver only loads the deployment's customization, not
+      // the template blueprint), so they're passed null → the customization's faq/
+      // services win WHOLE when present, else null (the agent's own blueprint FAQ
+      // + soul services stand). Gated on the binding (the deployment-first marker)
+      // so the workspace path stays byte-for-byte unchanged.
       ...(agent.bookingBinding
         ? {
             persona: (() => {
@@ -438,10 +452,17 @@ export async function runChannelTurn(
                 templateGreeting: agent.templateGreeting ?? null,
                 templateScript: agent.templateScript ?? null,
                 templateVoiceId: null, // text channels have no TTS voice
+                templateFaq: null,
+                templateServices: null,
                 customization: agent.customization ?? null,
                 clientName: agent.clientName ?? null,
               });
-              return { greeting: p.greeting, prompt: p.prompt };
+              return {
+                greeting: p.greeting,
+                prompt: p.prompt,
+                faq: p.faq,
+                services: p.services,
+              };
             })(),
           }
         : {}),

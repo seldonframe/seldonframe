@@ -36,7 +36,8 @@ import {
   type AgentValidatorResult,
 } from "@/db/schema";
 import { getAIClient } from "@/lib/ai/client";
-import { composeSystemPrompt } from "./prompt";
+import { composeSystemPrompt, applyDeploymentPersona } from "./prompt";
+import type { DeploymentPromptPersona } from "./prompt";
 import { runValidators } from "./validators";
 import { composeCorrectionPrompt, selectFinalFallback } from "./fallbacks";
 import {
@@ -94,6 +95,15 @@ export async function executeTurn(input: {
    *  booking tools shape slots + the required-fields gate from the client's
    *  rules. Absent → the tools fall back to system defaults. */
   bookingPolicy?: BookingPolicy;
+  /** DEPLOYED-agent only (P2). The RESOLVED per-deployment persona
+   *  run-channel-turn derives (greeting / prompt / faq / services), already
+   *  placeholder-filled. Applied to the prompt-builder inputs via
+   *  applyDeploymentPersona so the deployed client agent speaks AS the client:
+   *  prompt → customSkillMd, faq → blueprint.faq, services → soul.services,
+   *  greeting → opener directive. Absent for workspace/operator agents → the
+   *  prompt is composed from the agent's own blueprint/soul, byte-for-byte
+   *  unchanged. */
+  persona?: DeploymentPromptPersona;
 }): Promise<ExecuteTurnResult> {
   const t0 = Date.now();
 
@@ -226,10 +236,26 @@ export async function executeTurn(input: {
   // 5. System prompt + tools
   // blueprintOverride is set by the eval runner for fixture-injection scenarios
   // (e.g. poisoned FAQ entries). Never present in production paths.
-  const blueprint = (input.blueprintOverride ?? agent.blueprint ?? {}) as AgentBlueprint;
+  const baseBlueprint = (input.blueprintOverride ?? agent.blueprint ?? {}) as AgentBlueprint;
+  const baseSoul =
+    (orgRow.soul as Parameters<typeof composeSystemPrompt>[0]["soul"]) ?? null;
+  // Per-deployment persona (P2) — splice the RESOLVED client persona into the
+  // prompt-builder inputs, mirroring the voice path: prompt → customSkillMd,
+  // faq → blueprint.faq, services → soul.services, greeting → opener directive.
+  // Absent (workspace/operator agents) → byte-for-byte the same inputs as before
+  // (applyDeploymentPersona returns blueprint/soul unchanged + greetingPrefix null).
+  const {
+    blueprint,
+    soul: personaSoul,
+    greetingPrefix,
+  } = applyDeploymentPersona({
+    blueprint: baseBlueprint,
+    soul: baseSoul,
+    persona: input.persona ?? null,
+  });
   const systemPrompt = await composeSystemPrompt({
     orgName: orgRow.name,
-    soul: (orgRow.soul as Parameters<typeof composeSystemPrompt>[0]["soul"]) ?? null,
+    soul: personaSoul,
     blueprint,
     archetype: agent.archetype,
     testMode: conv.status === "test",
@@ -238,6 +264,8 @@ export async function executeTurn(input: {
     // anchors the resolution to the operator's local time.
     now: new Date(),
     timezone: orgRow.timezone ?? "UTC",
+    // Per-deployment opener (P2) — null on the workspace path → no opener section.
+    greetingPrefix,
   });
   // The seam: native (capability-filtered) tools PLUS any bound MCP connector
   // tools (blueprint.connectors), wrapped to look native. With no connectors

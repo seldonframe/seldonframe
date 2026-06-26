@@ -350,13 +350,20 @@ describe("runChannelTurn", () => {
   // and threads them to executeTurn so the client agent speaks AS the client and
   // the script never leaks a literal {business name}. Gated on bookingBinding
   // (the deployment-first marker); the workspace path threads NO persona.
-  type PersonaArg = { greeting: string | null; prompt: string | null } | undefined;
+  type PersonaArg =
+    | {
+        greeting: string | null;
+        prompt: string | null;
+        faq: Array<{ q: string; a: string }> | null;
+        services: Array<{ name: string; description?: string; price?: string }> | null;
+      }
+    | undefined;
 
   function capturePersonaDeps(agent: ResolvedAgent, capture: (p: PersonaArg) => void): RunChannelTurnDeps {
     return {
       resolveInboundAgent: async () => agent,
       getOrCreateConversation: async () => "conv-persona",
-      executeTurn: async (arg: { persona?: { greeting: string | null; prompt: string | null } }) => {
+      executeTurn: async (arg: { persona?: PersonaArg }) => {
         capture(arg.persona);
         return { ok: true, assistantMessage: "ok" };
       },
@@ -418,6 +425,85 @@ describe("runChannelTurn", () => {
     assert.match(persona!.prompt!, /You are the receptionist for Bright Smile Dental\./);
     assert.match(persona!.prompt!, /have a great\./);
     assert.doesNotMatch(persona!.prompt!, /[{}]/);
+  });
+
+  test("customization.script → executeTurn receives persona.prompt = that script (verbatim)", async () => {
+    let persona: PersonaArg;
+    const deps = capturePersonaDeps(
+      {
+        agentId: "a",
+        orgId: "client-org-1",
+        bookingBinding: { mode: "native" },
+        // An explicit script override is authored for this client → used VERBATIM
+        // (its {tokens} are NOT filled by the resolver).
+        customization: { script: "Always greet by first name and confirm the address." },
+        templateScript: "TEMPLATE default script that must be overridden.",
+        clientName: "Bright Smile Dental",
+      },
+      (p) => (persona = p),
+    );
+    const res = await runChannelTurn(deps, makeInbound(), { sendReply: async () => {} });
+    assert.equal(res.handled, true);
+    assert.equal(persona?.prompt, "Always greet by first name and confirm the address.");
+  });
+
+  test("customization.faq → executeTurn receives persona.faq (reaches the prompt context)", async () => {
+    let persona: PersonaArg;
+    const deps = capturePersonaDeps(
+      {
+        agentId: "a",
+        orgId: "client-org-1",
+        bookingBinding: { mode: "native" },
+        customization: {
+          faq: [{ q: "Do you offer financing?", a: "Yes, 0% for 12 months." }],
+        },
+        clientName: "Bright Smile Dental",
+      },
+      (p) => (persona = p),
+    );
+    await runChannelTurn(deps, makeInbound(), { sendReply: async () => {} });
+    assert.deepEqual(persona?.faq, [
+      { q: "Do you offer financing?", a: "Yes, 0% for 12 months." },
+    ]);
+  });
+
+  test("customization.services → executeTurn receives persona.services", async () => {
+    let persona: PersonaArg;
+    const deps = capturePersonaDeps(
+      {
+        agentId: "a",
+        orgId: "client-org-1",
+        bookingBinding: { mode: "native" },
+        customization: {
+          services: [{ name: "Deep Clean", description: "90 min", price: "$250" }],
+        },
+        clientName: "Bright Smile Dental",
+      },
+      (p) => (persona = p),
+    );
+    await runChannelTurn(deps, makeInbound(), { sendReply: async () => {} });
+    assert.deepEqual(persona?.services, [
+      { name: "Deep Clean", description: "90 min", price: "$250" },
+    ]);
+  });
+
+  test("no customization faq/services → persona.faq + persona.services are null", async () => {
+    let persona: PersonaArg;
+    const deps = capturePersonaDeps(
+      {
+        agentId: "a",
+        orgId: "client-org-1",
+        bookingBinding: { mode: "native" },
+        // Greeting-only customization → faq/services defer to null (the agent's
+        // own blueprint FAQ + soul services stand in executeTurn).
+        customization: { greeting: "Hi!" },
+        clientName: "Bright Smile Dental",
+      },
+      (p) => (persona = p),
+    );
+    await runChannelTurn(deps, makeInbound(), { sendReply: async () => {} });
+    assert.equal(persona?.faq, null);
+    assert.equal(persona?.services, null);
   });
 
   test("workspace agent (no bookingBinding) → executeTurn receives NO persona (unchanged)", async () => {

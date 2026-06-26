@@ -17,8 +17,12 @@
 // As Claude gets better, we add more nuance HERE. No code restructure.
 // This is the "fat skill" layer in thin-harness/fat-skill.
 
-import type { OrgSoul } from "@/lib/soul/types";
+import type { OrgSoul, SoulService } from "@/lib/soul/types";
 import type { AgentBlueprint } from "@/db/schema/agents";
+import type {
+  DeploymentFaqEntry,
+  DeploymentService,
+} from "@/lib/agents/persona/deployment-customization";
 import {
   canonicalArchetype,
   composeDefaultSkillMd,
@@ -49,7 +53,85 @@ export type ComposeSystemPromptInput = {
    *  the agent resolves "tomorrow" / "this Friday" in the OPERATOR'S
    *  local time, not the server's. */
   timezone?: string;
+  /** Per-deployment persona (P2) — the resolved client-facing greeting/opener. The
+   *  chat/SMS/email system prompt has no native greeting seam (the widget opener is
+   *  separate), so when a deployment supplies one we emit it as a one-line opener
+   *  directive right after the persona. Empty/undefined → unchanged. */
+  greetingPrefix?: string | null;
 };
+
+/** The EFFECTIVE per-deployment persona `resolveDeploymentPersona` produces,
+ *  as consumed by the chat/SMS/email prompt builder. Each field is null when its
+ *  source was null (→ the template/blueprint value stands). `voiceId`/businessName
+ *  are intentionally NOT part of this shape — text channels have no TTS voice, and
+ *  the business name already grounds via the org name + filled prompt. */
+export type DeploymentPromptPersona = {
+  greeting: string | null;
+  prompt: string | null;
+  faq: DeploymentFaqEntry[] | null;
+  services: DeploymentService[] | null;
+};
+
+/**
+ * Splice a resolved per-deployment persona into the `{ blueprint, soul }` inputs
+ * `composeSystemPrompt` consumes, mirroring the voice path (`deployment-voice.ts`)
+ * so chat/SMS/email speak AS the client with the SAME seams:
+ *
+ *   - `persona.prompt` (non-null) → `blueprint.customSkillMd`. This is the verbatim
+ *     operator-prose seam composeSystemPrompt already honors (it REPLACES the
+ *     up-front platform skills). The resolver already placeholder-filled it, so the
+ *     string is injected as-is — never re-templated (no `{token}` corruption).
+ *   - `persona.faq` (non-null) → `blueprint.faq` (the grounding/context FAQ block
+ *     the model cites). Override-wins-WHOLE, matching the resolver's semantics.
+ *   - `persona.services` (non-null) → `soul.services` (the "Services we offer"
+ *     grounding block reads from the soul, not the blueprint).
+ *   - `persona.greeting` (non-null) → returned as `greetingPrefix`; the chat system
+ *     prompt has no dedicated greeting seam (the widget opener is separate), so the
+ *     caller prepends it as a one-line opener directive the model sees.
+ *
+ * Pure; never throws. A null field leaves its target untouched, so a fully-null
+ * persona returns the inputs byte-for-byte unchanged. New objects are returned
+ * (no mutation of the caller's blueprint/soul).
+ */
+export function applyDeploymentPersona(args: {
+  blueprint: AgentBlueprint;
+  soul: OrgSoul | null;
+  persona?: DeploymentPromptPersona | null;
+}): { blueprint: AgentBlueprint; soul: OrgSoul | null; greetingPrefix: string | null } {
+  const { blueprint, soul, persona } = args;
+  if (!persona) return { blueprint, soul, greetingPrefix: null };
+
+  // prompt → customSkillMd (verbatim; already placeholder-filled by the resolver),
+  // faq → blueprint.faq (override-wins-WHOLE). Only override when non-null so the
+  // template/blueprint value stands otherwise.
+  let nextBlueprint = blueprint;
+  if (persona.prompt !== null) {
+    nextBlueprint = { ...nextBlueprint, customSkillMd: persona.prompt };
+  }
+  if (persona.faq !== null) {
+    nextBlueprint = { ...nextBlueprint, faq: persona.faq };
+  }
+
+  // services → soul.services (the "Services we offer" section reads the soul). Map
+  // the deployment shape { name, description?, price? } onto SoulService; price is a
+  // free-form string on the deployment side but numeric on the soul, so drop it
+  // here (the name + description are what ground the answer) rather than coerce.
+  let nextSoul = soul;
+  if (persona.services !== null) {
+    const mapped: SoulService[] = persona.services.map((s) => ({
+      name: s.name,
+      ...(s.description ? { description: s.description } : {}),
+    }));
+    nextSoul = { ...(soul ?? ({} as OrgSoul)), services: mapped };
+  }
+
+  const greetingPrefix =
+    persona.greeting !== null && persona.greeting.trim() !== ""
+      ? persona.greeting.trim()
+      : null;
+
+  return { blueprint: nextBlueprint, soul: nextSoul, greetingPrefix };
+}
 
 const ARCHETYPE_PERSONAS: Record<string, string> = {
   "website-chatbot":
@@ -70,6 +152,7 @@ export async function composeSystemPrompt(input: ComposeSystemPromptInput): Prom
     testMode,
     now,
     timezone,
+    greetingPrefix,
   } = input;
 
   // Resolve aliased archetypes (e.g. the builder's "chat-assistant" →
@@ -80,6 +163,17 @@ export async function composeSystemPrompt(input: ComposeSystemPromptInput): Prom
   const persona = personaTemplate.replace("{orgName}", orgName);
 
   const sections: string[] = [persona];
+
+  // Per-deployment opener (P2). A deployment-resolved greeting becomes the agent's
+  // opening line directive — emitted right after the persona so it leads the
+  // conversation, mirroring how the voice path speaks the resolved greeting. The
+  // string is already placeholder-filled by the resolver; emit verbatim.
+  const trimmedGreeting = greetingPrefix?.trim() ?? "";
+  if (trimmedGreeting.length > 0) {
+    sections.push(
+      `## Opening line\nOpen the conversation with: "${trimmedGreeting}"`,
+    );
+  }
 
   // ── PLATFORM INTELLIGENCE BASELINE ────────────────────────────────────
   // v1.28.3 — skill-pack architecture. Behavioral guidance lives in
