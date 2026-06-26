@@ -23,6 +23,11 @@
 //   • sendSms / sendEmail — the EXISTING outbound seam (sendSmsFromApi /
 //     sendEmailFromApi), tagging metadata.source = "agent:<skill>" so the
 //     throttle probe can find the row next time. userId:null = system-initiated.
+//   • memoryStore — the agent's loop-memory (State), Brain v2-backed via
+//     makeBrainMemoryStoreForOrg(orgId). runEventAgent recalls it before composing
+//     (the review throttle's primary gate is now hasDone(entries,"review_requested"))
+//     and records an entry after a successful send. Built per-event with the
+//     event's orgId; absent → the orchestrator falls back to the legacy throttle.
 
 import { and, eq, sql } from "drizzle-orm";
 import { db } from "@/db";
@@ -34,6 +39,7 @@ import { smsMessages } from "@/db/schema/sms-messages";
 import { sendEmailFromApi } from "@/lib/emails/api";
 import { sendSmsFromApi } from "@/lib/sms/api";
 import { resolveAgentTrigger } from "@/lib/agents/triggers/agent-trigger";
+import { makeBrainMemoryStoreForOrg } from "@/lib/agents/memory/brain-memory-store";
 import type {
   EventAgentMatch,
   EventAgentSkill,
@@ -62,9 +68,24 @@ function sourceTag(skill: EventAgentSkill): string {
 /**
  * Build the production deps. `findEventAgents` resolves the org's businessName
  * once (from the soul) and reuses it for every matched agent.
+ *
+ * `orgId` is optional ONLY for back-compat with callers that don't have it yet;
+ * the listener builds these deps fresh PER EVENT with the event's orgId in scope
+ * (see lib/events/listeners.ts), so the loop-memory store is constructed per-org,
+ * per-event. When `orgId` is given we wire:
+ *   • `memoryStore` = the Brain v2-backed `makeBrainMemoryStoreForOrg(orgId)` —
+ *     the agent recalls/records its loop-memory in this org's workspace Brain;
+ *   • `now` = the real clock, so recorded entries carry an ISO `at` stamp.
+ * Without `orgId`, `memoryStore`/`now` are omitted and runEventAgent behaves
+ * exactly as before (no recall, no record — the legacy metadata.source throttle
+ * is the only gate). The store's baked orgId always matches `event.orgId` because
+ * both come from the same per-event construction.
  */
-export function buildRunEventAgentDeps(): RunEventAgentDeps {
+export function buildRunEventAgentDeps(orgId?: string): RunEventAgentDeps {
+  const memoryStore = orgId ? makeBrainMemoryStoreForOrg(orgId) : undefined;
   return {
+    memoryStore,
+    now: () => new Date(),
     findEventAgents: async (orgId, eventType) => {
       const skill = skillForEvent(eventType);
       // We only run agents for events we have an outbound skill for.

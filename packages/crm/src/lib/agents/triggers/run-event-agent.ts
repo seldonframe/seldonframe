@@ -8,10 +8,18 @@
 //
 // `runEventAgent` finds the org's agents whose trigger matches THIS event (the
 // caller's `findEventAgents` already resolves `blueprint.trigger` via
-// resolveAgentTrigger and filters to `{kind:"event", event:<type>}`), runs the
+// resolveAgentTrigger and filters to `{kind:"event", event:<type>}`), RECALLS
+// what the agent already did for this contact (loop-memory — generalizes the
+// bespoke review throttle into `hasDone(entries, "review_requested")`), runs the
 // matching PURE skill (composeReviewRequest / composeSpeedToLead — lib/agents/
 // skills) to compose the words, resolves the recipient by channel, applies the
-// review one-per-contact throttle, and sends via the INJECTED outbound seam.
+// review one-per-contact throttle, sends via the INJECTED outbound seam, then
+// RECORDS what it did back into loop-memory.
+//
+// Loop-memory (State) is OPTIONAL + DI'd via `deps.memoryStore`. Absent → the
+// agent behaves exactly as before (recall = `[]`, no record); present (prod =
+// makeBrainMemoryStoreForOrg) → memory is keyed `{agentKey: skill, subjectKey:
+// contactId}` and every memory call is guarded so it can never break a send.
 //
 // PURE-ish + DI'd: every side effect (agent lookup, contact load, throttle
 // probe + mark, SMS/email send) is injected as `deps`, so it's unit-tested with
@@ -29,6 +37,12 @@
 
 import { composeReviewRequest } from "@/lib/agents/skills/review-requester";
 import { composeSpeedToLead } from "@/lib/agents/skills/speed-to-lead";
+import {
+  recallAgentMemory,
+  recordAgentMemory,
+  hasDone,
+  type AgentMemoryStore,
+} from "@/lib/agents/memory/agent-memory";
 
 // ─── the event the dispatcher reacts to ──────────────────────────────────────
 
@@ -113,6 +127,16 @@ export type RunEventAgentDeps = {
     body: string;
     skill: EventAgentSkill;
   }) => Promise<void>;
+  /** Optional agent loop-memory (State). When present, the agent RECALLS what it
+   *  did for this contact before composing (generalizing the review throttle into
+   *  `hasDone(entries, "review_requested")`) and RECORDS an entry after a
+   *  successful send. Absent → behave exactly as before (recall = `[]`, no record),
+   *  so the legacy `hasAlreadyRequested`/`markRequested` path is the only gate.
+   *  Production wires `makeBrainMemoryStoreForOrg(orgId)` (Brain v2-backed). */
+  memoryStore?: AgentMemoryStore;
+  /** Optional clock for stamping `entry.at` (ISO). Omitted → the recorded entry
+   *  carries no `at`. DI'd so tests can pin a deterministic timestamp. */
+  now?: () => Date;
 };
 
 // ─── result summary (for logging / tests — runEventAgent never throws) ────────
@@ -133,6 +157,14 @@ export type RunEventAgentResult = {
 /** Skills that fire at most once per contact (the review ask). Speed-to-lead is
  *  intentionally NOT here — every lead deserves an instant reply. */
 const ONE_PER_CONTACT: ReadonlySet<EventAgentSkill> = new Set(["review-requester"]);
+
+/** The loop-memory `kind` each skill records after a successful send (and, for
+ *  one-per-contact skills, the `hasDone` tag the recall gates on). Stable tags —
+ *  they're the durable contract written into the org's Brain, not the skill slug. */
+const MEMORY_KIND: Record<EventAgentSkill, string> = {
+  "review-requester": "review_requested",
+  "speed-to-lead": "lead_contacted",
+};
 
 /** Trim a possibly-null/blank string to a usable value, or null. */
 function clean(s: string | null | undefined): string | null {
@@ -232,6 +264,33 @@ async function runOneAgent(
   const contactName = clean(contact.name);
   const businessName = clean(agent.businessName);
 
+  // 0. Loop-memory keys. agentKey = the skill (the stable id already in scope —
+  //    EventAgentMatch carries no templateId; the skill slug is what memoryKey
+  //    namespaces under `agents/<agentKey>/…`). subjectKey = the contact.
+  const agentKey = agent.skill;
+  const subjectKey = contactId;
+  const memoryKind = MEMORY_KIND[agent.skill];
+
+  // Recall what this agent has done for this contact BEFORE composing. No store
+  // in deps → treat as no memory (`[]`), preserving today's behavior. recall
+  // never throws, but guard anyway so memory can never break the agent.
+  let recalled: Awaited<ReturnType<typeof recallAgentMemory>> = [];
+  if (deps.memoryStore) {
+    try {
+      recalled = await recallAgentMemory(deps.memoryStore, {
+        orgId: event.orgId,
+        agentKey,
+        subjectKey,
+      });
+    } catch (err) {
+      console.warn(
+        `[run-event-agent] recallAgentMemory failed for ${agent.skill}:`,
+        err instanceof Error ? err.message : String(err),
+      );
+      recalled = [];
+    }
+  }
+
   // 1. Compose the message via the matching PURE skill. A review with no URL
   //    can't be composed meaningfully → skip BEFORE touching the throttle/send.
   let composed: { subject?: string; body: string };
@@ -265,22 +324,41 @@ async function runOneAgent(
     return;
   }
 
-  // 3. Throttle: one-per-contact skills (review) never double-send. Probe the
-  //    injected check; speed-to-lead skips this entirely (every lead replies).
+  // 3. Throttle: one-per-contact skills (review) never double-send. The gate now
+  //    has TWO sources (throttle if EITHER says already-done):
+  //      (a) loop-memory — `hasDone(recalled, kind)`: the agent recalls it
+  //          already recorded this action for this contact. This is the PRIMARY
+  //          gate (generalizes the bespoke probe into a memory recall);
+  //      (b) the legacy `hasAlreadyRequested` probe (belt-and-suspenders — the
+  //          metadata.source tag on a prior send, for memory written before this
+  //          loop-memory existed / if the store is unavailable).
+  //    Speed-to-lead skips this entirely (every lead replies).
   const throttled = ONE_PER_CONTACT.has(agent.skill);
   if (throttled) {
-    let already = false;
+    // (a) loop-memory recall. Soft-fail to "no memory" — recall never throws, but
+    //     guard the whole block so a missing/odd store can't gate or break us.
+    let memorySaysDone = false;
+    if (recalled.length > 0) {
+      try {
+        memorySaysDone = hasDone(recalled, memoryKind);
+      } catch {
+        memorySaysDone = false;
+      }
+    }
+
+    // (b) the legacy probe. If IT fails, prefer NOT to spam: treat as already-sent.
+    let probeSaysDone = false;
     try {
-      already = await deps.hasAlreadyRequested(event.orgId, contactId, agent.skill);
+      probeSaysDone = await deps.hasAlreadyRequested(event.orgId, contactId, agent.skill);
     } catch (err) {
-      // If the probe fails, prefer NOT to spam: treat as already-sent.
       console.warn(
         `[run-event-agent] hasAlreadyRequested failed for ${agent.skill}:`,
         err instanceof Error ? err.message : String(err),
       );
-      already = true;
+      probeSaysDone = true;
     }
-    if (already) {
+
+    if (memorySaysDone || probeSaysDone) {
       result.throttled += 1;
       return;
     }
@@ -317,9 +395,40 @@ async function runOneAgent(
 
   result.sent += 1;
 
-  // 5. Mark sent so a later identical event is throttled. Best-effort — a
-  //    failed mark just means the throttle might not catch the next one (we
-  //    already sent, so under-throttling is the safe failure direction).
+  // 5. Record the action into loop-memory so a later run recalls it (and the
+  //    review throttle's `hasDone` gate catches the next event). For ALL skills:
+  //    review records "review_requested", speed-to-lead records "lead_contacted"
+  //    (so /runs and future runs see the full interaction history). Best-effort —
+  //    recordAgentMemory never throws, but guard the whole block so a misbehaving
+  //    store can never break a send we already completed.
+  if (deps.memoryStore) {
+    try {
+      const at = deps.now ? deps.now().toISOString() : undefined;
+      await recordAgentMemory(deps.memoryStore, {
+        orgId: event.orgId,
+        agentKey,
+        subjectKey,
+        entry: {
+          ...(at ? { at } : {}),
+          kind: memoryKind,
+          summary: `Sent ${agent.skill} via ${agent.channel} to ${
+            contactName ?? "contact"
+          }`,
+          data: { channel: agent.channel },
+        },
+      });
+    } catch (err) {
+      console.warn(
+        `[run-event-agent] recordAgentMemory failed for ${agent.skill}:`,
+        err instanceof Error ? err.message : String(err),
+      );
+    }
+  }
+
+  // 6. Legacy mark so a later identical event is throttled (belt-and-suspenders
+  //    alongside the memory record above). Best-effort — a failed mark just means
+  //    the throttle might not catch the next one (we already sent, so
+  //    under-throttling is the safe failure direction).
   if (throttled) {
     try {
       await deps.markRequested(event.orgId, contactId, agent.skill);

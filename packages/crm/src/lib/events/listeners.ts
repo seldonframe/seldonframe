@@ -427,7 +427,7 @@ export function registerCrmEventListeners() {
             contactId,
             payload: data,
           },
-          buildRunEventAgentDeps(),
+          buildRunEventAgentDeps(completedOrgId),
         );
       } catch (err) {
         console.warn(`[listeners] runEventAgent booking.completed failed:`, err);
@@ -458,7 +458,7 @@ export function registerCrmEventListeners() {
     try {
       await runEventAgent(
         { type: "lead.created", orgId, contactId, payload: data },
-        buildRunEventAgentDeps(),
+        buildRunEventAgentDeps(orgId),
       );
     } catch (err) {
       console.warn(`[listeners] runEventAgent lead.created failed:`, err);

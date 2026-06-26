@@ -33,6 +33,10 @@ import {
 } from "../../../../src/lib/agents/triggers/run-event-agent";
 import { composeReviewRequest } from "../../../../src/lib/agents/skills/review-requester";
 import { composeSpeedToLead } from "../../../../src/lib/agents/skills/speed-to-lead";
+import {
+  type AgentMemoryEntry,
+  type AgentMemoryStore,
+} from "../../../../src/lib/agents/memory/agent-memory";
 
 // ─── a recording fake deps builder ───────────────────────────────────────────
 
@@ -401,5 +405,187 @@ describe("runEventAgent — multiple agents on one event", () => {
     });
     await runEventAgent(bookingCompleted(), deps);
     assert.equal(smsCalls.length, 2, "review + speed are different throttle keys");
+  });
+});
+
+// ─── loop-memory (State): recall before composing + record after sending ──────
+//
+// T3 generalizes the bespoke review throttle into a memory recall. These pin:
+//   • booking.completed with empty memory → composes + sends ONCE + appends a
+//     `review_requested` entry for that contact's memory key;
+//   • a second booking.completed for the SAME contact whose memory already
+//     records `review_requested` → THROTTLED (no second send) — the gate is the
+//     recall, even though the legacy hasAlreadyRequested probe says "not yet";
+//   • lead.created → records `lead_contacted`;
+//   • NO memoryStore in deps → behaves exactly as before (covered by every test
+//     above that omits it, plus an explicit no-store assertion here);
+//   • a store whose read/append throws → the send still happens (memory never
+//     breaks the agent).
+//
+// agentKey = the skill ("review-requester"/"speed-to-lead"); subjectKey = the
+// contactId. The fake store mirrors makeBrainMemoryStoreForOrg's key shape
+// (`agents/<agentKey>/<subjectKey>`, orgId scoped by the store, not in the key).
+
+/** Build the production-shaped memory key (agentKey = skill, subjectKey =
+ *  contactId). PINS the key derivation runEventAgent must use. */
+function memKey(skill: EventAgentSkill, contactId: string): string {
+  return `agents/${skill}/${contactId}`;
+}
+
+type AppendCall = { key: string; entry: AgentMemoryEntry };
+
+/** A Map-backed AgentMemoryStore (NO Brain/Postgres) that records every read +
+ *  append so a test can assert the agent recalled/recorded the right thing. */
+function makeFakeMemoryStore(seed?: Record<string, AgentMemoryEntry[]>): {
+  store: AgentMemoryStore;
+  data: Map<string, AgentMemoryEntry[]>;
+  appendCalls: AppendCall[];
+  readKeys: string[];
+} {
+  const data = new Map<string, AgentMemoryEntry[]>(Object.entries(seed ?? {}));
+  const appendCalls: AppendCall[] = [];
+  const readKeys: string[] = [];
+  const store: AgentMemoryStore = {
+    read: async (key) => {
+      readKeys.push(key);
+      return data.get(key) ?? [];
+    },
+    append: async (key, entry) => {
+      appendCalls.push({ key, entry });
+      const list = data.get(key) ?? [];
+      list.push(entry);
+      data.set(key, list);
+    },
+  };
+  return { store, data, appendCalls, readKeys };
+}
+
+const FIXED_NOW = new Date("2026-06-26T12:00:00.000Z");
+
+describe("runEventAgent — loop-memory (recall + record)", () => {
+  test("booking.completed with EMPTY memory: composes + sends once + records review_requested", async () => {
+    const mem = makeFakeMemoryStore();
+    const { deps, smsCalls } = makeDeps({
+      findEventAgents: async () => [reviewAgent("sms")],
+      memoryStore: mem.store,
+      now: () => FIXED_NOW,
+    });
+
+    const result = await runEventAgent(bookingCompleted("contact-1"), deps);
+
+    // sent exactly once
+    assert.equal(smsCalls.length, 1, "exactly one SMS");
+    assert.equal(result.sent, 1);
+
+    // recalled the contact's memory under the pinned key
+    assert.ok(
+      mem.readKeys.includes(memKey("review-requester", "contact-1")),
+      `expected a recall of ${memKey("review-requester", "contact-1")}, got ${JSON.stringify(mem.readKeys)}`,
+    );
+
+    // recorded exactly one review_requested entry for that contact
+    assert.equal(mem.appendCalls.length, 1, "exactly one memory append");
+    const appended = mem.appendCalls[0];
+    assert.equal(appended.key, memKey("review-requester", "contact-1"));
+    assert.equal(appended.entry.kind, "review_requested");
+    assert.equal(appended.entry.at, FIXED_NOW.toISOString(), "entry carries the DI'd clock");
+    assert.equal((appended.entry.data as { channel?: string }).channel, "sms");
+    assert.equal(typeof appended.entry.summary, "string");
+
+    // memory now reports the action as done for that contact
+    const stored = mem.data.get(memKey("review-requester", "contact-1"));
+    assert.equal(stored?.length, 1);
+    assert.ok(
+      stored?.some((e) => e.kind === "review_requested"),
+      "memory hasDone(review_requested) for the contact",
+    );
+  });
+
+  test("a SECOND booking.completed for the SAME contact (memory already records review_requested) is THROTTLED — no second send", async () => {
+    // Memory pre-seeded as already-asked; the LEGACY probe deliberately says "no"
+    // to prove the recall is the gate now (throttle if EITHER says done).
+    const mem = makeFakeMemoryStore({
+      [memKey("review-requester", "contact-1")]: [
+        { kind: "review_requested", summary: "asked earlier", data: { channel: "sms" } },
+      ],
+    });
+    const { deps, smsCalls } = makeDeps({
+      findEventAgents: async () => [reviewAgent("sms")],
+      memoryStore: mem.store,
+      hasAlreadyRequested: async () => false, // legacy probe: NOT throttled
+    });
+
+    const result = await runEventAgent(bookingCompleted("contact-1"), deps);
+
+    assert.equal(smsCalls.length, 0, "memory recall throttles the resend");
+    assert.equal(result.sent, 0);
+    assert.equal(result.throttled, 1);
+    // nothing new recorded (we never sent)
+    assert.equal(mem.appendCalls.length, 0, "no append on a throttled run");
+  });
+
+  test("lead.created records lead_contacted (and is NOT throttled)", async () => {
+    const mem = makeFakeMemoryStore();
+    const { deps, smsCalls } = makeDeps({
+      findEventAgents: async () => [speedAgent("sms")],
+      memoryStore: mem.store,
+      now: () => FIXED_NOW,
+    });
+
+    const result = await runEventAgent(leadCreated("contact-9"), deps);
+
+    assert.equal(smsCalls.length, 1);
+    assert.equal(result.sent, 1);
+    assert.equal(mem.appendCalls.length, 1, "speed-to-lead records too");
+    const appended = mem.appendCalls[0];
+    assert.equal(appended.key, memKey("speed-to-lead", "contact-9"));
+    assert.equal(appended.entry.kind, "lead_contacted");
+    assert.equal((appended.entry.data as { channel?: string }).channel, "sms");
+  });
+
+  test("a second lead.created for the SAME contact still acks (speed-to-lead never throttles on memory)", async () => {
+    const mem = makeFakeMemoryStore();
+    const { deps, smsCalls } = makeDeps({
+      findEventAgents: async () => [speedAgent("sms")],
+      memoryStore: mem.store,
+    });
+    await runEventAgent(leadCreated("contact-9"), deps);
+    await runEventAgent(leadCreated("contact-9"), deps);
+    assert.equal(smsCalls.length, 2, "speed-to-lead is per-event even with memory");
+    assert.equal(mem.appendCalls.length, 2, "each ack is recorded");
+  });
+
+  test("NO memoryStore in deps → behaves exactly as before (sends, no recall/record)", async () => {
+    // makeDeps() omits memoryStore by default. The legacy throttle is the only
+    // gate; the run sends and nothing memory-related happens.
+    const { deps, smsCalls } = makeDeps({
+      findEventAgents: async () => [reviewAgent("sms")],
+    });
+    assert.equal(deps.memoryStore, undefined, "no store wired");
+    const result = await runEventAgent(bookingCompleted("contact-1"), deps);
+    assert.equal(smsCalls.length, 1);
+    assert.equal(result.sent, 1);
+  });
+
+  test("a store whose read/append THROWS → the send still happens (memory never breaks the agent)", async () => {
+    const throwingStore: AgentMemoryStore = {
+      read: async () => {
+        throw new Error("brain read exploded");
+      },
+      append: async () => {
+        throw new Error("brain append exploded");
+      },
+    };
+    const { deps, smsCalls } = makeDeps({
+      findEventAgents: async () => [reviewAgent("sms")],
+      memoryStore: throwingStore,
+    });
+
+    let result: Awaited<ReturnType<typeof runEventAgent>> | undefined;
+    await assert.doesNotReject(async () => {
+      result = await runEventAgent(bookingCompleted("contact-1"), deps);
+    });
+    assert.equal(smsCalls.length, 1, "send happens despite the memory store throwing");
+    assert.equal(result?.sent, 1);
   });
 });
