@@ -84,6 +84,10 @@ function logEventAgentRun(
         sent: result.sent,
         skipped: result.skipped,
         throttled: result.throttled,
+        // 2026-06-26 — L2 Verify (T3): how many sends the verify gate BLOCKED
+        // (composed body failed its rubric). The `verify_blocked` reason is in
+        // the Brain note; this is the greppable count.
+        blocked: result.blocked,
         failed: result.failed,
         // Loop-memory observability: counts + the stable `kind` tags so the line
         // is greppable without dumping message bodies. Absent when no memory

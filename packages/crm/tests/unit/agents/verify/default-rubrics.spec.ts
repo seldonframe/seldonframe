@@ -144,6 +144,44 @@ describe("defaultRubricForSkill — review-requester", () => {
       ["max_length", "must_not_include"],
     );
   });
+
+  test("channel-aware length cap: sms (or absent) → 320; email → the long-form cap", () => {
+    // SMS / no channel → the tight 320 (back-compat default).
+    const sms = defaultRubricForSkill("review-requester", {
+      reviewUrl: REVIEW_URL,
+      contactName: "Jordan",
+      channel: "sms",
+    });
+    const noChannel = defaultRubricForSkill("review-requester", {
+      reviewUrl: REVIEW_URL,
+      contactName: "Jordan",
+    });
+    assert.equal(check(sms!.checks, "max_length")!.max, 320);
+    assert.equal(check(noChannel!.checks, "max_length")!.max, 320, "no channel keeps the 320 default");
+
+    // Email → a much larger cap so a normal multi-paragraph email body passes.
+    const email = defaultRubricForSkill("review-requester", {
+      reviewUrl: REVIEW_URL,
+      contactName: "Jordan",
+      channel: "email",
+    });
+    const emailMax = check(email!.checks, "max_length")!.max;
+    assert.ok(emailMax > 320, `email cap (${emailMax}) must exceed the SMS cap`);
+
+    // A long-form body that BLOWS the SMS cap PASSES the email rubric.
+    const longBody = `${"Thank you so much for choosing us. ".repeat(20)} Jordan ${REVIEW_URL}`;
+    assert.ok(longBody.length > 320, "fixture must actually exceed 320");
+    assert.equal(
+      runDeterministicChecks(longBody, email!).pass,
+      true,
+      "a normal long email body must pass the email rubric",
+    );
+    assert.equal(
+      runDeterministicChecks(longBody, sms!).pass,
+      false,
+      "the same long body must FAIL the SMS rubric (length)",
+    );
+  });
 });
 
 describe("defaultRubricForSkill — speed-to-lead", () => {

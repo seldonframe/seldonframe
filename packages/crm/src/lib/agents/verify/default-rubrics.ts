@@ -23,9 +23,22 @@
 
 import type { VerifyCheck, VerifyRubric } from "./agent-verify";
 
-/** Max characters for an outbound ask (one SMS-ish segment). Shared by both
- *  supported skills so a review ask and a speed-to-lead reply stay short. */
-const MAX_OUTBOUND_LENGTH = 320;
+/** Max characters for an SMS-channel ask (one tight SMS-ish segment — two
+ *  segments of headroom). The default when no channel is given. */
+const MAX_SMS_LENGTH = 320;
+
+/** Max characters for an EMAIL-channel body. Email is a long-form, multi-
+ *  paragraph message (greeting + thanks + ask + link + sign-off), so the SMS
+ *  cap would (wrongly) block every legitimate email. This is a generous sanity
+ *  ceiling — it catches a runaway/garbage body without flagging a normal email. */
+const MAX_EMAIL_LENGTH = 5000;
+
+/** Pick the length cap for the channel. Absent/"sms" → the tight SMS cap (the
+ *  back-compat default callers without a channel still get); "email" → the
+ *  long-form email cap. */
+function maxLengthForChannel(channel?: "sms" | "email" | null): number {
+  return channel === "email" ? MAX_EMAIL_LENGTH : MAX_SMS_LENGTH;
+}
 
 /** The always-on "no leftover template placeholder leaked" guard. A literal "{"
  *  in the output means a `{firstName}`-style token never got filled. */
@@ -41,17 +54,27 @@ const NO_PLACEHOLDER: VerifyCheck = {
  *
  * - `"review-requester"` — enforce the review LINK and the contact NAME ONLY
  *   when those values are known (an unknown URL/name adds no check, rather than
- *   an unsatisfiable one), plus the always-on max_length 320 + no-placeholder.
+ *   an unsatisfiable one), plus the always-on max_length + no-placeholder.
  * - `"speed-to-lead"` — a non-empty reply (min_length 1) plus the always-on
- *   max_length 320 + no-placeholder. (No link/name to enforce.)
+ *   max_length + no-placeholder. (No link/name to enforce.)
+ *
+ * The `max_length` cap is CHANNEL-AWARE: `ctx.channel === "email"` uses the
+ * long-form email ceiling (an email body is multi-paragraph and would always
+ * blow an SMS cap); absent or `"sms"` uses the tight SMS cap (the back-compat
+ * default — callers that pass no channel get 320, exactly as before).
  *
  * `ctx.contactName` may be a single word; in that case the name's
  * `must_include_any` values collapse to one (deduped) — that's fine.
  */
 export function defaultRubricForSkill(
   skill: string,
-  ctx?: { reviewUrl?: string | null; contactName?: string | null },
+  ctx?: {
+    reviewUrl?: string | null;
+    contactName?: string | null;
+    channel?: "sms" | "email" | null;
+  },
 ): VerifyRubric | null {
+  const maxLength = maxLengthForChannel(ctx?.channel);
   switch (skill) {
     case "review-requester": {
       const checks: VerifyCheck[] = [];
@@ -72,7 +95,7 @@ export function defaultRubricForSkill(
         checks.push({ kind: "must_include_any", values, label: "contact name" });
       }
 
-      checks.push({ kind: "max_length", max: MAX_OUTBOUND_LENGTH });
+      checks.push({ kind: "max_length", max: maxLength });
       checks.push(NO_PLACEHOLDER);
       return { checks };
     }
@@ -81,7 +104,7 @@ export function defaultRubricForSkill(
       return {
         checks: [
           { kind: "min_length", min: 1 },
-          { kind: "max_length", max: MAX_OUTBOUND_LENGTH },
+          { kind: "max_length", max: maxLength },
           NO_PLACEHOLDER,
         ],
       };

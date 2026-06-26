@@ -37,6 +37,11 @@ import {
   type AgentMemoryEntry,
   type AgentMemoryStore,
 } from "../../../../src/lib/agents/memory/agent-memory";
+import {
+  type Checker,
+  type VerifyRubric,
+  type VerifyResult,
+} from "../../../../src/lib/agents/verify/agent-verify";
 
 // ─── a recording fake deps builder ───────────────────────────────────────────
 
@@ -688,5 +693,224 @@ describe("runEventAgent — T4: run summary carries recalled/recorded memory", (
     assert.equal(result.memory!.recorded.length, 2, "both records aggregated");
     const kinds = result.memory!.recorded.map((e) => e.kind).sort();
     assert.deepEqual(kinds, ["lead_contacted", "review_requested"]);
+  });
+});
+
+// ─── L2 Verify (T3): gate the composed body before sending ────────────────────
+//
+// The maker (the client's agent) must never grade its own homework: before a
+// send, the composed BODY is run through a VERIFY rubric (deterministic checks
+// always on; an optional injected `checker` AND-ed in). A fail BLOCKS the send,
+// increments `result.blocked`, and records a `verify_blocked` loop-memory entry
+// (so the agent "remembers" the failure and it's observable on the run summary).
+// These pin:
+//   • a compose that FAILS the rubric (here: a blueprint.verify requiring text
+//     the composed body lacks) → no send, blocked === 1, a verify_blocked memory
+//     entry recorded (and surfaced on result.memory.recorded);
+//   • a VALID compose (body satisfies the default rubric) → sends as before,
+//     blocked === 0, records the normal review_requested entry;
+//   • a skill with NO default rubric and no blueprint.verify → NO gate, sends
+//     (back-compat);
+//   • an injected `checker` returning pass:false on an otherwise-valid body →
+//     blocked (the maker≠checker seam).
+
+/** A rubric the composed body can NEVER satisfy (it requires a sentinel string
+ *  the skills never emit) — the simplest way to force a verify FAIL via the
+ *  agent's own blueprint.verify, independent of the default-rubric internals. */
+const UNSATISFIABLE_VERIFY: VerifyRubric = {
+  checks: [{ kind: "must_include", value: "__SENTINEL_NEVER_IN_BODY__", label: "sentinel" }],
+};
+
+/** An injected Checker that ALWAYS rejects — proves the maker≠checker seam: even
+ *  a deterministically-valid body is blocked when the separate grader says no. */
+const rejectingChecker: Checker = async (): Promise<VerifyResult> => ({
+  pass: false,
+  results: [],
+  failures: ["checker rejected the output"],
+});
+
+/** An injected Checker that ALWAYS passes — proves a checker that approves does
+ *  not interfere with an otherwise-valid send. */
+const approvingChecker: Checker = async (): Promise<VerifyResult> => ({
+  pass: true,
+  results: [],
+  failures: [],
+});
+
+describe("runEventAgent — L2 Verify gate (block before send)", () => {
+  test("a review compose that FAILS its rubric is BLOCKED: no send, blocked === 1, verify_blocked recorded", async () => {
+    const mem = makeFakeMemoryStore();
+    const { deps, smsCalls, emailCalls } = makeDeps({
+      // A valid review agent (has a URL → it composes fine) but with a
+      // blueprint.verify the body can't satisfy → the gate blocks the send.
+      findEventAgents: async () => [{ ...reviewAgent("sms"), verify: UNSATISFIABLE_VERIFY }],
+      memoryStore: mem.store,
+      now: () => FIXED_NOW,
+    });
+
+    const result = await runEventAgent(bookingCompleted("contact-1"), deps);
+
+    // BLOCKED — nothing sent.
+    assert.equal(smsCalls.length, 0, "a verify-failed message must NOT send");
+    assert.equal(emailCalls.length, 0);
+    assert.equal(result.sent, 0);
+    assert.equal(result.blocked, 1, "result.blocked counts the gated send");
+
+    // A verify_blocked entry was recorded to loop-memory under the contact's key.
+    assert.equal(mem.appendCalls.length, 1, "exactly one memory append (the block)");
+    const appended = mem.appendCalls[0];
+    assert.equal(appended.key, memKey("review-requester", "contact-1"));
+    assert.equal(appended.entry.kind, "verify_blocked");
+    assert.equal(appended.entry.at, FIXED_NOW.toISOString(), "block entry carries the DI'd clock");
+    // The failures are captured on the entry's data for observability.
+    const data = appended.entry.data as { failures?: unknown };
+    assert.ok(Array.isArray(data.failures) && data.failures.length > 0, "failures recorded");
+    assert.equal(typeof appended.entry.summary, "string");
+    assert.ok(appended.entry.summary.includes("Blocked"), "summary describes the block");
+
+    // It's also surfaced on the run summary's recorded list (observability).
+    assert.ok(result.memory, "memory present when a store is wired");
+    assert.equal(result.memory!.recorded.length, 1);
+    assert.equal(result.memory!.recorded[0].kind, "verify_blocked");
+    assert.deepEqual(result.memory!.recorded[0], appended.entry);
+  });
+
+  test("a VALID review compose passes the default rubric → sends as before, blocked === 0, records review_requested", async () => {
+    // No blueprint.verify → the DEFAULT rubric applies (review link + name +
+    // length + no-placeholder). composeReviewRequest emits the URL and the name,
+    // so the default rubric passes and the send goes out exactly as in L1.
+    const mem = makeFakeMemoryStore();
+    const { deps, smsCalls } = makeDeps({
+      findEventAgents: async () => [reviewAgent("sms")],
+      memoryStore: mem.store,
+      now: () => FIXED_NOW,
+    });
+
+    const result = await runEventAgent(bookingCompleted("contact-1"), deps);
+
+    assert.equal(smsCalls.length, 1, "a verify-passing message sends");
+    assert.equal(result.sent, 1);
+    assert.equal(result.blocked, 0, "nothing blocked");
+    // The normal review_requested entry is recorded (NOT verify_blocked).
+    assert.equal(mem.appendCalls.length, 1);
+    assert.equal(mem.appendCalls[0].entry.kind, "review_requested");
+    // And the body really did contain the review link (the rubric's key check).
+    assert.ok(smsCalls[0].body.includes(REVIEW_URL), "the review link is in the sent body");
+  });
+
+  test("a VALID review compose still sends with NO memory store (blocked === 0, back-compat)", async () => {
+    // The gate runs even without a memoryStore; a passing body just sends and
+    // there's nothing to record. Proves the deterministic gate is always on.
+    const { deps, smsCalls } = makeDeps({
+      findEventAgents: async () => [reviewAgent("sms")],
+    });
+    const result = await runEventAgent(bookingCompleted("contact-1"), deps);
+    assert.equal(smsCalls.length, 1);
+    assert.equal(result.sent, 1);
+    assert.equal(result.blocked, 0);
+  });
+
+  test("a blocked send with NO memory store still blocks (blocked === 1), just records nothing", async () => {
+    const { deps, smsCalls } = makeDeps({
+      findEventAgents: async () => [{ ...reviewAgent("sms"), verify: UNSATISFIABLE_VERIFY }],
+    });
+    const result = await runEventAgent(bookingCompleted("contact-1"), deps);
+    assert.equal(smsCalls.length, 0, "still blocked without a store");
+    assert.equal(result.sent, 0);
+    assert.equal(result.blocked, 1);
+    assert.equal(result.memory, undefined, "no store → no memory summary");
+  });
+
+  test("a skill with NO default rubric and no blueprint.verify → NO gate, sends (back-compat)", async () => {
+    // Force the orchestrator down the "rubric === null → skip verify" branch by
+    // matching an agent whose skill has no default rubric. We use a cast because
+    // EventAgentSkill is a closed union; runEventAgent treats an unknown skill as
+    // the non-review (speed-to-lead-style) compose path, and defaultRubricForSkill
+    // returns null for it → no deterministic gate, send as today.
+    const { deps, smsCalls } = makeDeps({
+      findEventAgents: async () => [
+        {
+          skill: "mystery-skill" as unknown as EventAgentSkill,
+          channel: "sms",
+          businessName: "Acme",
+        },
+      ],
+    });
+    const result = await runEventAgent(leadCreated("contact-1"), deps);
+    assert.equal(smsCalls.length, 1, "no rubric → no gate → sends");
+    assert.equal(result.sent, 1);
+    assert.equal(result.blocked, 0);
+  });
+
+  test("an injected checker that returns pass:false BLOCKS an otherwise-valid body (maker ≠ checker)", async () => {
+    // The default rubric PASSES (valid review body), but the separate grader
+    // rejects → AND-ed result is fail → blocked. This is the whole point of the
+    // primitive: a second, independent checker can veto the maker's output.
+    const mem = makeFakeMemoryStore();
+    const { deps, smsCalls } = makeDeps({
+      findEventAgents: async () => [reviewAgent("sms")],
+      checker: rejectingChecker,
+      memoryStore: mem.store,
+      now: () => FIXED_NOW,
+    });
+
+    const result = await runEventAgent(bookingCompleted("contact-1"), deps);
+
+    assert.equal(smsCalls.length, 0, "the injected checker vetoed the send");
+    assert.equal(result.sent, 0);
+    assert.equal(result.blocked, 1);
+    assert.equal(mem.appendCalls.length, 1);
+    assert.equal(mem.appendCalls[0].entry.kind, "verify_blocked");
+  });
+
+  test("an injected checker that returns pass:true does not block an otherwise-valid send", async () => {
+    const { deps, smsCalls } = makeDeps({
+      findEventAgents: async () => [reviewAgent("sms")],
+      checker: approvingChecker,
+    });
+    const result = await runEventAgent(bookingCompleted("contact-1"), deps);
+    assert.equal(smsCalls.length, 1, "an approving checker + valid body → sends");
+    assert.equal(result.sent, 1);
+    assert.equal(result.blocked, 0);
+  });
+
+  test("verify gate does not run on a throttled review (already-asked → throttled, not blocked)", async () => {
+    // A second booking.completed whose memory says already-asked is THROTTLED
+    // before the verify gate — even with an unsatisfiable rubric, the run is
+    // counted as throttled (not blocked), and nothing new is recorded.
+    const mem = makeFakeMemoryStore({
+      [memKey("review-requester", "contact-1")]: [
+        { kind: "review_requested", summary: "asked earlier", data: { channel: "sms" } },
+      ],
+    });
+    const { deps, smsCalls } = makeDeps({
+      findEventAgents: async () => [{ ...reviewAgent("sms"), verify: UNSATISFIABLE_VERIFY }],
+      memoryStore: mem.store,
+      hasAlreadyRequested: async () => false,
+    });
+    const result = await runEventAgent(bookingCompleted("contact-1"), deps);
+    assert.equal(smsCalls.length, 0);
+    assert.equal(result.throttled, 1, "throttle wins over the verify gate");
+    assert.equal(result.blocked, 0, "a throttled run is not counted as blocked");
+    assert.equal(mem.appendCalls.length, 0, "no record on a throttled run");
+  });
+
+  test("an email review compose verifies the BODY (not the subject) and blocks on a body failure", async () => {
+    // The gate must verify composed.body (the text/markdown body), NOT the
+    // subject. A blueprint.verify requiring a sentinel absent from the body
+    // blocks the email send.
+    const { deps, emailCalls } = makeDeps({
+      findEventAgents: async () => [{ ...reviewAgent("email"), verify: UNSATISFIABLE_VERIFY }],
+    });
+    const result = await runEventAgent(bookingCompleted("contact-1"), deps);
+    assert.equal(emailCalls.length, 0, "email blocked on a body-rubric failure");
+    assert.equal(result.blocked, 1);
+  });
+
+  test("the verify gate never throws (a blocked run resolves cleanly)", async () => {
+    const { deps } = makeDeps({
+      findEventAgents: async () => [{ ...reviewAgent("sms"), verify: UNSATISFIABLE_VERIFY }],
+    });
+    await assert.doesNotReject(() => runEventAgent(bookingCompleted("contact-1"), deps));
   });
 });

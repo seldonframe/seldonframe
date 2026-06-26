@@ -28,6 +28,12 @@
 //     (the review throttle's primary gate is now hasDone(entries,"review_requested"))
 //     and records an entry after a successful send. Built per-event with the
 //     event's orgId; absent → the orchestrator falls back to the legacy throttle.
+//
+// 2026-06-26 — L2 Verify (T3): the production deps deliberately wire NO `checker`.
+// The deterministic verify gate (review link / contact name / length / no leftover
+// placeholder) is always on inside runEventAgent regardless; the optional LLM/evals
+// checker is T4 and stays opt-in, so prod sends are gated deterministically only.
+// The per-agent rubric is projected from `blueprint.verify` onto each match below.
 
 import { and, eq, sql } from "drizzle-orm";
 import { db } from "@/db";
@@ -119,6 +125,7 @@ export function buildRunEventAgentDeps(orgId?: string): RunEventAgentDeps {
         const blueprint = (row.blueprint ?? {}) as {
           trigger?: unknown;
           reviewUrl?: string;
+          verify?: import("@/lib/agents/verify/agent-verify").VerifyRubric;
         };
         const trigger = resolveAgentTrigger(
           blueprint.trigger as Parameters<typeof resolveAgentTrigger>[0],
@@ -132,6 +139,14 @@ export function buildRunEventAgentDeps(orgId?: string): RunEventAgentDeps {
           businessName,
           // review-requester reads this; speed-to-lead ignores it.
           reviewUrl: typeof blueprint.reviewUrl === "string" ? blueprint.reviewUrl : null,
+          // 2026-06-26 — L2 Verify (T3): project the agent's own VERIFY rubric onto
+          // the match so the orchestrator can gate the composed body with it
+          // (overriding the per-skill default). A loose object (jsonb) — verifyOutput
+          // tolerates loose shapes; null/absent → the orchestrator uses the default.
+          verify:
+            blueprint.verify && typeof blueprint.verify === "object"
+              ? blueprint.verify
+              : null,
         });
       }
       return matches;

@@ -44,6 +44,16 @@ import {
   type AgentMemoryStore,
   type AgentMemoryEntry,
 } from "@/lib/agents/memory/agent-memory";
+// 2026-06-26 — Agent Loop L2 Verify (maker ≠ checker gate), T3. Before sending,
+// the composed message body is run through the VERIFY rubric (the agent never
+// grades its own homework): the deterministic checks (review link present,
+// contact name, length, no leftover {placeholder}) are the always-on gate, and
+// an optional async Checker (LLM/evals) is AND-ed in via `deps.checker`. A fail
+// BLOCKS the send + records a `verify_blocked` loop-memory entry. The rubric is
+// the agent's own `blueprint.verify` (projected onto the match as `verify`) or,
+// if absent, the per-skill default from defaultRubricForSkill.
+import { verifyOutput, type Checker, type VerifyRubric } from "@/lib/agents/verify/agent-verify";
+import { defaultRubricForSkill } from "@/lib/agents/verify/default-rubrics";
 
 // ─── the event the dispatcher reacts to ──────────────────────────────────────
 
@@ -78,6 +88,10 @@ export type EventAgentMatch = {
   reviewUrl?: string | null;
   /** Speed-to-lead only: a one-line summary of what the lead asked about. */
   leadSummary?: string | null;
+  /** The agent's own VERIFY rubric, projected from `blueprint.verify` by the
+   *  caller (buildRunEventAgentDeps). When present it OVERRIDES the per-skill
+   *  default rubric; absent → the gate falls back to defaultRubricForSkill. */
+  verify?: VerifyRubric | null;
 };
 
 /** The contact's reachable fields (resolved from contactId by the caller). */
@@ -138,6 +152,11 @@ export type RunEventAgentDeps = {
   /** Optional clock for stamping `entry.at` (ISO). Omitted → the recorded entry
    *  carries no `at`. DI'd so tests can pin a deterministic timestamp. */
   now?: () => Date;
+  /** Optional async VERIFY checker (LLM/`run_agent_evals` judge), AND-ed with the
+   *  always-on deterministic rubric checks in `verifyOutput`. Omitted (production
+   *  default for now → the LLM checker is T4) → the deterministic gate is the only
+   *  layer. A checker that throws fails CLOSED (blocks), per verifyOutput. */
+  checker?: Checker;
 };
 
 // ─── result summary (for logging / tests — runEventAgent never throws) ────────
@@ -151,6 +170,11 @@ export type RunEventAgentResult = {
   skipped: number;
   /** How many were blocked by the review one-per-contact throttle. */
   throttled: number;
+  /** How many were BLOCKED by the verify gate (the composed body failed its
+   *  rubric — e.g. the review link or contact name was missing, or an injected
+   *  checker rejected it). A blocked message is NOT sent; the reason is recorded
+   *  to loop-memory (`verify_blocked`) for observability. */
+  blocked: number;
   /** How many failed at send time (swallowed; surfaced here for observability). */
   failed: number;
   /**
@@ -200,9 +224,10 @@ function clean(s: string | null | undefined): string | null {
  * Dispatch a fired event to its matching event-agents. NEVER throws.
  *
  * For each matched agent: compose via the pure skill → resolve the recipient
- * for the channel → (review) throttle one-per-contact → send via the injected
- * seam → (review) mark sent. A failure in any one agent is swallowed and
- * recorded; sibling agents still run.
+ * for the channel → (review) throttle one-per-contact → VERIFY the composed body
+ * against the rubric (block on fail) → send via the injected seam → (review)
+ * mark sent. A failure in any one agent is swallowed and recorded; sibling
+ * agents still run.
  */
 export async function runEventAgent(
   event: FiredEvent,
@@ -213,6 +238,7 @@ export async function runEventAgent(
     sent: 0,
     skipped: 0,
     throttled: 0,
+    blocked: 0,
     failed: 0,
     // Only carry a memory summary when a store is wired (so a no-store run
     // leaves `memory` absent — there was nothing to recall/record). runOneAgent
@@ -325,9 +351,12 @@ async function runOneAgent(
 
   // 1. Compose the message via the matching PURE skill. A review with no URL
   //    can't be composed meaningfully → skip BEFORE touching the throttle/send.
+  //    `reviewUrl` is hoisted so the verify gate (step 3b) can feed it into the
+  //    default rubric's `must_include` (review link) check.
   let composed: { subject?: string; body: string };
+  let reviewUrl: string | null = null;
   if (agent.skill === "review-requester") {
-    const reviewUrl = clean(agent.reviewUrl);
+    reviewUrl = clean(agent.reviewUrl);
     if (!reviewUrl) {
       // No review link → the ask is worthless. Skip gracefully.
       result.skipped += 1;
@@ -392,6 +421,87 @@ async function runOneAgent(
 
     if (memorySaysDone || probeSaysDone) {
       result.throttled += 1;
+      return;
+    }
+  }
+
+  // 3b. VERIFY (maker ≠ checker): gate the composed body BEFORE sending so a
+  //     broken message (missing the review link / the contact's name, over
+  //     length, a leftover {placeholder}, or rejected by an injected checker) is
+  //     BLOCKED instead of going out wrong. We verify `composed.body` — the
+  //     text/markdown BODY for both channels (NOT the email subject), which is
+  //     what the rubric's link/name/length checks target.
+  //
+  //     Rubric source: the agent's own `blueprint.verify` (projected onto the
+  //     match as `verify`) OVERRIDES; else the per-skill default. `null` (an
+  //     unknown skill with no blueprint rubric) → NO gate, send as today
+  //     (back-compat). The deterministic checks are always on; `deps.checker`
+  //     (the LLM/evals judge — T4, undefined in prod for now) is AND-ed in.
+  //     verifyOutput never throws (a checker that throws fails CLOSED), but the
+  //     whole block is guarded so verify can never crash the handler.
+  const rubric: VerifyRubric | null =
+    agent.verify ??
+    defaultRubricForSkill(agent.skill, { reviewUrl, contactName, channel: agent.channel });
+  if (rubric) {
+    let verdict: Awaited<ReturnType<typeof verifyOutput>>;
+    try {
+      verdict = await verifyOutput(composed.body, rubric, deps.checker);
+    } catch (err) {
+      // verifyOutput already fails closed, but guard anyway: a verify error must
+      // never crash the agent. Treat an unexpected throw as a BLOCK (fail closed
+      // — don't send something we couldn't verify).
+      console.warn(
+        `[run-event-agent] verifyOutput threw for ${agent.skill}:`,
+        err instanceof Error ? err.message : String(err),
+      );
+      verdict = {
+        pass: false,
+        results: [],
+        failures: [err instanceof Error ? err.message : "verify_error"],
+      };
+    }
+
+    if (!verdict.pass) {
+      // BLOCKED — do NOT send. Count it, and record WHY to loop-memory (so the
+      // agent "remembers" it failed and an operator can see the reason) +
+      // surface it on the run summary's recorded list. Best-effort + guarded.
+      result.blocked += 1;
+      const failures = Array.isArray(verdict.failures) ? verdict.failures : [];
+      console.warn(
+        JSON.stringify({
+          action: "event_agent.verify_blocked",
+          orgId: event.orgId,
+          skill: agent.skill,
+          channel: agent.channel,
+          contactId,
+          failures,
+        }),
+      );
+      if (deps.memoryStore) {
+        const at = deps.now ? deps.now().toISOString() : undefined;
+        const blockedEntry: AgentMemoryEntry = {
+          ...(at ? { at } : {}),
+          kind: "verify_blocked",
+          summary: `Blocked ${agent.skill} to ${contactName ?? "contact"}: ${failures.join("; ")}`,
+          data: { failures, channel: agent.channel },
+        };
+        try {
+          await recordAgentMemory(deps.memoryStore, {
+            orgId: event.orgId,
+            agentKey,
+            subjectKey,
+            entry: blockedEntry,
+          });
+        } catch (err) {
+          console.warn(
+            `[run-event-agent] recordAgentMemory (verify_blocked) failed for ${agent.skill}:`,
+            err instanceof Error ? err.message : String(err),
+          );
+        }
+        if (result.memory) {
+          result.memory.recorded.push(blockedEntry);
+        }
+      }
       return;
     }
   }
