@@ -153,3 +153,134 @@ describe("resolveDeploymentPersona", () => {
     );
   });
 });
+
+describe("resolveDeploymentPersona — script/faq/services overrides (P2.1)", () => {
+  test("script override is used VERBATIM and is NOT placeholder-filled (an explicit override is authored, not a template)", () => {
+    // The deployment authored its own full script; even if it happens to contain
+    // {tokens} they are NOT substituted — an explicit override is literal.
+    const r = resolveDeploymentPersona({
+      templateScript: "You are the receptionist for {business name}.",
+      customization: {
+        script: "Greet the caller, then book a slot for {business_name} — keep it warm.",
+        businessInfo: { name: "Acme Plumbing" },
+      },
+    });
+    assert.equal(
+      r.prompt,
+      "Greet the caller, then book a slot for {business_name} — keep it warm.",
+    );
+    assert.ok(r.prompt!.includes("{business_name}"), "the override's braces survive verbatim");
+  });
+
+  test("a blank/whitespace script override is treated as absent → template script is placeholder-filled", () => {
+    const r = resolveDeploymentPersona({
+      templateScript: "You are the receptionist for {business name}.",
+      customization: { script: "   ", businessInfo: { name: "Acme Plumbing" } },
+    });
+    assert.equal(r.prompt, "You are the receptionist for Acme Plumbing.");
+  });
+
+  test("no script override → template script is placeholder-filled (existing behavior, unchanged)", () => {
+    const r = resolveDeploymentPersona({
+      templateScript: "You are the receptionist for {business name}.",
+      customization: { businessInfo: { name: "Acme Plumbing" } },
+    });
+    assert.equal(r.prompt, "You are the receptionist for Acme Plumbing.");
+  });
+
+  test("faq override wins WHOLE over templateFaq (no element merge)", () => {
+    const r = resolveDeploymentPersona({
+      templateFaq: [{ q: "Template Q", a: "Template A" }],
+      customization: {
+        faq: [
+          { q: "Do you offer free quotes?", a: "Yes, always." },
+          { q: "Are you licensed?", a: "Fully licensed and insured." },
+        ],
+      },
+    });
+    assert.deepEqual(r.faq, [
+      { q: "Do you offer free quotes?", a: "Yes, always." },
+      { q: "Are you licensed?", a: "Fully licensed and insured." },
+    ]);
+  });
+
+  test("absent customization.faq → templateFaq is returned", () => {
+    const r = resolveDeploymentPersona({
+      templateFaq: [{ q: "Template Q", a: "Template A" }],
+      customization: { businessInfo: { name: "Acme Plumbing" } },
+    });
+    assert.deepEqual(r.faq, [{ q: "Template Q", a: "Template A" }]);
+  });
+
+  test("empty-array customization.faq is treated as ABSENT → falls back to templateFaq", () => {
+    const r = resolveDeploymentPersona({
+      templateFaq: [{ q: "Template Q", a: "Template A" }],
+      customization: { faq: [] },
+    });
+    assert.deepEqual(r.faq, [{ q: "Template Q", a: "Template A" }]);
+  });
+
+  test("faq is null when neither customization nor template supplies one", () => {
+    const r = resolveDeploymentPersona({});
+    assert.equal(r.faq, null);
+  });
+
+  test("templateFaq null with no override → null faq", () => {
+    const r = resolveDeploymentPersona({ templateFaq: null });
+    assert.equal(r.faq, null);
+  });
+
+  test("services override wins WHOLE over templateServices (no element merge)", () => {
+    const r = resolveDeploymentPersona({
+      templateServices: [{ name: "Template Service" }],
+      customization: {
+        services: [
+          { name: "Drain Cleaning", description: "Fast and clean", price: "$120" },
+          { name: "Leak Repair" },
+        ],
+      },
+    });
+    assert.deepEqual(r.services, [
+      { name: "Drain Cleaning", description: "Fast and clean", price: "$120" },
+      { name: "Leak Repair" },
+    ]);
+  });
+
+  test("absent customization.services → templateServices is returned", () => {
+    const r = resolveDeploymentPersona({
+      templateServices: [{ name: "Template Service", price: "$99" }],
+      customization: { businessInfo: { name: "Acme Plumbing" } },
+    });
+    assert.deepEqual(r.services, [{ name: "Template Service", price: "$99" }]);
+  });
+
+  test("empty-array customization.services is treated as ABSENT → falls back to templateServices", () => {
+    const r = resolveDeploymentPersona({
+      templateServices: [{ name: "Template Service" }],
+      customization: { services: [] },
+    });
+    assert.deepEqual(r.services, [{ name: "Template Service" }]);
+  });
+
+  test("services is null when neither customization nor template supplies one", () => {
+    const r = resolveDeploymentPersona({});
+    assert.equal(r.services, null);
+  });
+
+  test("greeting/voiceId/businessName remain byte-for-byte when faq/services are present", () => {
+    // Adding the new overrides must not perturb the existing fields.
+    const r = resolveDeploymentPersona({
+      templateGreeting: "Thanks for calling {business_name}!",
+      templateVoiceId: "cedar",
+      customization: {
+        businessInfo: { name: "Acme Plumbing" },
+        faq: [{ q: "Q", a: "A" }],
+        services: [{ name: "S" }],
+      },
+      clientName: "Ignored Client",
+    });
+    assert.equal(r.greeting, "Thanks for calling Acme Plumbing!");
+    assert.equal(r.voiceId, "cedar");
+    assert.equal(r.businessName, "Acme Plumbing");
+  });
+});

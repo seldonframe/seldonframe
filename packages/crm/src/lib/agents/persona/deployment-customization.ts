@@ -31,14 +31,28 @@ export type DeploymentBusinessInfo = {
   email?: string;
 };
 
+/** A single client-facing FAQ entry (question + answer). */
+export type DeploymentFaqEntry = { q: string; a: string };
+
+/** A single client-facing service offering. `name` required; the rest optional. */
+export type DeploymentService = { name: string; description?: string; price?: string };
+
 /** A deployment's per-client persona overrides over the agent template default.
  *  `greeting` is a FULL override of the spoken/written greeting; `voiceId` a TTS
  *  voice override; `businessInfo` the facts that fill the template's placeholders
- *  (and from which the effective business name is derived). */
+ *  (and from which the effective business name is derived). `script`, `faq`, and
+ *  `services` are FULL overrides too: an explicit `script` replaces the template
+ *  script VERBATIM (no placeholder-fill — it was authored for this client), and a
+ *  non-empty `faq`/`services` array replaces the template's WHOLE (no element
+ *  merge). Any of these left absent (or, for the arrays, empty) defers to the
+ *  template default. */
 export type DeploymentCustomization = {
   greeting?: string;
   voiceId?: string;
   businessInfo?: DeploymentBusinessInfo;
+  script?: string;
+  faq?: DeploymentFaqEntry[];
+  services?: DeploymentService[];
 };
 
 /** Tolerant placeholder matcher: `{token}` with optional inner whitespace and a
@@ -95,6 +109,17 @@ function firstNonEmpty(...vals: (string | null | undefined)[]): string | null {
   return null;
 }
 
+/** Override-wins-WHOLE for array fields (faq/services): the customization array
+ *  wins only if it's a NON-EMPTY array (an empty array is treated as "not set" →
+ *  fall through to the template). No element merge. Returns the chosen array or
+ *  null when neither side supplies one. */
+function firstNonEmptyArray<T>(...vals: (T[] | null | undefined)[]): T[] | null {
+  for (const v of vals) {
+    if (Array.isArray(v) && v.length > 0) return v;
+  }
+  return null;
+}
+
 /**
  * Resolve the EFFECTIVE persona the runtime speaks/writes AS the client, from the
  * agent-template defaults and the deployment's customization.
@@ -106,11 +131,18 @@ function firstNonEmpty(...vals: (string | null | undefined)[]): string | null {
  *     field's token gets DROPPED rather than filled with blank.
  *   - `greeting` = the deployment's full `greeting` override (trimmed) if present;
  *     else the template greeting with its placeholders filled; else null.
- *   - `prompt` = the template script with its placeholders filled, else null. This
- *     is what kills the live "thanks for calling {business name}, have a great day"
- *     leak — the script's tokens are filled (or cleanly dropped) before runtime.
+ *   - `prompt` = the deployment's full `script` override (trimmed) used VERBATIM if
+ *     present (an explicit override is authored for this client — its `{tokens}`
+ *     are NOT filled); else the template script with its placeholders filled; else
+ *     null. The placeholder-fill path is what kills the live "thanks for calling
+ *     {business name}, have a great day" leak — the template's tokens are filled
+ *     (or cleanly dropped) before runtime.
  *   - `voiceId` = the deployment's `voiceId` override (trimmed) ?? the template
  *     voice ?? null.
+ *   - `faq` = the deployment's non-empty `faq` array (wins WHOLE, no element merge)
+ *     ?? `templateFaq` ?? null.
+ *   - `services` = the deployment's non-empty `services` array (wins WHOLE) ??
+ *     `templateServices` ?? null.
  *
  * Pure; never throws. Callers fall back to today's values when a field is null.
  */
@@ -118,10 +150,27 @@ export function resolveDeploymentPersona(args: {
   templateGreeting?: string | null;
   templateScript?: string | null;
   templateVoiceId?: string | null;
+  templateFaq?: DeploymentFaqEntry[] | null;
+  templateServices?: DeploymentService[] | null;
   customization?: DeploymentCustomization | null;
   clientName?: string | null;
-}): { greeting: string | null; prompt: string | null; voiceId: string | null; businessName: string | null } {
-  const { templateGreeting, templateScript, templateVoiceId, customization, clientName } = args;
+}): {
+  greeting: string | null;
+  prompt: string | null;
+  voiceId: string | null;
+  businessName: string | null;
+  faq: DeploymentFaqEntry[] | null;
+  services: DeploymentService[] | null;
+} {
+  const {
+    templateGreeting,
+    templateScript,
+    templateVoiceId,
+    templateFaq,
+    templateServices,
+    customization,
+    clientName,
+  } = args;
   const info = customization?.businessInfo;
 
   const businessName = firstNonEmpty(info?.name, clientName);
@@ -144,9 +193,19 @@ export function resolveDeploymentPersona(args: {
     greetingOverride ??
     (templateGreeting ? fillPlaceholders(templateGreeting, vars) : null);
 
-  const prompt = templateScript ? fillPlaceholders(templateScript, vars) : null;
+  // An explicit `script` override is used VERBATIM — it was authored for this
+  // client, so its `{tokens}` are NOT substituted. Only the TEMPLATE script gets
+  // placeholder-filled (the live-leak fix). A blank override falls through.
+  const scriptOverride = firstNonEmpty(customization?.script);
+  const prompt =
+    scriptOverride ?? (templateScript ? fillPlaceholders(templateScript, vars) : null);
 
   const voiceId = firstNonEmpty(customization?.voiceId, templateVoiceId);
 
-  return { greeting, prompt, voiceId, businessName };
+  // Override-wins-WHOLE: a non-empty customization array replaces the template's
+  // outright (no element merge); empty/absent defers to the template.
+  const faq = firstNonEmptyArray(customization?.faq, templateFaq);
+  const services = firstNonEmptyArray(customization?.services, templateServices);
+
+  return { greeting, prompt, voiceId, businessName, faq, services };
 }
