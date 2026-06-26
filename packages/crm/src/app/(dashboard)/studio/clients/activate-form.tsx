@@ -25,7 +25,7 @@
 
 import { useState, useTransition } from "react";
 import Link from "next/link";
-import { Phone, Pause, Loader2, ChevronDown, ChevronUp, Sparkles, KeyRound, Trash2, CalendarClock, Link2, Check, SlidersHorizontal, Send } from "lucide-react";
+import { Phone, Pause, Loader2, ChevronDown, ChevronUp, Sparkles, KeyRound, Trash2, CalendarClock, Link2, Check, SlidersHorizontal, Send, Star, AlertTriangle, Pencil } from "lucide-react";
 import {
   activateDeploymentAction,
   activateOutboundDeploymentAction,
@@ -33,6 +33,7 @@ import {
   provisionDeploymentNumberAction,
   cancelDeploymentAction,
   inviteClientToPortalAction,
+  setDeploymentCustomizationAction,
 } from "@/lib/deployments/actions";
 import {
   startCalendarConnect,
@@ -832,6 +833,163 @@ export function CustomizationSection({
       {open && (
         <div className="mt-3">
           <DeploymentCustomizationEditor deploymentId={deploymentId} initial={initial} />
+        </div>
+      )}
+    </div>
+  );
+}
+
+// ─── ReviewLinkSection ─────────────────────────────────────────────────────────
+//
+// The per-client Google review link, surfaced INLINE on a review-requester
+// agent's row (review-requester is OUTBOUND, so it never shows the speaking-agent
+// "Agent customization" panel above). This is the single most important field for
+// the agent to fire — with no link, the review ask is worthless and the runtime
+// skips the send — so when it's unset we show a muted WARNING, and when it's set
+// we show the link with an Edit affordance.
+//
+// It persists ONLY `customization.reviewUrl` via setDeploymentCustomizationAction
+// (the same writer the customization editor uses), MERGING over the deployment's
+// existing customization so booking/persona fields aren't dropped. A blank value
+// clears just the review link (null sentinel) while preserving the rest.
+
+type ReviewLinkSectionProps = {
+  deploymentId: string;
+  /** The deployment's stored customization (sparse Partial) — read for the
+   *  current reviewUrl and merged over on save so other fields persist. */
+  initial: Partial<DeploymentCustomization> | null;
+};
+
+export function ReviewLinkSection({ deploymentId, initial }: ReviewLinkSectionProps) {
+  const initialUrl = initial?.reviewUrl?.trim() ?? "";
+  const [savedUrl, setSavedUrl] = useState(initialUrl);
+  const [editing, setEditing] = useState(initialUrl.length === 0); // open when unset
+  const [draft, setDraft] = useState(initialUrl);
+  const [error, setError] = useState<string | null>(null);
+  const [isSaving, startSave] = useTransition();
+
+  function handleSave() {
+    setError(null);
+    const next = draft.trim();
+    startSave(async () => {
+      // Merge over the deployment's existing customization, overriding only the
+      // review link (null = clear just this field → fall back to the template).
+      const base = (initial ?? {}) as Partial<DeploymentCustomization>;
+      const customization: Partial<DeploymentCustomization> = {
+        ...base,
+        reviewUrl: next ? next : null,
+      };
+      const result = await setDeploymentCustomizationAction({
+        deploymentId,
+        customization,
+      });
+      if (result.ok) {
+        setSavedUrl(next);
+        setEditing(next.length === 0); // stay open (showing the warning) if cleared
+      } else {
+        setError(
+          result.error === "unauthorized"
+            ? "You don't have access to this client."
+            : result.error === "not_found"
+              ? "Client not found."
+              : "Couldn't save the review link — try again.",
+        );
+      }
+    });
+  }
+
+  return (
+    <div className="mt-3 border-t pt-3">
+      <div className="flex items-center gap-1.5 text-[11px] font-medium uppercase tracking-wide text-muted-foreground">
+        <Star className="size-3" aria-hidden />
+        Google review link
+      </div>
+
+      {!editing ? (
+        <div className="mt-2 flex flex-wrap items-center gap-2">
+          {savedUrl ? (
+            <>
+              <a
+                href={savedUrl}
+                target="_blank"
+                rel="noreferrer"
+                className="max-w-[22rem] truncate text-xs text-primary underline-offset-2 hover:underline"
+                title={savedUrl}
+              >
+                {savedUrl}
+              </a>
+              <button
+                type="button"
+                onClick={() => {
+                  setDraft(savedUrl);
+                  setEditing(true);
+                }}
+                className="inline-flex items-center gap-1 text-[11px] font-medium text-muted-foreground hover:text-foreground"
+              >
+                <Pencil className="size-3" aria-hidden />
+                Edit
+              </button>
+            </>
+          ) : (
+            // Unset — the agent can't fire. The single most important field.
+            <p className="inline-flex items-start gap-1.5 text-[11px] text-amber-700 dark:text-amber-400">
+              <AlertTriangle className="mt-0.5 size-3 shrink-0" aria-hidden />
+              <span>
+                No review link — this agent won&apos;t send until you add the
+                client&apos;s Google review URL.{" "}
+                <button
+                  type="button"
+                  onClick={() => setEditing(true)}
+                  className="font-medium underline underline-offset-2"
+                >
+                  Add it
+                </button>
+              </span>
+            </p>
+          )}
+        </div>
+      ) : (
+        <div className="mt-2 flex flex-col gap-1.5">
+          <div className="flex gap-2">
+            <input
+              type="url"
+              inputMode="url"
+              value={draft}
+              onChange={(e) => setDraft(e.target.value)}
+              disabled={isSaving}
+              placeholder="https://g.page/r/…/review"
+              aria-label="Google review link"
+              className="crm-input h-8 flex-1 text-sm disabled:opacity-50"
+            />
+            <button
+              type="button"
+              onClick={handleSave}
+              disabled={isSaving}
+              className="crm-button-primary inline-flex h-8 items-center gap-1.5 px-3 text-sm disabled:opacity-50"
+            >
+              {isSaving ? <Loader2 className="size-3.5 animate-spin" /> : <Check className="size-3.5" />}
+              Save
+            </button>
+            {savedUrl && (
+              <button
+                type="button"
+                onClick={() => {
+                  setDraft(savedUrl);
+                  setEditing(false);
+                  setError(null);
+                }}
+                disabled={isSaving}
+                className="crm-button-secondary h-8 px-3 text-sm disabled:opacity-50"
+              >
+                Cancel
+              </button>
+            )}
+          </div>
+          <p className="text-[11px] leading-relaxed text-muted-foreground">
+            Paste the client&apos;s Google review URL — get it from their Google
+            Business Profile → Reviews → Get more reviews / Share review form.
+          </p>
+          {error && <p className="text-[11px] text-rose-600 dark:text-rose-400">{error}</p>}
         </div>
       )}
     </div>

@@ -14,6 +14,7 @@ import { ChevronLeft } from "lucide-react";
 import { getOrgId } from "@/lib/auth/helpers";
 import { listAgentTemplates } from "@/lib/agent-templates/store";
 import { listDeployments, groupAttachableClients } from "@/lib/deployments/store";
+import { resolveAgentTrigger } from "@/lib/agents/triggers/agent-trigger";
 import { DeployFlowClient } from "./deploy-client";
 import { StudioTabs } from "../../../studio-tabs";
 
@@ -79,12 +80,24 @@ export default async function DeployTemplatePage({
       </header>
 
       <DeployFlowClient
-        templates={templates.map((t) => ({
-          id: t.id,
-          name: t.name,
-          type: t.type,
-          status: t.status,
-        }))}
+        templates={templates.map((t) => {
+          // Resolve the template's trigger so the stepper can show the review-link
+          // field for a review-requester (skill = trigger event booking.completed,
+          // matching the runtime's skillForEvent). The blueprint stays server-side;
+          // we pass only the derived flag.
+          const trigger = resolveAgentTrigger(
+            t.blueprint?.trigger as Parameters<typeof resolveAgentTrigger>[0],
+            t.type,
+          );
+          return {
+            id: t.id,
+            name: t.name,
+            type: t.type,
+            status: t.status,
+            isReviewRequester:
+              trigger.kind === "event" && trigger.event === "booking.completed",
+          };
+        })}
         initialTemplateId={selected.id}
         existingClients={attachableClients.map((c) => ({
           clientOrgId: c.clientOrgId,

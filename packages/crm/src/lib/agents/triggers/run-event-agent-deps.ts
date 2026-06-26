@@ -13,7 +13,10 @@
 //   • findEventAgents — query agent_templates for the org, resolve each
 //     blueprint.trigger via resolveAgentTrigger, keep the {kind:"event",
 //     event:<this type>} matches, and map to EventAgentMatch (businessName from
-//     the org soul, reviewUrl from the blueprint).
+//     the org soul; reviewUrl resolved PER-CLIENT as
+//     deployment.customization.reviewUrl ?? blueprint.reviewUrl — the Google
+//     review link belongs to the client's GBP, so the deployment's link wins over
+//     the shared template default).
 //   • loadContact — the contact's name/phone/email (same query dispatch.ts uses).
 //   • hasAlreadyRequested — the review one-per-contact throttle: probe both the
 //     smsMessages and emails tables for a prior outbound row tagged
@@ -44,6 +47,8 @@ import { organizations } from "@/db/schema/organizations";
 import { smsMessages } from "@/db/schema/sms-messages";
 import { sendEmailFromApi } from "@/lib/emails/api";
 import { sendSmsFromApi } from "@/lib/sms/api";
+import { loadDeploymentCustomizationForOrgTemplate } from "@/lib/deployments/store";
+import { resolveReviewUrl } from "@/lib/agents/persona/deployment-customization";
 import {
   resolveAgentTrigger,
   resolveSendDelayMinutes,
@@ -166,9 +171,12 @@ export function buildRunEventAgentDeps(orgId?: string): RunEventAgentDeps {
         null;
 
       // Load this org's agent templates and keep the ones whose resolved
-      // trigger is an event-trigger for THIS event type.
+      // trigger is an event-trigger for THIS event type. `id` is selected so a
+      // review-requester match can correlate to its deployment row (for the
+      // per-client review link below).
       const rows = await db
         .select({
+          id: agentTemplates.id,
           surface: agentTemplates.type,
           blueprint: agentTemplates.blueprint,
         })
@@ -189,12 +197,43 @@ export function buildRunEventAgentDeps(orgId?: string): RunEventAgentDeps {
         );
         if (trigger.kind !== "event" || trigger.event !== eventType) continue;
 
+        // PER-CLIENT review link: the review URL belongs to the CLIENT's Google
+        // Business Profile, so each deployment carries its own on
+        // `customization.reviewUrl`. Resolve deployment-wins-over-template:
+        // `deployment.customization?.reviewUrl ?? blueprint.reviewUrl` (the
+        // template link is the agency-wide fallback/default). Only worth a lookup
+        // for the review-requester skill (speed-to-lead ignores reviewUrl). The
+        // lookup is soft-fail: if it throws, fall back to the template link rather
+        // than break the run (it's inside a never-throws bus handler downstream).
+        const templateReviewUrl =
+          typeof blueprint.reviewUrl === "string" ? blueprint.reviewUrl : null;
+        let reviewUrl: string | null = templateReviewUrl;
+        if (skill === "review-requester") {
+          let customization: Awaited<
+            ReturnType<typeof loadDeploymentCustomizationForOrgTemplate>
+          > = null;
+          try {
+            customization = await loadDeploymentCustomizationForOrgTemplate(
+              orgId,
+              row.id,
+            );
+          } catch (err) {
+            console.warn(
+              `[run-event-agent-deps] loadDeploymentCustomization failed for template ${row.id}:`,
+              err instanceof Error ? err.message : String(err),
+            );
+            customization = null;
+          }
+          reviewUrl = resolveReviewUrl({ customization, templateReviewUrl });
+        }
+
         matches.push({
           skill,
           channel: trigger.channel, // "sms" | "email" (validated by the resolver)
           businessName,
-          // review-requester reads this; speed-to-lead ignores it.
-          reviewUrl: typeof blueprint.reviewUrl === "string" ? blueprint.reviewUrl : null,
+          // review-requester reads this; speed-to-lead ignores it. Resolved above
+          // as the CLIENT's deployment link, falling back to the template default.
+          reviewUrl,
           // 2026-06-26 — L2 Verify (T3): project the agent's own VERIFY rubric onto
           // the match so the orchestrator can gate the composed body with it
           // (overriding the per-skill default). A loose object (jsonb) — verifyOutput

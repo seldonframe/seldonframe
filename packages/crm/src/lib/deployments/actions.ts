@@ -111,6 +111,9 @@ export async function createDeploymentAction(
     /** Attach-to-existing-client (F3): when set, the new agent joins this EXISTING
      *  client workspace instead of creating a fresh client. Absent → new client. */
     existingClientOrgId?: string | null;
+    /** R2 — the CLIENT's Google review link (review-requester agents), persisted
+     *  onto the new deployment's `customization.reviewUrl`. Absent/blank → none. */
+    reviewUrl?: string;
   },
   _deps?: Partial<CreateDeploymentActionDeps>,
 ): Promise<CreateDeploymentActionResult> {
@@ -144,6 +147,13 @@ export async function createDeploymentAction(
     return { ok: false, error: "client_not_found" };
   }
 
+  // R2 — capture the client's Google review link onto the new deployment's
+  // customization (review-requester agents). A blank/absent value collapses to no
+  // customization in the store (→ the template default). Only this persona field
+  // is set at deploy time; the rest are edited later on the client card.
+  const reviewUrl = parsed.data.reviewUrl?.trim();
+  const customization = reviewUrl ? { reviewUrl } : undefined;
+
   const result = await createDeployment({
     builderOrgId: orgId,
     agentTemplateId: parsed.data.agentTemplateId,
@@ -154,6 +164,7 @@ export async function createDeploymentAction(
     priceCents: parsed.data.priceCents,
     bookingMode: parsed.data.bookingMode,
     externalBookingUrl: parsed.data.externalBookingUrl,
+    customization,
     // attach → write the existing clientOrgId onto the row (the idempotent
     // provisioner then no-ops on activation: no duplicate workspace, no 2nd
     // number). new → undefined (clientOrgId stays null, provisioned on activate).

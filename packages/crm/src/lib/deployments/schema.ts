@@ -94,6 +94,14 @@ export const CreateDeploymentSchema = z
     // (intersected against listClientOrgsForAgency) before it reaches the store.
     // Absent → "new client" (today's default). A UUID or absent — never "".
     existingClientOrgId: z.string().uuid().optional().nullable(),
+    // R2 — the CLIENT's Google review link, captured at deploy time for a
+    // review-requester agent and persisted onto the new deployment's
+    // `customization.reviewUrl`. ONLY this persona field is accepted by the deploy
+    // flow (greeting/voice/business-info are edited later on the client card via
+    // setDeploymentCustomizationAction). Bounded like externalBookingUrl; not
+    // .url() — operators paste GBP share links of varying shapes (the runtime only
+    // trims). Absent/blank → no customization is written (→ the template default).
+    reviewUrl: z.string().max(2000).optional(),
   })
   .strict()
   // external_link is only useful with a real URL to hand off; demand one. Other
@@ -240,6 +248,12 @@ const DeploymentCustomizationSchema = z
     greeting: z.string().max(2000).optional(),
     voiceId: z.string().max(60).optional(),
     businessInfo: BusinessInfoSchema.optional(),
+    // The client's own Google review URL (review-requester agents). Nullable so a
+    // caller can CLEAR just this field (→ fall back to the template's link) without
+    // dropping the rest of the customization; absent leaves it untouched. Bounded
+    // like externalBookingUrl so a row can't bloat. Not .url() — operators paste
+    // GBP share links of varying shapes; the resolver only trims, never parses.
+    reviewUrl: z.string().max(2000).nullable().optional(),
   })
   .strict();
 

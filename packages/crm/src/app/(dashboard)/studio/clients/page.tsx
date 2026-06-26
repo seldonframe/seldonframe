@@ -45,6 +45,7 @@ import {
   ConnectCalendarButton,
   BookingRulesSection,
   CustomizationSection,
+  ReviewLinkSection,
 } from "./activate-form";
 
 export const dynamic = "force-dynamic";
@@ -155,6 +156,12 @@ export default async function StudioClientsPage({
                     d.templateTrigger as Parameters<typeof resolveAgentTrigger>[0],
                     d.surface,
                   );
+                  // A review-requester agent — the one that needs the client's
+                  // Google review link. Detected by skill (trigger event
+                  // booking.completed), matching the runtime's skillForEvent.
+                  const isReviewRequester =
+                    trigger.kind === "event" &&
+                    trigger.event === "booking.completed";
                   return (
                     <li key={d.id} className="py-4 first:pt-4">
                       <div className="flex flex-wrap items-start justify-between gap-3">
@@ -234,9 +241,22 @@ export default async function StudioClientsPage({
                           fetched on this list query, and the resolver fills them
                           safely). */}
                       {d.isOutbound ? (
-                        <p className="mt-3 border-t pt-3 text-[11px] text-muted-foreground">
-                          This agent doesn&apos;t take bookings — it sends on an event.
-                        </p>
+                        <>
+                          <p className="mt-3 border-t pt-3 text-[11px] text-muted-foreground">
+                            This agent doesn&apos;t take bookings — it sends on an event.
+                          </p>
+                          {/* The per-client Google review link — the single most
+                              important field for a review-requester to fire. Shown
+                              inline with an edit affordance (or a warning when
+                              unset). Seeded with the deployment's stored
+                              customization (null = none yet). */}
+                          {isReviewRequester && (
+                            <ReviewLinkSection
+                              deploymentId={d.id}
+                              initial={d.customization ?? null}
+                            />
+                          )}
+                        </>
                       ) : (
                         d.bookingMode !== "external_link" && (
                           <BookingRulesSection

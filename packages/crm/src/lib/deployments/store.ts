@@ -201,6 +201,12 @@ export type CreateDeploymentInput = {
    *  and WINS over the intake-derived seed (the "already set" case). When absent
    *  the store seeds it from the captured clientContext hours (see below). */
   bookingPolicy?: Partial<BookingPolicy> | null;
+  /** An initial per-client persona/customization captured at deploy time —
+   *  today just the Google review link for a review-requester agent
+   *  (`customization.reviewUrl`). Sparse; collapsed to null when empty so a blank
+   *  capture leaves the column null (→ the template's defaults). The agency can
+   *  still edit it later from the client card (setDeploymentCustomizationAction). */
+  customization?: Partial<DeploymentCustomization> | null;
   /** ATTACH-TO-EXISTING-CLIENT (F3). When set, the new deployment row is created
    *  pointing at this EXISTING client workspace (org) instead of leaving
    *  clientOrgId null. Because provisionClientWorkspaceForDeployment is idempotent
@@ -278,6 +284,11 @@ export async function createDeployment(
     clientContext,
   );
 
+  // Initial per-client customization (today: the review link). Collapse an empty
+  // object to null so a blank capture leaves the column null (→ template defaults),
+  // never a stored {}. A blank/whitespace reviewUrl is dropped too.
+  const customization = normalizeCustomization(input.customization);
+
   // Attach-to-existing-client (F3): a pre-validated existing clientOrgId is
   // written onto the row at create time so the idempotent provisioner no-ops on
   // activation (no duplicate workspace, no second number). A blank/whitespace id
@@ -295,6 +306,8 @@ export async function createDeployment(
     bookingMode,
     externalBookingUrl,
     bookingPolicy,
+    // Only set when something non-empty was captured (else the column stays null).
+    ...(customization ? { customization } : {}),
     // Attach path only — null (omitted) for a new client; provisioning fills it
     // on activation. Set here only when attaching to an existing client workspace.
     ...(existingClientOrgId ? { clientOrgId: existingClientOrgId } : {}),
@@ -319,6 +332,35 @@ export function normalizeClientContact(
   if (email) out.email = email;
   if (address) out.address = address;
   return Object.keys(out).length > 0 ? out : undefined;
+}
+
+/**
+ * Normalize an initial per-client customization captured at create time. Today
+ * the deploy flow only sets `reviewUrl` (the review-requester's Google link); we
+ * trim it and drop a blank, returning null when nothing usable remains (so a
+ * blank capture leaves the column null → the template's defaults, never a stored
+ * {}). Other persona fields (greeting / voiceId / businessInfo / …) are passed
+ * through verbatim when present — they're shape-bounded at the action boundary
+ * (CreateDeploymentSchema does not yet accept them, so in practice only reviewUrl
+ * arrives here today, but this stays forward-compatible). Pure; never throws. */
+export function normalizeCustomization(
+  customization: Partial<DeploymentCustomization> | null | undefined,
+): Partial<DeploymentCustomization> | null {
+  if (!customization || typeof customization !== "object") return null;
+  const out: Partial<DeploymentCustomization> = {};
+  for (const [key, value] of Object.entries(customization)) {
+    if (key === "reviewUrl") {
+      const v = typeof value === "string" ? value.trim() : "";
+      if (v) out.reviewUrl = v;
+      continue;
+    }
+    // Pass through any other present field verbatim (forward-compat). Skip
+    // null/undefined so we never persist an explicit-null mid-object.
+    if (value !== null && value !== undefined) {
+      (out as Record<string, unknown>)[key] = value;
+    }
+  }
+  return Object.keys(out).length > 0 ? out : null;
 }
 
 /**
@@ -999,4 +1041,54 @@ export async function listClientOrgIdsWithTemplateAgent(
       ),
     );
   return new Set(rows.map((r) => r.orgId));
+}
+
+// ─── loadDeploymentCustomizationForOrgTemplate ───────────────────────────────
+
+/**
+ * Load the per-client `customization` (Partial<DeploymentCustomization>) for the
+ * deployment of `agentTemplateId` that serves `orgId`, or null if none.
+ *
+ * This is the runtime seam the event-agent path (review-requester) uses to read a
+ * client's OWN review link off their deployment. The firing org is the CLIENT org
+ * (a `booking.completed` resolves orgId from the booking row → the client
+ * workspace), but a template-in-the-agency-org case fires with the BUILDER org;
+ * so we match a deployment whose `agentTemplateId` is this template AND whose
+ * `clientOrgId` OR `builderOrgId` is the firing org. The PRECISE per-client match
+ * (`clientOrgId === orgId`) is preferred over the agency-org match — so a builder
+ * org that both owns the template AND has provisioned clients still reads the
+ * RIGHT client's link — then most-recently-updated within that tier (an org rarely
+ * runs two deployments of the SAME template, but if it does the live one's link is
+ * the right one). Returns the raw jsonb customization (the caller resolves
+ * precedence vs. the template default via `resolveReviewUrl`). Lazy DB import;
+ * never used in unit tests (DI'd there).
+ */
+export async function loadDeploymentCustomizationForOrgTemplate(
+  orgId: string,
+  agentTemplateId: string,
+): Promise<Partial<DeploymentCustomization> | null> {
+  if (!orgId || !agentTemplateId) return null;
+  const { db } = await import("@/db");
+  const { deployments } = await import("@/db/schema/deployments");
+  const { and, desc, eq, or, sql } = await import("drizzle-orm");
+  const [row] = await db
+    .select({ customization: deployments.customization })
+    .from(deployments)
+    .where(
+      and(
+        eq(deployments.agentTemplateId, agentTemplateId),
+        or(
+          eq(deployments.clientOrgId, orgId),
+          eq(deployments.builderOrgId, orgId),
+        ),
+      ),
+    )
+    // Prefer the precise client match (0) over the agency-org match (1), then the
+    // most-recently-updated within that tier.
+    .orderBy(
+      sql`CASE WHEN ${deployments.clientOrgId} = ${orgId} THEN 0 ELSE 1 END`,
+      desc(deployments.updatedAt),
+    )
+    .limit(1);
+  return row?.customization ?? null;
 }

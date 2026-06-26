@@ -36,6 +36,7 @@ import {
   Mail,
   Building2,
   UserPlus,
+  Star,
 } from "lucide-react";
 import {
   createDeploymentAction,
@@ -60,6 +61,10 @@ type TemplateOption = {
   name: string;
   type: string;
   status: string;
+  /** True when this template is a review-requester (trigger event
+   *  booking.completed) — the stepper then captures the client's Google review
+   *  link in step 2 and persists it onto the deployment's customization.reviewUrl. */
+  isReviewRequester?: boolean;
 };
 
 type Surface = "phone" | "embed" | "link" | "sms" | "email";
@@ -176,6 +181,11 @@ export function DeployFlowClient({
   const [clientPhone, setClientPhone] = useState("");
   const [clientEmail, setClientEmail] = useState("");
 
+  // Step 2 — the client's Google review link (review-requester agents only). The
+  // single most important field for the agent to fire; persisted onto the new
+  // deployment's customization.reviewUrl. Hidden for non-review agents.
+  const [reviewUrl, setReviewUrl] = useState("");
+
   // Step 2 — the CLIENT's business context (optional). Lets the deployed agent
   // speak AS the client (their services + FAQ), not just name them. Entirely
   // optional: left blank → today's name-only behavior.
@@ -206,6 +216,9 @@ export function DeployFlowClient({
     () => templates.find((t) => t.id === templateId) ?? null,
     [templates, templateId],
   );
+
+  // Show the Google-review-link field only when deploying a review-requester.
+  const isReviewRequester = Boolean(selectedTemplate?.isReviewRequester);
 
   const priceCents = useMemo(() => {
     const n = Number.parseFloat(priceDollars);
@@ -305,6 +318,9 @@ export function DeployFlowClient({
         // F3 — attach this agent to the chosen EXISTING client (its workspace /
         // soul / number are reused; no duplicate client, no second number bought).
         existingClientOrgId: attaching ? existingClientOrgId : undefined,
+        // R2 — the client's Google review link (review-requester only). Trimmed;
+        // blank → omitted (no customization written → the template default).
+        reviewUrl: isReviewRequester ? reviewUrl.trim() || undefined : undefined,
       });
       if (!result.ok) {
         setError(result.error);
@@ -678,6 +694,31 @@ export function DeployFlowClient({
             </>
           )}
 
+          {/* ── Google review link (review-requester agents only) ── */}
+          {isReviewRequester && (
+            <div className="rounded-lg border border-amber-500/30 bg-amber-500/5 p-4">
+              <Field label="Google review link">
+                <input
+                  type="url"
+                  inputMode="url"
+                  value={reviewUrl}
+                  onChange={(e) => setReviewUrl(e.target.value)}
+                  placeholder="https://g.page/r/…/review"
+                  className="w-full rounded-md border bg-background px-3 py-2 text-sm focus:border-primary focus:outline-none"
+                />
+              </Field>
+              <p className="mt-2 flex items-start gap-1.5 text-[11px] leading-relaxed text-muted-foreground">
+                <Star className="mt-0.5 size-3 shrink-0 text-amber-500" aria-hidden />
+                <span>
+                  Paste the client&apos;s Google review URL — get it from their
+                  Google Business Profile &rarr; Reviews &rarr; Get more reviews /
+                  Share review form. This agent won&apos;t send until it&apos;s set
+                  (you can also add it later from the client&apos;s card).
+                </span>
+              </p>
+            </div>
+          )}
+
           <StepNav
             onBack={() => setStep(1)}
             onNext={() => setStep(3)}
@@ -813,6 +854,12 @@ export function DeployFlowClient({
             />
             {bookingMode === "external_link" && externalBookingUrl.trim() && (
               <ReviewRow label="Booking link" value={externalBookingUrl.trim()} />
+            )}
+            {isReviewRequester && (
+              <ReviewRow
+                label="Review link"
+                value={reviewUrl.trim() || "— (add later from the client card)"}
+              />
             )}
             <ReviewRow label="Price" value={formatCentsMonthly(priceCents)} />
             <ReviewRow label="Your estimated net" value={formatCentsMonthly(margin.netCents)} />

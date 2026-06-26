@@ -3,6 +3,7 @@ import assert from "node:assert/strict";
 import {
   fillPlaceholders,
   resolveDeploymentPersona,
+  resolveReviewUrl,
 } from "../../../../src/lib/agents/persona/deployment-customization";
 
 describe("fillPlaceholders", () => {
@@ -282,5 +283,80 @@ describe("resolveDeploymentPersona — script/faq/services overrides (P2.1)", ()
     assert.equal(r.greeting, "Thanks for calling Acme Plumbing!");
     assert.equal(r.voiceId, "cedar");
     assert.equal(r.businessName, "Acme Plumbing");
+  });
+});
+
+// ─── resolveReviewUrl (R1 — per-client review link precedence) ────────────────
+//
+// The Google review link is CLIENT-specific (it's the client's GBP "get more
+// reviews" link), so it lives on the DEPLOYMENT's customization. The shared
+// agent template only carries an agency-wide fallback (blueprint.reviewUrl).
+// resolveReviewUrl encodes deployment-wins-over-template:
+//   deployment.customization.reviewUrl ?? template.blueprint.reviewUrl ?? null.
+describe("resolveReviewUrl — deployment wins over template", () => {
+  const DEPLOY_URL = "https://g.page/r/client-own/review";
+  const TEMPLATE_URL = "https://g.page/r/agency-default/review";
+
+  test("deployment customization.reviewUrl wins over the template default", () => {
+    assert.equal(
+      resolveReviewUrl({
+        customization: { reviewUrl: DEPLOY_URL },
+        templateReviewUrl: TEMPLATE_URL,
+      }),
+      DEPLOY_URL,
+    );
+  });
+
+  test("no deployment link → falls back to the template default", () => {
+    assert.equal(
+      resolveReviewUrl({ customization: {}, templateReviewUrl: TEMPLATE_URL }),
+      TEMPLATE_URL,
+    );
+    // A null/absent customization behaves the same as an empty one.
+    assert.equal(
+      resolveReviewUrl({ customization: null, templateReviewUrl: TEMPLATE_URL }),
+      TEMPLATE_URL,
+    );
+    assert.equal(
+      resolveReviewUrl({ templateReviewUrl: TEMPLATE_URL }),
+      TEMPLATE_URL,
+    );
+  });
+
+  test("neither deployment nor template link → null (the no-URL skip case)", () => {
+    assert.equal(resolveReviewUrl({ customization: {}, templateReviewUrl: null }), null);
+    assert.equal(resolveReviewUrl({}), null);
+    assert.equal(
+      resolveReviewUrl({ customization: { reviewUrl: "" }, templateReviewUrl: "" }),
+      null,
+    );
+  });
+
+  test("a blank/whitespace deployment link is treated as absent → template wins", () => {
+    assert.equal(
+      resolveReviewUrl({
+        customization: { reviewUrl: "   " },
+        templateReviewUrl: TEMPLATE_URL,
+      }),
+      TEMPLATE_URL,
+    );
+    // null deployment link (the editor's CLEAR sentinel) also falls through.
+    assert.equal(
+      resolveReviewUrl({
+        customization: { reviewUrl: null },
+        templateReviewUrl: TEMPLATE_URL,
+      }),
+      TEMPLATE_URL,
+    );
+  });
+
+  test("returns the trimmed link (no leading/trailing whitespace leaks)", () => {
+    assert.equal(
+      resolveReviewUrl({
+        customization: { reviewUrl: `  ${DEPLOY_URL}  ` },
+        templateReviewUrl: TEMPLATE_URL,
+      }),
+      DEPLOY_URL,
+    );
   });
 });

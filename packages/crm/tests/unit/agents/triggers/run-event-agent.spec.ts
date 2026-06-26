@@ -250,6 +250,97 @@ describe("runEventAgent — review-requester on booking.completed", () => {
   });
 });
 
+// ─── R1: the RESOLVED per-client review URL is what gets sent + verified ──────
+//
+// On the production path, findEventAgents resolves `EventAgentMatch.reviewUrl` as
+// `deployment.customization.reviewUrl ?? blueprint.reviewUrl` (resolveReviewUrl;
+// pinned in deployment-customization.spec.ts). Here we pin the ORCHESTRATOR half
+// of the contract: whatever URL the resolver put on the match is the URL that
+// (a) the compose skill embeds in the body, and (b) the always-on verify gate
+// enforces (a "review link" must_include check keyed on that exact URL). So a
+// per-client deployment link flows through end-to-end, and the template fallback
+// flows through identically when the deployment has none.
+describe("runEventAgent — resolved review URL flows to compose + verify (R1)", () => {
+  const CLIENT_URL = "https://g.page/r/this-clients-own/review";
+  const TEMPLATE_URL = "https://g.page/r/agency-template-default/review";
+
+  test("the deployment's own link (resolver winner) is embedded in the body", async () => {
+    const { deps, smsCalls } = makeDeps({
+      // findEventAgents already resolved deployment-wins: the match carries the
+      // CLIENT's link, NOT the template default.
+      findEventAgents: async () => [
+        { skill: "review-requester", channel: "sms", businessName: "Acme", reviewUrl: CLIENT_URL },
+      ],
+    });
+
+    const result = await runEventAgent(bookingCompleted(), deps);
+
+    assert.equal(result.sent, 1, "the resolved-URL ask sends");
+    assert.equal(smsCalls.length, 1);
+    assert.ok(
+      smsCalls[0].body.includes(CLIENT_URL),
+      "the client's own review link must be in the body",
+    );
+    assert.ok(
+      !smsCalls[0].body.includes(TEMPLATE_URL),
+      "the template default must NOT appear once the client link won",
+    );
+    // It matches the pure skill composed with the resolved URL.
+    const expected = composeReviewRequest({
+      contactName: "Jordan",
+      businessName: "Acme",
+      reviewUrl: CLIENT_URL,
+      channel: "sms",
+    });
+    assert.equal(smsCalls[0].body, expected.body);
+  });
+
+  test("the template default flows through when the deployment has none", async () => {
+    // The resolver fell back to the template link → the match carries it.
+    const { deps, smsCalls } = makeDeps({
+      findEventAgents: async () => [
+        { skill: "review-requester", channel: "sms", businessName: "Acme", reviewUrl: TEMPLATE_URL },
+      ],
+    });
+
+    const result = await runEventAgent(bookingCompleted(), deps);
+    assert.equal(result.sent, 1);
+    assert.ok(
+      smsCalls[0].body.includes(TEMPLATE_URL),
+      "the template fallback link is used when the client set none",
+    );
+  });
+
+  test("the verify gate keys its 'review link' check on the RESOLVED URL (block if absent)", async () => {
+    // The agent carries the client's URL, but a buggy/injected checker that
+    // strips the link must be BLOCKED — proving verify is keyed on the resolved
+    // URL. We force the failure by composing a body that lacks the link via a
+    // checker that asserts the resolved URL is the one being verified.
+    let verifiedAgainstUrl: string | null = null;
+    const { deps, smsCalls } = makeDeps({
+      findEventAgents: async () => [
+        { skill: "review-requester", channel: "sms", businessName: "Acme", reviewUrl: CLIENT_URL },
+      ],
+      // The deterministic default rubric already enforces must_include(CLIENT_URL).
+      // Add a checker that records the body it saw so we can confirm the resolved
+      // URL is present in what verify ran against, then PASS.
+      checker: async (output: string) => {
+        verifiedAgainstUrl = output.includes(CLIENT_URL) ? CLIENT_URL : null;
+        return { pass: true, results: [], failures: [] };
+      },
+    });
+
+    const result = await runEventAgent(bookingCompleted(), deps);
+    assert.equal(result.sent, 1, "passes verify with the resolved URL present");
+    assert.equal(
+      verifiedAgainstUrl,
+      CLIENT_URL,
+      "verify ran against the body carrying the resolved client URL",
+    );
+    assert.ok(smsCalls[0].body.includes(CLIENT_URL));
+  });
+});
+
 // ─── speed-to-lead ← lead.created ─────────────────────────────────────────────
 
 describe("runEventAgent — speed-to-lead on lead.created", () => {

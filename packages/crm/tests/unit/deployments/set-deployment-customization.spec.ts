@@ -133,4 +133,52 @@ describe("setDeploymentCustomizationAction", () => {
     const patch = patchSeen as unknown as Record<string, unknown>;
     assert.equal(patch.customization, null);
   });
+
+  // R1 — the per-client review link (review-requester agents). The schema accepts
+  // reviewUrl (nullable so a caller can CLEAR just this field), and the action
+  // persists the whole customization verbatim.
+  test("persists a reviewUrl on the customization", async () => {
+    let patchSeen: Record<string, unknown> | null = null;
+    const withReview: Partial<DeploymentCustomization> = {
+      reviewUrl: "https://g.page/r/acme-clients-own/review",
+    };
+    const res = await setDeploymentCustomizationAction(
+      { deploymentId: DEP_ID, customization: withReview },
+      {
+        getOrgId: async () => "builder-1",
+        findById: async () => fakeDeployment(),
+        update: async (_id, patch) => {
+          patchSeen = patch as Record<string, unknown>;
+          return fakeDeployment({ customization: withReview });
+        },
+        revalidate: () => {},
+      },
+    );
+    assert.deepEqual(res, { ok: true });
+    const patch = patchSeen as unknown as Record<string, unknown>;
+    assert.deepEqual(patch.customization, withReview);
+  });
+
+  test("accepts a null reviewUrl (CLEAR sentinel) alongside other fields", async () => {
+    let patchSeen: Record<string, unknown> | null = null;
+    const cleared: Partial<DeploymentCustomization> = {
+      reviewUrl: null,
+      businessInfo: { name: "Acme Plumbing" },
+    };
+    const res = await setDeploymentCustomizationAction(
+      { deploymentId: DEP_ID, customization: cleared },
+      {
+        getOrgId: async () => "builder-1",
+        findById: async () => fakeDeployment(),
+        update: async (_id, patch) => {
+          patchSeen = patch as Record<string, unknown>;
+          return fakeDeployment({ customization: cleared });
+        },
+        revalidate: () => {},
+      },
+    );
+    assert.deepEqual(res, { ok: true });
+    const patch = patchSeen as unknown as Record<string, unknown>;
+    assert.deepEqual(patch.customization, cleared);
+  });
 });

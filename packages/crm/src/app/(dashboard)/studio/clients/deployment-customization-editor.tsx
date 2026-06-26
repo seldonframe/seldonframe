@@ -47,6 +47,7 @@ export function DeploymentCustomizationEditor({
   const info = initial?.businessInfo;
   const [greeting, setGreeting] = useState(initial?.greeting ?? "");
   const [voiceId, setVoiceId] = useState(initial?.voiceId ?? "");
+  const [reviewUrl, setReviewUrl] = useState(initial?.reviewUrl ?? "");
   const [name, setName] = useState(info?.name ?? "");
   const [hours, setHours] = useState(info?.hours ?? "");
   const [address, setAddress] = useState(info?.address ?? "");
@@ -88,8 +89,10 @@ export function DeploymentCustomizationEditor({
     const customization: Partial<DeploymentCustomization> = {};
     const greetingTrimmed = greeting.trim();
     const voiceTrimmed = voiceId.trim();
+    const reviewUrlTrimmed = reviewUrl.trim();
     if (greetingTrimmed) customization.greeting = greetingTrimmed;
     if (voiceTrimmed) customization.voiceId = voiceTrimmed;
+    if (reviewUrlTrimmed) customization.reviewUrl = reviewUrlTrimmed;
     if (Object.keys(businessInfo).length > 0) customization.businessInfo = businessInfo;
 
     // Nothing set → persist null (clear the override) rather than an empty {}.
@@ -158,6 +161,29 @@ export function DeploymentCustomizationEditor({
             </option>
           ))}
         </select>
+      </label>
+
+      {/* Google review link — the CLIENT's own GBP review URL the review-requester
+          agent puts in its ask. Per-client because the link belongs to the client's
+          Google Business Profile, not the shared template. */}
+      <label className="flex flex-col gap-1.5">
+        <span className="text-[11px] font-medium uppercase tracking-wide text-muted-foreground">
+          Google review link
+        </span>
+        <input
+          type="url"
+          inputMode="url"
+          value={reviewUrl}
+          onChange={(e) => setReviewUrl(e.target.value)}
+          disabled={isSaving}
+          placeholder="https://g.page/r/…/review"
+          className="crm-input h-8 w-full text-sm disabled:opacity-50"
+        />
+        <span className="text-[11px] text-muted-foreground">
+          Paste the client&apos;s Google review URL — get it from their Google
+          Business Profile → Reviews → Get more reviews / Share review form. The
+          review-requester agent won&apos;t send until this is set.
+        </span>
       </label>
 
       {/* Business info — fills the template's {placeholders} + grounds the agent */}

@@ -44,8 +44,11 @@ export type DeploymentService = { name: string; description?: string; price?: st
  *  `services` are FULL overrides too: an explicit `script` replaces the template
  *  script VERBATIM (no placeholder-fill — it was authored for this client), and a
  *  non-empty `faq`/`services` array replaces the template's WHOLE (no element
- *  merge). Any of these left absent (or, for the arrays, empty) defers to the
- *  template default. */
+ *  merge). `reviewUrl` is the CLIENT's own Google review link the review-requester
+ *  agent puts in its ask — per-client, because the link belongs to the client's
+ *  Google Business Profile, not the shared template (the template's
+ *  `blueprint.reviewUrl` is only the agency-wide fallback/default). Any of these
+ *  left absent (or, for the arrays, empty) defers to the template default. */
 export type DeploymentCustomization = {
   greeting?: string;
   voiceId?: string;
@@ -53,7 +56,31 @@ export type DeploymentCustomization = {
   script?: string;
   faq?: DeploymentFaqEntry[];
   services?: DeploymentService[];
+  /** The client's own Google review URL (review-requester agents). Overrides the
+   *  template's `blueprint.reviewUrl`; absent/blank/`null` → the template's link is
+   *  used (and if neither exists, the review ask is skipped — it's worthless
+   *  without a link). `null` is the CLEAR sentinel the editor persists to drop just
+   *  this field; the resolver (`resolveReviewUrl` → `firstNonEmpty`) treats
+   *  null/blank identically to absent. Resolved on the runtime path. */
+  reviewUrl?: string | null;
 };
+
+/**
+ * Resolve the EFFECTIVE review URL a deployed review-requester agent should use:
+ * the deployment's per-client `customization.reviewUrl` if it's a non-empty
+ * string (the client's own GBP link wins), else the agent template's
+ * `blueprint.reviewUrl` (the agency-wide fallback/default), else null.
+ *
+ * Pure; never throws. A null result means "no link at all" — the caller skips
+ * the ask (run-event-agent does exactly this), because a review request with no
+ * link is worthless. Trimmed so a whitespace-only value is treated as absent.
+ */
+export function resolveReviewUrl(args: {
+  customization?: DeploymentCustomization | null;
+  templateReviewUrl?: string | null;
+}): string | null {
+  return firstNonEmpty(args.customization?.reviewUrl, args.templateReviewUrl);
+}
 
 /** Tolerant placeholder matcher: `{token}` with optional inner whitespace and a
  *  token of word-chars/spaces, so `{business_name}`, `{Business Name}`, and
