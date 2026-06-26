@@ -13,7 +13,8 @@
 //     getAnthropicClient) — tests inject a fake, production gets the platform
 //     Anthropic client (or null when no key);
 //   • the model id is read at CALL time (process.env.ANTHROPIC_AUTHOR_MODEL || a
-//     Haiku default), so a test/env that sets it later still wins;
+//     premium Opus default — authoring is compile-time + amortized), so a
+//     test/env that sets it later still wins;
 //   • the response text blocks are joined, fence-stripped, and JSON-parsed
 //     DEFENSIVELY — any failure mode (no key, network error, non-JSON) collapses
 //     to `{}`. `{}` has no skillMd, so the seam's normalizeAuthoredAgent yields
@@ -42,17 +43,19 @@ import { STARTER_TEMPLATES } from "@/lib/agent-templates/starter-pack";
 // ─── model + budget ──────────────────────────────────────────────────────────
 
 /**
- * The author writes a full playbook, so give it a sensible token budget — but it
- * is still ONE strict JSON object, not an open-ended generation. Overridable via
- * ANTHROPIC_AUTHOR_MODEL; defaults to a Haiku-tier model (the playbook is short,
- * structured prose). Read at call time, not module load, so a test/env that sets
- * it later still wins — mirrors classify-llm / judge-llm.
+ * The author is the lynchpin of the generator — it writes the agent's full
+ * playbook AND declares its primitives. Generation is COMPILE-TIME and amortized
+ * over the agent's whole lifetime, so it runs PREMIUM by default: a frontier
+ * model (Opus). Overridable via ANTHROPIC_AUTHOR_MODEL. Read at call time, not
+ * module load, so a test/env that sets it later still wins — mirrors classify-llm
+ * / judge-llm.
  */
-export const DEFAULT_AUTHOR_MODEL = "claude-haiku-4-5";
+export const DEFAULT_AUTHOR_MODEL = "claude-opus-4-8";
 
-/** A playbook + its primitives is a few hundred tokens of JSON. Keep it bounded
- *  so a runaway model can't turn an authoring call into an essay. */
-const AUTHOR_MAX_TOKENS = 1500;
+/** Authoring a FULL playbook (sectioned house-style prose) plus the primitives
+ *  JSON needs real room — sized for a playbook, not a classify. Still bounded so
+ *  a runaway model can't turn an authoring call into an endless essay. */
+const AUTHOR_MAX_TOKENS = 4000;
 
 /** How many starter templates to ship as few-shot examples. Two keeps the prompt
  *  budget sane while still showing both an outbound-event and an action-only shape. */
@@ -125,15 +128,17 @@ export function buildStarterExamples(): string {
 export function buildAuthorSystemPrompt(priorLessons?: string): string {
   const base = [
     "You design ONE automated agent for a local service business from the operator's sentence.",
-    'Return ONLY a JSON object of the shape: {"name": string, "summary": string, "skillMd": string, "trigger": {"kind": string, "cron"?: string, "event"?: string}, "channel": string, "tools": string[]}.',
+    'Return ONLY a JSON object of the shape: {"name": string, "summary": string, "skillMd": string, "trigger": {"kind": string, "cron"?: string, "event"?: string}, "channel": string, "tools": string[], "neededCapabilities": string[]}.',
     "Rules:",
     "- skillMd is the agent's FULL playbook in the SeldonFrame house style — see the examples below for tone and structure — written for THIS agent (do NOT copy an example).",
     "- trigger.kind = 'schedule' for a recurring cadence (include a cron, e.g. weekly Monday 9am = '0 9 * * 1'), 'event' for after-a-business-event (set event to one of: " +
       buildKnownEvents() +
       "), or 'inbound' to answer incoming contact.",
     "- channel = how it MESSAGES a person: 'sms' or 'email' — or 'none' if it only ACTS via tools and sends no customer message (e.g. a social poster that just publishes).",
-    "- tools = zero or more ids from this menu (use the id exactly; omit any you don't need):",
+    "- tools = zero or more ids from this FEATURED menu (use the id exactly; omit any you don't need):",
     buildToolMenu(),
+    "- The 'postiz' tool is a MULTI-PLATFORM social publisher: it posts to Instagram, Facebook, LinkedIn, X/Twitter, TikTok, and more — pick it for ANY social-posting agent, not just Instagram.",
+    "- neededCapabilities = plain-English phrases for any capability the agent needs that is NOT in the menu above (e.g. \"read this business's Google reviews\", \"create a Trello card\", \"charge a card via Stripe\"). DON'T invent a tool id for these — add the phrase to neededCapabilities and we'll resolve it to a real integration. Use [] when the menu already covers everything.",
     "Examples:",
     buildStarterExamples(),
     "Do not include any prose, explanation, or markdown fences. Output JSON only.",
@@ -187,7 +192,7 @@ export function parseAuthoredResponse(raw: string): unknown {
 // ─── the author factory ──────────────────────────────────────────────────────
 
 /**
- * Build a real Haiku-backed {@link AgentAuthor}. The returned author turns one
+ * Build a real premium (Opus by default) {@link AgentAuthor}. The returned author turns one
  * sentence (+ optionally the recalled loop-memory lessons) into a RAW draft via a
  * single strict Anthropic call, then returns the PARSED object verbatim for the
  * seam to validate. It FAILS SOFT on every failure mode (no key, network error,

@@ -19,7 +19,10 @@
 import { describe, test } from "node:test";
 import assert from "node:assert/strict";
 
-import { makeLlmAgentAuthor } from "../../../../src/lib/agents/generate/author-llm";
+import {
+  makeLlmAgentAuthor,
+  DEFAULT_AUTHOR_MODEL,
+} from "../../../../src/lib/agents/generate/author-llm";
 import { normalizeAuthoredAgent } from "../../../../src/lib/agents/generate/authored-agent";
 
 // ─── a narrow fake Anthropic client ──────────────────────────────────────────
@@ -29,16 +32,23 @@ import { normalizeAuthoredAgent } from "../../../../src/lib/agents/generate/auth
  *  CAPTURES the request so a test can assert what prompt the model received.
  *  Cast through `unknown` to the author's getClient return type — the author only
  *  reads the text blocks. Mirrors generate-action.spec's fakeAnthropicReturningText. */
+type CapturedCall = {
+  system?: unknown;
+  model?: unknown;
+  messages?: unknown;
+  max_tokens?: unknown;
+};
+
 function fakeClient(text: string): {
   client: ReturnType<
     NonNullable<NonNullable<Parameters<typeof makeLlmAgentAuthor>[0]>["getClient"]>
   >;
-  calls: Array<{ system?: unknown; model?: unknown; messages?: unknown }>;
+  calls: CapturedCall[];
 } {
-  const calls: Array<{ system?: unknown; model?: unknown; messages?: unknown }> = [];
+  const calls: CapturedCall[] = [];
   const client = {
     messages: {
-      create: async (req: { system?: unknown; model?: unknown; messages?: unknown }) => {
+      create: async (req: CapturedCall) => {
         calls.push(req);
         return { content: [{ type: "text", text }] };
       },
@@ -145,6 +155,42 @@ describe("makeLlmAgentAuthor — fails soft to {} (→ seam null → heuristic)"
   });
 });
 
+// ─── model + budget — premium author (Opus), playbook-sized token budget ──────
+
+describe("makeLlmAgentAuthor — runs premium (Opus default) with a playbook-sized budget", () => {
+  test("the default model constant is the premium Opus id", () => {
+    // Generation is compile-time + amortized → the author runs premium by default.
+    assert.equal(DEFAULT_AUTHOR_MODEL, "claude-opus-4-8");
+  });
+
+  test("the request uses the resolved author model (Opus default unless env overrides)", async () => {
+    const { client, calls } = fakeClient(WEEKLY_IG_JSON);
+    const author = makeLlmAgentAuthor({ getClient: () => client });
+
+    await author("post a weekly instagram highlight");
+
+    assert.equal(calls.length, 1);
+    // Model is read at call time: env override wins, else the Opus default.
+    const expected =
+      process.env.ANTHROPIC_AUTHOR_MODEL?.trim() || DEFAULT_AUTHOR_MODEL;
+    assert.equal(calls[0]!.model, expected);
+  });
+
+  test("max_tokens is sized for a full playbook (>= 4000)", async () => {
+    const { client, calls } = fakeClient(WEEKLY_IG_JSON);
+    const author = makeLlmAgentAuthor({ getClient: () => client });
+
+    await author("post a weekly instagram highlight");
+
+    const maxTokens = calls[0]!.max_tokens;
+    assert.equal(typeof maxTokens, "number");
+    assert.ok(
+      (maxTokens as number) >= 4000,
+      `expected max_tokens >= 4000, got ${String(maxTokens)}`,
+    );
+  });
+});
+
 // ─── the prompt the model receives ────────────────────────────────────────────
 
 describe("makeLlmAgentAuthor — the system prompt is built from the catalog / events / starters / lessons", () => {
@@ -165,6 +211,63 @@ describe("makeLlmAgentAuthor — the system prompt is built from the catalog / e
     // The KNOWN_EVENTS slugs are listed for the 'event' trigger rule.
     assert.match(system, /booking\.completed/);
     assert.match(system, /lead\.created/);
+  });
+
+  test("the prompt features the curated tool menu (labels + descriptions from the catalog)", async () => {
+    const { client, calls } = fakeClient(WEEKLY_IG_JSON);
+    const author = makeLlmAgentAuthor({ getClient: () => client });
+
+    await author("post a weekly instagram highlight");
+    const system = String(calls[0]!.system ?? "");
+
+    // The featured menu surfaces the curated catalog's labels (UI-grade names).
+    for (const label of [
+      "Postiz (social publishing)",
+      "Google Sheets / Drive",
+      "Google Calendar",
+      "Gmail",
+      "Notion",
+      "Slack",
+    ]) {
+      assert.ok(
+        system.includes(label),
+        `featured tool menu should list "${label}"`,
+      );
+    }
+  });
+
+  test("the prompt frames Postiz as a MULTI-PLATFORM social publisher (not IG-only)", async () => {
+    const { client, calls } = fakeClient(WEEKLY_IG_JSON);
+    const author = makeLlmAgentAuthor({ getClient: () => client });
+
+    await author("post a weekly instagram highlight");
+    const system = String(calls[0]!.system ?? "");
+
+    // Multi-platform note: the social poster reaches well beyond Instagram.
+    assert.match(system, /multi-platform/i);
+    for (const platform of ["Instagram", "Facebook", "LinkedIn", "TikTok"]) {
+      assert.ok(
+        system.includes(platform),
+        `Postiz framing should mention "${platform}"`,
+      );
+    }
+    // X/Twitter is covered too (either spelling).
+    assert.match(system, /X\/Twitter|Twitter/);
+  });
+
+  test("the prompt instructs the neededCapabilities escape hatch (don't invent tool ids)", async () => {
+    const { client, calls } = fakeClient(WEEKLY_IG_JSON);
+    const author = makeLlmAgentAuthor({ getClient: () => client });
+
+    await author("post a weekly instagram highlight");
+    const system = String(calls[0]!.system ?? "");
+
+    // The JSON contract advertises the field…
+    assert.match(system, /neededCapabilities/);
+    // …and the rule tells the author to use it instead of inventing a tool id.
+    assert.match(system, /invent a tool id/i);
+    // An out-of-menu example is shown to anchor the behavior.
+    assert.match(system, /Google reviews|Trello|Stripe/);
   });
 
   test("priorLessons, when passed, is folded into the system prompt", async () => {

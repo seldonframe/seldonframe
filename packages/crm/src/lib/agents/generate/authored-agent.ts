@@ -62,6 +62,14 @@ export type AuthoredAgent = {
   channel: EventChannel | "none";
   /** Known TOOL_CATALOG ids only (unknown dropped, deduped). */
   tools: string[];
+  /**
+   * Plain-English capabilities the agent needs that AREN'T in the bindable tool
+   * menu (e.g. "read this business's Google reviews", "create a Trello card",
+   * "charge via Stripe"). The author adds these instead of inventing a tool id;
+   * a downstream resolver maps each to a real integration. Trimmed, deduped,
+   * capped, and OMITTED when empty/absent. Advisory — never wired as a tool here.
+   */
+  neededCapabilities?: string[];
   /** Optional grounding hints the composer wires (e.g. a review link). */
   knowledgeHints?: { reviewUrl?: string };
 };
@@ -143,6 +151,10 @@ export function normalizeAuthoredAgent(raw: unknown): AuthoredAgent | null {
   // Tools — known catalog ids only, deduped, in declared order.
   const tools = filterKnownTools(raw.tools);
 
+  // Needed capabilities — plain-English asks NOT in the tool menu (the escape
+  // hatch). Trimmed, deduped, capped; omitted when empty/absent.
+  const neededCapabilities = normalizeNeededCapabilities(raw.neededCapabilities);
+
   // Name — trimmed override, else a humanized fallback (never empty).
   const declaredName = typeof raw.name === "string" ? raw.name.trim() : "";
   const name = declaredName || humanizeName(skillMd);
@@ -154,6 +166,7 @@ export function normalizeAuthoredAgent(raw: unknown): AuthoredAgent | null {
   const knowledgeHints = normalizeKnowledgeHints(raw.knowledgeHints);
 
   const out: AuthoredAgent = { name, summary, skillMd, trigger, channel, tools };
+  if (neededCapabilities.length > 0) out.neededCapabilities = neededCapabilities;
   if (knowledgeHints) out.knowledgeHints = knowledgeHints;
   return out;
 }
@@ -254,6 +267,33 @@ function filterKnownTools(value: unknown): string[] {
     if (!KNOWN_TOOL_IDS.has(id) || seen.has(id)) continue;
     seen.add(id);
     out.push(id);
+  }
+  return out;
+}
+
+/** Hard cap on how many escape-hatch capability phrases we carry — enough to
+ *  describe a multi-integration agent, bounded so a runaway author can't dump a
+ *  list. */
+const MAX_NEEDED_CAPABILITIES = 5;
+
+/**
+ * Filter an unknown `neededCapabilities` value to a clean list of plain-English
+ * phrases: drop non-string + blank entries, trim each, dedupe (case-sensitively,
+ * on the trimmed text), preserve the author's order, and cap at
+ * {@link MAX_NEEDED_CAPABILITIES}. `[]` when not an array (the caller omits the
+ * field when empty). Does not mutate the input.
+ */
+function normalizeNeededCapabilities(value: unknown): string[] {
+  if (!Array.isArray(value)) return [];
+  const out: string[] = [];
+  const seen = new Set<string>();
+  for (const entry of value) {
+    if (typeof entry !== "string") continue;
+    const phrase = entry.trim();
+    if (!phrase || seen.has(phrase)) continue;
+    seen.add(phrase);
+    out.push(phrase);
+    if (out.length >= MAX_NEEDED_CAPABILITIES) break;
   }
   return out;
 }

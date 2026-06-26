@@ -298,6 +298,83 @@ describe("normalizeAuthoredAgent — clamps + normalizes", () => {
     assert.equal(normalizeAuthoredAgent({ skillMd: "x" })!.summary, "");
   });
 
+  test("neededCapabilities: a clean array is trimmed, deduped, and kept", () => {
+    const a = normalizeAuthoredAgent({
+      skillMd: "x",
+      neededCapabilities: [
+        "  read this business's Google reviews  ",
+        "create a Trello card",
+        "read this business's Google reviews", // dupe (post-trim) → dropped
+        "charge a card via Stripe",
+      ],
+    });
+    assert.ok(a);
+    assert.deepEqual(a!.neededCapabilities, [
+      "read this business's Google reviews",
+      "create a Trello card",
+      "charge a card via Stripe",
+    ]);
+  });
+
+  test("neededCapabilities: drops non-string + blank entries", () => {
+    const a = normalizeAuthoredAgent({
+      skillMd: "x",
+      neededCapabilities: ["look up DMV records", "", "   ", 42, null, "send a Slack DM"],
+    });
+    assert.ok(a);
+    assert.deepEqual(a!.neededCapabilities, [
+      "look up DMV records",
+      "send a Slack DM",
+    ]);
+  });
+
+  test("neededCapabilities: capped at 5 (in declared order)", () => {
+    const a = normalizeAuthoredAgent({
+      skillMd: "x",
+      neededCapabilities: ["c1", "c2", "c3", "c4", "c5", "c6", "c7"],
+    });
+    assert.ok(a);
+    assert.equal(a!.neededCapabilities!.length, 5);
+    assert.deepEqual(a!.neededCapabilities, ["c1", "c2", "c3", "c4", "c5"]);
+  });
+
+  test("neededCapabilities: omitted when absent, empty, or all-blank", () => {
+    assert.equal(
+      normalizeAuthoredAgent({ skillMd: "x" })!.neededCapabilities,
+      undefined,
+    );
+    assert.equal(
+      normalizeAuthoredAgent({ skillMd: "x", neededCapabilities: [] })!
+        .neededCapabilities,
+      undefined,
+    );
+    assert.equal(
+      normalizeAuthoredAgent({ skillMd: "x", neededCapabilities: ["  ", ""] })!
+        .neededCapabilities,
+      undefined,
+    );
+  });
+
+  test("neededCapabilities: a non-array value → omitted (never throws)", () => {
+    assert.equal(
+      normalizeAuthoredAgent({ skillMd: "x", neededCapabilities: "read reviews" })!
+        .neededCapabilities,
+      undefined,
+    );
+    assert.equal(
+      normalizeAuthoredAgent({ skillMd: "x", neededCapabilities: 7 })!
+        .neededCapabilities,
+      undefined,
+    );
+    assert.equal(
+      normalizeAuthoredAgent({
+        skillMd: "x",
+        neededCapabilities: { phrase: "nope" },
+      })!.neededCapabilities,
+      undefined,
+    );
+  });
+
   test("knowledgeHints.reviewUrl kept only when a string; otherwise omitted", () => {
     const withUrl = normalizeAuthoredAgent({
       skillMd: "x",

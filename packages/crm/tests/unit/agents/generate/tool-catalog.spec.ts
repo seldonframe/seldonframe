@@ -121,6 +121,18 @@ describe("TOOL_CATALOG — required coverage", () => {
     assert.equal(e.connectorKind, "vetted");
   });
 
+  test("postiz description is multi-platform (not Instagram-exclusive)", () => {
+    const { description } = entry("postiz");
+    // The poster reaches well beyond Instagram — the description must name other
+    // networks so the author (and the chip UI) frame it as multi-platform.
+    assert.ok(
+      description.includes("Facebook") || description.includes("LinkedIn"),
+      `postiz description should name a non-IG platform (Facebook/LinkedIn); got: ${description}`,
+    );
+    // And it must not read as Instagram-only.
+    assert.match(description, /multi-platform|Facebook|LinkedIn|TikTok|Twitter|X\//);
+  });
+
   test("includes googlesheets (composio, real slug = googledrive)", () => {
     const e = entry("googlesheets");
     assert.equal(e.connectorKind, "composio");

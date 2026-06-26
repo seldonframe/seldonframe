@@ -86,7 +86,7 @@ export const TOOL_CATALOG: readonly ToolCatalogEntry[] = [
     connectorKind: "vetted",
     label: "Postiz (social publishing)",
     description:
-      "Draft, schedule, and publish social posts (Instagram, Facebook, LinkedIn, X, TikTok) via Postiz.",
+      "Multi-platform social publisher — draft, schedule, and publish posts to Instagram, Facebook, LinkedIn, X/Twitter, TikTok, and more via Postiz.",
     keywords: [
       "social",
       "social media",
