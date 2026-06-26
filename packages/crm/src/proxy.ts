@@ -12,6 +12,11 @@ import {
   negotiableAiAgentPage,
   type AiAgentMarkdownTarget,
 } from "@/lib/http/ai-agents-md-paths";
+import {
+  logMarkdownFetch,
+  type MarkdownSurface,
+  type MarkdownFetchMode,
+} from "@/lib/marketplace/md-analytics";
 
 const protectedPrefixes = ["/hub", "/dashboard", "/welcome", "/orgs", "/contacts", "/deals", "/activities", "/forms", "/settings", "/api/v1"];
 const publicPrefixes = ["/api/v1", "/api/auth"];
@@ -213,6 +218,20 @@ function hasAdminTokenCookie(request: NextRequest): boolean {
 // directly (it has no dynamic segment), so we only need to rewrite it for the
 // negotiated `/marketplace` HTML request.
 
+/**
+ * Best-effort server-side measurement of an agent-Markdown fetch from the proxy
+ * (design doc technique #6). Logged HERE — at the single choke point every
+ * matched `.md` / negotiated request passes through — so we capture the real
+ * public URL + the request's UA/Referer once per request, BEFORE the internal
+ * rewrite to a `listing.md`/index route hides them. `mode` distinguishes an
+ * explicit `.md` URL from an `Accept`-negotiated HTML→Markdown flip (the
+ * high-signal "a real agent speaks text/markdown" case). Never throws — the
+ * helper is fully guarded — so it can't affect routing.
+ */
+function logMd(request: NextRequest, surface: MarkdownSurface, mode: MarkdownFetchMode): void {
+  logMarkdownFetch(request, { surface, mode, path: request.nextUrl.pathname });
+}
+
 /** Rewrite target on the app for a per-listing Markdown request (the static
  *  `listing.md` route, slug carried as a query param so the folder stays a
  *  bracket-free static segment). A fresh `URL` is built from the request URL so
@@ -266,7 +285,16 @@ function handleMarketplaceNegotiation(request: NextRequest): NextResponse | null
   // `.md`) are already the Markdown routes — never rewrite them again, just let
   // them reach their handler. `/marketplace/listing.md` is also where (1)/(2)
   // land, so this MUST come before any rewrite below.
-  if (pathname === "/marketplace.md" || pathname === "/marketplace/listing.md") {
+  //
+  // Measurement note: the index `.md` reached DIRECTLY (a crawler fetching
+  // `/marketplace.md`) is logged here. `/marketplace/listing.md` is ONLY ever the
+  // internal rewrite target of (1)/(2) — it is NOT logged here (those branches
+  // already logged the originating public URL), so each request is counted once.
+  if (pathname === "/marketplace.md") {
+    logMd(request, "marketplace_index", "explicit_md");
+    return NextResponse.next();
+  }
+  if (pathname === "/marketplace/listing.md") {
     return NextResponse.next();
   }
 
@@ -277,6 +305,7 @@ function handleMarketplaceNegotiation(request: NextRequest): NextResponse | null
     // `/marketplace/build.md` etc. have no listing twin — let them 404 naturally
     // rather than rewriting to a guaranteed-missing slug.
     if (slug && slug !== "build") {
+      logMd(request, "marketplace_listing", "explicit_md");
       return listingMarkdownRewrite(request.nextUrl, slug);
     }
     return NextResponse.next();
@@ -295,6 +324,7 @@ function handleMarketplaceNegotiation(request: NextRequest): NextResponse | null
     // Same URL, Markdown representation — rewrite (not redirect) so the visible
     // URL is unchanged. Declared via Vary: Accept.
     if (pathname === "/marketplace") {
+      logMd(request, "marketplace_index", "accept_negotiated");
       const url = request.nextUrl.clone();
       url.pathname = "/marketplace.md";
       const res = NextResponse.rewrite(url);
@@ -302,6 +332,7 @@ function handleMarketplaceNegotiation(request: NextRequest): NextResponse | null
       return res;
     }
     // /marketplace/<slug> → static listing route with the slug as a query param.
+    logMd(request, "marketplace_listing", "accept_negotiated");
     const slug = /^\/marketplace\/([^/]+)$/.exec(pathname)?.[1] ?? "";
     return listingMarkdownRewrite(request.nextUrl, slug);
   }
@@ -379,19 +410,29 @@ function handleAiAgentsNegotiation(request: NextRequest): NextResponse | null {
   // Loop guard + static-route passthrough: the rewrite targets (and the index
   // `.md`) are already the Markdown routes — never rewrite them again. This MUST
   // come before any rewrite below.
-  if (pathname === AI_AGENTS_INDEX_MD_ROUTE || pathname === AI_AGENTS_LISTING_MD_ROUTE) {
+  //
+  // Measurement note: the index `.md` reached DIRECTLY is logged here.
+  // `/ai-agents/listing.md` is ONLY ever the internal rewrite target of (1)/(2),
+  // so it is NOT logged here — its originating public URL was already logged.
+  if (pathname === AI_AGENTS_INDEX_MD_ROUTE) {
+    logMd(request, "ai_agents_index", "explicit_md");
+    return NextResponse.next();
+  }
+  if (pathname === AI_AGENTS_LISTING_MD_ROUTE) {
     return NextResponse.next();
   }
 
   // (1) Explicit `.md` URLs → serve Markdown from the static route.
   const explicit = parseExplicitAiAgentMarkdownPath(pathname);
   if (explicit) {
+    logMd(request, "ai_agents_listing", "explicit_md");
     return aiAgentMarkdownRewrite(request.nextUrl, explicit);
   }
 
   // The index is negotiable but has a fixed twin/route (no job param).
   if (pathname === "/ai-agents") {
     if (negotiate(request.headers.get("accept")) === "markdown") {
+      logMd(request, "ai_agents_index", "accept_negotiated");
       const url = request.nextUrl.clone();
       url.pathname = AI_AGENTS_INDEX_MD_ROUTE;
       const res = NextResponse.rewrite(url);
@@ -413,6 +454,7 @@ function handleAiAgentsNegotiation(request: NextRequest): NextResponse | null {
 
   if (negotiate(request.headers.get("accept")) === "markdown") {
     // Same URL, Markdown representation — rewrite (not redirect). Vary: Accept.
+    logMd(request, "ai_agents_listing", "accept_negotiated");
     return aiAgentMarkdownRewrite(request.nextUrl, page.target);
   }
 
@@ -420,6 +462,40 @@ function handleAiAgentsNegotiation(request: NextRequest): NextResponse | null {
   const res = NextResponse.next();
   res.headers.set("Vary", "Accept");
   res.headers.append("Link", `<${page.twin}>; rel="alternate"; type="text/markdown"`);
+  return res;
+}
+
+// ─── Agent-Markdown content negotiation (the marketing root `/`) ──────────────
+//
+// SAFETY: the MOST conservative of the three handlers. The homepage renders ONLY
+// on the marketing host (`seldonframe.com` / `www.seldonframe.com`) — on the app
+// host `/` redirects to /dashboard|/login, which this must never touch. So the
+// caller invokes this ONLY for the marketing host, and it acts ONLY on `/`, and
+// ONLY ever flips to Markdown when the client EXPLICITLY prefers text/markdown
+// (negotiate() — `*/*` browsers always get the HTML homepage). The HTML case is
+// returned unchanged, merely annotated with Vary + a Link to the `/home.md` twin.
+//
+// The Markdown itself is the static `/home.md` route (renderHomeMarkdown); we
+// rewrite `/` → `/home.md` (not redirect) so the visible URL is unchanged.
+const HOME_MD_ROUTE = "/home.md";
+
+function handleHomeNegotiation(request: NextRequest): NextResponse | null {
+  if (request.nextUrl.pathname !== "/") return null;
+
+  if (negotiate(request.headers.get("accept")) === "markdown") {
+    logMd(request, "home", "accept_negotiated");
+    const url = request.nextUrl.clone();
+    url.pathname = HOME_MD_ROUTE;
+    const res = NextResponse.rewrite(url);
+    res.headers.set("Vary", "Accept");
+    return res;
+  }
+
+  // Default: let the homepage render as HTML, advertising the `.md` twin so
+  // DOM-parsing crawlers / headless fetchers can discover it.
+  const res = NextResponse.next();
+  res.headers.set("Vary", "Accept");
+  res.headers.append("Link", `<${HOME_MD_ROUTE}>; rel="alternate"; type="text/markdown"`);
   return res;
 }
 
@@ -584,6 +660,16 @@ export async function proxy(request: NextRequest, event: NextFetchEvent) {
     // for everything else so the rest of the pipeline is reached untouched.
     const aiNegotiated = handleAiAgentsNegotiation(request);
     if (aiNegotiated) return aiNegotiated;
+  }
+
+  // Marketing root `/` Accept-negotiation — ONLY on the marketing host (where the
+  // homepage actually renders; on the app host `/` redirects, handled below). The
+  // most conservative handler: flips to /home.md ONLY when text/markdown is
+  // explicitly preferred, else serves the HTML homepage with a Link to the twin.
+  // Runs BEFORE the workspace domain-lookup fetch so the homepage skips it.
+  if (marketingHosts.has(host) && pathname === "/") {
+    const homeNegotiated = handleHomeNegotiation(request);
+    if (homeNegotiated) return homeNegotiated;
   }
 
   if (

@@ -21,8 +21,15 @@
 // /llms.txt, /pricing, landing/booking/intake pages) is fully crawlable.
 
 import { siteBaseUrl } from "@/app/sitemap";
+import { logMarkdownFetch } from "@/lib/marketplace/md-analytics";
 
-export const dynamic = "force-static";
+// Was force-static; now reads the request's UA/Referer to MEASURE crawler hits
+// server-side (design doc technique #6 — the only reliable AI-traffic signal).
+// Reading request headers makes the route dynamic, but the `s-maxage=86400`
+// response header below means Vercel's CDN still serves a cached body to most
+// clients — the function only executes (and logs) on a cache miss, so robots.txt
+// stays cheap while crawler hits are still captured.
+export const dynamic = "force-dynamic";
 
 /** App surfaces that are auth-walled or operational — no value to crawlers. */
 const DISALLOW = [
@@ -41,7 +48,11 @@ const DISALLOW = [
   "/switch-workspace",
 ];
 
-export function GET(): Response {
+export function GET(req: Request): Response {
+  // Best-effort AI-traffic measurement (never blocks, never throws). robots.txt
+  // is not in the proxy matcher, so it logs itself.
+  logMarkdownFetch(req, { surface: "robots_txt", mode: "explicit_md", path: "/robots.txt" });
+
   const base = siteBaseUrl();
   const lines: string[] = [];
 

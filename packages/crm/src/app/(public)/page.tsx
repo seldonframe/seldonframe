@@ -47,9 +47,9 @@ import { LandingMarketingPricingSection } from "@/components/landing/marketing-p
 import { LandingMarketingFaqSection } from "@/components/landing/marketing-faq-section";
 import { MarketingFinalCta } from "@/components/landing/marketing-final-cta";
 import { MarketingFooter } from "@/components/landing/marketing-footer";
-
-const POSITIONING_ONE_LINER =
-  "SeldonFrame — the all-in-one platform to run and sell your service business: website, booking, CRM, payments, and AI agents that do the work, built from your URL in 60 seconds. 14-day free trial, then $29/mo.";
+// Positioning line is shared with the /home.md agent-Markdown twin (M3) so the
+// promise can't drift between the human page and the Markdown.
+import { POSITIONING_ONE_LINER } from "./home-copy";
 
 export const metadata: Metadata = {
   title: "SeldonFrame — Your entire service business, live in 60 seconds.",

@@ -10,13 +10,19 @@
 import { AGENT_JOBS, VERTICALS } from "@/lib/seo/agent-pages";
 import { siteBaseUrl } from "@/app/sitemap";
 import { loadStorefrontCatalog } from "@/lib/marketplace/load-storefront";
+import { logMarkdownFetch } from "@/lib/marketplace/md-analytics";
 
 export const dynamic = "force-dynamic";
 
 /** How many top agents to surface inline in the Marketplace section. */
 const TOP_AGENTS = 8;
 
-export async function GET(): Promise<Response> {
+export async function GET(req: Request): Promise<Response> {
+  // Measure AI traffic server-side (the only signal that survives — crawlers
+  // don't run JS). Best-effort; never blocks. `/llms.txt` is not in the proxy
+  // matcher, so it logs itself.
+  logMarkdownFetch(req, { surface: "llms_txt", mode: "explicit_md", path: "/llms.txt" });
+
   const base = siteBaseUrl();
   const agents = await loadStorefrontCatalog();
 
