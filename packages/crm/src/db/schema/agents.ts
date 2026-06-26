@@ -133,6 +133,15 @@ export type AgentBlueprint = {
    *  hint, not the final guard. Stored in the jsonb blueprint — no migration.
    *  See lib/agents/triggers/agent-trigger.ts. */
   trigger?: import("@/lib/agents/triggers/agent-trigger").AgentTrigger;
+  /** 2026-06-26 (primitive-composition generator, T4) — true when this agent ACTS
+   *  via its tools and sends NO customer message (a poster / logger), i.e. its
+   *  authored outbound `channel` is "none". The composer sets it so the runtime
+   *  (P2) can tell a post/log agent from a messaging one without re-deriving the
+   *  shape (a messaging agent goes through the verify/throttle/send path; an
+   *  action-only agent does its tool work and records, with no message gate).
+   *  Absent/false = a messaging or inbound agent (today's behavior, byte-for-byte).
+   *  Stored in the jsonb blueprint — no migration. */
+  actionOnly?: boolean;
   /** 2026-06-25 (unified agent model P1, T4) — the Google review URL the
    *  review-requester agent (trigger event "booking.completed") puts in its ask.
    *  Sourced from the business's GBP link; when absent the event-agent skips

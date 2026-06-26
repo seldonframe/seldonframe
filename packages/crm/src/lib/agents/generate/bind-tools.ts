@@ -37,6 +37,7 @@
 import type { AgentIntent } from "@/lib/agents/generate/parse-intent";
 import {
   findToolsByKeywords,
+  TOOL_CATALOG,
   type ToolCatalogEntry,
 } from "@/lib/agents/generate/tool-catalog";
 import type { ConnectorBinding } from "@/lib/agents/mcp/connectors";
@@ -117,4 +118,47 @@ export function bindToolsForIntent(intent: AgentIntent): BoundTools {
   }
 
   return { connectors, warnings: [] };
+}
+
+// ─── bindToolIds — the EXPLICIT-id binder (for the authored composer) ─────────
+
+/** The catalog indexed by its stable `id` (built once from TOOL_CATALOG). The
+ *  authored generator declares tools as explicit ids ("postiz", "gmail", …)
+ *  rather than via a sentence, so it looks them up here. */
+const CATALOG_BY_ID: ReadonlyMap<string, ToolCatalogEntry> = new Map(
+  TOOL_CATALOG.map((entry) => [entry.id, entry]),
+);
+
+/**
+ * Map an EXPLICIT list of catalog tool ids → their ConnectorBindings, reusing the
+ * SAME entry→binding logic (`bindingForEntry`) as the keyword path, so an authored
+ * agent's bindings are byte-for-byte identical to a hand-bound / keyword-bound one
+ * (vetted → Postiz's provisional shape; composio → enabledToolkits). Unknown ids
+ * are dropped, results are DEDUPED by kind+id, and the caller's order is preserved.
+ *
+ * This is the id-keyed sibling of {@link bindToolsForIntent} (which is sentence-
+ * keyed): the authored generator (compose-authored.ts) declares `tools: string[]`
+ * as catalog ids, so it binds via ids — no promptHint to keyword-match.
+ *
+ * PURE; never throws. A non-array / empty input yields `[]`.
+ */
+export function bindToolIds(ids: string[]): ConnectorBinding[] {
+  if (!Array.isArray(ids)) return [];
+
+  const connectors: ConnectorBinding[] = [];
+  const seen = new Set<string>();
+
+  for (const rawId of ids) {
+    if (typeof rawId !== "string") continue;
+    const entry = CATALOG_BY_ID.get(rawId.trim());
+    if (!entry) continue;
+    const binding = bindingForEntry(entry);
+    if (!binding) continue;
+    const key = `${binding.kind}:${binding.id}`;
+    if (seen.has(key)) continue;
+    seen.add(key);
+    connectors.push(binding);
+  }
+
+  return connectors;
 }
