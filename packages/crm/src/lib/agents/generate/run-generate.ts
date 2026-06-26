@@ -21,6 +21,7 @@
 //     can make this return `{ ok: false }`.
 
 import type { AgentBlueprint } from "@/db/schema/agents";
+import type { ConnectorBinding } from "@/lib/agents/mcp/connectors";
 import {
   assembleAgentBundle,
   resolveSkillAlias,
@@ -63,6 +64,22 @@ export type CreateAgentDraftInput = {
 };
 
 /**
+ * The result of resolving the author's plain-English `neededCapabilities` (P5.4):
+ *   • `bindings`   — real composio {@link ConnectorBinding}s for the matched
+ *                    capabilities, ready to merge onto blueprint.connectors;
+ *   • `resolved`   — the matched {capability, slug, label} triples (UX/telemetry);
+ *   • `unresolved` — the capability phrases that found NO integration (each becomes
+ *                    an operator warning so they know it'll be skipped).
+ * Fail-soft by construction at the resolver: no COMPOSIO key → empty catalog →
+ * nothing resolves → every capability lands in `unresolved` (just warnings).
+ */
+export type ResolveCapabilitiesResult = {
+  bindings: ConnectorBinding[];
+  resolved: { capability: string; slug: string; label: string }[];
+  unresolved: string[];
+};
+
+/**
  * The injectable effects. `getOrgId` resolves the operator's org from session
  * (null when unauthorized); `classify` is the optional LLM refiner merged over
  * the heuristic (omit it → heuristic only); `judge` is the optional maker≠checker
@@ -102,6 +119,18 @@ export type GenerateDeps = {
    *  Omit it → no recall, no record (today's behavior, byte-for-byte). All
    *  best-effort: a store error never breaks a generation. */
   lessonsStore?: AgentMemoryStore;
+  /** Optional LIVE capability resolver (P5.4 — the long-tail integration binder).
+   *  When present AND the AUTHOR path produced `neededCapabilities` (plain-English
+   *  asks NOT in the featured tool menu), this maps each phrase to a real composio
+   *  toolkit binding (via Composio's live catalog) and reports which phrases found
+   *  no integration. Its `bindings` are merged onto blueprint.connectors (deduped
+   *  by kind+id); each `unresolved` phrase becomes an operator warning. Omit it →
+   *  no resolution (today's behavior). Fail-soft by contract: the orchestrator
+   *  wraps the call so a resolver error never breaks generation, and the resolver
+   *  itself fails soft to "everything unresolved" when there's no COMPOSIO key. */
+  resolveCapabilities?: (
+    capabilities: string[],
+  ) => Promise<ResolveCapabilitiesResult>;
   create: (
     input: CreateAgentDraftInput,
   ) => Promise<{ ok: true; id: string } | { ok: false; error: string }>;
@@ -162,6 +191,34 @@ function firstSentenceFeature(sentence: string): string {
     .trim();
   if (!text) return "a request";
   return text.length > 80 ? `${text.slice(0, 80).trim()}…` : text;
+}
+
+// ─── connector merge (P5.4) ──────────────────────────────────────────────────
+
+/**
+ * Merge resolved long-tail bindings onto a blueprint's existing connectors,
+ * DEDUPED by `kind`+`id` (the same key the binders use in bind-tools.ts), with the
+ * existing bindings winning on a clash and order preserved (existing first, then
+ * the new). Returns `undefined` when the result is empty so a no-connector
+ * blueprint keeps `connectors` unset (mirrors compose-authored / agent-bundle,
+ * which only set the field when non-empty). Pure; never throws, never mutates
+ * either input array. */
+function mergeConnectors(
+  existing: ConnectorBinding[] | undefined,
+  added: ConnectorBinding[],
+): ConnectorBinding[] | undefined {
+  const base = Array.isArray(existing) ? existing : [];
+  const extra = Array.isArray(added) ? added : [];
+  const out: ConnectorBinding[] = [];
+  const seen = new Set<string>();
+  for (const binding of [...base, ...extra]) {
+    if (!binding || typeof binding.id !== "string") continue;
+    const key = `${binding.kind}:${binding.id}`;
+    if (seen.has(key)) continue;
+    seen.add(key);
+    out.push(binding);
+  }
+  return out.length > 0 ? out : undefined;
 }
 
 // ─── orchestrator ──────────────────────────────────────────────────────────────
@@ -242,6 +299,36 @@ export async function runGenerateAgentDraft(
   let bundle = authored
     ? composeBundleFromAuthored(authored, ctx)
     : assembleAgentBundle(intent!, ctx);
+
+  // ── P5.4 — resolve the author's long-tail capabilities → real bindings ──────
+  //
+  // The AUTHOR (and only the author — the heuristic path has no neededCapabilities)
+  // may declare plain-English asks NOT in the featured tool menu ("read my Google
+  // reviews", "create a Trello card"). When a `resolveCapabilities` dep is present,
+  // map each phrase to a real composio toolkit binding via Composio's LIVE catalog,
+  // MERGE those bindings onto the blueprint (deduped by kind+id, so an authored
+  // featured-tool binding is never duplicated), and surface every phrase that found
+  // NO integration as an operator warning. Wrapped end-to-end in try/catch and
+  // gated on the dep + a non-empty list, so a resolver hiccup (or no dep) NEVER
+  // breaks generation — it just degrades to "no long-tail bindings". The heuristic
+  // path is untouched (authored is null → no neededCapabilities → skipped).
+  if (deps.resolveCapabilities && authored?.neededCapabilities?.length) {
+    try {
+      const result = await deps.resolveCapabilities(authored.neededCapabilities);
+      bundle.blueprint.connectors = mergeConnectors(
+        bundle.blueprint.connectors,
+        result.bindings,
+      );
+      for (const capability of result.unresolved) {
+        bundle.warnings.push(
+          `No integration found yet for: ${capability} — connect one in Integrations or it'll be skipped.`,
+        );
+      }
+    } catch {
+      // Fail-soft: a capability-resolution error must never break (or block) a
+      // generation. The bundle is already safe + persistable without the long tail.
+    }
+  }
 
   // Optional maker≠checker review. judgeGeneratedAgent FAILS OPEN (a throwing or
   // malformed grader → {ok:true,issues:[]}), so this never blocks the (already

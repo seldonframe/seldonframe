@@ -23,9 +23,16 @@
 import { revalidatePath } from "next/cache";
 import type { AgentBlueprint } from "@/db/schema/agents";
 import { getOrgId } from "@/lib/auth/helpers";
+import { getSoul } from "@/lib/soul/server";
 import { assertWritable } from "@/lib/demo/server";
 import { llmClassify } from "@/lib/agents/generate/classify-llm";
 import { makeLlmAgentAuthor } from "@/lib/agents/generate/author-llm";
+import { loadAuthorSoulContext } from "@/lib/agents/generate/author-context";
+import {
+  listComposioToolkits,
+  resolveCapabilitiesToToolkits,
+  bindComposioToolkits,
+} from "@/lib/agents/generate/composio-resolver";
 import { makeLlmAgentGrader } from "@/lib/agents/generate/judge-llm";
 import {
   runGenerateAgentDraft,
@@ -68,18 +75,32 @@ export async function generateAgentDraftAction(
   const resolveOrgId = _deps?.getOrgId ?? getOrgId;
   const orgId = await resolveOrgId();
 
+  // P5.3/P5.4 — Soul-ground the author: fetch a COMPACT business summary for this
+  // org ONCE (via the real "use server" getSoul; loadAuthorSoulContext is fail-soft
+  // to "" — empty/missing orgId, no Soul, or a read error → the author stays
+  // generic, today's behavior). The author factory is built WITH it below so the
+  // skill it writes speaks as THIS business. Skipped entirely when the author is
+  // off / test-overridden (we don't pay a Soul read we won't use).
+  const buildRealAuthor = !(
+    (_deps && "author" in _deps) || process.env.SF_GENERATOR_AUTHOR === "off"
+  );
+  const soulContext = buildRealAuthor
+    ? await loadAuthorSoulContext(orgId ?? "", { getSoul })
+    : "";
+
   const deps: GenerateDeps = {
     getOrgId: async () => orgId,
     // Primitive-composition AUTHOR: default ON, trivially disablable via
     // SF_GENERATOR_AUTHOR=off (falls back to the classify→assemble heuristic). Fail-
     // soft by construction — a missing ANTHROPIC key makes the author return `{}`,
     // authorAgentDraft yields null, and generation proceeds via the heuristic path.
+    // Built WITH the Soul summary (P5.4) so it authors AS this specific business.
     author:
       _deps && "author" in _deps
         ? _deps.author
         : process.env.SF_GENERATOR_AUTHOR === "off"
           ? undefined
-          : makeLlmAgentAuthor(),
+          : makeLlmAgentAuthor({ soulContext }),
     classify: _deps?.classify ?? llmClassify,
     // Maker≠checker judge: default ON, trivially disablable via
     // SF_GENERATOR_JUDGE=off. Fail-open by construction — a missing ANTHROPIC
@@ -101,6 +122,13 @@ export async function generateAgentDraftAction(
         : orgId
           ? makeBrainMemoryStoreForOrg(orgId)
           : undefined,
+    // P5.4 — LIVE capability resolver: turn the author's plain-English long-tail
+    // asks (neededCapabilities) into real composio bindings via Composio's live
+    // catalog, and report which found no integration. Fail-soft by construction —
+    // no COMPOSIO key → listComposioToolkits is [] → nothing resolves → every
+    // capability is "unresolved" (warnings only); the orchestrator also wraps the
+    // call so a resolver throw can't break generation. Tests override via _deps.
+    resolveCapabilities: _deps?.resolveCapabilities ?? defaultResolveCapabilities,
     create: _deps?.create ?? defaultCreate,
   };
 
@@ -161,6 +189,41 @@ export async function recordGeneratorEditAction(input: {
   } catch {
     // Best-effort: capturing an edit-lesson must never break the editor's save.
   }
+}
+
+/**
+ * The real `resolveCapabilities` seam (P5.4): map the author's plain-English
+ * long-tail asks → real composio toolkit bindings via Composio's LIVE catalog.
+ *
+ *   1. `listComposioToolkits()` — the live toolkit catalog (cached per process,
+ *      fail-soft to `[]` when COMPOSIO_API_KEY is unset or the SDK errors);
+ *   2. `resolveCapabilitiesToToolkits` — best-match each phrase to a toolkit slug
+ *      (≥2 shared meaningful tokens; unmatched phrases drop out);
+ *   3. `bindComposioToolkits` — the matched slugs → `composio` ConnectorBindings;
+ *   4. `unresolved` — every input phrase that produced no match (→ orchestrator
+ *      warnings).
+ *
+ * Fail-soft end to end: with no key the catalog is `[]`, so `resolved` is `[]`,
+ * `bindings` is `[]`, and ALL capabilities come back `unresolved` (warnings only).
+ * None of the underlying helpers throw; the orchestrator additionally wraps the
+ * call. Kept here (not in run-generate.ts) so the orchestrator stays I/O-free +
+ * testable; tests inject their own resolver via `_deps.resolveCapabilities`.
+ */
+async function defaultResolveCapabilities(capabilities: string[]): Promise<{
+  bindings: import("@/lib/agents/mcp/connectors").ConnectorBinding[];
+  resolved: { capability: string; slug: string; label: string }[];
+  unresolved: string[];
+}> {
+  const toolkits = await listComposioToolkits();
+  const resolved = resolveCapabilitiesToToolkits(capabilities, toolkits);
+  const slugs = resolved.map((r) => r.slug);
+  return {
+    bindings: bindComposioToolkits(slugs),
+    resolved,
+    unresolved: capabilities.filter(
+      (c) => !resolved.some((r) => r.capability === c),
+    ),
+  };
 }
 
 /**

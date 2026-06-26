@@ -43,6 +43,7 @@ import type {
   AgentMemoryEntry,
   AgentMemoryStore,
 } from "../../../../src/lib/agents/memory/agent-memory";
+import type { ConnectorBinding } from "../../../../src/lib/agents/mcp/connectors";
 
 // ─── a capturing fake of the injected deps ────────────────────────────────────
 
@@ -51,6 +52,7 @@ function makeDeps(over: {
   author?: GenerateDeps["author"];
   classify?: GenerateDeps["classify"];
   judge?: GenerateDeps["judge"];
+  resolveCapabilities?: GenerateDeps["resolveCapabilities"];
   createResult?: { ok: true; id: string } | { ok: false; error: string };
 } = {}): {
   deps: GenerateDeps;
@@ -65,6 +67,7 @@ function makeDeps(over: {
     author: over.author,
     classify: over.classify,
     judge: over.judge,
+    resolveCapabilities: over.resolveCapabilities,
     create: async (input) => {
       calls.create.push(input);
       return over.createResult ?? { ok: true, id: "tmpl-new" };
@@ -1013,3 +1016,186 @@ async function recallStore(
   }
   return out;
 }
+
+// ─── P5.4 — the LIVE capability resolver wired into the orchestrator ──────────
+//
+// run-generate.ts now (when a `resolveCapabilities` dep is present AND the AUTHOR
+// path declared `neededCapabilities`) resolves those plain-English long-tail asks
+// to real composio ConnectorBindings, MERGES them onto blueprint.connectors
+// (deduped by kind+id), and surfaces every unresolved phrase as an operator
+// warning. It is additive + fail-soft: no dep / no neededCapabilities / the
+// heuristic path → today's behavior; a throwing resolver → generation still
+// succeeds. All with in-memory fakes — NO Composio, NO network.
+
+/** A composio binding the fake resolver returns for a Google-reviews ask — the
+ *  exact shape composio-resolver.bindComposioToolkits produces. */
+const GOOGLEBUSINESS_BINDING: ConnectorBinding = {
+  id: "googlebusiness",
+  kind: "composio",
+  enabledToolkits: ["googlebusiness"],
+  enabledTools: [],
+};
+
+/** An author draft that declares BOTH a featured tool (postiz) and a long-tail
+ *  capability the menu doesn't cover — so the merged connectors must carry the
+ *  postiz vetted binding AND the resolved composio binding. */
+const POSTER_WITH_CAPABILITY = {
+  name: "Review Spotlight Poster",
+  summary: "Posts our best Google reviews to social each week.",
+  skillMd:
+    "Each Monday, pull this week's best Google review and publish an on-brand highlight to our social channels. Keep it warm and never fabricate a quote.",
+  trigger: { kind: "schedule", cron: "0 9 * * 1" },
+  channel: "none",
+  tools: ["postiz"],
+  neededCapabilities: ["read this business's Google reviews"],
+} as const;
+
+describe("runGenerateAgentDraft — P5.4 resolve: long-tail capability → composio binding", () => {
+  test("a resolved capability binding is merged onto the CREATED blueprint (alongside the tool bindings)", async () => {
+    const author: AgentAuthor = async () => POSTER_WITH_CAPABILITY;
+    // The fake resolver maps the Google-reviews ask → the googlebusiness binding,
+    // nothing unresolved.
+    const resolveCapabilities: GenerateDeps["resolveCapabilities"] = async (
+      caps,
+    ) => {
+      assert.deepEqual(
+        caps,
+        ["read this business's Google reviews"],
+        "the author's neededCapabilities are handed to the resolver",
+      );
+      return {
+        bindings: [GOOGLEBUSINESS_BINDING],
+        resolved: [
+          {
+            capability: "read this business's Google reviews",
+            slug: "googlebusiness",
+            label: "Google Business Profile",
+          },
+        ],
+        unresolved: [],
+      };
+    };
+
+    const { deps, calls } = makeDeps({ author, resolveCapabilities });
+    const result = await runGenerateAgentDraft(deps, {
+      sentence: "Post a weekly highlight of our best Google reviews",
+    });
+
+    assert.equal(result.ok, true);
+    assert.equal(calls.create.length, 1, "create called exactly once");
+
+    const connectors = calls.create[0]!.blueprint.connectors ?? [];
+    // the resolved composio binding landed …
+    const gb = connectors.find((c) => c.id === "googlebusiness");
+    assert.ok(gb, "the resolved googlebusiness composio binding is on the blueprint");
+    assert.equal(gb!.kind, "composio");
+    // … ALONGSIDE the featured-tool (postiz) binding the composer already wired.
+    const postiz = connectors.find((c) => c.id === "postiz");
+    assert.ok(postiz, "the authored postiz tool binding is preserved");
+
+    // No unresolved phrases → no capability warning.
+    if (result.ok) {
+      assert.ok(
+        !result.warnings.some((w) => /No integration found yet/i.test(w)),
+        `expected no unresolved-capability warning, got: ${JSON.stringify(result.warnings)}`,
+      );
+    }
+  });
+
+  test("a capability the resolver leaves UNRESOLVED surfaces a warning AND the bundle still persists", async () => {
+    const author: AgentAuthor = async () => ({
+      ...POSTER_WITH_CAPABILITY,
+      neededCapabilities: ["consult an astrologer for the daily horoscope"],
+    });
+    // The resolver finds nothing → empty bindings, the phrase is unresolved.
+    const resolveCapabilities: GenerateDeps["resolveCapabilities"] = async (
+      caps,
+    ) => ({
+      bindings: [],
+      resolved: [],
+      unresolved: caps,
+    });
+
+    const { deps, calls } = makeDeps({ author, resolveCapabilities });
+    const result = await runGenerateAgentDraft(deps, {
+      sentence: "Post a weekly social highlight",
+    });
+
+    assert.equal(result.ok, true, "an unresolved capability never blocks generation");
+    assert.equal(calls.create.length, 1, "the bundle still persists");
+    if (!result.ok) return;
+    assert.ok(
+      result.warnings.some(
+        (w) =>
+          /No integration found yet/i.test(w) &&
+          w.includes("consult an astrologer for the daily horoscope"),
+      ),
+      `expected an unresolved-capability warning naming the phrase, got: ${JSON.stringify(result.warnings)}`,
+    );
+  });
+
+  test("NO resolveCapabilities dep → today's behavior (the authored bundle's connectors are untouched)", async () => {
+    const author: AgentAuthor = async () => POSTER_WITH_CAPABILITY;
+    const { deps, calls } = makeDeps({ author }); // no resolveCapabilities
+    const result = await runGenerateAgentDraft(deps, {
+      sentence: "Post a weekly highlight of our best Google reviews",
+    });
+
+    assert.equal(result.ok, true);
+    const connectors = calls.create[0]!.blueprint.connectors ?? [];
+    // Only the authored featured tool (postiz) — no long-tail resolution ran.
+    assert.ok(connectors.some((c) => c.id === "postiz"), "postiz tool binding present");
+    assert.ok(
+      !connectors.some((c) => c.id === "googlebusiness"),
+      "no composio binding without a resolver dep",
+    );
+    if (result.ok) {
+      assert.ok(
+        !result.warnings.some((w) => /No integration found yet/i.test(w)),
+        "no capability warnings without a resolver dep",
+      );
+    }
+  });
+
+  test("the HEURISTIC path (no author) never invokes the resolver, even when one is passed", async () => {
+    let resolverCalled = 0;
+    const resolveCapabilities: GenerateDeps["resolveCapabilities"] = async () => {
+      resolverCalled += 1;
+      return { bindings: [], resolved: [], unresolved: [] };
+    };
+    // No author → the heuristic path (which has no neededCapabilities) runs.
+    const { deps, calls } = makeDeps({ resolveCapabilities });
+    const result = await runGenerateAgentDraft(deps, {
+      sentence: "text my customers for a google review after the job",
+    });
+
+    assert.equal(result.ok, true);
+    assert.equal(calls.create.length, 1);
+    assert.equal(
+      resolverCalled,
+      0,
+      "the resolver is never called on the heuristic (no-neededCapabilities) path",
+    );
+  });
+
+  test("a resolveCapabilities that THROWS → generation still succeeds (fail-soft), bundle persisted", async () => {
+    const author: AgentAuthor = async () => POSTER_WITH_CAPABILITY;
+    const resolveCapabilities: GenerateDeps["resolveCapabilities"] = async () => {
+      throw new Error("composio catalog down");
+    };
+    const { deps, calls } = makeDeps({ author, resolveCapabilities });
+
+    let result!: GenerateAgentDraftOutput;
+    await assert.doesNotReject(async () => {
+      result = await runGenerateAgentDraft(deps, {
+        sentence: "Post a weekly highlight of our best Google reviews",
+      });
+    });
+
+    assert.equal(result.ok, true, "a throwing resolver must not block generation");
+    assert.equal(calls.create.length, 1, "the bundle is still persisted");
+    // The authored connectors survive (the postiz tool binding); no composio one.
+    const connectors = calls.create[0]!.blueprint.connectors ?? [];
+    assert.ok(connectors.some((c) => c.id === "postiz"), "authored connectors survive a resolver throw");
+  });
+});
