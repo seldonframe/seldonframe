@@ -24,6 +24,7 @@ import assert from "node:assert/strict";
 import {
   TOOL_CATALOG,
   findToolsByKeywords,
+  toolCatalogForUi,
   type ToolCatalogEntry,
 } from "../../../../src/lib/agents/generate/tool-catalog";
 import { COMPOSIO_TOOLKIT_SLUGS } from "../../../../src/lib/integrations/composio/catalog";
@@ -155,6 +156,68 @@ describe("TOOL_CATALOG — required coverage", () => {
       assert.ok(
         kws.includes(required),
         `postiz keywords should include "${required}"`,
+      );
+    }
+  });
+});
+
+describe("toolCatalogForUi — the one UI-facing projection (P4)", () => {
+  test("returns exactly the same ids as TOOL_CATALOG, in the same order (one source of truth)", () => {
+    const uiIds = toolCatalogForUi().map((e) => e.id);
+    const catalogIds = TOOL_CATALOG.map((e) => e.id);
+    // Same ids → the editor's quick-chips can wire exactly what the generator's
+    // author menu offers; nothing the UI shows is unbindable, nothing bindable is
+    // hidden.
+    assert.deepEqual(uiIds, catalogIds);
+  });
+
+  test("includes postiz + every projected entry carries a non-empty label + connectorKind", () => {
+    const ui = toolCatalogForUi();
+    assert.ok(
+      ui.some((e) => e.id === "postiz"),
+      "postiz (the vetted social tool) must be in the UI projection",
+    );
+    for (const e of ui) {
+      assert.ok(e.label.trim().length > 0, `label non-empty for ${e.id}`);
+      assert.ok(
+        e.connectorKind === "vetted" || e.connectorKind === "composio",
+        `connectorKind is a wired kind for ${e.id}`,
+      );
+    }
+  });
+
+  test("composio entries keep their toolkitSlug; vetted entries omit it (the binding key the chips toggle)", () => {
+    for (const e of toolCatalogForUi()) {
+      if (e.connectorKind === "composio") {
+        assert.ok(
+          typeof e.toolkitSlug === "string" && e.toolkitSlug.length > 0,
+          `composio UI entry ${e.id} must carry its toolkitSlug`,
+        );
+      } else {
+        assert.equal(
+          e.toolkitSlug,
+          undefined,
+          `vetted UI entry ${e.id} should not carry a toolkitSlug`,
+        );
+      }
+    }
+  });
+
+  test("projects each entry's label/description verbatim from TOOL_CATALOG (derived, not duplicated)", () => {
+    const ui = toolCatalogForUi();
+    for (const src of TOOL_CATALOG) {
+      const got = ui.find((e) => e.id === src.id);
+      assert.ok(got, `UI projection should include ${src.id}`);
+      assert.equal(got!.label, src.label, `label matches source for ${src.id}`);
+      assert.equal(
+        got!.description,
+        src.description,
+        `description matches source for ${src.id}`,
+      );
+      assert.equal(
+        got!.connectorKind,
+        src.connectorKind,
+        `connectorKind matches source for ${src.id}`,
       );
     }
   });

@@ -178,6 +178,44 @@ export const TOOL_CATALOG: readonly ToolCatalogEntry[] = [
   },
 ];
 
+// ─── UI projection (one source of truth for the editor's chips) ───────────────
+//
+// The agent EDITOR's "Apps & tools" quick-chips and the generator's AUTHOR menu
+// must offer the SAME set — otherwise the UI could show an app the generator
+// can't wire, or hide one it can. Both derive from TOOL_CATALOG: the author menu
+// via buildToolMenu() (author-llm.ts), the editor via this projection. This
+// returns only the fields the chip UI needs — no `keywords` (a sentence-matcher
+// concern the UI never touches) — so the client component stays decoupled from
+// the matcher internals while sharing the single catalog.
+
+/** The UI-facing shape of a catalog entry: what the editor's chip render + its
+ *  binding toggle need, and nothing else. `toolkitSlug` is present for composio
+ *  entries (the slug the chip toggles) and omitted for vetted entries (whose
+ *  endpoint is baked in — their chip opens the add-connector flow instead). */
+export type ToolCatalogUiEntry = {
+  id: string;
+  label: string;
+  description: string;
+  connectorKind: string;
+  toolkitSlug?: string;
+};
+
+/**
+ * Project TOOL_CATALOG to the UI-facing entries the editor's quick-chips render
+ * from — same ids, same order, label/description/connectorKind/toolkitSlug
+ * carried verbatim. The single source the editor maps over so the curated chips
+ * always match what the generator can bind. Pure; never throws.
+ */
+export function toolCatalogForUi(): ToolCatalogUiEntry[] {
+  return TOOL_CATALOG.map((e) => ({
+    id: e.id,
+    label: e.label,
+    description: e.description,
+    connectorKind: e.connectorKind,
+    ...(e.toolkitSlug !== undefined ? { toolkitSlug: e.toolkitSlug } : {}),
+  }));
+}
+
 // ─── keyword matcher ──────────────────────────────────────────────────────────
 
 /** Escape a string for safe use inside a RegExp literal. */

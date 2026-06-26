@@ -47,6 +47,10 @@ import {
 import type { AgentSurface } from "@/lib/agent-templates/store";
 import type { ConnectorBinding } from "@/lib/agents/mcp/connectors";
 import {
+  toolCatalogForUi,
+  type ToolCatalogUiEntry,
+} from "@/lib/agents/generate/tool-catalog";
+import {
   KNOWN_EVENTS,
   type AgentTrigger,
 } from "@/lib/agents/triggers/agent-trigger";
@@ -82,9 +86,6 @@ type QuoteRange = { service: string; low: string; high: string };
 /** Minimal serializable vetted-connector descriptor passed from the server. */
 type VettedConnectorOption = { id: string; label: string; secretService: string };
 
-/** Minimal serializable Composio toolkit descriptor for the per-agent picker. */
-type ComposioToolkitOption = { slug: string; label: string };
-
 type Props = {
   templateId: string;
   surface: AgentSurface;
@@ -117,8 +118,6 @@ type Props = {
   allCapabilities: string[];
   /** The shipped vetted connectors (id + label + secret service) for the Add form. */
   vettedConnectors: VettedConnectorOption[];
-  /** The curated Composio toolkit catalog for the per-agent "Composio apps" picker. */
-  composioCatalog: ComposioToolkitOption[];
 };
 
 // ─── trigger picker options (unified agent model P1) ────────────────────────
@@ -644,7 +643,6 @@ export function AgentTemplateEditor(props: Props) {
         surface={props.surface}
         initialConnectors={props.initialBlueprint.connectors}
         vettedConnectors={props.vettedConnectors}
-        composioCatalog={props.composioCatalog}
       />
 
       {/* FAQ */}
@@ -1418,13 +1416,11 @@ function ConnectorsCard({
   surface,
   initialConnectors,
   vettedConnectors,
-  composioCatalog,
 }: {
   templateId: string;
   surface: AgentSurface;
   initialConnectors: ConnectorBinding[];
   vettedConnectors: VettedConnectorOption[];
-  composioCatalog: ComposioToolkitOption[];
 }) {
   const router = useRouter();
   const isVoice = surface === "voice";
@@ -1531,11 +1527,11 @@ function ConnectorsCard({
         </p>
       )}
 
-      {/* Apps & tools — per-agent managed-app picker (Phase 3) + the vetted
-          Postiz "post to social" tool. */}
+      {/* Apps & tools — per-agent app picker driven by the shared tool catalog
+          (the same set the generator authors from) + the vetted Postiz "post to
+          social" tool. */}
       <ComposioAppsSection
         templateId={templateId}
-        catalog={composioCatalog}
         initialEnabled={composioEnabledToolkits}
         onChanged={() => router.refresh()}
         disabled={isVoice}
@@ -1678,17 +1674,23 @@ function ConnectorsCard({
   );
 }
 
-// ─── Composio apps (per-agent managed-app picker) ───────────────────────────
+// ─── Apps & tools (per-agent app picker) ─────────────────────────────────────
 //
-// A multiselect of the curated Composio toolkit catalog. Selecting apps persists
-// ONE kind:"composio" binding on the template blueprint (enabledToolkits + a
-// curated default tool allowlist); deselecting all removes it. The accounts
-// themselves are connected once, workspace-wide, in Integrations (/integrations) —
-// this only declares WHICH connected apps THIS agent may use. Optimistic toggle;
-// router.refresh() reconciles with the server.
+// The quick-chips render from the SAME catalog the agent generator authors from
+// (toolCatalogForUi() → TOOL_CATALOG), so what this UI offers is exactly what an
+// agent can be wired to — one source of truth. Two chip behaviors, by the entry's
+// wired kind:
+//   • a managed-app entry (connectorKind "composio") toggles its toolkit slug,
+//     persisting ONE kind:"composio" binding on the template blueprint
+//     (enabledToolkits + a curated default tool allowlist); deselecting all
+//     removes it. The accounts themselves are connected once, workspace-wide, in
+//     Integrations (/integrations) — this only declares WHICH connected apps THIS
+//     agent may use.
+//   • a vetted entry (e.g. Postiz) needs an API key, so its chip OPENS the
+//     add-connector flow pre-selected rather than silently toggling.
+// Optimistic toggle; router.refresh() reconciles with the server.
 function ComposioAppsSection({
   templateId,
-  catalog,
   initialEnabled,
   onChanged,
   disabled = false,
@@ -1696,7 +1698,6 @@ function ComposioAppsSection({
   onAddPostiz,
 }: {
   templateId: string;
-  catalog: ComposioToolkitOption[];
   initialEnabled: string[];
   onChanged: () => void;
   /** Voice templates can't run connectors — render the picker greyed + inert. */
@@ -1706,9 +1707,12 @@ function ComposioAppsSection({
   postizBound?: boolean;
   /** Open the add-connector flow pre-selected to Postiz (Postiz is a vetted
    *  connector — it needs an API key, so it can't be silently toggled like a
-   *  Composio toolkit). No-op when Postiz is already bound. */
+   *  managed app). No-op when Postiz is already bound. */
   onAddPostiz?: () => void;
 }) {
+  // The one curated source: the same catalog the generator's author menu uses.
+  // Computed once (pure, module-level data) — no need to memoize.
+  const catalog = toolCatalogForUi();
   const [enabled, setEnabled] = useState<string[]>(initialEnabled);
   const [busy, startBusy] = useTransition();
   const [error, setError] = useState<string | null>(null);
@@ -1789,62 +1793,87 @@ function ComposioAppsSection({
       </div>
 
       <div className="mt-3 flex flex-wrap gap-2">
-        {catalog.map((tk) => {
-          const on = enabled.includes(tk.slug);
+        {/* One chip per catalog entry — the SAME catalog the generator authors
+            from (toolCatalogForUi), so the UI offers exactly what an agent can be
+            wired to. Two behaviors by wired kind:
+              • composio → toggle the entry's toolkit slug (managed app)
+              • vetted (Postiz) → open the add-connector flow pre-selected (it
+                needs an API key, so it can't be silently toggled). */}
+        {catalog.map((entry) => {
+          const isVetted = entry.connectorKind === "vetted";
+          // Postiz (the only vetted entry today) keys its chip on `postizBound`;
+          // a managed app keys on whether its toolkit slug is enabled.
+          const on = isVetted
+            ? postizBound
+            : !!entry.toolkitSlug && enabled.includes(entry.toolkitSlug);
           return (
-            <button
-              key={tk.slug}
-              type="button"
-              onClick={() => toggle(tk.slug)}
-              disabled={busy || disabled}
-              aria-pressed={on}
-              className={`inline-flex items-center gap-1.5 rounded-full border px-3 py-1.5 text-xs font-medium transition-colors disabled:opacity-60 ${
-                on
-                  ? "border-indigo-500/40 bg-indigo-500/10 text-indigo-600 dark:text-indigo-300"
-                  : "bg-background text-muted-foreground hover:bg-muted/50"
-              }`}
-            >
-              {on ? (
-                <Check className="size-3.5" aria-hidden />
-              ) : (
-                <Plus className="size-3.5" aria-hidden />
-              )}
-              {tk.label}
-            </button>
+            <AppToolChip
+              key={entry.id}
+              label={appChipLabel(entry)}
+              on={on}
+              disabled={busy || disabled || (isVetted && postizBound)}
+              onClick={() => {
+                if (disabled) return;
+                if (isVetted) {
+                  if (!postizBound) onAddPostiz?.();
+                } else if (entry.toolkitSlug) {
+                  toggle(entry.toolkitSlug);
+                }
+              }}
+            />
           );
         })}
-
-        {/* Postiz — a first-class "post to social" tool. It's a VETTED connector
-            (needs an API key), so the chip opens the add-connector flow rather
-            than toggling like a managed Composio app. Shows as enabled once
-            bound. */}
-        <button
-          type="button"
-          onClick={() => {
-            if (disabled || postizBound) return;
-            onAddPostiz?.();
-          }}
-          disabled={busy || disabled || postizBound}
-          aria-pressed={postizBound}
-          className={`inline-flex items-center gap-1.5 rounded-full border px-3 py-1.5 text-xs font-medium transition-colors disabled:opacity-60 ${
-            postizBound
-              ? "border-indigo-500/40 bg-indigo-500/10 text-indigo-600 dark:text-indigo-300"
-              : "bg-background text-muted-foreground hover:bg-muted/50"
-          }`}
-        >
-          {postizBound ? (
-            <Check className="size-3.5" aria-hidden />
-          ) : (
-            <Plus className="size-3.5" aria-hidden />
-          )}
-          Post to social (Postiz)
-        </button>
       </div>
 
       {error && (
         <p className="mt-2 text-xs text-rose-600 dark:text-rose-400">{error}</p>
       )}
     </div>
+  );
+}
+
+/** The operator-facing chip label for a catalog entry. Postiz (vetted, social)
+ *  reads as a verb-first action ("Post to social (Postiz)") since its chip kicks
+ *  off a connect flow; every managed app uses its catalog label as-is. Keyed on
+ *  the stable catalog id, not a user-visible string. */
+function appChipLabel(entry: ToolCatalogUiEntry): string {
+  if (entry.id === "postiz") return "Post to social (Postiz)";
+  return entry.label;
+}
+
+/** A single "Apps & tools" pill. One presentation for both behaviors (toggle a
+ *  managed app / open the Postiz connect flow); the caller decides what onClick
+ *  does and what `on` means. */
+function AppToolChip({
+  label,
+  on,
+  disabled,
+  onClick,
+}: {
+  label: string;
+  on: boolean;
+  disabled: boolean;
+  onClick: () => void;
+}) {
+  return (
+    <button
+      type="button"
+      onClick={onClick}
+      disabled={disabled}
+      aria-pressed={on}
+      className={`inline-flex items-center gap-1.5 rounded-full border px-3 py-1.5 text-xs font-medium transition-colors disabled:opacity-60 ${
+        on
+          ? "border-indigo-500/40 bg-indigo-500/10 text-indigo-600 dark:text-indigo-300"
+          : "bg-background text-muted-foreground hover:bg-muted/50"
+      }`}
+    >
+      {on ? (
+        <Check className="size-3.5" aria-hidden />
+      ) : (
+        <Plus className="size-3.5" aria-hidden />
+      )}
+      {label}
+    </button>
   );
 }
 

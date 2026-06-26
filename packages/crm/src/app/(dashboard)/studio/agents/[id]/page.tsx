@@ -23,7 +23,6 @@ import {
 import { resolveAgentTrigger } from "@/lib/agents/triggers/agent-trigger";
 import { getSellerListingContextAction } from "@/lib/marketplace/seller-actions";
 import { VETTED_CONNECTORS } from "@/lib/agents/mcp/connectors";
-import { COMPOSIO_TOOLKITS } from "@/lib/integrations/composio/catalog";
 import type { AgentBlueprint } from "@/db/schema";
 import { AgentTemplateEditor } from "./editor-client";
 import { ListOnMarketplace } from "./list-on-marketplace";
@@ -173,10 +172,6 @@ export default async function AgentTemplatePage({
           id: c.id,
           label: c.label,
           secretService: c.secretService,
-        }))}
-        composioCatalog={COMPOSIO_TOOLKITS.map((t) => ({
-          slug: t.slug,
-          label: t.label,
         }))}
       />
     </section>
