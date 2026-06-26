@@ -18,6 +18,7 @@ import { MarketplaceStyles } from "@/components/marketplace/marketplace-styles";
 import { BrowseClient } from "@/components/marketplace/browse-client";
 import { MarketplaceIndustryDirectory } from "@/components/marketplace/marketplace-industry-directory";
 import { loadStorefrontCatalog } from "@/lib/marketplace/load-storefront";
+import { MarkdownPointer } from "@/components/seo/markdown-pointer";
 import {
   MKT,
   nicheToCategory,
@@ -29,7 +30,8 @@ export const metadata: Metadata = {
   title: "Agent Marketplace — Hire an AI agent that works 24/7 | SeldonFrame",
   description:
     "Vetted AI agents that answer calls, book jobs, chase reviews, and win back customers — built by operators who run businesses like yours. Install into your workspace in under a minute.",
-  alternates: { canonical: "/marketplace" },
+  // canonical + the Markdown twin so DOM-parsing crawlers discover the `.md`.
+  alternates: { canonical: "/marketplace", types: { "text/markdown": "/marketplace.md" } },
   openGraph: {
     title: "Hire an agent. It works 24/7, for pennies. | SeldonFrame Marketplace",
     description:
@@ -83,6 +85,7 @@ export default async function MarketplaceBrowsePage({ searchParams }: BrowsePage
   return (
     <div className="sf-mkt" style={{ minHeight: "100vh", background: MKT.paper, color: MKT.ink, fontFamily: MKT.fontSans }}>
       <MarketplaceStyles />
+      <MarkdownPointer href="/marketplace.md" />
       <MarketplaceNav active="browse" defaultQuery={initialQuery} />
       <BrowseClient
         agents={agents}

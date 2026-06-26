@@ -5,6 +5,13 @@ import { db } from "@/db";
 import { organizations } from "@/db/schema";
 import { enforcePlanGate } from "@/middleware/plan-gate";
 import { negotiate } from "@/lib/http/negotiate";
+import {
+  AI_AGENTS_INDEX_MD_ROUTE,
+  AI_AGENTS_LISTING_MD_ROUTE,
+  parseExplicitAiAgentMarkdownPath,
+  negotiableAiAgentPage,
+  type AiAgentMarkdownTarget,
+} from "@/lib/http/ai-agents-md-paths";
 
 const protectedPrefixes = ["/hub", "/dashboard", "/welcome", "/orgs", "/contacts", "/deals", "/activities", "/forms", "/settings", "/api/v1"];
 const publicPrefixes = ["/api/v1", "/api/auth"];
@@ -306,6 +313,116 @@ function handleMarketplaceNegotiation(request: NextRequest): NextResponse | null
   return res;
 }
 
+// ─── Agent-Markdown content negotiation (scoped to /ai-agents only) ───────────
+//
+// SAFETY: identical, conservative shape to the marketplace handler above —
+// scoped ONLY to the /ai-agents paths the matcher admits, only ever serving
+// Markdown when the request asks for it (an explicit `.md` URL, or an Accept
+// that EXPLICITLY prefers text/markdown — `*/*` browsers get HTML). Every HTML
+// case returns the normal HTML response, merely annotated with `Vary: Accept` +
+// a `Link` rel="alternate" pointing at the public `.md` twin.
+//
+// The per-page Markdown is served by a STATIC route, `/ai-agents/listing.md`,
+// that reads the job (+ optional vertical) from `?job=`/`?vertical=` query
+// params — NOT a `[job].md`/`[vertical].md` dotted dynamic folder (Next 16 can't
+// extract the param from a dotted dynamic segment, so its generated route-type
+// validator can't be satisfied and typecheck breaks — the M1 lesson). The
+// public `.md` URLs are preserved entirely here: the Tier-1 `/ai-agents/<job>.md`
+// and the Tier-2 `/ai-agents/<job>/for/<vertical>.md` (and their negotiated HTML
+// twins) are all internally rewritten to `/ai-agents/listing.md?job=…&vertical=…`.
+//
+// The index `.md` (`/ai-agents.md`) IS a static route reached directly (no
+// dynamic segment), so we only rewrite it for the negotiated `/ai-agents` HTML.
+
+/** Rewrite a request to the static `/ai-agents/listing.md` route, carrying the
+ *  page's job + optional vertical as query params so the folder stays a
+ *  bracket-free static segment (the M1 dotted-route lesson). */
+function aiAgentMarkdownRewrite(url: URL, target: AiAgentMarkdownTarget): NextResponse {
+  const dest = new URL(AI_AGENTS_LISTING_MD_ROUTE, url);
+  dest.searchParams.set("job", target.job);
+  if (target.vertical) dest.searchParams.set("vertical", target.vertical);
+  const res = NextResponse.rewrite(dest);
+  res.headers.set("Vary", "Accept");
+  return res;
+}
+
+/**
+ * Handle a request to an /ai-agents path. Returns a Response when this branch
+ * OWNS the request (every /ai-agents and /ai-agents/... path is public, served
+ * on the app host); returns null ONLY for non-/ai-agents paths so the caller
+ * falls through untouched.
+ *
+ * It owns EVERY `/ai-agents` and `/ai-agents/...` path (all public) so none of
+ * them reach authProxy — they were never in the proxy matcher before, so this
+ * preserves today's behavior (the pages already render publicly via the
+ * (public) route group).
+ *
+ * The path math (which public `.md` URL maps to which `listing.md` query, and
+ * which HTML page is negotiable) lives in the pure, unit-tested
+ * lib/http/ai-agents-md-paths module so this stays a thin Next adapter.
+ *
+ * Markdown is produced for:
+ *   1. An explicit `/ai-agents/<job>.md` or `/ai-agents/<job>/for/<vertical>.md`
+ *      URL → rewrite to `/ai-agents/listing.md?job=…&vertical=…`.
+ *   2. An HTML request (`/ai-agents`, `/ai-agents/<job>`, `/ai-agents/<job>/for/
+ *      <vertical>`) whose Accept explicitly prefers markdown → same rewrite (the
+ *      visible URL is unchanged).
+ * Everything else passes through as HTML, the answer pages additionally
+ * advertising their `.md` twin via Vary + Link.
+ */
+function handleAiAgentsNegotiation(request: NextRequest): NextResponse | null {
+  const pathname = request.nextUrl.pathname;
+  if (pathname !== "/ai-agents" && !pathname.startsWith("/ai-agents/")) {
+    return null; // not an /ai-agents path → don't touch it.
+  }
+
+  // Loop guard + static-route passthrough: the rewrite targets (and the index
+  // `.md`) are already the Markdown routes — never rewrite them again. This MUST
+  // come before any rewrite below.
+  if (pathname === AI_AGENTS_INDEX_MD_ROUTE || pathname === AI_AGENTS_LISTING_MD_ROUTE) {
+    return NextResponse.next();
+  }
+
+  // (1) Explicit `.md` URLs → serve Markdown from the static route.
+  const explicit = parseExplicitAiAgentMarkdownPath(pathname);
+  if (explicit) {
+    return aiAgentMarkdownRewrite(request.nextUrl, explicit);
+  }
+
+  // The index is negotiable but has a fixed twin/route (no job param).
+  if (pathname === "/ai-agents") {
+    if (negotiate(request.headers.get("accept")) === "markdown") {
+      const url = request.nextUrl.clone();
+      url.pathname = AI_AGENTS_INDEX_MD_ROUTE;
+      const res = NextResponse.rewrite(url);
+      res.headers.set("Vary", "Accept");
+      return res;
+    }
+    const res = NextResponse.next();
+    res.headers.set("Vary", "Accept");
+    res.headers.append("Link", `<${AI_AGENTS_INDEX_MD_ROUTE}>; rel="alternate"; type="text/markdown"`);
+    return res;
+  }
+
+  const page = negotiableAiAgentPage(pathname);
+  if (!page) {
+    // An /ai-agents path with no Markdown twin (e.g. a deeper/unknown subpath) —
+    // pass it straight through to its own page as HTML.
+    return NextResponse.next();
+  }
+
+  if (negotiate(request.headers.get("accept")) === "markdown") {
+    // Same URL, Markdown representation — rewrite (not redirect). Vary: Accept.
+    return aiAgentMarkdownRewrite(request.nextUrl, page.target);
+  }
+
+  // Default: serve the HTML page unchanged, advertising the public `.md` twin.
+  const res = NextResponse.next();
+  res.headers.set("Vary", "Accept");
+  res.headers.append("Link", `<${page.twin}>; rel="alternate"; type="text/markdown"`);
+  return res;
+}
+
 const authProxy = auth(async (request) => {
   const pathname = request.nextUrl.pathname;
   const host = getRequestHost(request);
@@ -462,6 +579,11 @@ export async function proxy(request: NextRequest, event: NextFetchEvent) {
   if (appHost) {
     const negotiated = handleMarketplaceNegotiation(request);
     if (negotiated) return negotiated;
+    // Same conservative Accept-negotiation for the /ai-agents SEO pages. Owns
+    // every /ai-agents + /ai-agents/<job>[/for/<vertical>] path; returns null
+    // for everything else so the rest of the pipeline is reached untouched.
+    const aiNegotiated = handleAiAgentsNegotiation(request);
+    if (aiNegotiated) return aiNegotiated;
   }
 
   if (
@@ -598,5 +720,18 @@ export const config = {
     // path, so none reach the auth/onboarding pipeline.
     "/marketplace",
     "/marketplace/:path*",
+    // Agent-Markdown negotiation — the /ai-agents SEO pages. `/ai-agents` (exact)
+    // is the library hub; `/ai-agents/:path*` admits the Tier-1 job pages, the
+    // Tier-2 job×vertical pages, AND the explicit per-page `.md` URLs (`:path*`
+    // matches dotted final segments, incl. the nested `/for/<vertical>.md`).
+    // handleAiAgentsNegotiation rewrites those `.md` URLs (and Markdown-negotiated
+    // HTML requests) to the static `/ai-agents/listing.md?job=…&vertical=…` route,
+    // and short-circuits the rewrite targets (`/ai-agents.md`,
+    // `/ai-agents/listing.md`) so they reach their handler without looping. The
+    // index `.md` (`/ai-agents.md`) has no trailing slash so `/ai-agents/:path*`
+    // can't match it, and `/ai-agents` is exact. handleAiAgentsNegotiation owns
+    // every matched /ai-agents path, so none reach the auth/onboarding pipeline.
+    "/ai-agents",
+    "/ai-agents/:path*",
   ],
 };

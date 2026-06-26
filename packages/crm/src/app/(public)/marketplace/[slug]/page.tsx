@@ -23,6 +23,7 @@ import { ListingActionsClient } from "@/components/marketplace/listing-actions-c
 import { SampleConversationClient } from "@/components/marketplace/sample-conversation-client";
 import { MARKETPLACE_SEED } from "@/components/marketplace/marketplace-seed";
 import { loadStorefrontCatalog } from "@/lib/marketplace/load-storefront";
+import { MarkdownPointer } from "@/components/seo/markdown-pointer";
 import { jobForMarketplaceSlug } from "@/lib/seo/agent-pages";
 import {
   CATEGORY_META,
@@ -59,10 +60,12 @@ export async function generateMetadata({ params }: ListingPageProps): Promise<Me
   const { agent } = found;
   const title = `${agent.name} — ${agent.tagline} | SeldonFrame Marketplace`;
   const description = agent.blurb;
+  const canonical = `/marketplace/${agent.slug}`;
   return {
     title,
     description,
-    alternates: { canonical: `/marketplace/${agent.slug}` },
+    // canonical + the Markdown twin so DOM-parsing crawlers discover the `.md`.
+    alternates: { canonical, types: { "text/markdown": `${canonical}.md` } },
     openGraph: {
       title: `${agent.name} · built by ${agent.builder}`,
       description,
@@ -126,6 +129,7 @@ export default async function ListingDetailPage({ params }: ListingPageProps) {
   return (
     <div className="sf-mkt" style={{ minHeight: "100vh", background: MKT.paper, color: MKT.ink, fontFamily: MKT.fontSans }}>
       <MarketplaceStyles />
+      <MarkdownPointer href={`/marketplace/${agent.slug}.md`} />
       {/* GEO: structured data so LLMs + search engines can cite the listing. */}
       <script type="application/ld+json" dangerouslySetInnerHTML={{ __html: JSON.stringify(jsonLd) }} />
       <MarketplaceNav active="browse" />

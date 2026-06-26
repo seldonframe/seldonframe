@@ -29,6 +29,7 @@ import { MarketplaceIcon } from "@/components/marketplace/marketplace-icons";
 import { MKT, SURFACE_META, mcpEndpointFor, mcpSnippetFor } from "@/components/marketplace/marketplace-data";
 import { AgentPageCta } from "@/components/seo/agent-page-cta";
 import { ToolLogoRow } from "@/components/seo/tool-marks";
+import { MarkdownPointer } from "@/components/seo/markdown-pointer";
 import {
   composePageCopy,
   deployHrefFor,
@@ -54,6 +55,11 @@ export function AgentPage({ job, vertical }: AgentPageProps): ReactElement {
   const steps = job.howItWorks;
   const related = relatedJobsForVertical(job.slug, 5);
   const verticalLabel = vertical ? vertical.plural : "your business";
+  // The public `.md` twin of THIS page (Tier-1 or Tier-2) — pointed at by the
+  // visually-hidden Markdown pointer for the human-pastes-URL-into-an-LLM flow.
+  const markdownHref = vertical
+    ? `/ai-agents/${job.slug}/for/${vertical.slug}.md`
+    : `/ai-agents/${job.slug}.md`;
 
   // ── schema.org: SoftwareApplication (the agent) + FAQPage (the registry FAQ).
   // Two graphs, emitted as JSON-LD so search engines + LLMs can cite the page.
@@ -84,6 +90,7 @@ export function AgentPage({ job, vertical }: AgentPageProps): ReactElement {
     >
       <MarketplaceStyles />
       <AgentPageStyles />
+      <MarkdownPointer href={markdownHref} />
       {/* GEO: structured data — SoftwareApplication + FAQPage. */}
       <script type="application/ld+json" dangerouslySetInnerHTML={{ __html: JSON.stringify(softwareLd) }} />
       <script type="application/ld+json" dangerouslySetInnerHTML={{ __html: JSON.stringify(faqLd) }} />

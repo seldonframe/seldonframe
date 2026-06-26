@@ -13,12 +13,15 @@ import { MarketplaceStyles } from "@/components/marketplace/marketplace-styles";
 import { MarketplaceIcon } from "@/components/marketplace/marketplace-icons";
 import { MKT, SURFACE_META } from "@/components/marketplace/marketplace-data";
 import { AGENT_JOBS } from "@/lib/seo/agent-pages";
+import { MarkdownPointer } from "@/components/seo/markdown-pointer";
 
 export const metadata: Metadata = {
   title: "AI Agents for local business — deploy a working one in 60 seconds | SeldonFrame",
   description:
     "Receptionists, review chasers, missed-call text-back, speed-to-lead, lead qualifiers, booking, quoting, win-back, social, and website chat — each deploys a real working agent into your own hosted workspace.",
-  alternates: { canonical: "/ai-agents" },
+  // canonical + the Markdown twin (rel="alternate" type="text/markdown") so
+  // DOM-parsing crawlers can discover the agent-legible version of this page.
+  alternates: { canonical: "/ai-agents", types: { "text/markdown": "/ai-agents.md" } },
   openGraph: {
     title: "AI Agents that work 24/7 for your business | SeldonFrame",
     description:
@@ -32,6 +35,7 @@ export default function AgentsIndexPage() {
   return (
     <div className="sf-mkt" style={{ minHeight: "100vh", background: MKT.paper, color: MKT.ink, fontFamily: MKT.fontSans }}>
       <MarketplaceStyles />
+      <MarkdownPointer href="/ai-agents.md" />
       <MarketplaceNav active="browse" />
 
       <main style={{ maxWidth: 980, margin: "0 auto", padding: "40px 32px 70px" }}>

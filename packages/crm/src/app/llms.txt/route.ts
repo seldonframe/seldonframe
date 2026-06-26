@@ -78,6 +78,17 @@ export async function GET(): Promise<Response> {
   );
   lines.push("");
 
+  // Markdown twins — the clean, token-light versions of every page, for agents
+  // and coding tools that fetch URLs. Each `.md` renders from the SAME data as
+  // its HTML page (no drift); append `.md` to any agent/marketplace URL above.
+  lines.push("## Markdown versions (clean, for AI/LLM tools)");
+  lines.push("");
+  lines.push(`- [Marketplace (Markdown)](${base}/marketplace.md): the full agent catalog as clean Markdown.`);
+  lines.push(`- Each listing: append \`.md\` to any \`${base}/marketplace/<slug>\` URL.`);
+  lines.push(`- [AI agent library (Markdown)](${base}/ai-agents.md): every agent, as clean Markdown.`);
+  lines.push(`- Each agent page: append \`.md\` (e.g. [${base}/ai-agents/${AGENT_JOBS[0].slug}.md](${base}/ai-agents/${AGENT_JOBS[0].slug}.md)), including the by-industry pages (\`${base}/ai-agents/<job>/for/<vertical>.md\`).`);
+  lines.push("");
+
   return new Response(lines.join("\n"), {
     headers: {
       "content-type": "text/markdown; charset=utf-8",
