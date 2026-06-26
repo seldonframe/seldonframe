@@ -93,6 +93,8 @@ function listItem(over: Partial<DeploymentListItem> = {}): DeploymentListItem {
     createdAt: new Date(),
     updatedAt: new Date(),
     templateName: "AI Phone Receptionist",
+    templateType: "voice_receptionist",
+    templateTrigger: null,
     clientOrgId: "org-acme",
     portalInvitedAt: null,
     bookingMode: "native",

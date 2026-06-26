@@ -126,14 +126,18 @@ function buildDefaultListDeps(): ListDeploymentsDeps {
         .orderBy(desc(deployments.updatedAt));
       return rows.map((r) => {
         const { templateType, templateBlueprint, ...rest } = r;
+        const templateTrigger =
+          (templateBlueprint as { trigger?: unknown } | null)?.trigger ?? null;
         return {
           ...rest,
           templateName: r.templateName ?? null,
+          // Carry the legacy surface + the raw blueprint trigger so the Clients
+          // card can resolve a precise per-agent trigger LABEL (triggerLabel),
+          // while keeping the rest of the blueprint off the wire.
+          templateType: templateType ?? null,
+          templateTrigger,
           // Resolve the inbound/outbound flag here (pure) so the card stays dumb.
-          isOutbound: isOutboundDeployment(
-            (templateBlueprint as { trigger?: unknown } | null)?.trigger,
-            templateType,
-          ),
+          isOutbound: isOutboundDeployment(templateTrigger, templateType),
         };
       });
     },
@@ -462,6 +466,14 @@ export type DeploymentListItem = {
   updatedAt: Date;
   /** The deployed template's display name (null if the join missed). */
   templateName: string | null;
+  /** The template's legacy `type`/surface (null if the join missed) — the
+   *  back-compat input to resolveAgentTrigger when no explicit trigger is stored. */
+  templateType: string | null;
+  /** The template's raw `blueprint.trigger` (loose jsonb; null when unset). The
+   *  Clients card resolves a precise per-agent label from it
+   *  (resolveAgentTrigger → triggerLabel). Off-wire blueprint stays off-wire — only
+   *  the trigger sub-object is carried. */
+  templateTrigger: unknown;
   /** The provisioned client workspace (front-office bridge) — gates the portal
    *  invite toggle (disabled until set). Null = not provisioned. */
   clientOrgId: string | null;
@@ -546,6 +558,80 @@ export function groupAttachableClients(
     if (name && !entry.agentNames.includes(name)) entry.agentNames.push(name);
   }
   return [...byOrg.values()];
+}
+
+/** One client on the Clients screen (F4): the client identity + number shown
+ *  ONCE in the card header, plus every agent (deployment) running for it. */
+export type ClientGroup = {
+  /** Stable grouping key — the clientOrgId when provisioned, else a `name:<slug>`
+   *  derived from the normalized client name (so un-provisioned drafts for the
+   *  same client still collapse into one card). Used as the React key. */
+  clientKey: string;
+  /** Display name shown in the card header (the most-recent deployment's name). */
+  clientName: string;
+  /** The provisioned client workspace (org) id, or null if no agent on this
+   *  client has been activated yet. */
+  clientOrgId: string | null;
+  /** The client's shared line, if any agent on it holds one (the inbound
+   *  receptionist). Null when no agent owns a number. Shown once in the header. */
+  number: string | null;
+  /** Every deployment (agent) for this client, preserving input order
+   *  (newest-first), each addressable by its own id for per-agent actions. */
+  agents: DeploymentListItem[];
+};
+
+/** Normalize a client name into a stable grouping token: trim, lower-case, and
+ *  collapse internal whitespace. Used only to derive a fallback key when a client
+ *  has no provisioned clientOrgId yet (so two drafts named "Acme  Plumbing" and
+ *  "acme plumbing" still group). Pure. */
+function normalizeClientNameKey(name: string): string {
+  return name.trim().toLowerCase().replace(/\s+/g, " ");
+}
+
+/**
+ * Group a builder's deployments into ONE entry per CLIENT for the Clients screen
+ * (F4). A client is identified by its provisioned `clientOrgId` when set; before
+ * activation (no workspace yet) deployments fall back to a key derived from the
+ * normalized client name, so a client with several agents shows a single card
+ * either way. Each group carries the client name + shared number (surfaced once
+ * in the header) and the full list of its agents (each still addressable by its
+ * own deployment id, so per-agent pause/cancel/activate stay correctly targeted).
+ *
+ * Order is STABLE and preserves the input order (listDeployments is newest-first):
+ * a client appears at the position of its first (most-recent) deployment, and the
+ * agents within a group keep that same newest-first order. Pure — no DB, no
+ * filtering (canceled agents still belong to their client's card, unlike the
+ * attach picker which drops them).
+ */
+export function groupDeploymentsByClient(
+  deployments: DeploymentListItem[],
+): ClientGroup[] {
+  const byKey = new Map<string, ClientGroup>();
+  for (const d of deployments) {
+    // Prefer the provisioned org id; otherwise fall back to the normalized name
+    // so un-activated drafts for the same client still collapse into one card.
+    const key = d.clientOrgId
+      ? `org:${d.clientOrgId}`
+      : `name:${normalizeClientNameKey(d.clientName)}`;
+    let group = byKey.get(key);
+    if (!group) {
+      group = {
+        clientKey: key,
+        clientName: d.clientName,
+        clientOrgId: d.clientOrgId ?? null,
+        number: d.phoneNumber ?? null,
+        agents: [],
+      };
+      byKey.set(key, group);
+    }
+    // First non-null clientOrgId wins (a later activation fills what an earlier
+    // draft row lacked), so the header can offer portal/attach affordances.
+    if (!group.clientOrgId && d.clientOrgId) group.clientOrgId = d.clientOrgId;
+    // First non-null number wins (input is newest-first → the latest live line).
+    if (!group.number && d.phoneNumber) group.number = d.phoneNumber;
+    group.agents.push(d);
+  }
+  return [...byKey.values()];
 }
 
 /** List a builder's deployments, most-recently-updated first, with template name. */
