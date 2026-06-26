@@ -115,6 +115,29 @@ export const TemplateBlueprintPatchSchema = z
           .optional(),
       })
       .optional(),
+    // The per-agent GUARDRAILS / brakes (agent loop L3). The kill switch + quiet
+    // hours + frequency cap + daily budget that gate the agent's outbound sends.
+    // LOOSE on purpose — every field optional, and the runtime evaluateGuardrails
+    // is fully defensive (a bad tz fails the quiet-hours check open, an
+    // unparseable last-sent skips the frequency check), so this is a shape +
+    // obvious-bounds allow-list, not the final guard. Mirrors
+    // AgentBlueprint.guardrails (jsonb — no migration).
+    guardrails: z
+      .object({
+        enabled: z.boolean().optional(),
+        maxPerDayPerAgent: z.number().int().positive().optional(),
+        minMinutesBetweenPerContact: z.number().int().min(0).optional(),
+        quietHours: z
+          .object({
+            startHour: z.number().int().min(0).max(23),
+            endHour: z.number().int().min(0).max(24),
+            tz: z.string().min(1),
+          })
+          .strict()
+          .optional(),
+      })
+      .strict()
+      .optional(),
   })
   .strict();
 

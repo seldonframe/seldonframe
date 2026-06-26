@@ -92,6 +92,25 @@ export function buildRunEventAgentDeps(orgId?: string): RunEventAgentDeps {
   return {
     memoryStore,
     now: () => new Date(),
+
+    // The workspace IANA timezone (organizations.timezone) bounds the L3
+    // guardrails DAILY COUNTER's date key (the budget brake resets at the
+    // workspace's local midnight). Defaults "UTC" on a missing row / blank /
+    // query failure — runEventAgent also treats any throw as "UTC", so this is
+    // belt-and-suspenders. Only consulted when memoryStore is wired.
+    resolveTimezone: async (orgId) => {
+      try {
+        const [org] = await db
+          .select({ timezone: organizations.timezone })
+          .from(organizations)
+          .where(eq(organizations.id, orgId))
+          .limit(1);
+        const tz = org?.timezone;
+        return typeof tz === "string" && tz.trim().length > 0 ? tz.trim() : "UTC";
+      } catch {
+        return "UTC";
+      }
+    },
     findEventAgents: async (orgId, eventType) => {
       const skill = skillForEvent(eventType);
       // We only run agents for events we have an outbound skill for.
@@ -126,6 +145,7 @@ export function buildRunEventAgentDeps(orgId?: string): RunEventAgentDeps {
           trigger?: unknown;
           reviewUrl?: string;
           verify?: import("@/lib/agents/verify/agent-verify").VerifyRubric;
+          guardrails?: import("@/lib/agents/guardrails/agent-guardrails").Guardrails;
         };
         const trigger = resolveAgentTrigger(
           blueprint.trigger as Parameters<typeof resolveAgentTrigger>[0],
@@ -146,6 +166,15 @@ export function buildRunEventAgentDeps(orgId?: string): RunEventAgentDeps {
           verify:
             blueprint.verify && typeof blueprint.verify === "object"
               ? blueprint.verify
+              : null,
+          // 2026-06-26 — L3 Guardrails (T2): project the agent's own guardrails
+          // (brakes) onto the match so the orchestrator can gate the send with
+          // them (overriding the per-skill default). A loose object (jsonb) —
+          // evaluateGuardrails tolerates loose shapes; null/absent → the
+          // orchestrator uses defaultGuardrailsForSkill.
+          guardrails:
+            blueprint.guardrails && typeof blueprint.guardrails === "object"
+              ? blueprint.guardrails
               : null,
         });
       }

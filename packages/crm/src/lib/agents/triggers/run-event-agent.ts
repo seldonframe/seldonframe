@@ -54,6 +54,20 @@ import {
 // if absent, the per-skill default from defaultRubricForSkill.
 import { verifyOutput, type Checker, type VerifyRubric } from "@/lib/agents/verify/agent-verify";
 import { defaultRubricForSkill } from "@/lib/agents/verify/default-rubrics";
+// 2026-06-26 — Agent Loop L3 Guardrails/Stop, T3. After the per-contact throttle
+// and BEFORE the L2 verify gate, the prospective send is run through the agent's
+// GUARDRAILS (the per-agent brakes: kill switch, quiet hours, frequency cap, daily
+// budget) via the pure evaluateGuardrails. A tripped brake BLOCKS the send and
+// records a `guardrail_blocked` loop-memory entry. The rubric source is the agent's
+// own `blueprint.guardrails` (projected onto the match as `guardrails`) or, if
+// absent, the per-skill default from defaultGuardrailsForSkill. The daily budget
+// reads/increments a per-agent daily counter kept in loop-memory keyed by the
+// workspace-tz date.
+import {
+  evaluateGuardrails,
+  defaultGuardrailsForSkill,
+  type Guardrails,
+} from "@/lib/agents/guardrails/agent-guardrails";
 
 // ─── the event the dispatcher reacts to ──────────────────────────────────────
 
@@ -92,6 +106,10 @@ export type EventAgentMatch = {
    *  caller (buildRunEventAgentDeps). When present it OVERRIDES the per-skill
    *  default rubric; absent → the gate falls back to defaultRubricForSkill. */
   verify?: VerifyRubric | null;
+  /** The agent's own GUARDRAILS (L3 brakes), projected from `blueprint.guardrails`
+   *  by the caller (buildRunEventAgentDeps). When present it OVERRIDES the per-skill
+   *  default; absent/null → the gate falls back to defaultGuardrailsForSkill. */
+  guardrails?: Guardrails | null;
 };
 
 /** The contact's reachable fields (resolved from contactId by the caller). */
@@ -157,6 +175,13 @@ export type RunEventAgentDeps = {
    *  default for now → the LLM checker is T4) → the deterministic gate is the only
    *  layer. A checker that throws fails CLOSED (blocks), per verifyOutput. */
   checker?: Checker;
+  /** Optional resolver for the workspace's IANA timezone (organizations.timezone),
+   *  used ONLY to compute the date boundary of the GUARDRAILS daily counter (the
+   *  budget brake resets at the workspace's local midnight). Omitted / throwing /
+   *  returning blank → "UTC". Only consulted when a `memoryStore` is wired (the
+   *  daily counter lives in loop-memory); the guardrails' own `quietHours.tz` is
+   *  unaffected by this. DI'd so a test can pin the date without a DB. */
+  resolveTimezone?: (orgId: string) => Promise<string> | string;
 };
 
 // ─── result summary (for logging / tests — runEventAgent never throws) ────────
@@ -170,10 +195,14 @@ export type RunEventAgentResult = {
   skipped: number;
   /** How many were blocked by the review one-per-contact throttle. */
   throttled: number;
-  /** How many were BLOCKED by the verify gate (the composed body failed its
-   *  rubric — e.g. the review link or contact name was missing, or an injected
-   *  checker rejected it). A blocked message is NOT sent; the reason is recorded
-   *  to loop-memory (`verify_blocked`) for observability. */
+  /** How many were BLOCKED before send — by EITHER the L3 GUARDRAILS gate (a
+   *  tripped brake: agent disabled / quiet hours / frequency cap / daily cap) OR
+   *  the L2 verify gate (the composed body failed its rubric — e.g. the review
+   *  link or contact name was missing, or an injected checker rejected it). A
+   *  blocked message is NOT sent; the reason is recorded to loop-memory
+   *  (`guardrail_blocked` / `verify_blocked` respectively) for observability. The
+   *  guardrail gate runs FIRST (after the throttle, before verify), so a
+   *  guardrail-blocked send never reaches verify. */
   blocked: number;
   /** How many failed at send time (swallowed; surfaced here for observability). */
   failed: number;
@@ -218,6 +247,53 @@ function clean(s: string | null | undefined): string | null {
   if (typeof s !== "string") return null;
   const t = s.trim();
   return t.length > 0 ? t : null;
+}
+
+// ─── L3 Guardrails (daily counter) helpers ────────────────────────────────────
+
+/** The loop-memory `kind` of the per-agent daily-send counter entry. */
+const DAILY_COUNT_KIND = "daily_count";
+
+/**
+ * The `YYYY-MM-DD` date of `now` in IANA `tz`, or the UTC date if `tz` is invalid
+ * (Intl throws on an unknown zone). Never throws. This is the boundary the daily
+ * budget brake resets on — a workspace's local midnight.
+ */
+function dateKeyInTz(now: Date, tz: string): string {
+  try {
+    // en-CA renders ISO-style YYYY-MM-DD, which is exactly the key we want.
+    return new Intl.DateTimeFormat("en-CA", {
+      timeZone: tz,
+      year: "numeric",
+      month: "2-digit",
+      day: "2-digit",
+    }).format(now);
+  } catch {
+    // Invalid tz → fall back to the UTC date (never throw the gate).
+    return now.toISOString().slice(0, 10);
+  }
+}
+
+/** The loop-memory subjectKey for an agent's daily counter on a given tz-date.
+ *  `memoryKey` sanitizes the "/" to "-", yielding `agents/<agentKey>/_stats-<date>`. */
+function dailyStatsSubjectKey(dateKey: string): string {
+  return `_stats/${dateKey}`;
+}
+
+/**
+ * The largest `count` recorded among an agent's daily-counter entries (0 if none).
+ * The backing store is append-only (every increment appends a fresh
+ * `{kind:"daily_count", data:{count}}` entry), so the CURRENT total is the MAX
+ * count seen — robust to ordering and to multiple appends in one day. Never throws.
+ */
+function maxDailyCount(entries: AgentMemoryEntry[]): number {
+  let max = 0;
+  for (const e of entries) {
+    if (e.kind !== DAILY_COUNT_KIND) continue;
+    const c = (e.data as { count?: unknown } | undefined)?.count;
+    if (typeof c === "number" && Number.isFinite(c) && c > max) max = c;
+  }
+  return max;
 }
 
 /**
@@ -425,6 +501,133 @@ async function runOneAgent(
     }
   }
 
+  // 3a. GUARDRAILS (L3 brakes): after the per-contact throttle and BEFORE the L2
+  //     verify gate, run the prospective send through the agent's guardrails —
+  //     the per-agent brakes that stop it from "billing you in silence":
+  //       • kill switch (enabled:false), • quiet hours (no late-night sends),
+  //       • per-contact frequency cap, • daily send budget.
+  //     The rubric source is the agent's own `blueprint.guardrails` (projected as
+  //     `guardrails`) or, if absent, the per-skill default. The decision is PURE
+  //     (evaluateGuardrails never throws); we feed it three ctx values:
+  //       - `now` (the DI'd clock),
+  //       - `lastSentToContactAt` = the most recent SEND we already recalled for
+  //         this contact (reusing `recalled` — no second read),
+  //       - `sentTodayByAgent` = the per-agent daily counter from loop-memory
+  //         (keyed by the workspace-tz date; 0 with no store).
+  //     A tripped brake BLOCKS the send (counted on `result.blocked`, with the
+  //     reason), records a `guardrail_blocked` loop-memory entry (guarded), and
+  //     returns BEFORE verify/send. The whole block is guarded so a guardrail
+  //     bug can never crash the handler (fail OPEN — guardrails are a brake, not
+  //     a hard dependency: a crash here must not silently drop every send).
+  // `now` is hoisted so the same instant bounds BOTH the guardrail decision and
+  // the daily-counter date key (and the increment after a successful send).
+  const now = deps.now?.() ?? new Date();
+
+  // The daily-counter context is resolved ONCE here (function scope) so the gate
+  // can read it AND step 5 can increment the SAME `_stats/<date>` note after a
+  // successful send. Only meaningful when a memoryStore is wired (else count = 0,
+  // subjectKey = null and the increment is skipped). Never throws.
+  let dailyStatsKey: string | null = null;
+  let sentTodayByAgent = 0;
+  if (deps.memoryStore) {
+    // Resolve the workspace tz (organizations.timezone via deps; "UTC" on any
+    // failure) to bound the day, then recall the `_stats/<date>` note + take max.
+    let tz = "UTC";
+    if (deps.resolveTimezone) {
+      try {
+        const resolved = await deps.resolveTimezone(event.orgId);
+        if (typeof resolved === "string" && resolved.trim().length > 0) {
+          tz = resolved.trim();
+        }
+      } catch {
+        tz = "UTC";
+      }
+    }
+    dailyStatsKey = dailyStatsSubjectKey(dateKeyInTz(now, tz));
+    try {
+      const statEntries = await recallAgentMemory(deps.memoryStore, {
+        orgId: event.orgId,
+        agentKey,
+        subjectKey: dailyStatsKey,
+      });
+      sentTodayByAgent = maxDailyCount(statEntries);
+    } catch {
+      sentTodayByAgent = 0;
+    }
+  }
+
+  const guardrails = agent.guardrails ?? defaultGuardrailsForSkill(agent.skill);
+  if (guardrails) {
+    // lastSentToContactAt — the max `at` among the contact's already-recalled
+    // SEND entries (review_requested / lead_contacted). Reuse `recalled`; skip a
+    // missing/unparseable `at`. (Block/daily-count entries are not "sends".)
+    let lastSentToContactAt: string | null = null;
+    let lastSentMs = -Infinity;
+    for (const e of recalled) {
+      if (e.kind !== "review_requested" && e.kind !== "lead_contacted") continue;
+      if (typeof e.at !== "string") continue;
+      const ms = Date.parse(e.at);
+      if (Number.isFinite(ms) && ms > lastSentMs) {
+        lastSentMs = ms;
+        lastSentToContactAt = e.at;
+      }
+    }
+
+    let decision = evaluateGuardrails(guardrails, { now, lastSentToContactAt, sentTodayByAgent });
+    // evaluateGuardrails never throws, but guard anyway: a guardrail engine bug
+    // must not crash the handler. Fail OPEN (allow) so a brake bug never silently
+    // drops every send (the verify gate still runs after).
+    if (typeof decision?.allow !== "boolean") {
+      decision = { allow: true };
+    }
+
+    if (!decision.allow) {
+      // BLOCKED by a brake — do NOT send. Count it (reusing `blocked`), log the
+      // reason, and record a `guardrail_blocked` entry to loop-memory (so the
+      // agent "remembers" why) + surface it on the run summary. Best-effort.
+      result.blocked += 1;
+      const reason = decision.reason ?? "guardrail";
+      console.warn(
+        JSON.stringify({
+          action: "event_agent.guardrail_blocked",
+          orgId: event.orgId,
+          skill: agent.skill,
+          channel: agent.channel,
+          contactId,
+          reason,
+        }),
+      );
+      if (deps.memoryStore) {
+        const at = deps.now ? deps.now().toISOString() : undefined;
+        const blockedEntry: AgentMemoryEntry = {
+          ...(at ? { at } : {}),
+          kind: "guardrail_blocked",
+          summary: `Guardrail blocked ${agent.skill} to ${
+            contactName ?? "contact"
+          }: ${reason}`,
+          data: { reason },
+        };
+        try {
+          await recordAgentMemory(deps.memoryStore, {
+            orgId: event.orgId,
+            agentKey,
+            subjectKey,
+            entry: blockedEntry,
+          });
+        } catch (err) {
+          console.warn(
+            `[run-event-agent] recordAgentMemory (guardrail_blocked) failed for ${agent.skill}:`,
+            err instanceof Error ? err.message : String(err),
+          );
+        }
+        if (result.memory) {
+          result.memory.recorded.push(blockedEntry);
+        }
+      }
+      return;
+    }
+  }
+
   // 3b. VERIFY (maker ≠ checker): gate the composed body BEFORE sending so a
   //     broken message (missing the review link / the contact's name, over
   //     length, a leftover {placeholder}, or rejected by an injected checker) is
@@ -571,6 +774,39 @@ async function runOneAgent(
     // throws, and the entry IS what we asked the store to persist either way.
     if (result.memory) {
       result.memory.recorded.push(entry);
+    }
+  }
+
+  // 5b. Increment the per-agent DAILY COUNTER (the budget brake's input) on a
+  //     successful send: append a fresh `daily_count` entry carrying the new
+  //     total to the SAME `_stats/<tz-date>` note we read before the gate. The
+  //     store is append-only, so the count is read as the MAX across entries
+  //     (maxDailyCount) — appending `prev + 1` advances that max by one. Only
+  //     when a store + a resolved stats key are present. Best-effort + guarded:
+  //     a failed counter write must never break a send we already completed (it
+  //     just means the daily cap under-counts by one — the safe direction). The
+  //     counter is NOT pushed to result.memory.recorded (it's bookkeeping, not a
+  //     contact-facing action — recorded surfaces the send/blocks).
+  if (deps.memoryStore && dailyStatsKey) {
+    const at = deps.now ? deps.now().toISOString() : undefined;
+    const counterEntry: AgentMemoryEntry = {
+      ...(at ? { at } : {}),
+      kind: "daily_count",
+      summary: `Daily send count for ${agent.skill} → ${sentTodayByAgent + 1}`,
+      data: { count: sentTodayByAgent + 1 },
+    };
+    try {
+      await recordAgentMemory(deps.memoryStore, {
+        orgId: event.orgId,
+        agentKey,
+        subjectKey: dailyStatsKey,
+        entry: counterEntry,
+      });
+    } catch (err) {
+      console.warn(
+        `[run-event-agent] recordAgentMemory (daily_count) failed for ${agent.skill}:`,
+        err instanceof Error ? err.message : String(err),
+      );
     }
   }
 

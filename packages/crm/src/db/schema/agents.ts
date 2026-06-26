@@ -150,6 +150,17 @@ export type AgentBlueprint = {
    *  hint, not the final guard. Stored in the jsonb blueprint — no migration. See
    *  lib/agents/verify/agent-verify.ts. */
   verify?: import("@/lib/agents/verify/agent-verify").VerifyRubric;
+  /** 2026-06-26 (agent loop L3 guardrails/stop, T2) — the per-agent BRAKES that
+   *  stop this agent from "billing you in silence": a kill switch (enabled:false),
+   *  quiet hours (no late-night sends), a per-contact frequency cap, and a daily
+   *  send budget. evaluateGuardrails runs them as a deterministic gate BEFORE the
+   *  verify gate / send (run-event-agent.ts); a tripped brake blocks the send and
+   *  records a `guardrail_blocked` loop-memory entry. When absent,
+   *  defaultGuardrailsForSkill derives sensible per-skill defaults (review-requester
+   *  is capped + quiet-hours'd; speed-to-lead is time-critical with no quiet hours);
+   *  when present, this overrides them. Stored in the jsonb blueprint — no
+   *  migration. See lib/agents/guardrails/agent-guardrails.ts. */
+  guardrails?: import("@/lib/agents/guardrails/agent-guardrails").Guardrails;
 };
 
 export const agents = pgTable(

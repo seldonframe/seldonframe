@@ -42,6 +42,7 @@ import {
   type VerifyRubric,
   type VerifyResult,
 } from "../../../../src/lib/agents/verify/agent-verify";
+import { type Guardrails } from "../../../../src/lib/agents/guardrails/agent-guardrails";
 
 // ─── a recording fake deps builder ───────────────────────────────────────────
 
@@ -61,6 +62,16 @@ type EmailCall = {
   skill: EventAgentSkill;
 };
 
+// A fixed DAYTIME clock (12:00 UTC) used as the DEFAULT `now` for every fake
+// deps. The L3 guardrails gate now applies defaultGuardrailsForSkill, and the
+// review-requester default carries quiet hours (21→8 UTC). Without a pinned
+// clock, the legacy L1/L2 tests would flake whenever CI happened to run during
+// the wall-clock quiet window. Noon UTC is outside 21→8 so the default
+// guardrails ALLOW — preserving the legacy send behavior deterministically.
+// Tests that need a different instant (e.g. the 03:00 quiet-hours tests below)
+// override `now`.
+const NOON_UTC = new Date("2026-06-26T12:00:00.000Z");
+
 function makeDeps(overrides: Partial<RunEventAgentDeps> = {}): {
   deps: RunEventAgentDeps;
   smsCalls: SmsCall[];
@@ -74,6 +85,9 @@ function makeDeps(overrides: Partial<RunEventAgentDeps> = {}): {
   const throttledKeys = new Set<string>();
 
   const deps: RunEventAgentDeps = {
+    // Default to the pinned daytime clock so guardrails are deterministic; an
+    // explicit `now` in overrides wins (spread below).
+    now: () => NOON_UTC,
     findEventAgents: async () => [],
     loadContact: async () => ({
       name: "Jordan",
@@ -467,6 +481,32 @@ function makeFakeMemoryStore(seed?: Record<string, AgentMemoryEntry[]>): {
 
 const FIXED_NOW = new Date("2026-06-26T12:00:00.000Z");
 
+// The L3 guardrails daily counter (T3) writes a `daily_count` entry to a SEPARATE
+// memory key — `agents/<skill>/_stats-<tz-date>` (memoryKey sanitizes the "/" in
+// `_stats/<date>` to "-"). So after a successful send a store now sees TWO
+// appends: the contact-key send record AND the stats-key counter. These helpers
+// let the loop-memory/verify tests assert the CONTACT-key appends precisely
+// (still exactly one send per contact), independent of the bookkeeping counter.
+function statsKey(skill: EventAgentSkill, dateKey: string): string {
+  return `agents/${skill}/_stats-${dateKey}`;
+}
+/** Appends made to a contact's memory key (the send/verify_blocked records). */
+function contactAppends(
+  appendCalls: AppendCall[],
+  skill: EventAgentSkill,
+  contactId: string,
+): AppendCall[] {
+  return appendCalls.filter((c) => c.key === memKey(skill, contactId));
+}
+/** Appends made to an agent's daily-counter stats key. */
+function statsAppends(
+  appendCalls: AppendCall[],
+  skill: EventAgentSkill,
+  dateKey: string,
+): AppendCall[] {
+  return appendCalls.filter((c) => c.key === statsKey(skill, dateKey));
+}
+
 describe("runEventAgent — loop-memory (recall + record)", () => {
   test("booking.completed with EMPTY memory: composes + sends once + records review_requested", async () => {
     const mem = makeFakeMemoryStore();
@@ -488,9 +528,12 @@ describe("runEventAgent — loop-memory (recall + record)", () => {
       `expected a recall of ${memKey("review-requester", "contact-1")}, got ${JSON.stringify(mem.readKeys)}`,
     );
 
-    // recorded exactly one review_requested entry for that contact
-    assert.equal(mem.appendCalls.length, 1, "exactly one memory append");
-    const appended = mem.appendCalls[0];
+    // recorded exactly one review_requested entry for that CONTACT (the L3 daily
+    // counter also appends a `daily_count` entry to a separate stats key — assert
+    // the contact-key appends precisely so the counter doesn't muddy the count).
+    const cAppends = contactAppends(mem.appendCalls, "review-requester", "contact-1");
+    assert.equal(cAppends.length, 1, "exactly one contact-key memory append");
+    const appended = cAppends[0];
     assert.equal(appended.key, memKey("review-requester", "contact-1"));
     assert.equal(appended.entry.kind, "review_requested");
     assert.equal(appended.entry.at, FIXED_NOW.toISOString(), "entry carries the DI'd clock");
@@ -541,8 +584,9 @@ describe("runEventAgent — loop-memory (recall + record)", () => {
 
     assert.equal(smsCalls.length, 1);
     assert.equal(result.sent, 1);
-    assert.equal(mem.appendCalls.length, 1, "speed-to-lead records too");
-    const appended = mem.appendCalls[0];
+    const cAppends = contactAppends(mem.appendCalls, "speed-to-lead", "contact-9");
+    assert.equal(cAppends.length, 1, "speed-to-lead records too (contact key)");
+    const appended = cAppends[0];
     assert.equal(appended.key, memKey("speed-to-lead", "contact-9"));
     assert.equal(appended.entry.kind, "lead_contacted");
     assert.equal((appended.entry.data as { channel?: string }).channel, "sms");
@@ -557,7 +601,11 @@ describe("runEventAgent — loop-memory (recall + record)", () => {
     await runEventAgent(leadCreated("contact-9"), deps);
     await runEventAgent(leadCreated("contact-9"), deps);
     assert.equal(smsCalls.length, 2, "speed-to-lead is per-event even with memory");
-    assert.equal(mem.appendCalls.length, 2, "each ack is recorded");
+    assert.equal(
+      contactAppends(mem.appendCalls, "speed-to-lead", "contact-9").length,
+      2,
+      "each ack is recorded (contact key)",
+    );
   });
 
   test("NO memoryStore in deps → behaves exactly as before (sends, no recall/record)", async () => {
@@ -631,9 +679,12 @@ describe("runEventAgent — T4: run summary carries recalled/recorded memory", (
     assert.equal(recorded.kind, "review_requested");
     assert.equal(recorded.at, FIXED_NOW.toISOString());
     assert.equal((recorded.data as { channel?: string }).channel, "sms");
-    // It matches what the store actually appended (observability is faithful).
-    assert.equal(mem.appendCalls.length, 1);
-    assert.deepEqual(recorded, mem.appendCalls[0].entry);
+    // It matches what the store actually appended to the CONTACT key (the L3
+    // daily counter also appends to a separate stats key; recorded surfaces only
+    // the contact-facing send, not the bookkeeping counter).
+    const cAppends = contactAppends(mem.appendCalls, "review-requester", "contact-1");
+    assert.equal(cAppends.length, 1);
+    assert.deepEqual(recorded, cAppends[0].entry);
   });
 
   test("recalled surfaces prior memory; a throttled run records nothing this run", async () => {
@@ -791,9 +842,11 @@ describe("runEventAgent — L2 Verify gate (block before send)", () => {
     assert.equal(smsCalls.length, 1, "a verify-passing message sends");
     assert.equal(result.sent, 1);
     assert.equal(result.blocked, 0, "nothing blocked");
-    // The normal review_requested entry is recorded (NOT verify_blocked).
-    assert.equal(mem.appendCalls.length, 1);
-    assert.equal(mem.appendCalls[0].entry.kind, "review_requested");
+    // The normal review_requested entry is recorded to the contact key (NOT
+    // verify_blocked). A `daily_count` entry also lands on the stats key.
+    const cAppends = contactAppends(mem.appendCalls, "review-requester", "contact-1");
+    assert.equal(cAppends.length, 1);
+    assert.equal(cAppends[0].entry.kind, "review_requested");
     // And the body really did contain the review link (the rubric's key check).
     assert.ok(smsCalls[0].body.includes(REVIEW_URL), "the review link is in the sent body");
   });
@@ -912,5 +965,344 @@ describe("runEventAgent — L2 Verify gate (block before send)", () => {
       findEventAgents: async () => [{ ...reviewAgent("sms"), verify: UNSATISFIABLE_VERIFY }],
     });
     await assert.doesNotReject(() => runEventAgent(bookingCompleted("contact-1"), deps));
+  });
+});
+
+// ─── L3 Guardrails / Stop (T3): the per-agent brakes gate ─────────────────────
+//
+// After the per-contact throttle and BEFORE the L2 verify gate, the prospective
+// send is run through the agent's GUARDRAILS (evaluateGuardrails) — the brakes
+// that stop an agent "billing you in silence": kill switch, quiet hours, a
+// per-contact frequency cap, and a daily send budget. A tripped brake BLOCKS the
+// send (counted on result.blocked, with the reason), records a `guardrail_blocked`
+// loop-memory entry, and never reaches verify/send. On an ALLOWED send, the
+// per-agent DAILY COUNTER (the budget brake's input) is incremented in loop-memory
+// under `agents/<skill>/_stats-<tz-date>`. These pin:
+//   • quiet hours: review-requester default blocks a 03:00 send (reason "quiet
+//     hours") + records guardrail_blocked; a noon send goes through;
+//   • daily cap: a counter seeded at the cap (200) blocks the next send (reason
+//     "daily cap"); below the cap → sends AND the counter advances to prev+1;
+//   • frequency cap: a blueprint.guardrails minMinutesBetweenPerContact:60 with a
+//     10-min-old prior send → blocked (reason "frequency cap");
+//   • enabled:false blueprint.guardrails → blocked (reason "agent disabled");
+//   • speed-to-lead at 03:00 → SENDS (its default has no quiet hours);
+//   • the gate never throws.
+//
+// No store wired → no daily-counter read/write and tz defaults to "UTC"; with a
+// store the default deps DON'T wire resolveTimezone, so the orchestrator's tz is
+// "UTC" → the stats date key is the now's UTC date.
+
+/** The stats-key date for an instant under the test's effective tz ("UTC", since
+ *  the fake deps don't wire resolveTimezone). PINS the daily-counter date key. */
+function utcDateKey(d: Date): string {
+  return d.toISOString().slice(0, 10);
+}
+
+const NIGHT_UTC = new Date("2026-06-26T03:00:00.000Z"); // 03:00Z → inside 21→8
+
+describe("runEventAgent — L3 guardrails: quiet hours", () => {
+  test("review-requester default quiet hours BLOCK a 03:00 send → no send, guardrail_blocked recorded (reason 'quiet hours')", async () => {
+    const mem = makeFakeMemoryStore();
+    const { deps, smsCalls, emailCalls } = makeDeps({
+      findEventAgents: async () => [reviewAgent("sms")], // no blueprint.guardrails → default
+      memoryStore: mem.store,
+      now: () => NIGHT_UTC,
+    });
+
+    const result = await runEventAgent(bookingCompleted("contact-1"), deps);
+
+    // BLOCKED before send.
+    assert.equal(smsCalls.length, 0, "a quiet-hours send must NOT go out");
+    assert.equal(emailCalls.length, 0);
+    assert.equal(result.sent, 0);
+    assert.equal(result.blocked, 1, "result.blocked counts the guardrail-gated send");
+
+    // A guardrail_blocked entry was recorded under the CONTACT key (not the stats
+    // key), carrying the machine reason; the daily counter is NOT touched (no send).
+    const cAppends = contactAppends(mem.appendCalls, "review-requester", "contact-1");
+    assert.equal(cAppends.length, 1, "exactly one contact-key append (the block)");
+    const appended = cAppends[0];
+    assert.equal(appended.entry.kind, "guardrail_blocked");
+    assert.equal(appended.entry.at, NIGHT_UTC.toISOString(), "block entry carries the DI'd clock");
+    assert.equal((appended.entry.data as { reason?: string }).reason, "quiet hours");
+    assert.ok(appended.entry.summary.includes("Guardrail blocked"), "summary describes the block");
+    // No daily_count written (nothing sent).
+    assert.equal(
+      statsAppends(mem.appendCalls, "review-requester", utcDateKey(NIGHT_UTC)).length,
+      0,
+      "the daily counter is not incremented on a blocked send",
+    );
+
+    // Surfaced on the run summary's recorded list (observability).
+    assert.ok(result.memory);
+    assert.equal(result.memory!.recorded.length, 1);
+    assert.equal(result.memory!.recorded[0].kind, "guardrail_blocked");
+    assert.deepEqual(result.memory!.recorded[0], appended.entry);
+  });
+
+  test("review-requester at NOON (outside quiet hours) sends normally", async () => {
+    const { deps, smsCalls } = makeDeps({
+      findEventAgents: async () => [reviewAgent("sms")],
+      now: () => FIXED_NOW, // 12:00Z → outside 21→8
+    });
+    const result = await runEventAgent(bookingCompleted("contact-1"), deps);
+    assert.equal(smsCalls.length, 1, "a daytime review send goes through the guardrail gate");
+    assert.equal(result.sent, 1);
+    assert.equal(result.blocked, 0);
+  });
+
+  test("a blocked quiet-hours send with NO memory store still blocks (records nothing)", async () => {
+    const { deps, smsCalls } = makeDeps({
+      findEventAgents: async () => [reviewAgent("sms")],
+      now: () => NIGHT_UTC,
+    });
+    const result = await runEventAgent(bookingCompleted("contact-1"), deps);
+    assert.equal(smsCalls.length, 0, "still blocked without a store");
+    assert.equal(result.blocked, 1);
+    assert.equal(result.memory, undefined, "no store → no memory summary");
+  });
+});
+
+describe("runEventAgent — L3 guardrails: daily cap", () => {
+  test("counter seeded AT the cap (200) blocks the next send (reason 'daily cap')", async () => {
+    // Seed the per-agent daily counter for TODAY (UTC date) at the review default
+    // cap. Use a NOON clock so quiet hours don't pre-empt the daily-cap check.
+    const dateKey = utcDateKey(FIXED_NOW);
+    const mem = makeFakeMemoryStore({
+      [statsKey("review-requester", dateKey)]: [
+        { kind: "daily_count", summary: "seeded at cap", data: { count: 200 } },
+      ],
+    });
+    const { deps, smsCalls } = makeDeps({
+      findEventAgents: async () => [reviewAgent("sms")],
+      memoryStore: mem.store,
+      now: () => FIXED_NOW,
+    });
+
+    const result = await runEventAgent(bookingCompleted("contact-1"), deps);
+
+    assert.equal(smsCalls.length, 0, "at the daily cap → no send");
+    assert.equal(result.sent, 0);
+    assert.equal(result.blocked, 1);
+    const cAppends = contactAppends(mem.appendCalls, "review-requester", "contact-1");
+    assert.equal(cAppends.length, 1);
+    assert.equal(cAppends[0].entry.kind, "guardrail_blocked");
+    assert.equal((cAppends[0].entry.data as { reason?: string }).reason, "daily cap");
+    // The counter is NOT advanced on a blocked send (no new daily_count append).
+    assert.equal(
+      statsAppends(mem.appendCalls, "review-requester", dateKey).length,
+      0,
+      "blocked send does not advance the counter",
+    );
+  });
+
+  test("below the cap → sends AND the daily counter advances to prev+1 (assert the written counter)", async () => {
+    // Seed the counter at 5 (well below 200). The send goes out and a fresh
+    // daily_count entry carrying 6 is appended to the SAME stats key.
+    const dateKey = utcDateKey(FIXED_NOW);
+    const mem = makeFakeMemoryStore({
+      [statsKey("review-requester", dateKey)]: [
+        { kind: "daily_count", summary: "5 so far", data: { count: 5 } },
+      ],
+    });
+    const { deps, smsCalls } = makeDeps({
+      findEventAgents: async () => [reviewAgent("sms")],
+      memoryStore: mem.store,
+      now: () => FIXED_NOW,
+    });
+
+    const result = await runEventAgent(bookingCompleted("contact-1"), deps);
+
+    assert.equal(smsCalls.length, 1, "below the cap → sends");
+    assert.equal(result.sent, 1);
+    assert.equal(result.blocked, 0);
+
+    // The daily counter advanced: exactly one new daily_count append carrying 6.
+    const statApp = statsAppends(mem.appendCalls, "review-requester", dateKey);
+    assert.equal(statApp.length, 1, "exactly one counter increment on a send");
+    assert.equal(statApp[0].entry.kind, "daily_count");
+    assert.equal(
+      (statApp[0].entry.data as { count?: number }).count,
+      6,
+      "counter incremented to prev(5)+1",
+    );
+    assert.equal(statApp[0].entry.at, FIXED_NOW.toISOString(), "counter entry carries the clock");
+    // The stored stats note now reports a max of 6 (what the next run would read).
+    const storedStats = mem.data.get(statsKey("review-requester", dateKey)) ?? [];
+    const maxCount = Math.max(
+      ...storedStats
+        .filter((e) => e.kind === "daily_count")
+        .map((e) => (e.data as { count?: number }).count ?? 0),
+    );
+    assert.equal(maxCount, 6, "the persisted counter max is now 6");
+  });
+
+  test("with NO store, the daily cap is treated as 0 sent → review sends at noon (no counter to read)", async () => {
+    const { deps, smsCalls } = makeDeps({
+      findEventAgents: async () => [reviewAgent("sms")],
+      now: () => FIXED_NOW,
+    });
+    const result = await runEventAgent(bookingCompleted("contact-1"), deps);
+    assert.equal(smsCalls.length, 1, "no store → sentTodayByAgent 0 → under cap → sends");
+    assert.equal(result.sent, 1);
+  });
+});
+
+describe("runEventAgent — L3 guardrails: frequency cap (per contact)", () => {
+  test("speed-to-lead with blueprint.guardrails minMinutesBetweenPerContact:60 + a 10-min-old prior send → blocked 'frequency cap'", async () => {
+    // speed-to-lead has NO default per-contact gap, so we pin the cap via the
+    // agent's own blueprint.guardrails. A prior lead_contacted 10 min before the
+    // clock (recalled from memory) trips the 60-min cap.
+    const freqGuardrails: Guardrails = { minMinutesBetweenPerContact: 60 };
+    const tenMinAgo = new Date(FIXED_NOW.getTime() - 10 * 60_000).toISOString();
+    const mem = makeFakeMemoryStore({
+      [memKey("speed-to-lead", "contact-7")]: [
+        { at: tenMinAgo, kind: "lead_contacted", summary: "acked 10m ago", data: { channel: "sms" } },
+      ],
+    });
+    const { deps, smsCalls } = makeDeps({
+      findEventAgents: async () => [{ ...speedAgent("sms"), guardrails: freqGuardrails }],
+      memoryStore: mem.store,
+      now: () => FIXED_NOW,
+    });
+
+    const result = await runEventAgent(leadCreated("contact-7"), deps);
+
+    assert.equal(smsCalls.length, 0, "within the frequency cap → no send");
+    assert.equal(result.sent, 0);
+    assert.equal(result.blocked, 1);
+    const cAppends = contactAppends(mem.appendCalls, "speed-to-lead", "contact-7");
+    // The prior send entry was seeded (not appended); only the block is appended.
+    assert.equal(cAppends.length, 1, "one new contact-key append (the block)");
+    assert.equal(cAppends[0].entry.kind, "guardrail_blocked");
+    assert.equal((cAppends[0].entry.data as { reason?: string }).reason, "frequency cap");
+  });
+
+  test("the SAME frequency cap ALLOWS once the prior send is older than the gap (90 min) → sends", async () => {
+    const freqGuardrails: Guardrails = { minMinutesBetweenPerContact: 60 };
+    const ninetyMinAgo = new Date(FIXED_NOW.getTime() - 90 * 60_000).toISOString();
+    const mem = makeFakeMemoryStore({
+      [memKey("speed-to-lead", "contact-7")]: [
+        { at: ninetyMinAgo, kind: "lead_contacted", summary: "acked 90m ago", data: { channel: "sms" } },
+      ],
+    });
+    const { deps, smsCalls } = makeDeps({
+      findEventAgents: async () => [{ ...speedAgent("sms"), guardrails: freqGuardrails }],
+      memoryStore: mem.store,
+      now: () => FIXED_NOW,
+    });
+    const result = await runEventAgent(leadCreated("contact-7"), deps);
+    assert.equal(smsCalls.length, 1, "outside the frequency cap → sends");
+    assert.equal(result.sent, 1);
+    assert.equal(result.blocked, 0);
+  });
+});
+
+describe("runEventAgent — L3 guardrails: kill switch + speed-to-lead exemption", () => {
+  test("enabled:false blueprint.guardrails → blocked ('agent disabled'), even at noon", async () => {
+    const mem = makeFakeMemoryStore();
+    const { deps, smsCalls } = makeDeps({
+      findEventAgents: async () => [{ ...speedAgent("sms"), guardrails: { enabled: false } }],
+      memoryStore: mem.store,
+      now: () => FIXED_NOW,
+    });
+
+    const result = await runEventAgent(leadCreated("contact-1"), deps);
+
+    assert.equal(smsCalls.length, 0, "a disabled agent never sends");
+    assert.equal(result.sent, 0);
+    assert.equal(result.blocked, 1);
+    const cAppends = contactAppends(mem.appendCalls, "speed-to-lead", "contact-1");
+    assert.equal(cAppends.length, 1);
+    assert.equal(cAppends[0].entry.kind, "guardrail_blocked");
+    assert.equal((cAppends[0].entry.data as { reason?: string }).reason, "agent disabled");
+  });
+
+  test("speed-to-lead at 03:00 SENDS (its default guardrails have NO quiet hours)", async () => {
+    // The whole point of the speed-to-lead default: a fresh lead must get an
+    // instant reply even at 3am. No blueprint.guardrails → default applies.
+    const { deps, smsCalls } = makeDeps({
+      findEventAgents: async () => [speedAgent("sms")],
+      now: () => NIGHT_UTC, // 03:00Z
+    });
+    const result = await runEventAgent(leadCreated("contact-1"), deps);
+    assert.equal(smsCalls.length, 1, "speed-to-lead is time-critical → sends at 3am");
+    assert.equal(result.sent, 1);
+    assert.equal(result.blocked, 0);
+  });
+
+  test("the guardrail gate never throws (a blocked run resolves cleanly)", async () => {
+    const { deps } = makeDeps({
+      findEventAgents: async () => [{ ...speedAgent("sms"), guardrails: { enabled: false } }],
+    });
+    await assert.doesNotReject(() => runEventAgent(leadCreated("contact-1"), deps));
+  });
+
+  test("an explicit blueprint.guardrails OVERRIDES the per-skill default (review with enabled:false at noon → blocked)", async () => {
+    // review-requester would normally send at noon; an explicit kill switch wins.
+    const { deps, smsCalls } = makeDeps({
+      findEventAgents: async () => [{ ...reviewAgent("sms"), guardrails: { enabled: false } }],
+      now: () => FIXED_NOW,
+    });
+    const result = await runEventAgent(bookingCompleted("contact-1"), deps);
+    assert.equal(smsCalls.length, 0, "the explicit kill switch overrides the default");
+    assert.equal(result.blocked, 1);
+  });
+});
+
+describe("runEventAgent — L3 guardrails: workspace tz resolution for the daily counter", () => {
+  test("resolveTimezone is consulted and bounds the daily-counter date key", async () => {
+    // With a resolveTimezone returning a far-west zone, the counter's date key is
+    // the LOCAL date. At 02:00 UTC on 2026-06-26, Pacific/Honolulu (UTC-10) is
+    // still 2026-06-25 → the counter must land on the 06-25 stats key.
+    const earlyUtc = new Date("2026-06-26T02:00:00.000Z"); // 16:00 prev day in HST
+    const mem = makeFakeMemoryStore();
+    let tzAskedFor: string | null = null;
+    const { deps, smsCalls } = makeDeps({
+      // speed-to-lead → no quiet hours, so the 02:00 instant still sends.
+      findEventAgents: async () => [speedAgent("sms")],
+      memoryStore: mem.store,
+      now: () => earlyUtc,
+      resolveTimezone: async (orgId) => {
+        tzAskedFor = orgId;
+        return "Pacific/Honolulu";
+      },
+    });
+
+    const result = await runEventAgent(leadCreated("contact-1"), deps);
+
+    assert.equal(result.sent, 1, "speed-to-lead sends at 16:00 local");
+    assert.equal(tzAskedFor, "org-1", "resolveTimezone was consulted with the event's orgId");
+    // The counter landed on the LOCAL (Honolulu) date, not the UTC date.
+    assert.equal(
+      statsAppends(mem.appendCalls, "speed-to-lead", "2026-06-25").length,
+      1,
+      "counter keyed by the workspace-local date (06-25 in HST)",
+    );
+    assert.equal(
+      statsAppends(mem.appendCalls, "speed-to-lead", "2026-06-26").length,
+      0,
+      "NOT keyed by the UTC date",
+    );
+  });
+
+  test("a throwing resolveTimezone falls back to UTC (still sends, counter on the UTC date)", async () => {
+    const mem = makeFakeMemoryStore();
+    const { deps, smsCalls } = makeDeps({
+      findEventAgents: async () => [speedAgent("sms")],
+      memoryStore: mem.store,
+      now: () => FIXED_NOW,
+      resolveTimezone: async () => {
+        throw new Error("tz lookup exploded");
+      },
+    });
+    const result = await runEventAgent(leadCreated("contact-1"), deps);
+    assert.equal(smsCalls.length, 1, "a tz failure must not break the send");
+    assert.equal(result.sent, 1);
+    assert.equal(
+      statsAppends(mem.appendCalls, "speed-to-lead", utcDateKey(FIXED_NOW)).length,
+      1,
+      "counter falls back to the UTC date",
+    );
   });
 });
