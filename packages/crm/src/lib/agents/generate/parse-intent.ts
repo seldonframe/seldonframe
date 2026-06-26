@@ -125,16 +125,26 @@ export function heuristicIntent(sentence: string): AgentIntent {
  * the heuristic fills the rest. A `classify` that throws (or whose result can't
  * be merged into a complete intent) degrades to the heuristic alone.
  *
+ * `priorLessons` (L5.3) is an optional rendered hint of past generator
+ * corrections, threaded through to the classifier so it can avoid repeating a
+ * mistake. It's a plain string — "" means "no lessons", behavior unchanged.
+ *
  * Never throws.
  */
 export async function parseAgentIntent(
   sentence: string,
-  deps?: { classify?: (sentence: string) => Promise<Partial<AgentIntent>> },
+  deps?: {
+    classify?: (
+      sentence: string,
+      priorLessons?: string,
+    ) => Promise<Partial<AgentIntent>>;
+    priorLessons?: string;
+  },
 ): Promise<AgentIntent> {
   const base = heuristicIntent(sentence);
   if (!deps?.classify) return base;
   try {
-    const llm = await deps.classify(sentence);
+    const llm = await deps.classify(sentence, deps.priorLessons);
     return mergeIntent(base, llm);
   } catch {
     // Fail-soft: any LLM error → the safe heuristic result. Agent creation must

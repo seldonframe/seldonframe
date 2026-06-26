@@ -31,6 +31,9 @@ import {
   type GenerateDeps,
   type GenerateAgentDraftOutput,
 } from "@/lib/agents/generate/run-generate";
+import { recordGeneratorLesson } from "@/lib/agents/generate/generator-lessons";
+import { diffEditToLessons } from "@/lib/agents/generate/generator-edit-diff";
+import { makeBrainMemoryStoreForOrg } from "@/lib/agents/memory/brain-memory-store";
 import {
   createAgentTemplate,
   updateAgentTemplate,
@@ -56,8 +59,16 @@ export async function generateAgentDraftAction(
 ): Promise<GenerateAgentDraftOutput> {
   assertWritable();
 
+  // Resolve the org ONCE here (the production getOrgId is a multi-source session
+  // lookup), so we can build the org-scoped lessons store from the same id and
+  // hand the orchestrator a memoized getOrgId — no double round-trip. Tests
+  // inject their own getOrgId via _deps, in which case we never call the real one
+  // and never build a real store (they pass their own lessonsStore, or none).
+  const resolveOrgId = _deps?.getOrgId ?? getOrgId;
+  const orgId = await resolveOrgId();
+
   const deps: GenerateDeps = {
-    getOrgId: _deps?.getOrgId ?? getOrgId,
+    getOrgId: async () => orgId,
     classify: _deps?.classify ?? llmClassify,
     // Maker≠checker judge: default ON, trivially disablable via
     // SF_GENERATOR_JUDGE=off. Fail-open by construction — a missing ANTHROPIC
@@ -68,6 +79,17 @@ export async function generateAgentDraftAction(
         : process.env.SF_GENERATOR_JUDGE === "off"
           ? undefined
           : makeLlmAgentGrader(),
+    // L5.3 self-improving loop: the org's Brain-backed generator loop-memory, so
+    // past corrections are recalled into this generation and new judge fixes are
+    // recorded for the next. Tests override via _deps; absent a resolved org
+    // (unauthorized) there's nothing to scope to → omit it (the orchestrator
+    // returns "unauthorized" before it would be read anyway). Fail-soft inside.
+    lessonsStore:
+      _deps && "lessonsStore" in _deps
+        ? _deps.lessonsStore
+        : orgId
+          ? makeBrainMemoryStoreForOrg(orgId)
+          : undefined,
     create: _deps?.create ?? defaultCreate,
   };
 
@@ -83,6 +105,51 @@ export async function generateAgentDraftAction(
   }
 
   return result;
+}
+
+/**
+ * L5.3 self-improving loop — capture a POST-GENERATE EDIT as a generator lesson.
+ *
+ * Fired by the editor the FIRST time an operator saves changes to a just-
+ * generated agent (the `?new=1` hand-off). The operator fixing what we generated
+ * is the strongest training signal there is — a human telling us the generator
+ * got it wrong — so we record it under the org's generator loop-memory and the
+ * NEXT generation recalls + honors it.
+ *
+ * We diff a SMALL, high-signal slice (`diffEditToLessons`: trigger / channel /
+ * skill-presence — never the prose, exactly like the judge allow-list) and record
+ * one `{pattern:"post-generate edit", mistake:<before>, correction:<after>}`
+ * lesson per meaningful change. A no-op edit (no meaningful change) records
+ * nothing.
+ *
+ * Best-effort + non-blocking by contract: assertWritable + an unauthorized org
+ * are the only hard stops; everything after is wrapped so a Brain/store hiccup
+ * NEVER surfaces to the caller. Returns void — the editor fires it
+ * fire-and-forget alongside its real save.
+ */
+export async function recordGeneratorEditAction(input: {
+  agentTemplateId: string;
+  before: AgentBlueprint;
+  after: AgentBlueprint;
+}): Promise<void> {
+  assertWritable();
+
+  const orgId = await getOrgId();
+  if (!orgId) return; // nothing to scope the lesson to.
+
+  try {
+    const lessons = diffEditToLessons(input.before, input.after);
+    if (lessons.length === 0) return; // operator changed nothing we learn from.
+
+    const store = makeBrainMemoryStoreForOrg(orgId);
+    for (const lesson of lessons) {
+      // recordGeneratorLesson already swallows store errors + dedupes; we await
+      // so each settles, inside the try so an unexpected throw can't escape.
+      await recordGeneratorLesson(store, { orgId, lesson });
+    }
+  } catch {
+    // Best-effort: capturing an edit-lesson must never break the editor's save.
+  }
 }
 
 /**

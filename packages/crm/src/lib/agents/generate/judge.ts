@@ -68,10 +68,15 @@ export type JudgeResult = { ok: boolean; issues: JudgeIssue[] };
  * `JudgeResult`. It MAY throw (network/timeout/parse) and MAY return a malformed
  * object — `judgeGeneratedAgent` defends against both and fails OPEN. Keeping
  * this minimal makes it trivial to back with any LLM call.
+ *
+ * `priorLessons` (L5.3 self-improving loop) is an OPTIONAL rendered block of
+ * past generator corrections — when present a real grader folds it into its
+ * prompt so it catches a mistake we've fixed before. Pure/fake graders ignore it.
  */
 export type AgentGrader = (args: {
   sentence: string;
   bundle: AgentBundle;
+  priorLessons?: string;
 }) => Promise<JudgeResult>;
 
 // ─── the allow-list (what a fix may touch) ───────────────────────────────────
@@ -154,7 +159,7 @@ function normalizeResult(raw: unknown): JudgeResult {
  * with its issues defensively cleaned. NEVER throws.
  */
 export async function judgeGeneratedAgent(
-  args: { sentence: string; bundle: AgentBundle },
+  args: { sentence: string; bundle: AgentBundle; priorLessons?: string },
   deps: { grader: AgentGrader },
 ): Promise<JudgeResult> {
   try {

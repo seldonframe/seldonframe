@@ -30,6 +30,12 @@ import {
   applyJudgeFixes,
   type AgentGrader,
 } from "@/lib/agents/generate/judge";
+import {
+  recallGeneratorLessons,
+  recordGeneratorLesson,
+  lessonsToPromptHint,
+} from "@/lib/agents/generate/generator-lessons";
+import type { AgentMemoryStore } from "@/lib/agents/memory/agent-memory";
 import { parseAgentIntent, type AgentIntent } from "@/lib/agents/generate/parse-intent";
 import {
   STARTER_TEMPLATES,
@@ -61,13 +67,26 @@ export type CreateAgentDraftInput = {
  */
 export type GenerateDeps = {
   getOrgId: () => Promise<string | null>;
-  classify?: (sentence: string) => Promise<Partial<AgentIntent>>;
+  /** The optional LLM classifier merged over the heuristic (omit → heuristic
+   *  only). Receives the sentence and, when L5.3 is wired, an optional
+   *  `priorLessons` hint of past corrections it may fold into its prompt. */
+  classify?: (
+    sentence: string,
+    priorLessons?: string,
+  ) => Promise<Partial<AgentIntent>>;
   /** Optional maker≠checker grader. When present, runs AFTER the deterministic
    *  assembler: it reviews the bundle against the sentence, auto-applies the
    *  allow-listed low-risk fixes (trigger/verify/guardrails/connectors), and
    *  surfaces the un-fixable issues as warnings. Fail-open — a broken/throwing
    *  judge NEVER blocks generation (judgeGeneratedAgent guards it). */
   judge?: AgentGrader;
+  /** Optional generator loop-memory (L5.3 self-improving loop). When present,
+   *  past `{pattern,mistake,correction}` lessons for this org are RECALLED and
+   *  folded into the classify + judge prompts (so the generator stops repeating
+   *  a fix), and each judge fix applied here is RECORDED back as a new lesson.
+   *  Omit it → no recall, no record (today's behavior, byte-for-byte). All
+   *  best-effort: a store error never breaks a generation. */
+  lessonsStore?: AgentMemoryStore;
   create: (
     input: CreateAgentDraftInput,
   ) => Promise<{ ok: true; id: string } | { ok: false; error: string }>;
@@ -101,18 +120,37 @@ function templateTypeForSkill(skill: string): AgentTemplateType {
   return starter?.type ?? "chat_assistant";
 }
 
+// ─── lesson pattern key ─────────────────────────────────────────────────────
+
+/** The recognizable "situation" a recorded lesson keys on (L5.3): a short,
+ *  normalized lead of the operator's sentence. We don't store the whole prose
+ *  (a lesson's `pattern` is a cue, not a transcript) — just the first ~80 chars,
+ *  whitespace-collapsed. Empty/garbage in → "a request" so the lesson still has
+ *  a non-empty pattern (recordGeneratorLesson drops empty-pattern lessons). Pure. */
+function firstSentenceFeature(sentence: string): string {
+  const text = (typeof sentence === "string" ? sentence : "")
+    .replace(/\s+/g, " ")
+    .trim();
+  if (!text) return "a request";
+  return text.length > 80 ? `${text.slice(0, 80).trim()}…` : text;
+}
+
 // ─── orchestrator ──────────────────────────────────────────────────────────────
 
 /**
  * Turn one English sentence into a created agent template. Pure orchestration
  * over injected deps (no real LLM / DB). Flow:
  *   1. getOrgId → null ⇒ { ok:false, error:"unauthorized" } (nothing created);
- *   2. parseAgentIntent(sentence, { classify }) → a complete AgentIntent (the
- *      classify is fail-soft inside parseAgentIntent, so this never throws);
+ *   1b. (optional, L5.3) recall this org's past generator lessons → a prompt
+ *      hint threaded into the classifier + judge below. Omitted store → no
+ *      recall; "" hint → both prompts unchanged;
+ *   2. parseAgentIntent(sentence, { classify, priorLessons }) → a complete
+ *      AgentIntent (classify is fail-soft inside parseAgentIntent, never throws);
  *   3. assembleAgentBundle(intent, { reviewUrl }) → name/description/blueprint +
  *      warnings, with every safety primitive wired;
  *   3b. (optional) judge the bundle (maker≠checker) — auto-fix low-risk plumbing,
- *      surface the rest as warnings. Fail-open; omitted → step skipped entirely;
+ *      surface the rest as warnings. Fail-open; omitted → step skipped entirely.
+ *      Each applied fix is RECORDED (L5.3) as a lesson for the next generation;
  *   4. create the template from the (possibly judge-fixed) bundle → its id;
  *   5. { ok:true, templateId, warnings }.
  *
@@ -130,9 +168,21 @@ export async function runGenerateAgentDraft(
   const orgId = await deps.getOrgId();
   if (!orgId) return { ok: false, error: "unauthorized" };
 
+  // L5.3 — recall this org's past generator corrections (fail-soft to []) and
+  // render them into a prompt hint we thread into BOTH the classifier and the
+  // judge below, so the generator stops repeating a fix. "" when there are none
+  // (or no store), which leaves both prompts byte-for-byte unchanged.
+  const lessons = deps.lessonsStore
+    ? await recallGeneratorLessons(deps.lessonsStore, { orgId })
+    : [];
+  const priorLessons = lessonsToPromptHint(lessons);
+
   // parseAgentIntent swallows a throwing classify internally (heuristic wins),
   // so this is safe even when the injected classify explodes.
-  const intent = await parseAgentIntent(sentence, { classify: deps.classify });
+  const intent = await parseAgentIntent(sentence, {
+    classify: deps.classify,
+    priorLessons,
+  });
 
   let bundle = assembleAgentBundle(intent, { reviewUrl: input.reviewUrl });
 
@@ -142,11 +192,40 @@ export async function runGenerateAgentDraft(
   // fields (trigger/verify/guardrails/connectors); the un-auto-fixed issues
   // (those without a `fix`) become operator-facing warnings on the bundle.
   if (deps.judge) {
-    const verdict = await judgeGeneratedAgent({ sentence, bundle }, { grader: deps.judge });
+    const verdict = await judgeGeneratedAgent(
+      { sentence, bundle, priorLessons },
+      { grader: deps.judge },
+    );
     bundle = applyJudgeFixes(bundle, verdict);
     bundle.warnings.push(
       ...verdict.issues.filter((i) => !i.fix).map((i) => i.problem),
     );
+
+    // L5.3 — the compounding loop: every fix the judge actually applied is a
+    // correction worth remembering. Record one lesson per FIXED issue so the
+    // next generation recalls it (above) and the maker stops making it. Guarded
+    // on the store + best-effort: recordGeneratorLesson already swallows store
+    // errors, and we await so a record settles, but never let it throw.
+    if (deps.lessonsStore) {
+      const store = deps.lessonsStore;
+      const feature = firstSentenceFeature(sentence);
+      for (const issue of verdict.issues) {
+        if (!issue.fix) continue;
+        try {
+          await recordGeneratorLesson(store, {
+            orgId,
+            lesson: {
+              pattern: feature,
+              mistake: issue.problem,
+              correction: JSON.stringify(issue.fix),
+            },
+          });
+        } catch {
+          // Best-effort: failing to remember a lesson must never break a
+          // generation (the bundle is already assembled + persisted next).
+        }
+      }
+    }
   }
 
   const created = await deps.create({

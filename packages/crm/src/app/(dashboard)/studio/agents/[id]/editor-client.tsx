@@ -16,7 +16,7 @@
 // natural language (generateAgentDraftAction → merge the returned patch into
 // local state → review → Save).
 
-import { useEffect, useState, useTransition } from "react";
+import { useEffect, useRef, useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
 import Link from "next/link";
 import {
@@ -35,6 +35,8 @@ import {
   generateAgentDraftAction,
 } from "@/lib/agent-templates/actions";
 import { sendTestEventAgentAction } from "@/lib/agents/triggers/actions";
+import { recordGeneratorEditAction } from "@/lib/agents/generate/actions";
+import type { AgentBlueprint } from "@/db/schema/agents";
 import {
   bindTemplateConnectorAction,
   unbindTemplateConnectorAction,
@@ -86,6 +88,12 @@ type ComposioToolkitOption = { slug: string; label: string };
 type Props = {
   templateId: string;
   surface: AgentSurface;
+  /** True when the editor was opened straight from the generate-by-default flow
+   *  (`?new=1`). Arms the L5.3 edit-capture: the FIRST save records what the
+   *  operator changed about the as-generated agent as a generator lesson, so the
+   *  next generation learns from the correction. Any other entry → false → no
+   *  capture, byte-for-byte today's save flow. */
+  isNew?: boolean;
   /** The agent's resolved trigger (unified agent model P1) — what FIRES it.
    *  Already clamped to a valid AgentTrigger by resolveAgentTrigger on the
    *  server, so the picker can trust its shape. */
@@ -312,6 +320,19 @@ export function AgentTemplateEditor(props: Props) {
   const [saveError, setSaveError] = useState<string | null>(null);
   const [saved, setSaved] = useState(false);
 
+  // ── L5.3 self-improving loop — capture the operator's FIRST edit of a freshly
+  //    generated agent as a generator lesson. We snapshot the AS-GENERATED slice
+  //    (trigger + custom script presence — the only axes the generator decides /
+  //    the lesson keys on) at mount, BEFORE any edit, then on the first
+  //    successful save compare it to what was saved and record the diff. Refs (no
+  //    re-render): the snapshot is captured once and the capture fires at most
+  //    once. Best-effort + non-blocking — it never gates the real save. ──
+  const genBeforeRef = useRef<AgentBlueprint>({
+    trigger: props.initialTrigger,
+    customSkillMd: props.initialBlueprint.customSkillMd.trim() || undefined,
+  });
+  const editCapturedRef = useRef(false);
+
   // ── Refine with a prompt ──
   const [refinePrompt, setRefinePrompt] = useState("");
   const [isRefining, startRefine] = useTransition();
@@ -380,6 +401,27 @@ export function AgentTemplateEditor(props: Props) {
         setSaveError(result.error);
       } else {
         setSaved(true);
+        // L5.3 — first save of a just-generated agent: record what the operator
+        // changed (vs the as-generated snapshot) as a generator lesson. Fire-and-
+        // forget; never blocks or fails the save. Guarded so it runs at most once.
+        if (props.isNew && !editCapturedRef.current) {
+          editCapturedRef.current = true;
+          const after: AgentBlueprint = {
+            trigger: buildTriggerPatch(
+              triggerKind,
+              triggerChannel,
+              triggerEvent,
+              triggerCron,
+              triggerDelayMinutes,
+            ) as AgentBlueprint["trigger"],
+            customSkillMd: customSkillMd.trim() || undefined,
+          };
+          void recordGeneratorEditAction({
+            agentTemplateId: props.templateId,
+            before: genBeforeRef.current,
+            after,
+          }).catch(() => {});
+        }
         router.refresh();
       }
     });

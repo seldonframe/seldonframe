@@ -34,6 +34,14 @@ import type { AgentIntent } from "../../../../src/lib/agents/generate/parse-inte
 import { parseClassification } from "../../../../src/lib/agents/generate/classify-llm";
 import { makeLlmAgentGrader } from "../../../../src/lib/agents/generate/judge-llm";
 import type { AgentBundle } from "../../../../src/lib/agents/generate/agent-bundle";
+import {
+  recordGeneratorLesson,
+  type GeneratorLesson,
+} from "../../../../src/lib/agents/generate/generator-lessons";
+import type {
+  AgentMemoryEntry,
+  AgentMemoryStore,
+} from "../../../../src/lib/agents/memory/agent-memory";
 
 // ─── a capturing fake of the injected deps ────────────────────────────────────
 
@@ -479,3 +487,223 @@ describe("makeLlmAgentGrader — fails OPEN on a malformed model response", () =
     assert.deepEqual(verdict.issues, []);
   });
 });
+
+// ─── L5.3 — generator lessons recalled into + recorded from a generation ──────
+//
+// run-generate.ts now (when a `lessonsStore` dep is present) RECALLS the org's
+// past corrections and threads the rendered hint into BOTH the classifier and
+// the judge, and RECORDS every judge fix it applies as a new lesson. All of it is
+// fail-soft: no store → unchanged behavior, a throwing store → generation still
+// succeeds. These use an in-memory fake AgentMemoryStore (a Map) + capturing
+// fake classify/judge deps — NO Brain, NO LLM.
+
+// An in-memory fake AgentMemoryStore over a Map (same read + append-to-array
+// semantics as the real Brain store), so recall/record round-trip without I/O.
+function makeFakeLessonsStore(): AgentMemoryStore & {
+  data: Map<string, AgentMemoryEntry[]>;
+} {
+  const data = new Map<string, AgentMemoryEntry[]>();
+  return {
+    data,
+    read: async (key) => data.get(key) ?? [],
+    append: async (key, entry) => {
+      const list = data.get(key) ?? [];
+      list.push(entry);
+      data.set(key, list);
+    },
+  };
+}
+
+// A store whose every method rejects — to prove a generation survives a broken
+// lessons store (record + recall both soft-fail).
+const throwingLessonsStore: AgentMemoryStore = {
+  read: async () => {
+    throw new Error("brain read exploded");
+  },
+  append: async () => {
+    throw new Error("brain append exploded");
+  },
+};
+
+const PRIOR_LESSON: GeneratorLesson = {
+  pattern: "sentence says 'after a booking' but trigger is inbound",
+  mistake: "wired an inbound trigger",
+  correction: "use trigger.event = booking.completed",
+};
+
+describe("runGenerateAgentDraft — L5.3 recall: priorLessons threaded into classify + judge", () => {
+  test("a prior lesson is rendered + passed into BOTH the classifier and the judge", async () => {
+    const store = await seededStore([PRIOR_LESSON]);
+
+    // Capturing fakes: record the priorLessons string each one receives.
+    let classifySawLessons: string | undefined;
+    const classify: GenerateDeps["classify"] = async (_sentence, priorLessons) => {
+      classifySawLessons = priorLessons;
+      return {};
+    };
+    let judgeSawLessons: string | undefined;
+    const judge: GenerateDeps["judge"] = async ({ priorLessons }) => {
+      judgeSawLessons = priorLessons;
+      return { ok: true, issues: [] };
+    };
+
+    const { deps } = makeDeps({ classify, judge });
+    const result = await runGenerateAgentDraft(
+      { ...deps, lessonsStore: store },
+      { sentence: "ask customers for a google review" },
+    );
+
+    assert.equal(result.ok, true);
+    // Both saw a NON-EMPTY hint carrying the recalled correction.
+    assert.ok(classifySawLessons, "classifier received a priorLessons string");
+    assert.ok(
+      classifySawLessons!.includes(PRIOR_LESSON.correction),
+      `classifier hint missing the correction, got: ${classifySawLessons}`,
+    );
+    assert.ok(judgeSawLessons, "judge received a priorLessons string");
+    assert.ok(
+      judgeSawLessons!.includes(PRIOR_LESSON.correction),
+      `judge hint missing the correction, got: ${judgeSawLessons}`,
+    );
+  });
+
+  test("no lessonsStore → classify/judge see an empty hint (today's behavior)", async () => {
+    let classifySawLessons: string | undefined;
+    const classify: GenerateDeps["classify"] = async (_s, priorLessons) => {
+      classifySawLessons = priorLessons;
+      return {};
+    };
+    let judgeSawLessons: string | undefined;
+    const judge: GenerateDeps["judge"] = async ({ priorLessons }) => {
+      judgeSawLessons = priorLessons;
+      return { ok: true, issues: [] };
+    };
+    const { deps } = makeDeps({ classify, judge }); // no lessonsStore
+
+    const result = await runGenerateAgentDraft(deps, {
+      sentence: "ask customers for a google review",
+    });
+
+    assert.equal(result.ok, true);
+    // "" — an empty hint leaves the prompts byte-for-byte unchanged.
+    assert.equal(classifySawLessons, "");
+    assert.equal(judgeSawLessons, "");
+  });
+});
+
+describe("runGenerateAgentDraft — L5.3 record: an applied judge fix becomes a lesson", () => {
+  test("after the judge fixes the trigger, a generator_lesson is recorded to the store", async () => {
+    const store = makeFakeLessonsStore();
+    const FIX = {
+      trigger: { kind: "event", event: "booking.completed", channel: "sms" },
+    } as const;
+    const judge: GenerateDeps["judge"] = async () => ({
+      ok: false,
+      issues: [
+        {
+          field: "trigger",
+          problem: "the sentence implies a post-booking event, not an inbound call",
+          fix: FIX,
+        },
+      ],
+    });
+    const { deps } = makeDeps({ judge });
+
+    const result = await runGenerateAgentDraft(
+      { ...deps, lessonsStore: store },
+      { sentence: "answer my phone when I miss a call" },
+    );
+
+    assert.equal(result.ok, true);
+    // The fix was recorded as a lesson under the generator lessons key.
+    const recalled = await recallStore(store);
+    assert.equal(recalled.length, 1, "exactly one lesson recorded");
+    assert.equal(recalled[0]!.mistake, "the sentence implies a post-booking event, not an inbound call");
+    // correction is the JSON-stringified fix the judge supplied.
+    assert.equal(recalled[0]!.correction, JSON.stringify(FIX));
+    // pattern is a feature of the sentence (its lead).
+    assert.ok(
+      recalled[0]!.pattern.includes("answer my phone"),
+      `pattern should key on the sentence, got: ${recalled[0]!.pattern}`,
+    );
+  });
+
+  test("an un-fixable issue (no fix) records NOTHING", async () => {
+    const store = makeFakeLessonsStore();
+    const judge: GenerateDeps["judge"] = async () => ({
+      ok: false,
+      issues: [{ field: "guardrails", problem: "looks empty — review before publishing" }],
+    });
+    const { deps } = makeDeps({ judge });
+
+    const result = await runGenerateAgentDraft(
+      { ...deps, lessonsStore: store },
+      { sentence: "ask customers for a google review" },
+    );
+
+    assert.equal(result.ok, true);
+    const recalled = await recallStore(store);
+    assert.equal(recalled.length, 0, "no lesson for an issue without a fix");
+  });
+});
+
+describe("runGenerateAgentDraft — L5.3 fail-soft: a broken lessons store never blocks", () => {
+  test("a throwing lessons store (recall + record) still yields a created agent", async () => {
+    // A judge fix would trigger a record; the store throws on both read + write.
+    const judge: GenerateDeps["judge"] = async () => ({
+      ok: false,
+      issues: [
+        {
+          field: "trigger",
+          problem: "wrong trigger",
+          fix: { trigger: { kind: "event", event: "booking.completed", channel: "sms" } },
+        },
+      ],
+    });
+    const { deps, calls } = makeDeps({ judge });
+
+    let result!: GenerateAgentDraftOutput;
+    await assert.doesNotReject(async () => {
+      result = await runGenerateAgentDraft(
+        { ...deps, lessonsStore: throwingLessonsStore },
+        { sentence: "ask customers for a google review" },
+      );
+    });
+
+    assert.equal(result.ok, true, "a broken lessons store must not block generation");
+    assert.equal(calls.create.length, 1, "the template is still created");
+  });
+});
+
+// Seed a fake store with prior lessons via the REAL recorder (awaited), so the
+// recall path under test sees production-shaped entries.
+async function seededStore(seed: GeneratorLesson[]): Promise<AgentMemoryStore & {
+  data: Map<string, AgentMemoryEntry[]>;
+}> {
+  const store = makeFakeLessonsStore();
+  for (const lesson of seed) {
+    await recordGeneratorLesson(store, { orgId: "builder-1", lesson });
+  }
+  return store;
+}
+
+// Read back every recorded generator lesson from a fake store (across all keys),
+// decoded from the AgentMemoryEntry payload — so a test asserts on the lessons
+// without re-deriving the memory key.
+async function recallStore(
+  store: AgentMemoryStore & { data: Map<string, AgentMemoryEntry[]> },
+): Promise<GeneratorLesson[]> {
+  const out: GeneratorLesson[] = [];
+  for (const entries of store.data.values()) {
+    for (const e of entries) {
+      if (e.kind !== "generator_lesson" || !e.data) continue;
+      const d = e.data as Record<string, unknown>;
+      out.push({
+        pattern: String(d.pattern ?? ""),
+        mistake: String(d.mistake ?? ""),
+        correction: String(d.correction ?? ""),
+      });
+    }
+  }
+  return out;
+}

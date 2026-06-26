@@ -61,9 +61,15 @@ const CLASSIFY_SYSTEM = [
  * It deliberately does NOT validate the trigger here — resolveAgentTrigger
  * (inside mergeIntent) clamps any malformed trigger to a safe one, so this just
  * passes through the parsed shape and lets the merge layer be the guard.
+ *
+ * `priorLessons` (L5.3 self-improving loop) is an OPTIONAL rendered block of
+ * past generator corrections (from `lessonsToPromptHint`). When non-empty it's
+ * appended to the system prompt so the classifier avoids repeating a known
+ * mistake; "" / undefined leaves the prompt byte-for-byte as before.
  */
 export async function llmClassify(
   sentence: string,
+  priorLessons?: string,
 ): Promise<Partial<AgentIntent>> {
   const text = typeof sentence === "string" ? sentence.trim() : "";
   if (!text) return {};
@@ -73,11 +79,15 @@ export async function llmClassify(
 
   const model = process.env.ANTHROPIC_CLASSIFY_MODEL?.trim() || DEFAULT_CLASSIFY_MODEL;
 
+  // Fold past corrections into the system prompt (only when there are any).
+  const lessons = typeof priorLessons === "string" ? priorLessons.trim() : "";
+  const system = lessons ? `${CLASSIFY_SYSTEM}\n\n${lessons}` : CLASSIFY_SYSTEM;
+
   try {
     const resp = await client.messages.create({
       model,
       max_tokens: CLASSIFY_MAX_TOKENS,
-      system: CLASSIFY_SYSTEM,
+      system,
       messages: [{ role: "user", content: text }],
     });
 

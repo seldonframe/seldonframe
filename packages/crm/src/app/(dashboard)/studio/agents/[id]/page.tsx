@@ -36,13 +36,21 @@ export const dynamic = "force-dynamic";
 
 export default async function AgentTemplatePage({
   params,
+  searchParams,
 }: {
   params: Promise<{ id: string }>;
+  searchParams: Promise<Record<string, string | string[] | undefined>>;
 }) {
   const orgId = await getOrgId();
   if (!orgId) notFound();
 
   const { id } = await params;
+  // The generate-by-default flow routes here with `?new=1` right after creating
+  // a template (describe-agent.tsx). That flag arms the editor's L5.3 edit-
+  // capture: the FIRST save is treated as the operator correcting what we
+  // generated, recorded as a generator lesson. Any other entry → no capture.
+  const sp = await searchParams;
+  const isNew = sp.new === "1" || sp.new === "true";
   const template = await getAgentTemplate(id);
   // Ownership guard: only the builder that owns the template can open it.
   if (!template || template.builderOrgId !== orgId) notFound();
@@ -136,6 +144,7 @@ export default async function AgentTemplatePage({
       <AgentTemplateEditor
         templateId={template.id}
         surface={surface}
+        isNew={isNew}
         initialTrigger={trigger}
         initialBlueprint={{
           greeting: blueprint.greeting ?? "",

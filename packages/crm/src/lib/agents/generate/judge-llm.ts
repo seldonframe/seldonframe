@@ -166,7 +166,7 @@ export function makeLlmAgentGrader(
 ): AgentGrader {
   const getClient = deps.getClient ?? getAnthropicClient;
 
-  return async ({ sentence, bundle }): Promise<JudgeResult> => {
+  return async ({ sentence, bundle, priorLessons }): Promise<JudgeResult> => {
     const open: JudgeResult = { ok: true, issues: [] };
 
     const text = typeof sentence === "string" ? sentence.trim() : "";
@@ -177,6 +177,11 @@ export function makeLlmAgentGrader(
 
     const model = process.env.ANTHROPIC_JUDGE_MODEL?.trim() || DEFAULT_JUDGE_MODEL;
 
+    // Fold past corrections (L5.3) into the system prompt, only when present, so
+    // the grader catches a mistake we've fixed before. "" → prompt unchanged.
+    const lessons = typeof priorLessons === "string" ? priorLessons.trim() : "";
+    const system = lessons ? `${JUDGE_SYSTEM}\n\n${lessons}` : JUDGE_SYSTEM;
+
     try {
       const userContent = [
         `Request: ${text}`,
@@ -186,7 +191,7 @@ export function makeLlmAgentGrader(
       const resp = await client.messages.create({
         model,
         max_tokens: JUDGE_MAX_TOKENS,
-        system: JUDGE_SYSTEM,
+        system,
         messages: [{ role: "user", content: userContent }],
       });
 
