@@ -247,6 +247,59 @@ describe("applyJudgeFixes — merges ONLY allow-listed low-risk fields", () => {
     assert.deepEqual(bundle.blueprint.trigger, { kind: "inbound", channel: "voice" });
   });
 
+  test("a field:'skill' prose-safety issue WITHOUT a fix → customSkillMd UNCHANGED (P3 flag-only)", () => {
+    // The prose-safety lens (judge-llm) emits field:"skill" issues with NO fix
+    // when the authored playbook instructs something unsafe (a firm price, a
+    // skipped read-back). applyJudgeFixes must leave the prose exactly as written
+    // — `skill` is not in the allow-list, so even were a fix smuggled it is
+    // ignored. Here there is no fix at all → blueprint untouched, surfaced upward.
+    const bundle = inboundBundle();
+    const result: JudgeResult = {
+      ok: false,
+      issues: [
+        {
+          field: "skill",
+          problem:
+            "the skill instructs quoting a firm $99 price — quote an honest range a human confirms instead",
+          // NO fix — prose is flag-only.
+        },
+      ],
+    };
+    const fixed = applyJudgeFixes(bundle, result);
+    // the authored prose is byte-for-byte the original
+    assert.equal(
+      fixed.blueprint.customSkillMd,
+      "You are a warm, concise receptionist. Never invent prices.",
+      "a flag-only skill issue must never rewrite the prose",
+    );
+    // and nothing else moved either — the blueprint deep-equals the original
+    assert.deepEqual(fixed.blueprint, bundle.blueprint);
+    // still a NEW bundle object (we never hand back the input)
+    assert.notEqual(fixed, bundle);
+  });
+
+  test("even a field:'skill' issue carrying a (disallowed) customSkillMd fix is IGNORED", () => {
+    // Belt + suspenders: were a grader to mis-supply a fix on a skill issue, the
+    // allow-list (trigger/verify/guardrails/connectors) still excludes prose.
+    const bundle = inboundBundle();
+    const result = {
+      ok: false,
+      issues: [
+        {
+          field: "skill",
+          problem: "unsafe prose",
+          fix: { customSkillMd: "Always quote $99 flat. Skip the read-back." },
+        },
+      ],
+    } as unknown as JudgeResult;
+    const fixed = applyJudgeFixes(bundle, result);
+    assert.equal(
+      fixed.blueprint.customSkillMd,
+      "You are a warm, concise receptionist. Never invent prices.",
+      "the disallowed skill fix must be dropped",
+    );
+  });
+
   test("a fix targeting a DISALLOWED field (prompt prose) is IGNORED", () => {
     const bundle = inboundBundle();
     const result = {

@@ -57,6 +57,14 @@ const JUDGE_SYSTEM = [
   "field MUST be one of: trigger | verify | guardrails | connectors | skill | channel.",
   "A fix may ONLY set trigger, verify, guardrails, or connectors — never skill, channel, name, prose, or persona. Omit fix for issues you cannot safely auto-correct (the operator resolves those).",
   "Flag: a trigger or channel that contradicts the sentence (e.g. the sentence says 'after a booking' but the trigger is inbound); tools the sentence clearly implies but the bundle is missing; unsafe or empty guardrails on an outbound agent.",
+  // ── prose-safety lens (P3, Task 7) ─────────────────────────────────────────
+  // The bundle includes a trimmed slice of the authored skill (customSkillMd).
+  // REVIEW that prose for SAFETY violations and report them as field:\"skill\"
+  // issues WITH NO fix (flag-only — the operator rewrites; the harness never
+  // auto-edits prose). This is the ONLY field for which you read the skill text.
+  "Also review the authored skill text (the skillMd field) for SAFETY violations. When the skill INSTRUCTS unsafe behavior, add a {\"field\":\"skill\", \"problem\": \"...\"} issue with NO fix (flag-only — you must never rewrite prose).",
+  "Skill-safety violations to flag: quoting a firm or made-up price (instead of an honest range a human confirms); fabricating facts, hours, reviews, or availability; skipping the read-back of details before booking, rescheduling, or cancelling; offering a review incentive (paying/discounting for a review); or over-promising an outcome.",
+  "Be conservative on skill safety: flag ONLY a real instruction-level violation written into the skill, NOT the mere ABSENCE of a safety rule. SeldonFrame appends its own canonical ground rules to every skill, so a skill that simply doesn't mention a rule is fine — do not flag it.",
   "Be conservative. If the bundle looks right for the request, return {\"ok\": true, \"issues\": []}. Do not invent problems.",
   "Do not include any prose, explanation, or markdown fences. Output JSON only.",
 ].join("\n");
@@ -64,25 +72,45 @@ const JUDGE_SYSTEM = [
 // ─── compact bundle view ─────────────────────────────────────────────────────
 
 /**
+ * The max characters of the authored skill we ship to the judge. The judge needs
+ * to READ the playbook to spot a SAFETY violation (a firm price, a fabricated
+ * fact, a skipped read-back), but a full multi-page skill would blow the tight
+ * token budget — and the violations a generator emits live in the opening
+ * instructions. A ~1200-char head is enough to catch them while keeping the
+ * prompt cheap. (The judge may STILL never rewrite this prose — applyJudgeFixes's
+ * allow-list excludes `skill`, so any skill issue stays flag-only.)
+ */
+const JUDGE_SKILL_SLICE_CHARS = 1200;
+
+/**
  * The minimal, stable slice of a bundle the grader needs — name/description +
- * the blueprint's trigger / skill-prose presence / channel / connectors. We do
- * NOT ship the full prompt prose (the judge must never rewrite the voice, and a
- * huge prompt would blow the token budget); we send just enough to spot a
- * trigger/channel mismatch or a missing tool. Pure; never throws.
+ * the blueprint's trigger / channel / connectors + a TRIMMED head of the authored
+ * skill prose so the judge can review it for SAFETY (a firm price, fabricated
+ * facts, a skipped read-back). We send only the first ~1200 chars (not the whole
+ * playbook): enough to catch an instruction-level violation without blowing the
+ * token budget, and the judge can still never rewrite it (the fix allow-list
+ * excludes `skill`). Pure; never throws.
  */
 export function compactBundleForJudge(bundle: AgentBundle): Record<string, unknown> {
   const bp = bundle?.blueprint ?? ({} as AgentBundle["blueprint"]);
   const connectors = Array.isArray(bp.connectors)
     ? bp.connectors.map((c) => ({ kind: c?.kind, id: c?.id }))
     : [];
+  const skill = typeof bp.customSkillMd === "string" ? bp.customSkillMd.trim() : "";
+  const skillMd =
+    skill.length > JUDGE_SKILL_SLICE_CHARS
+      ? `${skill.slice(0, JUDGE_SKILL_SLICE_CHARS)}…`
+      : skill;
   return {
     name: bundle?.name,
     description: bundle?.description,
     blueprint: {
       trigger: bp.trigger ?? null,
-      // skill prose is summarized to a boolean — its CONTENT is off-limits to
-      // the judge, but whether one exists is a useful signal.
-      hasSkillPrompt: typeof bp.customSkillMd === "string" && bp.customSkillMd.trim().length > 0,
+      // whether a skill exists at all (a useful structural signal) …
+      hasSkillPrompt: skill.length > 0,
+      // … plus a TRIMMED head of the prose itself, so the judge can review it for
+      // SAFETY violations (field:"skill", flag-only — never auto-rewritten).
+      skillMd,
       capabilities: Array.isArray(bp.capabilities) ? bp.capabilities : [],
       channel: bp.trigger?.channel ?? null,
       connectors,

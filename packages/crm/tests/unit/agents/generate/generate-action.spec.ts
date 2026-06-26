@@ -384,6 +384,41 @@ describe("runGenerateAgentDraft — judge wiring (un-fixable issue → warning)"
   });
 });
 
+describe("runGenerateAgentDraft — judge wiring (prose-safety skill issue → warning, prose untouched)", () => {
+  test("a field:'skill' flag-only issue surfaces as a warning AND never rewrites customSkillMd", async () => {
+    // The prose-safety lens (P3) returns field:"skill" issues with NO fix when the
+    // authored playbook instructs something unsafe. run-generate must surface the
+    // problem as an operator warning (it has no `fix`, so it flows through the
+    // issues.filter(!i.fix) → warnings path) and leave the prose byte-for-byte
+    // (applyJudgeFixes's allow-list excludes `skill`).
+    const SKILL_PROBLEM =
+      "the skill instructs quoting a firm $99 price — give an honest range a human confirms instead";
+    const author: AgentAuthor = async () => IG_POSTER_DRAFT;
+    const judge: GenerateDeps["judge"] = async () => ({
+      ok: false,
+      issues: [{ field: "skill", problem: SKILL_PROBLEM }], // flag-only
+    });
+    const { deps, calls } = makeDeps({ author, judge });
+
+    const result = await runGenerateAgentDraft(deps, {
+      sentence: "Post a weekly Instagram highlight of our 5-star reviews",
+    });
+
+    assert.equal(result.ok, true);
+    if (!result.ok) return;
+    // surfaced as a warning for the operator to resolve …
+    assert.ok(
+      result.warnings.includes(SKILL_PROBLEM),
+      `expected the skill issue surfaced as a warning, got: ${JSON.stringify(result.warnings)}`,
+    );
+    // … and the authored prose is preserved exactly (never auto-rewritten).
+    assert.ok(
+      calls.create[0]!.blueprint.customSkillMd?.includes("draft a short, on-brand highlight"),
+      "the authored playbook prose survives a flag-only skill issue",
+    );
+  });
+});
+
 describe("runGenerateAgentDraft — NO judge dep is today's behavior (baseline)", () => {
   test("without a judge, a fixable-looking sentence keeps the assembler's trigger + only assembler warnings", async () => {
     // No judge passed. The receptionist sentence must keep its INBOUND/voice
@@ -806,6 +841,59 @@ describe("runGenerateAgentDraft — L5.3 recall: priorLessons threaded into clas
     // "" — an empty hint leaves the prompts byte-for-byte unchanged.
     assert.equal(classifySawLessons, "");
     assert.equal(judgeSawLessons, "");
+  });
+
+  // P3 T7 — the AUTHOR (not just the classifier/judge) learns from past
+  // corrections: run-generate threads the recalled lessons hint into
+  // authorAgentDraft, so the primitive-composition author honors a fix we've made
+  // before. (authored-agent threads deps.priorLessons → author(sentence, hint);
+  // this pins the orchestrator end of that wire with a capturing fake author.)
+  test("the recalled priorLessons hint reaches the AUTHOR dep (author-fed lessons)", async () => {
+    const store = await seededStore([PRIOR_LESSON]);
+
+    let authorSawSentence: string | undefined;
+    let authorSawLessons: string | undefined;
+    const author: AgentAuthor = async (sentence, priorLessons) => {
+      authorSawSentence = sentence;
+      authorSawLessons = priorLessons;
+      // Return a valid composed draft so the author path is taken (and to prove
+      // the hint reaching the author isn't an artifact of a fallback).
+      return IG_POSTER_DRAFT;
+    };
+
+    const { deps } = makeDeps({ author });
+    const result = await runGenerateAgentDraft(
+      { ...deps, lessonsStore: store },
+      { sentence: "Post a weekly Instagram highlight of our 5-star reviews" },
+    );
+
+    assert.equal(result.ok, true);
+    assert.equal(
+      authorSawSentence,
+      "Post a weekly Instagram highlight of our 5-star reviews",
+      "the author receives the operator's sentence",
+    );
+    assert.ok(authorSawLessons, "the author received a priorLessons string");
+    assert.ok(
+      authorSawLessons!.includes(PRIOR_LESSON.correction),
+      `author hint missing the recalled correction, got: ${authorSawLessons}`,
+    );
+  });
+
+  test("no lessonsStore → the author sees an empty hint (today's behavior)", async () => {
+    let authorSawLessons: string | undefined;
+    const author: AgentAuthor = async (_s, priorLessons) => {
+      authorSawLessons = priorLessons;
+      return IG_POSTER_DRAFT;
+    };
+    const { deps } = makeDeps({ author }); // no lessonsStore
+
+    const result = await runGenerateAgentDraft(deps, {
+      sentence: "Post a weekly Instagram highlight of our 5-star reviews",
+    });
+
+    assert.equal(result.ok, true);
+    assert.equal(authorSawLessons, "", "an empty hint when there's no store");
   });
 });
 
