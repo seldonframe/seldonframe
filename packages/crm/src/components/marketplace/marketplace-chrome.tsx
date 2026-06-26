@@ -89,6 +89,7 @@ export function MarketplaceNav({
       }}
     >
       <div
+        className="sf-mkt-nav"
         style={{
           maxWidth: 1200,
           margin: "0 auto",
@@ -107,16 +108,17 @@ export function MarketplaceNav({
             gap: 10,
             textDecoration: "none",
             color: MKT.ink,
+            flex: "none",
           }}
         >
           <SeldonFrameMark size={23} />
           <span style={{ fontWeight: 700, fontSize: 16.5, letterSpacing: "-0.01em" }}>SeldonFrame</span>
-          <span style={{ fontWeight: 500, fontSize: 16.5, color: "rgba(34,29,23,0.42)", letterSpacing: "-0.01em" }}>
+          <span className="sf-mkt-navword" style={{ fontWeight: 500, fontSize: 16.5, color: "rgba(34,29,23,0.42)", letterSpacing: "-0.01em" }}>
             Marketplace
           </span>
         </Link>
 
-        <nav style={{ display: "flex", alignItems: "center", gap: 4, marginLeft: 8 }}>
+        <nav className="sf-mkt-navlinks" style={{ display: "flex", alignItems: "center", gap: 4, marginLeft: 8 }}>
           <Link
             href="/marketplace"
             style={{ ...navPill, color: navColor("browse"), background: navBg("browse") }}
@@ -145,10 +147,13 @@ export function MarketplaceNav({
 
         <div style={{ flex: 1 }} />
 
-        {/* Plain GET search — works without JS; the browse island enhances it. */}
+        {/* Plain GET search — works without JS; the browse island enhances it.
+            Hidden on phones (the hero/nav search would overflow); the browse hero
+            carries its own search field on mobile. */}
         <form
           action="/marketplace"
           method="get"
+          className="sf-mkt-navsearch"
           style={{
             display: "flex",
             alignItems: "center",
@@ -159,6 +164,7 @@ export function MarketplaceNav({
             padding: "8px 15px",
             width: 248,
             boxShadow: "0 1px 2px rgba(34,29,23,0.04)",
+            flex: "none",
           }}
         >
           <span style={{ color: "rgba(34,29,23,0.55)", display: "flex" }}>
@@ -219,6 +225,7 @@ export function MarketplaceFooter(): ReactElement {
   return (
     <footer style={{ background: MKT.dark, color: MKT.paper, marginTop: 30 }}>
       <div
+        className="sf-foot-grid"
         style={{
           maxWidth: 1200,
           margin: "0 auto",
@@ -253,6 +260,7 @@ export function MarketplaceFooter(): ReactElement {
       </div>
       <div style={{ borderTop: "1px solid rgba(246,242,234,0.12)" }}>
         <div
+          className="sf-foot-bottom"
           style={{
             maxWidth: 1200,
             margin: "0 auto",

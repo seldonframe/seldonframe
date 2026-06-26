@@ -61,11 +61,11 @@ export function BrowseClient({ agents, businessCount = 0, initialCategory = null
   return (
     <main>
       {/* HERO — spotlight variant (the stronger of the two design explored). */}
-      <section style={{ maxWidth: 1200, margin: "0 auto", padding: "74px 32px 26px" }}>
-        <div style={{ display: "grid", gridTemplateColumns: "1.12fr 0.88fr", gap: 60, alignItems: "center" }}>
+      <section className="sf-hero-sec sf-sec" style={{ maxWidth: 1200, margin: "0 auto", padding: "74px 32px 26px" }}>
+        <div className="sf-hero-grid" style={{ display: "grid", gridTemplateColumns: "1.12fr 0.88fr", gap: 60, alignItems: "center" }}>
           <div>
             <div style={kicker}>The agent marketplace</div>
-            <h1 style={{ margin: 0, fontSize: 62, lineHeight: 1.04, fontWeight: 600, letterSpacing: "-0.025em", maxWidth: 600 }}>
+            <h1 className="sf-hero-h1" style={{ margin: 0, fontSize: 62, lineHeight: 1.04, fontWeight: 600, letterSpacing: "-0.025em", maxWidth: 600 }}>
               Hire an agent.
               <br />
               It works 24/7,{" "}
@@ -80,6 +80,7 @@ export function BrowseClient({ agents, businessCount = 0, initialCategory = null
 
             {/* hero search */}
             <div
+              className="sf-hero-search"
               style={{
                 display: "flex",
                 alignItems: "center",
@@ -209,8 +210,8 @@ export function BrowseClient({ agents, businessCount = 0, initialCategory = null
       </section>
 
       {/* CATEGORIES */}
-      <section style={{ maxWidth: 1200, margin: "0 auto", padding: "44px 32px 8px" }}>
-        <div style={{ display: "grid", gridTemplateColumns: "repeat(6,1fr)", gap: 14 }}>
+      <section className="sf-sec" style={{ maxWidth: 1200, margin: "0 auto", padding: "44px 32px 8px" }}>
+        <div className="sf-cat-grid" style={{ display: "grid", gridTemplateColumns: "repeat(6,1fr)", gap: 14 }}>
           {CATEGORY_ORDER.map((key) => {
             const active = category === key;
             const count = categoryCounts[key] ?? 0;
@@ -261,12 +262,12 @@ export function BrowseClient({ agents, businessCount = 0, initialCategory = null
 
       {/* FEATURED */}
       {featured.length > 0 ? (
-        <section style={{ maxWidth: 1200, margin: "0 auto", padding: "42px 32px 8px" }}>
-          <div style={{ display: "flex", alignItems: "baseline", justifyContent: "space-between", marginBottom: 20 }}>
-            <h2 style={sectionH2}>Featured this week</h2>
+        <section className="sf-sec" style={{ maxWidth: 1200, margin: "0 auto", padding: "42px 32px 8px" }}>
+          <div style={{ display: "flex", alignItems: "baseline", justifyContent: "space-between", gap: 12, flexWrap: "wrap", marginBottom: 20 }}>
+            <h2 className="sf-sech2" style={sectionH2}>Featured this week</h2>
             <span style={{ fontSize: 13.5, color: "rgba(34,29,23,0.5)" }}>Hand-picked by the SeldonFrame team</span>
           </div>
-          <div style={{ display: "grid", gridTemplateColumns: "repeat(3,1fr)", gap: 18 }}>
+          <div className="sf-feat-grid" style={{ display: "grid", gridTemplateColumns: "repeat(3,1fr)", gap: 18 }}>
             {featured.map((agent) => (
               <AgentCard key={agent.slug} agent={agent} featured />
             ))}
@@ -275,9 +276,9 @@ export function BrowseClient({ agents, businessCount = 0, initialCategory = null
       ) : null}
 
       {/* ALL AGENTS */}
-      <section id="sf-results" style={{ maxWidth: 1200, margin: "0 auto", padding: "46px 32px 64px" }}>
-        <div style={{ display: "flex", alignItems: "center", gap: 14, marginBottom: 20 }}>
-          <h2 style={sectionH2}>{category ? CATEGORY_META[category].label : "All agents"}</h2>
+      <section id="sf-results" className="sf-sec" style={{ maxWidth: 1200, margin: "0 auto", padding: "46px 32px 64px" }}>
+        <div style={{ display: "flex", alignItems: "center", gap: 14, flexWrap: "wrap", marginBottom: 20 }}>
+          <h2 className="sf-sech2" style={sectionH2}>{category ? CATEGORY_META[category].label : "All agents"}</h2>
           <span style={{ fontSize: 14, color: "rgba(34,29,23,0.5)", fontFamily: MKT.fontMono }}>
             {filtered.length} {filtered.length === 1 ? "agent" : "agents"}
           </span>
@@ -310,7 +311,7 @@ export function BrowseClient({ agents, businessCount = 0, initialCategory = null
         </div>
 
         {filtered.length > 0 ? (
-          <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fill,minmax(296px,1fr))", gap: 18 }}>
+          <div className="sf-all-grid" style={{ display: "grid", gridTemplateColumns: "repeat(auto-fill,minmax(296px,1fr))", gap: 18 }}>
             {filtered.map((agent) => (
               <AgentCard key={agent.slug} agent={agent} />
             ))}

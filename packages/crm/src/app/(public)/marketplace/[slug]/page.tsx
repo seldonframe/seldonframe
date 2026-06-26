@@ -143,7 +143,7 @@ export default async function ListingDetailPage({ params }: ListingPageProps) {
       <script type="application/ld+json" dangerouslySetInnerHTML={{ __html: JSON.stringify(jsonLd) }} />
       <MarketplaceNav active="browse" />
 
-      <main style={{ maxWidth: 1100, margin: "0 auto", padding: "26px 32px 70px" }}>
+      <main className="sf-listing-main" style={{ maxWidth: 1100, margin: "0 auto", padding: "26px 32px 70px" }}>
         <Link
           href="/marketplace"
           className="sf-link"
@@ -154,11 +154,11 @@ export default async function ListingDetailPage({ params }: ListingPageProps) {
           <span style={{ color: "rgba(34,29,23,0.55)" }}>{categoryLabel}</span>
         </Link>
 
-        <div style={{ display: "grid", gridTemplateColumns: "1fr 340px", gap: 44, alignItems: "start" }}>
+        <div className="sf-listing-grid" style={{ display: "grid", gridTemplateColumns: "1fr 340px", gap: 44, alignItems: "start" }}>
           {/* MAIN COLUMN */}
           <div>
             {/* header — semantic h1 + the SEO/GEO credibility line */}
-            <header style={{ display: "flex", alignItems: "flex-start", gap: 20, paddingBottom: 26, borderBottom: "1px solid rgba(34,29,23,0.10)" }}>
+            <header className="sf-listing-head" style={{ display: "flex", alignItems: "flex-start", gap: 20, paddingBottom: 26, borderBottom: "1px solid rgba(34,29,23,0.10)" }}>
               <span style={{ width: 74, height: 74, borderRadius: 19, background: "rgba(0,137,123,0.10)", color: MKT.green, display: "flex", alignItems: "center", justifyContent: "center", flex: "none" }}>
                 <MarketplaceIcon name={agent.icon} size={36} />
               </span>
@@ -166,7 +166,7 @@ export default async function ListingDetailPage({ params }: ListingPageProps) {
                 <div style={{ fontSize: 12, fontWeight: 600, letterSpacing: "0.12em", textTransform: "uppercase", color: MKT.green }}>
                   {categoryLabel}
                 </div>
-                <h1 style={{ margin: "5px 0 0", fontSize: 38, fontWeight: 700, letterSpacing: "-0.025em", lineHeight: 1.05 }}>{agent.name}</h1>
+                <h1 className="sf-listing-h1" style={{ margin: "5px 0 0", fontSize: 38, fontWeight: 700, letterSpacing: "-0.025em", lineHeight: 1.05 }}>{agent.name}</h1>
                 <p style={{ margin: "8px 0 0", fontSize: 17.5, lineHeight: 1.45, color: "rgba(34,29,23,0.66)", maxWidth: 540 }}>{agent.tagline}</p>
                 <div style={{ display: "flex", alignItems: "center", gap: 16, marginTop: 16, flexWrap: "wrap" }}>
                   {hasRealRating ? (
@@ -220,7 +220,7 @@ export default async function ListingDetailPage({ params }: ListingPageProps) {
             <section style={sectionBorder}>
               <h2 style={sectionH2}>What it does</h2>
               <p style={{ margin: 0, fontSize: 16.5, lineHeight: 1.65, color: "rgba(34,29,23,0.78)", maxWidth: 600 }}>{agent.blurb}</p>
-              <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 12, marginTop: 20, maxWidth: 600 }}>
+              <div className="sf-2col" style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 12, marginTop: 20, maxWidth: 600 }}>
                 {agent.highlights.map((h) => (
                   <div key={h} style={{ display: "flex", alignItems: "flex-start", gap: 10, fontSize: 14.5, lineHeight: 1.4, color: "rgba(34,29,23,0.74)" }}>
                     <span style={{ color: MKT.green, display: "flex", marginTop: 1, flex: "none" }}>
@@ -262,7 +262,7 @@ export default async function ListingDetailPage({ params }: ListingPageProps) {
                 ))}
               </div>
               <div style={miniLabel}>Connects to</div>
-              <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 10, maxWidth: 600 }}>
+              <div className="sf-2col" style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 10, maxWidth: 600 }}>
                 {agent.tools.map((t) => (
                   <div key={t.label} style={{ display: "flex", alignItems: "center", gap: 11, background: "#fff", border: "1px solid rgba(34,29,23,0.10)", borderRadius: 13, padding: "12px 14px", fontSize: 14.5, fontWeight: 600 }}>
                     <span style={{ width: 32, height: 32, borderRadius: 9, background: "rgba(34,29,23,0.05)", color: "rgba(34,29,23,0.7)", display: "flex", alignItems: "center", justifyContent: "center", flex: "none" }}>
@@ -334,7 +334,7 @@ export default async function ListingDetailPage({ params }: ListingPageProps) {
               <section style={sectionBorder}>
                 <h2 style={{ ...sectionH2, marginBottom: 4 }}>More from {agent.builder}</h2>
                 <p style={{ margin: "0 0 18px", fontSize: 14.5, color: "rgba(34,29,23,0.55)" }}>Other agents from the same builder</p>
-                <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 14 }}>
+                <div className="sf-2col" style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 14 }}>
                   {others.map((o) => (
                     <Link
                       key={o.slug}
@@ -364,7 +364,7 @@ export default async function ListingDetailPage({ params }: ListingPageProps) {
                 </span>
                 Built to be found &amp; cited
               </div>
-              <div style={{ display: "grid", gridTemplateColumns: "300px 1fr", gap: 22, alignItems: "center", background: "#fff", border: "1px solid rgba(34,29,23,0.10)", borderRadius: 18, padding: 20, boxShadow: "0 1px 2px rgba(34,29,23,0.04)" }}>
+              <div className="sf-seo-grid" style={{ display: "grid", gridTemplateColumns: "300px 1fr", gap: 22, alignItems: "center", background: "#fff", border: "1px solid rgba(34,29,23,0.10)", borderRadius: 18, padding: 20, boxShadow: "0 1px 2px rgba(34,29,23,0.04)" }}>
                 {/* OG image preview */}
                 <div style={{ borderRadius: 13, overflow: "hidden", border: "1px solid rgba(34,29,23,0.10)", background: MKT.dark, aspectRatio: "1200/630", display: "flex", flexDirection: "column", justifyContent: "space-between", padding: 18, color: MKT.paper }}>
                   <div style={{ display: "flex", alignItems: "center", gap: 8, fontSize: 11, fontWeight: 600, letterSpacing: "0.04em", color: "rgba(246,242,234,0.6)" }}>
@@ -416,7 +416,7 @@ export default async function ListingDetailPage({ params }: ListingPageProps) {
           </div>
 
           {/* STICKY SIDEBAR — install + rent-via-MCP (client island) */}
-          <aside style={{ position: "sticky", top: 90, alignSelf: "start" }}>
+          <aside className="sf-listing-aside" style={{ position: "sticky", top: 90, alignSelf: "start" }}>
             <ListingActionsClient agent={agent} mcpEndpoint={mcpEndpoint} snippet={snippet} />
           </aside>
         </div>

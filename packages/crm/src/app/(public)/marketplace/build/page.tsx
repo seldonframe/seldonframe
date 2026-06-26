@@ -127,7 +127,7 @@ export default function MarketplaceBuildPage(): ReactElement {
       <script type="application/ld+json" dangerouslySetInnerHTML={{ __html: JSON.stringify(jsonLd) }} />
       <MarketplaceNav active="sell" />
 
-      <main style={{ maxWidth: 1000, margin: "0 auto", padding: "20px 32px 72px" }}>
+      <main className="sf-build-main" style={{ maxWidth: 1000, margin: "0 auto", padding: "20px 32px 72px" }}>
         {/* breadcrumb back to browse */}
         <Link
           href="/marketplace"
@@ -166,7 +166,7 @@ export default function MarketplaceBuildPage(): ReactElement {
           >
             <MarketplaceIcon name="zap" size={13} /> For builders
           </div>
-          <h1 style={{ margin: 0, fontSize: 46, fontWeight: 700, letterSpacing: "-0.03em", lineHeight: 1.04 }}>
+          <h1 className="sf-build-h1" style={{ margin: 0, fontSize: 46, fontWeight: 700, letterSpacing: "-0.03em", lineHeight: 1.04 }}>
             Build & sell agents on{" "}
             <span style={{ fontFamily: MKT.fontSerif, fontStyle: "italic", fontWeight: 500 }}>SeldonFrame</span>.
           </h1>
@@ -218,6 +218,7 @@ export default function MarketplaceBuildPage(): ReactElement {
 
         {/* ── THE COMMITMENT ───────────────────────────────────────────────── */}
         <section
+          className="sf-build-dark"
           style={{
             marginTop: 52,
             background: MKT.dark,
@@ -260,6 +261,7 @@ export default function MarketplaceBuildPage(): ReactElement {
 
           {/* the four promises */}
           <div
+            className="sf-2col"
             style={{
               display: "grid",
               gridTemplateColumns: "repeat(2, 1fr)",
@@ -335,7 +337,7 @@ export default function MarketplaceBuildPage(): ReactElement {
           <h2 style={{ margin: "0 0 28px", fontSize: 30, fontWeight: 700, letterSpacing: "-0.02em" }}>
             From an idea to earning, in three steps
           </h2>
-          <div style={{ display: "grid", gridTemplateColumns: "repeat(3, 1fr)", gap: 16 }}>
+          <div className="sf-build-steps" style={{ display: "grid", gridTemplateColumns: "repeat(3, 1fr)", gap: 16 }}>
             {STEPS.map((s) => (
               <div
                 key={s.n}
@@ -375,6 +377,7 @@ export default function MarketplaceBuildPage(): ReactElement {
 
         {/* ── CLOSING CTA ──────────────────────────────────────────────────── */}
         <section
+          className="sf-build-cta"
           style={{
             marginTop: 52,
             background: "rgba(0,137,123,0.07)",

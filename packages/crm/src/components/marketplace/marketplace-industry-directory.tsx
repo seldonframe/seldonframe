@@ -47,9 +47,11 @@ export function MarketplaceIndustryDirectory(): ReactElement {
   return (
     <section
       aria-labelledby="sf-industry-heading"
+      className="sf-dir-sec"
       style={{ maxWidth: 1200, margin: "0 auto", padding: "8px 32px 64px" }}
     >
       <div
+        className="sf-dir-card"
         style={{
           background: "#fff",
           border: "1px solid rgba(34,29,23,0.10)",
@@ -117,6 +119,7 @@ export function MarketplaceIndustryDirectory(): ReactElement {
 
         {/* Job grid — every AGENT_JOBS entry → its Tier-1 directory hub. */}
         <div
+          className="sf-dir-grid"
           style={{
             display: "grid",
             gridTemplateColumns: "repeat(auto-fill,minmax(232px,1fr))",
