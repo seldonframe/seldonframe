@@ -23,6 +23,7 @@ import assert from "node:assert/strict";
 import {
   triggerFromSurface,
   resolveAgentTrigger,
+  resolveSendDelayMinutes,
   triggerLabel,
   KNOWN_EVENTS,
   type AgentTrigger,
@@ -254,5 +255,142 @@ describe("KNOWN_EVENTS", () => {
       assert.ok(typeof e.value === "string" && e.value.length > 0);
       assert.ok(typeof e.label === "string" && e.label.length > 0);
     }
+  });
+});
+
+// ─── F2: send delay (delayMinutes on the event trigger) ───────────────────────
+//
+// An event trigger may carry an optional `delayMinutes` to DEFER its outbound
+// send (e.g. 1440 = "send the review ask 24h after the job"). Pinned rules:
+//   • a valid positive integer is carried verbatim on a resolved event trigger;
+//   • a malformed / negative / NaN / non-number delay is OMITTED (= immediate),
+//     and NEVER corrupts the otherwise-valid event trigger;
+//   • a delay past the 7-day cap (10080 min) is clamped DOWN to it;
+//   • resolveSendDelayMinutes reads a clamped delay off any trigger (0 for
+//     non-event / missing), and never throws.
+
+describe("resolveAgentTrigger — F2 delayMinutes on event triggers", () => {
+  test("a valid positive delayMinutes is carried verbatim", () => {
+    assert.deepEqual(
+      resolveAgentTrigger({ kind: "event", event: "booking.completed", channel: "sms", delayMinutes: 1440 }),
+      { kind: "event", event: "booking.completed", channel: "sms", delayMinutes: 1440 },
+    );
+  });
+
+  test("delayMinutes 0 is omitted (immediate) — a clean event trigger with no delay key", () => {
+    const resolved = resolveAgentTrigger({
+      kind: "event",
+      event: "booking.completed",
+      channel: "sms",
+      delayMinutes: 0,
+    });
+    assert.deepEqual(resolved, { kind: "event", event: "booking.completed", channel: "sms" });
+    assert.ok(!("delayMinutes" in resolved), "a 0 delay is not stored");
+  });
+
+  test("a negative delayMinutes is omitted (treated as immediate), trigger still valid", () => {
+    const resolved = resolveAgentTrigger({
+      kind: "event",
+      event: "lead.created",
+      channel: "email",
+      delayMinutes: -60,
+    });
+    assert.deepEqual(resolved, { kind: "event", event: "lead.created", channel: "email" });
+  });
+
+  test("a NaN / non-number delayMinutes is omitted, trigger still valid (never corrupts it)", () => {
+    assert.deepEqual(
+      resolveAgentTrigger({ kind: "event", event: "booking.completed", channel: "sms", delayMinutes: Number.NaN }),
+      { kind: "event", event: "booking.completed", channel: "sms" },
+    );
+    assert.deepEqual(
+      resolveAgentTrigger({
+        kind: "event",
+        event: "booking.completed",
+        channel: "sms",
+        delayMinutes: "1440" as unknown as number,
+      }),
+      { kind: "event", event: "booking.completed", channel: "sms" },
+    );
+  });
+
+  test("a fractional delayMinutes is floored", () => {
+    assert.deepEqual(
+      resolveAgentTrigger({ kind: "event", event: "booking.completed", channel: "sms", delayMinutes: 90.7 }),
+      { kind: "event", event: "booking.completed", channel: "sms", delayMinutes: 90 },
+    );
+  });
+
+  test("a delayMinutes past the 7-day cap is clamped down to 10080", () => {
+    assert.deepEqual(
+      resolveAgentTrigger({ kind: "event", event: "booking.completed", channel: "sms", delayMinutes: 999999 }),
+      { kind: "event", event: "booking.completed", channel: "sms", delayMinutes: 10080 },
+    );
+  });
+
+  test("delayMinutes is ignored on a malformed event trigger (clamps to inbound, no delay leak)", () => {
+    // A blank event with a delay still falls back to inbound — the delay never
+    // resurrects an invalid trigger.
+    assert.deepEqual(
+      resolveAgentTrigger({ kind: "event", event: "", channel: "sms", delayMinutes: 1440 }, "voice"),
+      { kind: "inbound", channel: "voice" },
+    );
+  });
+});
+
+describe("resolveSendDelayMinutes", () => {
+  test("reads a positive delay off a resolved event trigger", () => {
+    assert.equal(
+      resolveSendDelayMinutes({ kind: "event", event: "booking.completed", channel: "sms", delayMinutes: 240 }),
+      240,
+    );
+  });
+
+  test("event trigger with no delay → 0", () => {
+    assert.equal(
+      resolveSendDelayMinutes({ kind: "event", event: "booking.completed", channel: "sms" }),
+      0,
+    );
+  });
+
+  test("non-event triggers → 0 (inbound / schedule never delay)", () => {
+    assert.equal(resolveSendDelayMinutes({ kind: "inbound", channel: "voice" }), 0);
+    assert.equal(
+      resolveSendDelayMinutes({ kind: "schedule", cron: "0 8 * * 1", channel: "email" }),
+      0,
+    );
+  });
+
+  test("clamps a negative / NaN / fractional / over-cap delay defensively", () => {
+    assert.equal(
+      resolveSendDelayMinutes({ kind: "event", event: "x", channel: "sms", delayMinutes: -5 }),
+      0,
+    );
+    assert.equal(
+      resolveSendDelayMinutes({
+        kind: "event",
+        event: "x",
+        channel: "sms",
+        delayMinutes: Number.NaN,
+      }),
+      0,
+    );
+    assert.equal(
+      resolveSendDelayMinutes({ kind: "event", event: "x", channel: "sms", delayMinutes: 90.9 }),
+      90,
+    );
+    assert.equal(
+      resolveSendDelayMinutes({ kind: "event", event: "x", channel: "sms", delayMinutes: 1e9 }),
+      10080,
+    );
+  });
+
+  test("null / undefined / garbage → 0, never throws", () => {
+    assert.equal(resolveSendDelayMinutes(null), 0);
+    assert.equal(resolveSendDelayMinutes(undefined), 0);
+    assert.doesNotThrow(() =>
+      resolveSendDelayMinutes("nope" as unknown as Partial<AgentTrigger>),
+    );
+    assert.equal(resolveSendDelayMinutes("nope" as unknown as Partial<AgentTrigger>), 0);
   });
 });

@@ -68,6 +68,15 @@ import {
   defaultGuardrailsForSkill,
   type Guardrails,
 } from "@/lib/agents/guardrails/agent-guardrails";
+// 2026-06-26 — Outbound-UX Bundle F2 (send delay). When the matched agent's
+// trigger carries `delayMinutes > 0`, the prospective send is ENQUEUED (a frozen
+// event-context row due at now+delay) via the injected enqueue seam instead of
+// sending now; the cron consumer replays runEventAgent at due time so the gates
+// run THEN. See scheduled-event-agent.ts.
+import type {
+  EnqueueScheduledEventAgentSend,
+  ScheduledEventAgentSend,
+} from "./scheduled-event-agent";
 
 // ─── the event the dispatcher reacts to ──────────────────────────────────────
 
@@ -110,6 +119,15 @@ export type EventAgentMatch = {
    *  by the caller (buildRunEventAgentDeps). When present it OVERRIDES the per-skill
    *  default; absent/null → the gate falls back to defaultGuardrailsForSkill. */
   guardrails?: Guardrails | null;
+  /** 2026-06-26 — Outbound-UX Bundle F2 (send delay). The agent's configured send
+   *  delay in MINUTES, projected from `blueprint.trigger.delayMinutes` by the
+   *  caller (already clamped to a non-negative integer via resolveSendDelayMinutes).
+   *  0 / absent → send immediately (today's behavior). > 0 → the orchestrator
+   *  ENQUEUES a scheduled send (due = now + delayMinutes) via deps.enqueueScheduledSend
+   *  INSTEAD of sending now, and the gates run when the cron replays it. If a delay
+   *  is set but no enqueue seam is wired, the orchestrator falls back to sending
+   *  immediately (a delay must never silently drop the send). */
+  delayMinutes?: number | null;
 };
 
 /** The contact's reachable fields (resolved from contactId by the caller). */
@@ -182,6 +200,14 @@ export type RunEventAgentDeps = {
    *  daily counter lives in loop-memory); the guardrails' own `quietHours.tz` is
    *  unaffected by this. DI'd so a test can pin the date without a DB. */
   resolveTimezone?: (orgId: string) => Promise<string> | string;
+  /** 2026-06-26 — Outbound-UX Bundle F2 (send delay). Durably persist a deferred
+   *  send (the frozen event context) for the cron to replay at its `dueAt`. Only
+   *  called when a matched agent's `delayMinutes > 0`. Absent → no scheduling is
+   *  possible, so a delayed agent FALLS BACK to sending immediately (a configured
+   *  delay must never silently drop a send when the queue isn't wired). Production
+   *  wires a row insert (see buildRunEventAgentDeps); tests inject a recording
+   *  fake. The replay (cron) re-runs runEventAgent, so the gates run at send time. */
+  enqueueScheduledSend?: EnqueueScheduledEventAgentSend;
 };
 
 // ─── result summary (for logging / tests — runEventAgent never throws) ────────
@@ -195,6 +221,11 @@ export type RunEventAgentResult = {
   skipped: number;
   /** How many were blocked by the review one-per-contact throttle. */
   throttled: number;
+  /** 2026-06-26 — Outbound-UX Bundle F2: how many sends were ENQUEUED for a later
+   *  due time (the matched agent's `delayMinutes > 0`) instead of sent now. The
+   *  gates (throttle/guardrails/verify/memory) run when the cron replays them, so
+   *  an enqueued send is counted here, NOT in `sent`/`throttled`/`blocked`. */
+  scheduled: number;
   /** How many were BLOCKED before send — by EITHER the L3 GUARDRAILS gate (a
    *  tripped brake: agent disabled / quiet hours / frequency cap / daily cap) OR
    *  the L2 verify gate (the composed body failed its rubric — e.g. the review
@@ -314,6 +345,7 @@ export async function runEventAgent(
     sent: 0,
     skipped: 0,
     throttled: 0,
+    scheduled: 0,
     blocked: 0,
     failed: 0,
     // Only carry a memory summary when a store is wired (so a no-store run
@@ -392,6 +424,48 @@ async function runOneAgent(
 ): Promise<void> {
   const contactName = clean(contact.name);
   const businessName = clean(agent.businessName);
+
+  // F2 (send delay): if this agent is configured to DEFER its send and an enqueue
+  // seam is wired, queue the frozen event context (due = now + delayMinutes) and
+  // RETURN — do NOT run the throttle/guardrails/verify/send here. Those gates run
+  // when the cron replays runEventAgent at the due time (current contact state,
+  // current guardrails, current memory — the most-correct behavior). This branch
+  // runs FIRST so a deferred agent never composes/sends synchronously.
+  //
+  // Fallbacks that keep a configured delay from ever silently dropping a send:
+  //   • no enqueue seam wired (deps.enqueueScheduledSend absent) → fall through to
+  //     the immediate path (send now);
+  //   • the enqueue THROWS → swallow it, count `failed`, and DO NOT also send now
+  //     (a double "queue-then-also-send-immediately" would defeat the delay; the
+  //     failure is surfaced on the summary so the cron/operator can see it).
+  const delayMinutes =
+    typeof agent.delayMinutes === "number" && Number.isFinite(agent.delayMinutes)
+      ? Math.max(0, Math.floor(agent.delayMinutes))
+      : 0;
+  if (delayMinutes > 0 && deps.enqueueScheduledSend) {
+    const enqueueNow = deps.now?.() ?? new Date();
+    const dueAt = new Date(enqueueNow.getTime() + delayMinutes * 60_000);
+    const send: ScheduledEventAgentSend = {
+      eventType: event.type,
+      orgId: event.orgId,
+      contactId,
+      payload: event.payload ?? {},
+      dueAt,
+      agentSkill: agent.skill,
+      channel: agent.channel,
+    };
+    try {
+      await deps.enqueueScheduledSend(send);
+      result.scheduled += 1;
+    } catch (err) {
+      result.failed += 1;
+      console.warn(
+        `[run-event-agent] enqueueScheduledSend failed for ${agent.skill}:`,
+        err instanceof Error ? err.message : String(err),
+      );
+    }
+    return;
+  }
 
   // 0. Loop-memory keys. agentKey = the skill (the stable id already in scope —
   //    EventAgentMatch carries no templateId; the skill slug is what memoryKey

@@ -43,6 +43,10 @@ import {
   type VerifyResult,
 } from "../../../../src/lib/agents/verify/agent-verify";
 import { type Guardrails } from "../../../../src/lib/agents/guardrails/agent-guardrails";
+import {
+  runDueScheduledEventAgent,
+  type ScheduledEventAgentSend,
+} from "../../../../src/lib/agents/triggers/scheduled-event-agent";
 
 // ─── a recording fake deps builder ───────────────────────────────────────────
 
@@ -1304,5 +1308,268 @@ describe("runEventAgent — L3 guardrails: workspace tz resolution for the daily
       1,
       "counter falls back to the UTC date",
     );
+  });
+});
+
+// ─── F2: configurable send delay (enqueue a deferred send instead of sending) ──
+//
+// When the matched agent's `delayMinutes > 0` AND an enqueue seam is wired,
+// runEventAgent ENQUEUES the frozen event context (due = now + delayMinutes) via
+// deps.enqueueScheduledSend INSTEAD of sending now — the gates (throttle /
+// guardrails / verify / memory) run when the cron REPLAYS runEventAgent at the due
+// time, never at enqueue time. These pin:
+//   • a review agent with delayMinutes:1440 on booking.completed → exactly one
+//     enqueue with the right due offset + context, and NO immediate send;
+//   • delayMinutes:0 / absent → sends immediately as today (no enqueue);
+//   • a delay set but NO enqueue seam wired → falls back to sending now (a
+//     configured delay must never silently drop the send);
+//   • an enqueue that THROWS → counted `failed`, and does NOT also send now;
+//   • the deferred-send replay (runDueScheduledEventAgent) actually SENDS and
+//     strips the enqueue seam so it can never re-defer.
+
+/** A recording enqueue fake + a deps builder that wires it. */
+function makeEnqueueDeps(
+  overrides: Partial<RunEventAgentDeps> = {},
+): {
+  deps: RunEventAgentDeps;
+  smsCalls: SmsCall[];
+  emailCalls: EmailCall[];
+  enqueued: ScheduledEventAgentSend[];
+} {
+  const enqueued: ScheduledEventAgentSend[] = [];
+  const base = makeDeps({
+    enqueueScheduledSend: async (send) => {
+      enqueued.push(send);
+    },
+    ...overrides,
+  });
+  return { deps: base.deps, smsCalls: base.smsCalls, emailCalls: base.emailCalls, enqueued };
+}
+
+describe("runEventAgent — F2 send delay (enqueue vs send now)", () => {
+  test("review agent with delayMinutes:1440 on booking.completed → ENQUEUES (due = now+24h), no immediate send", async () => {
+    const { deps, smsCalls, emailCalls, enqueued } = makeEnqueueDeps({
+      findEventAgents: async () => [{ ...reviewAgent("sms"), delayMinutes: 1440 }],
+      now: () => FIXED_NOW,
+    });
+
+    const result = await runEventAgent(bookingCompleted("contact-1"), deps);
+
+    // NOT sent now.
+    assert.equal(smsCalls.length, 0, "a delayed agent must not send immediately");
+    assert.equal(emailCalls.length, 0);
+    assert.equal(result.sent, 0);
+    // Enqueued exactly once, counted on the summary.
+    assert.equal(enqueued.length, 1, "exactly one scheduled send enqueued");
+    assert.equal(result.scheduled, 1, "result.scheduled counts the deferral");
+    assert.equal(result.throttled, 0);
+    assert.equal(result.blocked, 0);
+
+    // The frozen context + the due offset are correct.
+    const send = enqueued[0];
+    assert.equal(send.eventType, "booking.completed");
+    assert.equal(send.orgId, "org-1");
+    assert.equal(send.contactId, "contact-1");
+    assert.equal(send.agentSkill, "review-requester");
+    assert.equal(send.channel, "sms");
+    assert.deepEqual(send.payload, { appointmentId: "appt-1", contactId: "contact-1" });
+    assert.equal(
+      send.dueAt.getTime(),
+      FIXED_NOW.getTime() + 1440 * 60_000,
+      "dueAt is now + delayMinutes",
+    );
+  });
+
+  test("delayMinutes:0 → sends immediately as today (no enqueue)", async () => {
+    const { deps, smsCalls, enqueued } = makeEnqueueDeps({
+      findEventAgents: async () => [{ ...reviewAgent("sms"), delayMinutes: 0 }],
+    });
+    const result = await runEventAgent(bookingCompleted("contact-1"), deps);
+    assert.equal(smsCalls.length, 1, "0 delay sends now");
+    assert.equal(result.sent, 1);
+    assert.equal(enqueued.length, 0, "nothing enqueued for a 0 delay");
+    assert.equal(result.scheduled, 0);
+  });
+
+  test("absent delayMinutes → sends immediately (back-compat, no enqueue)", async () => {
+    const { deps, smsCalls, enqueued } = makeEnqueueDeps({
+      findEventAgents: async () => [reviewAgent("sms")], // no delayMinutes field
+    });
+    const result = await runEventAgent(bookingCompleted("contact-1"), deps);
+    assert.equal(smsCalls.length, 1);
+    assert.equal(result.sent, 1);
+    assert.equal(enqueued.length, 0);
+  });
+
+  test("a negative delayMinutes is treated as immediate (sends now, no enqueue)", async () => {
+    const { deps, smsCalls, enqueued } = makeEnqueueDeps({
+      findEventAgents: async () => [{ ...reviewAgent("sms"), delayMinutes: -30 }],
+    });
+    const result = await runEventAgent(bookingCompleted("contact-1"), deps);
+    assert.equal(smsCalls.length, 1, "a negative delay → immediate");
+    assert.equal(result.sent, 1);
+    assert.equal(enqueued.length, 0);
+  });
+
+  test("delay set but NO enqueue seam wired → falls back to sending NOW (never silently drops)", async () => {
+    // makeDeps (not makeEnqueueDeps) → no enqueueScheduledSend in deps.
+    const { deps, smsCalls } = makeDeps({
+      findEventAgents: async () => [{ ...reviewAgent("sms"), delayMinutes: 1440 }],
+    });
+    assert.equal(deps.enqueueScheduledSend, undefined, "no enqueue seam wired");
+    const result = await runEventAgent(bookingCompleted("contact-1"), deps);
+    assert.equal(smsCalls.length, 1, "no queue → send immediately rather than drop");
+    assert.equal(result.sent, 1);
+    assert.equal(result.scheduled, 0);
+  });
+
+  test("an enqueue that THROWS is counted `failed` and does NOT also send now", async () => {
+    const { deps, smsCalls } = makeDeps({
+      findEventAgents: async () => [{ ...reviewAgent("sms"), delayMinutes: 1440 }],
+      enqueueScheduledSend: async () => {
+        throw new Error("queue insert exploded");
+      },
+    });
+    let result: Awaited<ReturnType<typeof runEventAgent>> | undefined;
+    await assert.doesNotReject(async () => {
+      result = await runEventAgent(bookingCompleted("contact-1"), deps);
+    });
+    assert.equal(smsCalls.length, 0, "a failed enqueue must not fall through to an immediate send");
+    assert.equal(result?.sent, 0);
+    assert.equal(result?.scheduled, 0);
+    assert.equal(result?.failed, 1, "the enqueue failure is surfaced");
+  });
+
+  test("a delayed agent does NOT consult the throttle/guardrails/verify at enqueue time (deferred to replay)", async () => {
+    // Pin that the enqueue path runs FIRST: even an UNSATISFIABLE verify rubric +
+    // a checker that would reject do not block the enqueue — those gates run when
+    // the send is replayed, not now.
+    let probed = false;
+    let checked = false;
+    const { deps, smsCalls, enqueued } = makeEnqueueDeps({
+      findEventAgents: async () => [
+        { ...reviewAgent("sms"), delayMinutes: 240, verify: UNSATISFIABLE_VERIFY },
+      ],
+      hasAlreadyRequested: async () => {
+        probed = true;
+        return true; // would throttle if (wrongly) consulted now
+      },
+      checker: async () => {
+        checked = true;
+        return { pass: false, results: [], failures: ["nope"] };
+      },
+    });
+    const result = await runEventAgent(bookingCompleted("contact-1"), deps);
+    assert.equal(enqueued.length, 1, "enqueued despite the unsatisfiable rubric");
+    assert.equal(result.scheduled, 1);
+    assert.equal(result.blocked, 0, "verify did NOT run at enqueue time");
+    assert.equal(result.throttled, 0, "throttle did NOT run at enqueue time");
+    assert.equal(smsCalls.length, 0);
+    assert.equal(probed, false, "throttle probe not consulted at enqueue");
+    assert.equal(checked, false, "verify checker not consulted at enqueue");
+  });
+
+  test("per-agent independence: a delayed review + an immediate speed-to-lead on one event", async () => {
+    // booking.completed with two matches — a delayed review (enqueues) and a
+    // speed-to-lead with no delay (sends now). Both outcomes happen independently.
+    const { deps, smsCalls, enqueued } = makeEnqueueDeps({
+      findEventAgents: async () => [
+        { ...reviewAgent("sms"), delayMinutes: 1440 },
+        speedAgent("sms"), // no delay → sends now
+      ],
+      now: () => FIXED_NOW,
+    });
+    const result = await runEventAgent(bookingCompleted("contact-1"), deps);
+    assert.equal(enqueued.length, 1, "the review is deferred");
+    assert.equal(enqueued[0].agentSkill, "review-requester");
+    assert.equal(smsCalls.length, 1, "the speed-to-lead sends now");
+    assert.equal(smsCalls[0].skill, "speed-to-lead");
+    assert.equal(result.scheduled, 1);
+    assert.equal(result.sent, 1);
+  });
+});
+
+describe("runDueScheduledEventAgent — replay a due deferred send", () => {
+  /** Build a due ScheduledEventAgentSend for a booking.completed review. */
+  function dueReviewSend(): ScheduledEventAgentSend {
+    return {
+      eventType: "booking.completed",
+      orgId: "org-1",
+      contactId: "contact-1",
+      payload: { appointmentId: "appt-1", contactId: "contact-1" },
+      dueAt: new Date(FIXED_NOW.getTime() - 60_000), // already due
+      agentSkill: "review-requester",
+      channel: "sms",
+    };
+  }
+
+  test("replays runEventAgent → the review ACTUALLY sends at due time (gates run now)", async () => {
+    const { deps, smsCalls } = makeDeps({
+      findEventAgents: async () => [reviewAgent("sms")], // resolved fresh at replay
+      now: () => FIXED_NOW, // noon → guardrails allow
+    });
+
+    const result = await runDueScheduledEventAgent(dueReviewSend(), deps);
+
+    assert.equal(smsCalls.length, 1, "the deferred review sends on replay");
+    assert.equal(result.sent, 1);
+    const expected = composeReviewRequest({
+      contactName: "Jordan",
+      businessName: "Acme Plumbing",
+      reviewUrl: REVIEW_URL,
+      channel: "sms",
+    });
+    assert.equal(smsCalls[0].body, expected.body);
+  });
+
+  test("the replay STRIPS the enqueue seam → a still-delayed agent can NOT re-defer (no infinite loop)", async () => {
+    // Even if the freshly-resolved agent STILL has a delay AND the deps carry an
+    // enqueue seam, the replay must send (not enqueue again).
+    const enqueued: ScheduledEventAgentSend[] = [];
+    const { deps, smsCalls } = makeDeps({
+      findEventAgents: async () => [{ ...reviewAgent("sms"), delayMinutes: 1440 }],
+      enqueueScheduledSend: async (s) => {
+        enqueued.push(s);
+      },
+      now: () => FIXED_NOW,
+    });
+
+    const result = await runDueScheduledEventAgent(dueReviewSend(), deps);
+
+    assert.equal(enqueued.length, 0, "replay never re-enqueues (seam stripped)");
+    assert.equal(smsCalls.length, 1, "replay sends instead of re-deferring");
+    assert.equal(result.sent, 1);
+    assert.equal(result.scheduled, 0);
+  });
+
+  test("the replay honors the gates at send time (a throttled contact does NOT send on replay)", async () => {
+    // Memory already records review_requested for this contact → the replay
+    // throttles (the gate runs at the real send time, exactly as intended).
+    const mem = makeFakeMemoryStore({
+      [memKey("review-requester", "contact-1")]: [
+        { kind: "review_requested", summary: "asked earlier", data: { channel: "sms" } },
+      ],
+    });
+    const { deps, smsCalls } = makeDeps({
+      findEventAgents: async () => [reviewAgent("sms")],
+      memoryStore: mem.store,
+      hasAlreadyRequested: async () => false,
+      now: () => FIXED_NOW,
+    });
+
+    const result = await runDueScheduledEventAgent(dueReviewSend(), deps);
+
+    assert.equal(smsCalls.length, 0, "the throttle gate runs at replay/send time");
+    assert.equal(result.throttled, 1);
+    assert.equal(result.sent, 0);
+  });
+
+  test("the replay never throws", async () => {
+    const { deps } = makeDeps({
+      findEventAgents: async () => {
+        throw new Error("db down at replay");
+      },
+    });
+    await assert.doesNotReject(() => runDueScheduledEventAgent(dueReviewSend(), deps));
   });
 });

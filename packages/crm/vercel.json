@@ -32,6 +32,10 @@
       "schedule": "* * * * *"
     },
     {
+      "path": "/api/cron/event-agent-scheduled-sends",
+      "schedule": "*/5 * * * *"
+    },
+    {
       "path": "/api/cron/expire-proposals",
       "schedule": "0 3 * * *"
     },

@@ -132,6 +132,13 @@ export * from "./agent-templates";
 export * from "./deployments";
 export * from "./builder-llm-keys";
 
+// 2026-06-26 — Outbound-UX Bundle F2 (send delay): durable queue for
+// time-deferred event-agent sends. When a matched event-agent's trigger carries
+// delayMinutes > 0, runEventAgent enqueues the frozen event context here and the
+// cron at /api/cron/event-agent-scheduled-sends replays it at due time. See
+// db/schema/event-agent-scheduled-sends.ts.
+export * from "./event-agent-scheduled-sends";
+
 // 2026-06-23 — ACP (Agentic Commerce Protocol): ChatGPT Instant-Checkout
 // session persistence. Additive table; money-safe (the wired processor is a
 // no-charge dev stub — see lib/acp/processor.ts).

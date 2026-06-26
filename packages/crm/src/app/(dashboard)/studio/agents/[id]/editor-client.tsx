@@ -137,16 +137,39 @@ const CHANNELS_BY_KIND: Record<TriggerKind, { value: string; label: string }[]> 
   ],
 };
 
+/** The "Send timing" choices for an event agent (F2 send delay). Value =
+ *  delayMinutes written to the trigger; 0 = send immediately (today's behavior). */
+const SEND_TIMING_OPTIONS: { value: number; label: string }[] = [
+  { value: 0, label: "Immediately" },
+  { value: 60, label: "1 hour after" },
+  { value: 240, label: "4 hours after" },
+  { value: 1440, label: "24 hours after" },
+  { value: 2880, label: "48 hours after" },
+];
+
 /** Assemble the loose trigger patch the save action sends. Carries only the
- *  fields the chosen kind needs (event slug for event, cron for schedule), so
- *  the server's resolveAgentTrigger gets a clean shape to validate/clamp. */
+ *  fields the chosen kind needs (event slug + send delay for event, cron for
+ *  schedule), so the server's resolveAgentTrigger gets a clean shape to
+ *  validate/clamp. `delayMinutes` is only sent for event triggers, and only when
+ *  non-zero (0 = immediate = omit, so an inbound/schedule trigger never carries it). */
 function buildTriggerPatch(
   kind: TriggerKind,
   channel: string,
   event: string,
   cron: string,
-): { kind: TriggerKind; channel: string; event?: string; cron?: string } {
-  if (kind === "event") return { kind, channel, event };
+  delayMinutes: number,
+): {
+  kind: TriggerKind;
+  channel: string;
+  event?: string;
+  cron?: string;
+  delayMinutes?: number;
+} {
+  if (kind === "event") {
+    return delayMinutes > 0
+      ? { kind, channel, event, delayMinutes }
+      : { kind, channel, event };
+  }
   if (kind === "schedule") return { kind, channel, cron };
   return { kind, channel };
 }
@@ -226,6 +249,14 @@ export function AgentTemplateEditor(props: Props) {
       ? props.initialTrigger.cron
       : "0 8 * * 1",
   );
+  // F2 (send delay) — for an event trigger, WHEN the outbound send fires relative
+  // to the event (0 = immediately). Seeded from the resolved trigger; only event
+  // triggers carry it, so default to 0 (immediate) for inbound/schedule.
+  const [triggerDelayMinutes, setTriggerDelayMinutes] = useState<number>(
+    props.initialTrigger.kind === "event"
+      ? props.initialTrigger.delayMinutes ?? 0
+      : 0,
+  );
 
   // Change the kind AND snap the channel into that kind's allowed set if the
   // current one isn't valid for it (e.g. inbound "voice" → event must become
@@ -289,6 +320,7 @@ export function AgentTemplateEditor(props: Props) {
             triggerChannel,
             triggerEvent,
             triggerCron,
+            triggerDelayMinutes,
           ),
         },
       });
@@ -373,9 +405,11 @@ export function AgentTemplateEditor(props: Props) {
         kind={triggerKind}
         channel={triggerChannel}
         event={triggerEvent}
+        delayMinutes={triggerDelayMinutes}
         onChangeKind={changeTriggerKind}
         onChangeChannel={setTriggerChannel}
         onChangeEvent={setTriggerEvent}
+        onChangeDelayMinutes={setTriggerDelayMinutes}
       />
 
       {/* Refine with a prompt — AI-assisted iteration over the whole config */}
@@ -694,16 +728,20 @@ function TriggerCard({
   kind,
   channel,
   event,
+  delayMinutes,
   onChangeKind,
   onChangeChannel,
   onChangeEvent,
+  onChangeDelayMinutes,
 }: {
   kind: TriggerKind;
   channel: string;
   event: string;
+  delayMinutes: number;
   onChangeKind: (k: TriggerKind) => void;
   onChangeChannel: (c: string) => void;
   onChangeEvent: (e: string) => void;
+  onChangeDelayMinutes: (m: number) => void;
 }) {
   const channelOptions = CHANNELS_BY_KIND[kind];
   return (
@@ -782,6 +820,31 @@ function TriggerCard({
             ))}
           </select>
         </label>
+
+        {/* Send timing — event triggers only (F2 send delay). Lets an outbound
+            agent fire its message a set time AFTER the event (e.g. the review
+            ask 24h after the job), not the instant it fires. 0 = immediately. */}
+        {kind === "event" && (
+          <label className="block">
+            <span className="mb-1 block text-xs font-medium text-foreground">
+              Send timing
+            </span>
+            <select
+              value={delayMinutes}
+              onChange={(e) => onChangeDelayMinutes(Number(e.target.value))}
+              className="w-full rounded-md border bg-background px-3 py-2 text-sm focus:border-primary focus:outline-none"
+            >
+              {SEND_TIMING_OPTIONS.map((opt) => (
+                <option key={opt.value} value={opt.value}>
+                  {opt.label}
+                </option>
+              ))}
+            </select>
+            <span className="mt-1 block text-xs text-muted-foreground">
+              When the message goes out after the event fires.
+            </span>
+          </label>
+        )}
       </div>
     </div>
   );

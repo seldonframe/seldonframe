@@ -98,6 +98,12 @@ export const TemplateBlueprintPatchSchema = z
         channel: z.string().min(1),
         event: z.string().optional(),
         cron: z.string().optional(),
+        // F2 (send delay) — event triggers only. The outbound send is deferred by
+        // this many minutes (0/absent → immediate). LOOSE on purpose: a finite
+        // number; resolveAgentTrigger clamps it (negative/NaN → omitted = 0, > 7d →
+        // 7d) when normalizing, so this is just a shape gate. Mirrors
+        // AgentTrigger.event.delayMinutes.
+        delayMinutes: z.number().optional(),
       })
       .strict()
       .optional(),

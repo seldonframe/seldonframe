@@ -20,8 +20,13 @@ export type ScheduleChannel = "email" | "digest";
 export type AgentTrigger =
   /** A call / chat / email / SMS arrives — the receptionist case. */
   | { kind: "inbound"; channel: InboundChannel }
-  /** A domain event fires (SeldonEvent), e.g. "booking.completed" → outbound. */
-  | { kind: "event"; event: string; channel: EventChannel }
+  /** A domain event fires (SeldonEvent), e.g. "booking.completed" → outbound.
+   *  `delayMinutes` (F2) optionally DELAYS the outbound send: 0/absent fires
+   *  immediately (today's behavior); a positive value defers the send to
+   *  `now + delayMinutes` (e.g. 1440 = "send the review ask 24h after the job").
+   *  The send's gates (throttle / guardrails / verify / memory) run at the
+   *  ACTUAL send time, not enqueue time — see run-event-agent.ts. */
+  | { kind: "event"; event: string; channel: EventChannel; delayMinutes?: number }
   /** A cron cadence fires, e.g. weekly Monday 8am → emails the operator. */
   | { kind: "schedule"; cron: string; channel: ScheduleChannel };
 
@@ -99,7 +104,14 @@ function parseTrigger(value: unknown): AgentTrigger | null {
   if (kind === "event") {
     const channel = normalizeChannel(v.channel, EVENT_CHANNELS);
     const event = typeof v.event === "string" ? v.event.trim() : "";
-    return channel && event ? { kind: "event", event, channel } : null;
+    if (!channel || !event) return null;
+    // F2 — optional send delay. A well-formed positive integer is carried; a
+    // malformed/negative/NaN value is simply OMITTED (treated as "no delay" =
+    // immediate), so a bad delay never corrupts an otherwise-valid trigger.
+    const delayMinutes = sanitizeDelayMinutes(v.delayMinutes);
+    return delayMinutes > 0
+      ? { kind: "event", event, channel, delayMinutes }
+      : { kind: "event", event, channel };
   }
 
   if (kind === "schedule") {
@@ -120,6 +132,44 @@ function normalizeChannel<T extends string>(
   if (typeof candidate !== "string") return null;
   const c = candidate.trim().toLowerCase();
   return (allowed as readonly string[]).includes(c) ? (c as T) : null;
+}
+
+// ─── send delay (F2) ──────────────────────────────────────────────────────────
+
+/** The largest send delay we'll honor: 7 days. A delay past this is almost
+ *  certainly a typo/corruption (the booking context is stale by then), so we
+ *  clamp DOWN to it rather than queue a send a week+ out. */
+const MAX_DELAY_MINUTES = 7 * 24 * 60; // 10080
+
+/**
+ * Coerce an unknown `delayMinutes` to a safe, non-negative integer count of
+ * minutes. Anything not a finite number (string, NaN, ±Infinity, null) → 0
+ * (immediate). A negative value → 0 (immediate). A fractional value is floored.
+ * A value past MAX_DELAY_MINUTES is clamped to it. NEVER throws. The pinned rule:
+ * a malformed/negative/NaN delay is "no delay" = send immediately as today.
+ */
+function sanitizeDelayMinutes(value: unknown): number {
+  if (typeof value !== "number" || !Number.isFinite(value)) return 0;
+  if (value <= 0) return 0;
+  const floored = Math.floor(value);
+  return floored > MAX_DELAY_MINUTES ? MAX_DELAY_MINUTES : floored;
+}
+
+/**
+ * The effective send delay (in minutes) for a resolved trigger. Only `event`
+ * triggers can carry one; every other kind (and a missing/0 value) → 0 =
+ * immediate. Defensive: tolerates a loose/partial trigger object (the resolver's
+ * output is already clean, but callers sometimes hold a raw blueprint trigger),
+ * applying the same `sanitizeDelayMinutes` clamp. NEVER throws.
+ */
+export function resolveSendDelayMinutes(
+  trigger: Partial<AgentTrigger> | null | undefined,
+): number {
+  if (!trigger || typeof trigger !== "object") return 0;
+  const t = trigger as { kind?: unknown; delayMinutes?: unknown };
+  const kind = typeof t.kind === "string" ? t.kind.trim().toLowerCase() : "";
+  if (kind !== "event") return 0;
+  return sanitizeDelayMinutes(t.delayMinutes);
 }
 
 // ─── label (for agents-list chips) ───────────────────────────────────────────

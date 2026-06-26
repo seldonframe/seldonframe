@@ -84,6 +84,9 @@ function logEventAgentRun(
         sent: result.sent,
         skipped: result.skipped,
         throttled: result.throttled,
+        // 2026-06-26 — Outbound-UX Bundle F2: how many sends were enqueued for a
+        // later due time (the agent's configured send delay) rather than sent now.
+        scheduled: result.scheduled,
         // 2026-06-26 — L2 Verify (T3): how many sends the verify gate BLOCKED
         // (composed body failed its rubric). The `verify_blocked` reason is in
         // the Brain note; this is the greppable count.

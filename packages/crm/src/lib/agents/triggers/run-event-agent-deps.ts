@@ -44,13 +44,18 @@ import { organizations } from "@/db/schema/organizations";
 import { smsMessages } from "@/db/schema/sms-messages";
 import { sendEmailFromApi } from "@/lib/emails/api";
 import { sendSmsFromApi } from "@/lib/sms/api";
-import { resolveAgentTrigger } from "@/lib/agents/triggers/agent-trigger";
+import {
+  resolveAgentTrigger,
+  resolveSendDelayMinutes,
+} from "@/lib/agents/triggers/agent-trigger";
 import { makeBrainMemoryStoreForOrg } from "@/lib/agents/memory/brain-memory-store";
 import type {
   EventAgentMatch,
   EventAgentSkill,
   RunEventAgentDeps,
 } from "@/lib/agents/triggers/run-event-agent";
+import type { ScheduledEventAgentSend } from "@/lib/agents/triggers/scheduled-event-agent";
+import { enqueueScheduledEventAgentSend } from "@/lib/agents/triggers/scheduled-send-store";
 
 /** Map a fired event-type slug to the skill an agent runs for it. Anything we
  *  don't have an outbound skill for yet → null (the agent is ignored). */
@@ -92,6 +97,37 @@ export function buildRunEventAgentDeps(orgId?: string): RunEventAgentDeps {
   return {
     memoryStore,
     now: () => new Date(),
+
+    // 2026-06-26 — Outbound-UX Bundle F2 (send delay): the enqueue seam, now
+    // WIRED to the durable queue. When a matched event-agent's trigger carries
+    // `delayMinutes > 0`, runEventAgent calls this INSTEAD of sending now, handing
+    // us the frozen event context + the due time. We persist it as a 'pending'
+    // row in `event_agent_scheduled_sends`; the cron consumer at
+    // /api/cron/event-agent-scheduled-sends loads due rows and REPLAYS
+    // runEventAgent via runDueScheduledEventAgent(row, buildRunEventAgentDeps(row.orgId))
+    // so the gates (throttle / guardrails / verify / memory) run at the ACTUAL
+    // send time. The replay strips this enqueue seam, so a still-delayed agent can
+    // never re-defer.
+    //
+    // We keep the structured log line (greppable) for observability AND insert the
+    // row. If the insert THROWS, we let it propagate: runEventAgent's enqueue
+    // branch counts `failed` and deliberately does NOT also send now (a
+    // queue-then-also-send-immediately would defeat the delay) — the failure is
+    // surfaced on the run summary so the operator can see the dropped deferral.
+    enqueueScheduledSend: async (send: ScheduledEventAgentSend) => {
+      console.info(
+        JSON.stringify({
+          action: "event_agent.scheduled_send.enqueued",
+          orgId: send.orgId,
+          eventType: send.eventType,
+          contactId: send.contactId,
+          agentSkill: send.agentSkill,
+          channel: send.channel,
+          dueAt: send.dueAt.toISOString(),
+        }),
+      );
+      await enqueueScheduledEventAgentSend(send);
+    },
 
     // The workspace IANA timezone (organizations.timezone) bounds the L3
     // guardrails DAILY COUNTER's date key (the budget brake resets at the
@@ -176,6 +212,11 @@ export function buildRunEventAgentDeps(orgId?: string): RunEventAgentDeps {
             blueprint.guardrails && typeof blueprint.guardrails === "object"
               ? blueprint.guardrails
               : null,
+          // 2026-06-26 — Outbound-UX Bundle F2 (send delay): project the agent's
+          // configured send delay off the RESOLVED trigger (already clamped to a
+          // non-negative integer). 0 → send immediately (today); > 0 → the
+          // orchestrator enqueues a deferred send via enqueueScheduledSend below.
+          delayMinutes: resolveSendDelayMinutes(trigger),
         });
       }
       return matches;
