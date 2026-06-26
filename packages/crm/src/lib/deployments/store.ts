@@ -28,7 +28,7 @@ import type { AgentTemplate } from "@/db/schema/agent-templates";
 import type { BookingPolicy } from "@/lib/agents/booking/booking-policy";
 import { bookingPolicyFromIntake } from "@/lib/agents/booking/booking-policy";
 import type { DeploymentCustomization } from "@/lib/agents/persona/deployment-customization";
-import { isDeploymentStatus, isDeploymentSurface } from "./margin";
+import { isDeploymentStatus, isDeploymentSurface, isOutboundDeployment } from "./margin";
 
 // ─── injectable deps (lazy DB — never imported in unit tests) ─────────────────
 
@@ -105,6 +105,11 @@ function buildDefaultListDeps(): ListDeploymentsDeps {
           createdAt: deployments.createdAt,
           updatedAt: deployments.updatedAt,
           templateName: agentTemplates.name,
+          // The template's trigger + type drive the inbound-vs-outbound decision
+          // on the Clients card (isOutboundDeployment): outbound agents share the
+          // client's number, so the card hides the get-a-number / phone step.
+          templateType: agentTemplates.type,
+          templateBlueprint: agentTemplates.blueprint,
           clientOrgId: deployments.clientOrgId,
           portalInvitedAt: deployments.portalInvitedAt,
           bookingMode: deployments.bookingMode,
@@ -119,10 +124,18 @@ function buildDefaultListDeps(): ListDeploymentsDeps {
         )
         .where(eq(deployments.builderOrgId, builderOrgId))
         .orderBy(desc(deployments.updatedAt));
-      return rows.map((r) => ({
-        ...r,
-        templateName: r.templateName ?? null,
-      }));
+      return rows.map((r) => {
+        const { templateType, templateBlueprint, ...rest } = r;
+        return {
+          ...rest,
+          templateName: r.templateName ?? null,
+          // Resolve the inbound/outbound flag here (pure) so the card stays dumb.
+          isOutbound: isOutboundDeployment(
+            (templateBlueprint as { trigger?: unknown } | null)?.trigger,
+            templateType,
+          ),
+        };
+      });
     },
   };
 }
@@ -403,6 +416,13 @@ export type DeploymentListItem = {
    *  null = no override (→ the template's defaults). The Clients card seeds the
    *  DeploymentCustomizationEditor directly with this value. */
   customization: Partial<DeploymentCustomization> | null;
+  /** True iff the deployed agent is OUTBOUND (its template's trigger is
+   *  event/schedule — review-requester, speed-to-lead, …). Outbound agents send
+   *  from the CLIENT org's existing number (sendSmsFromApi) and never claim their
+   *  own line, so the Clients card hides the get-a-number / phone-required step
+   *  and the spoken-persona editor for them. Resolved purely in listDeployments
+   *  from the joined template's blueprint trigger (isOutboundDeployment). */
+  isOutbound: boolean;
 };
 
 /** List a builder's deployments, most-recently-updated first, with template name. */

@@ -45,7 +45,8 @@ import {
   SetBookingPolicySchema,
   SetDeploymentCustomizationSchema,
 } from "./schema";
-import { isE164, isAreaCode, isPhoneInUseError } from "./margin";
+import { isE164, isAreaCode, isPhoneInUseError, isOutboundDeployment } from "./margin";
+import { getAgentTemplate } from "@/lib/agent-templates/store";
 import { mapSoulToClientContext } from "./client-context";
 import { compileSoulService } from "@/lib/soul-compiler/service";
 import { resolveBuilderClaudeKey } from "./client-context-server";
@@ -186,7 +187,30 @@ export async function generateClientContextAction(
 
 export type ActivateDeploymentActionResult =
   | { ok: true }
+  /** The agent is OUTBOUND (event/schedule) — it activated WITHOUT claiming a
+   *  phone number; it sends from the client org's existing number. The UI shows
+   *  a "uses the client's number" confirmation instead of a live line. */
+  | { ok: true; outbound: true }
   | { ok: false; error: "unauthorized" | "invalid_phone" | "phone_in_use" | "not_found" | "update_failed" };
+
+/** DI seam: resolve whether a deployment's agent TEMPLATE is OUTBOUND (its
+ *  trigger is event/schedule, so it must NOT claim a phone). Defaults to loading
+ *  the template via getAgentTemplate and resolving its blueprint trigger; tests
+ *  inject a stub so the action stays DB-free. Returns false (→ treat as inbound,
+ *  the phone-owning default) on any miss, so a missing template never strands an
+ *  inbound activation. */
+export type ResolveDeploymentOutboundDep = {
+  isDeploymentOutbound?: (deployment: import("@/db/schema/deployments").Deployment) => Promise<boolean>;
+};
+
+/** Default impl: load the deployment's template and resolve its trigger. */
+async function defaultIsDeploymentOutbound(
+  deployment: import("@/db/schema/deployments").Deployment,
+): Promise<boolean> {
+  const template = await getAgentTemplate(deployment.agentTemplateId);
+  if (!template) return false;
+  return isOutboundDeployment(template.blueprint?.trigger, template.type);
+}
 
 /**
  * Activate a draft deployment: assign the builder's Twilio phone number and
@@ -203,7 +227,7 @@ export type ActivateDeploymentActionResult =
  */
 export async function activateDeploymentAction(
   input: { deploymentId: string; phoneNumber: string },
-  _deps?: Partial<UpdateDeploymentDeps & { findDeploymentById: (id: string) => Promise<import("@/db/schema/deployments").Deployment | null> }>,
+  _deps?: Partial<UpdateDeploymentDeps & ResolveDeploymentOutboundDep & { findDeploymentById: (id: string) => Promise<import("@/db/schema/deployments").Deployment | null> }>,
 ): Promise<ActivateDeploymentActionResult> {
   assertWritable();
 
@@ -218,6 +242,24 @@ export async function activateDeploymentAction(
   // Org guard: load the deployment and verify ownership.
   const existing = await getDeployment(parsed.data.deploymentId, _deps ? { findById: _deps.findDeploymentById ?? _deps.findById } : undefined);
   if (!existing || existing.builderOrgId !== orgId) return { ok: false, error: "not_found" };
+
+  // Outbound (event/schedule) agents never claim a phone — they send from the
+  // client org's existing number (sendSmsFromApi, keyed by orgId). Activating one
+  // with a phone_number would collide with the client's receptionist on the
+  // partial unique index. So we IGNORE the pasted number and activate phone-less.
+  const isOutbound = await (_deps?.isDeploymentOutbound ?? defaultIsDeploymentOutbound)(existing);
+  if (isOutbound) {
+    const result = await updateDeployment({
+      id: parsed.data.deploymentId,
+      patch: { status: "active" },
+      deps: _deps,
+    });
+    if (!result.ok) {
+      return { ok: false, error: result.error === "deployment_not_found" ? "not_found" : "update_failed" };
+    }
+    revalidatePath("/studio/clients");
+    return { ok: true, outbound: true };
+  }
 
   try {
     const result = await updateDeployment({
@@ -236,6 +278,73 @@ export async function activateDeploymentAction(
     if (isPhoneInUseError(err)) return { ok: false, error: "phone_in_use" };
     throw err;
   }
+}
+
+// ─── activateOutboundDeploymentAction ────────────────────────────────────────
+
+export type ActivateOutboundDeploymentActionResult =
+  | { ok: true }
+  | { ok: false; error: "unauthorized" | "not_found" | "update_failed" | "needs_phone" };
+
+/**
+ * Activate an OUTBOUND deployment (an event/schedule agent — review-requester,
+ * speed-to-lead, digests) WITHOUT assigning any phone number. The agent sends
+ * from the CLIENT ORG's existing Twilio number via sendSmsFromApi (keyed by
+ * orgId), so it needs no line of its own and can share the client's receptionist
+ * number. Org-guarded.
+ *
+ * This is the no-number counterpart to activateDeploymentAction's get-a-number /
+ * paste-a-number paths — the Clients card calls THIS for an outbound agent so the
+ * operator never sees (and can never trip) the phone-required step. If the
+ * deployment is actually INBOUND (a receptionist that DOES need a number), this
+ * refuses with `needs_phone` so we never silently activate a receptionist with no
+ * line.
+ *
+ * @param _deps - optional DI; injected in unit tests to avoid DB + session.
+ */
+export async function activateOutboundDeploymentAction(
+  input: { deploymentId: string },
+  _deps?: Partial<
+    UpdateDeploymentDeps &
+      ResolveDeploymentOutboundDep & {
+        getOrgId: () => Promise<string | null>;
+        findDeploymentById: (id: string) => Promise<import("@/db/schema/deployments").Deployment | null>;
+        revalidate: (path: string) => void;
+      }
+  >,
+): Promise<ActivateOutboundDeploymentActionResult> {
+  assertWritable();
+
+  const resolveOrgId = _deps?.getOrgId ?? getOrgId;
+  const orgId = await resolveOrgId();
+  if (!orgId) return { ok: false, error: "unauthorized" };
+
+  const parsed = PauseDeploymentSchema.safeParse(input);
+  if (!parsed.success) return { ok: false, error: "not_found" };
+
+  const existing = await getDeployment(
+    parsed.data.deploymentId,
+    _deps ? { findById: _deps.findDeploymentById ?? _deps.findById } : undefined,
+  );
+  if (!existing || existing.builderOrgId !== orgId) return { ok: false, error: "not_found" };
+
+  // Guard: this path is ONLY for outbound agents. An inbound receptionist must go
+  // through the get-a-number / paste-a-number activation so it owns a line.
+  const isOutbound = await (_deps?.isDeploymentOutbound ?? defaultIsDeploymentOutbound)(existing);
+  if (!isOutbound) return { ok: false, error: "needs_phone" };
+
+  const result = await updateDeployment({
+    id: parsed.data.deploymentId,
+    // No phone_number — outbound agents share the client's number. Leaving it
+    // null keeps the partial unique index collision-free.
+    patch: { status: "active" },
+    deps: _deps,
+  });
+  if (!result.ok) {
+    return { ok: false, error: result.error === "deployment_not_found" ? "not_found" : "update_failed" };
+  }
+  (_deps?.revalidate ?? revalidatePath)("/studio/clients");
+  return { ok: true };
 }
 
 // ─── pauseDeploymentAction ───────────────────────────────────────────────────
@@ -283,6 +392,9 @@ export async function pauseDeploymentAction(
 
 export type ProvisionDeploymentNumberActionResult =
   | { ok: true; phoneNumber: string }
+  /** The agent is OUTBOUND (event/schedule) — it activated WITHOUT a number; it
+   *  sends from the client org's existing line. No Twilio number is bought. */
+  | { ok: true; outbound: true }
   | { ok: false; error: "unauthorized" | "not_found" | "invalid_area_code" }
   | { ok: false; error: "needs_telephony"; missing: ("twilio" | "trunk")[] }
   | {
@@ -330,6 +442,26 @@ export async function provisionDeploymentNumberAction(input: {
   const existing = await getDeployment(parsed.data.deploymentId);
   if (!existing || existing.builderOrgId !== orgId) {
     return { ok: false, error: "not_found" };
+  }
+
+  // Outbound (event/schedule) agents must NEVER buy/own a number — they send
+  // from the client org's existing line. Short-circuit BEFORE touching Twilio:
+  // activate phone-less so the agent runs and the partial unique index stays
+  // collision-free. (The UI hides "Get a number" for these, so this is mostly a
+  // belt-and-suspenders guard, but it also makes a direct call safe.)
+  if (await defaultIsDeploymentOutbound(existing)) {
+    const activated = await updateDeployment({
+      id: parsed.data.deploymentId,
+      patch: { status: "active" },
+    });
+    if (!activated.ok) {
+      return {
+        ok: false,
+        error: activated.error === "deployment_not_found" ? "not_found" : "provisioning_unavailable",
+      };
+    }
+    revalidatePath("/studio/clients");
+    return { ok: true, outbound: true };
   }
 
   // Resolve the builder's BYO Twilio creds + voice trunk SID.

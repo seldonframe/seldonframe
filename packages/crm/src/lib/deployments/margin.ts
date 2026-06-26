@@ -12,6 +12,7 @@ import type {
   DeploymentStatus,
   DeploymentSurface,
 } from "@/db/schema/deployments";
+import { resolveAgentTrigger } from "@/lib/agents/triggers/agent-trigger";
 
 // ─── estimate constants (DISPLAY ONLY — not billed here) ─────────────────────
 
@@ -113,6 +114,45 @@ export function isDeploymentStatus(value: unknown): value is DeploymentStatus {
     typeof value === "string" &&
     (DEPLOYMENT_STATUSES as readonly string[]).includes(value)
   );
+}
+
+// ─── inbound vs outbound (the phone-ownership rule) ──────────────────────────
+
+/**
+ * True iff the deployed agent is OUTBOUND — i.e. its template's trigger is an
+ * `event` or `schedule` (review-requester, speed-to-lead, digests, …) rather
+ * than an `inbound` receptionist. Pure.
+ *
+ * This is the rule that decides phone ownership:
+ *   - INBOUND agents RECEIVE on a number → they must OWN a unique `phone_number`
+ *     (the receptionist). Activation provisions/assigns that line.
+ *   - OUTBOUND (event/schedule) agents only SEND, from the client org's existing
+ *     Twilio number via sendSmsFromApi (keyed by orgId, NOT the deployment's
+ *     phone_number — see lib/sms/api.ts). They must NEVER claim/require their own
+ *     phone, so `phone_number` stays NULL and the partial unique index
+ *     `deployments_phone_number_uniq` (non-null only) can't collide. This is what
+ *     lets a client share ONE receptionist number across MANY attached agents.
+ *
+ * Resolution mirrors run-event-agent-deps.ts exactly: resolveAgentTrigger over
+ * the template's `blueprint.trigger`, falling back to the legacy `surface`
+ * (= agent_templates.type) when no explicit trigger is stored. The resolver
+ * NEVER throws and clamps any malformed shape to the inbound default, so an
+ * unknown/blank/corrupt blueprint is treated as INBOUND — i.e. it keeps today's
+ * phone-owning behavior (the safe default; we only SKIP the phone when we can
+ * positively identify an event/schedule trigger).
+ *
+ * @param blueprintTrigger - the template's `blueprint.trigger` (loose/jsonb).
+ * @param surface - the template's legacy `type`/surface, for back-compat.
+ */
+export function isOutboundDeployment(
+  blueprintTrigger: unknown,
+  surface?: string | null,
+): boolean {
+  const trigger = resolveAgentTrigger(
+    blueprintTrigger as Parameters<typeof resolveAgentTrigger>[0],
+    surface,
+  );
+  return trigger.kind !== "inbound";
 }
 
 // ─── isE164 ──────────────────────────────────────────────────────────────────

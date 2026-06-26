@@ -22,6 +22,7 @@ import { StudioTabs } from "../studio-tabs";
 import { DeploymentStatusBadge } from "./status-badge";
 import {
   ActivateForm,
+  ActivateOutboundButton,
   PauseButton,
   PortalInviteButton,
   CancelButton,
@@ -121,13 +122,19 @@ export default async function StudioClientsPage({
                     <DeploymentStatusBadge status={d.status} />
                   </div>
                 </div>
-                {/* Activation / pause affordances — client components */}
-                {d.status === "draft" && (
-                  <ActivateForm
-                    deploymentId={d.id}
-                    contactPhone={d.clientContact?.phone ?? null}
-                  />
-                )}
+                {/* Activation / pause affordances — client components. Outbound
+                    agents (event/schedule) share the client's number, so they get
+                    a one-click no-phone activate instead of the get-a-number flow
+                    (which would collide with the client's receptionist line). */}
+                {d.status === "draft" &&
+                  (d.isOutbound ? (
+                    <ActivateOutboundButton deploymentId={d.id} />
+                  ) : (
+                    <ActivateForm
+                      deploymentId={d.id}
+                      contactPhone={d.clientContact?.phone ?? null}
+                    />
+                  ))}
                 {d.status === "active" && (
                   <div className="flex flex-wrap items-start justify-end gap-2">
                     {/* Connect the client's external calendar — only for api_mcp
@@ -180,16 +187,19 @@ export default async function StudioClientsPage({
               {/* Per-client agent customization — greeting / TTS voice / business
                   info, for every agent that SPEAKS: a conversational surface
                   (phone / embed / link). The text-only surfaces (sms / email)
-                  don't get a spoken persona here. Seed with the deployment's
-                  stored customization (null = no override → template defaults). */}
-              {(d.surface === "phone" ||
-                d.surface === "embed" ||
-                d.surface === "link") && (
-                <CustomizationSection
-                  deploymentId={d.id}
-                  initial={d.customization ?? null}
-                />
-              )}
+                  don't get a spoken persona here, and neither do OUTBOUND agents
+                  (event/schedule — they compose a message, not a live voice). Seed
+                  with the deployment's stored customization (null = no override →
+                  template defaults). */}
+              {!d.isOutbound &&
+                (d.surface === "phone" ||
+                  d.surface === "embed" ||
+                  d.surface === "link") && (
+                  <CustomizationSection
+                    deploymentId={d.id}
+                    initial={d.customization ?? null}
+                  />
+                )}
             </article>
           ))}
         </div>

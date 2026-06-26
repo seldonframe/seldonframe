@@ -25,9 +25,10 @@
 
 import { useState, useTransition } from "react";
 import Link from "next/link";
-import { Phone, Pause, Loader2, ChevronDown, ChevronUp, Sparkles, KeyRound, Trash2, CalendarClock, Link2, Check, SlidersHorizontal } from "lucide-react";
+import { Phone, Pause, Loader2, ChevronDown, ChevronUp, Sparkles, KeyRound, Trash2, CalendarClock, Link2, Check, SlidersHorizontal, Send } from "lucide-react";
 import {
   activateDeploymentAction,
+  activateOutboundDeploymentAction,
   pauseDeploymentAction,
   provisionDeploymentNumberAction,
   cancelDeploymentAction,
@@ -87,7 +88,14 @@ export function ActivateForm({ deploymentId, contactPhone }: ActivateFormProps) 
         areaCode: areaCode.trim(),
       });
       if (result.ok) {
-        setActiveNumber(result.phoneNumber);
+        // Inbound get-a-number returns a live phoneNumber; the outbound branch
+        // (this form isn't shown for outbound agents, but the action's union
+        // includes it) activates with no number — just mark it activated.
+        if ("phoneNumber" in result) {
+          setActiveNumber(result.phoneNumber);
+        } else {
+          setActivated(true);
+        }
         setOpen(false);
       } else {
         setProvisionError(result.error);
@@ -288,6 +296,79 @@ function provisionErrorCopy(error: ProvisionErrorCode): string {
     default:
       return "Couldn't set that up — retry.";
   }
+}
+
+// ─── ActivateOutboundButton ─────────────────────────────────────────────────────
+//
+// Activate an OUTBOUND agent (event/schedule — review-requester, speed-to-lead,
+// digests). These never RECEIVE on a phone; they only SEND, from the CLIENT's
+// EXISTING number (sendSmsFromApi, keyed by the client org), so there's no
+// get-a-number step and no phone-required input — just a one-click activate. The
+// page renders THIS instead of <ActivateForm> when the deployment's agent is
+// outbound, so the operator never sees (and can never trip) the phone flow that
+// would otherwise collide with the client's receptionist number.
+
+type ActivateOutboundButtonProps = {
+  deploymentId: string;
+};
+
+export function ActivateOutboundButton({ deploymentId }: ActivateOutboundButtonProps) {
+  const [activated, setActivated] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+  const [isPending, startTransition] = useTransition();
+
+  function handleActivate() {
+    setError(null);
+    startTransition(async () => {
+      const result = await activateOutboundDeploymentAction({ deploymentId });
+      if (result.ok) {
+        setActivated(true);
+      } else {
+        setError(
+          result.error === "needs_phone"
+            ? "This agent needs its own number — use the phone activation."
+            : result.error === "not_found"
+              ? "Deployment not found."
+              : "Couldn't activate — please try again.",
+        );
+      }
+    });
+  }
+
+  if (activated) {
+    return (
+      <div className="flex flex-col items-end gap-1">
+        <span className="rounded-full bg-emerald-500/15 px-3 py-0.5 text-[11px] font-medium text-emerald-700 dark:text-emerald-400">
+          active
+        </span>
+        <p className="text-[11px] text-muted-foreground">
+          <Send className="mb-0.5 mr-0.5 inline size-3" />
+          Sends from the client&apos;s number
+        </p>
+      </div>
+    );
+  }
+
+  return (
+    <div className="flex flex-col items-end gap-1">
+      <button
+        type="button"
+        onClick={handleActivate}
+        disabled={isPending}
+        title="Activate — this agent sends from the client's existing number"
+        className="crm-button-primary flex h-8 items-center gap-1.5 px-3 text-sm disabled:opacity-50"
+      >
+        {isPending ? <Loader2 className="size-3.5 animate-spin" /> : <Send className="size-3.5" />}
+        Activate
+      </button>
+      <p className="max-w-[14rem] text-right text-[11px] text-muted-foreground">
+        No number needed — sends from the client&apos;s existing number.
+      </p>
+      {error && (
+        <p className="text-[11px] text-rose-600 dark:text-rose-400">{error}</p>
+      )}
+    </div>
+  );
 }
 
 // ─── PauseButton ──────────────────────────────────────────────────────────────
