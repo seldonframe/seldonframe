@@ -23,6 +23,7 @@ import {
   triggerLabel,
 } from "@/lib/agents/triggers/agent-trigger";
 import { NewAgentButton } from "./new-agent-button";
+import { DescribeAgent } from "./describe-agent";
 import { DeployButton } from "./deploy-button";
 import { TemplateStatusBadge, formatTemplateType } from "./status-badge";
 import { StudioTabs } from "../studio-tabs";
@@ -102,7 +103,11 @@ export default async function AgentsStudioPage() {
 
       {templates.length === 0 ? (
         <div className="space-y-6">
-          {/* Primary path for a brand-new builder: a curated, forkable menu. */}
+          {/* Generate-by-default: the headline path. Describe the outcome in one
+              sentence → a complete, guard-railed, verified agent. */}
+          <DescribeAgent />
+
+          {/* Then a curated, forkable menu as the template fallback. */}
           <StarterPackSection starters={starterCards} />
 
           {/* Secondary: describe-your-own / start-blank, kept available. */}
@@ -115,11 +120,11 @@ export default async function AgentsStudioPage() {
                 <Bot className="size-5" />
               </span>
               <h2 className="text-base font-semibold">
-                Or build one from scratch.
+                Prefer to start from a blank template?
               </h2>
               <p className="text-sm text-muted-foreground">
-                Describe what your agent should do in a sentence and we&apos;ll
-                draft it — or start from a blank template.
+                Open the builder to pick a surface and configure every section
+                yourself.
               </p>
               <div className="flex justify-center pt-1">
                 <NewAgentButton />
@@ -178,8 +183,10 @@ export default async function AgentsStudioPage() {
             );
           })}
 
-          {/* Always-available resale menu: fork another curated starter. */}
-          <div className="border-t pt-6">
+          {/* Always-available create surface: describe-by-default first, then
+              the resale menu (fork another curated starter) below. */}
+          <div className="space-y-6 border-t pt-6">
+            <DescribeAgent />
             <StarterPackSection starters={starterCards} />
           </div>
         </div>
