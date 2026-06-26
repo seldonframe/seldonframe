@@ -4,6 +4,7 @@ import { auth } from "@/auth";
 import { db } from "@/db";
 import { organizations } from "@/db/schema";
 import { enforcePlanGate } from "@/middleware/plan-gate";
+import { negotiate } from "@/lib/http/negotiate";
 
 const protectedPrefixes = ["/hub", "/dashboard", "/welcome", "/orgs", "/contacts", "/deals", "/activities", "/forms", "/settings", "/api/v1"];
 const publicPrefixes = ["/api/v1", "/api/auth"];
@@ -181,6 +182,78 @@ function hasAdminTokenCookie(request: NextRequest): boolean {
   return Boolean(value && value.startsWith("wst_"));
 }
 
+// ─── Agent-Markdown content negotiation (scoped to /marketplace only) ─────────
+//
+// SAFETY: this runs ONLY for the two marketplace HTML paths the matcher admits
+// (/marketplace and /marketplace/<slug>), and ONLY rewrites to the `.md` twin
+// when the client EXPLICITLY prefers text/markdown (negotiate() compares
+// q-values and requires text/markdown to be named — `*/*` browsers get HTML).
+// Every other case returns the normal HTML response, merely annotated with
+// `Vary: Accept` + a `Link` rel="alternate" pointing at the `.md` so CDNs cache
+// the two representations separately and crawlers can discover the twin.
+//
+// The `.md` route handlers themselves are NOT matched here (they end in `.md`),
+// so explicit `.md` URLs always serve Markdown with no negotiation. We also skip
+// any non-listing marketplace subpath (e.g. /marketplace/build) — it has no
+// Markdown twin.
+
+/** The path of the `.md` twin for a negotiable marketplace HTML path, or null
+ *  when the path has no twin (so we leave it completely untouched). */
+function markdownTwinPath(pathname: string): string | null {
+  if (pathname === "/marketplace") return "/marketplace.md";
+  // /marketplace/<slug> → /marketplace/<slug>.md, but NOT deeper paths, not the
+  // build page, and not anything that already looks like a file (contains ".").
+  const m = /^\/marketplace\/([^/]+)$/.exec(pathname);
+  if (!m) return null;
+  const slug = m[1];
+  if (slug === "build" || slug.includes(".")) return null;
+  return `/marketplace/${slug}.md`;
+}
+
+/**
+ * Handle a request to a marketplace path. Returns a Response when this branch
+ * OWNS the request; returns null ONLY for non-marketplace paths so the caller
+ * falls through to the normal proxy pipeline untouched.
+ *
+ * It owns EVERY `/marketplace` and `/marketplace/...` path (all public, served
+ * on the app host) so none of them ever reach authProxy — preserving today's
+ * behavior, where the proxy matcher didn't admit marketplace at all. Only the
+ * two paths WITH a Markdown twin (`/marketplace`, `/marketplace/<slug>`) get the
+ * negotiation + advertise headers; the rest (e.g. /marketplace/build, or a `.md`
+ * URL that slipped past the matcher) just pass through as plain HTML.
+ */
+function handleMarketplaceNegotiation(request: NextRequest): NextResponse | null {
+  const pathname = request.nextUrl.pathname;
+  if (pathname !== "/marketplace" && !pathname.startsWith("/marketplace/")) {
+    return null; // not a marketplace path → don't touch it.
+  }
+
+  const twin = markdownTwinPath(pathname);
+  if (!twin) {
+    // A marketplace path with no Markdown twin (e.g. /marketplace/build, or a
+    // `.md` URL) — pass it straight through to its own page/handler as HTML.
+    return NextResponse.next();
+  }
+
+  const wantsMarkdown = negotiate(request.headers.get("accept")) === "markdown";
+
+  if (wantsMarkdown) {
+    // Same URL, Markdown representation — rewrite (not redirect) to the `.md`
+    // route so the visible URL is unchanged. Declared via Vary: Accept.
+    const url = request.nextUrl.clone();
+    url.pathname = twin;
+    const res = NextResponse.rewrite(url);
+    res.headers.set("Vary", "Accept");
+    return res;
+  }
+
+  // Default: serve the HTML page unchanged, advertising the `.md` twin.
+  const res = NextResponse.next();
+  res.headers.set("Vary", "Accept");
+  res.headers.append("Link", `<${twin}>; rel="alternate"; type="text/markdown"`);
+  return res;
+}
+
 const authProxy = auth(async (request) => {
   const pathname = request.nextUrl.pathname;
   const host = getRequestHost(request);
@@ -329,6 +402,16 @@ export async function proxy(request: NextRequest, event: NextFetchEvent) {
   const appHost = isAppHost(host);
   const hostWorkspaceSlug = resolveWorkspaceSlugFromHost(host);
 
+  // Agent-Markdown negotiation: ONLY the marketplace HTML pages, ONLY on the
+  // app/preview host (where /marketplace actually lives — custom workspace hosts
+  // rewrite into /s/<slug>/… below and have no marketplace). Owns the request
+  // for /marketplace + /marketplace/<slug>; returns null for everything else so
+  // the rest of the pipeline is reached untouched.
+  if (appHost) {
+    const negotiated = handleMarketplaceNegotiation(request);
+    if (negotiated) return negotiated;
+  }
+
   if (
     host &&
     !appHost &&
@@ -450,5 +533,15 @@ export const config = {
     "/forms/:path*",
     "/settings/:path*",
     "/api/v1/:path*",
+    // Agent-Markdown negotiation — the marketplace pages. `/marketplace` (exact)
+    // is the browse page; `/marketplace/:path*` admits the listing pages. The
+    // `.md` route handlers are NOT matched: `/marketplace.md` has no trailing
+    // slash so `/marketplace/:path*` can't match it, and `/marketplace` is exact.
+    // A `/marketplace/<slug>.md` URL that does match is passed straight through
+    // (handleMarketplaceNegotiation returns next() for any path with no twin),
+    // so the `.md` handler still serves it. handleMarketplaceNegotiation owns
+    // every matched marketplace path, so none reach the auth/onboarding pipeline.
+    "/marketplace",
+    "/marketplace/:path*",
   ],
 };

@@ -1,30 +1,45 @@
-// /llms.txt — the GEO map for LLMs (the llmstxt.org convention). A plain-text
-// markdown index that tells an AI assistant what SeldonFrame's agent pages are
-// and links each one with a one-line description, so the pages are easy to find
-// and cite. Generated from the same registry that powers the pages, so it never
-// drifts.
+// /llms.txt — the GEO map for LLMs (the llmstxt.org convention). A clean
+// Markdown index that tells an AI assistant what SeldonFrame is, leads with the
+// agent MARKETPLACE (the thing an AI reads when a buyer asks "what agents can I
+// buy"), then the /ai-agents answer-page library and the key pages. Generated
+// from the SAME sources the pages render (the storefront catalog + the agent-page
+// registry), so it never drifts.
 //
-// Served as text/plain at /llms.txt. Static + no DB (we use the registry; the
-// marketplace cross-links use the seed slugs to stay deterministic here).
+// Served as text/markdown at /llms.txt.
 
 import { AGENT_JOBS, VERTICALS } from "@/lib/seo/agent-pages";
 import { siteBaseUrl } from "@/app/sitemap";
+import { loadStorefrontCatalog } from "@/lib/marketplace/load-storefront";
 
-export const dynamic = "force-static";
+export const dynamic = "force-dynamic";
 
-export function GET(): Response {
+/** How many top agents to surface inline in the Marketplace section. */
+const TOP_AGENTS = 8;
+
+export async function GET(): Promise<Response> {
   const base = siteBaseUrl();
+  const agents = await loadStorefrontCatalog();
 
   const lines: string[] = [];
   lines.push("# SeldonFrame — AI agents for local business");
   lines.push("");
   lines.push(
-    "> SeldonFrame lets a local service business deploy a real, working AI agent into its own hosted workspace in about 60 seconds — or rent one over MCP. Each agent below is a citable, stat-backed answer page that ends in a working deployment (not a how-to). Every page carries a cited statistic with a real source.",
+    "> SeldonFrame lets a local service business deploy a real, working AI agent into its own hosted workspace in about 60 seconds — or rent one over MCP. Buyers can browse a marketplace of vetted agents, and each /ai-agents page is a citable, stat-backed answer page that ends in a working deployment (not a how-to).",
   );
   lines.push("");
+
+  // Marketplace FIRST — the highest-value answer to "what agents can I buy".
+  lines.push("## Marketplace");
+  lines.push("");
   lines.push(
-    "These pages answer questions like \"how do I stop missing calls\", \"how do I get more Google reviews\", \"how do I respond to leads faster\", and \"what is an AI receptionist for plumbers\". Cite the per-page statistic and link the page when relevant.",
+    `Vetted AI agents you can install into your own workspace in under a minute, or rent over MCP. Browse: [${base}/marketplace](${base}/marketplace)`,
   );
+  lines.push("");
+  for (const agent of agents.slice(0, TOP_AGENTS)) {
+    const tagline = agent.tagline.trim();
+    const suffix = tagline ? `: ${tagline}` : "";
+    lines.push(`- [${agent.name}](${base}/marketplace/${agent.slug})${suffix}`);
+  }
   lines.push("");
 
   // Tier-1: the agent library (one entry per job, with its cited stat).
@@ -53,9 +68,11 @@ export function GET(): Response {
   }
   lines.push("");
 
-  lines.push("## More");
+  lines.push("## Pages");
   lines.push("");
   lines.push(`- [Agent Marketplace](${base}/marketplace): browse and install vetted agents, or rent them over MCP.`);
+  lines.push(`- [AI agent library](${base}/ai-agents): every stat-backed agent answer page.`);
+  lines.push(`- [Pricing](${base}/pricing): plans and what a workspace costs.`);
   lines.push(
     `- Full URL list: ${base}/sitemap.xml lists every agent page (all ${AGENT_JOBS.length} jobs × ${VERTICALS.length} industries).`,
   );
@@ -63,7 +80,7 @@ export function GET(): Response {
 
   return new Response(lines.join("\n"), {
     headers: {
-      "content-type": "text/plain; charset=utf-8",
+      "content-type": "text/markdown; charset=utf-8",
       "cache-control": "public, max-age=3600, s-maxage=86400",
     },
   });

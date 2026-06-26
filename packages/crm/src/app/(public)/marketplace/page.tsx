@@ -17,12 +17,10 @@ import { MarketplaceNav, MarketplaceFooter } from "@/components/marketplace/mark
 import { MarketplaceStyles } from "@/components/marketplace/marketplace-styles";
 import { BrowseClient } from "@/components/marketplace/browse-client";
 import { MarketplaceIndustryDirectory } from "@/components/marketplace/marketplace-industry-directory";
-import { listMarketplaceAgentsFromDb } from "@/lib/marketplace/agent-listings";
-import { MARKETPLACE_SEED } from "@/components/marketplace/marketplace-seed";
+import { loadStorefrontCatalog } from "@/lib/marketplace/load-storefront";
 import {
   MKT,
   nicheToCategory,
-  rowToStorefrontAgent,
   type CategoryKey,
   type StorefrontAgent,
 } from "@/components/marketplace/marketplace-data";
@@ -44,20 +42,6 @@ export const metadata: Metadata = {
 type BrowsePageProps = {
   searchParams: Promise<{ niche?: string; q?: string; kind?: string }>;
 };
-
-/** Load live published agent listings; fall back to the seed catalog when the
- *  published set is empty so the storefront never renders blank. */
-async function loadStorefrontAgents(): Promise<StorefrontAgent[]> {
-  try {
-    const rows = await listMarketplaceAgentsFromDb();
-    if (rows.length > 0) {
-      return rows.map(rowToStorefrontAgent);
-    }
-  } catch {
-    // DB unavailable (e.g. preview without a database) — fall through to seed.
-  }
-  return MARKETPLACE_SEED;
-}
 
 /**
  * The REAL "businesses on SeldonFrame" count — 1 workspace = 1 business.
@@ -89,7 +73,7 @@ async function countLiveBusinesses(): Promise<number> {
 
 export default async function MarketplaceBrowsePage({ searchParams }: BrowsePageProps) {
   const params = await searchParams;
-  const [agents, businessCount] = await Promise.all([loadStorefrontAgents(), countLiveBusinesses()]);
+  const [agents, businessCount] = await Promise.all([loadStorefrontCatalog(), countLiveBusinesses()]);
 
   const initialQuery = String(params.q ?? "").trim();
   const initialCategory: CategoryKey | null = params.niche

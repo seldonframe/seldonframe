@@ -21,8 +21,8 @@ import { MarketplaceStyles } from "@/components/marketplace/marketplace-styles";
 import { MarketplaceIcon, StarRow } from "@/components/marketplace/marketplace-icons";
 import { ListingActionsClient } from "@/components/marketplace/listing-actions-client";
 import { SampleConversationClient } from "@/components/marketplace/sample-conversation-client";
-import { listMarketplaceAgentsFromDb } from "@/lib/marketplace/agent-listings";
 import { MARKETPLACE_SEED } from "@/components/marketplace/marketplace-seed";
+import { loadStorefrontCatalog } from "@/lib/marketplace/load-storefront";
 import { jobForMarketplaceSlug } from "@/lib/seo/agent-pages";
 import {
   CATEGORY_META,
@@ -33,7 +33,6 @@ import {
   installsLabel,
   priceLabel,
   priceColor,
-  rowToStorefrontAgent,
   mcpEndpointFor,
   mcpSnippetFor,
   type StorefrontAgent,
@@ -43,20 +42,8 @@ type ListingPageProps = {
   params: Promise<{ slug: string }>;
 };
 
-/** Resolve the full storefront catalog (live listings, seed fallback) so we can
- *  render a listing AND compute "more from the same builder". */
-async function loadCatalog(): Promise<StorefrontAgent[]> {
-  try {
-    const rows = await listMarketplaceAgentsFromDb();
-    if (rows.length > 0) return rows.map(rowToStorefrontAgent);
-  } catch {
-    // fall through to seed
-  }
-  return MARKETPLACE_SEED;
-}
-
 async function loadAgent(slug: string): Promise<{ agent: StorefrontAgent; others: StorefrontAgent[] } | null> {
-  const catalog = await loadCatalog();
+  const catalog = await loadStorefrontCatalog();
   const agent = catalog.find((a) => a.slug === slug) ?? MARKETPLACE_SEED.find((a) => a.slug === slug);
   if (!agent) return null;
   const others = catalog.filter((a) => a.builder === agent.builder && a.slug !== agent.slug).slice(0, 2);
