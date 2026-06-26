@@ -58,6 +58,94 @@ The agency-tier alternative builds this exact stack in **GoHighLevel**: days to 
 
 ---
 
+## How it works — the architecture
+
+**SeldonFrame is a platform to build, run, and *sell* AI agents for service businesses.** Every agent ships with a real hosted front office — website, booking, intake, CRM, voice + chat — already wired on a live subdomain (`<slug>.app.seldonframe.com`). The bet underneath it: **thin harness + fat skills + an owned Brain** — keep the platform dumb and simple, put the intelligence in markdown skill-packs and an owned memory layer, and ride every model improvement for free. ([Why this bet ↓](#the-architectural-bet))
+
+### The agent model — Trigger × Skill × Channel
+
+An agent isn't a chatbot UI; it's three independent axes:
+
+- **Trigger** — *when it runs*: **inbound** (a call / chat / email / SMS arrives) · **event** (a domain event fires — `booking.completed`, `lead.created`, `invoice.paid`…) · **schedule** (a cron cadence).
+- **Skill** — *what it does*: receptionist · review-requester · speed-to-lead · win-back · digest…
+- **Channel** — *how it speaks*: voice · web chat · SMS · email · internal digest.
+
+`surface: voice | chat` (the old receptionist-only knob) is just one point in this space — `trigger=inbound`. One builder creates any agent; the marketplace sells any agent.
+
+### From agent to production *loop*
+
+A production agent is a **loop**, not a single prompt:
+
+> **Trigger → (Model + Tools + State) → Verify → Iterate**, bounded by a **Stop** condition, improved by **Evals**, kept honest by **Observability + Guardrails**.
+
+Two non-negotiables drive the roadmap: **the checker must be separate from the maker** (a model grading its own work is too generous a grader), and **the loop must have brakes** (or it bills you in silence). Where each primitive stands today:
+
+| Primitive | Status | What's there |
+|---|---|---|
+| **Trigger** | ✅ Shipped | Inbound + **event** triggers on the `SeldonEvent` bus. `booking.completed` → review-requester; `lead.created` → speed-to-lead, both sending outbound SMS/email. |
+| **State** | ✅ Shipped | Agent **loop-memory** in **Brain v2** — agents recall what they did before acting and record after. The review "ask once per customer" throttle is now a memory recall, not a bespoke flag. |
+| **Verify** (maker ≠ checker) | 🚧 In progress | A separate strict checker gates output before send — deterministic rubric (link/name present, length-bounded) first, an optional eval/LLM checker for judgment. |
+| **Guardrails / Stop** | 🚧 In progress | Per-agent guardrail layer (quote-guard, enforced read-back, throttle) + default brakes (max-iterations / token budget / no-progress) on looping or scheduled agents. |
+| **Generate-by-default** | 🗺 Roadmap | One English sentence → trigger + skill + channel + guardrail + checker + state + stop, generated together. *"text every customer for a Google review the day after their job — never twice, only if completed"* emits all of it. |
+
+### The pieces
+
+- **Composio** — 1000+ tool connectors, so any agent can reach the client's own stack (calendar, CRM, payments) without bespoke integrations.
+- **Brain v2** — the owned memory / Soul: the single source of truth an agent grounds on (business identity, services, pricing) and the durable per-agent, per-subject store it recalls from and records to.
+- **`/runs` + RunContext + evals** — observability: every run is a persisted snapshot; `run_agent_evals` grades behavior (and becomes the in-loop Verify gate).
+- **The marketplace** — build-once-sell-many: list an agent, **keep 95%**, and it's reachable **over MCP** so any LLM (Claude, ChatGPT, Cursor) can rent it.
+- **Per-deployment customization** — one agent **template** → many client-customized **instances** (greeting, voice, business info, script/FAQ/services) without forking the agent.
+
+### The loop, drawn
+
+```mermaid
+flowchart TD
+    subgraph TRIG["Triggers"]
+        direction LR
+        TIn["Inbound<br/>call · chat · email · SMS"]
+        TEv["Event<br/>booking.completed · lead.created"]
+        TSch["Schedule<br/>cron cadence"]
+    end
+
+    subgraph LOOP["Agent loop"]
+        direction TB
+        Model["Model<br/>(reasoning + skill-pack)"]
+        Tools["Tools<br/>Composio + native:<br/>book · update CRM · send SMS/email"]
+        State["State<br/>Brain v2: recall &amp; record"]
+        Verify{"Verify<br/>(separate checker)"}
+
+        Model --> Tools
+        Tools --> State
+        State --> Verify
+        Verify -- "fail: block / retry" --> Model
+    end
+
+    TIn --> Model
+    TEv --> Model
+    TSch --> Model
+
+    Verify -- "pass" --> Act["Act"]
+
+    subgraph OUT["Channels &amp; front office"]
+        direction LR
+        Chan["Voice · SMS · Email · Chat"]
+        Office["Front office:<br/>site · booking · CRM"]
+    end
+
+    Act --> Chan
+    Act --> Office
+
+    Stop(["Stop<br/>budget · max iterations · no-progress"]) -. bounds .-> LOOP
+    Obs[("Observability<br/>/runs + Brain")] -. observes .-> LOOP
+
+    classDef wip stroke-dasharray:5 5,stroke-width:2px;
+    class Verify,Stop wip;
+```
+
+> Dashed nodes (**Verify**, **Stop**) are the in-progress primitives. **Trigger** and **State** are shipped today; the rest of the loop is landing next.
+
+---
+
 ## What's pre-wired (zero glue work)
 
 Every generated workspace ships with all surfaces connected to one workspace database:
