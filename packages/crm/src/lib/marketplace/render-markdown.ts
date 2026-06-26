@@ -7,7 +7,7 @@
 //
 // Everything here is PURE (no I/O, no db, no React) so it unit-tests with plain
 // fixtures. The `.md` route handlers (app/marketplace.md, app/marketplace/
-// [slug].md) do the data-loading and hand the result to these functions.
+// listing.md) do the data-loading and hand the result to these functions.
 //
 // Why Markdown leads with concrete specifics (what it does, channels, price,
 // the install link) rather than metadata: the GEO research (Princeton/IIT-Delhi)

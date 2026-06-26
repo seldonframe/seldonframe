@@ -184,25 +184,44 @@ function hasAdminTokenCookie(request: NextRequest): boolean {
 
 // ─── Agent-Markdown content negotiation (scoped to /marketplace only) ─────────
 //
-// SAFETY: this runs ONLY for the two marketplace HTML paths the matcher admits
-// (/marketplace and /marketplace/<slug>), and ONLY rewrites to the `.md` twin
-// when the client EXPLICITLY prefers text/markdown (negotiate() compares
-// q-values and requires text/markdown to be named — `*/*` browsers get HTML).
-// Every other case returns the normal HTML response, merely annotated with
-// `Vary: Accept` + a `Link` rel="alternate" pointing at the `.md` so CDNs cache
-// the two representations separately and crawlers can discover the twin.
+// SAFETY: this runs ONLY for the marketplace paths the matcher admits
+// (/marketplace, /marketplace/<slug>, and an explicit /marketplace/<slug>.md),
+// and only ever serves Markdown when the request asks for it — either by an
+// explicit `.md` URL, or when the client EXPLICITLY prefers text/markdown
+// (negotiate() compares q-values and requires text/markdown to be named —
+// `*/*` browsers get HTML). Every HTML case returns the normal HTML response,
+// merely annotated with `Vary: Accept` + a `Link` rel="alternate" pointing at
+// the public `.md` twin so CDNs cache the two representations separately and
+// crawlers can discover the twin.
 //
-// The `.md` route handlers themselves are NOT matched here (they end in `.md`),
-// so explicit `.md` URLs always serve Markdown with no negotiation. We also skip
-// any non-listing marketplace subpath (e.g. /marketplace/build) — it has no
-// Markdown twin.
+// The per-listing Markdown is served by a STATIC route, `/marketplace/listing.md`,
+// that reads the slug from a `?slug=` query param. We do NOT use a `[slug].md`
+// dynamic-dot folder: Next 16 cannot extract the param from a dotted dynamic
+// segment, so its generated route-type validator can't be satisfied and
+// typecheck breaks (TS2344). The public URLs are preserved entirely here — both
+// the explicit `/marketplace/<slug>.md` and the negotiated `/marketplace/<slug>`
+// are internally rewritten to `/marketplace/listing.md?slug=<slug>`.
+//
+// The index `.md` (`/marketplace.md`) IS a static route too and is reached
+// directly (it has no dynamic segment), so we only need to rewrite it for the
+// negotiated `/marketplace` HTML request.
 
-/** The path of the `.md` twin for a negotiable marketplace HTML path, or null
- *  when the path has no twin (so we leave it completely untouched). */
+/** Rewrite target on the app for a per-listing Markdown request (the static
+ *  `listing.md` route, slug carried as a query param so the folder stays a
+ *  bracket-free static segment). A fresh `URL` is built from the request URL so
+ *  the origin is preserved while the path + query are set cleanly. */
+function listingMarkdownRewrite(url: URL, slug: string): NextResponse {
+  const target = new URL("/marketplace/listing.md", url);
+  target.searchParams.set("slug", slug);
+  const res = NextResponse.rewrite(target);
+  res.headers.set("Vary", "Accept");
+  return res;
+}
+
+/** The PUBLIC path of the `.md` twin for a negotiable marketplace HTML path
+ *  (used only for the advertised `Link` header), or null when none. */
 function markdownTwinPath(pathname: string): string | null {
   if (pathname === "/marketplace") return "/marketplace.md";
-  // /marketplace/<slug> → /marketplace/<slug>.md, but NOT deeper paths, not the
-  // build page, and not anything that already looks like a file (contains ".").
   const m = /^\/marketplace\/([^/]+)$/.exec(pathname);
   if (!m) return null;
   const slug = m[1];
@@ -217,10 +236,18 @@ function markdownTwinPath(pathname: string): string | null {
  *
  * It owns EVERY `/marketplace` and `/marketplace/...` path (all public, served
  * on the app host) so none of them ever reach authProxy — preserving today's
- * behavior, where the proxy matcher didn't admit marketplace at all. Only the
- * two paths WITH a Markdown twin (`/marketplace`, `/marketplace/<slug>`) get the
- * negotiation + advertise headers; the rest (e.g. /marketplace/build, or a `.md`
- * URL that slipped past the matcher) just pass through as plain HTML.
+ * behavior, where the proxy matcher didn't admit marketplace at all.
+ *
+ * Three things produce Markdown:
+ *   1. An explicit `/marketplace/<slug>.md` URL → rewrite to the static
+ *      `/marketplace/listing.md?slug=<slug>` (strip `.md`, pass the slug).
+ *   2. A `/marketplace/<slug>` HTML request whose Accept prefers markdown →
+ *      same rewrite (the visible URL is unchanged).
+ *   3. The index: `/marketplace.md` is reached directly; a `/marketplace` HTML
+ *      request whose Accept prefers markdown → rewrite to `/marketplace.md`.
+ * Everything else (the HTML pages, /marketplace/build, the static `.md` routes
+ * themselves) passes through, the HTML listing/index pages additionally
+ * advertising their `.md` twin via Vary + Link.
  */
 function handleMarketplaceNegotiation(request: NextRequest): NextResponse | null {
   const pathname = request.nextUrl.pathname;
@@ -228,26 +255,51 @@ function handleMarketplaceNegotiation(request: NextRequest): NextResponse | null
     return null; // not a marketplace path → don't touch it.
   }
 
+  // Loop guard + static-route passthrough: the rewrite targets (and the index
+  // `.md`) are already the Markdown routes — never rewrite them again, just let
+  // them reach their handler. `/marketplace/listing.md` is also where (1)/(2)
+  // land, so this MUST come before any rewrite below.
+  if (pathname === "/marketplace.md" || pathname === "/marketplace/listing.md") {
+    return NextResponse.next();
+  }
+
+  // (1) Explicit per-listing `.md` URL → serve Markdown from the static route.
+  const explicitMd = /^\/marketplace\/([^/]+)\.md$/.exec(pathname);
+  if (explicitMd) {
+    const slug = explicitMd[1];
+    // `/marketplace/build.md` etc. have no listing twin — let them 404 naturally
+    // rather than rewriting to a guaranteed-missing slug.
+    if (slug && slug !== "build") {
+      return listingMarkdownRewrite(request.nextUrl, slug);
+    }
+    return NextResponse.next();
+  }
+
   const twin = markdownTwinPath(pathname);
   if (!twin) {
     // A marketplace path with no Markdown twin (e.g. /marketplace/build, or a
-    // `.md` URL) — pass it straight through to its own page/handler as HTML.
+    // deeper subpath) — pass it straight through to its own page as HTML.
     return NextResponse.next();
   }
 
   const wantsMarkdown = negotiate(request.headers.get("accept")) === "markdown";
 
   if (wantsMarkdown) {
-    // Same URL, Markdown representation — rewrite (not redirect) to the `.md`
-    // route so the visible URL is unchanged. Declared via Vary: Accept.
-    const url = request.nextUrl.clone();
-    url.pathname = twin;
-    const res = NextResponse.rewrite(url);
-    res.headers.set("Vary", "Accept");
-    return res;
+    // Same URL, Markdown representation — rewrite (not redirect) so the visible
+    // URL is unchanged. Declared via Vary: Accept.
+    if (pathname === "/marketplace") {
+      const url = request.nextUrl.clone();
+      url.pathname = "/marketplace.md";
+      const res = NextResponse.rewrite(url);
+      res.headers.set("Vary", "Accept");
+      return res;
+    }
+    // /marketplace/<slug> → static listing route with the slug as a query param.
+    const slug = /^\/marketplace\/([^/]+)$/.exec(pathname)?.[1] ?? "";
+    return listingMarkdownRewrite(request.nextUrl, slug);
   }
 
-  // Default: serve the HTML page unchanged, advertising the `.md` twin.
+  // Default: serve the HTML page unchanged, advertising the public `.md` twin.
   const res = NextResponse.next();
   res.headers.set("Vary", "Accept");
   res.headers.append("Link", `<${twin}>; rel="alternate"; type="text/markdown"`);
@@ -534,13 +586,16 @@ export const config = {
     "/settings/:path*",
     "/api/v1/:path*",
     // Agent-Markdown negotiation — the marketplace pages. `/marketplace` (exact)
-    // is the browse page; `/marketplace/:path*` admits the listing pages. The
-    // `.md` route handlers are NOT matched: `/marketplace.md` has no trailing
-    // slash so `/marketplace/:path*` can't match it, and `/marketplace` is exact.
-    // A `/marketplace/<slug>.md` URL that does match is passed straight through
-    // (handleMarketplaceNegotiation returns next() for any path with no twin),
-    // so the `.md` handler still serves it. handleMarketplaceNegotiation owns
-    // every matched marketplace path, so none reach the auth/onboarding pipeline.
+    // is the browse page; `/marketplace/:path*` admits the listing pages AND the
+    // explicit per-listing `/marketplace/<slug>.md` URLs (`:path*` matches a
+    // dotted final segment). handleMarketplaceNegotiation rewrites those `.md`
+    // URLs (and Markdown-negotiated HTML requests) to the static
+    // `/marketplace/listing.md?slug=…` route, and short-circuits the rewrite
+    // targets (`/marketplace.md`, `/marketplace/listing.md`) so they reach their
+    // handler without looping. The index `.md` (`/marketplace.md`) has no
+    // trailing slash so `/marketplace/:path*` can't match it, and `/marketplace`
+    // is exact. handleMarketplaceNegotiation owns every matched marketplace
+    // path, so none reach the auth/onboarding pipeline.
     "/marketplace",
     "/marketplace/:path*",
   ],
