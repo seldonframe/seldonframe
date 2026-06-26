@@ -36,6 +36,7 @@
 import type Anthropic from "@anthropic-ai/sdk";
 import { getAnthropicClient } from "@/lib/ai/client";
 import type { AgentAuthor } from "@/lib/agents/generate/authored-agent";
+import { soulContextBlock } from "@/lib/agents/generate/author-context";
 import { TOOL_CATALOG } from "@/lib/agents/generate/tool-catalog";
 import { KNOWN_EVENTS } from "@/lib/agents/triggers/agent-trigger";
 import { STARTER_TEMPLATES } from "@/lib/agent-templates/starter-pack";
@@ -121,11 +122,17 @@ export function buildStarterExamples(): string {
 
 /**
  * Assemble the strict system prompt. The shape, rules, tool menu, known events,
- * and few-shot examples are static; only the `priorLessons` block is appended
- * when present (mirrors classify-llm / judge-llm's lessons fold). Pure; never
- * throws — `priorLessons` is trimmed and only added when non-empty.
+ * and few-shot examples are static; the `priorLessons` block is appended when
+ * present (mirrors classify-llm / judge-llm's lessons fold), and the
+ * `soulContext` business-grounding block is appended when present (P5.3 — turns a
+ * generic playbook into one written AS this specific business). Pure; never throws
+ * — both are trimmed and only added when non-empty, so an absent Soul / no lessons
+ * leaves the prompt byte-for-byte unchanged.
  */
-export function buildAuthorSystemPrompt(priorLessons?: string): string {
+export function buildAuthorSystemPrompt(
+  priorLessons?: string,
+  soulContext?: string,
+): string {
   const base = [
     "You design ONE automated agent for a local service business from the operator's sentence.",
     'Return ONLY a JSON object of the shape: {"name": string, "summary": string, "skillMd": string, "trigger": {"kind": string, "cron"?: string, "event"?: string}, "channel": string, "tools": string[], "neededCapabilities": string[]}.',
@@ -146,7 +153,11 @@ export function buildAuthorSystemPrompt(priorLessons?: string): string {
 
   const lessons = typeof priorLessons === "string" ? priorLessons.trim() : "";
   const corrections = `Past corrections to honor: ${lessons || "none"}.`;
-  return `${base}\n\n${corrections}`;
+  // The Soul block (when an authoring workspace has one) grounds the author in
+  // the real business — its services + voice — so the skill is specific, not
+  // generic. soulContextBlock already leads with "\n\n" and returns "" when there
+  // is no usable summary (→ the prompt is unchanged, the author stays generic).
+  return `${base}\n\n${corrections}${soulContextBlock(soulContext)}`;
 }
 
 // ─── defensive parse ─────────────────────────────────────────────────────────
@@ -203,11 +214,21 @@ export function parseAuthoredResponse(raw: string): unknown {
  * Anthropic client, or null when ANTHROPIC_API_KEY is unset, in which case the
  * author returns `{}` and generation proceeds via the heuristic). Tests inject a
  * fake client to exercise the prompt + parse without a network call.
+ *
+ * `soulContext` (P5.3) is the OPTIONAL compact business summary of the authoring
+ * workspace (from `loadAuthorSoulContext`). When non-empty it's rendered into the
+ * system prompt so the author writes the agent AS this specific business; when
+ * absent/blank the prompt is unchanged and the author stays generic (today's
+ * behavior, correct for a Soul-less marketplace template). It's a factory dep
+ * because it's org-scoped + fetched ONCE in the action layer (P5.4) where the
+ * factory is constructed — mirroring how `getClient` flows — so the `AgentAuthor`
+ * call signature (and `priorLessons`) is untouched.
  */
 export function makeLlmAgentAuthor(
-  deps: { getClient?: () => Anthropic | null } = {},
+  deps: { getClient?: () => Anthropic | null; soulContext?: string } = {},
 ): AgentAuthor {
   const getClient = deps.getClient ?? getAnthropicClient;
+  const soulContext = typeof deps.soulContext === "string" ? deps.soulContext : "";
 
   return async (sentence: string, priorLessons?: string): Promise<unknown> => {
     const text = typeof sentence === "string" ? sentence.trim() : "";
@@ -217,7 +238,7 @@ export function makeLlmAgentAuthor(
     if (!client) return {};
 
     const model = process.env.ANTHROPIC_AUTHOR_MODEL?.trim() || DEFAULT_AUTHOR_MODEL;
-    const system = buildAuthorSystemPrompt(priorLessons);
+    const system = buildAuthorSystemPrompt(priorLessons, soulContext);
 
     try {
       const resp = await client.messages.create({

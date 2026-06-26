@@ -290,3 +290,66 @@ describe("makeLlmAgentAuthor — the system prompt is built from the catalog / e
     assert.match(system, /Past corrections to honor: none\./);
   });
 });
+
+// ─── P5.3 — the Soul-grounded business block ──────────────────────────────────
+
+describe("makeLlmAgentAuthor — grounds the prompt in the workspace Soul (soulContext)", () => {
+  const SUMMARY =
+    "Acme Plumbing is a plumbing business. We fix leaks 24/7. Services: Drain cleaning. Brand voice: friendly, professional.";
+
+  test("a soulContext factory dep → the business block appears in the system prompt", async () => {
+    const { client, calls } = fakeClient(WEEKLY_IG_JSON);
+    const author = makeLlmAgentAuthor({
+      getClient: () => client,
+      soulContext: SUMMARY,
+    });
+
+    await author("post a weekly instagram highlight of our 5-star reviews");
+
+    const system = String(calls[0]!.system ?? "");
+    // The grounding label + the summary + the "speak as THIS business" rule.
+    assert.match(system, /The business you are authoring this agent for:/);
+    assert.match(system, /Acme Plumbing is a plumbing business/);
+    assert.match(system, /Drain cleaning/);
+    assert.match(system, /speak and act as THIS business/);
+  });
+
+  test("no soulContext → the business block is ABSENT (prompt stays generic)", async () => {
+    const { client, calls } = fakeClient(WEEKLY_IG_JSON);
+    const author = makeLlmAgentAuthor({ getClient: () => client });
+
+    await author("post a weekly instagram highlight");
+
+    const system = String(calls[0]!.system ?? "");
+    assert.ok(
+      !system.includes("The business you are authoring this agent for:"),
+      "the business block must not appear when no soulContext is provided",
+    );
+  });
+
+  test("an empty soulContext → the business block is ABSENT", async () => {
+    const { client, calls } = fakeClient(WEEKLY_IG_JSON);
+    const author = makeLlmAgentAuthor({ getClient: () => client, soulContext: "" });
+
+    await author("post a weekly instagram highlight");
+
+    const system = String(calls[0]!.system ?? "");
+    assert.ok(!system.includes("The business you are authoring this agent for:"));
+  });
+
+  test("soulContext and priorLessons coexist — BOTH fold into the prompt", async () => {
+    const { client, calls } = fakeClient(WEEKLY_IG_JSON);
+    const author = makeLlmAgentAuthor({
+      getClient: () => client,
+      soulContext: SUMMARY,
+    });
+
+    await author("post a weekly instagram highlight", "Never quote a firm price.");
+
+    const system = String(calls[0]!.system ?? "");
+    // priorLessons still threads through (regression guard)…
+    assert.match(system, /Never quote a firm price\./);
+    // …alongside the Soul block.
+    assert.match(system, /Acme Plumbing is a plumbing business/);
+  });
+});
