@@ -145,16 +145,26 @@ export async function saveAgentTemplateBlueprintAction(input: {
   // shape (wrong channel-for-kind, blank event/cron) to the safe inbound
   // default, so the blueprint never stores a trigger the runtime can't honor.
   // When `trigger` is absent we leave the patch untouched (partial save).
-  const { trigger, ...rest } = parsed.data;
-  const patch: TemplateBlueprintPatch =
-    trigger === undefined
-      ? rest
-      : {
-          ...rest,
-          // The zod `trigger` is intentionally loose (channel: string); the
-          // resolver strictly re-parses an unknown shape into a valid union.
-          trigger: resolveAgentTrigger(trigger as Partial<AgentTrigger>),
-        };
+  //
+  // `verify` / `guardrails` (agent-loop L2/L3) are also intentionally LOOSE in the
+  // zod schema (passthrough checks; every field optional) — the runtime engines
+  // (verifyOutput / evaluateGuardrails) are fully defensive about shape — so they
+  // cross into the strict blueprint types via a cast, exactly like `trigger`. A
+  // `null` is preserved (not cast away): it's the editor's "clear this override"
+  // signal that mergeTemplateBlueprint deletes so the per-skill default reapplies.
+  const { trigger, verify, guardrails, ...rest } = parsed.data;
+  const patch: TemplateBlueprintPatch = { ...rest };
+  if (trigger !== undefined) {
+    // The zod `trigger` is intentionally loose (channel: string); the resolver
+    // strictly re-parses an unknown shape into a valid union.
+    patch.trigger = resolveAgentTrigger(trigger as Partial<AgentTrigger>);
+  }
+  if (verify !== undefined) {
+    patch.verify = verify as TemplateBlueprintPatch["verify"];
+  }
+  if (guardrails !== undefined) {
+    patch.guardrails = guardrails as TemplateBlueprintPatch["guardrails"];
+  }
 
   const result = await updateAgentTemplate({
     id: input.templateId,

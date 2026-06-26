@@ -156,6 +156,25 @@ describe("mergeTemplateBlueprint", () => {
     mergeTemplateBlueprint(base, { greeting: "changed" });
     assert.equal(JSON.stringify(base), before, "input must be untouched");
   });
+
+  test("null DELETES the key (clear an override → runtime default reapplies)", () => {
+    // Outbound-UX F5: flipping "Use smart defaults" back ON sends `null`, which
+    // must REMOVE the stored guardrails/verify so defaultGuardrailsForSkill /
+    // defaultRubricForSkill apply again — distinct from `undefined` (a no-op).
+    const withOverride: AgentBlueprint = {
+      ...base,
+      guardrails: { enabled: true, maxPerDayPerAgent: 10 },
+      verify: { checks: [{ kind: "max_length", max: 100 }] },
+    };
+    const next = mergeTemplateBlueprint(withOverride, {
+      guardrails: null,
+      verify: null,
+    });
+    assert.equal("guardrails" in next, false, "guardrails must be removed");
+    assert.equal("verify" in next, false, "verify must be removed");
+    // Untouched fields survive the clear.
+    assert.equal(next.greeting, "Hello!");
+  });
 });
 
 // ---------------------------------------------------------------------

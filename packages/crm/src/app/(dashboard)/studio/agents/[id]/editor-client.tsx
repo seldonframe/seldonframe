@@ -27,6 +27,7 @@ import {
   ChevronDown,
   Plus,
   Check,
+  ShieldCheck,
 } from "lucide-react";
 import {
   saveAgentTemplateBlueprintAction,
@@ -46,6 +47,18 @@ import {
   type AgentTrigger,
 } from "@/lib/agents/triggers/agent-trigger";
 import { VOICE_OPTIONS } from "@/lib/agents/voice/card-status";
+import type { Guardrails } from "@/lib/agents/guardrails/agent-guardrails";
+import type { VerifyRubric } from "@/lib/agents/verify/agent-verify";
+import {
+  buildGuardrailsVerifyPatch,
+  describeGuardrailsDefault,
+  describeVerifyDefault,
+  guardrailFieldsFrom,
+  skillForTriggerEvent,
+  verifyFieldsFrom,
+  type GuardrailFields,
+  type VerifyFields,
+} from "./guardrails-fields";
 
 // Rotating status copy shown on the Refine button while a refinement is being
 // generated, so the multi-second LLM call feels alive. Cycled every
@@ -83,6 +96,13 @@ type Props = {
     faq: FaqRow[];
     quoteRanges: Array<{ service: string; low: number; high: number }>;
     connectors: ConnectorBinding[];
+    /** The agent's saved L3 guardrails override, or null when unset (→ the
+     *  per-skill smart default applies at runtime). Seeds the "Use smart
+     *  defaults" toggle (null → ON). */
+    guardrails: Guardrails | null;
+    /** The agent's saved L2 verify rubric override, or null when unset (→ the
+     *  per-skill smart default applies at runtime). */
+    verify: VerifyRubric | null;
   };
   allCapabilities: string[];
   /** The shipped vetted connectors (id + label + secret service) for the Add form. */
@@ -227,6 +247,23 @@ export function AgentTemplateEditor(props: Props) {
     })),
   );
 
+  // ── Guardrails & quality (F5) — the L3 brakes + L2 verify overrides ──
+  // The toggles default ON (= "use smart defaults") when the blueprint carries no
+  // override, so the per-skill runtime defaults (defaultGuardrailsForSkill /
+  // defaultRubricForSkill) apply. `hadGuardrails`/`hadVerify` capture whether the
+  // LOADED blueprint already had an override, so a defaults-ON save knows whether
+  // it must emit a `null` clear (there's something to clear) or omit the key.
+  const hadGuardrails = props.initialBlueprint.guardrails != null;
+  const hadVerify = props.initialBlueprint.verify != null;
+  const [guardrailsDefaultsOn, setGuardrailsDefaultsOn] = useState(!hadGuardrails);
+  const [verifyDefaultsOn, setVerifyDefaultsOn] = useState(!hadVerify);
+  const [guardrailFields, setGuardrailFields] = useState<GuardrailFields>(() =>
+    guardrailFieldsFrom(props.initialBlueprint.guardrails),
+  );
+  const [verifyFields, setVerifyFields] = useState<VerifyFields>(() =>
+    verifyFieldsFrom(props.initialBlueprint.verify),
+  );
+
   // ── Trigger (unified agent model P1) — what FIRES this agent ──
   // Seed each axis from the resolved initialTrigger. We keep one channel value
   // and reconcile it against the kind's allowed list when the kind changes (so
@@ -295,6 +332,17 @@ export function AgentTemplateEditor(props: Props) {
   const save = () => {
     setSaveError(null);
     setSaved(false);
+    // L3 guardrails + L2 verify (F5). Defaults-ON omits the key (or sends `null`
+    // to clear a prior override) so the per-skill runtime default applies; OFF
+    // sends the constructed override. Spread so an omitted field is truly absent.
+    const guardrailsVerifyPatch = buildGuardrailsVerifyPatch({
+      guardrailsDefaultsOn,
+      verifyDefaultsOn,
+      guardrails: guardrailFields,
+      verify: verifyFields,
+      hadGuardrails,
+      hadVerify,
+    });
     startSave(async () => {
       const result = await saveAgentTemplateBlueprintAction({
         templateId: props.templateId,
@@ -322,6 +370,8 @@ export function AgentTemplateEditor(props: Props) {
             triggerCron,
             triggerDelayMinutes,
           ),
+          // Guardrails & quality overrides (omitted/null when defaults-on).
+          ...guardrailsVerifyPatch,
         },
       });
       if (!result.ok) {
@@ -685,6 +735,22 @@ export function AgentTemplateEditor(props: Props) {
         )}
       </div>
 
+      {/* Guardrails & quality (F5) — the L3 brakes + L2 verify overrides. Most
+          meaningful for outbound/event agents, but shown for all (the gates apply
+          to event agents today). */}
+      <GuardrailsCard
+        skill={skillForTriggerEvent(triggerEvent)}
+        channel={triggerChannel}
+        guardrailsDefaultsOn={guardrailsDefaultsOn}
+        verifyDefaultsOn={verifyDefaultsOn}
+        onToggleGuardrailsDefaults={setGuardrailsDefaultsOn}
+        onToggleVerifyDefaults={setVerifyDefaultsOn}
+        guardrails={guardrailFields}
+        verify={verifyFields}
+        onChangeGuardrails={setGuardrailFields}
+        onChangeVerify={setVerifyFields}
+      />
+
       {/* Save */}
       <div className="rounded-xl border bg-card p-5">
         <h2 className="text-card-title">Save</h2>
@@ -847,6 +913,332 @@ function TriggerCard({
         )}
       </div>
     </div>
+  );
+}
+
+// ─── Guardrails & quality (F5) ───────────────────────────────────────────────
+//
+// One card holding BOTH the L3 guardrails (the per-agent brakes: kill switch /
+// daily cap / per-contact frequency cap / quiet hours) and the L2 verify rubric
+// (the maker≠checker quality gate). Each half opens with a "Use smart defaults"
+// toggle: ON (the default for a fresh agent) leaves the blueprint key UNSET so the
+// per-skill runtime default applies (and stays fresh); flipping it OFF reveals the
+// fields and the save writes an explicit override. The hint copy shows what the
+// smart default IS for this agent's skill so the builder knows what they're
+// replacing. Pure form — all persistence is via the editor's existing blueprint
+// save (buildGuardrailsVerifyPatch → saveAgentTemplateBlueprintAction).
+
+function GuardrailsCard({
+  skill,
+  channel,
+  guardrailsDefaultsOn,
+  verifyDefaultsOn,
+  onToggleGuardrailsDefaults,
+  onToggleVerifyDefaults,
+  guardrails,
+  verify,
+  onChangeGuardrails,
+  onChangeVerify,
+}: {
+  skill: string | null;
+  channel: string;
+  guardrailsDefaultsOn: boolean;
+  verifyDefaultsOn: boolean;
+  onToggleGuardrailsDefaults: (on: boolean) => void;
+  onToggleVerifyDefaults: (on: boolean) => void;
+  guardrails: GuardrailFields;
+  verify: VerifyFields;
+  onChangeGuardrails: (next: GuardrailFields) => void;
+  onChangeVerify: (next: VerifyFields) => void;
+}) {
+  const guardrailsHint = describeGuardrailsDefault(skill);
+  const verifyHint = describeVerifyDefault(skill, channel);
+
+  const patchG = (partial: Partial<GuardrailFields>) =>
+    onChangeGuardrails({ ...guardrails, ...partial });
+
+  const setMustInclude = (idx: number, value: string) => {
+    const next = [...verify.mustInclude];
+    next[idx] = value;
+    onChangeVerify({ ...verify, mustInclude: next });
+  };
+
+  return (
+    <div className="rounded-xl border bg-card p-5">
+      <div className="flex items-start gap-2">
+        <span
+          className="inline-flex size-8 shrink-0 items-center justify-center rounded-lg bg-indigo-500/10 text-indigo-500 dark:text-indigo-400"
+          aria-hidden
+        >
+          <ShieldCheck className="size-4" />
+        </span>
+        <div className="min-w-0 flex-1">
+          <h2 className="text-card-title">Guardrails &amp; quality</h2>
+          <p className="text-xs text-muted-foreground">
+            The brakes that stop this agent from over-sending, plus the quality
+            checks every outbound message must pass before it goes out. Smart
+            defaults are on — only change these if you need to.
+          </p>
+        </div>
+      </div>
+
+      {/* ── Guardrails (L3 brakes) ── */}
+      <div className="mt-4 rounded-lg border bg-background p-4">
+        <div className="flex items-start justify-between gap-3">
+          <div className="min-w-0">
+            <h3 className="text-sm font-semibold text-foreground">Guardrails</h3>
+            <p className="mt-0.5 text-xs text-muted-foreground">
+              {guardrailsHint
+                ? `Default: ${guardrailsHint}.`
+                : "No smart default for this agent — it sends with no extra brakes unless you set them."}
+            </p>
+          </div>
+          <SmartDefaultToggle
+            on={guardrailsDefaultsOn}
+            onChange={onToggleGuardrailsDefaults}
+            label="Use smart defaults"
+          />
+        </div>
+
+        {!guardrailsDefaultsOn && (
+          <div className="mt-3 space-y-3 border-t pt-3">
+            {/* Kill switch */}
+            <label className="flex cursor-pointer items-center gap-2 text-sm">
+              <input
+                type="checkbox"
+                checked={guardrails.enabled}
+                onChange={(e) => patchG({ enabled: e.target.checked })}
+              />
+              <span className="font-medium text-foreground">Enabled</span>
+              <span className="text-xs text-muted-foreground">
+                Turn off to hard-stop every send from this agent.
+              </span>
+            </label>
+
+            <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
+              <label className="block">
+                <span className="mb-1 block text-xs font-medium text-foreground">
+                  Max sends per day
+                </span>
+                <input
+                  type="number"
+                  inputMode="numeric"
+                  min={1}
+                  placeholder="No cap"
+                  value={guardrails.maxPerDay}
+                  onChange={(e) => patchG({ maxPerDay: e.target.value })}
+                  className="w-full rounded-md border bg-background px-3 py-2 text-sm focus:border-primary focus:outline-none"
+                />
+                <span className="mt-1 block text-xs text-muted-foreground">
+                  Leave blank for no daily cap.
+                </span>
+              </label>
+
+              <label className="block">
+                <span className="mb-1 block text-xs font-medium text-foreground">
+                  Min hours between messages (same contact)
+                </span>
+                <input
+                  type="number"
+                  inputMode="numeric"
+                  min={0}
+                  placeholder="No limit"
+                  value={guardrails.minHoursBetween}
+                  onChange={(e) => patchG({ minHoursBetween: e.target.value })}
+                  className="w-full rounded-md border bg-background px-3 py-2 text-sm focus:border-primary focus:outline-none"
+                />
+                <span className="mt-1 block text-xs text-muted-foreground">
+                  Don&apos;t re-message the same person within this many hours.
+                </span>
+              </label>
+            </div>
+
+            {/* Quiet hours */}
+            <div>
+              <span className="mb-1 block text-xs font-medium text-foreground">
+                Quiet hours
+              </span>
+              <div className="grid grid-cols-1 gap-2 sm:grid-cols-[auto_auto_1fr] sm:items-center">
+                <label className="flex items-center gap-1.5 text-sm">
+                  <span className="text-xs text-muted-foreground">No messages from</span>
+                  <input
+                    type="number"
+                    inputMode="numeric"
+                    min={0}
+                    max={23}
+                    placeholder="21"
+                    value={guardrails.quietStartHour}
+                    onChange={(e) => patchG({ quietStartHour: e.target.value })}
+                    className="w-16 rounded-md border bg-background px-2 py-1.5 text-sm focus:border-primary focus:outline-none"
+                  />
+                </label>
+                <label className="flex items-center gap-1.5 text-sm">
+                  <span className="text-xs text-muted-foreground">to</span>
+                  <input
+                    type="number"
+                    inputMode="numeric"
+                    min={0}
+                    max={23}
+                    placeholder="8"
+                    value={guardrails.quietEndHour}
+                    onChange={(e) => patchG({ quietEndHour: e.target.value })}
+                    className="w-16 rounded-md border bg-background px-2 py-1.5 text-sm focus:border-primary focus:outline-none"
+                  />
+                  <span className="text-xs text-muted-foreground">(24-hour clock)</span>
+                </label>
+                <label className="flex items-center gap-1.5 text-sm">
+                  <span className="text-xs text-muted-foreground">Timezone</span>
+                  <input
+                    type="text"
+                    placeholder="UTC"
+                    value={guardrails.quietTz}
+                    onChange={(e) => patchG({ quietTz: e.target.value })}
+                    className="min-w-0 flex-1 rounded-md border bg-background px-2 py-1.5 text-sm focus:border-primary focus:outline-none"
+                  />
+                </label>
+              </div>
+              <span className="mt-1 block text-xs text-muted-foreground">
+                Leave the hours blank to allow messages at any time.
+              </span>
+            </div>
+          </div>
+        )}
+      </div>
+
+      {/* ── Quality checks (L2 verify) ── */}
+      <div className="mt-3 rounded-lg border bg-background p-4">
+        <div className="flex items-start justify-between gap-3">
+          <div className="min-w-0">
+            <h3 className="text-sm font-semibold text-foreground">Quality checks</h3>
+            <p className="mt-0.5 text-xs text-muted-foreground">
+              {verifyHint
+                ? `Default: ${verifyHint}.`
+                : "No smart default for this agent — add your own checks to gate its messages."}
+            </p>
+          </div>
+          <SmartDefaultToggle
+            on={verifyDefaultsOn}
+            onChange={onToggleVerifyDefaults}
+            label="Use smart defaults"
+          />
+        </div>
+
+        {!verifyDefaultsOn && (
+          <div className="mt-3 space-y-3 border-t pt-3">
+            <div>
+              <div className="flex items-center justify-between gap-2">
+                <span className="text-xs font-medium text-foreground">
+                  Must include
+                </span>
+                <button
+                  type="button"
+                  onClick={() =>
+                    onChangeVerify({
+                      ...verify,
+                      mustInclude: [...verify.mustInclude, ""],
+                    })
+                  }
+                  className="crm-button-secondary h-7 px-2.5 text-xs"
+                >
+                  + Add
+                </button>
+              </div>
+              <p className="mt-0.5 text-xs text-muted-foreground">
+                Block the message unless it contains this exact text (e.g. the
+                review link, the business name).
+              </p>
+              {verify.mustInclude.length === 0 ? (
+                <p className="mt-2 text-xs text-muted-foreground">
+                  No required text yet.
+                </p>
+              ) : (
+                <div className="mt-2 space-y-2">
+                  {verify.mustInclude.map((value, idx) => (
+                    <div key={idx} className="flex items-center gap-2">
+                      <input
+                        type="text"
+                        placeholder="Text the message must include"
+                        value={value}
+                        onChange={(e) => setMustInclude(idx, e.target.value)}
+                        className="min-w-0 flex-1 rounded-md border bg-background px-3 py-2 text-sm focus:border-primary focus:outline-none"
+                      />
+                      <button
+                        type="button"
+                        onClick={() =>
+                          onChangeVerify({
+                            ...verify,
+                            mustInclude: verify.mustInclude.filter(
+                              (_, i) => i !== idx,
+                            ),
+                          })
+                        }
+                        className="text-xs text-rose-600 hover:underline"
+                      >
+                        Remove
+                      </button>
+                    </div>
+                  ))}
+                </div>
+              )}
+            </div>
+
+            <label className="block max-w-xs">
+              <span className="mb-1 block text-xs font-medium text-foreground">
+                Max length (characters)
+              </span>
+              <input
+                type="number"
+                inputMode="numeric"
+                min={1}
+                placeholder="No limit"
+                value={verify.maxLength}
+                onChange={(e) =>
+                  onChangeVerify({ ...verify, maxLength: e.target.value })
+                }
+                className="w-full rounded-md border bg-background px-3 py-2 text-sm focus:border-primary focus:outline-none"
+              />
+              <span className="mt-1 block text-xs text-muted-foreground">
+                Block messages longer than this. Leave blank for no limit.
+              </span>
+            </label>
+          </div>
+        )}
+      </div>
+    </div>
+  );
+}
+
+/** A small on/off pill toggle for the "Use smart defaults" switches. */
+function SmartDefaultToggle({
+  on,
+  onChange,
+  label,
+}: {
+  on: boolean;
+  onChange: (on: boolean) => void;
+  label: string;
+}) {
+  return (
+    <button
+      type="button"
+      role="switch"
+      aria-checked={on}
+      onClick={() => onChange(!on)}
+      className="inline-flex shrink-0 items-center gap-2 text-xs font-medium text-foreground"
+    >
+      <span
+        className={`relative inline-flex h-5 w-9 items-center rounded-full transition-colors ${
+          on ? "bg-primary" : "bg-muted-foreground/30"
+        }`}
+      >
+        <span
+          className={`inline-block size-4 transform rounded-full bg-white shadow transition-transform ${
+            on ? "translate-x-4" : "translate-x-0.5"
+          }`}
+        />
+      </span>
+      <span className="text-muted-foreground">{label}</span>
+    </button>
   );
 }
 

@@ -152,6 +152,12 @@ export default async function AgentTemplatePage({
           // tool schemas — NEVER the bearer key) so they cross the server→client
           // boundary safely. The picker renders + toggles these.
           connectors: blueprint.connectors ?? [],
+          // L3 GUARDRAILS + L2 VERIFY (outbound-UX F5). Pass through as-is (plain
+          // JSON, no secrets). `null` (absent on the blueprint) seeds the editor's
+          // "Use smart defaults" toggle ON, so the per-skill runtime defaults apply
+          // until the builder overrides them.
+          guardrails: blueprint.guardrails ?? null,
+          verify: blueprint.verify ?? null,
         }}
         allCapabilities={allCapabilities}
         vettedConnectors={VETTED_CONNECTORS.map((c) => ({

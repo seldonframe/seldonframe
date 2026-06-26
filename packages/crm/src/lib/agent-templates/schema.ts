@@ -114,12 +114,16 @@ export const TemplateBlueprintPatchSchema = z
     // must_not_include / …) without this allow-list enumerating them; the runtime
     // verifyOutput tolerates/clamps unknown shapes (an unknown kind fails THAT
     // check, never the gate). Mirrors AgentBlueprint.verify (jsonb — no migration).
+    // `.nullable()`: the Studio editor sends `null` to CLEAR an override (flip
+    // "Use smart defaults" back ON), which mergeTemplateBlueprint deletes from the
+    // blueprint so defaultRubricForSkill applies fresh at runtime.
     verify: z
       .object({
         checks: z
           .array(z.object({ kind: z.string() }).passthrough())
           .optional(),
       })
+      .nullable()
       .optional(),
     // The per-agent GUARDRAILS / brakes (agent loop L3). The kill switch + quiet
     // hours + frequency cap + daily budget that gate the agent's outbound sends.
@@ -128,6 +132,9 @@ export const TemplateBlueprintPatchSchema = z
     // unparseable last-sent skips the frequency check), so this is a shape +
     // obvious-bounds allow-list, not the final guard. Mirrors
     // AgentBlueprint.guardrails (jsonb — no migration).
+    // `.nullable()`: the Studio editor sends `null` to CLEAR an override (flip
+    // "Use smart defaults" back ON), which mergeTemplateBlueprint deletes from the
+    // blueprint so defaultGuardrailsForSkill applies fresh at runtime.
     guardrails: z
       .object({
         enabled: z.boolean().optional(),
@@ -143,6 +150,7 @@ export const TemplateBlueprintPatchSchema = z
           .optional(),
       })
       .strict()
+      .nullable()
       .optional(),
   })
   .strict();

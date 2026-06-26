@@ -241,7 +241,17 @@ export type TemplateBlueprintPatch = Partial<
     // event-triggered starters (review-requester / speed-to-lead) set it.
     | "trigger"
   >
->;
+> & {
+  // The L2 VERIFY rubric + L3 GUARDRAILS (agent-loop safety primitives). Carried
+  // through the same save path so the Studio "Guardrails & quality" card can
+  // OVERRIDE the per-skill smart defaults (defaultRubricForSkill /
+  // defaultGuardrailsForSkill). Declared HERE (not in the Pick above) so they can
+  // additionally accept `null`: editor convention (outbound-UX F5) is that a `null`
+  // means "clear the override" — mergeTemplateBlueprint DELETES the key so the
+  // runtime default applies fresh again; an absent key leaves it untouched.
+  verify?: AgentBlueprint["verify"] | null;
+  guardrails?: AgentBlueprint["guardrails"] | null;
+};
 
 /**
  * Merge-patch a template blueprint. Pure (no DB). Object-level shallow merge —
@@ -249,6 +259,13 @@ export type TemplateBlueprintPatch = Partial<
  * the full set it wants), identical to lib/agents/store.ts updateAgentBlueprint.
  * `undefined` patch fields are ignored so a partial save never clobbers an
  * existing value with undefined.
+ *
+ * `null` is the explicit CLEAR signal (outbound-UX F5): a patch field set to
+ * `null` DELETES that key from the blueprint, so a previously-saved override
+ * (e.g. `guardrails` / `verify`) is removed and the per-skill runtime default
+ * applies again. This differs from `undefined` (which is a no-op) on purpose: a
+ * partial save omits keys it doesn't touch, but flipping "Use smart defaults"
+ * back ON must actively wipe the stored override, not merely skip it.
  */
 export function mergeTemplateBlueprint(
   current: AgentBlueprint,
@@ -257,6 +274,11 @@ export function mergeTemplateBlueprint(
   const next: AgentBlueprint = { ...current };
   for (const [key, value] of Object.entries(patch)) {
     if (value === undefined) continue;
+    if (value === null) {
+      // Explicit clear — remove the override so the runtime default reapplies.
+      delete (next as Record<string, unknown>)[key];
+      continue;
+    }
     (next as Record<string, unknown>)[key] = value;
   }
   return next;
