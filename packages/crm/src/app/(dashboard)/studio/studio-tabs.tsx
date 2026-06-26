@@ -16,6 +16,7 @@ import { usePathname } from "next/navigation";
 
 const TABS = [
   { href: "/studio/agents", label: "Agents" },
+  { href: "/studio/agents/activity", label: "Activity" },
   { href: "/studio/clients", label: "Clients" },
   { href: "/studio/earnings", label: "Earnings" },
 ];
@@ -25,7 +26,19 @@ export function StudioTabs() {
   return (
     <nav className="flex gap-1 border-b" aria-label="Studio sections">
       {TABS.map((t) => {
-        const isActive = pathname === t.href || pathname.startsWith(`${t.href}/`);
+        // Prefix-match so a tab stays active on its subpages, EXCEPT a tab that is
+        // a strict prefix of a sibling (Agents ⊂ Agents/Activity) must not also
+        // light up on the sibling's path — so a tab is active only when no other,
+        // longer tab href is a better (longer) prefix of the current path.
+        const matches =
+          pathname === t.href || pathname.startsWith(`${t.href}/`);
+        const betterMatchExists = TABS.some(
+          (o) =>
+            o.href !== t.href &&
+            o.href.length > t.href.length &&
+            (pathname === o.href || pathname.startsWith(`${o.href}/`)),
+        );
+        const isActive = matches && !betterMatchExists;
         return (
           <Link
             key={t.href}

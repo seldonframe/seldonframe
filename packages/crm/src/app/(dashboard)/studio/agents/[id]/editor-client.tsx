@@ -28,11 +28,13 @@ import {
   Plus,
   Check,
   ShieldCheck,
+  Send,
 } from "lucide-react";
 import {
   saveAgentTemplateBlueprintAction,
   generateAgentDraftAction,
 } from "@/lib/agent-templates/actions";
+import { sendTestEventAgentAction } from "@/lib/agents/triggers/actions";
 import {
   bindTemplateConnectorAction,
   unbindTemplateConnectorAction,
@@ -461,6 +463,19 @@ export function AgentTemplateEditor(props: Props) {
         onChangeEvent={setTriggerEvent}
         onChangeDelayMinutes={setTriggerDelayMinutes}
       />
+
+      {/* Send test — outbound (event) agents only. Fire a REAL "[TEST] "
+          review/speed-to-lead message to your own number/email NOW, no booking
+          or lead required. Bypasses the throttle/guardrails/verify gates (it's an
+          explicit operator action); a review test still requires a review link.
+          Shown for kind=event; uses the CURRENTLY-SELECTED channel — save first
+          if you just switched channels so the test matches what you'll deploy. */}
+      {triggerKind === "event" && (
+        <SendTestCard
+          templateId={props.templateId}
+          channel={triggerChannel}
+        />
+      )}
 
       {/* Refine with a prompt — AI-assisted iteration over the whole config */}
       <div className="rounded-xl border bg-card p-5">
@@ -912,6 +927,107 @@ function TriggerCard({
           </label>
         )}
       </div>
+    </div>
+  );
+}
+
+// ─── Send test (outbound/event agents) ──────────────────────────────────────
+//
+// A small form that fires a REAL test of this agent's outbound message to a
+// number (SMS) or address (email) the operator types — typically their own — via
+// sendTestEventAgentAction. No booking/lead is needed: it's the "make my phone
+// fire a review request" affordance. The action bypasses the throttle/guardrails/
+// verify gates (explicit operator action) but still requires a review link for a
+// review test, surfacing a clear error if it's missing. The input shown matches
+// the agent's current channel (phone vs email).
+function SendTestCard({
+  templateId,
+  channel,
+}: {
+  templateId: string;
+  channel: string;
+}) {
+  const isEmail = channel === "email";
+  const [to, setTo] = useState("");
+  const [isSending, startSend] = useTransition();
+  const [okMsg, setOkMsg] = useState<string | null>(null);
+  const [errMsg, setErrMsg] = useState<string | null>(null);
+
+  const send = () => {
+    setOkMsg(null);
+    setErrMsg(null);
+    const dest = to.trim();
+    if (!dest) {
+      setErrMsg(isEmail ? "Enter an email address." : "Enter a phone number.");
+      return;
+    }
+    startSend(async () => {
+      const result = await sendTestEventAgentAction({
+        agentTemplateId: templateId,
+        ...(isEmail ? { toEmail: dest } : { toPhone: dest }),
+      });
+      if (result.ok) {
+        setOkMsg(`Sent to ${result.to}: ${result.preview}`);
+      } else {
+        setErrMsg(result.error);
+      }
+    });
+  };
+
+  return (
+    <div className="rounded-xl border bg-card p-5">
+      <div className="flex items-start gap-2">
+        <span
+          className="inline-flex size-8 shrink-0 items-center justify-center rounded-lg bg-indigo-500/10 text-indigo-500 dark:text-indigo-400"
+          aria-hidden
+        >
+          <Send className="size-4" />
+        </span>
+        <div className="min-w-0 flex-1">
+          <h2 className="text-card-title">Send test</h2>
+          <p className="text-xs text-muted-foreground">
+            Fire a real{" "}
+            <span className="font-medium text-foreground">
+              {isEmail ? "email" : "text"}
+            </span>{" "}
+            of this agent&apos;s message to {isEmail ? "an address" : "a number"}{" "}
+            you choose — no booking or lead needed. The message is prefixed with{" "}
+            <code className="font-mono text-[11px]">[TEST]</code>. Save first if
+            you just changed the channel or review link.
+          </p>
+        </div>
+      </div>
+      <div className="mt-3 flex flex-col gap-2 sm:flex-row">
+        <input
+          type={isEmail ? "email" : "tel"}
+          inputMode={isEmail ? "email" : "tel"}
+          value={to}
+          onChange={(e) => setTo(e.target.value)}
+          onKeyDown={(e) => {
+            if (e.key === "Enter" && !isSending) send();
+          }}
+          disabled={isSending}
+          placeholder={isEmail ? "you@example.com" : "+1 555 123 4567"}
+          className="h-10 flex-1 rounded-md border bg-background px-3 py-2 text-sm focus:border-primary focus:outline-none disabled:opacity-60"
+        />
+        <button
+          type="button"
+          onClick={send}
+          disabled={isSending}
+          className="crm-button-secondary inline-flex h-10 shrink-0 items-center gap-1.5 px-4 text-sm"
+        >
+          <Send className={`size-4 ${isSending ? "animate-pulse" : ""}`} />
+          {isSending ? "Sending…" : "Send test"}
+        </button>
+      </div>
+      {okMsg && (
+        <p className="mt-2 text-xs text-emerald-700 dark:text-emerald-400">
+          ✓ {okMsg}
+        </p>
+      )}
+      {errMsg && (
+        <p className="mt-2 text-xs text-rose-600 dark:text-rose-400">{errMsg}</p>
+      )}
     </div>
   );
 }
