@@ -88,6 +88,12 @@ export async function sendEmailFromApi(params: {
   // booking confirmations). Threaded straight to the provider send().
   // Undefined → existing behavior byte-for-byte.
   attachments?: EmailAttachment[];
+  /** 2026-06-25 — extra metadata merged into the emails row (after the default
+   *  { source, testMode }). Mirrors sendSmsFromApi.metadata: lets a caller tag
+   *  the row for idempotency / throttling — e.g. the event-agent review-requester
+   *  tags { source: "agent:review-requester" } so it never double-asks one
+   *  contact. Undefined → existing behavior byte-for-byte. */
+  metadata?: Record<string, unknown>;
 }): Promise<ApiSendEmailResult> {
   const toEmail = normalizeEmail(params.toEmail);
 
@@ -153,7 +159,7 @@ export async function sendEmailFromApi(params: {
       bodyHtml: rendered.html,
       bodyText: rendered.text,
       status: "queued",
-      metadata: { source: "api", testMode: isTestMode },
+      metadata: { source: "api", testMode: isTestMode, ...(params.metadata ?? {}) },
     })
     .returning({ id: emails.id, contactId: emails.contactId });
 

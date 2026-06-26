@@ -145,6 +145,21 @@ export async function POST(request: Request) {
     } catch {
       // Non-blocking for public form submission path.
     }
+
+    // 2026-06-25 — unified agent model P1 (T4): a public intake submission is a
+    // new lead → emit `lead.created` so the speed-to-lead event-agent fires
+    // (same canonical slug as lib/forms/actions.ts). orgId rides the payload for
+    // the in-memory bus listener. Non-blocking.
+    try {
+      await emitSeldonEvent("lead.created", {
+        contactId,
+        orgId: orgId,
+        source: "form.submitted",
+        formId: formName,
+      }, { orgId: orgId });
+    } catch {
+      // Non-blocking for public form submission path.
+    }
   }
 
   // May 1, 2026 — Measurement Layer 2 + 3.

@@ -271,6 +271,19 @@ export async function submitPublicIntakeAction({
       contactId,
       data,
     }, { orgId: form.orgId });
+
+    // 2026-06-25 — unified agent model P1 (T4): a submitted intake form IS a new
+    // lead. Emit the canonical `lead.created` event (the builder's KNOWN_EVENTS
+    // "new lead" slug) so any event-triggered agent — the speed-to-lead instant
+    // acknowledgement — fires. We carry orgId in the payload because the
+    // in-memory bus listener can't see emit-options.orgId. Additive: existing
+    // form.submitted consumers are untouched.
+    await emitSeldonEvent("lead.created", {
+      contactId,
+      orgId: form.orgId,
+      source: "form.submitted",
+      formId: form.id,
+    }, { orgId: form.orgId });
   }
 
   return { success: true };

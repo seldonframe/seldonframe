@@ -133,6 +133,13 @@ export type AgentBlueprint = {
    *  hint, not the final guard. Stored in the jsonb blueprint — no migration.
    *  See lib/agents/triggers/agent-trigger.ts. */
   trigger?: import("@/lib/agents/triggers/agent-trigger").AgentTrigger;
+  /** 2026-06-25 (unified agent model P1, T4) — the Google review URL the
+   *  review-requester agent (trigger event "booking.completed") puts in its ask.
+   *  Sourced from the business's GBP link; when absent the event-agent skips
+   *  gracefully (the ask is worthless without a link — see
+   *  lib/agents/triggers/run-event-agent.ts). Stored in the jsonb blueprint — no
+   *  migration. */
+  reviewUrl?: string;
 };
 
 export const agents = pgTable(

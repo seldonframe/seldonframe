@@ -5,6 +5,12 @@ import { configureTelemetry, trackTelemetryEvent } from "@seldonframe/core/telem
 import { db } from "@/db";
 import { bookings, changePlans, intakeForms, intakeSubmissions, onboardingLinks } from "@/db/schema";
 import { dispatchEventToDeployedAgents } from "@/lib/agents/dispatcher";
+// 2026-06-25 — unified agent model P1 (T4): event-triggered OUTBOUND agents.
+// review-requester ← booking.completed, speed-to-lead ← lead.created. The
+// orchestrator is pure-ish + DI'd; buildRunEventAgentDeps supplies the real
+// agent_templates lookup + the existing sendSms/sendEmail seam.
+import { runEventAgent } from "@/lib/agents/triggers/run-event-agent";
+import { buildRunEventAgentDeps } from "@/lib/agents/triggers/run-event-agent-deps";
 import { sendTriggeredEmailsForContactEvent, sendWelcomeEmailForContact } from "@/lib/emails/actions";
 import { syncContactToNewsletter } from "@/lib/integrations/newsletter-sync";
 // 2026-05-18 — Outbound messaging dispatch (plan v2, slice 2).
@@ -404,6 +410,58 @@ export function registerCrmEventListeners() {
           err,
         );
       }
+
+      // 2026-06-25 — unified agent model P1 (T4): run any EVENT-TRIGGERED
+      // agent_templates wired to booking.completed (the review-requester). This
+      // is the new Trigger × Skill × Channel path (distinct from the archetype
+      // dispatcher above): it composes the pure review ask + sends via the
+      // existing outbound seam, throttled one-per-contact. Non-fatal — never
+      // throws (it's inside the bus handler).
+      try {
+        const contactId =
+          typeof data.contactId === "string" ? data.contactId : null;
+        await runEventAgent(
+          {
+            type: "booking.completed",
+            orgId: completedOrgId,
+            contactId,
+            payload: data,
+          },
+          buildRunEventAgentDeps(),
+        );
+      } catch (err) {
+        console.warn(`[listeners] runEventAgent booking.completed failed:`, err);
+      }
+    }
+  });
+
+  // 2026-06-25 — unified agent model P1 (T4): speed-to-lead.
+  //
+  // `lead.created` is emitted at the lead-capture source (intake form submit /
+  // landing lead capture — see lib/forms/actions.ts) right after the existing
+  // form.submitted emit. It carries { contactId } and is THE canonical "a new
+  // lead arrived" slug the builder's KNOWN_EVENTS picker exposes. Here we run any
+  // event-triggered agent wired to it (the speed-to-lead instant acknowledgement)
+  // via the same orchestrator + outbound seam as the review-requester above.
+  //
+  // orgId is NOT on the in-memory bus payload (bus design — emit options carry it
+  // for durable logging only), so the emit at the source includes it in the data
+  // as `orgId` for this listener. Non-fatal.
+  bus.on("lead.created", async (event) => {
+    console.log(JSON.stringify({ action: "event.lead.created", ...event }));
+
+    const data = event.data as Record<string, unknown>;
+    const orgId = typeof data.orgId === "string" ? data.orgId : "";
+    const contactId = typeof data.contactId === "string" ? data.contactId : null;
+    if (!orgId) return;
+
+    try {
+      await runEventAgent(
+        { type: "lead.created", orgId, contactId, payload: data },
+        buildRunEventAgentDeps(),
+      );
+    } catch (err) {
+      console.warn(`[listeners] runEventAgent lead.created failed:`, err);
     }
   });
 
