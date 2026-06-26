@@ -26,6 +26,10 @@ import {
   type TemplateBlueprintPatch,
 } from "./store";
 import { TemplateBlueprintPatchSchema } from "./schema";
+import {
+  resolveAgentTrigger,
+  type AgentTrigger,
+} from "@/lib/agents/triggers/agent-trigger";
 import { generateDraft } from "./generate";
 import {
   instantiateStarter,
@@ -136,9 +140,25 @@ export async function saveAgentTemplateBlueprintAction(input: {
     return { ok: false, error: "template_not_found" };
   }
 
+  // Normalize the (deliberately loose) zod `trigger` into a strict, valid
+  // AgentTrigger before persisting: resolveAgentTrigger clamps any malformed
+  // shape (wrong channel-for-kind, blank event/cron) to the safe inbound
+  // default, so the blueprint never stores a trigger the runtime can't honor.
+  // When `trigger` is absent we leave the patch untouched (partial save).
+  const { trigger, ...rest } = parsed.data;
+  const patch: TemplateBlueprintPatch =
+    trigger === undefined
+      ? rest
+      : {
+          ...rest,
+          // The zod `trigger` is intentionally loose (channel: string); the
+          // resolver strictly re-parses an unknown shape into a valid union.
+          trigger: resolveAgentTrigger(trigger as Partial<AgentTrigger>),
+        };
+
   const result = await updateAgentTemplate({
     id: input.templateId,
-    patch: parsed.data,
+    patch,
   });
   if (!result.ok) {
     return { ok: false, error: result.error };

@@ -20,6 +20,7 @@ import {
   DEFAULT_VOICE_RECEPTIONIST_VOICE,
   type AgentTemplateType,
 } from "@/lib/agent-templates/store";
+import { resolveAgentTrigger } from "@/lib/agents/triggers/agent-trigger";
 import { getSellerListingContextAction } from "@/lib/marketplace/seller-actions";
 import { VETTED_CONNECTORS } from "@/lib/agents/mcp/connectors";
 import { COMPOSIO_TOOLKITS } from "@/lib/integrations/composio/catalog";
@@ -55,6 +56,11 @@ export default async function AgentTemplatePage({
   // (excl. the chat-only provide_faq_answer), chat gets the chat set (excl. the
   // voice-only get_quote_range). Same helper the generator's allow-list uses.
   const allCapabilities = capabilitiesForSurface(surface);
+  // What FIRES this agent (unified agent model P1). Resolve the stored
+  // blueprint.trigger, falling back to the inbound default derived from the
+  // template's surface — so an existing template with no trigger reads as
+  // "inbound · <surface>", byte-for-byte today's behavior.
+  const trigger = resolveAgentTrigger(blueprint.trigger, surface);
 
   // Seller marketplace context: the current listing for this template (if any)
   // + the builder's Stripe Connect status, so the "List on the marketplace"
@@ -130,6 +136,7 @@ export default async function AgentTemplatePage({
       <AgentTemplateEditor
         templateId={template.id}
         surface={surface}
+        initialTrigger={trigger}
         initialBlueprint={{
           greeting: blueprint.greeting ?? "",
           customSkillMd: blueprint.customSkillMd ?? "",

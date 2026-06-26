@@ -16,6 +16,12 @@ import { count, desc, eq } from "drizzle-orm";
 import { db } from "@/db";
 import { agentTemplates, deployments } from "@/db/schema";
 import { getOrgId } from "@/lib/auth/helpers";
+import type { AgentBlueprint } from "@/db/schema";
+import { surfaceForType, type AgentTemplateType } from "@/lib/agent-templates/store";
+import {
+  resolveAgentTrigger,
+  triggerLabel,
+} from "@/lib/agents/triggers/agent-trigger";
 import { NewAgentButton } from "./new-agent-button";
 import { DeployButton } from "./deploy-button";
 import { TemplateStatusBadge, formatTemplateType } from "./status-badge";
@@ -46,6 +52,9 @@ export default async function AgentsStudioPage() {
       status: agentTemplates.status,
       evalScore: agentTemplates.evalScore,
       updatedAt: agentTemplates.updatedAt,
+      // Needed for the trigger chip (unified agent model P1) — blueprint.trigger
+      // resolved against the type-derived surface gives the row's "fires when".
+      blueprint: agentTemplates.blueprint,
     })
     .from(agentTemplates)
     .where(eq(agentTemplates.builderOrgId, orgId))
@@ -122,16 +131,28 @@ export default async function AgentsStudioPage() {
         <div className="space-y-3">
           {templates.map((tmpl) => {
             const deployCount = deployCountByTemplate.get(tmpl.id) ?? 0;
+            // The row's trigger chip: resolve blueprint.trigger against the
+            // type-derived surface, then label it ("Inbound · Voice", "After
+            // booking · SMS"). Unset/legacy templates resolve to the inbound
+            // default, so the chip is always present and accurate.
+            const bp = (tmpl.blueprint ?? {}) as AgentBlueprint;
+            const surface = surfaceForType(tmpl.type as AgentTemplateType);
+            const chipLabel = triggerLabel(resolveAgentTrigger(bp.trigger, surface));
             return (
               <article key={tmpl.id} className="rounded-xl border bg-card p-5">
                 <div className="flex flex-wrap items-center justify-between gap-3">
                   <div className="min-w-0">
-                    <Link
-                      href={`/studio/agents/${tmpl.id}`}
-                      className="text-card-title hover:underline"
-                    >
-                      {tmpl.name}
-                    </Link>
+                    <div className="flex flex-wrap items-center gap-2">
+                      <Link
+                        href={`/studio/agents/${tmpl.id}`}
+                        className="text-card-title hover:underline"
+                      >
+                        {tmpl.name}
+                      </Link>
+                      <span className="inline-flex items-center rounded-full border bg-background px-2.5 py-0.5 text-xs font-medium text-muted-foreground">
+                        {chipLabel}
+                      </span>
+                    </div>
                     <p className="text-sm text-muted-foreground">
                       {formatTemplateType(tmpl.type)} •{" "}
                       {deployCount === 1

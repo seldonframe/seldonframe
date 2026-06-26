@@ -235,6 +235,11 @@ export type TemplateBlueprintPatch = Partial<
     | "capabilities"
     | "quoteRanges"
     | "connectors"
+    // What FIRES the agent (unified agent model P1). Carries blueprint.trigger
+    // through the same save path (zod-validated in schema.ts, persisted by the
+    // generic mergeTemplateBlueprint loop). Lets the Studio trigger picker + the
+    // event-triggered starters (review-requester / speed-to-lead) set it.
+    | "trigger"
   >
 >;
 

@@ -196,6 +196,40 @@ describe("STARTER_TEMPLATES — coverage", () => {
       "social starter summary must mention connecting Postiz for real publishing",
     );
   });
+
+  // Unified agent model P1 — the two event-triggered, OUTBOUND starters. Unlike
+  // every inbound starter above, these carry a blueprint.trigger of kind "event".
+  test("includes a review-requester starter wired to booking.completed → sms", () => {
+    const review = STARTER_TEMPLATES.find((s) => s.id === "review-requester");
+    assert.ok(review, "a review-requester starter must exist");
+    assert.deepEqual(
+      (review as StarterTemplate).blueprint.trigger,
+      { kind: "event", event: "booking.completed", channel: "sms" },
+      "review-requester must fire on booking.completed via sms",
+    );
+    // The persona is the human-facing description (the real copy comes from
+    // composeReviewRequest at runtime) — it must describe the Google-review ask.
+    assert.match(
+      (review as StarterTemplate).blueprint.customSkillMd ?? "",
+      /review/i,
+      "review-requester persona must describe the review ask",
+    );
+  });
+
+  test("includes a speed-to-lead starter wired to lead.created → sms", () => {
+    const speed = STARTER_TEMPLATES.find((s) => s.id === "speed-to-lead");
+    assert.ok(speed, "a speed-to-lead starter must exist");
+    assert.deepEqual(
+      (speed as StarterTemplate).blueprint.trigger,
+      { kind: "event", event: "lead.created", channel: "sms" },
+      "speed-to-lead must fire on lead.created via sms",
+    );
+    assert.match(
+      (speed as StarterTemplate).blueprint.customSkillMd ?? "",
+      /lead/i,
+      "speed-to-lead persona must describe instant new-lead outreach",
+    );
+  });
 });
 
 // ─────────────────────────────────────────────────────────────────────────────

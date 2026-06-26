@@ -26,8 +26,6 @@ import {
   Trash2,
   ChevronDown,
   Plus,
-  Phone,
-  MessageSquare,
   Check,
 } from "lucide-react";
 import {
@@ -43,6 +41,10 @@ import {
 } from "@/lib/agent-templates/template-mcp-server";
 import type { AgentSurface } from "@/lib/agent-templates/store";
 import type { ConnectorBinding } from "@/lib/agents/mcp/connectors";
+import {
+  KNOWN_EVENTS,
+  type AgentTrigger,
+} from "@/lib/agents/triggers/agent-trigger";
 import { VOICE_OPTIONS } from "@/lib/agents/voice/card-status";
 
 // Rotating status copy shown on the Refine button while a refinement is being
@@ -69,6 +71,10 @@ type ComposioToolkitOption = { slug: string; label: string };
 type Props = {
   templateId: string;
   surface: AgentSurface;
+  /** The agent's resolved trigger (unified agent model P1) — what FIRES it.
+   *  Already clamped to a valid AgentTrigger by resolveAgentTrigger on the
+   *  server, so the picker can trust its shape. */
+  initialTrigger: AgentTrigger;
   initialBlueprint: {
     greeting: string;
     customSkillMd: string;
@@ -84,6 +90,66 @@ type Props = {
   /** The curated Composio toolkit catalog for the per-agent "Composio apps" picker. */
   composioCatalog: ComposioToolkitOption[];
 };
+
+// ─── trigger picker options (unified agent model P1) ────────────────────────
+//
+// The three "Answers when…" arms + the channels each kind allows. These mirror
+// the AgentTrigger union in lib/agents/triggers/agent-trigger.ts (inbound:
+// voice/chat/email/sms · event: sms/email · schedule: email/digest). Kept here
+// (not exported from the pure module) because they're UI-shaped: label + the
+// allowed channel list per kind, used to drive the picker's selects.
+type TriggerKind = AgentTrigger["kind"];
+
+const TRIGGER_KIND_OPTIONS: { value: TriggerKind; label: string; help: string }[] = [
+  {
+    value: "inbound",
+    label: "Someone contacts the business",
+    help: "It answers an incoming call, chat, text, or email.",
+  },
+  {
+    value: "event",
+    label: "Something happens",
+    help: "It fires after a business event — like a booking finishing or a new lead.",
+  },
+  {
+    value: "schedule",
+    label: "On a schedule",
+    help: "It runs on a recurring cadence and sends an update.",
+  },
+];
+
+// The channel <select> options per kind. Value is the AgentTrigger channel; the
+// label is operator-facing.
+const CHANNELS_BY_KIND: Record<TriggerKind, { value: string; label: string }[]> = {
+  inbound: [
+    { value: "voice", label: "Voice (phone)" },
+    { value: "chat", label: "Web chat" },
+    { value: "sms", label: "SMS" },
+    { value: "email", label: "Email" },
+  ],
+  event: [
+    { value: "sms", label: "SMS" },
+    { value: "email", label: "Email" },
+  ],
+  schedule: [
+    { value: "email", label: "Email" },
+    { value: "digest", label: "Digest" },
+  ],
+};
+
+/** Assemble the loose trigger patch the save action sends. Carries only the
+ *  fields the chosen kind needs (event slug for event, cron for schedule), so
+ *  the server's resolveAgentTrigger gets a clean shape to validate/clamp. */
+function buildTriggerPatch(
+  kind: TriggerKind,
+  channel: string,
+  event: string,
+  cron: string,
+): { kind: TriggerKind; channel: string; event?: string; cron?: string } {
+  if (kind === "event") return { kind, channel, event };
+  if (kind === "schedule") return { kind, channel, cron };
+  return { kind, channel };
+}
 
 // ─── surface-aware copy ────────────────────────────────────────────────────
 //
@@ -138,6 +204,40 @@ export function AgentTemplateEditor(props: Props) {
     })),
   );
 
+  // ── Trigger (unified agent model P1) — what FIRES this agent ──
+  // Seed each axis from the resolved initialTrigger. We keep one channel value
+  // and reconcile it against the kind's allowed list when the kind changes (so
+  // switching inbound→event never strands an invalid channel like "voice").
+  const [triggerKind, setTriggerKind] = useState<TriggerKind>(
+    props.initialTrigger.kind,
+  );
+  const [triggerChannel, setTriggerChannel] = useState<string>(
+    props.initialTrigger.channel,
+  );
+  const [triggerEvent, setTriggerEvent] = useState<string>(
+    props.initialTrigger.kind === "event"
+      ? props.initialTrigger.event
+      : (KNOWN_EVENTS[0]?.value ?? "booking.completed"),
+  );
+  // The schedule cron isn't editable in P1 (no cron builder yet); we preserve
+  // the seeded value so a schedule trigger round-trips without loss.
+  const [triggerCron] = useState<string>(
+    props.initialTrigger.kind === "schedule"
+      ? props.initialTrigger.cron
+      : "0 8 * * 1",
+  );
+
+  // Change the kind AND snap the channel into that kind's allowed set if the
+  // current one isn't valid for it (e.g. inbound "voice" → event must become
+  // "sms"). Keeps the picker from ever holding a channel the kind can't speak.
+  const changeTriggerKind = (kind: TriggerKind) => {
+    setTriggerKind(kind);
+    const allowed = CHANNELS_BY_KIND[kind];
+    if (!allowed.some((o) => o.value === triggerChannel)) {
+      setTriggerChannel(allowed[0]!.value);
+    }
+  };
+
   const [isSaving, startSave] = useTransition();
   const [saveError, setSaveError] = useState<string | null>(null);
   const [saved, setSaved] = useState(false);
@@ -181,6 +281,15 @@ export function AgentTemplateEditor(props: Props) {
               low: Number(r.low) || 0,
               high: Number(r.high) || 0,
             })),
+          // What FIRES the agent. Send only the fields the kind needs; the
+          // server normalizes (resolveAgentTrigger) any loose shape to a valid
+          // AgentTrigger before persisting.
+          trigger: buildTriggerPatch(
+            triggerKind,
+            triggerChannel,
+            triggerEvent,
+            triggerCron,
+          ),
         },
       });
       if (!result.ok) {
@@ -258,8 +367,16 @@ export function AgentTemplateEditor(props: Props) {
 
   return (
     <div className="space-y-4">
-      {/* Surfaces — where this agent answers (template-type-derived, read-only) */}
-      <SurfacesCard surface={props.surface} />
+      {/* Trigger — what FIRES this agent (Trigger × Channel). Defaults to
+          inbound on the template's surface, so existing templates read as today. */}
+      <TriggerCard
+        kind={triggerKind}
+        channel={triggerChannel}
+        event={triggerEvent}
+        onChangeKind={changeTriggerKind}
+        onChangeChannel={setTriggerChannel}
+        onChangeEvent={setTriggerEvent}
+      />
 
       {/* Refine with a prompt — AI-assisted iteration over the whole config */}
       <div className="rounded-xl border bg-card p-5">
@@ -564,44 +681,108 @@ export function AgentTemplateEditor(props: Props) {
   );
 }
 
-// ─── Surfaces (#1 — read-only, template-type-derived) ───────────────────────
+// ─── Trigger (unified agent model P1 — "What kind of agent?") ────────────────
 //
-// Shows where this agent answers. The surface is DERIVED from the template type
-// (voice → Voice; chat → Web chat) and is read-only today — the data model
-// stores one surface per template, so we present it clearly rather than faking
-// an editable control the schema can't honor. A chat/text template also answers
-// SMS + email once deployed (the multi-surface runtime routes inbound text
-// through the same agent loop), so we say so honestly.
-function SurfacesCard({ surface }: { surface: AgentSurface }) {
-  const isVoice = surface === "voice";
+// Generalizes the old read-only Surfaces card. An agent is Trigger × Channel:
+// the builder picks WHEN it answers (inbound / event / schedule), then the
+// CHANNEL it uses (filtered to what the kind allows). The default — inbound on
+// the template's surface channel — keeps every existing template behaving
+// exactly as before. For kind=event, a second select chooses which domain event
+// (KNOWN_EVENTS) fires it. Cron editing is deferred (P2), so a schedule trigger
+// keeps its seeded cadence on save.
+function TriggerCard({
+  kind,
+  channel,
+  event,
+  onChangeKind,
+  onChangeChannel,
+  onChangeEvent,
+}: {
+  kind: TriggerKind;
+  channel: string;
+  event: string;
+  onChangeKind: (k: TriggerKind) => void;
+  onChangeChannel: (c: string) => void;
+  onChangeEvent: (e: string) => void;
+}) {
+  const channelOptions = CHANNELS_BY_KIND[kind];
   return (
     <div className="rounded-xl border bg-card p-5">
-      <div className="flex flex-wrap items-center gap-3">
-        <div className="min-w-0 flex-1">
-          <h2 className="text-card-title">Surface</h2>
-          <p className="text-xs text-muted-foreground">
-            Where this agent answers. Set by the template type.
-          </p>
-        </div>
-        <span className="inline-flex items-center gap-1.5 rounded-full border bg-background px-3 py-1 text-xs font-medium">
-          {isVoice ? (
-            <>
-              <Phone className="size-3.5 text-indigo-500 dark:text-indigo-400" aria-hidden />
-              Voice
-            </>
-          ) : (
-            <>
-              <MessageSquare className="size-3.5 text-indigo-500 dark:text-indigo-400" aria-hidden />
-              Web chat
-            </>
-          )}
-        </span>
-      </div>
-      {!isVoice && (
-        <p className="mt-2 text-xs text-muted-foreground">
-          This agent also answers SMS + email when deployed.
+      <div className="min-w-0">
+        <h2 className="text-card-title">What triggers this agent?</h2>
+        <p className="text-xs text-muted-foreground">
+          Choose when it answers and the channel it uses. Each client that
+          deploys this template inherits this.
         </p>
-      )}
+      </div>
+
+      {/* "Answers when…" — the three trigger kinds as selectable cards. */}
+      <fieldset className="mt-3">
+        <legend className="sr-only">Answers when</legend>
+        <div className="grid grid-cols-1 gap-2 sm:grid-cols-3">
+          {TRIGGER_KIND_OPTIONS.map((opt) => {
+            const selected = kind === opt.value;
+            return (
+              <button
+                key={opt.value}
+                type="button"
+                onClick={() => onChangeKind(opt.value)}
+                aria-pressed={selected}
+                className={`flex flex-col gap-1 rounded-lg border p-3 text-left transition-colors ${
+                  selected
+                    ? "border-primary bg-primary/5 ring-1 ring-primary"
+                    : "bg-background hover:bg-muted/50"
+                }`}
+              >
+                <span className="text-sm font-medium text-foreground">
+                  {opt.label}
+                </span>
+                <span className="text-xs text-muted-foreground">{opt.help}</span>
+              </button>
+            );
+          })}
+        </div>
+      </fieldset>
+
+      <div className="mt-3 grid grid-cols-1 gap-3 sm:grid-cols-2">
+        {/* Event picker — only for kind=event. */}
+        {kind === "event" && (
+          <label className="block">
+            <span className="mb-1 block text-xs font-medium text-foreground">
+              Which event
+            </span>
+            <select
+              value={event}
+              onChange={(e) => onChangeEvent(e.target.value)}
+              className="w-full rounded-md border bg-background px-3 py-2 text-sm focus:border-primary focus:outline-none"
+            >
+              {KNOWN_EVENTS.map((ev) => (
+                <option key={ev.value} value={ev.value}>
+                  {ev.label}
+                </option>
+              ))}
+            </select>
+          </label>
+        )}
+
+        {/* Channel — filtered to what the kind allows. */}
+        <label className="block">
+          <span className="mb-1 block text-xs font-medium text-foreground">
+            Channel
+          </span>
+          <select
+            value={channel}
+            onChange={(e) => onChangeChannel(e.target.value)}
+            className="w-full rounded-md border bg-background px-3 py-2 text-sm focus:border-primary focus:outline-none"
+          >
+            {channelOptions.map((ch) => (
+              <option key={ch.value} value={ch.value}>
+                {ch.label}
+              </option>
+            ))}
+          </select>
+        </label>
+      </div>
     </div>
   );
 }
