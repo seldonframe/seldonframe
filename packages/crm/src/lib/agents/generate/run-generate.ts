@@ -26,6 +26,11 @@ import {
   resolveSkillAlias,
 } from "@/lib/agents/generate/agent-bundle";
 import {
+  authorAgentDraft,
+  type AgentAuthor,
+} from "@/lib/agents/generate/authored-agent";
+import { composeBundleFromAuthored } from "@/lib/agents/generate/compose-authored";
+import {
   judgeGeneratedAgent,
   applyJudgeFixes,
   type AgentGrader,
@@ -74,6 +79,16 @@ export type GenerateDeps = {
     sentence: string,
     priorLessons?: string,
   ) => Promise<Partial<AgentIntent>>;
+  /** Optional LLM AGENT AUTHOR — the primitive-composition path. When present (and
+   *  it returns a valid draft), it AUTHORS the agent: writes its full playbook and
+   *  DECLARES its trigger/channel/tools as structured output, which the composer
+   *  (composeBundleFromAuthored) wires into a bundle with SF's deterministic safety
+   *  floor. Tried FIRST, fail-soft: a missing author, or one that throws / returns
+   *  garbage (→ authorAgentDraft yields null), falls back to the classify →
+   *  assemble heuristic path below — so generation never blocks on the LLM and the
+   *  tested template path stays the floor. Receives the recalled `priorLessons`
+   *  hint, same as the classifier. */
+  author?: AgentAuthor;
   /** Optional maker≠checker grader. When present, runs AFTER the deterministic
    *  assembler: it reviews the bundle against the sentence, auto-applies the
    *  allow-listed low-risk fixes (trigger/verify/guardrails/connectors), and
@@ -120,6 +135,20 @@ function templateTypeForSkill(skill: string): AgentTemplateType {
   return starter?.type ?? "chat_assistant";
 }
 
+/** Resolve the template TYPE for an AUTHORED bundle (the primitive-composition
+ *  path, which has no `intent.skill` to look a starter up by). The template type
+ *  is just the DB row's surface — the real behavior lives in the blueprint — so we
+ *  key it off the only axis that distinguishes the two row types: an inbound VOICE
+ *  agent is a `voice_receptionist`; everything else (chat / sms / email, plus every
+ *  action-only schedule/event poster) is a `chat_assistant` (the safe text type,
+ *  matching the heuristic path's default). Pure. */
+function templateTypeForBlueprint(blueprint: AgentBlueprint): AgentTemplateType {
+  const trigger = blueprint.trigger;
+  return trigger?.kind === "inbound" && trigger.channel === "voice"
+    ? "voice_receptionist"
+    : "chat_assistant";
+}
+
 // ─── lesson pattern key ─────────────────────────────────────────────────────
 
 /** The recognizable "situation" a recorded lesson keys on (L5.3): a short,
@@ -144,10 +173,14 @@ function firstSentenceFeature(sentence: string): string {
  *   1b. (optional, L5.3) recall this org's past generator lessons → a prompt
  *      hint threaded into the classifier + judge below. Omitted store → no
  *      recall; "" hint → both prompts unchanged;
- *   2. parseAgentIntent(sentence, { classify, priorLessons }) → a complete
- *      AgentIntent (classify is fail-soft inside parseAgentIntent, never throws);
- *   3. assembleAgentBundle(intent, { reviewUrl }) → name/description/blueprint +
- *      warnings, with every safety primitive wired;
+ *   2. bundle selection — AUTHOR-FIRST, fail-soft:
+ *      2a. authorAgentDraft(sentence, { author, priorLessons }) → an AuthoredAgent
+ *          or null (fail-soft: no author / it throws / it returns garbage → null);
+ *      2b. authored ? composeBundleFromAuthored(authored, { reviewUrl }) — the
+ *          primitive-composition path (authored playbook + SF's deterministic
+ *          safety floor) — : the prior HEURISTIC path unchanged
+ *          (parseAgentIntent(sentence,{classify,priorLessons}) → assembleAgentBundle),
+ *          so a missing/failed author is a zero-regression degrade to today's path;
  *   3b. (optional) judge the bundle (maker≠checker) — auto-fix low-risk plumbing,
  *      surface the rest as warnings. Fail-open; omitted → step skipped entirely.
  *      Each applied fix is RECORDED (L5.3) as a lesson for the next generation;
@@ -177,14 +210,38 @@ export async function runGenerateAgentDraft(
     : [];
   const priorLessons = lessonsToPromptHint(lessons);
 
-  // parseAgentIntent swallows a throwing classify internally (heuristic wins),
-  // so this is safe even when the injected classify explodes.
-  const intent = await parseAgentIntent(sentence, {
-    classify: deps.classify,
+  const ctx = { reviewUrl: input.reviewUrl };
+
+  // ── bundle selection: AUTHOR-FIRST, fail-soft to the heuristic ──────────────
+  //
+  // 1. Try the primitive-composition path: the LLM AUTHORS the agent (writes its
+  //    playbook + declares its primitives), and the composer wires SF's safety
+  //    floor deterministically. authorAgentDraft is fail-soft by construction — no
+  //    author dep, or one that throws / returns garbage → null.
+  // 2. On null (no LLM author, or it failed), fall back to TODAY's heuristic path:
+  //    parseAgentIntent (classify fail-soft inside it) → assembleAgentBundle. This
+  //    is byte-for-byte the prior behavior, so a missing author / failed author is
+  //    a zero-regression degrade and the tested template path stays the floor.
+  //
+  // EVERYTHING AFTER (judge → applyJudgeFixes → warnings, lessons record, create)
+  // runs on `bundle` identically for both paths — it's the same AgentBundle shape.
+  const authored = await authorAgentDraft(sentence, {
+    author: deps.author,
     priorLessons,
   });
 
-  let bundle = assembleAgentBundle(intent, { reviewUrl: input.reviewUrl });
+  // The heuristic intent is only computed on the fallback path (the authored path
+  // doesn't classify a skill). It also carries the template TYPE for that path.
+  const intent: AgentIntent | null = authored
+    ? null
+    : await parseAgentIntent(sentence, {
+        classify: deps.classify,
+        priorLessons,
+      });
+
+  let bundle = authored
+    ? composeBundleFromAuthored(authored, ctx)
+    : assembleAgentBundle(intent!, ctx);
 
   // Optional maker≠checker review. judgeGeneratedAgent FAILS OPEN (a throwing or
   // malformed grader → {ok:true,issues:[]}), so this never blocks the (already
@@ -228,11 +285,18 @@ export async function runGenerateAgentDraft(
     }
   }
 
+  // Template TYPE: the heuristic path keys off the classified skill's starter; the
+  // authored path (no skill) keys off the composed blueprint's resolved trigger.
+  // (Both read the POST-judge bundle, so a judge trigger fix is reflected here.)
+  const type = intent
+    ? templateTypeForSkill(intent.skill)
+    : templateTypeForBlueprint(bundle.blueprint);
+
   const created = await deps.create({
     builderOrgId: orgId,
     name: bundle.name,
     description: bundle.description,
-    type: templateTypeForSkill(intent.skill),
+    type,
     blueprint: bundle.blueprint,
   });
 

@@ -25,6 +25,7 @@ import type { AgentBlueprint } from "@/db/schema/agents";
 import { getOrgId } from "@/lib/auth/helpers";
 import { assertWritable } from "@/lib/demo/server";
 import { llmClassify } from "@/lib/agents/generate/classify-llm";
+import { makeLlmAgentAuthor } from "@/lib/agents/generate/author-llm";
 import { makeLlmAgentGrader } from "@/lib/agents/generate/judge-llm";
 import {
   runGenerateAgentDraft,
@@ -69,6 +70,16 @@ export async function generateAgentDraftAction(
 
   const deps: GenerateDeps = {
     getOrgId: async () => orgId,
+    // Primitive-composition AUTHOR: default ON, trivially disablable via
+    // SF_GENERATOR_AUTHOR=off (falls back to the classify→assemble heuristic). Fail-
+    // soft by construction — a missing ANTHROPIC key makes the author return `{}`,
+    // authorAgentDraft yields null, and generation proceeds via the heuristic path.
+    author:
+      _deps && "author" in _deps
+        ? _deps.author
+        : process.env.SF_GENERATOR_AUTHOR === "off"
+          ? undefined
+          : makeLlmAgentAuthor(),
     classify: _deps?.classify ?? llmClassify,
     // Maker≠checker judge: default ON, trivially disablable via
     // SF_GENERATOR_JUDGE=off. Fail-open by construction — a missing ANTHROPIC

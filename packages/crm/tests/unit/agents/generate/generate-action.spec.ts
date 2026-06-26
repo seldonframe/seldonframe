@@ -30,6 +30,7 @@ import {
   type GenerateDeps,
 } from "../../../../src/lib/agents/generate/run-generate";
 import { getStarterTemplate } from "../../../../src/lib/agent-templates/starter-pack";
+import type { AgentAuthor } from "../../../../src/lib/agents/generate/authored-agent";
 import type { AgentIntent } from "../../../../src/lib/agents/generate/parse-intent";
 import { parseClassification } from "../../../../src/lib/agents/generate/classify-llm";
 import { makeLlmAgentGrader } from "../../../../src/lib/agents/generate/judge-llm";
@@ -47,6 +48,7 @@ import type {
 
 function makeDeps(over: {
   orgId?: string | null;
+  author?: GenerateDeps["author"];
   classify?: GenerateDeps["classify"];
   judge?: GenerateDeps["judge"];
   createResult?: { ok: true; id: string } | { ok: false; error: string };
@@ -60,6 +62,7 @@ function makeDeps(over: {
       calls.getOrgId += 1;
       return over.orgId === undefined ? "builder-1" : over.orgId;
     },
+    author: over.author,
     classify: over.classify,
     judge: over.judge,
     create: async (input) => {
@@ -425,6 +428,221 @@ describe("runGenerateAgentDraft — judge fails OPEN (never blocks)", () => {
       event: "booking.completed",
       channel: "sms",
     });
+  });
+});
+
+// ─── P1 T5 — author-first path: the primitive-composition generator ──────────
+//
+// run-generate.ts now tries an LLM AUTHOR first: when a valid AuthoredAgent comes
+// back it COMPOSES the bundle from primitives (authored playbook + SF's
+// deterministic safety floor + declared trigger/channel/tools) instead of cloning
+// a starter. It's additive + fail-soft: no author dep, or an author that returns
+// null / throws, degrades to TODAY's parseAgentIntent → assembleAgentBundle path.
+// The judge + lessons ride on top of WHICHEVER bundle was selected. All with
+// in-memory fakes — NO real LLM, NO Postgres.
+
+/** A valid author result: a weekly Instagram poster — a NEW species of agent the
+ *  template-picker could never emit (schedule-fired, action-only, Postiz-bound). */
+const IG_POSTER_DRAFT = {
+  name: "Weekly IG Highlight",
+  summary: "Posts a weekly highlight of our best reviews to Instagram.",
+  skillMd:
+    "Each Monday at 9am, draft a short, on-brand highlight of the week's best 5-star review and publish it to the connected Instagram account. Keep it warm, concise, and never fabricate a quote.",
+  trigger: { kind: "schedule", cron: "0 9 * * 1" },
+  channel: "none",
+  tools: ["postiz"],
+} as const;
+
+describe("runGenerateAgentDraft — author-first: a valid draft uses the COMPOSED bundle", () => {
+  test("an author returning a weekly IG poster → composed (authored skill + actionOnly + Postiz), NOT a starter clone", async () => {
+    const author: AgentAuthor = async () => IG_POSTER_DRAFT;
+    const { deps, calls } = makeDeps({ author });
+
+    const result = await runGenerateAgentDraft(deps, {
+      // A sentence the heuristic would keyword-match to "reviews" and clone the
+      // review-requester starter from — the author path must win instead.
+      sentence: "Post a weekly Instagram highlight of our 5-star reviews",
+    });
+
+    assert.equal(result.ok, true);
+    assert.equal(calls.create.length, 1, "create called exactly once");
+    const created = calls.create[0]!;
+
+    // The AUTHORED name (not the review-requester starter's name).
+    assert.equal(created.name, "Weekly IG Highlight");
+
+    // The AUTHORED playbook prose is present (the composed path, not a clone) AND
+    // SF's ground rules are appended (the deterministic safety floor).
+    const skill = created.blueprint.customSkillMd ?? "";
+    assert.ok(
+      skill.includes("draft a short, on-brand highlight"),
+      "the authored playbook prose is used",
+    );
+    assert.ok(skill.includes("Never invent"), "SF ground rules appended");
+
+    // The composed primitives: a schedule trigger, action-only, Postiz bound.
+    assert.equal(created.blueprint.trigger?.kind, "schedule");
+    assert.equal(
+      created.blueprint.actionOnly,
+      true,
+      "channel 'none' → actionOnly true (a poster sends no customer message)",
+    );
+    const postiz = (created.blueprint.connectors ?? []).find(
+      (c) => c.id === "postiz",
+    );
+    assert.ok(postiz, "the Postiz connector is bound from the declared tool id");
+    assert.equal(postiz?.kind, "vetted");
+
+    // It is NOT the review-requester clone: an action-only poster has NO quiet
+    // hours (the review-requester starter always does).
+    assert.equal(
+      created.blueprint.guardrails?.quietHours,
+      undefined,
+      "an action-only poster has no quiet hours (not the review-requester clone)",
+    );
+    // …and it is a chat_assistant row type (not a voice receptionist).
+    assert.equal(created.type, "chat_assistant");
+  });
+});
+
+describe("runGenerateAgentDraft — NO author dep falls back to the heuristic (baseline)", () => {
+  test("without an author, a review sentence still assembles the review-requester bundle", async () => {
+    const { deps, calls } = makeDeps(); // no author
+    const result = await runGenerateAgentDraft(deps, {
+      sentence: "text my customers for a google review after the job",
+    });
+
+    assert.equal(result.ok, true);
+    assert.equal(calls.create.length, 1);
+    // Today's heuristic path: review-requester's event/SMS trigger + quiet hours.
+    assert.deepEqual(calls.create[0]!.blueprint.trigger, {
+      kind: "event",
+      event: "booking.completed",
+      channel: "sms",
+    });
+    assert.ok(
+      calls.create[0]!.blueprint.guardrails?.quietHours,
+      "the heuristic review-requester bundle keeps its quiet hours",
+    );
+  });
+});
+
+describe("runGenerateAgentDraft — a fail-soft author falls back to the heuristic", () => {
+  test("an author that RETURNS NULL → falls back; generation still succeeds", async () => {
+    const author: AgentAuthor = async () => null;
+    const { deps, calls } = makeDeps({ author });
+
+    const result = await runGenerateAgentDraft(deps, {
+      sentence: "text my customers for a google review after the job",
+    });
+
+    assert.equal(result.ok, true, "a null-returning author still generates");
+    assert.equal(calls.create.length, 1);
+    // Fell back to the heuristic review-requester bundle.
+    assert.deepEqual(calls.create[0]!.blueprint.trigger, {
+      kind: "event",
+      event: "booking.completed",
+      channel: "sms",
+    });
+  });
+
+  test("an author that THROWS → falls back (fail-soft); generation still succeeds", async () => {
+    const author: AgentAuthor = async () => {
+      throw new Error("LLM author down");
+    };
+    const { deps, calls } = makeDeps({ author });
+
+    let result!: GenerateAgentDraftOutput;
+    await assert.doesNotReject(async () => {
+      result = await runGenerateAgentDraft(deps, {
+        sentence: "text my customers for a google review after the job",
+      });
+    });
+
+    assert.equal(result.ok, true, "a throwing author must not block generation");
+    assert.equal(calls.create.length, 1);
+    assert.deepEqual(calls.create[0]!.blueprint.trigger, {
+      kind: "event",
+      event: "booking.completed",
+      channel: "sms",
+    });
+  });
+
+  test("an author returning GARBAGE (no skillMd) → falls back via the seam", async () => {
+    const author: AgentAuthor = async () => ({ name: "no playbook here" });
+    const { deps, calls } = makeDeps({ author });
+
+    const result = await runGenerateAgentDraft(deps, {
+      sentence: "text my customers for a google review after the job",
+    });
+
+    assert.equal(result.ok, true);
+    assert.equal(calls.create.length, 1);
+    // The garbage draft normalized to null → heuristic review-requester bundle.
+    assert.deepEqual(calls.create[0]!.blueprint.trigger, {
+      kind: "event",
+      event: "booking.completed",
+      channel: "sms",
+    });
+  });
+});
+
+describe("runGenerateAgentDraft — judge + lessons run on the COMPOSED (authored) bundle", () => {
+  test("a judge trigger-fix is applied to the composed bundle AND recorded as a lesson", async () => {
+    const author: AgentAuthor = async () => IG_POSTER_DRAFT;
+
+    // The judge rules the poster should actually fire on a booking event and
+    // supplies a low-risk trigger fix — it must land on the COMPOSED blueprint.
+    const FIX = {
+      trigger: { kind: "event", event: "booking.completed", channel: "sms" },
+    } as const;
+    const judge: GenerateDeps["judge"] = async ({ bundle }) => {
+      // Prove the judge received the COMPOSED bundle (authored prose), not a clone.
+      assert.ok(
+        bundle.blueprint.customSkillMd?.includes("draft a short, on-brand highlight"),
+        "the judge graded the composed authored bundle",
+      );
+      return {
+        ok: false,
+        issues: [
+          { field: "trigger", problem: "this should fire after a booking", fix: FIX },
+        ],
+      };
+    };
+
+    const store = makeFakeLessonsStore();
+    const { deps, calls } = makeDeps({ author, judge });
+
+    const result = await runGenerateAgentDraft(
+      { ...deps, lessonsStore: store },
+      { sentence: "Post a weekly Instagram highlight of our 5-star reviews" },
+    );
+
+    assert.equal(result.ok, true);
+    assert.equal(calls.create.length, 1);
+    // The FIXED trigger landed on the persisted COMPOSED blueprint (not the
+    // authored schedule trigger) — the judge rides on top of the authored path.
+    assert.deepEqual(calls.create[0]!.blueprint.trigger, {
+      kind: "event",
+      event: "booking.completed",
+      channel: "sms",
+    });
+    // …but the authored playbook prose survives the judge (prose is never rewritten).
+    assert.ok(
+      calls.create[0]!.blueprint.customSkillMd?.includes(
+        "draft a short, on-brand highlight",
+      ),
+      "the authored prose is preserved through the judge",
+    );
+
+    // The applied fix was recorded as a generator lesson (the compounding loop).
+    const recalled = await recallStore(store);
+    assert.equal(recalled.length, 1, "exactly one lesson recorded");
+    assert.equal(recalled[0]!.correction, JSON.stringify(FIX));
+    assert.ok(
+      recalled[0]!.pattern.includes("Post a weekly Instagram highlight"),
+      `the lesson keys on the sentence, got: ${recalled[0]!.pattern}`,
+    );
   });
 });
 
