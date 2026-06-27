@@ -50,8 +50,13 @@ export type SimCustomerReply = (args: {
 export type AgentReply = (args: { turns: EvalTurn[] }) => Promise<{ text: string }>;
 
 /** Default hard cap on AGENT turns — bounds token cost and is the ultimate
- *  guard against a sim/agent pair that never says `done`. */
-const DEFAULT_MAX_TURNS = 6;
+ *  guard against a sim/agent pair that never says `done`. Set to 10 (was 6): a
+ *  realistic book-the-job flow (greet → triage → collect address/name → propose
+ *  a slot → read back → confirm) needs more than 6 agent turns to RESOLVE, and a
+ *  6-turn cap was truncating multi-step scenarios so they never reached the
+ *  outcome the grader scores. The empty-streak + sim-`done` early-termination
+ *  rules still end a resolved conversation well before this cap. */
+const DEFAULT_MAX_TURNS = 10;
 
 /**
  * Run a scenario against an agent by alternating customer ↔ agent turns.

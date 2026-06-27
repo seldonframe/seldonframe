@@ -145,6 +145,12 @@ export async function runAgentEvalsAction(
         client,
       }),
       lessonsStore: makeBrainMemoryStoreForOrg(orgId),
+      // Give multi-step scenarios room to RESOLVE (greet → triage → collect
+      // details → propose slot → read back → confirm). Matches DEFAULT_MAX_TURNS
+      // but is passed explicitly so the run's turn budget is unmistakable here.
+      // Early termination (sim `done` / empty-streak) still ends a resolved
+      // conversation sooner.
+      maxTurns: 10,
     },
   );
 

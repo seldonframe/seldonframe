@@ -26,6 +26,26 @@ function fakeClientReturning(text: string): ReturnType<
   >;
 }
 
+/** A fake client that records the `system` + `messages` it was called with (and
+ *  returns a fixed verdict), so a test can assert what prompt the grader sent. */
+function capturingClient(): {
+  client: ReturnType<NonNullable<NonNullable<Parameters<typeof makeLlmEvalGrader>[0]>["getClient"]>>;
+  calls: { system?: string; userContent?: string }[];
+} {
+  const calls: { system?: string; userContent?: string }[] = [];
+  const client = {
+    messages: {
+      create: async (req: { system?: string; messages?: { content?: string }[] }) => {
+        calls.push({ system: req?.system, userContent: req?.messages?.[0]?.content });
+        return { content: [{ type: "text", text: '{"met":[],"missed":[]}' }] };
+      },
+    },
+  } as unknown as ReturnType<
+    NonNullable<NonNullable<Parameters<typeof makeLlmEvalGrader>[0]>["getClient"]>
+  >;
+  return { client, calls };
+}
+
 const SCENARIO: EvalScenario = {
   id: "s1",
   title: "No-heat emergency at 11pm",
@@ -94,6 +114,36 @@ describe("makeLlmEvalGrader — well-formed verdicts parse", () => {
     });
     assert.deepEqual(out, { met: [], missed: [] });
     assert.equal(called, false, "grader should not touch the client when there are no criteria");
+  });
+});
+
+describe("makeLlmEvalGrader — sandbox-aware grading prompt", () => {
+  test("the grader system prompt tells the judge this ran in SANDBOX and to grade BEHAVIOR, not real side-effects", async () => {
+    const { client, calls } = capturingClient();
+    const grader = makeLlmEvalGrader({ getClient: () => client });
+    await grader({ transcript: TRANSCRIPT, scenario: SCENARIO });
+
+    assert.equal(calls.length, 1, "grader should make exactly one LLM call");
+    const system = calls[0].system ?? "";
+    // The calibration: name the sandbox + grade behavior, not real-world effects.
+    assert.match(system, /SANDBOX/);
+    assert.match(system, /SYNTHETIC/);
+    assert.match(system, /BEHAVIOR/);
+    // It must explicitly forbid failing a criterion just because no real
+    // booking/SMS happened (the bug that sank a great agent to 20%).
+    assert.match(system, /Do NOT fail a criterion merely because a real booking\/SMS didn't occur/);
+    // And it must still credit the RIGHT actions (calling the tool IS correct).
+    assert.match(system, /RIGHT ACTIONS/);
+  });
+
+  test("the user content also flags the run as [SANDBOX] so the note is unmistakable", async () => {
+    const { client, calls } = capturingClient();
+    const grader = makeLlmEvalGrader({ getClient: () => client });
+    await grader({ transcript: TRANSCRIPT, scenario: SCENARIO });
+
+    const userContent = calls[0].userContent ?? "";
+    assert.match(userContent, /\[SANDBOX\]/);
+    assert.match(userContent, /SYNTHETIC/);
   });
 });
 

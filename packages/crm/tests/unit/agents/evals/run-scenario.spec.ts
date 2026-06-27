@@ -134,14 +134,34 @@ describe("runEvalScenario — maxTurns hard stop", () => {
     assertStrictAlternation(transcript.turns);
   });
 
-  test("default cap is 6 agent turns when maxTurns is omitted", async () => {
+  test("default cap is 10 agent turns when maxTurns is omitted (a sim that never says done)", async () => {
     const sc = scenario();
     const agentReply: AgentReply = async () => ({ text: "still going" });
     const simCustomer: SimCustomerReply = async () => ({ text: "ok", done: false });
 
     const transcript = await runEvalScenario(sc, { simCustomer, agentReply });
     const agentCount = transcript.turns.filter((t) => t.role === "agent").length;
-    assert.equal(agentCount, 6, "default maxTurns is 6");
+    assert.equal(agentCount, 10, "default maxTurns is 10 (bumped from 6 so book-the-job flows resolve)");
+  });
+
+  test("early termination still wins over the higher default: sim says done on turn 2 → ends well before 10", async () => {
+    const sc = scenario();
+    let agentCalls = 0;
+    const agentReply: AgentReply = async () => {
+      agentCalls += 1;
+      return { text: `a${agentCalls}` };
+    };
+    let simCalls = 0;
+    const simCustomer: SimCustomerReply = async () => {
+      simCalls += 1;
+      return { text: `c${simCalls}`, done: simCalls >= 2 };
+    };
+
+    const transcript = await runEvalScenario(sc, { simCustomer, agentReply });
+    const agentCount = transcript.turns.filter((t) => t.role === "agent").length;
+    // Resolved on the 2nd customer line → only 2 agent turns, NOT the 10-turn cap.
+    assert.equal(agentCount, 2, "sim `done` ends the loop early despite the higher default");
+    assert.ok(agentCount < 10, "did not run to the default cap");
   });
 });
 

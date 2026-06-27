@@ -49,6 +49,14 @@ const EVAL_MAX_TOKENS = 512;
 const GRADER_SYSTEM = [
   "You are grading a finished conversation between a simulated CUSTOMER and an AI AGENT against a list of success criteria.",
   "You are given the scenario (the customer's situation) and the full transcript. Judge ONLY whether each success criterion was satisfied by what the AGENT actually did in the transcript.",
+  // ── SANDBOX: grade BEHAVIOR, not real-world side-effects ──────────────────
+  // The agent under test runs in SANDBOX (testMode): its tools (calendar, SMS,
+  // booking, escalation) return SYNTHETIC results and nothing is really booked
+  // or sent. If we grade for real side-effects we punish the agent for doing the
+  // RIGHT thing (calling the tool IS the correct action here), which is exactly
+  // how a great agent scored 20%. So: credit correct actions; only fail a
+  // criterion when the agent did the WRONG thing.
+  "This conversation ran in SANDBOX — the agent's tools (calendar, SMS, booking) return SYNTHETIC results and nothing is really booked or sent. Judge the agent's BEHAVIOR, not real-world side-effects: credit it for taking the RIGHT ACTIONS (calling the calendar/booking tool, asking for the address/name, reading back details, following its ground rules, escalating emergencies). Do NOT fail a criterion merely because a real booking/SMS didn't occur — only fail it if the agent did the WRONG thing (invented a slot without checking, quoted a firm price, skipped read-back, missed an emergency).",
   'Return ONLY a JSON object of the shape: {"met": string[], "missed": string[], "notes"?: string}.',
   "Each string in `met` / `missed` MUST be copied VERBATIM from the provided success criteria list — do not paraphrase, invent, split, or merge criteria.",
   "Put a criterion in `met` if the transcript clearly satisfies it; put it in `missed` if it clearly does not (or there is no evidence it was satisfied). Every criterion belongs in exactly one of the two lists.",
@@ -182,7 +190,11 @@ export function makeLlmEvalGrader(
     const model = process.env.ANTHROPIC_EVAL_MODEL?.trim() || DEFAULT_EVAL_MODEL;
 
     try {
+      // Name the sandbox in the user content too, so the grader can't miss it:
+      // the system prompt explains HOW to grade a sandbox run; this line asserts
+      // that THIS run is one. (Cheap, unmistakable, and survives prompt edits.)
       const userContent = [
+        "[SANDBOX] This run executed in testMode: the agent's tools returned SYNTHETIC results — nothing was really booked or sent. Grade behavior (right actions), not real side-effects, per the system instructions.",
         `Scenario: ${JSON.stringify(compactScenarioForGrader(scenario))}`,
         `Transcript:\n${renderTranscript(transcript)}`,
       ].join("\n\n");
