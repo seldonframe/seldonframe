@@ -28,6 +28,7 @@ import { listDeployments, groupDeploymentsByClient } from "@/lib/deployments/sto
 import {
   formatCentsMonthly,
   formatDeploymentSurface,
+  describeOutboundAgent,
 } from "@/lib/deployments/margin";
 import { resolveBookingPolicy } from "@/lib/agents/booking/booking-policy";
 import {
@@ -179,19 +180,21 @@ export default async function StudioClientsPage({
                         </div>
 
                         {/* Per-agent activation / pause / cancel — addressed to
-                            THIS deployment id. Outbound agents (event/schedule)
-                            share the client's number, so they get a one-click
-                            no-phone activate instead of the get-a-number flow
-                            (which would collide with the client's receptionist
-                            line). */}
+                            THIS deployment id. The decider is needsNumber, NOT
+                            isOutbound: a PURE-outbound agent (review/social/digest)
+                            shares the client's number, so it gets a one-click
+                            no-phone activate. An agent that needs its own line —
+                            an inbound receptionist OR a missed-call agent
+                            (event-triggered but it forwards-in + texts-back) —
+                            goes through the get-a-number flow so it owns a line. */}
                         {d.status === "draft" &&
-                          (d.isOutbound ? (
-                            <ActivateOutboundButton deploymentId={d.id} />
-                          ) : (
+                          (d.needsNumber ? (
                             <ActivateForm
                               deploymentId={d.id}
                               contactPhone={d.clientContact?.phone ?? null}
                             />
+                          ) : (
+                            <ActivateOutboundButton deploymentId={d.id} />
                           ))}
                         {d.status === "active" && (
                           <div className="flex flex-wrap items-start justify-end gap-2">
@@ -230,16 +233,22 @@ export default async function StudioClientsPage({
                         )}
                       </div>
 
-                      {/* F1 — an OUTBOUND agent (event/schedule) never books, so we
-                          show a small note instead of booking rules. Its per-client
-                          Google review link — the single most important field for a
-                          review-requester to fire — stays surfaced INLINE here (with
-                          an edit affordance, or a warning when unset), never hidden
-                          behind the Configure disclosure below. */}
+                      {/* F1 — an OUTBOUND (event/schedule) agent shows a small note
+                          instead of booking rules. The copy reflects what THIS
+                          agent actually does (books / posts / sends), derived from
+                          its blueprint — never the old hard-coded "doesn't take
+                          bookings", which was wrong for an agent wired to book. Its
+                          per-client Google review link — the single most important
+                          field for a review-requester to fire — stays surfaced
+                          INLINE here (with an edit affordance, or a warning when
+                          unset), never hidden behind the Configure disclosure below. */}
                       {d.isOutbound && (
                         <>
                           <p className="mt-3 border-t pt-3 text-[11px] text-muted-foreground">
-                            This agent doesn&apos;t take bookings — it sends on an event.
+                            {describeOutboundAgent({
+                              books: d.agentBooks,
+                              posts: d.agentPosts,
+                            })}
                           </p>
                           {isReviewRequester && (
                             <ReviewLinkSection

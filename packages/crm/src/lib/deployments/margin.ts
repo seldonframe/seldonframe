@@ -12,7 +12,10 @@ import type {
   DeploymentStatus,
   DeploymentSurface,
 } from "@/db/schema/deployments";
-import { resolveAgentTrigger } from "@/lib/agents/triggers/agent-trigger";
+import {
+  agentNeedsNumber,
+  resolveAgentTrigger,
+} from "@/lib/agents/triggers/agent-trigger";
 
 // ─── estimate constants (DISPLAY ONLY — not billed here) ─────────────────────
 
@@ -155,6 +158,36 @@ export function isOutboundDeployment(
   return trigger.kind !== "inbound";
 }
 
+/**
+ * True iff the deployed agent needs its OWN dedicated phone number provisioned on
+ * activation (vs. activating phone-less and sending from the client org's shared
+ * number). Pure — resolves the template's loose `blueprint.trigger` (falling back
+ * to `surface`) exactly like isOutboundDeployment, then applies agentNeedsNumber.
+ *
+ * This is the gate the activation paths (activate / activate-outbound / get-a-
+ * number) use to decide phone-ownership. It is NOT simply `!isOutboundDeployment`:
+ * an inbound receptionist needs a number (TRUE here, FALSE there), a pure-outbound
+ * review/social agent does not (FALSE here, TRUE there), AND — the case this
+ * carves out — a missed-call agent IS `event`-triggered (so isOutboundDeployment
+ * is TRUE) yet STILL needs a number (TRUE here), because the client forwards
+ * missed calls to it and it texts back from it.
+ *
+ * Because the resolver clamps any malformed/blank/corrupt trigger to the inbound
+ * default, an unknown blueprint is treated as needing a number — the safe default
+ * (we only DROP the number when we can positively identify a pure-outbound
+ * event/schedule trigger).
+ */
+export function deploymentNeedsNumber(
+  blueprintTrigger: unknown,
+  surface?: string | null,
+): boolean {
+  const trigger = resolveAgentTrigger(
+    blueprintTrigger as Parameters<typeof resolveAgentTrigger>[0],
+    surface,
+  );
+  return agentNeedsNumber(trigger);
+}
+
 // ─── isE164 ──────────────────────────────────────────────────────────────────
 
 /**
@@ -226,6 +259,44 @@ export function deriveAreaCode(phone: unknown): string | null {
   if (digits.length < 10) return null;
   const candidate = digits.slice(0, 3);
   return isAreaCode(candidate) ? candidate : null;
+}
+
+// ─── outbound-agent description (client-card note copy) ──────────────────────
+
+/** What an outbound/event agent actually DOES, for the client-card note. Derived
+ *  purely from blueprint signals the store surfaces on each DeploymentListItem. */
+export type OutboundAgentTraits = {
+  /** The agent has a booking capability (blueprint.capabilities ∋ book_appointment). */
+  books: boolean;
+  /** The agent posts to a channel (a social/Postiz connector, or it's action-only —
+   *  a poster/logger that sends no customer message). */
+  posts: boolean;
+};
+
+/**
+ * The honest one-line note shown under an outbound agent's row on the Clients
+ * card. The old copy hard-coded "This agent doesn't take bookings — it sends on
+ * an event.", which is WRONG for an agent that books (e.g. one wired with a
+ * booking capability) or one that posts to social. This picks the sentence that
+ * matches what the blueprint says the agent actually does. Pure; never throws.
+ *
+ *   • books → "This agent books appointments — it acts when an event fires."
+ *   • posts (and doesn't book) → "This agent posts to its channel on an event —
+ *     it doesn't take bookings."
+ *   • otherwise (a messager — review ask / speed-to-lead) → the original
+ *     "This agent doesn't take bookings — it sends a message when an event fires."
+ *
+ * `books` wins over `posts` when (unusually) both are set — booking is the more
+ * consequential capability to surface.
+ */
+export function describeOutboundAgent(traits: OutboundAgentTraits): string {
+  if (traits.books) {
+    return "This agent books appointments — it acts when an event fires.";
+  }
+  if (traits.posts) {
+    return "This agent posts to its channel on an event — it doesn't take bookings.";
+  }
+  return "This agent doesn't take bookings — it sends a message when an event fires.";
 }
 
 /** Human label for a surface id, e.g. "phone" → "Phone". */

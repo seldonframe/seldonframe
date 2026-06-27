@@ -47,7 +47,12 @@ import {
   SetBookingPolicySchema,
   SetDeploymentCustomizationSchema,
 } from "./schema";
-import { isE164, isAreaCode, isPhoneInUseError, isOutboundDeployment } from "./margin";
+import {
+  isE164,
+  isAreaCode,
+  isPhoneInUseError,
+  deploymentNeedsNumber,
+} from "./margin";
 import { getAgentTemplate } from "@/lib/agent-templates/store";
 import { mapSoulToClientContext } from "./client-context";
 import { compileSoulService } from "@/lib/soul-compiler/service";
@@ -258,23 +263,27 @@ export type ActivateDeploymentActionResult =
   | { ok: true; outbound: true }
   | { ok: false; error: "unauthorized" | "invalid_phone" | "phone_in_use" | "not_found" | "update_failed" };
 
-/** DI seam: resolve whether a deployment's agent TEMPLATE is OUTBOUND (its
- *  trigger is event/schedule, so it must NOT claim a phone). Defaults to loading
- *  the template via getAgentTemplate and resolving its blueprint trigger; tests
- *  inject a stub so the action stays DB-free. Returns false (→ treat as inbound,
- *  the phone-owning default) on any miss, so a missing template never strands an
- *  inbound activation. */
+/** DI seam: resolve whether a deployment's agent TEMPLATE needs its OWN phone
+ *  number (an inbound receptionist OR an inbound-ish event like missed_call —
+ *  which RECEIVES and so must own a line), vs. a pure-outbound agent that only
+ *  SENDS from the client org's shared number and must NOT claim a phone. Defaults
+ *  to loading the template via getAgentTemplate and resolving deploymentNeedsNumber;
+ *  tests inject a stub so the action stays DB-free. Returns true (→ treat as
+ *  needing a number, the phone-owning default) on any miss, so a missing template
+ *  never strands a receptionist/missed-call activation phone-less. */
 export type ResolveDeploymentOutboundDep = {
-  isDeploymentOutbound?: (deployment: import("@/db/schema/deployments").Deployment) => Promise<boolean>;
+  isDeploymentNeedsNumber?: (deployment: import("@/db/schema/deployments").Deployment) => Promise<boolean>;
 };
 
-/** Default impl: load the deployment's template and resolve its trigger. */
-async function defaultIsDeploymentOutbound(
+/** Default impl: load the deployment's template and resolve whether it needs its
+ *  own number. A missing template → true (the phone-owning default), so we never
+ *  silently activate a would-be receptionist / missed-call agent phone-less. */
+async function defaultDeploymentNeedsNumber(
   deployment: import("@/db/schema/deployments").Deployment,
 ): Promise<boolean> {
   const template = await getAgentTemplate(deployment.agentTemplateId);
-  if (!template) return false;
-  return isOutboundDeployment(template.blueprint?.trigger, template.type);
+  if (!template) return true;
+  return deploymentNeedsNumber(template.blueprint?.trigger, template.type);
 }
 
 /**
@@ -308,12 +317,18 @@ export async function activateDeploymentAction(
   const existing = await getDeployment(parsed.data.deploymentId, _deps ? { findById: _deps.findDeploymentById ?? _deps.findById } : undefined);
   if (!existing || existing.builderOrgId !== orgId) return { ok: false, error: "not_found" };
 
-  // Outbound (event/schedule) agents never claim a phone — they send from the
-  // client org's existing number (sendSmsFromApi, keyed by orgId). Activating one
-  // with a phone_number would collide with the client's receptionist on the
-  // partial unique index. So we IGNORE the pasted number and activate phone-less.
-  const isOutbound = await (_deps?.isDeploymentOutbound ?? defaultIsDeploymentOutbound)(existing);
-  if (isOutbound) {
+  // PURE-OUTBOUND (review/social/digest) agents never claim a phone — they send
+  // from the client org's existing number (sendSmsFromApi, keyed by orgId).
+  // Activating one with a phone_number would collide with the client's
+  // receptionist on the partial unique index. So we IGNORE the pasted number and
+  // activate phone-less.
+  //
+  // The gate is `!needsNumber`, NOT `isOutbound`: a missed-call agent is
+  // event-triggered (isOutbound true) yet STILL needs a dedicated number (the
+  // client forwards missed calls to it + it texts back from it), so it must fall
+  // through to the phone path below and keep the pasted number.
+  const needsNumber = await (_deps?.isDeploymentNeedsNumber ?? defaultDeploymentNeedsNumber)(existing);
+  if (!needsNumber) {
     const result = await updateDeployment({
       id: parsed.data.deploymentId,
       patch: { status: "active" },
@@ -393,10 +408,13 @@ export async function activateOutboundDeploymentAction(
   );
   if (!existing || existing.builderOrgId !== orgId) return { ok: false, error: "not_found" };
 
-  // Guard: this path is ONLY for outbound agents. An inbound receptionist must go
-  // through the get-a-number / paste-a-number activation so it owns a line.
-  const isOutbound = await (_deps?.isDeploymentOutbound ?? defaultIsDeploymentOutbound)(existing);
-  if (!isOutbound) return { ok: false, error: "needs_phone" };
+  // Guard: this no-phone path is ONLY for agents that DON'T need their own number.
+  // An inbound receptionist — AND a missed-call agent (event-triggered but it
+  // forwards-in + texts-back, so it needs a dedicated line) — must go through the
+  // get-a-number / paste-a-number activation so it owns a line. We gate on
+  // `needsNumber`, not `!isOutbound`, so the missed-call case is refused here.
+  const needsNumber = await (_deps?.isDeploymentNeedsNumber ?? defaultDeploymentNeedsNumber)(existing);
+  if (needsNumber) return { ok: false, error: "needs_phone" };
 
   const result = await updateDeployment({
     id: parsed.data.deploymentId,
@@ -509,12 +527,16 @@ export async function provisionDeploymentNumberAction(input: {
     return { ok: false, error: "not_found" };
   }
 
-  // Outbound (event/schedule) agents must NEVER buy/own a number — they send
-  // from the client org's existing line. Short-circuit BEFORE touching Twilio:
+  // PURE-OUTBOUND (review/social/digest) agents must NEVER buy/own a number — they
+  // send from the client org's existing line. Short-circuit BEFORE touching Twilio:
   // activate phone-less so the agent runs and the partial unique index stays
   // collision-free. (The UI hides "Get a number" for these, so this is mostly a
   // belt-and-suspenders guard, but it also makes a direct call safe.)
-  if (await defaultIsDeploymentOutbound(existing)) {
+  //
+  // A missed-call agent is event-triggered but DOES need a number, so it is NOT
+  // short-circuited here — it falls through to the real provision path below and
+  // gets a dedicated Twilio line (the client forwards missed calls to it).
+  if (!(await defaultDeploymentNeedsNumber(existing))) {
     const activated = await updateDeployment({
       id: parsed.data.deploymentId,
       patch: { status: "active" },

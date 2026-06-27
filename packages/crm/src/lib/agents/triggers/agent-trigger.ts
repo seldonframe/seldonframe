@@ -50,6 +50,54 @@ const EVENT_CHIP_TEXT: Record<string, string> = {
   missed_call: "Missed call",
 };
 
+// ─── inbound-ish events (need a dedicated number) ────────────────────────────
+
+/**
+ * Event triggers that — despite being `kind:"event"` — describe an agent that
+ * RECEIVES on a phone line and therefore needs its OWN number, NOT the phone-less
+ * outbound treatment.
+ *
+ * The canonical case is `missed_call` (the real SeldonEvent slug; see KNOWN_EVENTS
+ * + EVENT_CHIP_TEXT above): the client FORWARDS missed calls to the agent's
+ * dedicated number and the agent TEXTS BACK from it. That round-trip can't run on
+ * the client's shared receptionist line, so the agent must own a line of its own —
+ * exactly like an inbound receptionist.
+ *
+ * Pure-outbound events (booking.completed / lead.created / invoice.paid) only SEND
+ * (from the client org's existing number via sendSmsFromApi) and stay phone-less,
+ * so they are deliberately NOT in this set.
+ */
+const INBOUND_ISH_EVENTS: ReadonlySet<string> = new Set(["missed_call"]);
+
+/**
+ * True iff a deployed agent with this RESOLVED trigger needs its OWN dedicated
+ * phone number provisioned on activation (vs. activating phone-less and sending
+ * from the client org's shared number). Pure; takes the already-resolved
+ * `AgentTrigger` (use resolveAgentTrigger first for a loose/stored shape).
+ *
+ *   • inbound (any channel)        → TRUE  (the receptionist RECEIVES on a line)
+ *   • event whose slug is inbound-ish (missed_call) → TRUE  (forward-in + text-back
+ *                                     round-trip needs a dedicated line)
+ *   • event that is pure-outbound (booking.completed / lead.created / invoice.paid)
+ *                                  → FALSE (only SENDS, from the client's number)
+ *   • schedule (digests, social posters)            → FALSE (only SENDS / posts)
+ *
+ * This is the precise gate the activation paths use to decide whether to route a
+ * deployment through the get-a-number flow or activate it phone-less — it is the
+ * COMPLEMENT of "pure outbound", carving the missed-call agent back out of the
+ * phone-less default that `isOutboundDeployment` (kind !== "inbound") would give it.
+ */
+export function agentNeedsNumber(trigger: AgentTrigger): boolean {
+  switch (trigger.kind) {
+    case "inbound":
+      return true;
+    case "event":
+      return INBOUND_ISH_EVENTS.has(trigger.event);
+    case "schedule":
+      return false;
+  }
+}
+
 // ─── valid channels per kind (the clamp table) ───────────────────────────────
 
 const INBOUND_CHANNELS: readonly InboundChannel[] = ["voice", "chat", "email", "sms"];

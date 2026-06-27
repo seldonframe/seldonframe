@@ -102,6 +102,9 @@ function listItem(over: Partial<DeploymentListItem> = {}): DeploymentListItem {
     bookingPolicy: null,
     customization: null,
     isOutbound: false,
+    needsNumber: true,
+    agentBooks: false,
+    agentPosts: false,
     ...over,
   };
 }

@@ -28,7 +28,40 @@ import type { AgentTemplate } from "@/db/schema/agent-templates";
 import type { BookingPolicy } from "@/lib/agents/booking/booking-policy";
 import { bookingPolicyFromIntake } from "@/lib/agents/booking/booking-policy";
 import type { DeploymentCustomization } from "@/lib/agents/persona/deployment-customization";
-import { isDeploymentStatus, isDeploymentSurface, isOutboundDeployment } from "./margin";
+import {
+  isDeploymentStatus,
+  isDeploymentSurface,
+  isOutboundDeployment,
+  deploymentNeedsNumber,
+} from "./margin";
+
+// ─── blueprint capability probes (client-card copy signals) ──────────────────
+
+/** A booking capability slug — its presence in blueprint.capabilities means the
+ *  agent can BOOK. Mirrors the runtime tool id (lib/agents/tools.ts). */
+const BOOKING_CAPABILITY = "book_appointment";
+
+/** True iff the template blueprint gives the agent a booking capability. Pure +
+ *  shape-tolerant (jsonb): a non-array `capabilities` → false. */
+function blueprintBooks(blueprint: { capabilities?: unknown } | null): boolean {
+  const caps = blueprint?.capabilities;
+  return Array.isArray(caps) && caps.includes(BOOKING_CAPABILITY);
+}
+
+/** True iff the agent POSTS to a channel: it's flagged action-only (a poster/
+ *  logger that sends no customer message) OR it binds a social connector (Postiz).
+ *  Pure + shape-tolerant (jsonb). */
+function blueprintPosts(
+  blueprint: { connectors?: unknown; actionOnly?: unknown } | null,
+): boolean {
+  if (blueprint?.actionOnly === true) return true;
+  const connectors = blueprint?.connectors;
+  if (!Array.isArray(connectors)) return false;
+  return connectors.some(
+    (c) =>
+      c && typeof c === "object" && (c as { id?: unknown }).id === "postiz",
+  );
+}
 
 // ─── injectable deps (lazy DB — never imported in unit tests) ─────────────────
 
@@ -126,8 +159,13 @@ function buildDefaultListDeps(): ListDeploymentsDeps {
         .orderBy(desc(deployments.updatedAt));
       return rows.map((r) => {
         const { templateType, templateBlueprint, ...rest } = r;
-        const templateTrigger =
-          (templateBlueprint as { trigger?: unknown } | null)?.trigger ?? null;
+        const blueprint = (templateBlueprint ?? null) as {
+          trigger?: unknown;
+          capabilities?: unknown;
+          connectors?: unknown;
+          actionOnly?: unknown;
+        } | null;
+        const templateTrigger = blueprint?.trigger ?? null;
         return {
           ...rest,
           templateName: r.templateName ?? null,
@@ -138,6 +176,18 @@ function buildDefaultListDeps(): ListDeploymentsDeps {
           templateTrigger,
           // Resolve the inbound/outbound flag here (pure) so the card stays dumb.
           isOutbound: isOutboundDeployment(templateTrigger, templateType),
+          // P2.1-T3: whether the deployed agent needs its OWN dedicated number on
+          // activation. TRUE for an inbound receptionist AND for a missed-call
+          // agent (event-triggered but it forwards-in + texts-back). FALSE for a
+          // pure-outbound review/social/digest agent. The card uses this to pick
+          // the get-a-number form vs. the no-phone activate button.
+          needsNumber: deploymentNeedsNumber(templateTrigger, templateType),
+          // P2.1-T3 (copy fix): the two blueprint signals the card's outbound-note
+          // copy keys off — does the agent BOOK (a booking capability) and/or POST
+          // (a social/Postiz connector, or it's action-only). Resolved here (pure)
+          // so the card stays dumb; the rest of the blueprint stays off the wire.
+          agentBooks: blueprintBooks(blueprint),
+          agentPosts: blueprintPosts(blueprint),
         };
       });
     },
@@ -543,6 +593,18 @@ export type DeploymentListItem = {
    *  and the spoken-persona editor for them. Resolved purely in listDeployments
    *  from the joined template's blueprint trigger (isOutboundDeployment). */
   isOutbound: boolean;
+  /** P2.1-T3 — True iff the deployed agent needs its OWN dedicated number on
+   *  activation: an inbound receptionist OR a missed-call agent (event-triggered
+   *  but it forwards-in + texts-back). The card routes these through the
+   *  get-a-number form; pure-outbound agents (needsNumber:false) get the no-phone
+   *  activate button. Resolved purely from the trigger (deploymentNeedsNumber). */
+  needsNumber: boolean;
+  /** P2.1-T3 (copy fix) — True iff the agent has a booking capability
+   *  (blueprint.capabilities ∋ book_appointment). Drives the outbound-note copy. */
+  agentBooks: boolean;
+  /** P2.1-T3 (copy fix) — True iff the agent posts to a channel (action-only, or a
+   *  social/Postiz connector). Drives the outbound-note copy. */
+  agentPosts: boolean;
 };
 
 /** An EXISTING client the builder can attach a new agent to (F3). Derived purely

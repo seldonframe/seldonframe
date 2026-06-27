@@ -24,6 +24,11 @@ import { revalidatePath } from "next/cache";
 import { createMcpClient } from "@/lib/agents/mcp/client";
 import type { BindConnectorInput } from "@/lib/agents/mcp/bind";
 import type { ConnectorBinding } from "@/lib/agents/mcp/connectors";
+import { isBindingConnectedForOrg } from "@/lib/agents/mcp/binding-connection";
+import {
+  computeToolConnectionStatuses,
+  type ToolConnectionStatus,
+} from "@/lib/agents/mcp/tool-connection";
 import type { AgentBlueprint } from "@/db/schema/agents";
 import { getAgentTemplate, updateAgentTemplate } from "./store";
 import {
@@ -198,4 +203,38 @@ export async function setTemplateComposioToolkitsAction(input: {
   );
   if (result.ok) revalidateEditor(input.templateId);
   return result;
+}
+
+export type ConnectedToolsActionResult =
+  | { ok: true; tools: ToolConnectionStatus[] }
+  | { ok: false; error: "unauthorized" | "not_found" };
+
+/**
+ * P2.1-T3 — report the connection status of every tool the TEMPLATE binds, so the
+ * editor can surface a "Connect <tool> in Integrations →" CTA for each bound-but-
+ * UNCONNECTED tool (a generated social agent that says "Connect Postiz to go
+ * live"). Org-guarded: the template must belong to the operator's org.
+ *
+ * The per-binding connection check is the SHARED money-safe predicate
+ * (isBindingConnectedForOrg) — the EXACT one the runtime's tool-fire gate uses —
+ * so what the editor flags as unconnected is precisely what the runtime would
+ * refuse to fire. The labels resolve from the static catalogs (pure). Returns the
+ * FULL list (connected + not) so the caller can decide what to show.
+ */
+export async function connectedToolsAction(input: {
+  templateId: string;
+}): Promise<ConnectedToolsActionResult> {
+  const orgId = await getOrgId();
+  if (!orgId) return { ok: false, error: "unauthorized" };
+
+  const template = await getAgentTemplate(input.templateId);
+  if (!template || template.builderOrgId !== orgId) {
+    return { ok: false, error: "not_found" };
+  }
+
+  const bindings = (template.blueprint?.connectors ?? []) as ConnectorBinding[];
+  const tools = await computeToolConnectionStatuses(bindings, (binding) =>
+    isBindingConnectedForOrg(orgId, binding),
+  );
+  return { ok: true, tools };
 }

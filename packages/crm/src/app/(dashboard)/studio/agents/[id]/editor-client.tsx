@@ -29,6 +29,8 @@ import {
   Check,
   ShieldCheck,
   Send,
+  AlertCircle,
+  ArrowRight,
 } from "lucide-react";
 import {
   saveAgentTemplateBlueprintAction,
@@ -43,7 +45,9 @@ import {
   setTemplateConnectorToolsAction,
   refreshTemplateConnectorAction,
   setTemplateComposioToolkitsAction,
+  connectedToolsAction,
 } from "@/lib/agent-templates/template-mcp-server";
+import type { ToolConnectionStatus } from "@/lib/agents/mcp/tool-connection";
 import type { AgentSurface } from "@/lib/agent-templates/store";
 import type { ConnectorBinding } from "@/lib/agents/mcp/connectors";
 import {
@@ -1545,6 +1549,20 @@ function ConnectorsCard({
         }}
       />
 
+      {/* P2.1-T3 — connect-the-tools CTA. A generated agent BINDS tools (Postiz /
+          Calendar) before the workspace has CONNECTED them; this calls the server
+          (the same money-safe predicate the runtime fires on) and prompts the
+          operator to connect each bound-but-unconnected one. Voice agents don't run
+          connectors, so it's hidden there (the picker is already inert). */}
+      {!isVoice && (
+        <ConnectToolsBanner
+          templateId={templateId}
+          // Re-fetch whenever the bound set changes (after a connect/remove);
+          // the key folds the binding ids so a mutation re-runs the effect.
+          bindingKey={initialConnectors.map((b) => b.id).join(",")}
+        />
+      )}
+
       {/* Bound connectors */}
       {connectors.length === 0 ? (
         <p className="mt-4 text-xs text-muted-foreground">
@@ -1669,6 +1687,86 @@ function ConnectorsCard({
             </div>
           </div>
         )}
+      </div>
+    </div>
+  );
+}
+
+// ─── Connect-the-tools CTA (P2.1-T3) ─────────────────────────────────────────
+//
+// A generated agent BINDS external tools (Postiz to post, Google Calendar to
+// book) onto its blueprint before the workspace has CONNECTED those accounts. The
+// runtime's money-safe gate then refuses to fire an unconnected tool — so this
+// banner asks the server (connectedToolsAction → the SAME predicate the runtime
+// uses) which bound tools aren't connected yet, and shows a calm, on-brand
+// "Connect <tool> in Integrations →" row for each. A social agent reads "Connect
+// Postiz to go live." When every bound tool is connected, the banner renders
+// nothing. Fetches on mount + whenever the bound set changes (bindingKey).
+function ConnectToolsBanner({
+  templateId,
+  bindingKey,
+}: {
+  templateId: string;
+  /** A fingerprint of the bound connector ids — re-runs the fetch on a change. */
+  bindingKey: string;
+}) {
+  const [tools, setTools] = useState<ToolConnectionStatus[] | null>(null);
+
+  useEffect(() => {
+    let alive = true;
+    // No bindings → nothing to check (skip the round-trip).
+    if (!bindingKey) {
+      setTools([]);
+      return;
+    }
+    void connectedToolsAction({ templateId }).then((res) => {
+      if (!alive) return;
+      setTools(res.ok ? res.tools : []);
+    });
+    return () => {
+      alive = false;
+    };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [templateId, bindingKey]);
+
+  const unconnected = (tools ?? []).filter((t) => !t.connected);
+  if (unconnected.length === 0) return null;
+
+  return (
+    <div className="mt-4 rounded-lg border border-amber-500/30 bg-amber-500/5 p-4">
+      <div className="flex items-start gap-2">
+        <span
+          aria-hidden
+          className="mt-0.5 inline-flex size-5 shrink-0 items-center justify-center text-amber-600 dark:text-amber-400"
+        >
+          <AlertCircle className="size-4" />
+        </span>
+        <div className="min-w-0 flex-1">
+          <p className="text-sm font-medium text-amber-800 dark:text-amber-300">
+            {unconnected.length === 1
+              ? "Connect this app to go live"
+              : "Connect these apps to go live"}
+          </p>
+          <p className="mt-0.5 text-xs text-amber-700/90 dark:text-amber-400/80">
+            This agent uses{" "}
+            {unconnected.length === 1 ? "an app that isn't" : "apps that aren't"}{" "}
+            connected yet. Until then it won&apos;t be able to use{" "}
+            {unconnected.length === 1 ? "it" : "them"}.
+          </p>
+          <ul className="mt-2 space-y-1.5">
+            {unconnected.map((t) => (
+              <li key={t.key}>
+                <Link
+                  href="/integrations"
+                  className="inline-flex items-center gap-1.5 rounded-full border border-amber-500/40 bg-background px-3 py-1 text-xs font-medium text-amber-800 transition-colors hover:bg-amber-500/10 dark:text-amber-300"
+                >
+                  Connect {t.label} in Integrations
+                  <ArrowRight className="size-3.5" aria-hidden />
+                </Link>
+              </li>
+            ))}
+          </ul>
+        </div>
       </div>
     </div>
   );

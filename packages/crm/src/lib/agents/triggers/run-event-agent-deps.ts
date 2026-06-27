@@ -154,45 +154,17 @@ export function buildRunEventAgentDeps(orgId?: string): RunEventAgentDeps {
     },
 
     // 2026-06-27 — P2.1-T2 (live tool-fire): the MONEY-SAFE connection check. A
-    // bound tool is CONNECTED for the org ⟺ it can actually be invoked:
-    //   • vetted/byo → its bearer secret is stored (getSecretValue non-null — the
-    //     EXACT thing wrap-tool needs to call the MCP server). serviceName is the
-    //     encrypted-secret key on the binding.
-    //   • composio → the workspace has a usable Composio key (resolveComposioKey
-    //     source !== "none"), the same fail-closed gate getToolsForCapabilities uses
-    //     to decide whether a composio binding's tools are even exposed.
-    // Soft-fail to NOT-connected (false) on any error — the orchestrator then records
-    // tool_not_connected and never fakes a post.
+    // bound tool is CONNECTED for the org ⟺ it can actually be invoked (composio
+    // key present / encrypted bearer secret present). Delegated to the SHARED
+    // predicate so the editor's "connect the tools" surfacing (P2.1-T3) asks the
+    // exact same question — no drift between "the editor says connected" and "the
+    // runtime will fire it". Soft-fails to NOT-connected on any error → the
+    // orchestrator records tool_not_connected and never fakes a post.
     isToolConnected: async (orgId, binding) => {
-      try {
-        if (!binding || typeof binding !== "object") return false;
-        if (binding.kind === "composio") {
-          const { resolveComposioKey } = await import(
-            "@/lib/integrations/composio/keys"
-          );
-          const { source } = await resolveComposioKey(orgId);
-          return source !== "none";
-        }
-        // vetted / byo — the bearer secret must be present.
-        const serviceName =
-          typeof binding.serviceName === "string" ? binding.serviceName.trim() : "";
-        if (!serviceName) return false;
-        const { getSecretValue } = await import("@/lib/secrets");
-        const secret = await getSecretValue({
-          workspaceId: orgId,
-          serviceName,
-          skipAccessCheck: true,
-        });
-        return typeof secret === "string" && secret.length > 0;
-      } catch (err) {
-        console.warn(
-          `[run-event-agent-deps] isToolConnected failed for ${
-            binding?.id ?? "?"
-          }:`,
-          err instanceof Error ? err.message : String(err),
-        );
-        return false;
-      }
+      const { isBindingConnectedForOrg } = await import(
+        "@/lib/agents/mcp/binding-connection"
+      );
+      return isBindingConnectedForOrg(orgId, binding);
     },
 
     // 2026-06-27 — P2.1-T2 (live tool-fire): drive the action-only agent ONCE with
