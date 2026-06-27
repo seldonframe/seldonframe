@@ -30,7 +30,9 @@ import {
   type EventAgentMatch,
   type EventAgentSkill,
   type FiredEvent,
+  type RunActionOnlyTurnResult,
 } from "../../../../src/lib/agents/triggers/run-event-agent";
+import { type ConnectorBinding } from "../../../../src/lib/agents/mcp/connectors";
 import { composeReviewRequest } from "../../../../src/lib/agents/skills/review-requester";
 import { composeSpeedToLead } from "../../../../src/lib/agents/skills/speed-to-lead";
 import {
@@ -1665,7 +1667,7 @@ describe("runDueScheduledEventAgent — replay a due deferred send", () => {
   });
 });
 
-// ─── ACTION-ONLY agents (P2 / Task 6): the runtime guard ──────────────────────
+// ─── ACTION-ONLY agents (P2 / Task 6 + P2.1-T2 live tool-fire) ────────────────
 //
 // An action-only agent (a poster/logger — `blueprint.actionOnly`) ACTS via its
 // tools and sends NO customer message. The SAFETY-CRITICAL contract these pin:
@@ -1673,19 +1675,31 @@ describe("runDueScheduledEventAgent — replay a due deferred send", () => {
 //     posting agent must never text a customer, even when the contact is reachable
 //     and a verify rubric is set;
 //   • it is counted on `result.actionOnly`, NOT `result.sent`;
-//   • a loop-memory `action_fired` record IS written (the observable record),
-//     noting the bound tools, and the per-agent daily counter advances;
 //   • the GUARDRAILS gate still applies — a daily-cap-exceeded action-only agent
-//     is BLOCKED (no fire, no `action_fired`, counted on `result.blocked`);
-//   • the LIVE tool execution (actually posting) is P2.1 — the fire is recorded
-//     but no post is made (asserted via the recorded entry's marker).
+//     is BLOCKED (no fire, counted on `result.blocked`);
+//
+// P2.1-T2 — the fire is now MONEY-SAFE-gated on the bound tool's CONNECTION:
+//   • ≥1 bound tool CONNECTED (fake isToolConnected → true) + the live-turn seam
+//     wired (fake runActionOnlyTurn) → the live agentic turn IS invoked, an
+//     `action_posted` record is written (noting the invoked tools), and STILL no
+//     customer SMS/email is sent;
+//   • NOT connected (fake isToolConnected → false, or no seam) → NO live turn, a
+//     `tool_not_connected` record is written, no send (the common case — never a
+//     fake post);
+//   • a THROWING live turn → an `action_error` record, the run completes (fail-soft).
 // A normal (actionOnly-falsy) review-requester is UNCHANGED (still composes/sends).
 
 /** An action-only agent: fires on the event but sends no customer message. Modeled
  *  on the review-requester skill (the event maps there) with `actionOnly:true` +
- *  bound tools. NO reviewUrl is needed — an action-only agent never composes. By
- *  default carries action-only guardrails (daily cap only, NO quiet hours — what
- *  defaultGuardrailsForShape({channel:"none"}) yields). */
+ *  a bound Postiz connector. NO reviewUrl is needed — an action-only agent never
+ *  composes. By default carries action-only guardrails (daily cap only, NO quiet
+ *  hours). The `connectors` binding is what the connection check consults. */
+const POSTIZ_BINDING: ConnectorBinding = {
+  id: "postiz",
+  kind: "vetted",
+  serviceName: "postiz",
+  enabledTools: ["postiz__create_post"],
+};
 function actionOnlyAgent(overrides: Partial<EventAgentMatch> = {}): EventAgentMatch {
   return {
     skill: "review-requester",
@@ -1693,25 +1707,54 @@ function actionOnlyAgent(overrides: Partial<EventAgentMatch> = {}): EventAgentMa
     businessName: "Acme Plumbing",
     actionOnly: true,
     connectorIds: ["postiz"],
+    connectors: [POSTIZ_BINDING],
     guardrails: { enabled: true, maxPerDayPerAgent: 200 },
     ...overrides,
   };
 }
 
-describe("runEventAgent — action-only agents (P2 runtime guard)", () => {
-  test("an action-only agent FIRES but NEVER calls sendSms/sendEmail; counts on actionOnly; writes an action_fired record + advances the daily counter", async () => {
+/** A recording fake `runActionOnlyTurn` seam (no network/LLM). Returns a fixed
+ *  result and captures the agent/connectedTools it was driven with. */
+function makeFakeTurn(result?: RunActionOnlyTurnResult): {
+  run: NonNullable<RunEventAgentDeps["runActionOnlyTurn"]>;
+  calls: Array<{ orgId: string; connectedIds: string[] }>;
+} {
+  const calls: Array<{ orgId: string; connectedIds: string[] }> = [];
+  const run: NonNullable<RunEventAgentDeps["runActionOnlyTurn"]> = async ({
+    orgId,
+    connectedTools,
+  }) => {
+    calls.push({
+      orgId,
+      connectedIds: connectedTools.map((b) => b.id),
+    });
+    return result ?? { ok: true, toolCalls: ["postiz__create_post"] };
+  };
+  return { run, calls };
+}
+
+describe("runEventAgent — action-only agents (P2 runtime guard + P2.1 live fire)", () => {
+  test("CONNECTED tool: a one-shot agentic turn fires (real post), action_posted recorded, NO customer SMS/email sent", async () => {
     const mem = makeFakeMemoryStore();
+    const turn = makeFakeTurn({ ok: true, toolCalls: ["postiz__create_post"] });
     const { deps, smsCalls, emailCalls } = makeDeps({
       findEventAgents: async () => [actionOnlyAgent()],
       memoryStore: mem.store,
       now: () => FIXED_NOW,
+      // The bound Postiz tool IS connected for this org.
+      isToolConnected: async () => true,
+      runActionOnlyTurn: turn.run,
     });
 
     const result = await runEventAgent(bookingCompleted("contact-1"), deps);
 
-    // SAFETY-CRITICAL: the messaging seam was NOT called — no customer was texted.
+    // SAFETY-CRITICAL: still NO customer message, even on the live path.
     assert.equal(smsCalls.length, 0, "an action-only agent must NEVER send an SMS");
     assert.equal(emailCalls.length, 0, "an action-only agent must NEVER send an email");
+
+    // The live agentic turn WAS invoked, scoped to the connected tool.
+    assert.equal(turn.calls.length, 1, "the live agentic turn ran exactly once");
+    assert.deepEqual(turn.calls[0].connectedIds, ["postiz"], "driven with the connected tool");
 
     // Counted as an action-only fire, not a send.
     assert.equal(result.matched, 1);
@@ -1719,23 +1762,22 @@ describe("runEventAgent — action-only agents (P2 runtime guard)", () => {
     assert.equal(result.sent, 0, "nothing was sent to a customer");
     assert.equal(result.blocked, 0);
 
-    // An `action_fired` record was written to the agent's key (subjectKey = the
-    // agentKey/skill for an action-only agent — it's per-agent, not per-contact).
+    // An `action_posted` record was written to the agent's key (subjectKey = the
+    // agentKey/skill — an action-only agent is per-agent, not per-contact).
     const agentKeyAppends = mem.appendCalls.filter(
       (c) => c.key === `agents/review-requester/review-requester`,
     );
-    assert.equal(agentKeyAppends.length, 1, "exactly one action_fired record");
-    assert.equal(agentKeyAppends[0].entry.kind, "action_fired");
+    assert.equal(agentKeyAppends.length, 1, "exactly one action_posted record");
+    assert.equal(agentKeyAppends[0].entry.kind, "action_posted");
     assert.equal(agentKeyAppends[0].entry.at, FIXED_NOW.toISOString());
-    // The record notes the bound tools + marks live tool-execution as pending (P2.1).
-    const firedData = agentKeyAppends[0].entry.data as {
+    const postedData = agentKeyAppends[0].entry.data as {
       tools?: string[];
-      liveToolExecution?: string;
+      invokedTools?: string[];
       actionOnly?: boolean;
     };
-    assert.deepEqual(firedData.tools, ["postiz"], "records the bound tools");
-    assert.equal(firedData.liveToolExecution, "pending_p2_1", "live tool-execution is P2.1");
-    assert.equal(firedData.actionOnly, true);
+    assert.deepEqual(postedData.tools, ["postiz"], "records the connected tool ids");
+    assert.deepEqual(postedData.invokedTools, ["postiz__create_post"], "records what was invoked");
+    assert.equal(postedData.actionOnly, true);
 
     // The per-agent daily counter advanced (so the daily cap brakes subsequent
     // fires) — exactly one daily_count append carrying 1, on the stats key.
@@ -1746,8 +1788,140 @@ describe("runEventAgent — action-only agents (P2 runtime guard)", () => {
 
     // Surfaced on the run summary's recorded list (observability).
     assert.ok(
-      result.memory?.recorded.some((e) => e.kind === "action_fired"),
-      "action_fired surfaced on result.memory.recorded",
+      result.memory?.recorded.some((e) => e.kind === "action_posted"),
+      "action_posted surfaced on result.memory.recorded",
+    );
+  });
+
+  test("NOT connected: no agentic turn runs, tool_not_connected recorded, no send (money-safe — never a fake post)", async () => {
+    const mem = makeFakeMemoryStore();
+    const turn = makeFakeTurn();
+    const { deps, smsCalls, emailCalls } = makeDeps({
+      findEventAgents: async () => [actionOnlyAgent()],
+      memoryStore: mem.store,
+      now: () => FIXED_NOW,
+      // The bound tool is NOT connected → the live turn must NOT run.
+      isToolConnected: async () => false,
+      runActionOnlyTurn: turn.run,
+    });
+
+    const result = await runEventAgent(bookingCompleted("contact-1"), deps);
+
+    assert.equal(turn.calls.length, 0, "no agentic turn when the tool is not connected");
+    assert.equal(smsCalls.length, 0, "no SMS");
+    assert.equal(emailCalls.length, 0, "no email");
+    assert.equal(result.actionOnly, 1, "still counted as an action-only fire");
+    assert.equal(result.sent, 0);
+    assert.equal(result.blocked, 0);
+
+    // A `tool_not_connected` record on the agent key, noting the bound tool to connect.
+    const agentKeyAppends = mem.appendCalls.filter(
+      (c) => c.key === `agents/review-requester/review-requester`,
+    );
+    assert.equal(agentKeyAppends.length, 1, "exactly one tool_not_connected record");
+    assert.equal(agentKeyAppends[0].entry.kind, "tool_not_connected");
+    const data = agentKeyAppends[0].entry.data as { tools?: string[]; posted?: boolean };
+    assert.deepEqual(data.tools, ["postiz"], "records the bound (unconnected) tool ids");
+    assert.equal(data.posted, false, "explicitly records that NO post was made");
+
+    // The counter still advances (so a runaway un-connected poster is still braked).
+    const dateKey = utcDateKey(FIXED_NOW);
+    assert.equal(
+      statsAppends(mem.appendCalls, "review-requester", dateKey).length,
+      1,
+      "the daily counter advances on any fire that passed guardrails",
+    );
+  });
+
+  test("no live-turn seam wired (but tool connected) → tool_not_connected, no fake post", async () => {
+    // isToolConnected says connected, but deps.runActionOnlyTurn is absent → there's
+    // no way to drive the agent, so we must NOT claim a post.
+    const mem = makeFakeMemoryStore();
+    const { deps, smsCalls } = makeDeps({
+      findEventAgents: async () => [actionOnlyAgent()],
+      memoryStore: mem.store,
+      now: () => FIXED_NOW,
+      isToolConnected: async () => true,
+      // runActionOnlyTurn omitted on purpose.
+    });
+
+    const result = await runEventAgent(bookingCompleted("contact-1"), deps);
+
+    assert.equal(smsCalls.length, 0);
+    assert.equal(result.actionOnly, 1);
+    const agentKeyAppends = mem.appendCalls.filter(
+      (c) => c.key === `agents/review-requester/review-requester`,
+    );
+    assert.equal(agentKeyAppends.length, 1);
+    assert.equal(
+      agentKeyAppends[0].entry.kind,
+      "tool_not_connected",
+      "no seam → no live post claimed",
+    );
+  });
+
+  test("a THROWING agentic turn → action_error recorded, run completes (fail-soft)", async () => {
+    const mem = makeFakeMemoryStore();
+    const throwingTurn: NonNullable<RunEventAgentDeps["runActionOnlyTurn"]> = async () => {
+      throw new Error("postiz exploded mid-turn");
+    };
+    const { deps, smsCalls, emailCalls } = makeDeps({
+      findEventAgents: async () => [actionOnlyAgent()],
+      memoryStore: mem.store,
+      now: () => FIXED_NOW,
+      isToolConnected: async () => true,
+      runActionOnlyTurn: throwingTurn,
+    });
+
+    let result: Awaited<ReturnType<typeof runEventAgent>> | undefined;
+    await assert.doesNotReject(async () => {
+      result = await runEventAgent(bookingCompleted("contact-1"), deps);
+    });
+
+    assert.equal(smsCalls.length, 0, "no SMS even on a turn error");
+    assert.equal(emailCalls.length, 0);
+    assert.equal(result?.actionOnly, 1, "the fire is still counted (it attempted to act)");
+    assert.equal(result?.sent, 0);
+    assert.equal(result?.failed, 0, "a turn error is recorded, NOT counted as a run failure");
+
+    const agentKeyAppends = mem.appendCalls.filter(
+      (c) => c.key === `agents/review-requester/review-requester`,
+    );
+    assert.equal(agentKeyAppends.length, 1, "one action_error record");
+    assert.equal(agentKeyAppends[0].entry.kind, "action_error");
+    const data = agentKeyAppends[0].entry.data as { error?: string };
+    assert.ok(
+      typeof data.error === "string" && data.error.includes("postiz exploded"),
+      "the error detail is recorded for observability",
+    );
+  });
+
+  test("a turn that reports ok:false (e.g. no LLM key at fire time) → action_error, no fake post", async () => {
+    // The connection check passed, but the live turn could not actually run (the
+    // impl returns ok:false, e.g. getAIClient yielded no client). We must NOT claim
+    // a post — record action_error so the operator sees the real reason.
+    const mem = makeFakeMemoryStore();
+    const turn = makeFakeTurn({ ok: false, detail: "no_llm_key" });
+    const { deps, smsCalls } = makeDeps({
+      findEventAgents: async () => [actionOnlyAgent()],
+      memoryStore: mem.store,
+      now: () => FIXED_NOW,
+      isToolConnected: async () => true,
+      runActionOnlyTurn: turn.run,
+    });
+
+    const result = await runEventAgent(bookingCompleted("contact-1"), deps);
+
+    assert.equal(smsCalls.length, 0);
+    assert.equal(result.actionOnly, 1);
+    const agentKeyAppends = mem.appendCalls.filter(
+      (c) => c.key === `agents/review-requester/review-requester`,
+    );
+    assert.equal(agentKeyAppends.length, 1);
+    assert.equal(
+      agentKeyAppends[0].entry.kind,
+      "action_error",
+      "a turn that didn't complete records action_error, not a fake post",
     );
   });
 
@@ -1764,6 +1938,8 @@ describe("runEventAgent — action-only agents (P2 runtime guard)", () => {
         }),
       ],
       now: () => FIXED_NOW,
+      isToolConnected: async () => true,
+      runActionOnlyTurn: makeFakeTurn().run,
     });
 
     const result = await runEventAgent(bookingCompleted("contact-1"), deps);
@@ -1774,33 +1950,37 @@ describe("runEventAgent — action-only agents (P2 runtime guard)", () => {
     assert.equal(result.sent, 0);
   });
 
-  test("GUARDRAILS still gate: a daily-cap-exceeded action-only agent is BLOCKED (no fire, no send, records guardrail_blocked)", async () => {
+  test("GUARDRAILS still gate: a daily-cap-exceeded action-only agent is BLOCKED (no fire, no turn, records guardrail_blocked)", async () => {
     // Seed the per-agent daily counter for TODAY at the cap. The action-only fire
-    // must be blocked by the daily-cap brake — caps apply to posters too.
+    // must be blocked by the daily-cap brake BEFORE the connection check / live turn.
     const dateKey = utcDateKey(FIXED_NOW);
     const mem = makeFakeMemoryStore({
       [statsKey("review-requester", dateKey)]: [
         { kind: "daily_count", summary: "at cap", data: { count: 5 } },
       ],
     });
+    const turn = makeFakeTurn();
     const { deps, smsCalls, emailCalls } = makeDeps({
       findEventAgents: async () => [
         actionOnlyAgent({ guardrails: { enabled: true, maxPerDayPerAgent: 5 } }),
       ],
       memoryStore: mem.store,
       now: () => FIXED_NOW,
+      isToolConnected: async () => true,
+      runActionOnlyTurn: turn.run,
     });
 
     const result = await runEventAgent(bookingCompleted("contact-1"), deps);
 
-    // Blocked: no send, no fire counted, blocked counted.
+    // Blocked: no send, no turn, no fire counted, blocked counted.
+    assert.equal(turn.calls.length, 0, "blocked before the live turn");
     assert.equal(smsCalls.length, 0, "blocked → no SMS");
     assert.equal(emailCalls.length, 0, "blocked → no email");
     assert.equal(result.actionOnly, 0, "a blocked action-only agent did NOT fire");
     assert.equal(result.blocked, 1, "counted as blocked");
     assert.equal(result.sent, 0);
 
-    // A guardrail_blocked record on the agent key; NO action_fired; counter NOT
+    // A guardrail_blocked record on the agent key; NO action_posted; counter NOT
     // advanced (a blocked fire does not bump the daily count).
     const agentKeyAppends = mem.appendCalls.filter(
       (c) => c.key === `agents/review-requester/review-requester`,
@@ -1812,8 +1992,10 @@ describe("runEventAgent — action-only agents (P2 runtime guard)", () => {
       "daily cap",
     );
     assert.ok(
-      !agentKeyAppends.some((c) => c.entry.kind === "action_fired"),
-      "no action_fired on a blocked agent",
+      !agentKeyAppends.some(
+        (c) => c.entry.kind === "action_posted" || c.entry.kind === "tool_not_connected",
+      ),
+      "no fire record on a blocked agent",
     );
     assert.equal(
       statsAppends(mem.appendCalls, "review-requester", dateKey).length,
@@ -1824,14 +2006,18 @@ describe("runEventAgent — action-only agents (P2 runtime guard)", () => {
 
   test("a normal review-requester (actionOnly falsy) is UNCHANGED — still composes + sends", async () => {
     // The default review path must be byte-for-byte: an SMS is composed + sent and
-    // counted on `sent`, NOT `actionOnly`.
+    // counted on `sent`, NOT `actionOnly`. The live-fire seams must not perturb it.
+    const turn = makeFakeTurn();
     const { deps, smsCalls } = makeDeps({
       findEventAgents: async () => [reviewAgent("sms")],
       now: () => FIXED_NOW,
+      isToolConnected: async () => true,
+      runActionOnlyTurn: turn.run,
     });
 
     const result = await runEventAgent(bookingCompleted("contact-1"), deps);
 
+    assert.equal(turn.calls.length, 0, "a messaging agent never runs the action-only turn");
     assert.equal(smsCalls.length, 1, "the normal review path still sends");
     assert.equal(
       smsCalls[0].body,
@@ -1849,7 +2035,7 @@ describe("runEventAgent — action-only agents (P2 runtime guard)", () => {
 
   test("an action-only agent never throws and a sibling messaging agent still fires", async () => {
     // An action-only agent + a normal review agent (different skill) on one event:
-    // the poster fires (no send), the messenger sends. Proves the action-only
+    // the poster fires (live, no send), the messenger sends. Proves the action-only
     // branch returns cleanly and doesn't disturb siblings.
     const { deps, smsCalls } = makeDeps({
       findEventAgents: async () => [
@@ -1857,6 +2043,8 @@ describe("runEventAgent — action-only agents (P2 runtime guard)", () => {
         speedAgent("sms"),
       ],
       now: () => FIXED_NOW,
+      isToolConnected: async () => true,
+      runActionOnlyTurn: makeFakeTurn().run,
     });
 
     const result = await runEventAgent(bookingCompleted("contact-1"), deps);
@@ -1865,5 +2053,27 @@ describe("runEventAgent — action-only agents (P2 runtime guard)", () => {
     assert.equal(smsCalls.length, 1, "the messaging sibling still sent");
     assert.equal(smsCalls[0].skill, "speed-to-lead", "only the messaging agent sent");
     assert.equal(result.sent, 1);
+  });
+
+  test("isToolConnected that THROWS is treated as not-connected (no fake post)", async () => {
+    // A connection-check error must fail-closed: record tool_not_connected, never
+    // run the live turn (we can't be sure the tool is connected).
+    const turn = makeFakeTurn();
+    const { deps, smsCalls } = makeDeps({
+      findEventAgents: async () => [actionOnlyAgent()],
+      now: () => FIXED_NOW,
+      isToolConnected: async () => {
+        throw new Error("secret store down");
+      },
+      runActionOnlyTurn: turn.run,
+    });
+
+    let result: Awaited<ReturnType<typeof runEventAgent>> | undefined;
+    await assert.doesNotReject(async () => {
+      result = await runEventAgent(bookingCompleted("contact-1"), deps);
+    });
+    assert.equal(turn.calls.length, 0, "the live turn must not run when the check failed");
+    assert.equal(smsCalls.length, 0);
+    assert.equal(result?.actionOnly, 1, "still counted as a fire (record-and-warn)");
   });
 });

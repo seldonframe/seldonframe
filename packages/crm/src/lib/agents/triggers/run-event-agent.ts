@@ -133,11 +133,13 @@ export type EventAgentMatch = {
    *  projected from `blueprint.actionOnly` by the caller. This is the SAFETY-
    *  CRITICAL flag: when true the orchestrator SKIPS composing/sending the customer
    *  SMS/email ENTIRELY (a posting agent must never text a customer) — it still
-   *  runs the GUARDRAILS gate (so caps apply), records an `action_fired` loop-memory
-   *  entry, and surfaces the run on `result.actionOnly`. The LIVE tool execution
-   *  (actually invoking Postiz / the bound MCP tool to post) is P2.1 — this fire is
-   *  recorded but does NOT yet post. Absent/false → a messaging agent (today's
-   *  compose/verify/send path, byte-for-byte). */
+   *  runs the GUARDRAILS gate (so caps apply) and surfaces the run on
+   *  `result.actionOnly`. 2026-06-27 (P2.1-T2): when the agent's bound tool is
+   *  actually CONNECTED, the orchestrator drives a one-shot agentic turn so it
+   *  invokes the tool (e.g. posts via Postiz) and records `action_posted`; when NOT
+   *  connected it records `tool_not_connected` and makes NO post (money-safe — never
+   *  a fake post). Absent/false → a messaging agent (today's compose/verify/send
+   *  path, byte-for-byte). */
   actionOnly?: boolean | null;
   /** 2026-06-26 — Primitive-Composition generator, P2 (Task 6). The IDs of the
    *  external tools bound to this agent, projected from `blueprint.connectors` by
@@ -147,6 +149,24 @@ export type EventAgentMatch = {
    *  path. Absent/empty → no bound tools (an action-only fire logs "no tools bound",
    *  the operator-facing signal that the agent can't actually post yet). */
   connectorIds?: string[] | null;
+  /** 2026-06-27 — P2.1-T2 (live tool-fire). The agent's FULL connector bindings
+   *  (blueprint.connectors), projected by the caller. Unlike `connectorIds` (just
+   *  ids, for logging) these carry the kind + serviceName/toolkits the CONNECTION
+   *  CHECK needs (vetted/byo → is the bearer secret stored? composio → is the
+   *  workspace Composio key present?). Consulted ONLY on the action-only path:
+   *  before a live fire the orchestrator asks `deps.isToolConnected(orgId, binding)`
+   *  for each; a live agentic turn runs ONLY if ≥1 is connected (else it records
+   *  `tool_not_connected` — money-safe, never a fake post). Absent/empty → no bound
+   *  tools → `tool_not_connected`. Ignored on the messaging path. */
+  connectors?: import("@/lib/agents/mcp/connectors").ConnectorBinding[] | null;
+  /** 2026-06-27 — P2.1-T2 (live tool-fire). The agent's FULL blueprint, projected
+   *  by the caller, so the live agentic-turn seam (`deps.runActionOnlyTurn`) can
+   *  drive the real agent brain (its `capabilities` + `connectors` + persona /
+   *  `customSkillMd`) with its bound tools NON-testMode — i.e. actually post via
+   *  Postiz. Consulted ONLY on the action-only path, and ONLY after the connection
+   *  check passes. Absent → the live turn is skipped (the fire is still recorded);
+   *  the production deps always project it for an action-only template. */
+  blueprint?: import("@/db/schema/agents").AgentBlueprint | null;
 };
 
 /** The contact's reachable fields (resolved from contactId by the caller). */
@@ -227,6 +247,60 @@ export type RunEventAgentDeps = {
    *  wires a row insert (see buildRunEventAgentDeps); tests inject a recording
    *  fake. The replay (cron) re-runs runEventAgent, so the gates run at send time. */
   enqueueScheduledSend?: EnqueueScheduledEventAgentSend;
+  /** 2026-06-27 — P2.1-T2 (live tool-fire). Is this bound tool actually CONNECTED
+   *  for the org? The MONEY-SAFETY gate for an action-only live fire: a vetted/byo
+   *  connector is connected ⟺ its bearer secret is stored (getSecretValue non-null
+   *  — the exact thing wrap-tool needs to call it); a composio connector is
+   *  connected ⟺ the workspace has a usable Composio key (resolveComposioKey.source
+   *  !== "none"). Returns true ONLY when the tool can really be invoked. Consulted
+   *  ONLY on the action-only path; a live agentic turn runs ONLY if at least one
+   *  bound tool reports connected — otherwise the orchestrator records
+   *  `tool_not_connected` and NEVER posts (never fakes it). Omitted (e.g. a
+   *  no-store run / a test that doesn't exercise the live path) → treated as NOT
+   *  connected (fail-closed → record-and-warn, the safe direction). Guarded by the
+   *  orchestrator: a throw is treated as not-connected. */
+  isToolConnected?: (
+    orgId: string,
+    binding: import("@/lib/agents/mcp/connectors").ConnectorBinding,
+  ) => Promise<boolean>;
+  /** 2026-06-27 — P2.1-T2 (live tool-fire). Run the action-only agent ONCE with its
+   *  bound tools, NON-testMode, so it actually invokes the tool (e.g. posts via
+   *  Postiz). The production impl wraps `runStatelessAgentTurn({ …, testMode:false,
+   *  client: <org BYOK>, blueprint: agent.blueprint, connectors })` with a synthetic
+   *  trigger message ("It's time to run your scheduled task now. Use your tools to
+   *  do it.") so the LLM drives the bound tool — the SAME runtime tool-merge the live
+   *  agents use, no hand-rolled loop. Called ONLY after `isToolConnected` reports at
+   *  least one bound tool connected. Returns whether the turn ran and which tools it
+   *  invoked (for the `action_posted` record). NEVER throws in the orchestrator's
+   *  eyes — the orchestrator wraps the call and records `action_error` on a throw —
+   *  but the impl may reject; the gate is the connection, not this result. Omitted
+   *  → even a connected tool can't be driven, so the orchestrator records
+   *  `tool_not_connected` (the live seam isn't wired). */
+  runActionOnlyTurn?: (args: {
+    orgId: string;
+    /** The action-only agent (skill, blueprint, connectors) to drive. */
+    agent: EventAgentMatch;
+    /** The bound tools confirmed CONNECTED for this org (a subset of
+     *  agent.connectors), so the impl can scope/observe what it may invoke. */
+    connectedTools: import("@/lib/agents/mcp/connectors").ConnectorBinding[];
+  }) => Promise<RunActionOnlyTurnResult>;
+};
+
+/** The outcome of a live action-only agentic turn (deps.runActionOnlyTurn). */
+export type RunActionOnlyTurnResult = {
+  /** Whether the agentic turn ran to completion (an LLM turn happened). A `false`
+   *  here (e.g. the LLM key resolved to null at fire time) makes the orchestrator
+   *  record `tool_not_connected` rather than a fake `action_posted`. */
+  ok: boolean;
+  /** The tool names the agent actually invoked during the turn (e.g.
+   *  `["postiz__create_post"]`). Recorded on the `action_posted` entry so an
+   *  operator can see WHAT was posted. Empty when the agent ran but called no tool
+   *  (which the orchestrator treats as "ran but did not post" — still `ok`, but
+   *  noted). */
+  toolCalls?: string[];
+  /** Optional one-line detail surfaced on the record/log (e.g. the assistant's
+   *  final text, or a diagnostic). Never load-bearing. */
+  detail?: string | null;
 };
 
 // ─── result summary (for logging / tests — runEventAgent never throws) ────────
@@ -257,12 +331,22 @@ export type RunEventAgentResult = {
   blocked: number;
   /** 2026-06-26 — Primitive-Composition generator, P2 (Task 6): how many matched
    *  agents were ACTION-ONLY fires (`blueprint.actionOnly`) — a poster/logger that
-   *  ran its guardrails + was RECORDED (loop-memory `action_fired`) but sent NO
-   *  customer message. The LIVE tool execution (actually posting via the bound
-   *  tools) is P2.1 — these agents fire + are recorded but do NOT yet post. An
-   *  action-only fire is counted here, NOT in `sent` (nothing was sent to a
-   *  customer); a guardrail-blocked action-only agent is counted in `blocked`, not
-   *  here (it never fired). */
+   *  ran its guardrails + was RECORDED but sent NO customer message. An action-only
+   *  fire is counted here, NOT in `sent` (nothing was sent to a customer); a
+   *  guardrail-blocked action-only agent is counted in `blocked`, not here (it never
+   *  fired).
+   *
+   *  2026-06-27 — P2.1-T2 (live tool-fire): an action-only fire now branches on the
+   *  bound tool's CONNECTION (money-safe). Either way the fire is counted here:
+   *    • ≥1 bound tool CONNECTED + the live-turn seam wired → a real one-shot agentic
+   *      turn runs (the agent invokes its tool, e.g. posts via Postiz); loop-memory
+   *      records `action_posted` (with the tools invoked). On a turn error the run
+   *      records `action_error` (fail-soft) and is STILL counted here (it fired).
+   *    • NOT connected (or no seam) → NO live post; loop-memory records
+   *      `tool_not_connected` (the operator must connect the tool). Still counted
+   *      here — the agent fired its action attempt, it just had nothing live to call.
+   *  In all three the legacy `action_fired` marker is NOT written (it's superseded
+   *  by the connection-aware records); see runActionOnlyAgent. */
   actionOnly: number;
   /** How many failed at send time (swallowed; surfaced here for observability). */
   failed: number;
@@ -945,21 +1029,32 @@ async function runOneAgent(
 
 /**
  * Run a single ACTION-ONLY agent (a poster/logger — `blueprint.actionOnly`). P2 /
- * Task 6. Mutates `result` with the outcome. NEVER composes or sends a customer
- * message — that is the safety-critical contract (a posting agent must never text
- * a customer). Instead it:
+ * Task 6 + P2.1-T2 (live tool-fire). Mutates `result` with the outcome. NEVER
+ * composes or sends a customer message — that is the safety-critical contract (a
+ * posting agent must never text a customer). Instead it:
  *   1. runs the GUARDRAILS gate (action-only guardrails from T3 = a daily cap,
  *      NO quiet hours), so caps still brake a runaway poster. A tripped brake
  *      BLOCKS the fire (counted on `result.blocked`, recorded `guardrail_blocked`).
- *   2. records an `action_fired` loop-memory entry (the observable record that the
- *      agent fired, noting the bound tools) + a structured log line, and advances
- *      the per-agent daily counter (so the daily cap brakes on subsequent fires).
- *   3. counts the fire on `result.actionOnly`.
+ *   2. P2.1-T2 — checks whether the agent's bound tools are actually CONNECTED for
+ *      the org (`deps.isToolConnected` per binding: vetted/byo → bearer secret
+ *      present; composio → workspace Composio key present). This is the MONEY-SAFE
+ *      gate — a live post fires ONLY when a tool is really connected:
+ *        • ≥1 connected AND `deps.runActionOnlyTurn` wired → run ONE real agentic
+ *          turn (NON-testMode) so the agent invokes the tool (e.g. posts via
+ *          Postiz). Record `action_posted` (the tools invoked). A turn error →
+ *          record `action_error` (fail-soft, still counted as fired).
+ *        • NOT connected (or the live seam isn't wired) → NO live post; record
+ *          `tool_not_connected` (+ the bound-tool ids) and a clear log. This is the
+ *          COMMON case until the operator connects the tool.
+ *   3. advances the per-agent daily counter (so the daily cap brakes subsequent
+ *      fires) — for ANY fire (posted / not-connected / error) that passed the
+ *      guardrail gate, so a runaway poster is braked regardless.
+ *   4. counts the fire on `result.actionOnly`.
  *
- * It does NOT actually invoke the bound tools yet — the LIVE tool execution
- * (calling Postiz / the bound MCP tool to post) is P2.1. So the agent fires + is
- * recorded but does NOT yet post; the structured log + the `action_fired` entry
- * surface the bound tools (`agent.connectorIds`) so an unbound poster is visible.
+ * NEVER fakes a post: with no connected tool, nothing is invoked and the record
+ * says so. The live turn reuses the existing runtime tool-merge via the injected
+ * `deps.runActionOnlyTurn` (prod = runStatelessAgentTurn, testMode:false) — no
+ * hand-rolled tool loop here.
  *
  * Self-contained (it re-derives its own guardrails decision + daily-counter from
  * the pure helpers) so the messaging path in runOneAgent stays byte-for-byte.
@@ -1023,10 +1118,19 @@ async function runActionOnlyAgent(
   // brake bug never silently swallows the fire — but never crashes the handler).
   const guardrails = agent.guardrails ?? defaultGuardrailsForSkill(agent.skill);
   if (guardrails) {
+    // The most recent prior FIRE for this agent (the frequency-cap input). P2.1
+    // records a fire as `action_posted` (live) or `tool_not_connected` (no live
+    // post) — both are "the agent fired", so the lookback recognizes either (plus
+    // the legacy `action_fired` kind, in case an older entry predates P2.1).
     let lastFiredAt: string | null = null;
     let lastFiredMs = -Infinity;
     for (const e of recalled) {
-      if (e.kind !== "action_fired") continue;
+      if (
+        e.kind !== "action_posted" &&
+        e.kind !== "tool_not_connected" &&
+        e.kind !== "action_fired"
+      )
+        continue;
       if (typeof e.at !== "string") continue;
       const ms = Date.parse(e.at);
       if (Number.isFinite(ms) && ms > lastFiredMs) {
@@ -1088,59 +1192,169 @@ async function runActionOnlyAgent(
     }
   }
 
-  // FIRE. We do NOT send a customer message and we do NOT (yet) invoke the bound
-  // tools — that live tool-execution is P2.1.
-  // TODO(P2.1): invoke bound tools (agent.connectorIds → the connector/tool-invoke
-  // seam, e.g. actually call Postiz to post) using the agent's skill as context.
-  // Until then this fire is RECORDED + logged but no post is made.
+  // FIRE (P2.1-T2). The guardrail gate passed → this agent gets to act. We do NOT
+  // send a customer message. Whether a LIVE post happens is gated on the bound
+  // tool's CONNECTION (money-safe): we never fake a post.
   result.actionOnly += 1;
-  console.info(
-    JSON.stringify({
-      action: "event_agent.action_only.fired",
-      orgId: event.orgId,
-      skill: agent.skill,
-      tools: connectorIds,
-      liveToolExecution: "pending_p2_1",
-      note:
-        connectorIds.length > 0
-          ? "action-only fire recorded; live tool execution is P2.1 (no post yet)"
-          : "action-only fire recorded but NO tools bound — connect a tool to post (live execution is P2.1)",
-    }),
-  );
 
-  // Record the fire to loop-memory as an action so a later run/`/runs` can OBSERVE
-  // it. Best-effort + guarded — a misbehaving store must never break the handler.
-  if (deps.memoryStore) {
-    const at = deps.now ? deps.now().toISOString() : undefined;
-    const entry: AgentMemoryEntry = {
+  // The agent's full connector bindings (for the connection check). Prefer the
+  // projected `agent.connectors`; an action-only agent with no bindings can't post.
+  const bindings: import("@/lib/agents/mcp/connectors").ConnectorBinding[] =
+    Array.isArray(agent.connectors) ? agent.connectors : [];
+
+  // Connection check (money-safety gate). Ask the injected predicate per binding;
+  // keep the CONNECTED ones. Guarded — a throw is treated as not-connected (the
+  // safe direction: record-and-warn, never a fake post). No predicate wired → the
+  // common test/no-store path → nothing is connected → tool_not_connected.
+  const connectedTools: import("@/lib/agents/mcp/connectors").ConnectorBinding[] = [];
+  if (deps.isToolConnected) {
+    for (const binding of bindings) {
+      let connected = false;
+      try {
+        connected = await deps.isToolConnected(event.orgId, binding);
+      } catch (err) {
+        connected = false;
+        console.warn(
+          `[run-event-agent] isToolConnected threw for ${agent.skill} (${
+            binding?.id ?? "?"
+          }):`,
+          err instanceof Error ? err.message : String(err),
+        );
+      }
+      if (connected) connectedTools.push(binding);
+    }
+  }
+  const connectedIds = connectedTools
+    .map((b) => (b && typeof b.id === "string" ? b.id : null))
+    .filter((id): id is string => id !== null);
+
+  // Decide + act. Three terminal outcomes, each recorded to loop-memory under the
+  // agent's key (subjectKey = agentKey — an action-only agent is per-agent, not
+  // per-contact). `at` is the DI'd clock (omitted → no stamp), matching the
+  // messaging path.
+  const at = deps.now ? deps.now().toISOString() : undefined;
+  let fireEntry: AgentMemoryEntry;
+
+  if (connectedTools.length > 0 && deps.runActionOnlyTurn) {
+    // LIVE PATH — at least one bound tool is connected AND the live-turn seam is
+    // wired. Run ONE real agentic turn (NON-testMode) so the agent invokes its
+    // tool (e.g. posts via Postiz). Fail-soft: a turn error → `action_error`.
+    let turn: RunActionOnlyTurnResult | null = null;
+    let turnError: string | null = null;
+    try {
+      turn = await deps.runActionOnlyTurn({
+        orgId: event.orgId,
+        agent,
+        connectedTools,
+      });
+    } catch (err) {
+      turnError = err instanceof Error ? err.message : String(err);
+    }
+
+    if (turnError !== null || !turn || turn.ok !== true) {
+      // The live turn threw or reported it did not run → record action_error
+      // (do NOT claim a post). Still counted as an action-only fire (it fired).
+      const reason = turnError ?? turn?.detail ?? "agentic turn did not complete";
+      console.warn(
+        JSON.stringify({
+          action: "event_agent.action_only.action_error",
+          orgId: event.orgId,
+          skill: agent.skill,
+          tools: connectedIds,
+          reason,
+        }),
+      );
+      fireEntry = {
+        ...(at ? { at } : {}),
+        kind: "action_error",
+        summary: `Action-only ${agent.skill} attempted a live post via ${
+          connectedIds.join(", ") || "its tools"
+        } but the run errored: ${reason}`,
+        data: { actionOnly: true, tools: connectedIds, error: reason },
+      };
+    } else {
+      // The agent ran. Surface the tools it actually invoked (if any) — a turn
+      // that called no tool still counts as a fire, but the record notes it.
+      const invoked = Array.isArray(turn.toolCalls) ? turn.toolCalls : [];
+      console.info(
+        JSON.stringify({
+          action: "event_agent.action_only.action_posted",
+          orgId: event.orgId,
+          skill: agent.skill,
+          connectedTools: connectedIds,
+          invokedTools: invoked,
+        }),
+      );
+      fireEntry = {
+        ...(at ? { at } : {}),
+        kind: "action_posted",
+        summary:
+          invoked.length > 0
+            ? `Action-only ${agent.skill} posted live via ${invoked.join(", ")}`
+            : `Action-only ${agent.skill} ran live (tools connected: ${
+                connectedIds.join(", ") || "none"
+              }) but invoked no tool`,
+        data: {
+          actionOnly: true,
+          tools: connectedIds,
+          invokedTools: invoked,
+          ...(turn.detail ? { detail: turn.detail } : {}),
+        },
+      };
+    }
+  } else {
+    // NOT CONNECTED (or the live seam isn't wired) → NO live post. Record
+    // `tool_not_connected` + the bound-tool ids so the operator can see WHICH
+    // tool to connect. This is the common case until the tool is connected.
+    console.warn(
+      JSON.stringify({
+        action: "event_agent.action_only.tool_not_connected",
+        orgId: event.orgId,
+        skill: agent.skill,
+        boundTools: connectorIds,
+        note:
+          connectorIds.length > 0
+            ? "action-only agent fired but its bound tool is NOT connected for this workspace — connect it in Integrations to go live (no post made)"
+            : "action-only agent fired but NO tools are bound — bind + connect a tool to post (no post made)",
+      }),
+    );
+    fireEntry = {
       ...(at ? { at } : {}),
-      kind: "action_fired",
+      kind: "tool_not_connected",
       summary:
         connectorIds.length > 0
-          ? `Action-only ${agent.skill} fired (tools: ${connectorIds.join(", ")}); live tool execution pending (P2.1)`
-          : `Action-only ${agent.skill} fired with NO tools bound; live tool execution pending (P2.1)`,
-      data: { actionOnly: true, tools: connectorIds, liveToolExecution: "pending_p2_1" },
+          ? `Action-only ${agent.skill} fired but its tool(s) ${connectorIds.join(
+              ", ",
+            )} are NOT connected — connect to post (no post made)`
+          : `Action-only ${agent.skill} fired but NO tools are bound — bind + connect a tool to post (no post made)`,
+      data: { actionOnly: true, tools: connectorIds, posted: false },
     };
+  }
+
+  // Record the fire outcome to loop-memory so a later run / `/runs` can OBSERVE it.
+  // Best-effort + guarded — a misbehaving store must never break the handler.
+  if (deps.memoryStore) {
     try {
       await recordAgentMemory(deps.memoryStore, {
         orgId: event.orgId,
         agentKey,
         subjectKey: agentKey,
-        entry,
+        entry: fireEntry,
       });
     } catch (err) {
       console.warn(
-        `[run-event-agent] recordAgentMemory (action_fired) failed for ${agent.skill}:`,
+        `[run-event-agent] recordAgentMemory (${fireEntry.kind}) failed for ${agent.skill}:`,
         err instanceof Error ? err.message : String(err),
       );
     }
     if (result.memory) {
-      result.memory.recorded.push(entry);
+      result.memory.recorded.push(fireEntry);
     }
 
-    // Advance the per-agent DAILY COUNTER (the budget brake's input) on a fire —
-    // same append-only `daily_count` shape the messaging path uses, so the daily
-    // cap brakes subsequent fires. Best-effort + guarded.
+    // Advance the per-agent DAILY COUNTER (the budget brake's input) on ANY fire
+    // that passed the guardrail gate (posted / not-connected / error) — same
+    // append-only `daily_count` shape the messaging path uses, so the daily cap
+    // brakes subsequent fires regardless of connection. Best-effort + guarded.
     if (dailyStatsKey) {
       const counterEntry: AgentMemoryEntry = {
         ...(at ? { at } : {}),

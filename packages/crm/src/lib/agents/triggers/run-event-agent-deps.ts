@@ -152,6 +152,129 @@ export function buildRunEventAgentDeps(orgId?: string): RunEventAgentDeps {
         return "UTC";
       }
     },
+
+    // 2026-06-27 — P2.1-T2 (live tool-fire): the MONEY-SAFE connection check. A
+    // bound tool is CONNECTED for the org ⟺ it can actually be invoked:
+    //   • vetted/byo → its bearer secret is stored (getSecretValue non-null — the
+    //     EXACT thing wrap-tool needs to call the MCP server). serviceName is the
+    //     encrypted-secret key on the binding.
+    //   • composio → the workspace has a usable Composio key (resolveComposioKey
+    //     source !== "none"), the same fail-closed gate getToolsForCapabilities uses
+    //     to decide whether a composio binding's tools are even exposed.
+    // Soft-fail to NOT-connected (false) on any error — the orchestrator then records
+    // tool_not_connected and never fakes a post.
+    isToolConnected: async (orgId, binding) => {
+      try {
+        if (!binding || typeof binding !== "object") return false;
+        if (binding.kind === "composio") {
+          const { resolveComposioKey } = await import(
+            "@/lib/integrations/composio/keys"
+          );
+          const { source } = await resolveComposioKey(orgId);
+          return source !== "none";
+        }
+        // vetted / byo — the bearer secret must be present.
+        const serviceName =
+          typeof binding.serviceName === "string" ? binding.serviceName.trim() : "";
+        if (!serviceName) return false;
+        const { getSecretValue } = await import("@/lib/secrets");
+        const secret = await getSecretValue({
+          workspaceId: orgId,
+          serviceName,
+          skipAccessCheck: true,
+        });
+        return typeof secret === "string" && secret.length > 0;
+      } catch (err) {
+        console.warn(
+          `[run-event-agent-deps] isToolConnected failed for ${
+            binding?.id ?? "?"
+          }:`,
+          err instanceof Error ? err.message : String(err),
+        );
+        return false;
+      }
+    },
+
+    // 2026-06-27 — P2.1-T2 (live tool-fire): drive the action-only agent ONCE with
+    // its bound tools, NON-testMode, so it actually invokes the tool (e.g. posts via
+    // Postiz). Reuses the EXISTING runtime tool-merge via runStatelessAgentTurn
+    // (testMode:false → write/connector tools really execute) — the SAME loop the
+    // live chat/voice agents use, no hand-rolled tool loop. Called ONLY after
+    // isToolConnected reported ≥1 connected (the orchestrator's gate).
+    //
+    // We resolve the org's OWN BYOK Anthropic client (getAIClient): an action-only
+    // poster runs unbounded build/post work, so it uses the operator's key, not the
+    // platform allowance. No usable client → return { ok:false } so the orchestrator
+    // records tool_not_connected (never a fake post). The blueprint (capabilities +
+    // connectors + persona/customSkillMd) drives the brain; we pass the org soul +
+    // name + tz (an action-only agent is the operator's OWN automation, so its real
+    // identity is appropriate, unlike the identity-neutral template TEST turn).
+    runActionOnlyTurn: async ({ orgId, agent }) => {
+      const blueprint = agent.blueprint;
+      if (!blueprint || typeof blueprint !== "object") {
+        return { ok: false, detail: "no blueprint to run" };
+      }
+
+      const { getAIClient } = await import("@/lib/ai/client");
+      const resolution = await getAIClient({ orgId });
+      if (!resolution.client) {
+        // No Anthropic client (no key / OpenAI-only key) → can't drive the agent.
+        // ok:false → the orchestrator records action_error (we made NO post; the
+        // connection check passed but the turn could not run). Never a fake post.
+        return { ok: false, detail: "no_llm_key" };
+      }
+
+      const [org] = await db
+        .select({
+          slug: organizations.slug,
+          name: organizations.name,
+          soul: organizations.soul,
+          timezone: organizations.timezone,
+        })
+        .from(organizations)
+        .where(eq(organizations.id, orgId))
+        .limit(1);
+      if (!org) return { ok: false, detail: "org not found" };
+
+      const { runStatelessAgentTurn } = await import(
+        "@/lib/agents/stateless-turn"
+      );
+
+      const turn = await runStatelessAgentTurn({
+        orgId,
+        orgSlug: org.slug,
+        orgName: org.name ?? "your business",
+        soul:
+          org.soul && typeof org.soul === "object"
+            ? (org.soul as Parameters<typeof runStatelessAgentTurn>[0]["soul"])
+            : null,
+        timezone: org.timezone ?? "UTC",
+        blueprint,
+        // The synthetic trigger: a scheduled/event poster has no customer message,
+        // so we hand it a "go do your job" nudge that drives it to USE its tool.
+        messages: [
+          {
+            role: "user",
+            content:
+              "It's time to run your scheduled task now. Use your tools to do it.",
+          },
+        ],
+        // NON-testMode → connector (Postiz) + write tools actually execute. THIS is
+        // the live post. The orchestrator only reaches here when a tool is connected.
+        testMode: false,
+        client: resolution.client,
+      });
+
+      if (!turn.ok) {
+        return { ok: false, detail: turn.message };
+      }
+      return {
+        ok: true,
+        toolCalls: turn.toolCalls.map((c) => c.name),
+        detail: turn.reply ? turn.reply.slice(0, 200) : null,
+      };
+    },
+
     findEventAgents: async (orgId, eventType) => {
       const skill = skillForEvent(eventType);
       // We only run agents for events we have an outbound skill for.
@@ -272,6 +395,15 @@ export function buildRunEventAgentDeps(orgId?: string): RunEventAgentDeps {
                 .map((c) => (c && typeof c.id === "string" ? c.id : null))
                 .filter((id): id is string => id !== null)
             : [],
+          // 2026-06-27 — P2.1-T2 (live tool-fire): project the FULL connector
+          // bindings (for the connection check) + the FULL blueprint (so the live
+          // agentic-turn seam can drive the agent's real brain with its bound tools
+          // NON-testMode). Only meaningful on the action-only path; ignored by the
+          // messaging path. Cast through the shared ConnectorBinding type.
+          connectors: Array.isArray(blueprint.connectors)
+            ? (blueprint.connectors as import("@/lib/agents/mcp/connectors").ConnectorBinding[])
+            : [],
+          blueprint: (row.blueprint ?? {}) as import("@/db/schema/agents").AgentBlueprint,
         });
       }
       return matches;
