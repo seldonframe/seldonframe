@@ -1092,3 +1092,156 @@ export async function loadDeploymentCustomizationForOrgTemplate(
     .limit(1);
   return row?.customization ?? null;
 }
+
+// ─── scheduled-agent deployments (P2.1-T1: the schedule cron runtime) ─────────
+//
+// The schedule cron (/api/cron/schedule-agents) enumerates ACTIVE deployments
+// whose template's `blueprint.trigger.kind === "schedule"` and fires runEventAgent
+// for each one that's due. These two helpers are its data layer: the enumerate
+// query + the per-deployment `lastFiredAt` stamp. Lazy DB imports (real path
+// only) — the orchestration (runDueScheduledAgents) is DI'd + unit-tested with no
+// Postgres.
+
+/**
+ * The reserved key under the deployment's `customization` jsonb where the
+ * schedule cron stamps the last-fired time (ISO string). Stored HERE (rather than
+ * a new column) so the idempotency guard needs NO migration — the deployments
+ * table has no generic metadata jsonb, and `customization` is already loaded by
+ * listDeployments. The `_`-prefix + this constant mark it as runtime-internal:
+ * resolveDeploymentPersona only reads the typed persona fields (greeting/voiceId/
+ * …) and ignores unknown keys, so this never leaks into the agent's persona.
+ */
+export const SCHEDULE_LAST_FIRED_KEY = "_scheduleLastFiredAt";
+
+/**
+ * List the ACTIVE deployments whose deployed template is a SCHEDULE agent —
+ * `resolveAgentTrigger(blueprint.trigger, template.type).kind === "schedule"` —
+ * each resolved to the shape the cron orchestration consumes:
+ *   { deploymentId, orgId, agentKey, cron, tz, lastFiredAt }
+ *
+ * `orgId` is the org the agent runs FOR: the provisioned client workspace
+ * (clientOrgId) when present, else the builder/agency org — the SAME org
+ * runEventAgent grounds in. `tz` is that org's `organizations.timezone`. `cron`
+ * is `blueprint.trigger.cron`. `lastFiredAt` is read off
+ * `customization[SCHEDULE_LAST_FIRED_KEY]` (the idempotency stamp; null if never
+ * fired / not a string).
+ *
+ * Only `status = 'active'` deployments are considered (a draft/paused/canceled
+ * agent must not fire). A deployment whose template join missed, whose trigger
+ * isn't a schedule, or whose cron is blank is dropped. Returns [] when there are
+ * none. Lazy DB import; DI'd in unit tests via runDueScheduledAgents' `list`.
+ */
+export async function listScheduledAgentDeployments(): Promise<
+  import("@/lib/agents/triggers/schedule-agents").ScheduledAgentDeployment[]
+> {
+  const { db } = await import("@/db");
+  const { deployments } = await import("@/db/schema/deployments");
+  const { agentTemplates } = await import("@/db/schema/agent-templates");
+  const { organizations } = await import("@/db/schema/organizations");
+  const { resolveAgentTrigger } = await import("@/lib/agents/triggers/agent-trigger");
+  const { and, eq } = await import("drizzle-orm");
+
+  // Active deployments + their template's trigger/type + the org tz. The org we
+  // resolve tz for (and run as) is clientOrgId ?? builderOrgId — joined below via
+  // COALESCE-style resolution in JS (a SQL coalesce join on two FK targets is
+  // awkward), so we select both the client-org tz and the builder-org tz and pick.
+  const rows = await db
+    .select({
+      deploymentId: deployments.id,
+      builderOrgId: deployments.builderOrgId,
+      clientOrgId: deployments.clientOrgId,
+      agentTemplateId: deployments.agentTemplateId,
+      customization: deployments.customization,
+      templateType: agentTemplates.type,
+      templateBlueprint: agentTemplates.blueprint,
+    })
+    .from(deployments)
+    .innerJoin(agentTemplates, eq(deployments.agentTemplateId, agentTemplates.id))
+    .where(eq(deployments.status, "active"));
+
+  if (rows.length === 0) return [];
+
+  // Resolve the run-org per row (clientOrgId ?? builderOrgId) and batch-load each
+  // distinct org's timezone in ONE query (avoid N round-trips).
+  const orgIds = Array.from(
+    new Set(rows.map((r) => r.clientOrgId ?? r.builderOrgId).filter(Boolean)),
+  ) as string[];
+  const tzByOrg = new Map<string, string>();
+  if (orgIds.length > 0) {
+    const { inArray } = await import("drizzle-orm");
+    const tzRows = await db
+      .select({ id: organizations.id, timezone: organizations.timezone })
+      .from(organizations)
+      .where(inArray(organizations.id, orgIds));
+    for (const t of tzRows) {
+      tzByOrg.set(t.id, typeof t.timezone === "string" && t.timezone.trim() ? t.timezone.trim() : "UTC");
+    }
+  }
+
+  const out: import("@/lib/agents/triggers/schedule-agents").ScheduledAgentDeployment[] = [];
+  for (const r of rows) {
+    const trigger = resolveAgentTrigger(
+      (r.templateBlueprint as { trigger?: unknown } | null)?.trigger as Parameters<
+        typeof resolveAgentTrigger
+      >[0],
+      r.templateType,
+    );
+    if (trigger.kind !== "schedule") continue;
+    const cron = typeof trigger.cron === "string" ? trigger.cron.trim() : "";
+    if (!cron) continue;
+
+    const orgId = r.clientOrgId ?? r.builderOrgId;
+    const tz = tzByOrg.get(orgId) ?? "UTC";
+    const lastFiredRaw = (r.customization as Record<string, unknown> | null)?.[
+      SCHEDULE_LAST_FIRED_KEY
+    ];
+    const lastFiredAt = typeof lastFiredRaw === "string" ? lastFiredRaw : null;
+
+    out.push({
+      deploymentId: r.deploymentId,
+      orgId,
+      agentKey: r.agentTemplateId,
+      cron,
+      tz,
+      lastFiredAt,
+    });
+  }
+  return out;
+}
+
+/**
+ * Stamp a deployment's schedule `lastFiredAt` (the cron's idempotency guard) into
+ * its `customization` jsonb under SCHEDULE_LAST_FIRED_KEY — NO migration (the
+ * deployments table has no generic metadata column). Reads the current
+ * customization, merges the new ISO stamp over it (preserving every persona
+ * field), and writes it back. Best-effort: the caller (runDueScheduledAgents)
+ * swallows a throw and counts it (a missed stamp only risks a re-fire next tick,
+ * which the window guard + the agent's own throttle/guardrails contain). Lazy DB
+ * import (real path only).
+ */
+export async function markDeploymentScheduleFired(
+  deploymentId: string,
+  firedAt: Date,
+): Promise<void> {
+  if (!deploymentId) return;
+  const { db } = await import("@/db");
+  const { deployments } = await import("@/db/schema/deployments");
+  const { eq } = await import("drizzle-orm");
+
+  const [row] = await db
+    .select({ customization: deployments.customization })
+    .from(deployments)
+    .where(eq(deployments.id, deploymentId))
+    .limit(1);
+
+  const current = (row?.customization ?? {}) as Record<string, unknown>;
+  const next = { ...current, [SCHEDULE_LAST_FIRED_KEY]: firedAt.toISOString() };
+
+  await db
+    .update(deployments)
+    .set({
+      customization: next as Partial<DeploymentCustomization>,
+      updatedAt: new Date(),
+    })
+    .where(eq(deployments.id, deploymentId));
+}
