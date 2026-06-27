@@ -9,7 +9,7 @@
 import { notFound } from "next/navigation";
 import Link from "next/link";
 import { eq } from "drizzle-orm";
-import { ChevronLeft, Bot } from "lucide-react";
+import { ArrowLeft } from "lucide-react";
 import { db } from "@/db";
 import { organizations } from "@/db/schema";
 import { getOrgId } from "@/lib/auth/helpers";
@@ -27,6 +27,7 @@ import type { AgentBlueprint } from "@/db/schema";
 import { AgentTemplateEditor } from "./editor-client";
 import { ListOnMarketplace } from "./list-on-marketplace";
 import { RunEvalsCard } from "./run-evals";
+import { EditorSection, EditorSectionDivider } from "./editor-section";
 import { TemplateStatusBadge, formatTemplateType } from "../status-badge";
 import { DeployButton } from "../deploy-button";
 import { DeployToClientsButton } from "../deploy-to-clients-button";
@@ -87,98 +88,131 @@ export default async function AgentTemplatePage({
   const builderName = orgRow[0]?.name ?? "A SeldonFrame builder";
 
   return (
-    <section className="animate-page-enter space-y-5 sm:space-y-6">
-      <nav
-        aria-label="Breadcrumb"
-        className="flex items-center gap-1 text-xs text-muted-foreground"
-      >
-        <Link
-          href="/studio/agents"
-          className="inline-flex items-center gap-1 hover:text-foreground"
-        >
-          <ChevronLeft className="size-3" />
-          Agents
-        </Link>
-        <span>/</span>
-        <span className="text-foreground">{template.name}</span>
-      </nav>
-
-      <header className="flex flex-wrap items-start gap-3">
-        <span
-          className="inline-flex size-10 items-center justify-center rounded-lg bg-indigo-500/10 text-indigo-500 dark:text-indigo-400"
-          aria-hidden
-        >
-          <Bot className="size-5" />
-        </span>
-        <div className="min-w-0 flex-1 space-y-1">
-          <div className="flex flex-wrap items-center gap-2">
-            <h1 className="text-lg sm:text-[22px] font-semibold tracking-tight leading-relaxed text-foreground">
+    <section className="animate-page-enter">
+      {/* ── Sticky header (Claude Design, direction A) ──────────────────────
+          A calm action bar that pins just under the dashboard topbar
+          (matching the in-repo ProposalStepsHeader convention: sticky top-0
+          z-10 + opaque blurred bg). Back · "Agents / {name}" · status chip on
+          the left; Deploy-to-clients · Deploy on the right. The Save control
+          stays a wired affordance inside the editor (its dirty/saved state
+          lives in the client island) — see the editor's Save section. */}
+      <div className="sticky top-0 z-10 -mx-4 mb-2 border-b border-border/70 bg-background/90 px-4 py-3 backdrop-blur-xl sm:-mx-6 sm:px-6 lg:-mx-8 lg:px-8">
+        <div className="flex flex-wrap items-center gap-x-3 gap-y-2">
+          <Link
+            href="/studio/agents"
+            aria-label="Back to Agents"
+            className="crm-topbar-icon-btn size-9 shrink-0"
+          >
+            <ArrowLeft className="size-4" />
+          </Link>
+          <div className="flex min-w-0 items-center gap-2">
+            <Link
+              href="/studio/agents"
+              className="shrink-0 text-xs text-muted-foreground hover:text-foreground"
+            >
+              Agents
+            </Link>
+            <span aria-hidden className="text-xs text-muted-foreground">
+              /
+            </span>
+            <h1 className="truncate text-base font-semibold tracking-tight text-foreground sm:text-[17px]">
               {template.name}
             </h1>
             <TemplateStatusBadge status={template.status} />
           </div>
-          <p className="text-sm text-muted-foreground max-w-3xl">
-            {formatTemplateType(template.type)} template. Configure it once here,
-            test it in the sandbox, then deploy it to as many clients as you
-            like.
-          </p>
+          <div className="ml-auto flex shrink-0 items-center gap-2">
+            <DeployToClientsButton templateId={template.id} variant="secondary" />
+            <DeployButton templateId={template.id} variant="primary" />
+          </div>
         </div>
-        <div className="flex flex-wrap items-center gap-2">
-          <TestButton templateId={template.id} variant="secondary" />
-          <DeployToClientsButton templateId={template.id} variant="secondary" />
-          <DeployButton templateId={template.id} variant="primary" />
+      </div>
+
+      {/* The calm scroll body — one breathing document of grouped sections. */}
+      <div className="mx-auto max-w-3xl space-y-2 pt-6 pb-24">
+        <p className="max-w-2xl text-sm leading-relaxed text-muted-foreground">
+          {formatTemplateType(template.type)} template. Configure it once here,
+          test it in the sandbox, then deploy it to as many clients as you like.
+        </p>
+
+        <div className="pt-6">
+          {/* Sections 01–04 + Save live inside the editor island (they need
+              client state). It renders: When it runs · What it says & does ·
+              Tools · Quality & guardrails · Save. */}
+          <AgentTemplateEditor
+            templateId={template.id}
+            surface={surface}
+            isNew={isNew}
+            initialTrigger={trigger}
+            initialBlueprint={{
+              greeting: blueprint.greeting ?? "",
+              customSkillMd: blueprint.customSkillMd ?? "",
+              voice: blueprint.voice ?? DEFAULT_VOICE_RECEPTIONIST_VOICE,
+              capabilities: blueprint.capabilities ?? [...allCapabilities],
+              faq: (blueprint.faq ?? []).map((f) => ({ q: f.q, a: f.a })),
+              quoteRanges: (blueprint.quoteRanges ?? []).map((r) => ({
+                service: r.service,
+                low: r.low,
+                high: r.high,
+              })),
+              // MCP connector bindings (#3). Plain JSON (serviceName pointer +
+              // cached tool schemas — NEVER the bearer key) so they cross the
+              // server→client boundary safely. The picker renders + toggles these.
+              connectors: blueprint.connectors ?? [],
+              // L3 GUARDRAILS + L2 VERIFY (outbound-UX F5). Pass through as-is
+              // (plain JSON, no secrets). `null` (absent on the blueprint) seeds
+              // the editor's "Use smart defaults" toggle ON, so the per-skill
+              // runtime defaults apply until the builder overrides them.
+              guardrails: blueprint.guardrails ?? null,
+              verify: blueprint.verify ?? null,
+            }}
+            allCapabilities={allCapabilities}
+            vettedConnectors={VETTED_CONNECTORS.map((c) => ({
+              id: c.id,
+              label: c.label,
+              secretService: c.secretService,
+            }))}
+          />
         </div>
-      </header>
 
-      {/* List on the marketplace — publish this template as a sellable
-          kind:'agent' listing, with a live preview + the paid Connect gate. */}
-      <ListOnMarketplace
-        templateId={template.id}
-        templateName={template.name}
-        agentType={template.type}
-        builderName={builderName}
-        initialListing={sellerListing}
-        initialConnect={sellerConnect}
-      />
+        <EditorSectionDivider />
 
-      {/* Run evals — play the agent against realistic customers, see a pass rate
-          + exactly what failed, and record failures as Brain lessons (E5). */}
-      <RunEvalsCard templateId={template.id} />
+        {/* ── 05 · Try it ── Score the agent against realistic customers. (The
+            sandbox chat lives behind Test; the event-only "Send test" affordance
+            is inline in the editor's trigger section.) */}
+        <EditorSection
+          step="05"
+          title="Try it"
+          anchor="try"
+          description="Score the agent against realistic customers, or open the sandbox to chat with it. Nothing is booked or sent."
+        >
+          {/* Run evals — play the agent against realistic customers, see a pass
+              rate + exactly what failed, and record failures as Brain lessons (E5). */}
+          <RunEvalsCard templateId={template.id} />
+          <div className="flex flex-wrap items-center gap-2">
+            <TestButton templateId={template.id} variant="secondary" />
+          </div>
+        </EditorSection>
 
-      <AgentTemplateEditor
-        templateId={template.id}
-        surface={surface}
-        isNew={isNew}
-        initialTrigger={trigger}
-        initialBlueprint={{
-          greeting: blueprint.greeting ?? "",
-          customSkillMd: blueprint.customSkillMd ?? "",
-          voice: blueprint.voice ?? DEFAULT_VOICE_RECEPTIONIST_VOICE,
-          capabilities: blueprint.capabilities ?? [...allCapabilities],
-          faq: (blueprint.faq ?? []).map((f) => ({ q: f.q, a: f.a })),
-          quoteRanges: (blueprint.quoteRanges ?? []).map((r) => ({
-            service: r.service,
-            low: r.low,
-            high: r.high,
-          })),
-          // MCP connector bindings (#3). Plain JSON (serviceName pointer + cached
-          // tool schemas — NEVER the bearer key) so they cross the server→client
-          // boundary safely. The picker renders + toggles these.
-          connectors: blueprint.connectors ?? [],
-          // L3 GUARDRAILS + L2 VERIFY (outbound-UX F5). Pass through as-is (plain
-          // JSON, no secrets). `null` (absent on the blueprint) seeds the editor's
-          // "Use smart defaults" toggle ON, so the per-skill runtime defaults apply
-          // until the builder overrides them.
-          guardrails: blueprint.guardrails ?? null,
-          verify: blueprint.verify ?? null,
-        }}
-        allCapabilities={allCapabilities}
-        vettedConnectors={VETTED_CONNECTORS.map((c) => ({
-          id: c.id,
-          label: c.label,
-          secretService: c.secretService,
-        }))}
-      />
+        <EditorSectionDivider />
+
+        {/* ── Publish ── List this template on the marketplace as a sellable
+            kind:'agent' listing, with a live preview + the paid Connect gate. */}
+        <EditorSection
+          step="06"
+          title="Publish"
+          anchor="publish"
+          description="Sell this template on the marketplace so other businesses can deploy it."
+        >
+          <ListOnMarketplace
+            templateId={template.id}
+            templateName={template.name}
+            agentType={template.type}
+            builderName={builderName}
+            initialListing={sellerListing}
+            initialConnect={sellerConnect}
+          />
+        </EditorSection>
+      </div>
     </section>
   );
 }

@@ -31,6 +31,7 @@ import {
   Send,
   AlertCircle,
   ArrowRight,
+  FileCode2,
 } from "lucide-react";
 import {
   saveAgentTemplateBlueprintAction,
@@ -71,6 +72,7 @@ import {
   type GuardrailFields,
   type VerifyFields,
 } from "./guardrails-fields";
+import { EditorSection, EditorSectionDivider } from "./editor-section";
 
 // Rotating status copy shown on the Refine button while a refinement is being
 // generated, so the multi-second LLM call feels alive. Cycled every
@@ -495,346 +497,413 @@ export function AgentTemplateEditor(props: Props) {
   };
 
   return (
-    <div className="space-y-4">
-      {/* Trigger — what FIRES this agent (Trigger × Channel). Defaults to
-          inbound on the template's surface, so existing templates read as today. */}
-      <TriggerCard
-        kind={triggerKind}
-        channel={triggerChannel}
-        event={triggerEvent}
-        delayMinutes={triggerDelayMinutes}
-        onChangeKind={changeTriggerKind}
-        onChangeChannel={setTriggerChannel}
-        onChangeEvent={setTriggerEvent}
-        onChangeDelayMinutes={setTriggerDelayMinutes}
-      />
-
-      {/* Send test — outbound (event) agents only. Fire a REAL "[TEST] "
-          review/speed-to-lead message to your own number/email NOW, no booking
-          or lead required. Bypasses the throttle/guardrails/verify gates (it's an
-          explicit operator action); a review test still requires a review link.
-          Shown for kind=event; uses the CURRENTLY-SELECTED channel — save first
-          if you just switched channels so the test matches what you'll deploy. */}
-      {triggerKind === "event" && (
-        <SendTestCard
-          templateId={props.templateId}
+    <div>
+      {/* ── 01 · When it runs ─────────────────────────────────────────────
+          What FIRES this agent (Trigger × Channel), plus the event-only
+          "Send test" affordance. */}
+      <EditorSection
+        step="01"
+        title="When it runs"
+        anchor="trigger"
+        description="Choose what wakes the agent and the channel it answers on. Each client that deploys this template inherits this."
+      >
+        {/* Trigger — what FIRES this agent (Trigger × Channel). Defaults to
+            inbound on the template's surface, so existing templates read as today. */}
+        <TriggerCard
+          kind={triggerKind}
           channel={triggerChannel}
+          event={triggerEvent}
+          delayMinutes={triggerDelayMinutes}
+          onChangeKind={changeTriggerKind}
+          onChangeChannel={setTriggerChannel}
+          onChangeEvent={setTriggerEvent}
+          onChangeDelayMinutes={setTriggerDelayMinutes}
         />
-      )}
 
-      {/* Refine with a prompt — AI-assisted iteration over the whole config */}
-      <div className="rounded-xl border bg-card p-5">
-        <div className="flex items-start gap-2">
-          <span
-            className="inline-flex size-8 shrink-0 items-center justify-center rounded-lg bg-indigo-500/10 text-indigo-500 dark:text-indigo-400"
-            aria-hidden
-          >
-            <Sparkles className="size-4" />
-          </span>
-          <div className="min-w-0 flex-1">
-            <h2 className="text-card-title">Refine with a prompt</h2>
-            <p className="text-xs text-muted-foreground">
-              Describe a change in plain language — we&apos;ll update the fields
-              below. Review, then Save.
-            </p>
-          </div>
-        </div>
-        <div className="mt-3 flex flex-col gap-2 sm:flex-row">
-          <input
-            type="text"
-            value={refinePrompt}
-            onChange={(e) => setRefinePrompt(e.target.value)}
-            onKeyDown={(e) => {
-              if (e.key === "Enter" && !isRefining) refine();
-            }}
-            disabled={isRefining}
-            placeholder="e.g. Add an FAQ about emergency service and a quote range for drain cleaning"
-            className="h-10 flex-1 rounded-md border bg-background px-3 py-2 text-sm focus:border-primary focus:outline-none disabled:opacity-60"
-          />
-          <button
-            type="button"
-            onClick={refine}
-            disabled={isRefining}
-            className="crm-button-secondary inline-flex h-10 shrink-0 items-center gap-1.5 px-4 text-sm"
-          >
-            <Sparkles className={`size-4 ${isRefining ? "animate-pulse" : ""}`} />
-            {isRefining ? REFINE_STATUS_MESSAGES[refineStatusIdx] : "Refine"}
-          </button>
-        </div>
-        {refined && (
-          <p className="mt-2 text-xs text-emerald-700 dark:text-emerald-400">
-            ✓ Updated the fields below — review and Save.
-          </p>
+        {/* Send test — outbound (event) agents only. Fire a REAL "[TEST] "
+            review/speed-to-lead message to your own number/email NOW, no booking
+            or lead required. Bypasses the throttle/guardrails/verify gates (it's an
+            explicit operator action); a review test still requires a review link.
+            Shown for kind=event; uses the CURRENTLY-SELECTED channel — save first
+            if you just switched channels so the test matches what you'll deploy. */}
+        {triggerKind === "event" && (
+          <SendTestCard templateId={props.templateId} channel={triggerChannel} />
         )}
-        {refineError && (
-          <p className="mt-2 text-xs text-rose-600 dark:text-rose-400">
-            {refineError}
-          </p>
-        )}
-      </div>
+      </EditorSection>
 
-      {/* Greeting */}
-      <div className="rounded-xl border bg-card p-5">
-        <h2 className="text-card-title">Greeting</h2>
-        <p className="text-xs text-muted-foreground">{c.greetingHelp}</p>
-        <textarea
-          value={greeting}
-          onChange={(e) => setGreeting(e.target.value)}
-          rows={2}
-          className="mt-3 w-full rounded-md border bg-background px-3 py-2 text-sm focus:border-primary focus:outline-none"
-          placeholder={c.greetingPlaceholder}
-        />
-      </div>
+      <EditorSectionDivider />
 
-      {/* Agent script (core persona — blueprint.customSkillMd) */}
-      <div className="rounded-xl border bg-card p-5">
-        <h2 className="text-card-title">{c.scriptTitle}</h2>
-        <p className="text-xs text-muted-foreground">{c.scriptHelp}</p>
-        <textarea
-          value={customSkillMd}
-          onChange={(e) => setCustomSkillMd(e.target.value)}
-          rows={16}
-          className="mt-3 w-full rounded-md border bg-background px-3 py-2 font-mono text-xs leading-relaxed focus:border-primary focus:outline-none"
-          placeholder={c.scriptPlaceholder}
-        />
-      </div>
-
-      {/* TTS voice — voice templates only (chat has no TTS) */}
-      {!isChat && (
+      {/* ── 02 · What it says & does ──────────────────────────────────────
+          The heart of the template: the greeting that opens every
+          conversation, the agent script (its core instructions), the
+          Refine-with-a-prompt affordance folded into the script editor, the
+          TTS voice (voice templates), and the FAQ. */}
+      <EditorSection
+        step="02"
+        title="What it says & does"
+        anchor="script"
+        description="The greeting opens every conversation; the script is the agent's core instructions. Refine either in plain language."
+      >
+        {/* Greeting */}
         <div className="rounded-xl border bg-card p-5">
-          <h2 className="text-card-title">Voice</h2>
-          <p className="text-xs text-muted-foreground">
-            The text-to-speech voice the agent speaks with.
-          </p>
-          <select
-            value={voice}
-            onChange={(e) => setVoice(e.target.value)}
-            className="mt-3 w-full max-w-xs rounded-md border bg-background px-3 py-2 text-sm capitalize focus:border-primary focus:outline-none"
-          >
-            {VOICE_OPTIONS.map((v) => (
-              <option key={v} value={v} className="capitalize">
-                {v}
-              </option>
-            ))}
-          </select>
+          <h3 className="text-sm font-semibold text-foreground">Greeting</h3>
+          <p className="mt-0.5 text-xs text-muted-foreground">{c.greetingHelp}</p>
+          <textarea
+            value={greeting}
+            onChange={(e) => setGreeting(e.target.value)}
+            rows={2}
+            className="mt-3 w-full rounded-md border bg-background px-3 py-2 text-sm focus:border-primary focus:outline-none"
+            placeholder={c.greetingPlaceholder}
+          />
         </div>
-      )}
 
-      {/* Tool toggles */}
-      <div className="rounded-xl border bg-card p-5">
-        <h2 className="text-card-title">Tools</h2>
-        <p className="text-xs text-muted-foreground">{c.toolsHelp}</p>
-        <div className="mt-3 grid grid-cols-1 gap-2 sm:grid-cols-2">
-          {props.allCapabilities.map((cap) => (
-            <label
-              key={cap}
-              className="flex cursor-pointer items-center gap-2 rounded-md border bg-background p-3 text-sm hover:bg-muted/50"
-            >
-              <input
-                type="checkbox"
-                checked={capabilities.includes(cap)}
-                onChange={() => toggleCap(cap)}
+        {/* Agent script (core persona — blueprint.customSkillMd) — a breathing
+            monospace editor: a quiet chrome bar (filename · Markdown badge · live
+            char count), the mono textarea, and a footer that folds in the
+            "Refine with a prompt" control (AI-assisted iteration over the whole
+            config). */}
+        <div>
+          <label
+            htmlFor="agent-script"
+            className="mb-2 block text-sm font-semibold text-foreground"
+          >
+            {c.scriptTitle}
+          </label>
+          <p className="mb-3 text-xs text-muted-foreground">{c.scriptHelp}</p>
+          <div className="overflow-hidden rounded-xl border bg-card shadow-(--shadow-xs)">
+            {/* chrome bar */}
+            <div className="flex items-center gap-2.5 border-b border-border/70 bg-muted/40 px-3.5 py-2.5">
+              <FileCode2
+                className="size-3.5 text-muted-foreground"
+                aria-hidden
               />
-              <code className="font-mono text-xs">{cap}</code>
-            </label>
-          ))}
-        </div>
-      </div>
-
-      {/* Connectors & Tools — bind external MCP servers (#3) */}
-      <ConnectorsCard
-        templateId={props.templateId}
-        surface={props.surface}
-        initialConnectors={props.initialBlueprint.connectors}
-        vettedConnectors={props.vettedConnectors}
-      />
-
-      {/* FAQ */}
-      <div className="rounded-xl border bg-card p-5">
-        <div className="flex items-center justify-between gap-2">
-          <div>
-            <h2 className="text-card-title">FAQ</h2>
-            <p className="text-xs text-muted-foreground">{c.faqHelp}</p>
-          </div>
-          <button
-            type="button"
-            onClick={() => setFaq([...faq, { q: "", a: "" }])}
-            className="crm-button-secondary h-8 px-3 text-xs"
-          >
-            + Add row
-          </button>
-        </div>
-        {faq.length === 0 ? (
-          <p className="mt-3 text-xs text-muted-foreground">No FAQ yet.</p>
-        ) : (
-          <div className="mt-3 space-y-2">
-            {faq.map((row, idx) => (
-              <div
-                key={idx}
-                className="grid grid-cols-1 gap-2 rounded-md border bg-background p-3 sm:grid-cols-[1fr_2fr_auto]"
+              <span className="font-mono text-xs font-medium text-muted-foreground">
+                script.md
+              </span>
+              <span className="rounded-full bg-muted px-2 py-0.5 font-mono text-[10px] text-muted-foreground">
+                Markdown
+              </span>
+              <span className="ml-auto font-mono text-[11px] text-muted-foreground">
+                {customSkillMd.length.toLocaleString()} chars
+              </span>
+            </div>
+            <textarea
+              id="agent-script"
+              value={customSkillMd}
+              onChange={(e) => setCustomSkillMd(e.target.value)}
+              spellCheck={false}
+              rows={16}
+              className="block min-h-[300px] w-full resize-y border-0 bg-muted/20 px-5 py-4 font-mono text-[13px] leading-7 text-foreground focus:outline-none"
+              placeholder={c.scriptPlaceholder}
+            />
+            {/* Refine footer — AI-assisted iteration over the whole config. */}
+            <div className="flex items-center gap-2.5 border-t border-border/70 bg-card px-3 py-2.5">
+              <span
+                className="inline-flex size-8 shrink-0 items-center justify-center rounded-lg bg-primary/10 text-primary"
+                aria-hidden
               >
-                <input
-                  type="text"
-                  placeholder="Question"
-                  value={row.q}
-                  onChange={(e) => {
-                    const next = [...faq];
-                    next[idx] = { ...next[idx], q: e.target.value };
-                    setFaq(next);
-                  }}
-                  className="rounded border bg-background px-2 py-1 text-sm focus:border-primary focus:outline-none"
+                <Sparkles className="size-4" />
+              </span>
+              <input
+                type="text"
+                value={refinePrompt}
+                onChange={(e) => setRefinePrompt(e.target.value)}
+                onKeyDown={(e) => {
+                  if (e.key === "Enter" && !isRefining) refine();
+                }}
+                disabled={isRefining}
+                placeholder="Refine in plain language — e.g. add an FAQ about emergency service"
+                className="h-9 min-w-0 flex-1 border-0 bg-transparent px-1 text-sm text-foreground focus:outline-none disabled:opacity-60"
+              />
+              <button
+                type="button"
+                onClick={refine}
+                disabled={isRefining}
+                className="crm-button-secondary inline-flex h-9 shrink-0 items-center gap-1.5 px-4 text-sm"
+              >
+                <Sparkles
+                  className={`size-4 ${isRefining ? "animate-pulse" : ""}`}
                 />
-                <textarea
-                  placeholder="Answer"
-                  value={row.a}
-                  rows={2}
-                  onChange={(e) => {
-                    const next = [...faq];
-                    next[idx] = { ...next[idx], a: e.target.value };
-                    setFaq(next);
-                  }}
-                  className="rounded border bg-background px-2 py-1 text-sm focus:border-primary focus:outline-none"
-                />
-                <button
-                  type="button"
-                  onClick={() => setFaq(faq.filter((_, i) => i !== idx))}
-                  className="text-xs text-rose-600 hover:underline"
-                >
-                  Remove
-                </button>
-              </div>
-            ))}
+                {isRefining ? REFINE_STATUS_MESSAGES[refineStatusIdx] : "Refine"}
+              </button>
+            </div>
           </div>
-        )}
-      </div>
-
-      {/* Guardrails — quote ranges for the get_quote_range tool */}
-      <div className="rounded-xl border bg-card p-5">
-        <div className="flex items-center justify-between gap-2">
-          <div>
-            <h2 className="text-card-title">Guardrails</h2>
-            <p className="text-xs text-muted-foreground">
-              Price ranges the agent may quote. It never states a firm price — it
-              gives this low–high band and says a human confirms the final
-              number. A service with no range here gets a &ldquo;we&apos;ll
-              confirm&rdquo; answer.
+          {refined && (
+            <p className="mt-2 text-xs text-emerald-700 dark:text-emerald-400">
+              ✓ Updated the fields below — review and Save.
             </p>
-          </div>
-          <button
-            type="button"
-            onClick={() =>
-              setQuoteRanges([
-                ...quoteRanges,
-                { service: "", low: "", high: "" },
-              ])
-            }
-            className="crm-button-secondary h-8 px-3 text-xs"
-          >
-            + Add range
-          </button>
+          )}
+          {refineError && (
+            <p className="mt-2 text-xs text-rose-600 dark:text-rose-400">
+              {refineError}
+            </p>
+          )}
         </div>
-        {quoteRanges.length === 0 ? (
-          <p className="mt-3 text-xs text-muted-foreground">
-            No quote ranges yet.
-          </p>
-        ) : (
-          <div className="mt-3 space-y-2">
-            {quoteRanges.map((row, idx) => (
-              <div
-                key={idx}
-                className="grid grid-cols-1 gap-2 rounded-md border bg-background p-3 sm:grid-cols-[2fr_1fr_1fr_auto]"
-              >
-                <input
-                  type="text"
-                  placeholder="Service (e.g. Drain cleaning)"
-                  value={row.service}
-                  onChange={(e) => {
-                    const next = [...quoteRanges];
-                    next[idx] = { ...next[idx], service: e.target.value };
-                    setQuoteRanges(next);
-                  }}
-                  className="rounded border bg-background px-2 py-1 text-sm focus:border-primary focus:outline-none"
-                />
-                <input
-                  type="number"
-                  inputMode="decimal"
-                  placeholder="Low $"
-                  value={row.low}
-                  onChange={(e) => {
-                    const next = [...quoteRanges];
-                    next[idx] = { ...next[idx], low: e.target.value };
-                    setQuoteRanges(next);
-                  }}
-                  className="rounded border bg-background px-2 py-1 text-sm focus:border-primary focus:outline-none"
-                />
-                <input
-                  type="number"
-                  inputMode="decimal"
-                  placeholder="High $"
-                  value={row.high}
-                  onChange={(e) => {
-                    const next = [...quoteRanges];
-                    next[idx] = { ...next[idx], high: e.target.value };
-                    setQuoteRanges(next);
-                  }}
-                  className="rounded border bg-background px-2 py-1 text-sm focus:border-primary focus:outline-none"
-                />
-                <button
-                  type="button"
-                  onClick={() =>
-                    setQuoteRanges(quoteRanges.filter((_, i) => i !== idx))
-                  }
-                  className="text-xs text-rose-600 hover:underline"
-                >
-                  Remove
-                </button>
-              </div>
-            ))}
+
+        {/* TTS voice — voice templates only (chat has no TTS) */}
+        {!isChat && (
+          <div className="rounded-xl border bg-card p-5">
+            <h3 className="text-sm font-semibold text-foreground">Voice</h3>
+            <p className="mt-0.5 text-xs text-muted-foreground">
+              The text-to-speech voice the agent speaks with.
+            </p>
+            <select
+              value={voice}
+              onChange={(e) => setVoice(e.target.value)}
+              className="mt-3 w-full max-w-xs rounded-md border bg-background px-3 py-2 text-sm capitalize focus:border-primary focus:outline-none"
+            >
+              {VOICE_OPTIONS.map((v) => (
+                <option key={v} value={v} className="capitalize">
+                  {v}
+                </option>
+              ))}
+            </select>
           </div>
         )}
-      </div>
 
-      {/* Guardrails & quality (F5) — the L3 brakes + L2 verify overrides. Most
-          meaningful for outbound/event agents, but shown for all (the gates apply
-          to event agents today). */}
-      <GuardrailsCard
-        skill={skillForTriggerEvent(triggerEvent)}
-        channel={triggerChannel}
-        guardrailsDefaultsOn={guardrailsDefaultsOn}
-        verifyDefaultsOn={verifyDefaultsOn}
-        onToggleGuardrailsDefaults={setGuardrailsDefaultsOn}
-        onToggleVerifyDefaults={setVerifyDefaultsOn}
-        guardrails={guardrailFields}
-        verify={verifyFields}
-        onChangeGuardrails={setGuardrailFields}
-        onChangeVerify={setVerifyFields}
-      />
+        {/* FAQ */}
+        <div className="rounded-xl border bg-card p-5">
+          <div className="flex items-center justify-between gap-2">
+            <div>
+              <h3 className="text-sm font-semibold text-foreground">FAQ</h3>
+              <p className="mt-0.5 text-xs text-muted-foreground">{c.faqHelp}</p>
+            </div>
+            <button
+              type="button"
+              onClick={() => setFaq([...faq, { q: "", a: "" }])}
+              className="crm-button-secondary h-8 px-3 text-xs"
+            >
+              + Add row
+            </button>
+          </div>
+          {faq.length === 0 ? (
+            <p className="mt-3 text-xs text-muted-foreground">No FAQ yet.</p>
+          ) : (
+            <div className="mt-3 space-y-2">
+              {faq.map((row, idx) => (
+                <div
+                  key={idx}
+                  className="grid grid-cols-1 gap-2 rounded-md border bg-background p-3 sm:grid-cols-[1fr_2fr_auto]"
+                >
+                  <input
+                    type="text"
+                    placeholder="Question"
+                    value={row.q}
+                    onChange={(e) => {
+                      const next = [...faq];
+                      next[idx] = { ...next[idx], q: e.target.value };
+                      setFaq(next);
+                    }}
+                    className="rounded border bg-background px-2 py-1 text-sm focus:border-primary focus:outline-none"
+                  />
+                  <textarea
+                    placeholder="Answer"
+                    value={row.a}
+                    rows={2}
+                    onChange={(e) => {
+                      const next = [...faq];
+                      next[idx] = { ...next[idx], a: e.target.value };
+                      setFaq(next);
+                    }}
+                    className="rounded border bg-background px-2 py-1 text-sm focus:border-primary focus:outline-none"
+                  />
+                  <button
+                    type="button"
+                    onClick={() => setFaq(faq.filter((_, i) => i !== idx))}
+                    className="text-xs text-rose-600 hover:underline"
+                  >
+                    Remove
+                  </button>
+                </div>
+              ))}
+            </div>
+          )}
+        </div>
+      </EditorSection>
 
-      {/* Save */}
-      <div className="rounded-xl border bg-card p-5">
-        <h2 className="text-card-title">Save</h2>
+      <EditorSectionDivider />
+
+      {/* ── 03 · Tools ────────────────────────────────────────────────────
+          The native capabilities the agent may use, plus the external apps it
+          can act in (Apps & tools / connectors / booking actions). */}
+      <EditorSection
+        step="03"
+        title="Tools"
+        anchor="tools"
+        description="Pick what the agent is allowed to do, and connect the apps it can act in. These carry into every deployment."
+      >
+        {/* Tool toggles (native capabilities) */}
+        <div className="rounded-xl border bg-card p-5">
+          <h3 className="text-sm font-semibold text-foreground">
+            Built-in tools
+          </h3>
+          <p className="mt-0.5 text-xs text-muted-foreground">{c.toolsHelp}</p>
+          <div className="mt-3 grid grid-cols-1 gap-2 sm:grid-cols-2">
+            {props.allCapabilities.map((cap) => (
+              <label
+                key={cap}
+                className="flex cursor-pointer items-center gap-2 rounded-md border bg-background p-3 text-sm hover:bg-muted/50"
+              >
+                <input
+                  type="checkbox"
+                  checked={capabilities.includes(cap)}
+                  onChange={() => toggleCap(cap)}
+                />
+                <code className="font-mono text-xs">{cap}</code>
+              </label>
+            ))}
+          </div>
+        </div>
+
+        {/* Connectors & Tools — bind external MCP servers (#3) */}
+        <ConnectorsCard
+          templateId={props.templateId}
+          surface={props.surface}
+          initialConnectors={props.initialBlueprint.connectors}
+          vettedConnectors={props.vettedConnectors}
+        />
+      </EditorSection>
+
+      <EditorSectionDivider />
+
+      {/* ── 04 · Quality & guardrails ─────────────────────────────────────
+          The brakes that keep the agent safe and on-message: the quote ranges
+          it may give, plus the L3 guardrails + L2 verify gates. */}
+      <EditorSection
+        step="04"
+        title="Quality & guardrails"
+        anchor="guardrails"
+        description="Brakes that keep the agent safe and on-message. Smart defaults are on — adjust only if you need to."
+      >
+        {/* Quote ranges for the get_quote_range tool */}
+        <div className="rounded-xl border bg-card p-5">
+          <div className="flex items-center justify-between gap-2">
+            <div>
+              <h3 className="text-sm font-semibold text-foreground">
+                Quote ranges
+              </h3>
+              <p className="mt-0.5 text-xs text-muted-foreground">
+                Price ranges the agent may quote. It never states a firm price —
+                it gives this low–high band and says a human confirms the final
+                number. A service with no range here gets a &ldquo;we&apos;ll
+                confirm&rdquo; answer.
+              </p>
+            </div>
+            <button
+              type="button"
+              onClick={() =>
+                setQuoteRanges([
+                  ...quoteRanges,
+                  { service: "", low: "", high: "" },
+                ])
+              }
+              className="crm-button-secondary h-8 shrink-0 px-3 text-xs"
+            >
+              + Add range
+            </button>
+          </div>
+          {quoteRanges.length === 0 ? (
+            <p className="mt-3 text-xs text-muted-foreground">
+              No quote ranges yet.
+            </p>
+          ) : (
+            <div className="mt-3 space-y-2">
+              {quoteRanges.map((row, idx) => (
+                <div
+                  key={idx}
+                  className="grid grid-cols-1 gap-2 rounded-md border bg-background p-3 sm:grid-cols-[2fr_1fr_1fr_auto]"
+                >
+                  <input
+                    type="text"
+                    placeholder="Service (e.g. Drain cleaning)"
+                    value={row.service}
+                    onChange={(e) => {
+                      const next = [...quoteRanges];
+                      next[idx] = { ...next[idx], service: e.target.value };
+                      setQuoteRanges(next);
+                    }}
+                    className="rounded border bg-background px-2 py-1 text-sm focus:border-primary focus:outline-none"
+                  />
+                  <input
+                    type="number"
+                    inputMode="decimal"
+                    placeholder="Low $"
+                    value={row.low}
+                    onChange={(e) => {
+                      const next = [...quoteRanges];
+                      next[idx] = { ...next[idx], low: e.target.value };
+                      setQuoteRanges(next);
+                    }}
+                    className="rounded border bg-background px-2 py-1 text-sm focus:border-primary focus:outline-none"
+                  />
+                  <input
+                    type="number"
+                    inputMode="decimal"
+                    placeholder="High $"
+                    value={row.high}
+                    onChange={(e) => {
+                      const next = [...quoteRanges];
+                      next[idx] = { ...next[idx], high: e.target.value };
+                      setQuoteRanges(next);
+                    }}
+                    className="rounded border bg-background px-2 py-1 text-sm focus:border-primary focus:outline-none"
+                  />
+                  <button
+                    type="button"
+                    onClick={() =>
+                      setQuoteRanges(quoteRanges.filter((_, i) => i !== idx))
+                    }
+                    className="text-xs text-rose-600 hover:underline"
+                  >
+                    Remove
+                  </button>
+                </div>
+              ))}
+            </div>
+          )}
+        </div>
+
+        {/* Guardrails & quality (F5) — the L3 brakes + L2 verify overrides. Most
+            meaningful for outbound/event agents, but shown for all (the gates apply
+            to event agents today). */}
+        <GuardrailsCard
+          skill={skillForTriggerEvent(triggerEvent)}
+          channel={triggerChannel}
+          guardrailsDefaultsOn={guardrailsDefaultsOn}
+          verifyDefaultsOn={verifyDefaultsOn}
+          onToggleGuardrailsDefaults={setGuardrailsDefaultsOn}
+          onToggleVerifyDefaults={setVerifyDefaultsOn}
+          guardrails={guardrailFields}
+          verify={verifyFields}
+          onChangeGuardrails={setGuardrailFields}
+          onChangeVerify={setVerifyFields}
+        />
+      </EditorSection>
+
+      {/* ── Save ── A calm, prominent primary action. The save-state (dirty /
+          saved / error) is wired here in the client island; the sticky header's
+          Deploy actions sit alongside it conceptually. */}
+      <div className="mt-10 flex flex-wrap items-center gap-3 border-t border-border/70 pt-6">
+        <button
+          type="button"
+          onClick={save}
+          disabled={isSaving}
+          className="crm-button-primary h-10 px-6 text-sm"
+        >
+          {isSaving ? "Saving…" : "Save changes"}
+        </button>
         <p className="text-xs text-muted-foreground">
           Saves your changes to this template. Use Test to try it in the sandbox,
           then Deploy to set it up for a client.
         </p>
-        <div className="mt-3 flex flex-wrap items-center gap-3">
-          <button
-            type="button"
-            onClick={save}
-            disabled={isSaving}
-            className="crm-button-primary h-10 px-5 text-sm"
-          >
-            {isSaving ? "Saving…" : "Save changes"}
-          </button>
-          {saved && (
-            <span className="text-xs text-emerald-700 dark:text-emerald-400">
-              ✓ Saved.
-            </span>
-          )}
-          {saveError && (
-            <span className="text-xs text-rose-600">Error: {saveError}</span>
-          )}
-        </div>
+        {saved && (
+          <span className="text-xs text-emerald-700 dark:text-emerald-400">
+            ✓ Saved.
+          </span>
+        )}
+        {saveError && (
+          <span className="text-xs text-rose-600">Error: {saveError}</span>
+        )}
       </div>
     </div>
   );
