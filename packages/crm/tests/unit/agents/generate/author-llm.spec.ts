@@ -255,6 +255,20 @@ describe("makeLlmAgentAuthor — the system prompt is built from the catalog / e
     assert.match(system, /X\/Twitter|Twitter/);
   });
 
+  test("the prompt states channel 'none' is for a posting agent (not 'digest')", async () => {
+    const { client, calls } = fakeClient(WEEKLY_IG_JSON);
+    const author = makeLlmAgentAuthor({ getClient: () => client });
+
+    await author("post a weekly instagram highlight");
+    const system = String(calls[0]!.system ?? "");
+
+    // A social poster sends no customer message → channel 'none' (a real run
+    // mis-picked 'digest'; the prompt now nudges 'none' explicitly).
+    assert.match(system, /'none' for a social-posting agent|none.*social-posting/i);
+    // And it warns off 'digest' for the publish action (digest = internal recap).
+    assert.match(system, /digest/i);
+  });
+
   test("the prompt instructs the neededCapabilities escape hatch (don't invent tool ids)", async () => {
     const { client, calls } = fakeClient(WEEKLY_IG_JSON);
     const author = makeLlmAgentAuthor({ getClient: () => client });

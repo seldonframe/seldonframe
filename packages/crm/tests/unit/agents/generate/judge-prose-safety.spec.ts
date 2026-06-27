@@ -154,7 +154,7 @@ describe("compactBundleForJudge — ships a TRIMMED skill head, not the whole pl
     const compact = compactBundleForJudge(bundle);
     const skillMd = String((compact.blueprint as Record<string, unknown>).skillMd);
     assert.ok(skillMd.length < long.length, "the long skill must be trimmed");
-    assert.ok(skillMd.length <= 1300, "trimmed to ~1200 chars + an ellipsis, keeping the budget sane");
+    assert.ok(skillMd.length <= 2500, "trimmed to ~2400 chars + an ellipsis, keeping the budget sane");
     assert.ok(skillMd.endsWith("…"), "a trimmed slice ends with an ellipsis");
   });
 
@@ -169,5 +169,104 @@ describe("compactBundleForJudge — ships a TRIMMED skill head, not the whole pl
     const bp = compact.blueprint as Record<string, unknown>;
     assert.equal(bp.skillMd, "");
     assert.equal(bp.hasSkillPrompt, false);
+  });
+
+  // The trim is now ~2400 chars (was 1200) so the judge rarely sees a sentence
+  // cut mid-thought — fewer FALSE "truncated" flags. Pin the new ceiling at the
+  // pure layer (a 2000-char skill is carried whole; a 5000-char one is trimmed
+  // wider than the old 1200 head).
+  test("the skill slice is wider than the old 1200 head (~2400 chars now)", () => {
+    const mid = "y".repeat(2000);
+    const midBundle: AgentBundle = {
+      name: "Mid",
+      description: "",
+      blueprint: { trigger: { kind: "inbound", channel: "voice" }, customSkillMd: mid },
+      warnings: [],
+    };
+    const midSkill = String(
+      (compactBundleForJudge(midBundle).blueprint as Record<string, unknown>).skillMd,
+    );
+    // A 2000-char skill now fits under the slice → carried whole (would have been
+    // trimmed under the old 1200 ceiling).
+    assert.equal(midSkill, mid, "a 2000-char skill is now carried whole (slice ≥ 2400)");
+
+    const long = "z".repeat(5000);
+    const longBundle: AgentBundle = {
+      name: "Long",
+      description: "",
+      blueprint: { trigger: { kind: "inbound", channel: "voice" }, customSkillMd: long },
+      warnings: [],
+    };
+    const longSkill = String(
+      (compactBundleForJudge(longBundle).blueprint as Record<string, unknown>).skillMd,
+    );
+    // The trimmed head is now > the old 1200 ceiling and ≤ ~2400 + an ellipsis.
+    assert.ok(longSkill.length > 1300, "the trim is wider than the old 1200 head");
+    assert.ok(longSkill.length <= 2500, "trimmed to ~2400 chars + an ellipsis");
+    assert.ok(longSkill.endsWith("…"));
+  });
+
+  // The slice is carried under an explicitly-LABELED `skillMdExcerpt` key (in
+  // addition to `skillMd`) so the judge can never mistake an intentional trim for
+  // a model that ran out of room mid-sentence.
+  test("the slice is also exposed under a labeled `skillMdExcerpt` key", () => {
+    const compact = compactBundleForJudge(AUTHORED_BUNDLE);
+    const bp = compact.blueprint as Record<string, unknown>;
+    assert.equal(typeof bp.skillMdExcerpt, "string");
+    assert.equal(bp.skillMdExcerpt, bp.skillMd, "the excerpt mirrors the skill slice");
+    assert.match(String(bp.skillMdExcerpt), new RegExp(SKILL_MARKER));
+  });
+});
+
+// ─── the system prompt teaches the SeldonFrame model (kills the 4 false flags) ──
+//
+// A generic judge raised FALSE issues by assuming a connector-per-capability model
+// SeldonFrame does not use ("needs a Twilio connector", "needs per-platform social
+// connectors", "channel doesn't match the trigger", "skill is truncated"). The
+// JUDGE_SYSTEM prompt now carries a "SeldonFrame model (do NOT flag these as
+// issues)" section that forbids each of those. Pin the substrings off the captured
+// system prompt (NO network).
+
+describe("makeLlmAgentGrader — the system prompt teaches SeldonFrame's own model", () => {
+  test("it carries the SF-model section that forbids the 4 known false flags", async () => {
+    const { client, calls } = capturingClient(BENIGN);
+    const grader = makeLlmAgentGrader({ getClient: () => client });
+
+    await grader({ sentence: "text back missed callers", bundle: AUTHORED_BUNDLE });
+
+    assert.equal(calls.length, 1, "the grader called the model once");
+    const system = String(calls[0]!.system ?? "");
+
+    // A clearly-delimited "do NOT flag these" section exists.
+    assert.match(system, /SeldonFrame model/i);
+    assert.match(system, /do NOT flag/i);
+
+    // (1) sms/email/voice are NATIVE channels — not connectors.
+    assert.match(system, /native/i);
+    assert.match(system, /sms.*email.*voice|voice.*native/i);
+
+    // (2) Postiz is one MULTI-PLATFORM publisher covering all socials.
+    assert.match(system, /postiz/i);
+    assert.match(system, /multi-platform/i);
+
+    // (3) `channel` is the OUTPUT medium — it need not match the trigger event.
+    assert.match(system, /OUTBOUND|output medium/i);
+
+    // (4) the skill is an EXCERPT — never flag truncation / incompleteness.
+    assert.match(system, /excerpt/i);
+    assert.match(system, /do NOT flag.*truncat|never flag.*truncat|truncat/i);
+  });
+
+  test("the genuine P3 prose-safety checks still ride alongside the SF-model section (regression guard)", async () => {
+    const { client, calls } = capturingClient(BENIGN);
+    const grader = makeLlmAgentGrader({ getClient: () => client });
+
+    await grader({ sentence: "post a weekly instagram highlight", bundle: AUTHORED_BUNDLE });
+
+    const system = String(calls[0]!.system ?? "");
+    // The real safety lens (firm price / fabricate / read-back) is untouched.
+    assert.match(system, /firm.*price/i);
+    assert.match(system, /fabricat/i);
+    assert.match(system, /read-back/i);
   });
 });

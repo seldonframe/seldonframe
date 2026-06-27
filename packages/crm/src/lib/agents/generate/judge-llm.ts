@@ -57,6 +57,15 @@ const JUDGE_SYSTEM = [
   "field MUST be one of: trigger | verify | guardrails | connectors | skill | channel.",
   "A fix may ONLY set trigger, verify, guardrails, or connectors — never skill, channel, name, prose, or persona. Omit fix for issues you cannot safely auto-correct (the operator resolves those).",
   "Flag: a trigger or channel that contradicts the sentence (e.g. the sentence says 'after a booking' but the trigger is inbound); tools the sentence clearly implies but the bundle is missing; unsafe or empty guardrails on an outbound agent.",
+  // ── SeldonFrame model (do NOT flag these as issues) ─────────────────────────
+  // The judge is a generic reviewer; without this section it raised FALSE issues
+  // by assuming a connector-per-capability model SeldonFrame does not use. These
+  // are platform FACTS, not request-specific — never report any of them as a problem.
+  "## SeldonFrame model (do NOT flag these as issues)",
+  "- Channels: `sms`, `email`, and `voice` are NATIVE SeldonFrame channels, provisioned per-deployment (Twilio / Resend). They are NOT connectors. NEVER flag that the agent 'needs an SMS / Twilio / email / voice connector' — an agent whose channel is sms/email/voice already has its messaging.",
+  "- `channel` is the OUTBOUND/output medium — HOW the agent messages a person — or `none` for a post-only / log-only agent. It does NOT have to match the trigger's event type. A missed-call → SMS text-back agent correctly uses channel `sms` (it texts the caller back); do NOT flag the output channel for 'not matching' the trigger (e.g. 'channel should be voice for a missed_call trigger' is WRONG).",
+  "- `postiz` is ONE multi-platform social publisher covering Instagram, Facebook, LinkedIn, YouTube, TikTok, and X/Twitter. A single Postiz binding covers ALL social platforms. NEVER flag that the agent 'needs separate connectors per social platform' or 'only Postiz is configured but the skill mentions Instagram/Facebook/LinkedIn'.",
+  "- The skill text shown to you is an EXCERPT (trimmed for length, look for the `skillMdExcerpt` key / an '(excerpt)' label and a trailing ellipsis) and SeldonFrame appends its OWN canonical ground rules to every skill deterministically. NEVER flag the skill as 'truncated', 'cut off mid-sentence', 'incomplete', or 'ground rules incomplete'. Only flag what the VISIBLE text actually INSTRUCTS that is unsafe.",
   // ── prose-safety lens (P3, Task 7) ─────────────────────────────────────────
   // The bundle includes a trimmed slice of the authored skill (customSkillMd).
   // REVIEW that prose for SAFETY violations and report them as field:\"skill\"
@@ -76,20 +85,30 @@ const JUDGE_SYSTEM = [
  * to READ the playbook to spot a SAFETY violation (a firm price, a fabricated
  * fact, a skipped read-back), but a full multi-page skill would blow the tight
  * token budget — and the violations a generator emits live in the opening
- * instructions. A ~1200-char head is enough to catch them while keeping the
- * prompt cheap. (The judge may STILL never rewrite this prose — applyJudgeFixes's
- * allow-list excludes `skill`, so any skill issue stays flag-only.)
+ * instructions. A ~2400-char head is enough to catch them while keeping the
+ * prompt cheap, and — crucially — wide enough that the judge rarely sees a
+ * sentence cut mid-thought (which used to make it FALSE-flag the excerpt as
+ * "truncated"; the SF-model section in JUDGE_SYSTEM forbids that, and the wider
+ * slice makes it even less likely). (The judge may STILL never rewrite this prose
+ * — applyJudgeFixes's allow-list excludes `skill`, so any skill issue stays
+ * flag-only.)
  */
-const JUDGE_SKILL_SLICE_CHARS = 1200;
+const JUDGE_SKILL_SLICE_CHARS = 2400;
 
 /**
  * The minimal, stable slice of a bundle the grader needs — name/description +
  * the blueprint's trigger / channel / connectors + a TRIMMED head of the authored
  * skill prose so the judge can review it for SAFETY (a firm price, fabricated
- * facts, a skipped read-back). We send only the first ~1200 chars (not the whole
+ * facts, a skipped read-back). We send only the first ~2400 chars (not the whole
  * playbook): enough to catch an instruction-level violation without blowing the
  * token budget, and the judge can still never rewrite it (the fix allow-list
  * excludes `skill`). Pure; never throws.
+ *
+ * The skill slice is carried under BOTH `skillMd` and a clearly-labeled
+ * `skillMdExcerpt` key, and a trimmed slice ends in an ellipsis, so the judge can
+ * never mistake an intentionally-trimmed head for a model that "ran out" mid-
+ * sentence (the JUDGE_SYSTEM SF-model section forbids flagging truncation, and the
+ * explicit `…Excerpt` label + ellipsis reinforce it).
  */
 export function compactBundleForJudge(bundle: AgentBundle): Record<string, unknown> {
   const bp = bundle?.blueprint ?? ({} as AgentBundle["blueprint"]);
@@ -109,8 +128,11 @@ export function compactBundleForJudge(bundle: AgentBundle): Record<string, unkno
       // whether a skill exists at all (a useful structural signal) …
       hasSkillPrompt: skill.length > 0,
       // … plus a TRIMMED head of the prose itself, so the judge can review it for
-      // SAFETY violations (field:"skill", flag-only — never auto-rewritten).
+      // SAFETY violations (field:"skill", flag-only — never auto-rewritten). It's
+      // carried under BOTH keys: `skillMd` (back-compat) and an explicitly-LABELED
+      // `skillMdExcerpt` so the judge cannot mistake the trim for a truncated draft.
       skillMd,
+      skillMdExcerpt: skillMd,
       capabilities: Array.isArray(bp.capabilities) ? bp.capabilities : [],
       channel: bp.trigger?.channel ?? null,
       connectors,

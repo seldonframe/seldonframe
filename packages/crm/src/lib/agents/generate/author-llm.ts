@@ -141,7 +141,7 @@ export function buildAuthorSystemPrompt(
     "- trigger.kind = 'schedule' for a recurring cadence (include a cron, e.g. weekly Monday 9am = '0 9 * * 1'), 'event' for after-a-business-event (set event to one of: " +
       buildKnownEvents() +
       "), or 'inbound' to answer incoming contact.",
-    "- channel = how it MESSAGES a person: 'sms' or 'email' — or 'none' if it only ACTS via tools and sends no customer message (e.g. a social poster that just publishes).",
+    "- channel = how it MESSAGES a person: 'sms' or 'email' — or 'none' if it only ACTS via tools and sends NO customer message. Use 'none' for a social-posting agent (e.g. an Instagram/Postiz poster that just publishes) — it sends no message to a person. Do NOT use 'digest' for a posting agent; a 'digest' is only an internal recap the operator reads, never the publish action itself.",
     "- tools = zero or more ids from this FEATURED menu (use the id exactly; omit any you don't need):",
     buildToolMenu(),
     "- The 'postiz' tool is a MULTI-PLATFORM social publisher: it posts to Instagram, Facebook, LinkedIn, X/Twitter, TikTok, and more — pick it for ANY social-posting agent, not just Instagram.",
