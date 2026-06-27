@@ -21,6 +21,7 @@ import {
   parseAgentIntent,
   type AgentIntent,
 } from "../../../../src/lib/agents/generate/parse-intent";
+import { agentNeedsNumber } from "../../../../src/lib/agents/triggers/agent-trigger";
 
 // ─── heuristicIntent — social-poster (priority #1) ───────────────────────────
 
@@ -128,12 +129,33 @@ describe("heuristicIntent — speed-to-lead", () => {
     assert.equal((i.trigger as { channel: string }).channel, "email");
   });
 
-  test("a 'missed call' sentence is a lead (not the receptionist 'call' rule)", () => {
-    // priority order: the lead rule (missed call) outranks the receptionist
-    // /call/ rule, so this stays speed-to-lead.
+  test("a 'missed call' sentence → speed-to-lead skill on the missed_call EVENT (NOT the receptionist 'call' rule, NOT lead.created)", () => {
+    // MISSED_CALL_RE is matched BEFORE LEAD_RE and RECEPTION_RE: a missed-call
+    // sentence keeps the speed-to-lead text-back skill but fires on the
+    // missed_call event (a dedicated-number agent), not lead.created.
     const i = heuristicIntent("follow up on every missed call right away");
     assert.equal(i.skill, "speed-to-lead");
+    assert.equal((i.trigger as { event: string }).event, "missed_call");
+  });
+
+  test("'answer missed calls and book the job' → missed_call event that NEEDS a dedicated number", () => {
+    // The exact gap: a missed-call text-back agent must provision its own line.
+    // It used to land on lead.created (phone-less); now it's missed_call, which
+    // agentNeedsNumber maps to "needs a dedicated number".
+    const i = heuristicIntent("answer missed calls and book the job");
+    assert.equal(i.skill, "speed-to-lead");
+    assert.equal(i.trigger.kind, "event");
+    assert.equal((i.trigger as { event: string }).event, "missed_call");
+    assert.equal(agentNeedsNumber(i.trigger), true);
+  });
+
+  test("a plain 'reply to new leads' is still lead.created (phone-less, no number)", () => {
+    // Guard the boundary: the missed_call branch must not swallow ordinary
+    // lead follow-ups — those stay on lead.created and need NO dedicated number.
+    const i = heuristicIntent("reply to new leads");
+    assert.equal(i.skill, "speed-to-lead");
     assert.equal((i.trigger as { event: string }).event, "lead.created");
+    assert.equal(agentNeedsNumber(i.trigger), false);
   });
 });
 

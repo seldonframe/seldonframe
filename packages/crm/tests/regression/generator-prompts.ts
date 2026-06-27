@@ -89,7 +89,8 @@ export const SKILL_SIGNATURE = {
 // Coverage map (by emitted skill / trigger.kind):
 //   social-poster (schedule) ......... cases 1, 9, 12, 13
 //   review-requester (event book) .... case 2
-//   speed-to-lead (event lead) ....... cases 3, 4, 6, 10, 14
+//   speed-to-lead (event missed_call)  case 3
+//   speed-to-lead (event lead) ....... cases 4, 6, 10, 14
 //   receptionist (inbound voice) ..... cases 5, 11
 //   receptionist (inbound chat) ...... case 8   (KNOWN GAP)
 //
@@ -127,20 +128,20 @@ export const GENERATOR_CASES: GeneratorCase[] = [
     note: "Channel must follow 'Text' → sms (not the email branch). 'appointment' also binds googlecalendar — intentionally not pinned.",
   },
 
-  // 3 — missed-call → book the job. KNOWN GAP (see note): the heuristic has no
-  //     missed_call event path; "missed call" hits the LEAD rule first, so it
-  //     emits speed-to-lead on lead.created. The TASK only requires it be NOT a
-  //     social poster and NOT review-requester — which we assert — plus we pin the
-  //     reality (event lead.created) so a future regression is still caught.
+  // 3 — missed-call → book the job. The heuristic now has a missed_call branch
+  //     (MISSED_CALL_RE, matched BEFORE LEAD_RE): "missed call" → speed-to-lead
+  //     skill on the missed_call EVENT, which agentNeedsNumber maps to "needs a
+  //     dedicated number" (forward-in + text-back). Pins event/missed_call so the
+  //     floor matches what the Opus author already emits.
   {
     sentence: "Answer missed calls for my HVAC company and book the job",
     expect: {
       triggerKind: "event",
-      triggerEvent: "lead.created",
+      triggerEvent: "missed_call",
       channelOneOf: ["sms"],
       skillNot: [SKILL_SIGNATURE.socialPoster, SKILL_SIGNATURE.reviewRequester],
     },
-    note: "KNOWN GAP: an LLM author would emit a missed-call shape — trigger event 'missed_call' (which needs a dedicated number per INBOUND_ISH_EVENTS). The deterministic heuristic has no missed_call branch: 'missed call' matches LEAD_RE before RECEPTION_RE, so it lands on speed-to-lead/lead.created with no number provisioned. Asserted as-is; tighten when the heuristic learns missed_call.",
+    note: "Missed-call text-back: MISSED_CALL_RE fires before LEAD_RE, so 'missed call' → trigger event 'missed_call' (needs a dedicated number per INBOUND_ISH_EVENTS), keeping the speed-to-lead text-back skill.",
   },
 
   // 4 — speed-to-lead, the canonical inbound-lead follow-up. event lead.created.

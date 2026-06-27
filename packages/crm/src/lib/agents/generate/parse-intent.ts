@@ -63,9 +63,21 @@ const REVIEW_RE =
  *  reception desk request counts as "clearly inbound". */
 const CLEARLY_INBOUND_RE = /\b(answer (the |my )?phone|reception(ist)?|front desk|pick up the phone)\b/i;
 
-/** Speed-to-lead intent: a new lead / inquiry / missed call / contact-form
- *  submission should get an instant follow-up. */
-const LEAD_RE = /lead|inquir|missed call|new customer|contact form/i;
+/** Missed-call text-back intent: the operator wants the agent to catch missed
+ *  calls and reply (typically by SMS). Matched BEFORE LEAD_RE so a "missed call"
+ *  sentence becomes a missed_call EVENT agent (which agentNeedsNumber maps to
+ *  "needs a dedicated number" — the agent forwards-in + texts-back on its own
+ *  line) instead of an outbound, phone-less speed-to-lead on lead.created.
+ *
+ *  Deliberately keyed on the noun phrase "missed call(s)" / "missed-call" only —
+ *  NOT a loose "miss a call" — so an answer-the-phone receptionist sentence like
+ *  "answer my phone when I miss a call" stays the inbound voice receptionist. */
+const MISSED_CALL_RE = /\bmissed[ -]calls?\b/i;
+
+/** Speed-to-lead intent: a new lead / inquiry / contact-form submission should
+ *  get an instant follow-up. (Note: "missed call" is handled earlier by
+ *  MISSED_CALL_RE — it is a dedicated-number text-back agent, not a lead.) */
+const LEAD_RE = /lead|inquir|new customer|contact form/i;
 
 /** Receptionist intent: answer inbound calls / chats — the always-on front desk. */
 const RECEPTION_RE = /answer|reception|phone|call/i;
@@ -91,10 +103,14 @@ const URL_RE = /https?:\/\/\S+/i;
  *   2. ask-for-review (and not clearly inbound) → review-requester, fires on
  *      booking.completed, channel sms|email. TIGHTENED: a bare "review" mention
  *      no longer matches; the sentence must ASK for a review.
- *   3. /lead|inquir|missed call|new customer|contact form/ → speed-to-lead,
- *      fires on lead.created, channel sms|email.
- *   4. /answer|reception|phone|call/ → receptionist, inbound voice.
- *   5. default → receptionist, inbound chat.
+ *   3. /missed call/ → speed-to-lead skill but on the missed_call EVENT (channel
+ *      sms|email). Matched BEFORE the lead rule so a missed-call text-back agent
+ *      provisions its OWN number (agentNeedsNumber(missed_call) === true) instead
+ *      of activating phone-less as a lead.created agent.
+ *   4. /lead|inquir|new customer|contact form/ → speed-to-lead, fires on
+ *      lead.created, channel sms|email.
+ *   5. /answer|reception|phone|call/ → receptionist, inbound voice.
+ *   6. default → receptionist, inbound chat.
  *
  * The matched trigger is always run through resolveAgentTrigger so the returned
  * intent's trigger is guaranteed valid. promptHint carries the original sentence
@@ -126,6 +142,14 @@ export function heuristicIntent(sentence: string): AgentIntent {
   } else if (REVIEW_RE.test(text) && !CLEARLY_INBOUND_RE.test(text)) {
     skill = "review-requester";
     trigger = { kind: "event", event: "booking.completed", channel };
+  } else if (MISSED_CALL_RE.test(text)) {
+    // Missed-call text-back: the closest existing skill is speed-to-lead (it
+    // does the instant outreach), but the TRIGGER is the missed_call event —
+    // which agentNeedsNumber maps to "needs a dedicated number" so the deployed
+    // agent provisions its own line (forward-in + text-back), NOT lead.created
+    // (which would activate phone-less and provision no number).
+    skill = "speed-to-lead";
+    trigger = { kind: "event", event: "missed_call", channel };
   } else if (LEAD_RE.test(text)) {
     skill = "speed-to-lead";
     trigger = { kind: "event", event: "lead.created", channel };
