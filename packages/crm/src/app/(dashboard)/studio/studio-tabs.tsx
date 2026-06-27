@@ -1,9 +1,12 @@
 "use client";
 
-// ICP-3 — the shared sub-nav for the Agents Studio console. Three tabs:
+// ICP-3 — the shared sub-nav for the Agents Studio console. Tabs:
 //   Agents    (/studio/agents)   — the builder's reusable template roster
+//   Activity  (/studio/agents/activity) — recent fires from outbound agents
 //   Clients   (/studio/clients)  — the builder's book of deployments
-//   Earnings  (/studio/earnings) — marketplace income (Phase 3, seller side)
+//   Revenue   (/studio/earnings) — recurring revenue (MRR/ARR) + marketplace
+//                                  income. Route kept at /studio/earnings; only
+//                                  the visible label is "Revenue".
 // so all surfaces are reachable and the Studio reads as one console. Mirrors
 // the agents/[id]/agent-tabs.tsx active-link chrome exactly.
 //
@@ -14,12 +17,17 @@
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 
-const TABS = [
+/** The Studio sub-nav tabs. Exported (read-only) so the nav spec can pin the
+ *  label/href contract without rendering the client component. The Revenue tab
+ *  keeps the legacy `/studio/earnings` href — only its visible label changed. */
+export const STUDIO_TABS = [
   { href: "/studio/agents", label: "Agents" },
   { href: "/studio/agents/activity", label: "Activity" },
   { href: "/studio/clients", label: "Clients" },
-  { href: "/studio/earnings", label: "Earnings" },
-];
+  { href: "/studio/earnings", label: "Revenue" },
+] as const;
+
+const TABS = STUDIO_TABS;
 
 export function StudioTabs() {
   const pathname = usePathname();

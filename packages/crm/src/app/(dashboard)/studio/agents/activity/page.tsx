@@ -10,18 +10,35 @@
 // Org-scoped + read-only: getOrgId() gates it; loadEventAgentActivity queries
 // only this org's rows and folds them via the pure summarizeEventAgentActivity.
 
+import Link from "next/link";
 import { Activity } from "lucide-react";
 import { getOrgId } from "@/lib/auth/helpers";
 import { loadEventAgentActivity } from "@/lib/agents/triggers/activity-store";
-import type {
-  EventAgentActivityOutcome,
-  EventAgentActivityRow,
+import {
+  parseActivityWindowDays,
+  type ActivityWindowDays,
+  type EventAgentActivityOutcome,
+  type EventAgentActivityRow,
 } from "@/lib/agents/triggers/activity";
 import { StudioTabs } from "../../studio-tabs";
 
 export const dynamic = "force-dynamic";
 
-export default async function EventAgentActivityPage() {
+/** The three windows the segmented control offers. */
+const WINDOW_OPTIONS: { days: ActivityWindowDays; label: string }[] = [
+  { days: 1, label: "1d" },
+  { days: 7, label: "7d" },
+  { days: 30, label: "30d" },
+];
+
+export default async function EventAgentActivityPage({
+  searchParams,
+}: {
+  searchParams: Promise<{ window?: string }>;
+}) {
+  const { window } = await searchParams;
+  const windowDays = parseActivityWindowDays(window);
+
   const orgId = await getOrgId();
   if (!orgId) {
     return (
@@ -35,7 +52,7 @@ export default async function EventAgentActivityPage() {
     );
   }
 
-  const rows = await loadEventAgentActivity(orgId, 50);
+  const rows = await loadEventAgentActivity(orgId, 50, windowDays);
 
   return (
     <section className="animate-page-enter space-y-5">
@@ -48,6 +65,7 @@ export default async function EventAgentActivityPage() {
             requests, lead replies, scheduled and blocked sends.
           </p>
         </div>
+        <WindowToggle active={windowDays} />
       </div>
 
       {rows.length === 0 ? (
@@ -58,10 +76,13 @@ export default async function EventAgentActivityPage() {
           >
             <Activity className="size-5" />
           </span>
-          <h2 className="mt-3 text-base font-semibold">No activity yet</h2>
+          <h2 className="mt-3 text-base font-semibold">
+            No activity in the last {windowDays}{" "}
+            {windowDays === 1 ? "day" : "days"}
+          </h2>
           <p className="mx-auto mt-1 max-w-md text-sm text-muted-foreground">
             When an event agent fires — after a booking completes or a lead
-            arrives — its sends show up here. Use{" "}
+            arrives — its sends show up here. Widen the window above, or use{" "}
             <span className="font-medium text-foreground">Send test</span> on an
             outbound agent to fire one now.
           </p>
@@ -88,6 +109,39 @@ export default async function EventAgentActivityPage() {
         </div>
       )}
     </section>
+  );
+}
+
+/** The 1d / 7d / 30d segmented control. Server-rendered: each segment is a Link
+ *  to `?window=N`, so selecting one re-runs this server component with the new
+ *  window (the page is force-dynamic). The active segment reads as a filled pill;
+ *  `scroll={false}` keeps the viewport put on switch. */
+function WindowToggle({ active }: { active: ActivityWindowDays }) {
+  return (
+    <div
+      className="inline-flex items-center rounded-lg border bg-muted/40 p-0.5"
+      role="group"
+      aria-label="Activity window"
+    >
+      {WINDOW_OPTIONS.map((opt) => {
+        const isActive = opt.days === active;
+        return (
+          <Link
+            key={opt.days}
+            href={`/studio/agents/activity?window=${opt.days}`}
+            scroll={false}
+            aria-current={isActive ? "true" : undefined}
+            className={`rounded-md px-3 py-1 text-xs font-medium transition-colors duration-150 ${
+              isActive
+                ? "bg-background text-foreground shadow-sm"
+                : "text-muted-foreground hover:text-foreground"
+            }`}
+          >
+            {opt.label}
+          </Link>
+        );
+      })}
+    </div>
   );
 }
 

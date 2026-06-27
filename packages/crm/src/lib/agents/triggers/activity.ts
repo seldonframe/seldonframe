@@ -142,6 +142,50 @@ function ms(at: string): number {
   return Number.isFinite(n) ? n : -Infinity;
 }
 
+/** The allowed Activity-feed windows, in days. */
+export type ActivityWindowDays = 1 | 7 | 30;
+
+/** The default window the feed opens on (last 7 days). */
+export const DEFAULT_ACTIVITY_WINDOW_DAYS: ActivityWindowDays = 7;
+
+/**
+ * Is `iso` within the trailing `windowDays`-day window ending at `nowMs`? Pure.
+ *
+ *   keep ⟺ (nowMs - windowDays·86_400_000) ≤ when ≤ nowMs
+ *
+ * The window is INCLUSIVE at both ends: a row exactly `windowDays` old is kept,
+ * and a row dated exactly `nowMs` is kept. A FUTURE row (when > nowMs) — e.g. a
+ * scheduled send due later — is dropped, since it's outside the trailing window
+ * (the feed shows what has happened / is overdue within the window, sorted
+ * newest-first elsewhere). An unparseable `iso` → dropped (can't place it).
+ * `windowDays` is clamped to ≥ 0 defensively.
+ */
+export function withinWindow(
+  iso: string,
+  nowMs: number,
+  windowDays: number,
+): boolean {
+  const when = ms(iso);
+  if (!Number.isFinite(when)) return false;
+  if (!Number.isFinite(nowMs)) return false;
+  const days = Math.max(0, windowDays);
+  const lowerBound = nowMs - days * 86_400_000;
+  return when >= lowerBound && when <= nowMs;
+}
+
+/** Coerce an arbitrary `?window=` value to a valid {1,7,30}, else the default.
+ *  Pure — accepts the raw searchParam string or number; anything else → default. */
+export function parseActivityWindowDays(value: unknown): ActivityWindowDays {
+  const n =
+    typeof value === "number"
+      ? value
+      : typeof value === "string"
+        ? Number.parseInt(value, 10)
+        : NaN;
+  if (n === 1 || n === 7 || n === 30) return n;
+  return DEFAULT_ACTIVITY_WINDOW_DAYS;
+}
+
 /**
  * Fold the durable sources into ONE newest-first activity feed.
  *
@@ -155,14 +199,36 @@ function ms(at: string): number {
  * Rows are sorted by `when` descending (newest first); ties keep input order
  * (stable). Pure; never throws. `limit` (when given, > 0) caps the output AFTER
  * the merge+sort so the most-recent N across BOTH sources win.
+ *
+ * The second arg is either a bare `limit` (legacy) OR an options object that can
+ * ALSO carry a trailing-window filter (`windowDays` + `nowMs`): when both are
+ * present, rows outside the window are dropped via `withinWindow` BEFORE the
+ * sort+limit, so the limit counts only in-window rows. Omitting the window keeps
+ * the prior behavior (no time bound).
  */
+export type SummarizeActivityOptions = {
+  /** Cap the merged result to the most-recent N (> 0). */
+  limit?: number;
+  /** Trailing window length in days — when set (with `nowMs`), rows older than
+   *  `nowMs - windowDays·1d` (or in the future) are dropped. */
+  windowDays?: number;
+  /** "Now" as epoch ms, paired with `windowDays`. Injected (never read from the
+   *  clock here) so the fold stays pure + testable. */
+  nowMs?: number;
+};
+
 export function summarizeEventAgentActivity(
   input: {
     sends?: EventAgentSendRow[];
     scheduled?: EventAgentScheduledRow[];
   },
-  limit?: number,
+  limitOrOptions?: number | SummarizeActivityOptions,
 ): EventAgentActivityRow[] {
+  const opts: SummarizeActivityOptions =
+    typeof limitOrOptions === "number"
+      ? { limit: limitOrOptions }
+      : limitOrOptions ?? {};
+  const { limit, windowDays, nowMs } = opts;
   const rows: EventAgentActivityRow[] = [];
 
   for (const s of input.sends ?? []) {
@@ -199,8 +265,16 @@ export function summarizeEventAgentActivity(
     });
   }
 
+  // Optional trailing-window filter (when both windowDays + nowMs are given):
+  // drop rows outside [nowMs - windowDays·1d, nowMs] BEFORE sort+limit, so the
+  // limit counts only in-window rows. Omit either → no time bound (legacy).
+  const windowed =
+    typeof windowDays === "number" && typeof nowMs === "number"
+      ? rows.filter((r) => withinWindow(r.when, nowMs, windowDays))
+      : rows;
+
   // Stable newest-first: decorate with index, sort by (ms desc, index asc).
-  const decorated = rows.map((row, idx) => ({ row, idx }));
+  const decorated = windowed.map((row, idx) => ({ row, idx }));
   decorated.sort((a, b) => {
     const dm = ms(b.row.when) - ms(a.row.when);
     if (dm !== 0) return dm;

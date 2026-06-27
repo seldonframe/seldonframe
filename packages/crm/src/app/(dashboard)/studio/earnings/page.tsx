@@ -1,6 +1,9 @@
-// ICP-3 / Phase 3 (seller side) — the Studio EARNINGS dashboard.
+// ICP-3 / Phase 3 (seller side) — the Studio REVENUE dashboard (route stays
+// /studio/earnings; the visible label + heading are "Revenue").
 //
-// The builder's marketplace income at a glance: their published + draft
+// Leads with the recurring revenue the builder's deployed agents generate:
+// 30-day MRR (Σ active deployments' monthly priceCents) + ARR (MRR × 12). Below
+// that, the existing marketplace breakdown stays: their published + draft
 // kind:'agent' listings, each with installs, rentals, and revenue, plus a
 // summary that discloses the platform fee.
 //
@@ -19,6 +22,8 @@ import { marketplaceListings } from "@/db/schema/marketplace";
 import { seldonframeEvents } from "@/db/schema/seldonframe-events";
 import { getOrgId } from "@/lib/auth/helpers";
 import { computeListingEarnings } from "@/lib/marketplace/earnings";
+import { computeRevenueSummary } from "@/lib/deployments/revenue";
+import { listDeployments } from "@/lib/deployments/store";
 import { formatCentsUsd } from "@/lib/utils/formatters";
 import { StudioTabs } from "../studio-tabs";
 
@@ -66,14 +71,16 @@ export default async function StudioEarningsPage() {
   if (!orgId) {
     return (
       <section className="animate-page-enter space-y-4">
-        <h1 className="text-page-title">Earnings</h1>
-        <p className="text-sm text-muted-foreground">Sign in to see your marketplace earnings.</p>
+        <StudioTabs />
+        <h1 className="text-page-title">Revenue</h1>
+        <p className="text-sm text-muted-foreground">Sign in to see your revenue.</p>
       </section>
     );
   }
 
-  // The seller's agent listings + their lifetime rentals.
-  const [listings, rentals] = await Promise.all([
+  // The seller's agent listings + their lifetime rentals + their deployments
+  // (the recurring-revenue source for the MRR/ARR hero). All in parallel.
+  const [listings, rentals, deployments] = await Promise.all([
     db
       .select({
         id: marketplaceListings.id,
@@ -96,7 +103,12 @@ export default async function StudioEarningsPage() {
         ),
       ),
     rentalsByListing(orgId),
+    listDeployments(orgId),
   ]);
+
+  // The money shot: recurring revenue from ACTIVE deployments. Pure fold over the
+  // deployment list (only status:'active' priceCents count); ARR = MRR × 12.
+  const revenue = computeRevenueSummary(deployments);
 
   const { listings: rows, summary } = computeListingEarnings(
     listings.map((l) => {
@@ -128,10 +140,10 @@ export default async function StudioEarningsPage() {
 
       <div className="flex flex-wrap items-start justify-between gap-3">
         <div>
-          <h1 className="text-page-title">Earnings</h1>
+          <h1 className="text-page-title">Revenue</h1>
           <p className="text-label text-[hsl(var(--color-text-secondary))]">
-            What your agents earn on the marketplace. You keep 95% — SeldonFrame
-            takes a {summary.feePercent}% fee on sales.
+            The recurring revenue your deployed agents generate, plus what they
+            earn on the marketplace.
           </p>
         </div>
         <Link href="/studio/agents" className="crm-button-secondary h-9 px-4 text-sm">
@@ -139,8 +151,33 @@ export default async function StudioEarningsPage() {
         </Link>
       </div>
 
-      {/* ── Summary: the money shot. The ONLY place the fee is shown. ── */}
+      {/* ── Hero: recurring revenue (MRR / ARR) from active deployments. The
+          headline number this page now leads with. ── */}
       <div className="rounded-xl border bg-card p-5">
+        <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
+          <RevenueStat
+            label="MRR · monthly recurring"
+            value={formatCentsUsd(revenue.mrrCents)}
+            hint={
+              revenue.activeCount === 1
+                ? "1 active client"
+                : `${revenue.activeCount.toLocaleString("en-US")} active clients`
+            }
+          />
+          <RevenueStat
+            label="ARR · annual run-rate"
+            value={formatCentsUsd(revenue.arrCents)}
+            hint="MRR × 12"
+          />
+        </div>
+      </div>
+
+      {/* ── Marketplace summary: the money shot. The ONLY place the fee is shown. ── */}
+      <div className="space-y-2">
+        <h2 className="text-label font-medium text-[hsl(var(--color-text-secondary))]">
+          Marketplace · you keep 95% (SeldonFrame takes a {summary.feePercent}% fee on sales)
+        </h2>
+        <div className="rounded-xl border bg-card p-5">
         <div className="grid grid-cols-1 gap-4 sm:grid-cols-3">
           <Stat label="Gross sales" value={formatCentsUsd(summary.grossCents)} />
           <Stat
@@ -160,6 +197,7 @@ export default async function StudioEarningsPage() {
           {summary.rentalRevenueCents > 0 && (
             <span>{formatCentsUsd(summary.rentalRevenueCents)} from rentals</span>
           )}
+        </div>
         </div>
       </div>
 
@@ -230,6 +268,30 @@ export default async function StudioEarningsPage() {
         </div>
       )}
     </section>
+  );
+}
+
+/** The big recurring-revenue figure: a bold $ headline + a one-line hint. Used
+ *  for the MRR / ARR hero that now leads the page. */
+function RevenueStat({
+  label,
+  value,
+  hint,
+}: {
+  label: string;
+  value: string;
+  hint?: string;
+}) {
+  return (
+    <div>
+      <p className="text-xs font-medium uppercase tracking-wide text-muted-foreground">
+        {label}
+      </p>
+      <p className="mt-1 text-3xl font-bold tracking-tight text-foreground">
+        {value}
+      </p>
+      {hint && <p className="mt-0.5 text-xs text-muted-foreground">{hint}</p>}
+    </div>
   );
 }
 

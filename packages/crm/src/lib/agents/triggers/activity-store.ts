@@ -23,6 +23,7 @@ import { eventAgentScheduledSends } from "@/db/schema/event-agent-scheduled-send
 import { deployments } from "@/db/schema/deployments";
 import {
   summarizeEventAgentActivity,
+  DEFAULT_ACTIVITY_WINDOW_DAYS,
   type EventAgentActivityRow,
   type EventAgentSendRow,
   type EventAgentScheduledRow,
@@ -184,12 +185,15 @@ export async function loadScheduledSends(
 /**
  * Load + fold the org's recent event-agent activity into one newest-first feed.
  * Fetches each source capped at `limit` (so the most-recent N per source enter
- * the merge), then summarizeEventAgentActivity caps the merged result at `limit`.
- * Read-only; org-scoped.
+ * the merge), then summarizeEventAgentActivity filters to the trailing
+ * `windowDays`-day window (default 7) and caps the merged result at `limit`.
+ * Read-only; org-scoped. The clock (`Date.now()`) is read HERE (the impure
+ * boundary) and injected into the pure fold, so the fold stays deterministic.
  */
 export async function loadEventAgentActivity(
   orgId: string,
   limit = 50,
+  windowDays: number = DEFAULT_ACTIVITY_WINDOW_DAYS,
 ): Promise<EventAgentActivityRow[]> {
   // Resolve the feed's client ONCE (a single indexed deployments lookup), then
   // thread it onto every row — the whole feed shares one client because a single
@@ -201,5 +205,8 @@ export async function loadEventAgentActivity(
     loadAgentSends(orgId, limit, clientLabel),
     loadScheduledSends(orgId, limit, clientLabel),
   ]);
-  return summarizeEventAgentActivity({ sends, scheduled }, limit);
+  return summarizeEventAgentActivity(
+    { sends, scheduled },
+    { limit, windowDays, nowMs: Date.now() },
+  );
 }
