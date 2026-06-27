@@ -16,10 +16,16 @@
 
 import Link from "next/link";
 import { usePathname } from "next/navigation";
+import { LayoutGrid, Activity, UsersRound, Wallet } from "lucide-react";
+import type { LucideIcon } from "lucide-react";
 
 /** The Studio sub-nav tabs. Exported (read-only) so the nav spec can pin the
  *  label/href contract without rendering the client component. The Revenue tab
- *  keeps the legacy `/studio/earnings` href — only its visible label changed. */
+ *  keeps the legacy `/studio/earnings` href — only its visible label changed.
+ *
+ *  Icons mirror the Claude Design "direction A (calm)" dashboard mockup tab
+ *  bar (layout-grid · activity · users-round · wallet); the `icon` field is
+ *  presentation-only and does not touch the href/label contract above. */
 export const STUDIO_TABS = [
   { href: "/studio/agents", label: "Agents" },
   { href: "/studio/agents/activity", label: "Activity" },
@@ -29,10 +35,26 @@ export const STUDIO_TABS = [
 
 const TABS = STUDIO_TABS;
 
+/** Tab href → calm-tab icon (keyed off the stable href so the exported
+ *  label/href contract stays untouched). */
+const TAB_ICONS: Record<string, LucideIcon> = {
+  "/studio/agents": LayoutGrid,
+  "/studio/agents/activity": Activity,
+  "/studio/clients": UsersRound,
+  "/studio/earnings": Wallet,
+};
+
 export function StudioTabs() {
   const pathname = usePathname();
+  // Calm segmented control (Claude Design direction A): a quiet inset track
+  // (bg-muted/60) holding pills; the active pill lifts onto the card surface
+  // with a hairline + soft shadow, inactive pills stay flush + muted. Replaces
+  // the old underline-tab chrome — same nav, same active-detection logic.
   return (
-    <nav className="flex gap-1 border-b" aria-label="Studio sections">
+    <nav
+      className="inline-flex flex-wrap gap-1 rounded-xl border border-border/70 bg-muted/60 p-1"
+      aria-label="Studio sections"
+    >
       {TABS.map((t) => {
         // Prefix-match so a tab stays active on its subpages, EXCEPT a tab that is
         // a strict prefix of a sibling (Agents ⊂ Agents/Activity) must not also
@@ -47,17 +69,19 @@ export function StudioTabs() {
             (pathname === o.href || pathname.startsWith(`${o.href}/`)),
         );
         const isActive = matches && !betterMatchExists;
+        const Icon = TAB_ICONS[t.href];
         return (
           <Link
             key={t.href}
             href={t.href}
-            className={`relative px-4 py-2 text-sm border-b-2 -mb-px transition-[color,border-color,background-color] duration-150 ease-out rounded-t-md ${
+            className={`inline-flex items-center gap-2 rounded-lg px-3.5 py-2 text-sm transition-[color,background-color,box-shadow] duration-150 ease-out ${
               isActive
-                ? "border-primary text-primary font-medium"
-                : "border-transparent text-muted-foreground hover:text-foreground hover:bg-accent/40"
+                ? "bg-card font-medium text-foreground shadow-(--shadow-xs)"
+                : "font-normal text-muted-foreground hover:text-foreground"
             }`}
             aria-current={isActive ? "page" : undefined}
           >
+            {Icon ? <Icon className="size-4" aria-hidden /> : null}
             {t.label}
           </Link>
         );

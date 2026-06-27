@@ -3,6 +3,7 @@
 // page and the editor page can import them.
 
 import type { AgentTemplateStatus } from "@/db/schema/agent-templates";
+import type { AgentTrigger } from "@/lib/agents/triggers/agent-trigger";
 
 /** Human label for a template type id (e.g. "voice_receptionist" → "Voice
  *  receptionist"). */
@@ -11,6 +12,58 @@ export function formatTemplateType(type: string): string {
   // Generic fallback: snake_case → Sentence case.
   const spaced = type.replace(/_/g, " ");
   return spaced.charAt(0).toUpperCase() + spaced.slice(1);
+}
+
+/** Human label for a channel slug, for the Agents table's "Channel" column
+ *  (e.g. "chat" → "Web chat"). Pure. */
+export function formatChannel(channel: string): string {
+  switch (channel) {
+    case "voice":
+      return "Voice";
+    case "chat":
+      return "Web chat";
+    case "sms":
+      return "SMS";
+    case "email":
+      return "Email";
+    case "digest":
+      return "Digest";
+    default:
+      return channel.charAt(0).toUpperCase() + channel.slice(1);
+  }
+}
+
+/** The trigger half of a resolved trigger, for the Agents table's "Trigger"
+ *  column — the channel is shown in its own column, so this drops it. Mirrors
+ *  triggerLabel() but returns only the left-of-"·" descriptor. Pure. */
+export function formatTriggerDescriptor(trigger: AgentTrigger): string {
+  switch (trigger.kind) {
+    case "inbound":
+      return "Inbound";
+    case "event":
+      return formatEventDescriptor(trigger.event);
+    case "schedule":
+      return "Scheduled";
+  }
+}
+
+function formatEventDescriptor(event: string): string {
+  switch (event) {
+    case "booking.completed":
+      return "After booking";
+    case "lead.created":
+      return "New lead";
+    case "invoice.paid":
+      return "Invoice paid";
+    case "missed_call":
+      return "Missed call";
+    default:
+      // Slug → Sentence (e.g. "deal.won" → "Deal won").
+      return (
+        event.replace(/[._]/g, " ").charAt(0).toUpperCase() +
+        event.replace(/[._]/g, " ").slice(1)
+      );
+  }
 }
 
 /** Status pill for an agent template. draft / tested / published, mirroring the

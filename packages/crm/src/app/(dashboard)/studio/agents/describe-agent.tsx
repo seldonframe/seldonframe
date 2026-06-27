@@ -28,11 +28,11 @@
 
 import { useEffect, useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
-import { Sparkles, AlertTriangle, ArrowRight } from "lucide-react";
+import { Sparkles, AlertTriangle, ArrowRight, Plug, ListChecks } from "lucide-react";
 import { generateAgentDraftAction } from "@/lib/agents/generate/actions";
 
 const PLACEHOLDER =
-  "Text every customer for a Google review the day after their job…";
+  "Answer missed calls and text the customer back to book the job…";
 
 // Rotating status copy shown on the Generate button while the draft is written,
 // so the multi-second LLM-classify + assemble feels alive instead of frozen.
@@ -101,26 +101,28 @@ export function DescribeAgent() {
   };
 
   return (
+    // Calm hero (Claude Design direction A): the generator IS the page's
+    // centerpiece. A quiet eyebrow + accent-soft sparkle badge, an oversized
+    // borderless textarea that reads like a prompt, then a hairline footer with
+    // the "uses your connected tools" reassurance + the Generate CTA. Tokens map
+    // to LIVE SeldonFrame vars (bg-card / border-border / bg-primary/10 / etc.).
     <section
       aria-labelledby="describe-agent-heading"
-      className="rounded-xl border bg-card p-5"
+      className="rounded-2xl border border-border bg-card p-6 shadow-(--shadow-xs) sm:p-7"
     >
-      <div className="flex items-start gap-3">
+      <div className="mb-4 flex items-center gap-2.5">
         <span
-          className="inline-flex size-9 shrink-0 items-center justify-center rounded-lg bg-indigo-500/10 text-indigo-500 dark:text-indigo-400"
+          className="inline-flex size-8 shrink-0 items-center justify-center rounded-lg bg-primary/10 text-primary"
           aria-hidden
         >
           <Sparkles className="size-4" />
         </span>
-        <div className="min-w-0">
-          <h2 id="describe-agent-heading" className="text-card-title">
-            Describe your agent
-          </h2>
-          <p className="text-sm text-muted-foreground">
-            Describe what you want in plain English — we&apos;ll wire the
-            trigger, channel, guardrails, and quality checks for you.
-          </p>
-        </div>
+        <span
+          id="describe-agent-heading"
+          className="text-[11px] font-semibold uppercase tracking-[0.07em] text-muted-foreground"
+        >
+          Describe your agent
+        </span>
       </div>
 
       <label htmlFor="describe-agent-input" className="sr-only">
@@ -138,22 +140,23 @@ export function DescribeAgent() {
         rows={2}
         placeholder={PLACEHOLDER}
         disabled={isPending}
-        className="mt-3 w-full rounded-md border bg-background px-3 py-2 text-sm leading-relaxed focus:border-primary focus:outline-none disabled:opacity-60"
+        className="w-full resize-none border-none bg-transparent p-0 text-lg leading-relaxed tracking-tight text-foreground outline-none placeholder:text-muted-foreground/70 focus:outline-none disabled:opacity-60 sm:text-xl"
       />
 
-      <div className="mt-3 flex flex-wrap items-center gap-3">
+      <div className="mt-5 flex flex-wrap items-center justify-between gap-3 border-t border-border pt-4">
+        <span className="inline-flex items-center gap-2 text-xs text-muted-foreground">
+          <Plug className="size-3.5 shrink-0" aria-hidden />
+          Uses your connected tools — Calendar, SMS, email
+        </span>
         <button
           type="button"
           onClick={generate}
           disabled={!canGenerate}
-          className="crm-button-primary inline-flex h-10 items-center gap-1.5 px-5 text-sm disabled:opacity-60"
+          className="crm-button-primary inline-flex h-11 items-center gap-2 px-5 text-sm disabled:opacity-60"
         >
           <Sparkles className={`size-4 ${isPending ? "animate-pulse" : ""}`} />
           {isPending ? GEN_STATUS_MESSAGES[statusIdx] : "Generate agent"}
         </button>
-        <span className="text-xs text-muted-foreground">
-          e.g. &ldquo;Answer my phone, qualify the caller, and book the job.&rdquo;
-        </span>
       </div>
 
       {error && (
@@ -161,30 +164,33 @@ export function DescribeAgent() {
       )}
 
       {/* Warnings hand-off: the agent WAS created (it's safe + guard-railed); these
-          are "before you go live" reminders the assembler surfaced. Show them, then
-          let the builder continue to the editor. */}
+          are "before you go live" reminders the assembler surfaced. Shown as a calm
+          amber checklist (Claude Design "Finish before going live"), then a button
+          to continue to the editor. */}
       {pendingResult && (
-        <div className="mt-4 rounded-lg border border-amber-500/30 bg-amber-500/5 p-3">
-          <div className="flex items-start gap-2">
-            <AlertTriangle
-              className="mt-0.5 size-4 shrink-0 text-amber-600 dark:text-amber-400"
-              aria-hidden
-            />
-            <div className="min-w-0 space-y-1.5">
-              <p className="text-xs font-medium text-amber-800 dark:text-amber-300">
-                Your agent is ready — finish these before going live:
-              </p>
-              <ul className="list-disc space-y-0.5 pl-4 text-xs text-amber-800 dark:text-amber-300">
-                {pendingResult.warnings.map((w, i) => (
-                  <li key={i}>{w}</li>
-                ))}
-              </ul>
-            </div>
+        <div className="mt-5 rounded-xl border border-amber-500/25 bg-amber-500/5 p-4">
+          <div className="mb-2.5 flex items-center gap-2 text-xs font-semibold text-amber-800 dark:text-amber-300">
+            <ListChecks className="size-4 shrink-0" aria-hidden />
+            Finish before going live
           </div>
+          <ul className="space-y-1.5">
+            {pendingResult.warnings.map((w, i) => (
+              <li
+                key={i}
+                className="flex items-start gap-2 text-xs leading-relaxed text-amber-800 dark:text-amber-300"
+              >
+                <AlertTriangle
+                  className="mt-0.5 size-3.5 shrink-0"
+                  aria-hidden
+                />
+                {w}
+              </li>
+            ))}
+          </ul>
           <button
             type="button"
             onClick={() => router.push(editorHref(pendingResult.templateId))}
-            className="crm-button-primary mt-3 inline-flex h-9 items-center gap-1.5 px-4 text-sm"
+            className="crm-button-primary mt-3.5 inline-flex h-9 items-center gap-1.5 px-4 text-sm"
           >
             Continue to editor
             <ArrowRight className="size-4" />

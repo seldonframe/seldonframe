@@ -55,15 +55,18 @@ export function StarterPackSection({ starters }: { starters: StarterCard[] }) {
 
   return (
     <section aria-labelledby="starter-pack-heading" className="space-y-3">
-      <div className="flex items-start gap-2">
+      <div className="flex items-center gap-2.5">
         <span
-          className="inline-flex size-8 shrink-0 items-center justify-center rounded-lg bg-indigo-500/10 text-indigo-500 dark:text-indigo-400"
+          className="inline-flex size-8 shrink-0 items-center justify-center rounded-lg bg-primary/10 text-primary"
           aria-hidden
         >
           <Sparkles className="size-4" />
         </span>
         <div className="min-w-0">
-          <h2 id="starter-pack-heading" className="text-card-title">
+          <h2
+            id="starter-pack-heading"
+            className="text-base font-semibold tracking-tight text-foreground"
+          >
             Start from a template
           </h2>
           <p className="text-sm text-muted-foreground">
@@ -80,11 +83,11 @@ export function StarterPackSection({ starters }: { starters: StarterCard[] }) {
           return (
             <article
               key={s.id}
-              className="flex flex-col rounded-xl border bg-card p-4"
+              className="flex flex-col rounded-2xl border border-border bg-card p-4 shadow-(--shadow-xs)"
             >
               <div className="flex items-center gap-2">
                 <span
-                  className="inline-flex size-8 shrink-0 items-center justify-center rounded-md bg-muted text-muted-foreground"
+                  className="inline-flex size-8 shrink-0 items-center justify-center rounded-md bg-primary/10 text-primary"
                   aria-hidden
                 >
                   <Icon className="size-4" />
