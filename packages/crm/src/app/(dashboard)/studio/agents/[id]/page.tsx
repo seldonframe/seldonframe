@@ -26,6 +26,7 @@ import { VETTED_CONNECTORS } from "@/lib/agents/mcp/connectors";
 import type { AgentBlueprint } from "@/db/schema";
 import { AgentTemplateEditor } from "./editor-client";
 import { ListOnMarketplace } from "./list-on-marketplace";
+import { RunEvalsCard } from "./run-evals";
 import { TemplateStatusBadge, formatTemplateType } from "../status-badge";
 import { DeployButton } from "../deploy-button";
 import { DeployToClientsButton } from "../deploy-to-clients-button";
@@ -139,6 +140,10 @@ export default async function AgentTemplatePage({
         initialListing={sellerListing}
         initialConnect={sellerConnect}
       />
+
+      {/* Run evals — play the agent against realistic customers, see a pass rate
+          + exactly what failed, and record failures as Brain lessons (E5). */}
+      <RunEvalsCard templateId={template.id} />
 
       <AgentTemplateEditor
         templateId={template.id}
