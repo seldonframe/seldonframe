@@ -135,15 +135,15 @@ export default async function StudioEarningsPage() {
   );
 
   return (
-    <section className="animate-page-enter space-y-5">
+    <section className="animate-page-enter space-y-6">
       <StudioTabs />
 
       <div className="flex flex-wrap items-start justify-between gap-3">
         <div>
           <h1 className="text-page-title">Revenue</h1>
-          <p className="text-label text-[hsl(var(--color-text-secondary))]">
-            The recurring revenue your deployed agents generate, plus what they
-            earn on the marketplace.
+          <p className="text-label text-muted-foreground">
+            How much, from where, and what your agents earn — the recurring
+            revenue your deployments generate, plus marketplace income.
           </p>
         </div>
         <Link href="/studio/agents" className="crm-button-secondary h-9 px-4 text-sm">
@@ -151,67 +151,85 @@ export default async function StudioEarningsPage() {
         </Link>
       </div>
 
-      {/* ── Hero: recurring revenue (MRR / ARR) from active deployments. The
-          headline number this page now leads with. ── */}
-      <div className="rounded-xl border bg-card p-5">
-        <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
-          <RevenueStat
-            label="MRR · monthly recurring"
-            value={formatCentsUsd(revenue.mrrCents)}
-            hint={
-              revenue.activeCount === 1
+      {/* ── Hero: recurring revenue (MRR / ARR) from active deployments — the
+          headline statement, calm. MRR leads as the big mono figure; ARR sits
+          beside it as the annual run-rate. ── */}
+      <div className="grid grid-cols-1 gap-4 sm:grid-cols-[1.15fr_1fr]">
+        <div className="flex flex-col justify-between rounded-2xl border border-border bg-card p-6 shadow-(--shadow-xs)">
+          <div className="flex items-center justify-between">
+            <span className="text-[11px] font-semibold uppercase tracking-wide text-muted-foreground">
+              MRR · monthly recurring
+            </span>
+            <span className="inline-flex items-center gap-1.5 rounded-full bg-primary/10 px-2.5 py-1 text-xs font-medium text-primary">
+              {revenue.activeCount === 1
                 ? "1 active client"
-                : `${revenue.activeCount.toLocaleString("en-US")} active clients`
-            }
-          />
-          <RevenueStat
-            label="ARR · annual run-rate"
-            value={formatCentsUsd(revenue.arrCents)}
-            hint="MRR × 12"
-          />
+                : `${revenue.activeCount.toLocaleString("en-US")} active clients`}
+            </span>
+          </div>
+          <div className="mt-5">
+            <div className="font-mono text-5xl font-semibold leading-none tracking-tight text-foreground">
+              {formatCentsUsd(revenue.mrrCents)}
+            </div>
+            <p className="mt-3 text-sm text-muted-foreground">
+              Your recurring take-home from active deployments.
+            </p>
+          </div>
         </div>
-      </div>
-
-      {/* ── Marketplace summary: the money shot. The ONLY place the fee is shown. ── */}
-      <div className="space-y-2">
-        <h2 className="text-label font-medium text-[hsl(var(--color-text-secondary))]">
-          Marketplace · you keep 95% (SeldonFrame takes a {summary.feePercent}% fee on sales)
-        </h2>
-        <div className="rounded-xl border bg-card p-5">
-        <div className="grid grid-cols-1 gap-4 sm:grid-cols-3">
-          <Stat label="Gross sales" value={formatCentsUsd(summary.grossCents)} />
-          <Stat
-            label={`SeldonFrame fee (${summary.feePercent}%)`}
-            value={`− ${formatCentsUsd(summary.feeCents)}`}
-            muted
-          />
-          <Stat label="You keep (95%)" value={formatCentsUsd(summary.netCents)} emphasis />
-        </div>
-        <div className="mt-4 flex flex-wrap gap-x-6 gap-y-1 border-t pt-3 text-xs text-muted-foreground">
-          <span>
-            {summary.publishedCount} live ·{" "}
-            {summary.listingCount - summary.publishedCount} draft
+        <div className="rounded-2xl border border-border bg-card p-6 shadow-(--shadow-xs)">
+          <span className="text-[11px] font-semibold uppercase tracking-wide text-muted-foreground">
+            ARR · annual run-rate
           </span>
-          <span>{summary.installCount.toLocaleString("en-US")} total installs</span>
-          <span>{summary.rentalCount.toLocaleString("en-US")} total rental calls</span>
-          {summary.rentalRevenueCents > 0 && (
-            <span>{formatCentsUsd(summary.rentalRevenueCents)} from rentals</span>
-          )}
-        </div>
+          <div className="mt-5 font-mono text-4xl font-semibold leading-none tracking-tight text-foreground">
+            {formatCentsUsd(revenue.arrCents)}
+          </div>
+          <p className="mt-3 text-sm text-muted-foreground">MRR × 12</p>
         </div>
       </div>
 
-      {/* ── Per-listing breakdown ── */}
+      {/* ── Marketplace summary: the money shot. The ONLY place the fee is shown.
+          Rendered as a calm "where your gross goes" statement card. ── */}
+      <div className="space-y-3">
+        <h2 className="text-card-title text-foreground">
+          Marketplace ·{" "}
+          <span className="text-muted-foreground">
+            you keep 95% (SeldonFrame takes a {summary.feePercent}% fee on sales)
+          </span>
+        </h2>
+        <div className="rounded-2xl border border-border bg-card p-6 shadow-(--shadow-xs)">
+          <div className="grid grid-cols-1 gap-5 sm:grid-cols-3">
+            <Stat label="Gross sales" value={formatCentsUsd(summary.grossCents)} />
+            <Stat
+              label={`SeldonFrame fee (${summary.feePercent}%)`}
+              value={`− ${formatCentsUsd(summary.feeCents)}`}
+              muted
+            />
+            <Stat label="You keep (95%)" value={formatCentsUsd(summary.netCents)} emphasis />
+          </div>
+          <div className="mt-5 flex flex-wrap gap-x-6 gap-y-1 border-t border-border pt-4 text-xs text-muted-foreground">
+            <span>
+              {summary.publishedCount} live ·{" "}
+              {summary.listingCount - summary.publishedCount} draft
+            </span>
+            <span>{summary.installCount.toLocaleString("en-US")} total installs</span>
+            <span>{summary.rentalCount.toLocaleString("en-US")} total rental calls</span>
+            {summary.rentalRevenueCents > 0 && (
+              <span>{formatCentsUsd(summary.rentalRevenueCents)} from rentals</span>
+            )}
+          </div>
+        </div>
+      </div>
+
+      {/* ── Per-listing breakdown: revenue by agent, calm. ── */}
       {rows.length === 0 ? (
-        <article className="rounded-xl border bg-card p-6 text-center">
+        <article className="rounded-2xl border border-border bg-card p-8 text-center shadow-(--shadow-xs)">
           <div className="mx-auto max-w-md space-y-3">
             <span
-              className="mx-auto inline-flex size-10 items-center justify-center rounded-xl bg-emerald-500/10 text-emerald-600 dark:text-emerald-400"
+              className="mx-auto inline-flex size-10 items-center justify-center rounded-xl bg-primary/10 text-primary"
               aria-hidden
             >
               <Store className="size-5" />
             </span>
-            <h2 className="text-base font-semibold">No listings yet.</h2>
+            <h2 className="text-base font-semibold text-foreground">No listings yet.</h2>
             <p className="text-sm text-muted-foreground">
               Open an agent and use <strong>List on the marketplace</strong> to
               publish it. Once builders install it, your earnings show up here.
@@ -224,77 +242,58 @@ export default async function StudioEarningsPage() {
           </div>
         </article>
       ) : (
-        <div className="overflow-hidden rounded-xl border bg-card">
-          {/* header row (desktop) */}
-          <div className="hidden grid-cols-[2fr_1fr_1fr_1fr_1fr] gap-3 border-b px-5 py-3 text-[11px] font-medium uppercase tracking-wide text-muted-foreground sm:grid">
-            <span>Agent</span>
-            <span className="text-right">Installs</span>
-            <span className="text-right">Rentals</span>
-            <span className="text-right">Gross</span>
-            <span className="text-right">You keep</span>
-          </div>
-          <ul className="divide-y">
-            {rows.map((row) => (
-              <li
-                key={row.id}
-                className="grid grid-cols-1 gap-2 px-5 py-4 sm:grid-cols-[2fr_1fr_1fr_1fr_1fr] sm:items-center sm:gap-3"
-              >
-                <div className="min-w-0">
-                  <div className="flex items-center gap-2">
-                    <span className="truncate text-sm font-medium text-foreground">{row.name}</span>
-                    {row.isPublished ? (
-                      <Link
-                        href={`/marketplace/${row.slug}`}
-                        target="_blank"
-                        className="inline-flex items-center gap-0.5 text-[11px] text-emerald-700 hover:underline dark:text-emerald-400"
-                      >
-                        live <ExternalLink className="size-3" />
-                      </Link>
-                    ) : (
-                      <span className="rounded-full bg-muted px-2 py-0.5 text-[10px] font-medium text-muted-foreground">
-                        draft
-                      </span>
-                    )}
+        <div className="space-y-3">
+          <h2 className="text-card-title text-foreground">Revenue by agent</h2>
+          <div className="overflow-hidden rounded-2xl border border-border bg-card shadow-(--shadow-xs)">
+            {/* header row (desktop) */}
+            <div className="hidden grid-cols-[2fr_1fr_1fr_1fr_1fr] gap-3 border-b border-border bg-muted/30 px-5 py-3 text-[11px] font-medium uppercase tracking-wide text-muted-foreground sm:grid">
+              <span>Agent</span>
+              <span className="text-right">Installs</span>
+              <span className="text-right">Rentals</span>
+              <span className="text-right">Gross</span>
+              <span className="text-right">You keep</span>
+            </div>
+            <ul className="divide-y divide-border">
+              {rows.map((row) => (
+                <li
+                  key={row.id}
+                  className="grid grid-cols-1 gap-2 px-5 py-4 transition-colors hover:bg-muted/30 sm:grid-cols-[2fr_1fr_1fr_1fr_1fr] sm:items-center sm:gap-3"
+                >
+                  <div className="min-w-0">
+                    <div className="flex items-center gap-2">
+                      <span className="truncate text-sm font-medium text-foreground">{row.name}</span>
+                      {row.isPublished ? (
+                        <Link
+                          href={`/marketplace/${row.slug}`}
+                          target="_blank"
+                          className="inline-flex items-center gap-0.5 text-[11px] text-emerald-700 hover:underline dark:text-emerald-400"
+                        >
+                          live <ExternalLink className="size-3" />
+                        </Link>
+                      ) : (
+                        <span className="rounded-full bg-muted px-2 py-0.5 text-[10px] font-medium text-muted-foreground">
+                          draft
+                        </span>
+                      )}
+                    </div>
+                    <p className="text-xs text-muted-foreground">{row.priceLabel}</p>
                   </div>
-                  <p className="text-xs text-muted-foreground">{row.priceLabel}</p>
-                </div>
-                <Cell label="Installs" value={row.installCount.toLocaleString("en-US")} />
-                <Cell label="Rentals" value={row.rentalCount.toLocaleString("en-US")} />
-                <Cell label="Gross" value={formatCentsUsd(row.grossCents)} />
-                <Cell label="You keep" value={formatCentsUsd(row.netCents)} emphasis />
-              </li>
-            ))}
-          </ul>
+                  <Cell label="Installs" value={row.installCount.toLocaleString("en-US")} />
+                  <Cell label="Rentals" value={row.rentalCount.toLocaleString("en-US")} />
+                  <Cell label="Gross" value={formatCentsUsd(row.grossCents)} />
+                  <Cell label="You keep" value={formatCentsUsd(row.netCents)} emphasis />
+                </li>
+              ))}
+            </ul>
+          </div>
         </div>
       )}
     </section>
   );
 }
 
-/** The big recurring-revenue figure: a bold $ headline + a one-line hint. Used
- *  for the MRR / ARR hero that now leads the page. */
-function RevenueStat({
-  label,
-  value,
-  hint,
-}: {
-  label: string;
-  value: string;
-  hint?: string;
-}) {
-  return (
-    <div>
-      <p className="text-xs font-medium uppercase tracking-wide text-muted-foreground">
-        {label}
-      </p>
-      <p className="mt-1 text-3xl font-bold tracking-tight text-foreground">
-        {value}
-      </p>
-      {hint && <p className="mt-0.5 text-xs text-muted-foreground">{hint}</p>}
-    </div>
-  );
-}
-
+/** A figure in the marketplace statement card: a small label over a mono number.
+ *  `emphasis` is the green "you keep" take-home; `muted` is the deducted fee. */
 function Stat({
   label,
   value,
@@ -312,10 +311,10 @@ function Stat({
       <p
         className={
           emphasis
-            ? "mt-1 text-2xl font-semibold tracking-tight text-emerald-700 dark:text-emerald-400"
+            ? "mt-1 font-mono text-2xl font-semibold tracking-tight text-emerald-600 dark:text-emerald-400"
             : muted
-              ? "mt-1 text-2xl font-semibold tracking-tight text-muted-foreground"
-              : "mt-1 text-2xl font-semibold tracking-tight text-foreground"
+              ? "mt-1 font-mono text-2xl font-semibold tracking-tight text-muted-foreground"
+              : "mt-1 font-mono text-2xl font-semibold tracking-tight text-foreground"
         }
       >
         {value}
@@ -333,8 +332,8 @@ function Cell({ label, value, emphasis }: { label: string; value: string; emphas
       <span
         className={
           emphasis
-            ? "text-sm font-semibold text-emerald-700 dark:text-emerald-400"
-            : "text-sm text-foreground"
+            ? "font-mono text-sm font-semibold text-emerald-600 dark:text-emerald-400"
+            : "font-mono text-sm text-foreground"
         }
       >
         {value}

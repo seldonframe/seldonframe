@@ -20,11 +20,23 @@
 // those two nouns is a later Phase-4 decision; this screen is the Studio's.
 //
 // Auth + builder resolution: getOrgId() — the operator's org IS the builder org.
+//
+// Reskin (Claude Design, direction A / "book of business"): a quiet header,
+// Clients / Total-MRR / Active-agents KPI tiles, and each client as a calm card
+// with an initials avatar, a health pill, and a per-month figure — on the LIVE
+// SeldonFrame tokens. RESKIN ONLY: every wired control (activate / pause / cancel
+// / portal invite / connect-calendar / configure / review-link) is preserved
+// verbatim; the avatar, health, and MRR are pure read-only folds over the
+// deployments already loaded.
 
 import Link from "next/link";
-import { Users, Phone } from "lucide-react";
+import { Users, Phone, Bot, Wallet } from "lucide-react";
 import { getOrgId } from "@/lib/auth/helpers";
-import { listDeployments, groupDeploymentsByClient } from "@/lib/deployments/store";
+import {
+  listDeployments,
+  groupDeploymentsByClient,
+  type ClientGroup,
+} from "@/lib/deployments/store";
 import {
   formatCentsMonthly,
   formatDeploymentSurface,
@@ -75,8 +87,11 @@ export default async function StudioClientsPage({
   // F4: one card per client (groups all the client's agents), most-recent first.
   const clients = groupDeploymentsByClient(deployments);
 
+  // Portfolio totals for the KPI strip — pure folds over the grouped clients.
+  const totals = summarizeClientTotals(clients);
+
   return (
-    <section className="animate-page-enter space-y-5">
+    <section className="animate-page-enter space-y-6">
       <StudioTabs />
 
       {calendar === "connected" && (
@@ -93,9 +108,9 @@ export default async function StudioClientsPage({
       <div className="flex flex-wrap items-start justify-between gap-3">
         <div>
           <h1 className="text-page-title">Clients</h1>
-          <p className="text-label text-[hsl(var(--color-text-secondary))]">
-            Every client you&apos;ve deployed an agent to. They never log in —
-            this is your book of business.
+          <p className="text-label text-muted-foreground">
+            Who you serve and whether their agents are healthy. They never log in
+            — this is your book of business.
           </p>
         </div>
         {clients.length > 0 && (
@@ -106,15 +121,17 @@ export default async function StudioClientsPage({
       </div>
 
       {clients.length === 0 ? (
-        <article className="rounded-xl border bg-card p-8 text-center">
+        <article className="rounded-2xl border border-border bg-card p-8 text-center shadow-(--shadow-xs)">
           <div className="mx-auto max-w-md space-y-4">
             <span
-              className="mx-auto inline-flex size-12 items-center justify-center rounded-xl bg-indigo-500/10 text-indigo-500 dark:text-indigo-400"
+              className="mx-auto inline-flex size-12 items-center justify-center rounded-xl bg-primary/10 text-primary"
               aria-hidden
             >
               <Users className="size-6" />
             </span>
-            <h2 className="text-lg font-semibold">No clients yet — deploy an agent.</h2>
+            <h2 className="text-lg font-semibold text-foreground">
+              No clients yet — deploy an agent.
+            </h2>
             <p className="text-sm text-muted-foreground">
               Build an agent once, then deploy it to a client. Each client you
               deploy to shows up here with its plan and status.
@@ -127,182 +144,368 @@ export default async function StudioClientsPage({
           </div>
         </article>
       ) : (
-        <div className="space-y-3">
-          {clients.map((client) => (
-            <article key={client.clientKey} className="rounded-xl border bg-card p-5">
-              {/* ── Client header: name + shared number, shown ONCE ─────────── */}
-              <header className="flex flex-wrap items-start justify-between gap-3 border-b pb-3">
-                <div className="min-w-0">
-                  <p className="text-card-title truncate">{client.clientName}</p>
-                  <p className="text-sm text-muted-foreground">
-                    {client.agents.length === 1
-                      ? "1 agent"
-                      : `${client.agents.length} agents`}
-                    {client.number && (
-                      <>
-                        {" • "}
-                        <Phone className="mb-0.5 mr-0.5 inline size-3" />
-                        {client.number}
-                      </>
-                    )}
-                  </p>
-                </div>
-              </header>
+        <>
+          {/* ── Portfolio KPI strip: Clients · Total MRR · Active agents ── */}
+          <div className="grid grid-cols-1 gap-3 sm:grid-cols-3">
+            <ClientKpiTile
+              label="Clients"
+              value={totals.clientCount.toLocaleString("en-US")}
+              icon={<Users className="size-[22px]" />}
+              tone="primary"
+            />
+            <ClientKpiTile
+              label="Total MRR · active"
+              value={formatCentsMonthly(totals.mrrCents)}
+              icon={<Wallet className="size-[22px]" />}
+              tone="positive"
+            />
+            <ClientKpiTile
+              label="Active agents"
+              value={totals.activeAgents.toLocaleString("en-US")}
+              icon={<Bot className="size-[22px]" />}
+              tone="neutral"
+            />
+          </div>
 
-              {/* ── Each agent: a row with its own status + actions ─────────── */}
-              <ul className="divide-y">
-                {client.agents.map((d) => {
-                  const trigger = resolveAgentTrigger(
-                    d.templateTrigger as Parameters<typeof resolveAgentTrigger>[0],
-                    d.surface,
-                  );
-                  // A review-requester agent — the one that needs the client's
-                  // Google review link. Detected by skill (trigger event
-                  // booking.completed), matching the runtime's skillForEvent.
-                  const isReviewRequester =
-                    trigger.kind === "event" &&
-                    trigger.event === "booking.completed";
-                  return (
-                    <li key={d.id} className="py-4 first:pt-4">
-                      <div className="flex flex-wrap items-start justify-between gap-3">
-                        <div className="min-w-0">
-                          <p className="font-medium leading-tight">
-                            {d.templateName ?? "Agent"}
-                          </p>
-                          <p className="text-sm text-muted-foreground">
-                            {triggerLabel(trigger)} •{" "}
-                            {formatDeploymentSurface(d.surface)} •{" "}
-                            {formatCentsMonthly(d.priceCents)}
-                          </p>
-                          <div className="mt-2">
-                            <DeploymentStatusBadge status={d.status} />
+          <div className="space-y-4">
+            {clients.map((client) => {
+              const health = clientHealth(client);
+              const mrrCents = clientMrrCents(client);
+              return (
+                <article
+                  key={client.clientKey}
+                  className="overflow-hidden rounded-2xl border border-border bg-card shadow-(--shadow-xs)"
+                >
+                  {/* ── Client header: avatar + name + agent count + number, health
+                      pill, and the client's per-month figure — shown ONCE ──── */}
+                  <header className="flex flex-wrap items-center justify-between gap-4 border-b border-border px-5 py-4">
+                    <div className="flex min-w-0 items-center gap-3">
+                      <span
+                        className="inline-flex size-11 shrink-0 items-center justify-center rounded-xl bg-primary/10 text-sm font-semibold text-primary"
+                        aria-hidden
+                      >
+                        {clientInitials(client.clientName)}
+                      </span>
+                      <div className="min-w-0">
+                        <p className="text-card-title truncate text-foreground">
+                          {client.clientName}
+                        </p>
+                        <p className="mt-0.5 text-sm text-muted-foreground">
+                          {client.agents.length === 1
+                            ? "1 agent"
+                            : `${client.agents.length} agents`}
+                          {client.number && (
+                            <>
+                              {" • "}
+                              <Phone className="mb-0.5 mr-0.5 inline size-3" />
+                              {client.number}
+                            </>
+                          )}
+                        </p>
+                      </div>
+                    </div>
+                    <div className="flex items-center gap-5">
+                      <span
+                        className={`inline-flex items-center gap-1.5 text-xs font-semibold ${health.text}`}
+                      >
+                        <span
+                          className={`size-[7px] rounded-full ${health.dot}`}
+                          aria-hidden
+                        />
+                        {health.label}
+                      </span>
+                      {mrrCents > 0 && (
+                        <div className="text-right">
+                          <div className="font-mono text-lg font-semibold tracking-tight text-foreground">
+                            {formatCentsMonthly(mrrCents)}
+                          </div>
+                          <div className="text-[11px] text-muted-foreground">
+                            per month
                           </div>
                         </div>
-
-                        {/* Per-agent activation / pause / cancel — addressed to
-                            THIS deployment id. The decider is needsNumber, NOT
-                            isOutbound: a PURE-outbound agent (review/social/digest)
-                            shares the client's number, so it gets a one-click
-                            no-phone activate. An agent that needs its own line —
-                            an inbound receptionist OR a missed-call agent
-                            (event-triggered but it forwards-in + texts-back) —
-                            goes through the get-a-number flow so it owns a line. */}
-                        {d.status === "draft" &&
-                          (d.needsNumber ? (
-                            <ActivateForm
-                              deploymentId={d.id}
-                              contactPhone={d.clientContact?.phone ?? null}
-                            />
-                          ) : (
-                            <ActivateOutboundButton deploymentId={d.id} />
-                          ))}
-                        {d.status === "active" && (
-                          <div className="flex flex-wrap items-start justify-end gap-2">
-                            {/* Connect the client's external calendar — only for
-                                api_mcp bookings (native / external_link never book
-                                externally). */}
-                            {d.bookingMode === "api_mcp" && (
-                              <ConnectCalendarButton
-                                deploymentId={d.id}
-                                connected={Boolean(d.calendarRef?.accountId)}
-                              />
-                            )}
-                            <PortalInviteButton
-                              deploymentId={d.id}
-                              clientOrgId={d.clientOrgId}
-                              portalInvitedAt={
-                                d.portalInvitedAt
-                                  ? d.portalInvitedAt.toISOString()
-                                  : null
-                              }
-                            />
-                            <PauseButton deploymentId={d.id} phoneNumber={d.phoneNumber} />
-                            <CancelButton deploymentId={d.id} phoneNumber={d.phoneNumber} />
-                          </div>
-                        )}
-                        {d.status === "paused" && (
-                          <div className="flex flex-wrap items-start justify-end gap-2">
-                            {d.bookingMode === "api_mcp" && (
-                              <ConnectCalendarButton
-                                deploymentId={d.id}
-                                connected={Boolean(d.calendarRef?.accountId)}
-                              />
-                            )}
-                            <CancelButton deploymentId={d.id} phoneNumber={d.phoneNumber} />
-                          </div>
-                        )}
-                      </div>
-
-                      {/* F1 — an OUTBOUND (event/schedule) agent shows a small note
-                          instead of booking rules. The copy reflects what THIS
-                          agent actually does (books / posts / sends), derived from
-                          its blueprint — never the old hard-coded "doesn't take
-                          bookings", which was wrong for an agent wired to book. Its
-                          per-client Google review link — the single most important
-                          field for a review-requester to fire — stays surfaced
-                          INLINE here (with an edit affordance, or a warning when
-                          unset), never hidden behind the Configure disclosure below. */}
-                      {d.isOutbound && (
-                        <>
-                          <p className="mt-3 border-t pt-3 text-[11px] text-muted-foreground">
-                            {describeOutboundAgent({
-                              books: d.agentBooks,
-                              posts: d.agentPosts,
-                            })}
-                          </p>
-                          {isReviewRequester && (
-                            <ReviewLinkSection
-                              deploymentId={d.id}
-                              initial={d.customization ?? null}
-                            />
-                          )}
-                        </>
                       )}
+                    </div>
+                  </header>
 
-                      {/* R3 — ONE "Configure" affordance per agent row: a collapsed
-                          disclosure that edits THIS deployment's per-client settings
-                          inline (no page leave), plus an "Edit agent template →" link
-                          for template-level config. Each flag scopes what the panel
-                          shows:
-                            • customization (greeting / voice / review link / business
-                              info) — agents that SPEAK (phone / embed / link); the
-                              text-only surfaces (sms / email) + OUTBOUND agents don't
-                              get a spoken persona;
-                            • booking rules — agents that BOOK (native / api_mcp /
-                              cal_com); external_link hands booking to the client's own
-                              page (no rules) and OUTBOUND never books.
-                          The booking-rules editor is seeded with the EFFECTIVE policy
-                          (deployment override ?? system defaults; the template default
-                          + workspace tz aren't on this list query, and the resolver
-                          fills them safely). Every control is keyed to d.id, so the
-                          grouped agents on one client card never cross saves. */}
-                      <ConfigureSection
-                        deploymentId={d.id}
-                        agentTemplateId={d.agentTemplateId}
-                        showCustomization={
-                          !d.isOutbound &&
-                          (d.surface === "phone" ||
-                            d.surface === "embed" ||
-                            d.surface === "link")
-                        }
-                        customization={d.customization ?? null}
-                        showBookingRules={
-                          !d.isOutbound && d.bookingMode !== "external_link"
-                        }
-                        bookingPolicy={resolveBookingPolicy(
-                          d.bookingPolicy ?? null,
-                          null,
-                          undefined,
-                        )}
-                      />
-                    </li>
-                  );
-                })}
-              </ul>
-            </article>
-          ))}
-        </div>
+                  {/* ── Each agent: a row with its own status + actions ─────────── */}
+                  <ul className="divide-y divide-border">
+                    {client.agents.map((d) => {
+                      const trigger = resolveAgentTrigger(
+                        d.templateTrigger as Parameters<typeof resolveAgentTrigger>[0],
+                        d.surface,
+                      );
+                      // A review-requester agent — the one that needs the client's
+                      // Google review link. Detected by skill (trigger event
+                      // booking.completed), matching the runtime's skillForEvent.
+                      const isReviewRequester =
+                        trigger.kind === "event" &&
+                        trigger.event === "booking.completed";
+                      return (
+                        <li key={d.id} className="px-5 py-4">
+                          <div className="flex flex-wrap items-start justify-between gap-3">
+                            <div className="min-w-0">
+                              <p className="font-medium leading-tight text-foreground">
+                                {d.templateName ?? "Agent"}
+                              </p>
+                              <p className="text-sm text-muted-foreground">
+                                {triggerLabel(trigger)} •{" "}
+                                {formatDeploymentSurface(d.surface)} •{" "}
+                                {formatCentsMonthly(d.priceCents)}
+                              </p>
+                              <div className="mt-2">
+                                <DeploymentStatusBadge status={d.status} />
+                              </div>
+                            </div>
+
+                            {/* Per-agent activation / pause / cancel — addressed to
+                                THIS deployment id. The decider is needsNumber, NOT
+                                isOutbound: a PURE-outbound agent (review/social/digest)
+                                shares the client's number, so it gets a one-click
+                                no-phone activate. An agent that needs its own line —
+                                an inbound receptionist OR a missed-call agent
+                                (event-triggered but it forwards-in + texts-back) —
+                                goes through the get-a-number flow so it owns a line. */}
+                            {d.status === "draft" &&
+                              (d.needsNumber ? (
+                                <ActivateForm
+                                  deploymentId={d.id}
+                                  contactPhone={d.clientContact?.phone ?? null}
+                                />
+                              ) : (
+                                <ActivateOutboundButton deploymentId={d.id} />
+                              ))}
+                            {d.status === "active" && (
+                              <div className="flex flex-wrap items-start justify-end gap-2">
+                                {/* Connect the client's external calendar — only for
+                                    api_mcp bookings (native / external_link never book
+                                    externally). */}
+                                {d.bookingMode === "api_mcp" && (
+                                  <ConnectCalendarButton
+                                    deploymentId={d.id}
+                                    connected={Boolean(d.calendarRef?.accountId)}
+                                  />
+                                )}
+                                <PortalInviteButton
+                                  deploymentId={d.id}
+                                  clientOrgId={d.clientOrgId}
+                                  portalInvitedAt={
+                                    d.portalInvitedAt
+                                      ? d.portalInvitedAt.toISOString()
+                                      : null
+                                  }
+                                />
+                                <PauseButton deploymentId={d.id} phoneNumber={d.phoneNumber} />
+                                <CancelButton deploymentId={d.id} phoneNumber={d.phoneNumber} />
+                              </div>
+                            )}
+                            {d.status === "paused" && (
+                              <div className="flex flex-wrap items-start justify-end gap-2">
+                                {d.bookingMode === "api_mcp" && (
+                                  <ConnectCalendarButton
+                                    deploymentId={d.id}
+                                    connected={Boolean(d.calendarRef?.accountId)}
+                                  />
+                                )}
+                                <CancelButton deploymentId={d.id} phoneNumber={d.phoneNumber} />
+                              </div>
+                            )}
+                          </div>
+
+                          {/* F1 — an OUTBOUND (event/schedule) agent shows a small note
+                              instead of booking rules. The copy reflects what THIS
+                              agent actually does (books / posts / sends), derived from
+                              its blueprint — never the old hard-coded "doesn't take
+                              bookings", which was wrong for an agent wired to book. Its
+                              per-client Google review link — the single most important
+                              field for a review-requester to fire — stays surfaced
+                              INLINE here (with an edit affordance, or a warning when
+                              unset), never hidden behind the Configure disclosure below. */}
+                          {d.isOutbound && (
+                            <>
+                              <p className="mt-3 border-t border-border pt-3 text-[11px] text-muted-foreground">
+                                {describeOutboundAgent({
+                                  books: d.agentBooks,
+                                  posts: d.agentPosts,
+                                })}
+                              </p>
+                              {isReviewRequester && (
+                                <ReviewLinkSection
+                                  deploymentId={d.id}
+                                  initial={d.customization ?? null}
+                                />
+                              )}
+                            </>
+                          )}
+
+                          {/* R3 — ONE "Configure" affordance per agent row: a collapsed
+                              disclosure that edits THIS deployment's per-client settings
+                              inline (no page leave), plus an "Edit agent template →" link
+                              for template-level config. Each flag scopes what the panel
+                              shows:
+                                • customization (greeting / voice / review link / business
+                                  info) — agents that SPEAK (phone / embed / link); the
+                                  text-only surfaces (sms / email) + OUTBOUND agents don't
+                                  get a spoken persona;
+                                • booking rules — agents that BOOK (native / api_mcp /
+                                  cal_com); external_link hands booking to the client's own
+                                  page (no rules) and OUTBOUND never books.
+                              The booking-rules editor is seeded with the EFFECTIVE policy
+                              (deployment override ?? system defaults; the template default
+                              + workspace tz aren't on this list query, and the resolver
+                              fills them safely). Every control is keyed to d.id, so the
+                              grouped agents on one client card never cross saves. */}
+                          <ConfigureSection
+                            deploymentId={d.id}
+                            agentTemplateId={d.agentTemplateId}
+                            showCustomization={
+                              !d.isOutbound &&
+                              (d.surface === "phone" ||
+                                d.surface === "embed" ||
+                                d.surface === "link")
+                            }
+                            customization={d.customization ?? null}
+                            showBookingRules={
+                              !d.isOutbound && d.bookingMode !== "external_link"
+                            }
+                            bookingPolicy={resolveBookingPolicy(
+                              d.bookingPolicy ?? null,
+                              null,
+                              undefined,
+                            )}
+                          />
+                        </li>
+                      );
+                    })}
+                  </ul>
+
+                  {/* ── Card footer: Deploy another agent (same target as the
+                      header CTA). The mockup's "Open client" is omitted — the
+                      grouped client carries only a clientOrgId, not the portal
+                      slug the /portal/[orgSlug] route needs, so there's no honest
+                      link to add without new data. ── */}
+                  <div className="flex flex-wrap items-center gap-2 border-t border-border px-5 py-3">
+                    <Link
+                      href="/studio/agents"
+                      className="inline-flex h-9 items-center gap-2 rounded-lg border border-dashed border-border px-3 text-sm font-medium text-primary transition-colors hover:border-primary/60 hover:bg-primary/5"
+                    >
+                      <Bot className="size-4" />
+                      Deploy another agent
+                    </Link>
+                  </div>
+                </article>
+              );
+            })}
+          </div>
+        </>
       )}
     </section>
   );
+}
+
+/** A calm KPI tile for the portfolio strip: a soft-tinted icon chip beside a big
+ *  mono figure + label. Pure presentation. */
+function ClientKpiTile({
+  label,
+  value,
+  icon,
+  tone,
+}: {
+  label: string;
+  value: string;
+  icon: React.ReactNode;
+  tone: "primary" | "positive" | "neutral";
+}) {
+  const toneChip =
+    tone === "primary"
+      ? "bg-primary/10 text-primary"
+      : tone === "positive"
+        ? "bg-emerald-500/10 text-emerald-600 dark:text-emerald-400"
+        : "bg-muted text-muted-foreground";
+  return (
+    <div className="flex items-center gap-3 rounded-2xl border border-border bg-card p-4 shadow-(--shadow-xs)">
+      <span
+        className={`inline-flex size-11 shrink-0 items-center justify-center rounded-xl ${toneChip}`}
+        aria-hidden
+      >
+        {icon}
+      </span>
+      <div>
+        <div className="font-mono text-2xl font-semibold tracking-tight text-foreground">
+          {value}
+        </div>
+        <div className="mt-0.5 text-xs text-muted-foreground">{label}</div>
+      </div>
+    </div>
+  );
+}
+
+/** Up-to-two-letter initials from the client name (e.g. "Valley Air" → "VA").
+ *  Falls back to "•" for an empty name. Pure. */
+function clientInitials(name: string): string {
+  const words = name.trim().split(/\s+/).filter(Boolean);
+  if (words.length === 0) return "•";
+  if (words.length === 1) return words[0].slice(0, 2).toUpperCase();
+  return (words[0][0] + words[1][0]).toUpperCase();
+}
+
+/** Sum of this client's ACTIVE deployments' monthly price (cents). Mirrors the
+ *  revenue primitive's "only active counts" rule. Pure. */
+function clientMrrCents(client: ClientGroup): number {
+  return client.agents.reduce(
+    (sum, d) => (d.status === "active" ? sum + (d.priceCents || 0) : sum),
+    0,
+  );
+}
+
+/** A client's roll-up health from its agents' statuses, mapped to the live
+ *  semantic tokens. Any paused/canceled → amber "Attention"; any draft (not yet
+ *  live) → primary "Setup"; otherwise "Live" green; no agents → muted. Pure. */
+function clientHealth(client: ClientGroup): {
+  label: string;
+  text: string;
+  dot: string;
+} {
+  const statuses = client.agents.map((d) => d.status);
+  if (statuses.length === 0) {
+    return {
+      label: "Idle",
+      text: "text-muted-foreground",
+      dot: "bg-muted-foreground/50",
+    };
+  }
+  if (statuses.some((s) => s === "paused" || s === "canceled")) {
+    return {
+      label: "Attention",
+      text: "text-amber-600 dark:text-amber-400",
+      dot: "bg-amber-500",
+    };
+  }
+  if (statuses.some((s) => s === "draft")) {
+    return { label: "Setup", text: "text-primary", dot: "bg-primary" };
+  }
+  return {
+    label: "Live",
+    text: "text-emerald-600 dark:text-emerald-400",
+    dot: "bg-emerald-500",
+  };
+}
+
+/** Portfolio roll-ups for the KPI strip: client count, summed active MRR, and the
+ *  count of active agents across all clients. Pure folds. */
+function summarizeClientTotals(clients: ClientGroup[]): {
+  clientCount: number;
+  mrrCents: number;
+  activeAgents: number;
+} {
+  let mrrCents = 0;
+  let activeAgents = 0;
+  for (const c of clients) {
+    for (const d of c.agents) {
+      if (d.status === "active") {
+        activeAgents += 1;
+        mrrCents += d.priceCents || 0;
+      }
+    }
+  }
+  return { clientCount: clients.length, mrrCents, activeAgents };
 }
