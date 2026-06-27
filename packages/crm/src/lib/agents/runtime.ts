@@ -45,6 +45,7 @@ import {
   type AgentTool,
   type ToolExecuteContext,
 } from "./tools";
+import { resolveTurnModel } from "./runtime/turn-model";
 import type { CalendarBinding } from "@/lib/agents/booking/calendar-backend";
 import type { BookingPolicy } from "@/lib/agents/booking/booking-policy";
 import { bindingToCtxBooking } from "@/lib/agents/booking/binding-ctx";
@@ -299,11 +300,34 @@ export async function executeTurn(input: {
   const allToolResults: AgentToolResult[] = [];
   let finalText = "";
 
+  // Adaptive per-turn model selection — the execution-side mirror of the author
+  // path. Spend the premium model ONLY on HARD turns (booking/quote/escalation
+  // intent in the user message, a write/booking/escalate tool available, a turn
+  // recovering from a tool error, or a long/complex message); stay on the cheap
+  // MODEL for easy turns ("what are your hours?"). Signals come from the in-scope
+  // context. `priorToolError` is recomputed inside the loop so a recovery
+  // iteration escalates. FAIL-SOFT: resolveTurnModel never throws — any oddity →
+  // MODEL — so a turn can never break (or silently get pricier) on selection.
+  // Honors the SF_ADAPTIVE_RUNTIME_MODEL=off kill switch.
+  const toolNamesAvailable = tools.map((t) => t.name);
+  let priorToolError = false;
+  // The model actually used for the LAST call this turn — persisted on the
+  // assistant turn row so cost/observability reflect what was spent, not MODEL.
+  let lastModelUsed = MODEL;
+
   for (let iter = 0; iter < MAX_TURN_ITERATIONS; iter++) {
+    const turnModel = resolveTurnModel({
+      userMessage: input.userMessage,
+      toolNamesAvailable,
+      priorToolError,
+      turnIndex: nextTurnIndex,
+      defaultModel: MODEL,
+    });
+    lastModelUsed = turnModel;
     let response: Anthropic.Messages.Message;
     try {
       response = await anthropic.messages.create({
-        model: MODEL,
+        model: turnModel,
         max_tokens: 1024,
         system: systemPrompt,
         tools: tools.map((t) => ({
@@ -446,6 +470,10 @@ export async function executeTurn(input: {
       }
     }
 
+    // Did any tool in this iteration error? If so, the NEXT iteration is a
+    // recovery turn → escalate it to the premium model via resolveTurnModel.
+    priorToolError = toolResultsForThisIter.some((r) => r.is_error === true);
+
     messages.push({
       role: "user",
       content: toolResultsForThisIter,
@@ -541,8 +569,19 @@ export async function executeTurn(input: {
         ...messages,
         { role: "user", content: correctionPrompt },
       ];
+      // Regeneration IS a hard turn — the model just produced a critically-
+      // failing response and gets one chance to recover. Escalate to premium
+      // (priorToolError-equivalent recovery signal). Fail-soft → MODEL.
+      const regenModel = resolveTurnModel({
+        userMessage: input.userMessage,
+        toolNamesAvailable,
+        priorToolError: true,
+        turnIndex: nextTurnIndex,
+        defaultModel: MODEL,
+      });
+      lastModelUsed = regenModel;
       const regenResponse = await anthropic.messages.create({
-        model: MODEL,
+        model: regenModel,
         max_tokens: 512,
         system: systemPrompt,
         // No tools on regeneration — we want a clean text response, not
@@ -618,7 +657,10 @@ export async function executeTurn(input: {
     latencyMs,
     tokensIn: totalTokensIn,
     tokensOut: totalTokensOut,
-    model: MODEL,
+    // Record the model ACTUALLY used for the final call this turn (adaptive
+    // selection may have escalated a hard turn to the premium model), not the
+    // static default — so cost/observability reflect real spend.
+    model: lastModelUsed,
   });
 
   // 9. Update conversation aggregates

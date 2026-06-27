@@ -37,6 +37,7 @@ import {
   type AgentTool,
   type ToolExecuteContext,
 } from "./tools";
+import { resolveTurnModel } from "./runtime/turn-model";
 
 // Mirror runtime.ts exactly so a template test behaves like the live agent.
 const MODEL =
@@ -148,14 +149,33 @@ export async function runStatelessAgentTurn(
     content: m.content,
   }));
 
+  // Adaptive per-turn model (execution-side mirror of the author path): spend the
+  // premium model only on HARD turns, stay on the cheap MODEL otherwise. Signals
+  // are derived from the in-scope context — the latest user message, the resolved
+  // tool allowlist (so a write/booking/escalate tool bumps to premium), and the
+  // turn position. `priorToolError` is recomputed inside the loop so a recovery
+  // iteration (after a failed tool call) also escalates. Fail-soft: resolveTurnModel
+  // never throws — any oddity → MODEL. Honors SF_ADAPTIVE_RUNTIME_MODEL=off.
+  const lastUserMessage = [...input.messages].reverse().find((m) => m.role === "user")
+    ?.content;
+  const toolNamesAvailable = tools.map((t) => t.name);
+  let priorToolError = false;
+
   const allToolCalls: StatelessToolCall[] = [];
   let finalText = "";
 
   for (let iter = 0; iter < MAX_TURN_ITERATIONS; iter++) {
+    const turnModel = resolveTurnModel({
+      userMessage: lastUserMessage,
+      toolNamesAvailable,
+      priorToolError,
+      turnIndex: input.messages.length,
+      defaultModel: MODEL,
+    });
     let response: Anthropic.Messages.Message;
     try {
       response = await input.client.messages.create({
-        model: MODEL,
+        model: turnModel,
         max_tokens: MAX_TOKENS,
         system: systemPrompt,
         tools: tools.map((t) => ({
@@ -270,6 +290,10 @@ export async function runStatelessAgentTurn(
         });
       }
     }
+
+    // Did any tool in this iteration error? If so, the NEXT iteration is a
+    // recovery turn → escalate it to the premium model via resolveTurnModel.
+    priorToolError = toolResultsForThisIter.some((r) => r.is_error === true);
 
     messages.push({ role: "user", content: toolResultsForThisIter });
   }
