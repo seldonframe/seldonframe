@@ -120,10 +120,19 @@ function buildDefaultListDeps(): ListDeploymentsDeps {
       const { db } = await import("@/db");
       const { deployments } = await import("@/db/schema/deployments");
       const { agentTemplates } = await import("@/db/schema/agent-templates");
-      const { desc, eq } = await import("drizzle-orm");
+      const { organizations } = await import("@/db/schema/organizations");
+      const { desc, eq, sql } = await import("drizzle-orm");
       // Left-join the template so the Clients screen can show which agent each
       // client runs. Template is onDelete:'restrict', so it's effectively never
       // null, but we tolerate null defensively.
+      //
+      // ICP-3 (Open client + Vertical): ALSO left-join the client workspace
+      // (organizations on clientOrgId) to carry its URL slug + Soul industry. One
+      // extra join — no N+1 getSoul per client — surfaces both the "Open client →"
+      // target and the "Vertical" badge. clientOrgId is null for un-activated
+      // drafts, so both columns come back null then (the card omits the link and
+      // shows "—"); `soul->>'industry'` is a cheap jsonb text extract that yields
+      // null when the soul is absent or has no industry.
       const rows = await db
         .select({
           id: deployments.id,
@@ -144,6 +153,8 @@ function buildDefaultListDeps(): ListDeploymentsDeps {
           templateType: agentTemplates.type,
           templateBlueprint: agentTemplates.blueprint,
           clientOrgId: deployments.clientOrgId,
+          clientSlug: organizations.slug,
+          clientVertical: sql<string | null>`${organizations.soul} ->> 'industry'`,
           portalInvitedAt: deployments.portalInvitedAt,
           bookingMode: deployments.bookingMode,
           calendarRef: deployments.calendarRef,
@@ -154,6 +165,10 @@ function buildDefaultListDeps(): ListDeploymentsDeps {
         .leftJoin(
           agentTemplates,
           eq(deployments.agentTemplateId, agentTemplates.id),
+        )
+        .leftJoin(
+          organizations,
+          eq(deployments.clientOrgId, organizations.id),
         )
         .where(eq(deployments.builderOrgId, builderOrgId))
         .orderBy(desc(deployments.updatedAt));
@@ -169,6 +184,12 @@ function buildDefaultListDeps(): ListDeploymentsDeps {
         return {
           ...rest,
           templateName: r.templateName ?? null,
+          // ICP-3 (Open client + Vertical): pass the joined slug through as-is
+          // (null when no workspace), and NORMALIZE the vertical — trim it and
+          // collapse a blank to null so the card's "—" fallback is consistent
+          // (an empty-string industry never renders as a blank badge).
+          clientSlug: r.clientSlug ?? null,
+          clientVertical: normalizeVertical(r.clientVertical),
           // Carry the legacy surface + the raw blueprint trigger so the Clients
           // card can resolve a precise per-agent trigger LABEL (triggerLabel),
           // while keeping the rest of the blueprint off the wire.
@@ -569,6 +590,17 @@ export type DeploymentListItem = {
   /** The provisioned client workspace (front-office bridge) — gates the portal
    *  invite toggle (disabled until set). Null = not provisioned. */
   clientOrgId: string | null;
+  /** ICP-3 (Open client) — the provisioned client workspace's URL slug, joined
+   *  from organizations on clientOrgId. Drives the "Open client →" link on the
+   *  client card (→ /clients/<slug>/ready, the same agency-side workspace hub the
+   *  sidebar/topbar switcher targets). Null when the client has no workspace yet
+   *  (un-activated draft) — the card then omits the link. */
+  clientSlug: string | null;
+  /** ICP-3 (Vertical) — the client's industry/vertical, read cheaply from the
+   *  client org's Soul (`soul->>'industry'`) in the same join. Null/blank when the
+   *  client has no workspace yet or the soul has no industry set — the card
+   *  fail-softs to "—". */
+  clientVertical: string | null;
   /** When the client was invited to portal access (null = never). */
   portalInvitedAt: Date | null;
   /** How the deployed agent books (native | external_link | api_mcp | cal_com).
@@ -664,6 +696,15 @@ export function groupAttachableClients(
   return [...byOrg.values()];
 }
 
+/** ICP-3 (Vertical) — normalize a client's industry/vertical for display: trim
+ *  and collapse a blank / non-string to null so the Clients card fail-softs to
+ *  "—" consistently (never a blank badge). Pure. */
+export function normalizeVertical(vertical: string | null | undefined): string | null {
+  if (typeof vertical !== "string") return null;
+  const trimmed = vertical.trim();
+  return trimmed.length > 0 ? trimmed : null;
+}
+
 /** One client on the Clients screen (F4): the client identity + number shown
  *  ONCE in the card header, plus every agent (deployment) running for it. */
 export type ClientGroup = {
@@ -676,6 +717,15 @@ export type ClientGroup = {
   /** The provisioned client workspace (org) id, or null if no agent on this
    *  client has been activated yet. */
   clientOrgId: string | null;
+  /** ICP-3 (Open client) — the client workspace's URL slug, surfaced once on the
+   *  group (first non-null across the client's agents wins, mirroring clientOrgId).
+   *  Drives the "Open client →" link (→ /clients/<slug>/ready). Null until the
+   *  client has a provisioned workspace — the card omits the link then. */
+  clientSlug: string | null;
+  /** ICP-3 (Vertical) — the client's industry/vertical from its Soul, surfaced
+   *  once (first non-null across the client's agents wins). Null when unknown; the
+   *  card fail-softs to "—". */
+  clientVertical: string | null;
   /** The client's shared line, if any agent on it holds one (the inbound
    *  receptionist). Null when no agent owns a number. Shown once in the header. */
   number: string | null;
@@ -723,6 +773,8 @@ export function groupDeploymentsByClient(
         clientKey: key,
         clientName: d.clientName,
         clientOrgId: d.clientOrgId ?? null,
+        clientSlug: d.clientSlug ?? null,
+        clientVertical: d.clientVertical ?? null,
         number: d.phoneNumber ?? null,
         agents: [],
       };
@@ -731,6 +783,12 @@ export function groupDeploymentsByClient(
     // First non-null clientOrgId wins (a later activation fills what an earlier
     // draft row lacked), so the header can offer portal/attach affordances.
     if (!group.clientOrgId && d.clientOrgId) group.clientOrgId = d.clientOrgId;
+    // ICP-3 — first non-null slug / vertical wins too (same "a later activated
+    // row fills what an earlier draft lacked" rule), so the card can offer the
+    // "Open client →" link + the vertical badge as soon as ANY of the client's
+    // agents carries a provisioned workspace.
+    if (!group.clientSlug && d.clientSlug) group.clientSlug = d.clientSlug;
+    if (!group.clientVertical && d.clientVertical) group.clientVertical = d.clientVertical;
     // First non-null number wins (input is newest-first → the latest live line).
     if (!group.number && d.phoneNumber) group.number = d.phoneNumber;
     group.agents.push(d);

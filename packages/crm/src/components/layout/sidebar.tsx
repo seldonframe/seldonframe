@@ -316,7 +316,12 @@ export function Sidebar(props: {
         </div>
 
         <div className="mt-auto px-3 pb-3 pt-5 sm:px-3.5 sm:pb-4 lg:px-4 lg:pb-4">
-          <button type="button" className="flex w-full items-center gap-2.5 rounded-xl border border-border/80 bg-card/72 p-2 text-left shadow-(--shadow-xs) transition-all hover:border-border hover:bg-card/92 hover:shadow-(--shadow-sm)">
+          {/* 2026-06-27 — calm direction-A: the account tile is a flat
+              hairline card that just softens its background on hover
+              (matches the mockup's user card). The old shadow-bloom +
+              transition-all lift read as loud against the hairline
+              chrome. */}
+          <button type="button" className="flex w-full items-center gap-2.5 rounded-xl border border-border/80 bg-card/72 p-2 text-left shadow-(--shadow-xs) transition-colors hover:bg-card/92">
             <div className="flex size-8 items-center justify-center rounded-lg border border-border/70 bg-muted/30 text-xs font-semibold text-foreground">
               {avatarFallback}
             </div>

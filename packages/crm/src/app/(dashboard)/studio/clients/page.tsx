@@ -30,7 +30,7 @@
 // deployments already loaded.
 
 import Link from "next/link";
-import { Users, Phone, Bot, Wallet } from "lucide-react";
+import { Users, Phone, Bot, Wallet, Tag, ArrowRight } from "lucide-react";
 import { getOrgId } from "@/lib/auth/helpers";
 import {
   listDeployments,
@@ -187,9 +187,18 @@ export default async function StudioClientsPage({
                         {clientInitials(client.clientName)}
                       </span>
                       <div className="min-w-0">
-                        <p className="text-card-title truncate text-foreground">
-                          {client.clientName}
-                        </p>
+                        <div className="flex flex-wrap items-center gap-2">
+                          <p className="text-card-title truncate text-foreground">
+                            {client.clientName}
+                          </p>
+                          {/* ICP-3 (Vertical): the client's industry from its Soul,
+                              shown as a calm hairline chip. Fail-soft "—" when the
+                              client has no workspace/industry yet. */}
+                          <span className="inline-flex items-center gap-1 rounded-full border border-border bg-muted/50 px-2 py-0.5 text-[11px] font-medium text-muted-foreground">
+                            <Tag className="size-2.5" aria-hidden />
+                            {client.clientVertical ?? "—"}
+                          </span>
+                        </div>
                         <p className="mt-0.5 text-sm text-muted-foreground">
                           {client.agents.length === 1
                             ? "1 agent"
@@ -378,11 +387,14 @@ export default async function StudioClientsPage({
                     })}
                   </ul>
 
-                  {/* ── Card footer: Deploy another agent (same target as the
-                      header CTA). The mockup's "Open client" is omitted — the
-                      grouped client carries only a clientOrgId, not the portal
-                      slug the /portal/[orgSlug] route needs, so there's no honest
-                      link to add without new data. ── */}
+                  {/* ── Card footer: Deploy another agent + Open client. The
+                      grouped client now carries its workspace slug (joined from
+                      organizations on clientOrgId), so "Open client →" links to
+                      the agency-side workspace hub at /clients/<slug>/ready — the
+                      SAME destination the sidebar/topbar workspace switcher uses
+                      when flipping into a client workspace. Shown only once the
+                      client has a provisioned workspace (slug present); an
+                      un-activated draft client omits it (nothing to open yet). ── */}
                   <div className="flex flex-wrap items-center gap-2 border-t border-border px-5 py-3">
                     <Link
                       href="/studio/agents"
@@ -391,6 +403,15 @@ export default async function StudioClientsPage({
                       <Bot className="size-4" />
                       Deploy another agent
                     </Link>
+                    {client.clientSlug && (
+                      <Link
+                        href={`/clients/${client.clientSlug}/ready`}
+                        className="crm-pressable inline-flex h-9 items-center gap-1.5 rounded-lg px-3 text-sm font-medium text-muted-foreground transition-colors hover:bg-accent/60 hover:text-foreground"
+                      >
+                        Open client
+                        <ArrowRight className="size-4" aria-hidden />
+                      </Link>
+                    )}
                   </div>
                 </article>
               );

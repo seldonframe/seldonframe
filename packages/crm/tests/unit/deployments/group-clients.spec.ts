@@ -18,6 +18,7 @@ import assert from "node:assert/strict";
 
 import {
   groupDeploymentsByClient,
+  normalizeVertical,
   type DeploymentListItem,
 } from "../../../src/lib/deployments/store";
 
@@ -41,6 +42,8 @@ function listItem(over: Partial<DeploymentListItem> = {}): DeploymentListItem {
     templateType: "voice_receptionist",
     templateTrigger: null,
     clientOrgId: "org-acme",
+    clientSlug: null,
+    clientVertical: null,
     portalInvitedAt: null,
     bookingMode: "native",
     calendarRef: null,
@@ -178,6 +181,8 @@ describe("groupDeploymentsByClient", () => {
       clientKey: "org:org-solo",
       clientName: "Solo Co",
       clientOrgId: "org-solo",
+      clientSlug: null,
+      clientVertical: null,
       number: "+12125551234",
       agents: groups[0].agents,
     });
@@ -230,5 +235,85 @@ describe("groupDeploymentsByClient", () => {
       channel: "sms",
     });
     assert.equal(groups[0].agents[0].isOutbound, true);
+  });
+
+  // ── ICP-3: Open client (slug) + Vertical surfaced on the group ──────────────
+
+  test("surfaces the client's slug + vertical on the group (Open client + badge)", () => {
+    const groups = groupDeploymentsByClient([
+      listItem({
+        id: "dep-recep",
+        clientOrgId: "org-acme",
+        clientName: "Acme Plumbing",
+        clientSlug: "acme-plumbing",
+        clientVertical: "Plumbing",
+      }),
+    ]);
+    assert.equal(groups.length, 1);
+    // Drives the "Open client →" link target (/clients/<slug>/ready) + the badge.
+    assert.equal(groups[0].clientSlug, "acme-plumbing");
+    assert.equal(groups[0].clientVertical, "Plumbing");
+  });
+
+  test("first non-null slug / vertical wins when the newest agent lacks them", () => {
+    // Two agents on ONE client (same org). The newest row (first) carries no
+    // slug/vertical (e.g. a draft joined before the workspace was provisioned);
+    // a later activated row does. The group must adopt the later non-null values
+    // — same rule as clientOrgId / number.
+    const groups = groupDeploymentsByClient([
+      listItem({
+        id: "dep-new",
+        clientOrgId: "org-acme",
+        clientSlug: null,
+        clientVertical: null,
+      }),
+      listItem({
+        id: "dep-old",
+        clientOrgId: "org-acme",
+        clientSlug: "acme-plumbing",
+        clientVertical: "HVAC",
+      }),
+    ]);
+    assert.equal(groups.length, 1, "both collapse into one client card");
+    assert.equal(groups[0].clientSlug, "acme-plumbing");
+    assert.equal(groups[0].clientVertical, "HVAC");
+  });
+
+  test("vertical fail-softs to null when no agent carries one (card shows —)", () => {
+    // An un-activated draft (no workspace yet) has no slug + no vertical; the
+    // group leaves both null so the card omits the link + renders the "—" dash.
+    const groups = groupDeploymentsByClient([
+      listItem({
+        id: "dep-draft",
+        clientOrgId: null,
+        clientName: "Pending Co",
+        clientSlug: null,
+        clientVertical: null,
+        status: "draft",
+      }),
+    ]);
+    assert.equal(groups.length, 1);
+    assert.equal(groups[0].clientSlug, null, "no link target until provisioned");
+    assert.equal(groups[0].clientVertical, null, "→ the card's — fallback");
+  });
+});
+
+// ── ICP-3: normalizeVertical (pure) ──────────────────────────────────────────
+
+describe("normalizeVertical", () => {
+  test("trims a present industry", () => {
+    assert.equal(normalizeVertical("  Plumbing  "), "Plumbing");
+  });
+
+  test("collapses blank / whitespace-only to null", () => {
+    assert.equal(normalizeVertical(""), null);
+    assert.equal(normalizeVertical("   "), null);
+  });
+
+  test("collapses null / undefined / non-string to null (fail-soft)", () => {
+    assert.equal(normalizeVertical(null), null);
+    assert.equal(normalizeVertical(undefined), null);
+    // A non-string from a malformed jsonb extract still yields null, never throws.
+    assert.equal(normalizeVertical(123 as unknown as string), null);
   });
 });

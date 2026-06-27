@@ -356,11 +356,14 @@
     transition: color var(--transition-fast);
   }
 
+  /* 2026-06-27 — calm direction-A (matches the editor/studio reskin):
+     a quiet hover wash, no lift. The old translateY(-1px) made every
+     nav row bob on hover, which read as restless against the calm
+     hairline chrome. Hover just softens the background + ink. */
   .crm-sidebar-link:hover {
     background: color-mix(in srgb, var(--sidebar-accent) 55.00%, transparent);
-    border-color: var(--sidebar-border);
+    border-color: transparent;
     color: var(--foreground);
-    transform: translateY(-1px);
   }
 
   .crm-sidebar-link:hover .crm-sidebar-icon {
@@ -371,19 +374,26 @@
     color: var(--foreground);
   }
 
+  /* 2026-06-27 — calm direction-A active state: an accent-SOFT pill
+     (the mockup's `background:var(--accent-soft); color:var(--accent-
+     tint-fg)`). Live-token mapping: a soft tint of --primary (the brand
+     green light / teal dark) with --primary ink + icon, no border, no
+     drop-shadow. Replaces the old loud gradient + `0 10px 24px` dark
+     shadow, which fought the hairline chrome. The label weight bump is
+     handled in markup (font-medium on the active row). */
   .crm-sidebar-link[data-active="true"] {
-    background: linear-gradient(180deg, color-mix(in srgb, var(--sidebar-accent) 88%, transparent) 0%, color-mix(in srgb, var(--sidebar-accent) 72%, transparent) 100%);
-    border-color: var(--sidebar-border);
-    box-shadow: inset 0 1px 0 rgb(255 255 255 / 0.05), 0 10px 24px rgb(0 0 0 / 0.18);
-    color: var(--foreground);
+    background: color-mix(in srgb, var(--primary) 12%, transparent);
+    border-color: transparent;
+    box-shadow: none;
+    color: var(--primary);
   }
 
   .crm-sidebar-link[data-active="true"] .crm-sidebar-icon {
-    color: var(--foreground);
+    color: var(--primary);
   }
 
   .crm-sidebar-link[data-active="true"] .crm-sidebar-text {
-    color: var(--foreground);
+    color: var(--primary);
   }
 
   .crm-topbar-input {
@@ -422,11 +432,15 @@
     }
   }
 
+  /* 2026-06-27 — calm direction-A: topbar icon buttons (theme toggle,
+     notifications bell, user menu) soften on hover without the
+     translateY lift — the mockup's header controls sit still on a
+     hairline. The :active press scale below stays as the click
+     affordance. */
   .crm-topbar-icon-btn:hover {
     background: var(--accent);
-    border-color: color-mix(in srgb, var(--border) 100%, transparent);
+    border-color: var(--border);
     color: var(--foreground);
-    transform: translateY(-1px);
   }
 
   .crm-topbar-icon-btn:active:not(:disabled) {

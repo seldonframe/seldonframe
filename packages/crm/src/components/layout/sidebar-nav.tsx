@@ -83,9 +83,15 @@ function NavItemLink({ item, pathname, onNavigate, icon: Icon }: { item: NavItem
   // Bookings/Intake Forms under Customers). The icon column stays
   // aligned; only the row's left inset shifts.
   const indentClass = item.indent ? " pl-7" : "";
+  // 2026-06-27 — calm direction-A: the active row reads as an accent-soft
+  // pill, so its label weight bumps to semibold (the mockup's 600 vs 500
+  // for inactive rows) while inactive rows stay medium. The base
+  // .crm-sidebar-link styling (height / hover / the active pill bg) is
+  // unchanged; only the per-row weight is tuned here.
+  const weightClass = active && !item.disabled ? " font-semibold" : " font-medium";
   const className = item.disabled
-    ? `crm-sidebar-link cursor-not-allowed border border-transparent px-2.5 font-medium opacity-55${indentClass}`
-    : `crm-sidebar-link border px-2.5 font-medium${indentClass}`;
+    ? `crm-sidebar-link cursor-not-allowed border border-transparent px-2.5 opacity-55${indentClass}${weightClass}`
+    : `crm-sidebar-link border px-2.5${indentClass}${weightClass}`;
 
   // May 1, 2026 — external links (Discord, etc.) render as plain
   // <a target="_blank"> so they don't trip Next.js client-side
@@ -98,7 +104,10 @@ function NavItemLink({ item, pathname, onNavigate, icon: Icon }: { item: NavItem
   ) : item.external ? (
     <ExternalLink className="size-3 text-muted-foreground/60" />
   ) : active && !item.disabled ? (
-    <ChevronRight className="h-4 w-4 text-muted-foreground/70" />
+    // 2026-06-27 — calm direction-A: the active row's trailing chevron
+    // picks up the accent-soft pill's --primary ink instead of muted
+    // grey, so the whole active row reads as one quiet accent unit.
+    <ChevronRight className="h-4 w-4 text-primary/70" />
   ) : null;
 
   if (item.external) {

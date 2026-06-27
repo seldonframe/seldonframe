@@ -96,6 +96,8 @@ function listItem(over: Partial<DeploymentListItem> = {}): DeploymentListItem {
     templateType: "voice_receptionist",
     templateTrigger: null,
     clientOrgId: "org-acme",
+    clientSlug: null,
+    clientVertical: null,
     portalInvitedAt: null,
     bookingMode: "native",
     calendarRef: null,
