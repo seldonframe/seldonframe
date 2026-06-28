@@ -19,6 +19,8 @@ import { agentTemplates } from "@/db/schema/agent-templates";
 import { resolveUniqueTemplateSlug } from "@/lib/agent-templates/store";
 import type { AgentBlueprint } from "@/db/schema/agents";
 import { getStripeClient } from "@seldonframe/payments";
+import { createOneTimeAgentCheckout } from "@/lib/marketplace/billing/one-time-checkout";
+import { buildOneTimeCheckoutDeps } from "@/lib/marketplace/billing/real-deps";
 
 type GeneratedFile = { path: string; content: string };
 
@@ -528,6 +530,8 @@ export async function installAgentListingAction(input: { slug: string }) {
       description: marketplaceListings.description,
       kind: marketplaceListings.kind,
       price: marketplaceListings.price,
+      priceModel: marketplaceListings.priceModel,
+      creatorOrgId: marketplaceListings.creatorOrgId,
       stripeConnectAccountId: marketplaceListings.stripeConnectAccountId,
       agentType: marketplaceListings.agentType,
       agentBlueprint: marketplaceListings.agentBlueprint,
@@ -572,6 +576,33 @@ export async function installAgentListingAction(input: { slug: string }) {
   // platform fee carries identically to the agent paid path.
   if (!listing.stripeConnectAccountId) {
     throw new Error("Seller payout account is not configured for this agent.");
+  }
+
+  // #139 P1 — gated one-time Connect Checkout. Behind the SF_MARKETPLACE_BILLING
+  // feature flag (default OFF) and ONLY for a `onetime` paid agent whose seller
+  // is Connect-ready, this records a marketplace_purchases row + uses an
+  // idempotency key. It is INERT without a Stripe key and returns { skipped } for
+  // any other case — in which case we fall through to today's free-install /
+  // legacy soul-checkout path UNCHANGED. Money-safe: test mode unless explicitly
+  // live-gated; no real charge is reachable in dev.
+  const billed = await createOneTimeAgentCheckout(
+    {
+      listing: {
+        id: listing.id,
+        slug: listing.slug,
+        name: listing.name,
+        description: listing.description,
+        priceModel: listing.priceModel,
+        price: Number(listing.price ?? 0),
+        stripeConnectAccountId: listing.stripeConnectAccountId,
+      },
+      buyerOrgId: orgId,
+      sellerOrgId: listing.creatorOrgId,
+    },
+    buildOneTimeCheckoutDeps(),
+  );
+  if (billed.ok) {
+    return { ok: true as const, checkoutUrl: billed.url };
   }
 
   const stripe = getStripeClient();

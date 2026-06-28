@@ -246,6 +246,13 @@
       "when": 1782515272296,
       "tag": "0057_event_agent_scheduled_sends",
       "breakpoints": true
+    },
+    {
+      "idx": 35,
+      "version": "7",
+      "when": 1782601672296,
+      "tag": "0058_marketplace_purchases",
+      "breakpoints": true
     }
   ]
 }

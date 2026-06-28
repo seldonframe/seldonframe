@@ -143,3 +143,11 @@ export * from "./event-agent-scheduled-sends";
 // session persistence. Additive table; money-safe (the wired processor is a
 // no-charge dev stub — see lib/acp/processor.ts).
 export * from "./acp";
+
+// 2026-06-28 — Recurring & Metered Agent Billing (#139) P0: marketplace_purchases.
+// Additive table; the fiat-Stripe-Connect settlement record for buying a
+// marketplace agent on the SELLER's connected account (5% application fee).
+// Money-safe — stripe_mode defaults 'test', a 'live' row needs the live flag +
+// key + charges_enabled; inert without a Stripe key. See
+// lib/marketplace/billing/*.
+export * from "./marketplace-purchases";
