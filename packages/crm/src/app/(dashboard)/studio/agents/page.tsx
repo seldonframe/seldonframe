@@ -11,7 +11,7 @@
 // Auth + builder resolution: getOrgId() — the operator's org IS the builder org.
 
 import Link from "next/link";
-import { Bot, Phone, MessageSquare, Mail, Bell, Radio, Settings2 } from "lucide-react";
+import { Bot, Phone, MessageSquare, Mail, Bell, Radio, Settings2, ExternalLink } from "lucide-react";
 import { count, desc, eq } from "drizzle-orm";
 import { db } from "@/db";
 import { agentTemplates, deployments } from "@/db/schema";
@@ -19,6 +19,12 @@ import { getOrgId } from "@/lib/auth/helpers";
 import type { AgentBlueprint } from "@/db/schema";
 import { surfaceForType, type AgentTemplateType } from "@/lib/agent-templates/store";
 import { resolveAgentTrigger } from "@/lib/agents/triggers/agent-trigger";
+import {
+  loadAgentMarketplaceStatusForOrg,
+  marketplaceStatusFor,
+  marketplaceCellState,
+  type AgentMarketplaceStatus,
+} from "@/lib/marketplace/agent-marketplace-status";
 import { NewAgentButton } from "./new-agent-button";
 import { DescribeAgent } from "./describe-agent";
 import { DeployButton } from "./deploy-button";
@@ -63,18 +69,24 @@ export default async function AgentsStudioPage() {
     .where(eq(agentTemplates.builderOrgId, orgId))
     .orderBy(desc(agentTemplates.updatedAt));
 
-  // Deployment count per template (one grouped query). 0 is fine — most
-  // templates start undeployed.
-  const deployCounts = templates.length
-    ? await db
-        .select({
-          agentTemplateId: deployments.agentTemplateId,
-          n: count(),
-        })
-        .from(deployments)
-        .where(eq(deployments.builderOrgId, orgId))
-        .groupBy(deployments.agentTemplateId)
-    : [];
+  // Deployment count per template (one grouped query) + the marketplace status
+  // per template (listed? price? earned?) in PARALLEL. Deployment = "to clients";
+  // marketplace = "listed for sale". Both default cleanly (0 deploys / not
+  // listed) and the marketplace read is fail-soft (errors → empty map), so the
+  // roster never breaks because of a marketplace read.
+  const [deployCounts, marketplaceStatus] = templates.length
+    ? await Promise.all([
+        db
+          .select({
+            agentTemplateId: deployments.agentTemplateId,
+            n: count(),
+          })
+          .from(deployments)
+          .where(eq(deployments.builderOrgId, orgId))
+          .groupBy(deployments.agentTemplateId),
+        loadAgentMarketplaceStatusForOrg(orgId),
+      ])
+    : [[], new Map<string, AgentMarketplaceStatus>()];
   const deployCountByTemplate = new Map<string, number>(
     deployCounts.map((r) => [r.agentTemplateId, Number(r.n)]),
   );
@@ -101,6 +113,8 @@ export default async function AgentsStudioPage() {
       channel: trigger.channel,
       triggerDescriptor: formatTriggerDescriptor(trigger),
       deployCount,
+      // Marketplace facet (listed? price? earned?) — distinct from Deployed.
+      marketplace: marketplaceStatusFor(marketplaceStatus, tmpl.id),
     };
   });
   const liveRows = agentRows.filter((r) => r.status === "published");
@@ -185,9 +199,9 @@ export default async function AgentsStudioPage() {
 
             <div className="overflow-hidden rounded-2xl border border-border bg-card shadow-(--shadow-xs)">
               <div className="overflow-x-auto">
-                <div className="min-w-[760px]">
+                <div className="min-w-[920px]">
                   {/* Column header */}
-                  <div className="grid grid-cols-[1.7fr_1.2fr_1fr_0.9fr_0.9fr_auto] gap-3 border-b border-border bg-muted/40 px-5 py-3">
+                  <div className="grid grid-cols-[1.7fr_1.1fr_0.9fr_0.8fr_1.2fr_0.8fr_auto] gap-3 border-b border-border bg-muted/40 px-5 py-3">
                     <span className="text-[11px] font-semibold uppercase tracking-[0.06em] text-muted-foreground">
                       Agent
                     </span>
@@ -199,6 +213,9 @@ export default async function AgentsStudioPage() {
                     </span>
                     <span className="text-[11px] font-semibold uppercase tracking-[0.06em] text-muted-foreground">
                       Deployed
+                    </span>
+                    <span className="text-[11px] font-semibold uppercase tracking-[0.06em] text-muted-foreground">
+                      Marketplace
                     </span>
                     <span className="text-[11px] font-semibold uppercase tracking-[0.06em] text-muted-foreground">
                       Status
@@ -253,6 +270,7 @@ type AgentRow = {
   channel: string;
   triggerDescriptor: string;
   deployCount: number;
+  marketplace: AgentMarketplaceStatus;
 };
 
 /** Channel slug → leading icon for the Agent cell's badge + the Trigger column. */
@@ -293,7 +311,7 @@ function AgentGroupHeader({ label, count }: { label: string; count: number }) {
 function AgentTableRow({ row }: { row: AgentRow }) {
   const Channel = channelIcon(row.channel);
   return (
-    <div className="grid grid-cols-[1.7fr_1.2fr_1fr_0.9fr_0.9fr_auto] items-center gap-3 border-b border-border/70 px-5 py-3.5 transition-colors duration-150 ease-out last:border-b-0 hover:bg-muted/40">
+    <div className="grid grid-cols-[1.7fr_1.1fr_0.9fr_0.8fr_1.2fr_0.8fr_auto] items-center gap-3 border-b border-border/70 px-5 py-3.5 transition-colors duration-150 ease-out last:border-b-0 hover:bg-muted/40">
       {/* Agent — icon badge + linked name (+ template-type subline) */}
       <div className="flex min-w-0 items-center gap-3">
         <span
@@ -340,6 +358,9 @@ function AgentTableRow({ row }: { row: AgentRow }) {
         )}
       </span>
 
+      {/* Marketplace — listed chip + price + earned sub-line, or "Not listed" */}
+      <MarketplaceCell marketplace={row.marketplace} />
+
       {/* Status chip */}
       <span>
         <TemplateStatusBadge status={row.status} />
@@ -357,6 +378,44 @@ function AgentTableRow({ row }: { row: AgentRow }) {
         </Link>
         <DeployButton templateId={row.id} variant="primary" />
       </div>
+    </div>
+  );
+}
+
+/** The Marketplace cell: a calm "is this agent listed for sale, and what has it
+ *  earned?" — distinct from Deployed (to clients). Listed → an accent-soft
+ *  "Listed · $29/mo" chip + a muted "$120 earned" sub-line (+ a quiet
+ *  "View listing" link when it's live on the storefront). Not listed → muted
+ *  "Not listed". All presentation comes from the pure `marketplaceCellState`. */
+function MarketplaceCell({ marketplace }: { marketplace: AgentMarketplaceStatus }) {
+  const cell = marketplaceCellState(marketplace);
+
+  if (!cell.listed) {
+    return <span className="text-[13px] text-muted-foreground">Not listed</span>;
+  }
+
+  return (
+    <div className="flex min-w-0 flex-col gap-1">
+      <span className="inline-flex w-fit max-w-full items-center gap-1.5 truncate rounded-full bg-primary/10 px-2.5 py-1 text-xs font-medium text-primary">
+        <span className="shrink-0">{cell.published ? "Listed" : "Draft"}</span>
+        <span className="text-primary/60" aria-hidden>
+          ·
+        </span>
+        <span className="truncate font-mono text-[11px]">{cell.priceLabel}</span>
+      </span>
+      <span className="flex items-center gap-2 text-[11px] text-muted-foreground">
+        <span className="font-mono">{cell.revenueLabel}</span>
+        {cell.published && cell.slug && (
+          <Link
+            href={`/marketplace/${cell.slug}`}
+            target="_blank"
+            className="inline-flex items-center gap-0.5 text-muted-foreground hover:text-foreground hover:underline"
+            title="View listing"
+          >
+            View <ExternalLink className="size-3" aria-hidden />
+          </Link>
+        )}
+      </span>
     </div>
   );
 }
