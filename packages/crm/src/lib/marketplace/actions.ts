@@ -20,7 +20,13 @@ import { resolveUniqueTemplateSlug } from "@/lib/agent-templates/store";
 import type { AgentBlueprint } from "@/db/schema/agents";
 import { getStripeClient } from "@seldonframe/payments";
 import { createOneTimeAgentCheckout } from "@/lib/marketplace/billing/one-time-checkout";
-import { buildOneTimeCheckoutDeps } from "@/lib/marketplace/billing/real-deps";
+import { createMonthlyAgentSubscription } from "@/lib/marketplace/billing/monthly-subscription";
+import { createMeteredAgentSubscription } from "@/lib/marketplace/billing/metered-subscription";
+import { selectInstallCreator } from "@/lib/marketplace/billing/subscription-deps";
+import {
+  buildOneTimeCheckoutDeps,
+  buildSubscriptionCheckoutDeps,
+} from "@/lib/marketplace/billing/real-deps";
 
 type GeneratedFile = { path: string; content: string };
 
@@ -531,6 +537,10 @@ export async function installAgentListingAction(input: { slug: string }) {
       kind: marketplaceListings.kind,
       price: marketplaceListings.price,
       priceModel: marketplaceListings.priceModel,
+      monthlyPriceCents: marketplaceListings.monthlyPriceCents,
+      perCallPriceCents: marketplaceListings.perCallPriceCents,
+      perOutcomePriceCents: marketplaceListings.perOutcomePriceCents,
+      outcomeType: marketplaceListings.outcomeType,
       creatorOrgId: marketplaceListings.creatorOrgId,
       stripeConnectAccountId: marketplaceListings.stripeConnectAccountId,
       agentType: marketplaceListings.agentType,
@@ -553,6 +563,37 @@ export async function installAgentListingAction(input: { slug: string }) {
 
   const price = Number(listing.price ?? 0);
 
+  // #139 P2/P3 — RECURRING models (monthly / per_usage / per_outcome). These keep
+  // `price` (the one-time column) at 0, so WITHOUT this branch they'd fall into
+  // the free-clone shortcut below. Behind the SF_MARKETPLACE_BILLING flag (default
+  // OFF) + a Connect-ready seller + a Stripe key, route to the subscription
+  // Checkout. Any { skipped } (flag off / not connected / inert / not paid) falls
+  // THROUGH to today's free-install path UNCHANGED — money-safe by construction.
+  const installCreator = selectInstallCreator(listing.priceModel);
+  if (installCreator === "monthly" || installCreator === "metered") {
+    const recurringListing = {
+      id: listing.id,
+      slug: listing.slug,
+      name: listing.name,
+      description: listing.description,
+      priceModel: listing.priceModel,
+      price: price,
+      monthlyPriceCents: listing.monthlyPriceCents,
+      perCallPriceCents: listing.perCallPriceCents,
+      perOutcomePriceCents: listing.perOutcomePriceCents,
+      outcomeType: listing.outcomeType,
+    };
+    const subInput = { listing: recurringListing, buyerOrgId: orgId, sellerOrgId: listing.creatorOrgId };
+    const subscribed =
+      installCreator === "monthly"
+        ? await createMonthlyAgentSubscription(subInput, buildSubscriptionCheckoutDeps())
+        : await createMeteredAgentSubscription(subInput, buildSubscriptionCheckoutDeps());
+    if (subscribed.ok) {
+      return { ok: true as const, checkoutUrl: subscribed.url };
+    }
+    // else: fall through to the free-install path below (today's behavior).
+  }
+
   // FREE → clone immediately into the buyer org.
   if (price <= 0) {
     const templateId = await cloneAgentListingIntoOrg(listing as ListingInstallRow, orgId);
@@ -569,7 +610,7 @@ export async function installAgentListingAction(input: { slug: string }) {
     return { ok: true as const, templateId };
   }
 
-  // PAID → reuse the soul Stripe-checkout path. metadata.type "soul_purchase"
+  // PAID (onetime) → reuse the soul Stripe-checkout path. metadata.type "soul_purchase"
   // routes the webhook to finalizeSoulPurchaseFromWebhook, which now branches on
   // kind:'agent' to clone the template. The 5% marketplace fee is computed off
   // the SAME computeMarketplaceFeeCents(price) as a paid soul, so the

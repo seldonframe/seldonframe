@@ -69,15 +69,25 @@ export type CanChargeListingInput = {
   billingEnabled: boolean;
 };
 
+/** The pricing models that are settle-able today. P1 wired `onetime`; P2 adds
+ *  `monthly`; P3 adds the metered `per_usage` / `per_outcome` subscriptions. */
+const CHARGEABLE_MODELS = new Set<MarketplacePriceModel>([
+  "onetime",
+  "monthly",
+  "per_usage",
+  "per_outcome",
+]);
+
 /**
- * The per-install charge gate. P1 wires ONLY the one-time Checkout, so this
- * returns true exclusively for `onetime` + a Connect-ready seller + billing ON.
- * Monthly / per_usage / per_outcome (P2/P3), a not-ready seller, or the flag OFF
- * all return false so the caller falls back to the free install. Pure.
+ * The per-install charge gate. Returns true for any settle-able pricing model
+ * (`onetime` via P1's one-time Checkout; `monthly` via P2; `per_usage` /
+ * `per_outcome` via P3's metered subscription) AND a Connect-ready seller AND
+ * billing ON. A not-ready seller, the flag OFF (the default), or an
+ * unknown/legacy model all return false so the caller falls back to the free
+ * install. Pure.
  */
 export function canChargeListing(input: CanChargeListingInput): boolean {
   if (!input.billingEnabled) return false;
   if (!input.connectReady) return false;
-  // P1 scope: only the one-time model is settle-able today.
-  return input.priceModel === "onetime";
+  return CHARGEABLE_MODELS.has(input.priceModel as MarketplacePriceModel);
 }

@@ -37,6 +37,45 @@ import {
 } from "@/lib/marketplace/agent-rental-run";
 import { devStubVerifier } from "@/lib/marketplace/x402";
 import { trackEvent } from "@/lib/analytics/track";
+import { reportAgentUsage } from "@/lib/marketplace/billing/metered-subscription";
+import {
+  buildUsageReportDeps,
+  resolveRenterMeteredSubscriptionItemId,
+} from "@/lib/marketplace/billing/real-deps";
+
+/**
+ * #139 P3 — fire-and-forget metered usage report for a RENTED agent call. Behind
+ * the SF_MARKETPLACE_BILLING flag (reportAgentUsage gates on it) and INERT without
+ * a Stripe key. Resolves the renter's ACTIVE metered subscription item for this
+ * listing; if one exists, reports 1 unit. Never throws — both the resolver and
+ * reportAgentUsage swallow errors — so metering can NEVER break the rental path.
+ */
+async function reportRentalUsageFailSoft(entry: {
+  slug: string;
+  listingId: string;
+  renterOrgId: string;
+  creatorOrgId: string;
+}): Promise<void> {
+  try {
+    const subscriptionItemId = await resolveRenterMeteredSubscriptionItemId({
+      renterOrgId: entry.renterOrgId,
+      listingId: entry.listingId,
+    });
+    if (!subscriptionItemId) return; // no metered subscription → no-op.
+    await reportAgentUsage(
+      {
+        subscriptionItemId,
+        quantity: 1,
+        idempotencyKey: `mkt-usage-${subscriptionItemId}-${Date.now()}`,
+      },
+      buildUsageReportDeps(),
+    );
+  } catch (err) {
+    // Defensive: the inner calls already fail-soft, but never let this escape.
+    const detail = err instanceof Error ? err.message : String(err);
+    console.error(`[agent-rental] usage_report_error listing=${entry.listingId} renter=${entry.renterOrgId} err=${detail}`);
+  }
+}
 
 // CORS: an MCP client may be browser-hosted or a server; mirror the public-turn
 // endpoint's permissive stance. The endpoint exposes only the delegating tool
@@ -71,7 +110,7 @@ const REAL_DEPS: AgentRentalRpcDeps = {
   resolveAgent: resolveRentalAgent,
   runTurn: runAgentRentalTurn,
   getSecret: getRentalSigningSecret,
-  logUsage: (entry) =>
+  logUsage: (entry) => {
     trackEvent(
       "agent_rental_call",
       {
@@ -89,7 +128,17 @@ const REAL_DEPS: AgentRentalRpcDeps = {
       // Attribute to the CREATOR org (whose agent earned the call — the side the
       // 5% accrues to, and the org the meter counts against).
       { orgId: entry.creatorOrgId },
-    ),
+    );
+    // #139 P3 — ALSO report a metered usage unit (fail-soft, flag-gated, inert
+    // without a key). Fire-and-forget: a metering failure must not affect the
+    // rental reply, which has already been produced.
+    void reportRentalUsageFailSoft({
+      slug: entry.slug,
+      listingId: entry.listingId,
+      renterOrgId: entry.renterOrgId,
+      creatorOrgId: entry.creatorOrgId,
+    });
+  },
   now: () => new Date(),
 
   // ── x402 metering wiring. The verifier is the DEV STUB → NO money moves. To

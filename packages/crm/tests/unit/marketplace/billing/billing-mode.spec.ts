@@ -104,20 +104,31 @@ describe("canChargeListing", () => {
     );
   });
 
-  test("monthly → false (P2, not wired yet)", () => {
+  test("monthly → true (P2 — wired)", () => {
     assert.equal(
       canChargeListing({ priceModel: "monthly", connectReady: true, billingEnabled: true }),
-      false,
+      true,
     );
   });
 
-  test("per_usage / per_outcome → false (P3)", () => {
+  test("per_usage / per_outcome → true (P3 — wired)", () => {
     assert.equal(
       canChargeListing({ priceModel: "per_usage", connectReady: true, billingEnabled: true }),
-      false,
+      true,
     );
     assert.equal(
       canChargeListing({ priceModel: "per_outcome", connectReady: true, billingEnabled: true }),
+      true,
+    );
+  });
+
+  test("unknown / legacy model → false (only the four known models settle)", () => {
+    assert.equal(
+      canChargeListing({ priceModel: "mystery", connectReady: true, billingEnabled: true }),
+      false,
+    );
+    assert.equal(
+      canChargeListing({ priceModel: null, connectReady: true, billingEnabled: true }),
       false,
     );
   });

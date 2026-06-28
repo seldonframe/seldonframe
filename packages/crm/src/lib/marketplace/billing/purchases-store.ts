@@ -47,6 +47,27 @@ export async function updatePurchaseByCheckoutId(
 }
 
 /**
+ * Patch the purchase whose Stripe SUBSCRIPTION id matches (the recurring P2/P3
+ * reconciliation key — the subscription id arrives on the P4
+ * `checkout.session.completed` / `customer.subscription.*` webhooks). Always
+ * bumps updatedAt. Returns the updated row, or null if no row carried that
+ * subscription id. `id`/`createdAt` are not patchable.
+ */
+export async function updatePurchaseBySubscriptionId(
+  stripeSubscriptionId: string,
+  patch: Partial<Omit<NewMarketplacePurchase, "id" | "createdAt">>,
+): Promise<MarketplacePurchaseRow | null> {
+  const key = (stripeSubscriptionId ?? "").trim();
+  if (!key) return null;
+  const [row] = await db
+    .update(marketplacePurchases)
+    .set({ ...patch, updatedAt: new Date() })
+    .where(eq(marketplacePurchases.stripeSubscriptionId, key))
+    .returning();
+  return row ?? null;
+}
+
+/**
  * Load a single purchase by id, SCOPED to the buyer's org (a buyer can only read
  * its own purchases). Returns null when it doesn't exist for that org.
  */
