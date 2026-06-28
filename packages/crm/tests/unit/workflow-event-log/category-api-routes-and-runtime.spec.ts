@@ -3,14 +3,36 @@
 
 import { describe, test } from "node:test";
 
-import { assertOrgIdExpr } from "./emit-site-extractor";
+import { assertEmitOrgId, assertOrgIdExpr } from "./emit-site-extractor";
 
-describe("SLICE 1-a — api/v1/forms/submit/route.ts (2 sites)", () => {
-  test("line 123 contact.created — orgId", () => {
-    assertOrgIdExpr("src/app/api/v1/forms/submit/route.ts", 123, "orgId");
+// 2026-06-28 — switched these two sites from line-anchored (assertOrgIdExpr)
+// to event-name-anchored (assertEmitOrgId). FIX 3 of the security audit added
+// host-resolution above the emits, shifting every line below it; the
+// line-anchored matcher would silently drift to the wrong call. assertEmitOrgId
+// locates each site by its event-name literal + enclosing function so it
+// survives edits. A third site (lead.created → fires the speed-to-lead agent)
+// is now asserted too: its orgId MUST be the verified-org `orgId`.
+describe("SLICE 1-a — api/v1/forms/submit/route.ts (3 sites)", () => {
+  test("contact.created — orgId", () => {
+    assertEmitOrgId(
+      "src/app/api/v1/forms/submit/route.ts",
+      { event: "contact.created", inFunction: "POST" },
+      "orgId",
+    );
   });
-  test("line 133 form.submitted — orgId", () => {
-    assertOrgIdExpr("src/app/api/v1/forms/submit/route.ts", 133, "orgId");
+  test("form.submitted — orgId", () => {
+    assertEmitOrgId(
+      "src/app/api/v1/forms/submit/route.ts",
+      { event: "form.submitted", inFunction: "POST" },
+      "orgId",
+    );
+  });
+  test("lead.created — orgId (agent-fire must use the verified org)", () => {
+    assertEmitOrgId(
+      "src/app/api/v1/forms/submit/route.ts",
+      { event: "lead.created", inFunction: "POST" },
+      "orgId",
+    );
   });
 });
 

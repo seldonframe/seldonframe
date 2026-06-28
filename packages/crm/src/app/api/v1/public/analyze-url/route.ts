@@ -4,6 +4,7 @@ import { NextResponse } from "next/server";
 import { db } from "@/db";
 import { previewSessions } from "@/db/schema";
 import { demoApiBlockedResponse, isDemoReadonly } from "@/lib/demo/server";
+import { assertPublicHttpUrl } from "@/lib/security/ssrf-guard";
 import { checkRateLimit } from "@/lib/utils/rate-limit";
 
 type DetectedTool = { name: string; slug: string; icon: string; autoConnect: boolean };
@@ -355,8 +356,23 @@ export async function POST(request: Request) {
     return withCors(NextResponse.json({ error: "URL is required" }, { status: 400 }));
   }
 
+  // SSRF egress guard (security audit 2026-06-28, FIX 1). This is an
+  // UNAUTHENTICATED endpoint that fetches a caller-supplied URL and
+  // reflects its content. Resolve the hostname and reject any URL that
+  // points (by name or DNS) at a loopback/private/link-local/metadata
+  // address before we ever open the socket. On reject we return a flat
+  // 400 without leaking which check failed (don't help an attacker map
+  // the internal network).
+  let safeUrl: string;
   try {
-    const response = await fetch(cleanUrl, {
+    const vetted = await assertPublicHttpUrl(cleanUrl);
+    safeUrl = vetted.url.toString();
+  } catch {
+    return withCors(NextResponse.json({ error: "URL not allowed" }, { status: 400 }));
+  }
+
+  try {
+    const response = await fetch(safeUrl, {
       headers: { "User-Agent": "SeldonFrame/1.0 (Business Analysis)" },
       signal: AbortSignal.timeout(10_000),
     });
@@ -371,13 +387,13 @@ export async function POST(request: Request) {
     const markdown = htmlToMarkdown(html).slice(0, MAX_MARKDOWN_CHARS);
     const detectedTools = detectTools(html);
     const themeColor = extractPrimaryColor(html);
-    const businessData = await extractBusinessData(markdown, cleanUrl);
+    const businessData = await extractBusinessData(markdown, safeUrl);
 
     const claimToken = randomUUID();
 
     await db.insert(previewSessions).values({
       token: claimToken,
-      url: cleanUrl,
+      url: safeUrl,
       businessData,
       detectedTools,
       themeColor,

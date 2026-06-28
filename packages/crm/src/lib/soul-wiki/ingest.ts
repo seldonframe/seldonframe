@@ -1,3 +1,5 @@
+import { assertPublicHttpUrl, SsrfBlockedError } from "@/lib/security/ssrf-guard";
+
 type IngestInput = {
   type: "url" | "youtube" | "text" | "testimonial";
   url?: string;
@@ -16,7 +18,15 @@ export async function ingestSource(
         throw new Error("URL is required");
       }
 
-      const response = await fetch(url);
+      // SSRF egress guard (security audit 2026-06-28, FIX 2). The
+      // ingested URL is tenant-controlled and its body is returned in
+      // `rawContent`, so an attacker could read internal endpoints.
+      // Resolve + reject loopback/private/link-local/metadata targets
+      // before opening the socket; throw a generic message (the route
+      // maps a throw to a 400 "URL not allowed").
+      const safe = await assertSafeIngestUrl(url);
+
+      const response = await fetch(safe);
       if (!response.ok) {
         throw new Error(`Failed to fetch URL (${response.status})`);
       }
@@ -41,6 +51,12 @@ export async function ingestSource(
       if (!url) {
         throw new Error("YouTube URL is required");
       }
+
+      // SSRF guard on the tenant-supplied URL (FIX 2). The transcript
+      // fetch itself hits a fixed third-party host, but we still vet the
+      // input URL so this branch can't be used to smuggle an internal
+      // address (and to keep both branches uniformly guarded).
+      await assertSafeIngestUrl(url);
 
       const videoId = extractYouTubeId(url);
       const transcript = await fetchYouTubeTranscript(videoId);
@@ -91,6 +107,24 @@ export async function ingestSource(
 
     default:
       throw new Error(`Unknown source type: ${String((input as { type?: unknown }).type ?? "")}`);
+  }
+}
+
+/**
+ * Vet a tenant-supplied ingest URL through the shared SSRF guard. Returns
+ * the normalized safe URL string on success. On any rejection, throws an
+ * Error with a generic "URL not allowed" message — the ingest route maps a
+ * throw to a 400 without leaking which check failed.
+ */
+async function assertSafeIngestUrl(url: string): Promise<string> {
+  try {
+    const vetted = await assertPublicHttpUrl(url);
+    return vetted.url.toString();
+  } catch (err) {
+    if (err instanceof SsrfBlockedError) {
+      throw new Error("URL not allowed");
+    }
+    throw err;
   }
 }
 

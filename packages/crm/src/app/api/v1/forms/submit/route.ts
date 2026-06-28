@@ -7,6 +7,11 @@ import { assertWritable, demoApiBlockedResponse, isDemoReadonly } from "@/lib/de
 import { emitSeldonEvent } from "@/lib/events/bus";
 import { trackEvent } from "@/lib/analytics/track";
 import { logBrainEvent } from "@/lib/analytics/brain";
+import { resolveSubmitOrg } from "@/lib/forms/resolve-submit-org";
+import {
+  resolveWorkspaceSlugFromRequest,
+  resolveWorkspaceSlugFromRequestWithCustomDomains,
+} from "@/lib/workspace/host-to-slug";
 
 type SubmitBody = {
   formName?: string;
@@ -58,6 +63,28 @@ function calculateScore(data: Record<string, unknown>) {
   return { totalScore, scoredFields };
 }
 
+/**
+ * Resolve the workspace org id from the VERIFIED request host — the
+ * `<slug>.app.seldonframe.com` subdomain or a verified custom domain in
+ * workspace_domains. Returns null when the host doesn't map to a workspace
+ * (e.g. the bare app domain, or an in-dashboard editor preview). Mirrors the
+ * host-resolution in /api/v1/public/intake so the public landing form keeps
+ * working: those pages are served on the workspace subdomain, so the host
+ * resolves to the same org the page was rendered for.
+ */
+async function resolveOrgIdFromRequestHost(request: Request): Promise<string | null> {
+  const customDomainSlug = await resolveWorkspaceSlugFromRequestWithCustomDomains(request);
+  const slug = customDomainSlug || resolveWorkspaceSlugFromRequest(request);
+  if (!slug) return null;
+
+  const [org] = await db
+    .select({ id: organizations.id })
+    .from(organizations)
+    .where(eq(organizations.slug, slug))
+    .limit(1);
+  return org?.id ?? null;
+}
+
 export async function POST(request: Request) {
   if (isDemoReadonly()) {
     return demoApiBlockedResponse();
@@ -67,11 +94,44 @@ export async function POST(request: Request) {
 
   const body = (await request.json()) as SubmitBody;
   const data = body.data && typeof body.data === "object" ? body.data : {};
-  const orgId = body.orgId || (await getOrgId());
 
-  if (!orgId) {
-    return NextResponse.json({ error: "Missing orgId" }, { status: 400 });
+  // ------------------------------------------------------------------
+  // Authoritative-org resolution (security audit 2026-06-28, FIX 3).
+  //
+  // This is a PUBLIC route that writes a contact AND emits
+  // `lead.created` (which fires the org's speed-to-lead agent on its
+  // own Twilio/Resend creds). The previous `body.orgId || getOrgId()`
+  // trusted a caller-supplied org id, letting any unauthenticated
+  // caller write into / bill another tenant.
+  //
+  // The authority is now the VERIFIED request host (mirrors
+  // /api/v1/public/intake) or an authenticated operator session — never
+  // a raw body.orgId. body.orgId is only honored as a confirmation that
+  // must MATCH the authority (the legit Puck landing form's body.orgId
+  // always equals the org its subdomain resolves to). No verified org →
+  // reject (no write, no emit). See resolveSubmitOrg for the decision.
+  // ------------------------------------------------------------------
+  const hostOrgId = await resolveOrgIdFromRequestHost(request);
+  const sessionOrgId = hostOrgId ? null : await getOrgId();
+  const bodyOrgId = typeof body.orgId === "string" ? body.orgId : null;
+
+  const resolved = resolveSubmitOrg({ hostOrgId, sessionOrgId, bodyOrgId });
+  if (!resolved.ok) {
+    console.error(
+      JSON.stringify({
+        event: "forms_submit_rejected",
+        reason: resolved.reason,
+        host_header: request.headers.get("host"),
+        x_forwarded_host: request.headers.get("x-forwarded-host"),
+        body_org_present: Boolean(bodyOrgId),
+      }),
+    );
+    // Generic message — don't reveal whether the org exists or which
+    // check failed.
+    return NextResponse.json({ error: "Form submission not allowed." }, { status: 403 });
   }
+
+  const orgId = resolved.orgId;
 
   const formName = String(body.formName ?? "Puck Form");
   const { totalScore: score, scoredFields } = calculateScore(data);
