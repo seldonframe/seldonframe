@@ -165,6 +165,21 @@ export function ListingActionsClient({
   }, [rentalKey]);
 
   const isFree = agent.priceCents <= 0;
+  // A non-one-time model carries its own label ("$29/mo", "$2 per call", "$10
+  // per booking"). Split it into the big amount + the small unit suffix so the
+  // sidebar shows the true model — not a hardcoded "per month" for every paid
+  // agent. Falls back to the one-time "$N" + "per month" when there's no
+  // override (onetime/free), preserving the original design.
+  const override = agent.priceLabelOverride?.trim();
+  const split = override ? splitPriceLabel(override) : null;
+  const bigAmount = isFree ? "Free" : split ? split.amount : `$${Math.round(agent.priceCents / 100)}`;
+  const unitSuffix = isFree ? "to install & run" : split ? split.suffix : "per month";
+  // Recurring (monthly) keeps the "billed monthly" reassurance; one-time / per-
+  // usage / per-outcome get a neutral line that doesn't over-promise a cadence.
+  const isMonthlyOverride = override ? /\/mo\b/.test(override) : false;
+  const paidBlurb = isMonthlyOverride
+    ? "Billed monthly. Cancel anytime — the agent keeps everything it learned."
+    : "Cancel anytime — the agent keeps everything it learned, running on your own workspace and keys.";
 
   return (
     <>
@@ -179,14 +194,14 @@ export function ListingActionsClient({
       >
         <div style={{ display: "flex", alignItems: "baseline", gap: 8 }}>
           <span style={{ fontSize: 30, fontWeight: 700, letterSpacing: "-0.02em", color: priceColor(agent.priceCents), fontFamily: MKT.fontMono }}>
-            {isFree ? "Free" : `$${Math.round(agent.priceCents / 100)}`}
+            {bigAmount}
           </span>
-          <span style={{ fontSize: 14, color: "rgba(34,29,23,0.5)" }}>{isFree ? "to install & run" : "per month"}</span>
+          <span style={{ fontSize: 14, color: "rgba(34,29,23,0.5)" }}>{unitSuffix}</span>
         </div>
         <p style={{ margin: "6px 0 18px", fontSize: 13.5, color: "rgba(34,29,23,0.58)", lineHeight: 1.45 }}>
           {isFree
             ? "No card required. Install it and it starts working in your Studio."
-            : "Billed monthly. Cancel anytime — the agent keeps everything it learned."}
+            : paidBlurb}
         </p>
 
         <button
@@ -378,6 +393,19 @@ const mcpLabel = {
   color: "rgba(34,29,23,0.42)",
   marginBottom: 8,
 } as const;
+
+/**
+ * Split a model price label ("$29/mo", "$2 per call", "$10 per booking",
+ * "$49 one-time") into the big dollar amount + the small unit suffix the sidebar
+ * renders side by side. The amount is the leading "$NN"; everything after is the
+ * suffix ("/mo", "per call", "per booking", "one-time"). Falls back to the whole
+ * label as the amount with no suffix if it doesn't start with "$".
+ */
+function splitPriceLabel(label: string): { amount: string; suffix: string } {
+  const m = label.match(/^(\$[\d,.]+)\s*(.*)$/);
+  if (!m) return { amount: label, suffix: "" };
+  return { amount: m[1], suffix: m[2].trim() };
+}
 
 function Assurance({ icon, text }: { icon: "check" | "shield"; text: string }): ReactElement {
   return (

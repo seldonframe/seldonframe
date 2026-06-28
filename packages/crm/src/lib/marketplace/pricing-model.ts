@@ -190,3 +190,113 @@ export function normalizePricingForPersist(input: PricingInput): PricingPersist 
 
   return base;
 }
+
+// ─── storefront READ decision (the bug fix) ──────────────────────────────────
+//
+// The persisted marketplace_listings columns the storefront needs to price a
+// listing. A non-`onetime` model keeps `price` at 0 and carries its amount in
+// the matching *_cents column — so reading `price` alone makes a $29/mo listing
+// look free. This is the SAME column set normalizePricingForPersist writes.
+
+/** The pricing columns of a marketplace_listings row, as the storefront reads
+ *  them. Every field is optional so partial rows (the curated starter rows, a
+ *  pre-migration DB, the seed catalog) read as a plain one-time listing.
+ *  `priceModel` may be absent/NULL on legacy rows → coerced to onetime. */
+export type StorefrontPricingRow = {
+  /** The legacy one-time install price column (cents). Source of truth for the
+   *  `onetime` model; 0 for the others. */
+  price?: number | null;
+  priceModel?: PriceModel | string | null;
+  monthlyPriceCents?: number | null;
+  perCallPriceCents?: number | null;
+  perOutcomePriceCents?: number | null;
+  outcomeType?: OutcomeType | string | null;
+};
+
+/** What the storefront should display for a listing's price. */
+export type StorefrontPrice = {
+  /** The chargeable amount for the SELECTED model, in cents (0 when free/unset).
+   *  Drives the sidebar "$X / per month" and the schema.org offers.price. */
+  priceCents: number;
+  /** The human label ("Free", "$29/mo", "$2 per call", "$49 one-time"). */
+  label: string;
+  /** Same as `label`, but UNDEFINED for one-time/free so the card keeps using
+   *  its own priceLabel(priceCents) derivation (avoids double-formatting). Set
+   *  only for the non-one-time models that priceCents alone can't express. */
+  labelOverride: string | undefined;
+  /** True when the listing charges anything under its selected model. */
+  isPaid: boolean;
+};
+
+/**
+ * Resolve the storefront price (cents + label) for a listing from its persisted
+ * pricing columns. Pure. The single fix for the "$29/mo shows Free" bug: it
+ * reads the SELECTED model's column, not just `price`.
+ *
+ * - onetime  → reads `price` (0 = Free). No override (card derives "$X/mo").
+ * - monthly  → reads monthly_price_cents → "$29/mo".
+ * - per_usage→ reads per_call_price_cents → "$2 per call".
+ * - per_outcome → reads per_outcome_price_cents (+ outcome_type) → "$10 per booking".
+ *
+ * A model whose amount is unset reads "Free"/0 (never "$0/mo") so an in-progress
+ * draft is honest. Unknown/legacy model → onetime (backward compatible).
+ */
+export function storefrontPriceFromRow(row: StorefrontPricingRow): StorefrontPrice {
+  const model = isPriceModel(row.priceModel) ? row.priceModel : "onetime";
+  const pricingInput: PricingInput = {
+    priceModel: model,
+    priceCents: nonNegIntCents(row.price),
+    monthlyPriceCents: row.monthlyPriceCents ?? null,
+    perCallPriceCents: row.perCallPriceCents ?? null,
+    perOutcomePriceCents: row.perOutcomePriceCents ?? null,
+    outcomeType: isOutcomeType(row.outcomeType) ? row.outcomeType : null,
+  };
+
+  const label = priceModelLabel(pricingInput);
+
+  // The chargeable amount for the chosen model (0 for free / unset).
+  const amountForModel = ((): number => {
+    switch (model) {
+      case "onetime":
+        return nonNegIntCents(row.price);
+      case "monthly":
+        return nonNegIntCents(row.monthlyPriceCents);
+      case "per_usage":
+        return nonNegIntCents(row.perCallPriceCents);
+      case "per_outcome":
+        return nonNegIntCents(row.perOutcomePriceCents);
+      default:
+        return nonNegIntCents(row.price);
+    }
+  })();
+
+  const isPaid = amountForModel > 0;
+  // Only the non-one-time models need an explicit override; for onetime/free the
+  // card's priceLabel(priceCents) already produces the right thing.
+  const labelOverride = model === "onetime" ? undefined : isPaid ? label : undefined;
+
+  return { priceCents: amountForModel, label, labelOverride, isPaid };
+}
+
+// ─── publish/edit GATE decision ──────────────────────────────────────────────
+
+/**
+ * The publish/edit gate, extracted pure so the seller action, the publish route,
+ * and tests all agree. A free listing always goes live (price 0, no Connect). A
+ * paid listing goes live ONLY when the seller's Stripe Connect is ready (charges
+ * enabled); otherwise it is saved as a draft and the UI is told to prompt the
+ * connect flow (`needsConnect`). This is the money-safe fallback: a paid agent
+ * without Stripe stays unpublished rather than charging through an unconfigured
+ * account.
+ */
+export function resolveListingPublishState(input: {
+  isPaid: boolean;
+  connectReady: boolean;
+}): { isPublished: boolean; needsConnect: boolean } {
+  if (!input.isPaid) {
+    return { isPublished: true, needsConnect: false };
+  }
+  return input.connectReady
+    ? { isPublished: true, needsConnect: false }
+    : { isPublished: false, needsConnect: true };
+}

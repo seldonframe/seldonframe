@@ -38,6 +38,7 @@ import {
 import {
   validateListingPricing,
   normalizePricingForPersist,
+  resolveListingPublishState,
   isPriceModel,
   isOutcomeType,
   type PriceModel,
@@ -284,7 +285,10 @@ export async function publishOrUpdateAgentListingAction(input: {
     (pricing.perCallPriceCents ?? 0) > 0 ||
     (pricing.perOutcomePriceCents ?? 0) > 0;
   const connectReady = connect.ready && Boolean(accountId);
-  const isPublished = !isPaid || connectReady;
+  // Single source of truth for the publish gate (TDD'd in storefront-pricing
+  // spec): free → live; paid + Stripe-ready → live with price; paid + no Stripe
+  // → saved as draft + needs_connect.
+  const { isPublished } = resolveListingPublishState({ isPaid, connectReady });
 
   const existing = await findListingForTemplate(orgId, templateId);
 

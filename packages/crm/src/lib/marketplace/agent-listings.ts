@@ -136,7 +136,20 @@ export type MarketplaceAgentRow = {
   description: string | null;
   niche: string;
   tags: string[];
+  /** The legacy one-time install price (cents). Source of truth ONLY for the
+   *  `onetime` model; 0 for monthly/per_usage/per_outcome (whose amount lives in
+   *  the *_cents columns below). Read the model-aware price via
+   *  storefrontPriceFromRow — reading `price` alone makes a $29/mo listing look
+   *  free (the bug this carries the columns to fix). */
   price: number;
+  // ── pricing MENU columns — optional/backward-compatible. Omitting them (e.g.
+  // the curated starter rows or a pre-migration DB) reads as a plain one-time
+  // listing, so existing callers are unaffected. ──
+  priceModel?: string | null;
+  monthlyPriceCents?: number | null;
+  perCallPriceCents?: number | null;
+  perOutcomePriceCents?: number | null;
+  outcomeType?: string | null;
   agentType: string | null;
   installCount: number;
   rating: number;
@@ -217,6 +230,14 @@ function buildDefaultListAgentsDeps(): ListMarketplaceAgentsDeps {
           niche: marketplaceListings.niche,
           tags: marketplaceListings.tags,
           price: marketplaceListings.price,
+          // Carry the pricing-MENU columns so a monthly/per-usage/per-outcome
+          // listing prices correctly on the storefront (the `price` column is 0
+          // for those models; their amount lives here).
+          priceModel: marketplaceListings.priceModel,
+          monthlyPriceCents: marketplaceListings.monthlyPriceCents,
+          perCallPriceCents: marketplaceListings.perCallPriceCents,
+          perOutcomePriceCents: marketplaceListings.perOutcomePriceCents,
+          outcomeType: marketplaceListings.outcomeType,
           agentType: marketplaceListings.agentType,
           installCount: marketplaceListings.installCount,
           rating: marketplaceListings.rating,

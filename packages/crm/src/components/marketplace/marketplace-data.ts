@@ -12,6 +12,7 @@
 
 import type { MarketplaceIconName } from "./marketplace-icons";
 import type { MarketplaceAgentRow } from "@/lib/marketplace/agent-listings";
+import { storefrontPriceFromRow } from "@/lib/marketplace/pricing-model";
 
 // ─── design tokens (the live marketing palette — keep these hex values exact) ─
 
@@ -194,6 +195,12 @@ export function rowToStorefrontAgent(row: MarketplaceAgentRow): StorefrontAgent 
   const category = nicheToCategory(row.niche);
   const surfaces = surfacesFromTags(row.tags) ?? agentTypeToSurfaces(row.agentType);
   const tagline = (row.description ?? "").trim() || `${row.name} — works 24/7 for your business.`;
+  // Model-aware price: a monthly/per-usage/per-outcome listing carries 0 in the
+  // legacy `price` column, so deriving from `price` alone showed "Free". Read
+  // the SELECTED model's amount + label (the bug fix). priceCents is the
+  // chargeable amount for the model; priceLabelOverride carries the non-one-time
+  // label ("$29/mo") that priceCents alone can't express.
+  const pricing = storefrontPriceFromRow(row);
   return {
     slug: row.slug,
     name: row.name,
@@ -203,7 +210,8 @@ export function rowToStorefrontAgent(row: MarketplaceAgentRow): StorefrontAgent 
     installs: row.installCount ?? 0,
     rating: formatRating(row.rating),
     reviewCount: row.reviewCount ?? 0,
-    priceCents: row.price ?? 0,
+    priceCents: pricing.priceCents,
+    priceLabelOverride: pricing.labelOverride,
     featured: Boolean(row.isFeatured),
     builder: builderFromTags(row.tags) ?? "A SeldonFrame builder",
     verified: true,
