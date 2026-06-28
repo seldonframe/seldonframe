@@ -30,6 +30,10 @@ import type {
   ReportAgentUsageDeps,
   UsageReportSeam,
 } from "./metered-subscription";
+import type {
+  BillingPortalSeam,
+  MarketplacePortalDeps,
+} from "./billing-portal";
 
 /** Read the seller org's Connect status from stripe_connections — the same row
  *  the proposals onboarding + the seller publish gate use. ready when isActive. */
@@ -213,6 +217,24 @@ export function buildUsageReportDeps(): ReportAgentUsageDeps {
   return {
     getUsageReporter,
     env: process.env as Record<string, string | undefined>,
+  };
+}
+
+// ─── P4: buyer billing-portal deps ───────────────────────────────────────────
+
+/** Build the production deps for resolveMarketplacePortalSession. The seller
+ *  account is resolved via the SAME readConnectStatus the checkout uses (the
+ *  customer + subscription live on that connected account). Inert without a
+ *  Stripe key (getStripeClient() → null → the portal helper skips). */
+export function buildMarketplacePortalDeps(returnUrl: string): MarketplacePortalDeps {
+  return {
+    getStripe: () => getStripeClient() as BillingPortalSeam | null,
+    resolveSellerAccountId: async (sellerOrgId: string) => {
+      const status = await readConnectStatus(sellerOrgId);
+      return status.ready ? status.accountId : null;
+    },
+    env: process.env as Record<string, string | undefined>,
+    returnUrl,
   };
 }
 
