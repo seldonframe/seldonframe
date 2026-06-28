@@ -18,6 +18,7 @@ import assert from "node:assert/strict";
 import {
   storefrontPriceFromRow,
   resolveListingPublishState,
+  sellingBannerState,
   type StorefrontPricingRow,
 } from "../../../src/lib/marketplace/pricing-model";
 import { rowToStorefrontAgent } from "../../../src/components/marketplace/marketplace-data";
@@ -207,5 +208,42 @@ describe("resolveListingPublishState", () => {
   test("paid + NO Stripe → NOT published, needsConnect (the safe free fallback)", () => {
     const out = resolveListingPublishState({ isPaid: true, connectReady: false });
     assert.deepEqual(out, { isPublished: false, needsConnect: true });
+  });
+});
+
+// ---------------------------------------------------------------------
+// sellingBannerState — the listing editor's "how selling works" explainer
+// ---------------------------------------------------------------------
+
+describe("sellingBannerState", () => {
+  test("free selected → 'free' (no Stripe needed, no warning) regardless of connect", () => {
+    assert.equal(sellingBannerState({ isPaidSelected: false, connectReady: false }), "free");
+    assert.equal(sellingBannerState({ isPaidSelected: false, connectReady: true }), "free");
+  });
+
+  test("paid + Stripe connected → 'active' (paid pricing is on — Max's case)", () => {
+    assert.equal(sellingBannerState({ isPaidSelected: true, connectReady: true }), "active");
+  });
+
+  test("paid + NOT connected → 'needs_connect' (warn + lists Free until connected)", () => {
+    assert.equal(sellingBannerState({ isPaidSelected: true, connectReady: false }), "needs_connect");
+  });
+
+  test("fail-soft: unknown connect status (treated as false) on a paid price never reads 'active'", () => {
+    // The editor coerces an unknown/failed connect read to connectReady:false,
+    // so the worst case is the neutral 'needs_connect' prompt — never a false
+    // 'active' that would imply payouts are wired when they aren't.
+    assert.equal(sellingBannerState({ isPaidSelected: true, connectReady: false }), "needs_connect");
+  });
+
+  test("parity with the publish gate: 'active' ⇔ the gate would publish a paid listing", () => {
+    for (const connectReady of [true, false]) {
+      const banner = sellingBannerState({ isPaidSelected: true, connectReady });
+      const gate = resolveListingPublishState({ isPaid: true, connectReady });
+      // active exactly when the paid listing goes Live; needs_connect exactly
+      // when it falls back to the free draft.
+      assert.equal(banner === "active", gate.isPublished);
+      assert.equal(banner === "needs_connect", gate.needsConnect);
+    }
   });
 });

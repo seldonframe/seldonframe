@@ -13,14 +13,17 @@
 // SAME connect onboarding entry the proposals flow uses (POST
 // /api/v1/proposals/connect/start) and keep the draft saved.
 //
-// NOTE: the 2% marketplace fee is NOT shown here — it appears ONLY on the
-// earnings dashboard. This surface is about getting listed; the fee is disclosed
-// where the money is shown.
+// A calm, state-aware SellingClarityBanner sits at the top of the panel and
+// explains how selling AGENTS prices + bills (proposals billing was already
+// clear; selling agents wasn't). It names the REAL marketplace fee sourced from
+// MARKETPLACE_FEE_PERCENT (gmv.ts) — the same percent the earnings dashboard
+// shows — so the two surfaces never disagree, and it reacts to the seller's
+// Stripe Connect status (✓ active · ⚠ connect-to-enable · silent when free).
 
 import { useMemo, useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
 import Link from "next/link";
-import { Store, ExternalLink, Eye, Check } from "lucide-react";
+import { Store, ExternalLink, Eye, Check, BadgeCheck, AlertTriangle } from "lucide-react";
 import { AgentCard } from "@/components/marketplace/agent-card";
 import { MarketplaceStyles } from "@/components/marketplace/marketplace-styles";
 import {
@@ -39,9 +42,11 @@ import {
 import {
   OUTCOME_TYPES,
   priceModelLabel,
+  sellingBannerState,
   type OutcomeType,
   type PriceModel,
 } from "@/lib/marketplace/pricing-model";
+import { MARKETPLACE_FEE_PERCENT } from "@/lib/billing/gmv";
 
 type Props = {
   templateId: string;
@@ -135,6 +140,72 @@ function PriceField(props: {
   );
 }
 
+/**
+ * Calm "how selling works" explainer for the listing editor. Always states the
+ * model (free = instant; paid = billed through the seller's connected Stripe,
+ * payouts minus the marketplace fee; buyers run on their own keys). Then ONE
+ * state-aware line driven by `sellingBannerState`:
+ *   - active        → ✓ Stripe connected — paid pricing is active.
+ *   - needs_connect → ⚠ connect Stripe to turn on paid pricing (lists Free until then) + CTA.
+ *   - free          → (no extra line; free is fine).
+ * Mobile-friendly + live tokens (bg-primary/5 · border-border · muted text;
+ * amber only for the warning). Stateless — the connect CTA reuses the parent's
+ * existing startConnect (same POST /api/v1/proposals/connect/start as Proposals).
+ */
+function SellingClarityBanner(props: {
+  connectReady: boolean;
+  isPaidSelected: boolean;
+  onConnect: () => void;
+  connecting: boolean;
+}) {
+  const state = sellingBannerState({
+    connectReady: props.connectReady,
+    isPaidSelected: props.isPaidSelected,
+  });
+
+  return (
+    <div className="rounded-lg border border-border bg-primary/5 p-3 sm:p-4">
+      <p className="text-xs leading-relaxed text-muted-foreground">
+        <span className="font-medium text-foreground">How selling works:</span>{" "}
+        Free agents go live instantly. <span className="font-medium text-foreground">Paid</span>{" "}
+        agents (one-time or monthly) bill the buyer through{" "}
+        <span className="font-medium text-foreground">your connected Stripe</span> — payouts go
+        to you, minus a{" "}
+        <span className="font-medium text-foreground">{MARKETPLACE_FEE_PERCENT}% marketplace fee</span>.
+        Buyers run the agent on <span className="font-medium text-foreground">their own keys</span>{" "}
+        (BYOK).
+      </p>
+
+      {state === "active" ? (
+        <p className="mt-2.5 flex items-center gap-1.5 text-xs font-medium text-emerald-700 dark:text-emerald-400">
+          <BadgeCheck className="size-3.5 shrink-0" aria-hidden />
+          Stripe connected — paid pricing is active.
+        </p>
+      ) : null}
+
+      {state === "needs_connect" ? (
+        <div className="mt-2.5 flex flex-col gap-1.5 border-t border-amber-500/20 pt-2.5 sm:flex-row sm:items-start sm:justify-between sm:gap-3">
+          <p className="flex items-start gap-1.5 text-xs text-amber-800 dark:text-amber-300">
+            <AlertTriangle className="mt-px size-3.5 shrink-0" aria-hidden />
+            <span>
+              Connect Stripe to turn on paid pricing — until then your agent lists as{" "}
+              <span className="font-medium">Free to install</span>.
+            </span>
+          </p>
+          <button
+            type="button"
+            onClick={props.onConnect}
+            disabled={props.connecting}
+            className="shrink-0 self-start whitespace-nowrap text-xs font-medium text-primary hover:underline disabled:opacity-60"
+          >
+            {props.connecting ? "Opening Stripe…" : "Connect Stripe →"}
+          </button>
+        </div>
+      ) : null}
+    </div>
+  );
+}
+
 export function ListOnMarketplace(props: Props) {
   const router = useRouter();
   const existing = props.initialListing;
@@ -198,6 +269,23 @@ export function ListOnMarketplace(props: Props) {
       outcomeType,
     };
   }, [priceMode, onetimeDollars, monthlyDollars, perCallDollars, perOutcomeDollars, outcomeType]);
+
+  // ── selling clarity banner inputs ──
+  // connectReady comes straight from the server prop the editor page wires from
+  // readConnectStatus (via getSellerListingContextAction). Fail-soft: the page
+  // defaults initialConnect to { ready:false } when the context read fails, so
+  // an unknown status reads as not-connected (neutral explainer, never a false
+  // "active"). isPaidSelected mirrors the publish gate's `isPaid`: any model
+  // with a positive amount under the CURRENT selection.
+  const connectReady = props.initialConnect.ready === true;
+  const isPaidSelected = useMemo(
+    () =>
+      pricing.priceCents > 0 ||
+      (pricing.monthlyPriceCents ?? 0) > 0 ||
+      (pricing.perCallPriceCents ?? 0) > 0 ||
+      (pricing.perOutcomePriceCents ?? 0) > 0,
+    [pricing],
+  );
 
   // The human price label the live preview card shows ("$29/mo", "$2 per call",
   // "$10 per booking", "Free", "$49 one-time"). Shared pure helper.
@@ -396,6 +484,14 @@ export function ListOnMarketplace(props: Props) {
       <div className="mt-4 grid grid-cols-1 gap-5 lg:grid-cols-[1fr_320px]">
         {/* ── form ── */}
         <div className="space-y-4">
+          {/* Calm, state-aware explainer: how selling agents prices + bills. */}
+          <SellingClarityBanner
+            connectReady={connectReady}
+            isPaidSelected={isPaidSelected}
+            onConnect={startConnect}
+            connecting={connecting}
+          />
+
           {/* Category */}
           <div className="space-y-1.5">
             <label className="text-xs font-medium text-foreground" htmlFor="mkt-category">

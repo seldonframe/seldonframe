@@ -300,3 +300,29 @@ export function resolveListingPublishState(input: {
     ? { isPublished: true, needsConnect: false }
     : { isPublished: false, needsConnect: true };
 }
+
+// ─── selling clarity banner state ────────────────────────────────────────────
+
+/** Which clarity message the listing editor's "how selling works" banner shows.
+ *  - "free"          → a free price is selected; no Stripe needed, no warning.
+ *  - "active"        → a paid price is selected AND Stripe Connect is ready.
+ *  - "needs_connect" → a paid price is selected but Stripe isn't connected yet
+ *                      (the agent will list as "Free to install" until it is). */
+export type SellingBannerState = "active" | "needs_connect" | "free";
+
+/**
+ * Decide the clarity-banner state from the seller's connect status + whether the
+ * currently-selected pricing is paid. Pure mirror of the publish gate
+ * (`resolveListingPublishState`) for the *explainer* surface: free pricing never
+ * warns; paid pricing reads "active" only when Stripe is connected, otherwise
+ * "needs_connect". Fail-soft: an unknown connect status (treated as
+ * `connectReady:false`) on a paid price degrades to "needs_connect" — the
+ * neutral "connect to turn on paid pricing" prompt, never a false "active".
+ */
+export function sellingBannerState(input: {
+  connectReady: boolean;
+  isPaidSelected: boolean;
+}): SellingBannerState {
+  if (!input.isPaidSelected) return "free";
+  return input.connectReady ? "active" : "needs_connect";
+}
