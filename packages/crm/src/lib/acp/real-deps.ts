@@ -74,8 +74,13 @@ function patchToValues(patch: Partial<AcpStoredSession>): Partial<NewAcpCheckout
   return out;
 }
 
-/** Resolve a slug → AcpResolvedListing (or null). enableCheckout is true only
- *  for PAID agents (price > 0) — free agents are install-via-App, not ACP. */
+/** Resolve a slug → AcpResolvedListing (or null). priceCents is the SELECTED
+ *  model's real price (so a one-time agent charges its real amount, not 0).
+ *  enableCheckout is true ONLY for ONE-TIME priced agents — ACP checkout is
+ *  one-time fiat, so a monthly/per_usage/per_outcome listing is resolvable (it
+ *  appears in the feed) but NOT purchasable here (the handler refuses it with
+ *  item_not_purchasable rather than 0-charging a subscription). Free agents
+ *  install via the App, also not ACP. This mirrors the feed's enable_checkout. */
 async function resolveListing(slug: string): Promise<AcpResolvedListing | null> {
   const listing = await getPublishedAgentListingBySlug(slug);
   if (!listing) return null;
@@ -87,7 +92,9 @@ async function resolveListing(slug: string): Promise<AcpResolvedListing | null> 
     niche: listing.niche,
     sellerOrgId: listing.creatorOrgId,
     isPublished: true, // getPublishedAgentListingBySlug only returns published rows
-    enableCheckout: priceCents > 0,
+    // One-time fiat only: a recurring/metered model is resolvable but not
+    // checkout-able, so ACP never transacts a misrepresented subscription.
+    enableCheckout: listing.priceModel === "onetime" && priceCents > 0,
   };
 }
 

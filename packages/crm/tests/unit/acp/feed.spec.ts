@@ -28,7 +28,8 @@ function row(overrides: Partial<MarketplaceAgentRow> = {}): MarketplaceAgentRow 
 }
 
 describe("buildProductFeed", () => {
-  test("maps a paid agent → enable_checkout true + price block", () => {
+  test("maps a paid ONE-TIME agent → enable_checkout true + price block", () => {
+    // Default row has no priceModel → onetime; price 2500 → checkout-able.
     const feed = buildProductFeed([row({ price: 2500 })]);
     assert.equal(feed.products.length, 1);
     const p = feed.products[0];
@@ -44,13 +45,43 @@ describe("buildProductFeed", () => {
     assert.equal(p.enable_checkout, true);
   });
 
-  test("free agent → enable_checkout false (install via the App, not ACP)", () => {
+  test("explicit one-time $50 → amount 5000 + enable_checkout true", () => {
+    const feed = buildProductFeed([row({ priceModel: "onetime", price: 5000 })]);
+    assert.equal(feed.products[0].price.amount, 5000);
+    assert.equal(feed.products[0].enable_checkout, true);
+  });
+
+  test("THE BUG: a monthly $29 agent shows amount 2900 (not $0) + enable_checkout false", () => {
+    // The exact Seldon Studio listing: monthly model, $29 in monthly_price_cents,
+    // the legacy `price` column 0. The feed must show the REAL 2900 price (so the
+    // agent is discoverable at its true price) but NOT offer a one-time buy that
+    // misrepresents the subscription → enable_checkout false.
+    const feed = buildProductFeed([row({ priceModel: "monthly", monthlyPriceCents: 2900, price: 0 })]);
+    assert.equal(feed.products[0].price.amount, 2900, "real monthly price, not the $0 legacy column");
+    assert.equal(feed.products[0].enable_checkout, false, "recurring → not a one-time ACP buy");
+  });
+
+  test("per_usage paid → real per-call amount + enable_checkout false (metered, not one-time)", () => {
+    const feed = buildProductFeed([row({ priceModel: "per_usage", perCallPriceCents: 200, price: 0 })]);
+    assert.equal(feed.products[0].price.amount, 200);
+    assert.equal(feed.products[0].enable_checkout, false);
+  });
+
+  test("per_outcome paid → real per-outcome amount + enable_checkout false", () => {
+    const feed = buildProductFeed([
+      row({ priceModel: "per_outcome", perOutcomePriceCents: 1000, outcomeType: "booking", price: 0 }),
+    ]);
+    assert.equal(feed.products[0].price.amount, 1000);
+    assert.equal(feed.products[0].enable_checkout, false);
+  });
+
+  test("free agent → amount 0 + enable_checkout false (install via the App, not ACP)", () => {
     const feed = buildProductFeed([row({ price: 0 })]);
     assert.equal(feed.products[0].enable_checkout, false);
     assert.deepEqual(feed.products[0].price, { amount: 0, currency: "usd" });
   });
 
-  test("treats a non-positive / non-finite price as free (checkout disabled)", () => {
+  test("treats a non-positive / non-finite one-time price as free (checkout disabled)", () => {
     const neg = buildProductFeed([row({ price: -5 })]);
     assert.equal(neg.products[0].enable_checkout, false);
     assert.equal(neg.products[0].price.amount, 0);

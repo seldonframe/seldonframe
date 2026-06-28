@@ -115,6 +115,53 @@ describe("storefrontPriceFromRow", () => {
 });
 
 // ---------------------------------------------------------------------
+// ACP checkout-listing RESOLVE contract — getPublishedAgentListingBySlug /
+// real-deps.resolveListing both price the line item via storefrontPriceFromRow
+// (the SELECTED model's column, not the legacy `price`) and gate ACP checkout
+// to ONE-TIME fiat. These tests lock that resolve mapping purely (the DB-backed
+// resolvers are thin wrappers over exactly this decision):
+//   • a one-time agent resolves its REAL amount + is checkout-eligible.
+//   • a monthly/per_usage agent resolves its REAL amount (so the math is never
+//     0) but is NOT checkout-eligible (one-time fiat only).
+// ---------------------------------------------------------------------
+
+describe("ACP checkout-listing resolve (selected-model price + one-time gate)", () => {
+  /** Mirror of the resolve in getPublishedAgentListingBySlug + real-deps: real
+   *  selected-model cents, and enable_checkout only for one-time priced rows. */
+  function resolve(r: StorefrontPricingRow): { priceCents: number; enableCheckout: boolean } {
+    const priced = storefrontPriceFromRow(r);
+    const model = typeof r.priceModel === "string" ? r.priceModel : "onetime";
+    return { priceCents: priced.priceCents, enableCheckout: model === "onetime" && priced.priceCents > 0 };
+  }
+
+  test("a one-time $50 agent resolves the REAL amount (5000) + enable_checkout true", () => {
+    const out = resolve(row({ priceModel: "onetime", price: 5000 }));
+    assert.equal(out.priceCents, 5000, "the checkout math is the real one-time price, not 0");
+    assert.equal(out.enableCheckout, true);
+  });
+
+  test("a monthly $29 agent resolves the REAL amount (2900) but enable_checkout false", () => {
+    // If it somehow reached checkout it would charge the real amount — but the
+    // gate refuses it (one-time fiat only), so ACP never 0-charges a sub.
+    const out = resolve(row({ priceModel: "monthly", monthlyPriceCents: 2900, price: 0 }));
+    assert.equal(out.priceCents, 2900, "real monthly price resolved (not the $0 legacy column)");
+    assert.equal(out.enableCheckout, false);
+  });
+
+  test("a per_usage paid agent resolves the real per-call amount + enable_checkout false", () => {
+    const out = resolve(row({ priceModel: "per_usage", perCallPriceCents: 200, price: 0 }));
+    assert.equal(out.priceCents, 200);
+    assert.equal(out.enableCheckout, false);
+  });
+
+  test("a free one-time agent resolves 0 + enable_checkout false", () => {
+    const out = resolve(row({ priceModel: "onetime", price: 0 }));
+    assert.equal(out.priceCents, 0);
+    assert.equal(out.enableCheckout, false);
+  });
+});
+
+// ---------------------------------------------------------------------
 // resolveListingPublishState — the publish/edit gate decision
 // ---------------------------------------------------------------------
 

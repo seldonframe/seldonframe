@@ -265,11 +265,16 @@ export async function listMarketplaceAgentsFromDb(
 
 /** A single published kind='agent' listing resolved for ACP checkout: the
  *  fields needed to price a line item + attribute the (recorded) fee to the
- *  creator org. `creatorOrgId` is the agent's owner (the seller). */
+ *  creator org. `creatorOrgId` is the agent's owner (the seller). `priceCents`
+ *  is the SELECTED-model price (the real chargeable amount — NOT the legacy
+ *  `price` column, which is 0 for monthly/per_usage/per_outcome). `priceModel`
+ *  lets the caller gate one-time-only checkout (ACP transacts one-time fiat). */
 export type AgentListingForCheckout = {
   slug: string;
   name: string;
   priceCents: number;
+  /** The listing's chosen pricing model (onetime → ACP-checkout-eligible). */
+  priceModel: string;
   niche: string;
   creatorOrgId: string;
 };
@@ -278,8 +283,13 @@ export type AgentListingForCheckout = {
  * Resolve ONE published kind='agent' listing by slug for ACP checkout. Returns
  * null when the slug doesn't resolve to a published agent listing. Lazy-imports
  * the db so unit tests that don't hit this never touch Postgres (the ACP handler
- * is tested with a fake resolver). `price` is the listing's one-time price in
- * cents; the caller decides checkout-eligibility (price > 0 → enable_checkout).
+ * is tested with a fake resolver).
+ *
+ * `priceCents` is the SELECTED model's price (via storefrontPriceFromRow), so a
+ * one-time agent that IS checked out is charged its real price — not 0. It reads
+ * the pricing-MENU columns (mirroring the storefront fix); the legacy `price`
+ * column alone would read 0 for a monthly/per_usage/per_outcome listing. The
+ * caller gates checkout-eligibility (onetime + price > 0 → enable_checkout).
  */
 export async function getPublishedAgentListingBySlug(
   slug: string,
@@ -287,11 +297,20 @@ export async function getPublishedAgentListingBySlug(
   const { db } = await import("@/db");
   const { marketplaceListings } = await import("@/db/schema/marketplace");
   const { and, eq } = await import("drizzle-orm");
+  const { storefrontPriceFromRow } = await import("@/lib/marketplace/pricing-model");
   const [row] = await db
     .select({
       slug: marketplaceListings.slug,
       name: marketplaceListings.name,
       price: marketplaceListings.price,
+      // The pricing-MENU columns: a monthly/per_usage/per_outcome listing keeps
+      // `price` at 0 and carries its amount here — read them so the resolved
+      // priceCents is the real chargeable amount, not 0.
+      priceModel: marketplaceListings.priceModel,
+      monthlyPriceCents: marketplaceListings.monthlyPriceCents,
+      perCallPriceCents: marketplaceListings.perCallPriceCents,
+      perOutcomePriceCents: marketplaceListings.perOutcomePriceCents,
+      outcomeType: marketplaceListings.outcomeType,
       niche: marketplaceListings.niche,
       creatorOrgId: marketplaceListings.creatorOrgId,
       kind: marketplaceListings.kind,
@@ -300,10 +319,19 @@ export async function getPublishedAgentListingBySlug(
     .where(and(eq(marketplaceListings.slug, slug), eq(marketplaceListings.isPublished, true)))
     .limit(1);
   if (!row || row.kind !== "agent") return null;
+  const priced = storefrontPriceFromRow({
+    price: row.price,
+    priceModel: row.priceModel,
+    monthlyPriceCents: row.monthlyPriceCents,
+    perCallPriceCents: row.perCallPriceCents,
+    perOutcomePriceCents: row.perOutcomePriceCents,
+    outcomeType: row.outcomeType,
+  });
   return {
     slug: row.slug,
     name: row.name,
-    priceCents: row.price ?? 0,
+    priceCents: priced.priceCents,
+    priceModel: row.priceModel ?? "onetime",
     niche: row.niche,
     creatorOrgId: row.creatorOrgId,
   };
