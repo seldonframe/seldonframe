@@ -1,14 +1,23 @@
 // #139 P2/P3 — the SHARED recurring-Checkout seam + deps.
 //
 // Both the monthly subscription (P2) and the metered subscription (P3) drive the
-// same `mode:"subscription"` Stripe Checkout with the same 5% application-fee
-// percent + seller transfer destination + idempotency + persisted purchase row.
-// They differ ONLY in the recurring Price they bill (a flat monthly licensed
-// price vs a metered usage price). So the DI'd seam + the deps + the result type
-// live here once and both creators import them.
+// same `mode:"subscription"` Stripe Checkout, created as a DIRECT charge ON the
+// seller's connected account ({ stripeAccount }) with the same 5% application-fee
+// percent + idempotency + persisted purchase row — and NO transfer_data (a direct
+// charge already settles to the seller, who BEARS Stripe's processing fee so SF's
+// 5% arrives clean). They differ ONLY in the recurring Price they bill (a flat
+// monthly licensed price vs a metered usage price). So the DI'd seam + the deps +
+// the result type live here once and both creators import them.
 //
-// MONEY-SAFETY: the seam is narrow (just the three calls the creators make), so
-// the unit tests fake it with no network / no real Stripe key / no db. The real
+// The recurring Price + Meter must live on the SAME (connected) account as the
+// session, so resolveRecurringPrice takes the seller account id and creates them
+// there (see recurring-price.ts). Trade-off (correct for a marketplace): the
+// seller is merchant of record + bears dispute/refund liability + settlement
+// currency; the customer + subscription + invoices live on the connected account
+// → the webhook receives CONNECT events (event.account).
+//
+// MONEY-SAFETY: the seam is narrow (just the calls the creators make), so the
+// unit tests fake it with no network / no real Stripe key / no db. The real
 // production deps (real-deps.ts) wrap the live Stripe client + the
 // stripe_connections read + createPurchase behind exactly this seam.
 
@@ -41,14 +50,14 @@ export type RecurringPriceRef = {
   meterId?: string | null;
 };
 
-/** Params for create-or-lookup of a recurring Price on the PLATFORM account. No
- *  connected-account id: the price + meter live on the platform (matching the
- *  platform Checkout session); the seller destination is applied at the session
- *  level via subscription_data.transfer_data, not on the price. */
+/** Params for create-or-lookup of a recurring Price on the SELLER's CONNECTED
+ *  account. The price + meter MUST live on the same (connected) account as the
+ *  direct-charge Checkout session that references them; the seller bears Stripe's
+ *  fee + SF takes the % application fee at the session level. */
 export type ResolveRecurringPriceParams = {
   /** The listing id (used to make the lookup_key stable + idempotent). */
   listingId: string;
-  /** The listing name (the product label on the platform account). */
+  /** The listing name (the product label on the connected account). */
   listingName: string;
   /** The flat unit amount in cents (per month for licensed; per unit for metered). */
   unitAmountCents: number;
@@ -56,6 +65,9 @@ export type ResolveRecurringPriceParams = {
   interval: "month";
   /** licensed = flat monthly; metered = usage-based. */
   usageType: "licensed" | "metered";
+  /** The seller's Stripe Connect account id (acct_…). The price + meter are
+   *  created on THIS account (a direct charge), matching the session. */
+  connectAccountId: string;
 };
 
 /** The narrow Stripe seam the recurring creators call. Typed against the real
@@ -71,8 +83,9 @@ export type SubscriptionCheckoutSeam = {
       ): Promise<Pick<Stripe.Checkout.Session, "id" | "url">>;
     };
   };
-  /** Create-or-lookup the recurring Price on the seller's connected account.
-   *  Real impl uses a stable lookup_key so a re-list reuses one price. */
+  /** Create-or-lookup the recurring Price on the seller's connected account
+   *  (params.connectAccountId). Real impl uses a stable lookup_key so a re-list
+   *  reuses one price. */
   resolveRecurringPrice(params: ResolveRecurringPriceParams): Promise<RecurringPriceRef>;
 };
 

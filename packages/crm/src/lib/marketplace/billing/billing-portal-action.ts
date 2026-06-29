@@ -12,7 +12,7 @@
 import { getOrgId } from "@/lib/auth/helpers";
 import { getPurchase } from "./purchases-store";
 import { resolveMarketplacePortalSession } from "./billing-portal";
-import { buildMarketplacePortalDeps } from "./real-deps";
+import { buildMarketplacePortalDeps, readConnectStatus } from "./real-deps";
 
 export type CreateMarketplaceBillingPortalResult =
   | { ok: true; url: string }
@@ -39,8 +39,16 @@ export async function createMarketplaceBillingPortalAction(input: {
   const baseUrl = process.env.NEXT_PUBLIC_APP_URL?.trim() || "https://app.seldonframe.com";
   const returnUrl = `${baseUrl}/marketplace/${purchase.slug}`;
 
+  // The subscription is a DIRECT charge — the buyer's customer lives on the
+  // SELLER's connected account, so the portal must run there. Resolve the seller's
+  // acct_… from the same stripe_connections row the checkout used.
+  const sellerConnect = await readConnectStatus(purchase.sellerOrgId);
+
   const result = await resolveMarketplacePortalSession(
-    { stripeCustomerId: purchase.stripeCustomerId },
+    {
+      stripeCustomerId: purchase.stripeCustomerId,
+      sellerConnectAccountId: sellerConnect.accountId,
+    },
     buildMarketplacePortalDeps(returnUrl),
   );
 

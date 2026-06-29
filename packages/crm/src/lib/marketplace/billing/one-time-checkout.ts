@@ -1,13 +1,22 @@
-// #139 P1 — one-time agent Checkout on the SELLER's connected account.
+// #139 P1 — one-time agent Checkout as a DIRECT charge on the SELLER's account.
 //
-// THE PROOF: a Stripe Connect Checkout Session (mode:"payment") for a `onetime`
-// paid marketplace agent, with the 5% MARKETPLACE_FEE_PERCENT as the
-// application_fee_amount and the remainder routed to the seller via
-// transfer_data.destination — plus an idempotency key and a persisted
-// marketplace_purchases row (status:'pending'). This MIRRORS the existing
-// installAgentListingAction Stripe call (lib/marketplace/actions.ts) but adds the
-// money-safety gating, the idempotency key, the resolved stripeMode, and the
-// settlement row that today's free-install path lacks.
+// THE PROOF: a Stripe Checkout Session (mode:"payment") created ON THE SELLER's
+// connected account ({ stripeAccount }) for a `onetime` paid marketplace agent,
+// with the 5% MARKETPLACE_FEE_PERCENT as the application_fee_amount — and NO
+// transfer_data (a DIRECT charge: the money already lands on the connected
+// account, the seller is the settlement merchant and BEARS Stripe's processing
+// fee, and SF's application fee arrives clean). Plus an idempotency key and a
+// persisted marketplace_purchases row (status:'pending').
+//
+// WHY direct (not destination): on a destination charge (transfer_data) the
+// PLATFORM balance is debited for Stripe's processing fee, so SF's 5% goes
+// net-negative at low prices ($1 sale: 5¢ fee − 34¢ processing). A direct charge
+// debits the processing fee from the SELLER's balance instead, leaving the 5%
+// application fee intact. Trade-off (correct for a marketplace): the seller is
+// the merchant of record + bears dispute/refund liability + the settlement
+// currency. The customer + charge now live on the connected account, so the
+// webhook receives CONNECT events (event.account) and reconciles by the same
+// checkout id.
 //
 // ─────────────────────────────────────────────────────────────────────────────
 // MONEY-SAFETY (non-negotiable):
@@ -159,9 +168,10 @@ export async function createOneTimeAgentCheckout(
   const feeCents = computeMarketplaceFeeCents(amountCents);
   const idempotencyKey = `mkt-onetime-${buyerOrgId}-${listing.id}-${utcDayKey(deps.now())}`;
 
-  // 6) Create the Checkout Session on the SELLER's connected account. Mirrors the
-  //    existing installAgentListingAction params: mode payment, one line item at
-  //    the real price, the 5% application fee, transfer_data.destination = seller.
+  // 6) Create the Checkout Session as a DIRECT charge ON the SELLER's connected
+  //    account ({ stripeAccount: destination }): mode payment, one line item at
+  //    the real price, the 5% application fee, and NO transfer_data (the money
+  //    already lands on the connected account — the seller bears Stripe's fee).
   const session = await stripe.checkout.sessions.create(
     {
       mode: "payment",
@@ -181,8 +191,9 @@ export async function createOneTimeAgentCheckout(
         },
       ],
       payment_intent_data: {
+        // The platform's 5% cut, debited from the direct charge on the seller's
+        // account. No transfer_data: a direct charge already settles to the seller.
         application_fee_amount: feeCents,
-        transfer_data: { destination },
       },
       metadata: {
         // Distinct from the legacy soul_purchase metadata so the P4 webhook can
@@ -194,7 +205,9 @@ export async function createOneTimeAgentCheckout(
         sellerOrgId,
       },
     },
-    { idempotencyKey },
+    // DIRECT charge: the session is created on the connected account. This is the
+    // mechanism that makes the seller the settlement merchant + fee-bearer.
+    { idempotencyKey, stripeAccount: destination },
   );
 
   // 7) Persist the pending settlement row with the resolved mode + the checkout id.

@@ -150,19 +150,22 @@ describe("createMeteredAgentSubscription — happy path", () => {
     assert.equal(priceCalls[0].unitAmountCents, 200);
     assert.equal(priceCalls[0].interval, "month");
 
+    // The metered price was resolved ON the seller's CONNECTED account.
+    assert.equal(priceCalls[0].connectAccountId, "acct_seller_u");
+
     assert.equal(calls.length, 1);
     const { params, options } = calls[0];
     assert.equal(params.mode, "subscription");
-    // PLATFORM destination charge: created on the PLATFORM (NO { stripeAccount }).
-    assert.equal(options?.stripeAccount, undefined);
+    // DIRECT charge: created ON the seller's connected account ({ stripeAccount }).
+    assert.equal(options?.stripeAccount, "acct_seller_u");
     // A metered line item carries the price, NO quantity (Stripe bills usage).
     assert.equal(params.line_items?.length, 1);
     assert.equal(params.line_items?.[0]?.price, "price_metered_1");
     assert.equal(params.line_items?.[0]?.quantity, undefined);
 
-    // 5% fee % + seller destination.
+    // 5% fee % — NO transfer_data (a direct charge already settles to the seller).
     assert.equal(params.subscription_data?.application_fee_percent, 5);
-    assert.equal(params.subscription_data?.transfer_data?.destination, "acct_seller_u");
+    assert.equal(params.subscription_data?.transfer_data, undefined);
 
     // Idempotency + metadata + the meter id surfaced.
     assert.equal(options?.idempotencyKey, "mkt-metered-org-buyer-u-listing-u1");
@@ -259,11 +262,13 @@ describe("createMeteredAgentSubscription — money-safe skips", () => {
 
 // ─── reportAgentUsage ────────────────────────────────────────────────────────
 
+type UsagePush = { subscriptionItemId: string; connectAccountId: string; quantity: number; idempotencyKey: string };
+
 function makeUsageDeps(over: Partial<ReportAgentUsageDeps> & { throws?: boolean; nullReporter?: boolean } = {}): {
   deps: ReportAgentUsageDeps;
-  pushes: Array<{ subscriptionItemId: string; quantity: number; idempotencyKey: string }>;
+  pushes: UsagePush[];
 } {
-  const pushes: Array<{ subscriptionItemId: string; quantity: number; idempotencyKey: string }> = [];
+  const pushes: UsagePush[] = [];
   const reporter: UsageReportSeam = {
     async reportUsage(input) {
       if (over.throws) throw new Error("stripe boom");
@@ -278,20 +283,27 @@ function makeUsageDeps(over: Partial<ReportAgentUsageDeps> & { throws?: boolean;
 }
 
 describe("reportAgentUsage", () => {
-  test("pushes ONE usage record with the quantity + idempotency key", async () => {
+  test("pushes ONE usage record with the quantity + connect account + idempotency key", async () => {
     const { deps, pushes } = makeUsageDeps();
     const result = await reportAgentUsage(
-      { subscriptionItemId: "si_1", quantity: 1, idempotencyKey: "key-1" },
+      { subscriptionItemId: "si_1", connectAccountId: "acct_seller_u", quantity: 1, idempotencyKey: "key-1" },
       deps,
     );
     assert.equal(result.ok, true);
     assert.equal(pushes.length, 1);
-    assert.deepEqual(pushes[0], { subscriptionItemId: "si_1", quantity: 1, idempotencyKey: "key-1" });
+    // The connect account flows through so the meter event fires on the seller's
+    // connected account (a direct-charge metered subscription).
+    assert.deepEqual(pushes[0], {
+      subscriptionItemId: "si_1",
+      connectAccountId: "acct_seller_u",
+      quantity: 1,
+      idempotencyKey: "key-1",
+    });
   });
 
   test("NO-OP when the flag is OFF (no push)", async () => {
     const { deps, pushes } = makeUsageDeps({ env: {} });
-    const result = await reportAgentUsage({ subscriptionItemId: "si_1", quantity: 1, idempotencyKey: "k" }, deps);
+    const result = await reportAgentUsage({ subscriptionItemId: "si_1", connectAccountId: "acct_seller_u", quantity: 1, idempotencyKey: "k" }, deps);
     assert.equal(result.ok, false);
     if (result.ok) throw new Error("unreachable");
     assert.equal(result.reason, "billing_disabled");
@@ -300,21 +312,26 @@ describe("reportAgentUsage", () => {
 
   test("NO-OP when no Stripe key (reporter null)", async () => {
     const { deps, pushes } = makeUsageDeps({ nullReporter: true });
-    const result = await reportAgentUsage({ subscriptionItemId: "si_1", quantity: 1, idempotencyKey: "k" }, deps);
+    const result = await reportAgentUsage({ subscriptionItemId: "si_1", connectAccountId: "acct_seller_u", quantity: 1, idempotencyKey: "k" }, deps);
     assert.equal(result.ok, false);
     if (result.ok) throw new Error("unreachable");
     assert.equal(result.reason, "stripe_unconfigured");
     assert.equal(pushes.length, 0);
   });
 
-  test("NO-OP when no subscription item / non-positive quantity", async () => {
+  test("NO-OP when no subscription item / no connect account / non-positive quantity", async () => {
     const { deps, pushes } = makeUsageDeps();
-    const noItem = await reportAgentUsage({ subscriptionItemId: "", quantity: 1, idempotencyKey: "k" }, deps);
+    const noItem = await reportAgentUsage({ subscriptionItemId: "", connectAccountId: "acct_seller_u", quantity: 1, idempotencyKey: "k" }, deps);
     assert.equal(noItem.ok, false);
     if (noItem.ok) throw new Error("unreachable");
     assert.equal(noItem.reason, "no_subscription_item");
 
-    const zero = await reportAgentUsage({ subscriptionItemId: "si_1", quantity: 0, idempotencyKey: "k" }, deps);
+    const noAcct = await reportAgentUsage({ subscriptionItemId: "si_1", connectAccountId: "", quantity: 1, idempotencyKey: "k" }, deps);
+    assert.equal(noAcct.ok, false);
+    if (noAcct.ok) throw new Error("unreachable");
+    assert.equal(noAcct.reason, "no_connect_account");
+
+    const zero = await reportAgentUsage({ subscriptionItemId: "si_1", connectAccountId: "acct_seller_u", quantity: 0, idempotencyKey: "k" }, deps);
     assert.equal(zero.ok, false);
     if (zero.ok) throw new Error("unreachable");
     assert.equal(zero.reason, "non_positive_quantity");
@@ -324,7 +341,7 @@ describe("reportAgentUsage", () => {
   test("NEVER throws — a Stripe error is swallowed → { skipped, report_failed }", async () => {
     const { deps, pushes } = makeUsageDeps({ throws: true });
     // Must resolve (not reject) even though the seam throws.
-    const result = await reportAgentUsage({ subscriptionItemId: "si_1", quantity: 1, idempotencyKey: "k" }, deps);
+    const result = await reportAgentUsage({ subscriptionItemId: "si_1", connectAccountId: "acct_seller_u", quantity: 1, idempotencyKey: "k" }, deps);
     assert.equal(result.ok, false);
     if (result.ok) throw new Error("unreachable");
     assert.equal(result.reason, "report_failed");

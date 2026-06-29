@@ -2,9 +2,11 @@
 // proof. A FAKE Stripe is the ONLY Stripe: it records the SessionCreateParams +
 // options + the recurring-price create-or-lookup so we can assert mode:
 // "subscription", a recurring MONTHLY price at the real amount, the 5%
-// application_fee_percent, the seller transfer destination, and the idempotency
-// key. The skip paths (flag OFF / not connected / not monthly / no key) must make
-// ZERO Stripe calls and persist NO row — no real charge is ever reachable.
+// application_fee_percent, the DIRECT charge on the seller's connected account
+// ({ stripeAccount } + NO transfer_data — so the seller bears Stripe's fee and
+// SF's 5% arrives clean), and the idempotency key. The skip paths (flag OFF / not
+// connected / not monthly / no key) must make ZERO Stripe calls and persist NO
+// row — no real charge is ever reachable.
 //
 // No network, no real key, no db: everything is DI'd.
 
@@ -130,15 +132,15 @@ describe("createMonthlyAgentSubscription — happy path", () => {
     assert.equal(result.url, "https://checkout.stripe.test/cs_test_sub_123");
     assert.equal(result.stripeMode, "test");
 
-    // The recurring price was created-or-looked-up at the REAL monthly amount.
-    // (It carries NO connected-account id — the price is created on the PLATFORM;
-    // see recurring-price.spec.ts for the no-{stripeAccount} proof. The seller
-    // destination rides on the session's transfer_data, asserted below.)
+    // The recurring price was created-or-looked-up at the REAL monthly amount, ON
+    // the seller's CONNECTED account (connectAccountId threaded through; see
+    // recurring-price.spec.ts for the {stripeAccount} proof).
     assert.equal(priceCalls.length, 1);
     assert.equal(priceCalls[0].unitAmountCents, 2900);
     assert.equal(priceCalls[0].interval, "month");
     assert.equal(priceCalls[0].usageType, "licensed");
     assert.equal(priceCalls[0].listingId, "listing-m1");
+    assert.equal(priceCalls[0].connectAccountId, "acct_seller_m");
 
     // Exactly one Checkout Session call.
     assert.equal(calls.length, 1);
@@ -147,19 +149,20 @@ describe("createMonthlyAgentSubscription — happy path", () => {
     // mode subscription.
     assert.equal(params.mode, "subscription");
 
-    // PLATFORM destination charge: the session is created on the PLATFORM (NO
-    // { stripeAccount } option) — the customer + subscription + price live on the
-    // platform; the seller is paid via transfer_data.destination below.
-    assert.equal(options?.stripeAccount, undefined);
+    // DIRECT charge: the session is created ON the seller's connected account
+    // ({ stripeAccount }) — the customer + subscription + price live there, the
+    // seller bears Stripe's fee, and SF's application fee arrives clean.
+    assert.equal(options?.stripeAccount, "acct_seller_m");
 
     // Line item references the resolved recurring price.
     assert.equal(params.line_items?.length, 1);
     assert.equal(params.line_items?.[0]?.price, "price_monthly_1");
     assert.equal(params.line_items?.[0]?.quantity, 1);
 
-    // 5% application fee PERCENT + seller destination on subscription_data.
+    // 5% application fee PERCENT on subscription_data — NO transfer_data (a direct
+    // charge already settles to the connected account).
     assert.equal(params.subscription_data?.application_fee_percent, 5);
-    assert.equal(params.subscription_data?.transfer_data?.destination, "acct_seller_m");
+    assert.equal(params.subscription_data?.transfer_data, undefined);
 
     // Idempotency key = (buyerOrg, listing) — day-independent so a re-attempt reuses it.
     assert.equal(options?.idempotencyKey, "mkt-monthly-org-buyer-m-listing-m1");

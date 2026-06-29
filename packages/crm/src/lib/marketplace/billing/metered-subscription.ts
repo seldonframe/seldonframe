@@ -2,10 +2,12 @@
 //
 // THE PROOF: a Stripe Checkout Session in `mode:"subscription"` whose recurring
 // Price is METERED (usage-based), at the listing's per-call (per_usage) or
-// per-outcome (per_outcome) amount, created on the PLATFORM (no { stripeAccount })
-// — same 5% application_fee_percent + seller transfer destination + idempotency +
-// a persisted pending purchase row as the monthly path (a destination charge).
-// The renter is billed only for what they consume; SeldonFrame reports the usage.
+// per-outcome (per_outcome) amount, created as a DIRECT charge ON the seller's
+// connected account ({ stripeAccount }) — same 5% application_fee_percent +
+// idempotency + a persisted pending purchase row as the monthly path, with NO
+// transfer_data (a direct charge: the seller bears Stripe's fee + SF's 5% arrives
+// clean). The renter is billed only for what they consume; SeldonFrame reports the
+// usage (the meter lives on the connected account too — see recurring-price.ts).
 //
 // reportAgentUsage(...) pushes ONE usage record / meter event to Stripe. It is
 // wired (behind the flag, fail-soft) at the existing `agent_rental_call` accrual
@@ -104,18 +106,22 @@ export async function createMeteredAgentSubscription(
   const feePercent = MARKETPLACE_FEE_PERCENT;
   const idempotencyKey = `mkt-metered-${buyerOrgId}-${listing.id}`;
 
-  // 6) Create-or-lookup a METERED recurring price on the PLATFORM
-  //    (usage_type:"metered" + a platform meter the usage records report to). The
-  //    seller is paid via the session's transfer_data.destination (destination charge).
+  // 6) Create-or-lookup a METERED recurring price on the SELLER's CONNECTED
+  //    account (usage_type:"metered" + a meter on that account the usage records
+  //    report to). A direct charge: the price + meter live on the connected
+  //    account, matching the session below.
   const priceRef: RecurringPriceRef = await stripe.resolveRecurringPrice({
     listingId: listing.id,
     listingName: listing.name,
     unitAmountCents,
     interval: "month",
     usageType: "metered",
+    connectAccountId: destination,
   });
 
-  // 7) Create the metered SUBSCRIPTION Checkout Session.
+  // 7) Create the metered SUBSCRIPTION Checkout Session as a DIRECT charge ON the
+  //    seller's connected account ({ stripeAccount: destination }). NO
+  //    transfer_data (a direct charge); SF takes application_fee_percent.
   const session = await stripe.checkout.sessions.create(
     {
       mode: "subscription",
@@ -125,7 +131,6 @@ export async function createMeteredAgentSubscription(
       line_items: [{ price: priceRef.priceId }],
       subscription_data: {
         application_fee_percent: feePercent,
-        transfer_data: { destination },
       },
       metadata: {
         type: "marketplace_agent_subscription",
@@ -137,7 +142,7 @@ export async function createMeteredAgentSubscription(
         ...(priceRef.meterId ? { meterId: priceRef.meterId } : {}),
       },
     },
-    { idempotencyKey },
+    { idempotencyKey, stripeAccount: destination },
   );
 
   // 8) Persist the pending settlement row (subscription id reconciled by P4).
@@ -161,12 +166,14 @@ export async function createMeteredAgentSubscription(
 // ─── usage reporting ─────────────────────────────────────────────────────────
 
 /** The narrow Stripe seam reportAgentUsage drives — just the usage push. The
- *  real dep maps this to the live Stripe usage-record / meter-event call; the
- *  test fakes it and records the args. */
+ *  real dep maps this to the live Stripe meter-event call (on the connected
+ *  account); the test fakes it and records the args. */
 export type UsageReportSeam = {
   reportUsage(input: {
-    /** The metered subscription item the usage accrues to. */
+    /** The metered subscription item the usage accrues to (on the connected account). */
     subscriptionItemId: string;
+    /** The seller's connected account id the subscription + meter live on. */
+    connectAccountId: string;
     /** Units consumed (1 per agent call by default). */
     quantity: number;
     /** Idempotency key so a retried report doesn't double-count. */
@@ -176,6 +183,9 @@ export type UsageReportSeam = {
 
 export type ReportAgentUsageInput = {
   subscriptionItemId: string;
+  /** The seller's connected account id (the metered subscription is a direct
+   *  charge — the subscription + meter live there). */
+  connectAccountId: string;
   quantity: number;
   idempotencyKey: string;
 };
@@ -212,6 +222,9 @@ export async function reportAgentUsage(
     const subscriptionItemId = String(input.subscriptionItemId ?? "").trim();
     if (!subscriptionItemId) return { ok: false, skipped: true, reason: "no_subscription_item" };
 
+    const connectAccountId = String(input.connectAccountId ?? "").trim();
+    if (!connectAccountId) return { ok: false, skipped: true, reason: "no_connect_account" };
+
     const quantity = Number(input.quantity);
     if (!Number.isFinite(quantity) || quantity <= 0) {
       return { ok: false, skipped: true, reason: "non_positive_quantity" };
@@ -222,6 +235,7 @@ export async function reportAgentUsage(
 
     await reporter.reportUsage({
       subscriptionItemId,
+      connectAccountId,
       quantity: Math.round(quantity),
       idempotencyKey: String(input.idempotencyKey ?? "").trim() || `mkt-usage-${subscriptionItemId}-${Date.now()}`,
     });

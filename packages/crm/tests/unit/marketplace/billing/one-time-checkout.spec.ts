@@ -1,7 +1,9 @@
 // Unit tests for lib/marketplace/billing/one-time-checkout.ts — the #139 P1
 // proof. A FAKE Stripe is the ONLY Stripe: it records the SessionCreateParams +
-// options so we can assert the 5% application fee, the seller destination, the
-// real price line item, the idempotency key, and mode:"payment". The skip paths
+// options so we can assert the 5% application fee, the DIRECT charge on the
+// seller's connected account ({ stripeAccount } + NO transfer_data — so the
+// seller bears Stripe's processing fee and SF's 5% arrives clean), the real
+// price line item, the idempotency key, and mode:"payment". The skip paths
 // (flag OFF / not connected / monthly / no Stripe key) must make ZERO Stripe
 // calls and persist NO row — i.e. no real charge is ever reachable.
 //
@@ -129,6 +131,13 @@ describe("createOneTimeAgentCheckout — happy path", () => {
     // mode payment.
     assert.equal(params.mode, "payment");
 
+    // DIRECT charge on the seller's connected account: the session is created
+    // WITH { stripeAccount } so the seller is the settlement merchant and bears
+    // Stripe's processing fee; SF's application fee then arrives clean. (A
+    // destination charge — transfer_data — would leave the platform paying the
+    // Stripe fee, making the 5% net-negative at low prices.)
+    assert.equal(options?.stripeAccount, "acct_seller_1");
+
     // Line item at the REAL price (the onetime `price` column, cents).
     assert.equal(params.line_items?.length, 1);
     const li = params.line_items?.[0];
@@ -136,9 +145,10 @@ describe("createOneTimeAgentCheckout — happy path", () => {
     assert.equal(li?.price_data?.unit_amount, 4900);
     assert.equal(li?.price_data?.currency, "usd");
 
-    // 5% application fee + seller destination.
+    // 5% application fee on the direct charge — NO transfer_data (on a direct
+    // charge the money already lands on the connected account).
     assert.equal(params.payment_intent_data?.application_fee_amount, 245); // round(4900 * 5 / 100)
-    assert.equal(params.payment_intent_data?.transfer_data?.destination, "acct_seller_1");
+    assert.equal(params.payment_intent_data?.transfer_data, undefined);
 
     // Idempotency key = (buyerOrg, listing, UTC day).
     assert.equal(options?.idempotencyKey, "mkt-onetime-org-buyer-1-listing-1-2026-06-28");

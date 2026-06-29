@@ -101,18 +101,24 @@ export function buildSubscriptionCheckoutDeps(): SubscriptionCheckoutDeps {
 
 // ─── P3: usage reporting deps ────────────────────────────────────────────────
 
-/** The live usage push. The basil API meters by CUSTOMER via a meter event (the
- *  legacy subscriptionItems.createUsageRecord is gone), so we resolve the metered
- *  subscription item → its subscription → customer + the price's meter event_name,
- *  then fire ONE billing.meterEvent. Fail-soft is the CALLER's job
- *  (reportAgentUsage swallows throws); this stays a thin live mapping. */
+/** The live usage push. The metered subscription is a DIRECT charge — the
+ *  subscription, the metered price + meter, the customer AND the meter events all
+ *  live on the SELLER's connected account, so EVERY call passes
+ *  { stripeAccount: connectAccountId }. The basil API meters by CUSTOMER via a
+ *  meter event (the legacy subscriptionItems.createUsageRecord is gone), so we
+ *  resolve the metered subscription item → its subscription → customer + the
+ *  price's meter event_name, then fire ONE billing.meterEvent on that account.
+ *  Fail-soft is the CALLER's job (reportAgentUsage swallows throws); this stays a
+ *  thin live mapping. */
 async function reportUsageLive(
   stripe: Stripe,
-  input: { subscriptionItemId: string; quantity: number; idempotencyKey: string },
+  input: { subscriptionItemId: string; connectAccountId: string; quantity: number; idempotencyKey: string },
 ): Promise<void> {
+  const onAccount: Stripe.RequestOptions = { stripeAccount: input.connectAccountId };
   // The subscription item carries the price (→ meter) + its subscription (→ customer).
   const item = await stripe.subscriptionItems.retrieve(input.subscriptionItemId, {
     expand: ["price.recurring"],
+    ...onAccount,
   });
   const meterId =
     typeof item.price?.recurring?.meter === "string" ? item.price.recurring.meter : null;
@@ -121,20 +127,23 @@ async function reportUsageLive(
   if (!meterId || !subscriptionId) {
     throw new Error("metered subscription item missing meter or subscription");
   }
-  const meter = await stripe.billing.meters.retrieve(meterId);
-  const subscription = await stripe.subscriptions.retrieve(subscriptionId);
+  const meter = await stripe.billing.meters.retrieve(meterId, onAccount);
+  const subscription = await stripe.subscriptions.retrieve(subscriptionId, onAccount);
   const customerId =
     typeof subscription.customer === "string" ? subscription.customer : subscription.customer?.id;
   if (!customerId) throw new Error("metered subscription missing customer");
 
-  await stripe.billing.meterEvents.create({
-    event_name: meter.event_name,
-    identifier: input.idempotencyKey,
-    payload: {
-      stripe_customer_id: customerId,
-      value: String(input.quantity),
+  await stripe.billing.meterEvents.create(
+    {
+      event_name: meter.event_name,
+      identifier: input.idempotencyKey,
+      payload: {
+        stripe_customer_id: customerId,
+        value: String(input.quantity),
+      },
     },
-  });
+    onAccount,
+  );
 }
 
 /** Wrap the live Stripe client into the narrow UsageReportSeam, or null when no
@@ -156,10 +165,12 @@ export function buildUsageReportDeps(): ReportAgentUsageDeps {
 // ─── P4: buyer billing-portal deps ───────────────────────────────────────────
 
 /** Build the production deps for resolveMarketplacePortalSession. The buyer's
- *  customer + subscription live on the PLATFORM (the subscriptions are platform
- *  destination charges), so the portal session is created on the platform for the
- *  buyer's platform customer id — no connected-account resolution needed. Inert
- *  without a Stripe key (getStripeClient() → null → the portal helper skips). */
+ *  customer + subscription live on the SELLER's CONNECTED account (the
+ *  subscriptions are direct charges), so the portal session is created on that
+ *  account ({ stripeAccount }) — the caller passes the resolved
+ *  sellerConnectAccountId on the PortalPurchase. The Stripe client itself is the
+ *  same; the per-call { stripeAccount } scopes it. Inert without a Stripe key
+ *  (getStripeClient() → null → the portal helper skips). */
 export function buildMarketplacePortalDeps(returnUrl: string): MarketplacePortalDeps {
   return {
     getStripe: () => getStripeClient() as BillingPortalSeam | null,
@@ -170,14 +181,24 @@ export function buildMarketplacePortalDeps(returnUrl: string): MarketplacePortal
 
 // ─── P3: resolve the renter's metered subscription item (rental-path wiring) ──
 
+/** The resolved metered-subscription handle for a rental usage report: the
+ *  subscription item the usage accrues to + the connected account it lives on
+ *  (the metered subscription is a DIRECT charge). */
+export type RenterMeteredSubscriptionItem = {
+  subscriptionItemId: string;
+  connectAccountId: string;
+};
+
 /**
  * Resolve the ACTIVE metered marketplace subscription item for a (renter org,
  * listing) pair, or null when there isn't one. Used at the `agent_rental_call`
  * accrual to decide whether to report a usage unit. Looks up the most recent
- * active metered purchase row for this buyer+listing, then reads its
- * subscription's first item id from Stripe. Returns null (no report) on ANY miss
- * — no flag, no key, no metered purchase, no subscription — so the rental path
- * is unaffected unless a real metered subscription exists.
+ * active metered purchase row for this buyer+listing, resolves the seller's
+ * connected account (the subscription is a direct charge — it lives there), then
+ * reads its subscription's first item id from Stripe ON that account. Returns null
+ * (no report) on ANY miss — no flag, no key, no metered purchase, no connect
+ * account, no subscription — so the rental path is unaffected unless a real
+ * metered subscription exists.
  *
  * NEVER THROWS: a lookup failure returns null (the caller no-ops) so metering can
  * never break a rented agent.
@@ -185,14 +206,17 @@ export function buildMarketplacePortalDeps(returnUrl: string): MarketplacePortal
 export async function resolveRenterMeteredSubscriptionItemId(input: {
   renterOrgId: string;
   listingId: string;
-}): Promise<string | null> {
+}): Promise<RenterMeteredSubscriptionItem | null> {
   try {
     const renterOrgId = String(input.renterOrgId ?? "").trim();
     const listingId = String(input.listingId ?? "").trim();
     if (!renterOrgId || !listingId) return null;
 
     const [row] = await db
-      .select({ subId: marketplacePurchases.stripeSubscriptionId })
+      .select({
+        subId: marketplacePurchases.stripeSubscriptionId,
+        sellerOrgId: marketplacePurchases.sellerOrgId,
+      })
       .from(marketplacePurchases)
       .where(
         and(
@@ -205,14 +229,22 @@ export async function resolveRenterMeteredSubscriptionItemId(input: {
       .limit(1);
 
     const subscriptionId = row?.subId?.trim();
-    if (!subscriptionId) return null;
+    if (!subscriptionId || !row?.sellerOrgId) return null;
+
+    // The subscription lives on the SELLER's connected account (direct charge).
+    const connect = await readConnectStatus(row.sellerOrgId);
+    const connectAccountId = connect.accountId?.trim();
+    if (!connectAccountId) return null;
 
     const stripe = getStripeClient();
     if (!stripe) return null;
 
-    const subscription = await stripe.subscriptions.retrieve(subscriptionId);
+    const subscription = await stripe.subscriptions.retrieve(subscriptionId, {
+      stripeAccount: connectAccountId,
+    });
     const item = subscription.items?.data?.[0];
-    return item?.id ?? null;
+    if (!item?.id) return null;
+    return { subscriptionItemId: item.id, connectAccountId };
   } catch (err) {
     const detail = err instanceof Error ? err.message : String(err);
     console.error(`[marketplace-billing] resolve_metered_item_error listing=${input.listingId} renter=${input.renterOrgId} err=${detail}`);

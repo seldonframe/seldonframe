@@ -1,12 +1,13 @@
 // Unit tests for lib/marketplace/billing/billing-portal.ts — the #139 P4 buyer
 // "Manage billing" link. Fake Stripe, no network. The buyer's customer +
-// subscription now live on the PLATFORM (the subscriptions are platform
-// destination charges), so the Billing Portal session is created ON THE PLATFORM —
-// with NO { stripeAccount } option. Proofs:
-//   • creates a portal session for the buyer's PLATFORM customer (no stripeAccount).
+// subscription live on the SELLER's CONNECTED account (the subscriptions are
+// direct charges), so the Billing Portal session is created ON THE CONNECTED
+// account — WITH { stripeAccount: seller }. Proofs:
+//   • creates a portal session for the buyer's customer ON the connected account.
 //   • flag OFF (default) → skipped, NO Stripe call.
 //   • no Stripe key (inert) → skipped, NO Stripe call.
 //   • no customer id (buyer hasn't paid) → skipped, NO Stripe call.
+//   • no seller connect account → skipped, NO Stripe call.
 
 import { describe, test } from "node:test";
 import assert from "node:assert/strict";
@@ -39,7 +40,7 @@ function makeFakeStripe(url = "https://billing.stripe.test/session_1") {
   return { stripe, calls };
 }
 
-const PURCHASE: PortalPurchase = { stripeCustomerId: "cus_buyer_1" };
+const PURCHASE: PortalPurchase = { stripeCustomerId: "cus_buyer_1", sellerConnectAccountId: "acct_seller_1" };
 
 function makeDeps(over: Partial<MarketplacePortalDeps> = {}): {
   deps: MarketplacePortalDeps;
@@ -58,7 +59,7 @@ function makeDeps(over: Partial<MarketplacePortalDeps> = {}): {
 // ─── happy path ──────────────────────────────────────────────────────────────
 
 describe("resolveMarketplacePortalSession — happy path", () => {
-  test("creates a portal session for the buyer's customer ON THE PLATFORM (no stripeAccount)", async () => {
+  test("creates a portal session for the buyer's customer ON the CONNECTED account (stripeAccount=seller)", async () => {
     const { deps, calls } = makeDeps();
     const res = await resolveMarketplacePortalSession(PURCHASE, deps);
 
@@ -69,9 +70,9 @@ describe("resolveMarketplacePortalSession — happy path", () => {
     assert.equal(calls.length, 1);
     assert.equal(calls[0].params.customer, "cus_buyer_1");
     assert.equal(calls[0].params.return_url, "https://app.seldonframe.com/marketplace/installed");
-    // PLATFORM session — the buyer's customer lives on the platform, NOT a
-    // connected account. So NO { stripeAccount } request option.
-    assert.equal(calls[0].options?.stripeAccount, undefined);
+    // CONNECTED session — the buyer's customer + subscription live on the seller's
+    // connected account (a direct charge). So { stripeAccount: seller }.
+    assert.equal(calls[0].options?.stripeAccount, "acct_seller_1");
   });
 });
 
@@ -98,10 +99,25 @@ describe("resolveMarketplacePortalSession — skips (no Stripe call)", () => {
 
   test("no customer id (buyer hasn't completed Checkout) → skipped", async () => {
     const { deps, calls } = makeDeps();
-    const res = await resolveMarketplacePortalSession({ stripeCustomerId: null }, deps);
+    const res = await resolveMarketplacePortalSession(
+      { stripeCustomerId: null, sellerConnectAccountId: "acct_seller_1" },
+      deps,
+    );
     assert.equal(res.ok, false);
     if (res.ok) throw new Error("unreachable");
     assert.equal(res.reason, "no_customer");
+    assert.equal(calls.length, 0);
+  });
+
+  test("no seller connect account → skipped (can't locate the customer's account)", async () => {
+    const { deps, calls } = makeDeps();
+    const res = await resolveMarketplacePortalSession(
+      { stripeCustomerId: "cus_buyer_1", sellerConnectAccountId: null },
+      deps,
+    );
+    assert.equal(res.ok, false);
+    if (res.ok) throw new Error("unreachable");
+    assert.equal(res.reason, "no_connect_account");
     assert.equal(calls.length, 0);
   });
 });

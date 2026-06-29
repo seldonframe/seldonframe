@@ -57,16 +57,17 @@ async function reportRentalUsageFailSoft(entry: {
   creatorOrgId: string;
 }): Promise<void> {
   try {
-    const subscriptionItemId = await resolveRenterMeteredSubscriptionItemId({
+    const metered = await resolveRenterMeteredSubscriptionItemId({
       renterOrgId: entry.renterOrgId,
       listingId: entry.listingId,
     });
-    if (!subscriptionItemId) return; // no metered subscription → no-op.
+    if (!metered) return; // no metered subscription → no-op.
     await reportAgentUsage(
       {
-        subscriptionItemId,
+        subscriptionItemId: metered.subscriptionItemId,
+        connectAccountId: metered.connectAccountId,
         quantity: 1,
-        idempotencyKey: `mkt-usage-${subscriptionItemId}-${Date.now()}`,
+        idempotencyKey: `mkt-usage-${metered.subscriptionItemId}-${Date.now()}`,
       },
       buildUsageReportDeps(),
     );

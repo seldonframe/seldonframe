@@ -1,14 +1,15 @@
-// Unit tests for lib/marketplace/billing/recurring-price.ts — the #139 PLATFORM
+// Unit tests for lib/marketplace/billing/recurring-price.ts — the #139 CONNECTED
 // create-or-lookup of a recurring Price (and, for metered, a Meter). The whole
-// point of this test: prove the Price AND the Meter are created on the PLATFORM
-// account — i.e. with NO connected-account (`{ stripeAccount }`) request option —
-// so they exist on the same account where monthly-/metered-subscription create the
-// Checkout session. (The seller still gets paid via the session's
-// subscription_data.transfer_data.destination — a destination charge.)
+// point of this test: prove the Price AND the Meter are created on the SELLER's
+// CONNECTED account — i.e. EVERY Stripe call carries the
+// `{ stripeAccount: connectAccountId }` request option — so they exist on the same
+// account where monthly-/metered-subscription create the direct-charge Checkout
+// session. (The seller bears Stripe's fee; SF takes the % application fee at the
+// session level — a DIRECT charge, no transfer_data.)
 //
 // A FAKE Stripe is the ONLY Stripe: it records the RequestOptions passed to every
 // prices.list / prices.create / billing.meters.list / billing.meters.create call
-// so we can assert `options?.stripeAccount === undefined` on each. No network, no
+// so we can assert `options?.stripeAccount === <seller>` on each. No network, no
 // real key, no db.
 
 import { describe, test } from "node:test";
@@ -81,12 +82,15 @@ function makeFakeStripe(opts?: {
   return { stripe, priceListCalls, priceCreateCalls, meterListCalls, meterCreateCalls };
 }
 
+const SELLER = "acct_seller_x";
+
 const LICENSED: ResolveRecurringPriceParams = {
   listingId: "listing-m1",
   listingName: "Speed to Lead",
   unitAmountCents: 2900,
   interval: "month",
   usageType: "licensed",
+  connectAccountId: SELLER,
 };
 
 const METERED: ResolveRecurringPriceParams = {
@@ -95,34 +99,35 @@ const METERED: ResolveRecurringPriceParams = {
   unitAmountCents: 200,
   interval: "month",
   usageType: "metered",
+  connectAccountId: SELLER,
 };
 
-/** Assert no call carried a connected-account request option. */
-function assertNoStripeAccount(calls: Array<{ options?: Stripe.RequestOptions }>) {
+/** Assert EVERY call carried the seller's connected-account request option. */
+function assertOnConnectedAccount(calls: Array<{ options?: Stripe.RequestOptions }>) {
   for (const c of calls) {
     assert.equal(
       c.options?.stripeAccount,
-      undefined,
-      "expected NO { stripeAccount } option (must be created on the PLATFORM)",
+      SELLER,
+      "expected { stripeAccount: seller } option (must be created on the CONNECTED account — a direct charge)",
     );
   }
 }
 
 // ─── licensed (monthly) ───────────────────────────────────────────────────────
 
-describe("resolveRecurringPriceLive — licensed (monthly), PLATFORM", () => {
-  test("creates the Price on the PLATFORM (no stripeAccount option) at the real amount", async () => {
+describe("resolveRecurringPriceLive — licensed (monthly), CONNECTED account", () => {
+  test("creates the Price on the CONNECTED account (stripeAccount=seller) at the real amount", async () => {
     const fake = makeFakeStripe({ createdPriceId: "price_monthly_new" });
     const ref = await resolveRecurringPriceLive(fake.stripe, LICENSED);
 
     assert.equal(ref.priceId, "price_monthly_new");
     assert.equal(ref.meterId, null);
 
-    // Looked up once, created once — both on the platform.
+    // Looked up once, created once — both on the connected account.
     assert.equal(fake.priceListCalls.length, 1);
     assert.equal(fake.priceCreateCalls.length, 1);
-    assertNoStripeAccount(fake.priceListCalls);
-    assertNoStripeAccount(fake.priceCreateCalls);
+    assertOnConnectedAccount(fake.priceListCalls);
+    assertOnConnectedAccount(fake.priceCreateCalls);
 
     // Licensed → no meter touched at all.
     assert.equal(fake.meterListCalls.length, 0);
@@ -136,38 +141,38 @@ describe("resolveRecurringPriceLive — licensed (monthly), PLATFORM", () => {
     assert.equal(created.recurring?.usage_type, "licensed");
   });
 
-  test("reuses an existing Price by lookup_key (still PLATFORM, no create)", async () => {
+  test("reuses an existing Price by lookup_key (still CONNECTED, no create)", async () => {
     const fake = makeFakeStripe({ existingPrice: { id: "price_existing", meter: null } });
     const ref = await resolveRecurringPriceLive(fake.stripe, LICENSED);
 
     assert.equal(ref.priceId, "price_existing");
     assert.equal(fake.priceCreateCalls.length, 0);
     assert.equal(fake.priceListCalls.length, 1);
-    assertNoStripeAccount(fake.priceListCalls);
+    assertOnConnectedAccount(fake.priceListCalls);
   });
 });
 
 // ─── metered (per_usage / per_outcome) ────────────────────────────────────────
 
-describe("resolveRecurringPriceLive — metered, PLATFORM", () => {
-  test("creates BOTH the Meter and the Price on the PLATFORM (no stripeAccount option)", async () => {
+describe("resolveRecurringPriceLive — metered, CONNECTED account", () => {
+  test("creates BOTH the Meter and the Price on the CONNECTED account (stripeAccount=seller)", async () => {
     const fake = makeFakeStripe({ createdMeterId: "mtr_new", createdPriceId: "price_metered_new" });
     const ref = await resolveRecurringPriceLive(fake.stripe, METERED);
 
     assert.equal(ref.priceId, "price_metered_new");
     assert.equal(ref.meterId, "mtr_new");
 
-    // Meter: listed once + created once — both on the platform (no stripeAccount).
+    // Meter: listed once + created once — both on the connected account.
     assert.equal(fake.meterListCalls.length, 1);
     assert.equal(fake.meterCreateCalls.length, 1);
-    assertNoStripeAccount(fake.meterListCalls);
-    assertNoStripeAccount(fake.meterCreateCalls);
+    assertOnConnectedAccount(fake.meterListCalls);
+    assertOnConnectedAccount(fake.meterCreateCalls);
 
-    // Price: listed once + created once — both on the platform (no stripeAccount).
+    // Price: listed once + created once — both on the connected account.
     assert.equal(fake.priceListCalls.length, 1);
     assert.equal(fake.priceCreateCalls.length, 1);
-    assertNoStripeAccount(fake.priceListCalls);
-    assertNoStripeAccount(fake.priceCreateCalls);
+    assertOnConnectedAccount(fake.priceListCalls);
+    assertOnConnectedAccount(fake.priceCreateCalls);
 
     // The created price is metered + points at the created meter.
     const created = fake.priceCreateCalls[0].params;
@@ -179,7 +184,7 @@ describe("resolveRecurringPriceLive — metered, PLATFORM", () => {
     assert.equal(fake.meterCreateCalls[0].params.event_name, "sf_agent_usage_listing-u1");
   });
 
-  test("reuses an existing Meter by event_name (no meter create), Price still on PLATFORM", async () => {
+  test("reuses an existing Meter by event_name (no meter create), Price still CONNECTED", async () => {
     const fake = makeFakeStripe({
       existingMeter: { id: "mtr_existing", event_name: "sf_agent_usage_listing-u1" },
       createdPriceId: "price_metered_new",
@@ -189,11 +194,11 @@ describe("resolveRecurringPriceLive — metered, PLATFORM", () => {
     assert.equal(ref.meterId, "mtr_existing");
     assert.equal(fake.meterCreateCalls.length, 0);
     assert.equal(fake.meterListCalls.length, 1);
-    assertNoStripeAccount(fake.meterListCalls);
+    assertOnConnectedAccount(fake.meterListCalls);
 
-    // Price still created on the platform, pointing at the reused meter.
+    // Price still created on the connected account, pointing at the reused meter.
     assert.equal(fake.priceCreateCalls.length, 1);
-    assertNoStripeAccount(fake.priceCreateCalls);
+    assertOnConnectedAccount(fake.priceCreateCalls);
     assert.equal(fake.priceCreateCalls[0].params.recurring?.meter, "mtr_existing");
   });
 });

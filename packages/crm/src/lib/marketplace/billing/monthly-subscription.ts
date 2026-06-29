@@ -1,16 +1,23 @@
-// #139 P2 — monthly agent SUBSCRIPTION Checkout as a PLATFORM destination charge.
+// #139 P2 — monthly agent SUBSCRIPTION Checkout as a DIRECT charge on the seller.
 //
 // THE PROOF: a Stripe Checkout Session in `mode:"subscription"` for a `monthly`
-// paid marketplace agent listing, created on the PLATFORM (no { stripeAccount }).
-// Stripe creates the Subscription and runs the recurring monthly billing for us
-// (the simplest path + mirrors P1's hosted Checkout). The recurring monthly Price
-// is created-or-looked-up on the PLATFORM (same account as the session); the 5%
-// MARKETPLACE_FEE_PERCENT rides as `subscription_data.application_fee_percent` and
-// the remainder routes to the seller via `subscription_data.transfer_data.destination`
-// (a destination charge — the customer + subscription + price live on the
-// platform). An idempotency key keeps a re-attempt from creating a duplicate
-// session, and a pending marketplace_purchases row is persisted (the subscription
-// id itself arrives via the P4 webhook → updatePurchaseBySubscriptionId).
+// paid marketplace agent listing, created ON the SELLER's connected account
+// ({ stripeAccount }). Stripe creates the Subscription on that account and runs
+// the recurring monthly billing for us. The recurring monthly Price is
+// created-or-looked-up on the SAME connected account; the 5% MARKETPLACE_FEE_PERCENT
+// rides as `subscription_data.application_fee_percent` and there is NO transfer_data
+// (a DIRECT charge — the customer + subscription + price live on the connected
+// account, the seller is the settlement merchant and BEARS Stripe's processing
+// fee, and SF's 5% arrives clean). An idempotency key keeps a re-attempt from
+// creating a duplicate session, and a pending marketplace_purchases row is
+// persisted (the subscription id itself arrives via the P4 webhook →
+// updatePurchaseBySubscriptionId; the webhook receives CONNECT events,
+// event.account = the seller).
+//
+// WHY direct (not destination): a destination charge debits the PLATFORM balance
+// for Stripe's processing fee, so SF's 5% goes net-negative at low prices. A
+// direct charge debits it from the seller. Trade-off (correct for a marketplace):
+// the seller bears dispute/refund liability + the settlement currency.
 //
 // ─────────────────────────────────────────────────────────────────────────────
 // MONEY-SAFETY (same contract as P1 — non-negotiable):
@@ -90,21 +97,23 @@ export async function createMonthlyAgentSubscription(
   const feePercent = MARKETPLACE_FEE_PERCENT;
   const idempotencyKey = `mkt-monthly-${buyerOrgId}-${listing.id}`;
 
-  // 6) Create-or-lookup a recurring MONTHLY price on the PLATFORM for this
-  //    listing's amount. The price + subscription live on the platform; the
-  //    seller is paid via the session's transfer_data.destination (a destination
-  //    charge), and SF takes the % application fee.
+  // 6) Create-or-lookup a recurring MONTHLY price on the SELLER's CONNECTED
+  //    account for this listing's amount. The price + subscription live on the
+  //    connected account (a direct charge); SF takes the % application fee.
   const priceRef: RecurringPriceRef = await stripe.resolveRecurringPrice({
     listingId: listing.id,
     listingName: listing.name,
     unitAmountCents: amountCents,
     interval: "month",
     usageType: "licensed",
+    connectAccountId: destination,
   });
 
-  // 7) Create the SUBSCRIPTION Checkout Session on the PLATFORM (no stripeAccount).
-  //    Stripe creates the subscription + handles recurring billing; the funds
-  //    settle out to the seller via subscription_data.transfer_data.destination.
+  // 7) Create the SUBSCRIPTION Checkout Session as a DIRECT charge ON the seller's
+  //    connected account ({ stripeAccount: destination }). Stripe creates the
+  //    subscription on that account + handles recurring billing; the seller bears
+  //    Stripe's fee and SF takes subscription_data.application_fee_percent. NO
+  //    transfer_data (a direct charge already settles to the connected account).
   const session = await stripe.checkout.sessions.create(
     {
       mode: "subscription",
@@ -113,7 +122,6 @@ export async function createMonthlyAgentSubscription(
       line_items: [{ quantity: 1, price: priceRef.priceId }],
       subscription_data: {
         application_fee_percent: feePercent,
-        transfer_data: { destination },
       },
       metadata: {
         // Distinct from the legacy soul_purchase metadata so the P4 webhook can
@@ -126,7 +134,7 @@ export async function createMonthlyAgentSubscription(
         sellerOrgId,
       },
     },
-    { idempotencyKey },
+    { idempotencyKey, stripeAccount: destination },
   );
 
   // 8) Persist the pending settlement row. The subscription id is reconciled by
