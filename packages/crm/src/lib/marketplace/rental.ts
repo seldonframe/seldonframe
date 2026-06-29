@@ -29,18 +29,32 @@ import { getRentalSigningSecret } from "@/lib/marketplace/rental-secret";
 
 export type GenerateRentalKeyResult =
   | { ok: true; key: string; endpoint: string; expiresInDays: number }
+  // `reason: "auth_required"` is the logged-out signal — the buy box redirects
+  // to the app-origin sign-in instead of surfacing the error string. Carries
+  // `error` too so any non-redirect-aware caller still has a human message.
+  | { ok: false; reason: "auth_required"; error: string }
   | { ok: false; error: string };
+
+/** Auth seam — DI'd so the unit test runs with no Next.js session. Defaults to
+ *  the real getOrgId helper. */
+export type GenerateRentalKeyDeps = { getOrgId: typeof getOrgId };
 
 /**
  * Mint a rental key for the caller's org scoped to a published agent listing.
  * Returns the key + the MCP endpoint URL so the UI can show the real config
  * snippet. Org-guarded; only resolves PUBLISHED kind:'agent' listings.
  */
-export async function generateAgentRentalKeyAction(input: {
-  slug: string;
-}): Promise<GenerateRentalKeyResult> {
-  const orgId = await getOrgId();
-  if (!orgId) return { ok: false, error: "unauthorized" };
+export async function generateAgentRentalKeyAction(
+  input: {
+    slug: string;
+  },
+  _deps: GenerateRentalKeyDeps = { getOrgId },
+): Promise<GenerateRentalKeyResult> {
+  const orgId = await _deps.getOrgId();
+  // Logged-out (or on www., where the host-only session cookie isn't sent) →
+  // structured signal so the buy box redirects to sign-in rather than rendering
+  // a masked/scary error string.
+  if (!orgId) return { ok: false, reason: "auth_required", error: "unauthorized" };
 
   const slug = String(input?.slug ?? "").trim();
   if (!slug) return { ok: false, error: "Listing slug is required." };

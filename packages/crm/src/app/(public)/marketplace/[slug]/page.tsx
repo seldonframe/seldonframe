@@ -23,6 +23,8 @@ import { ListingActionsClient } from "@/components/marketplace/listing-actions-c
 import { SampleConversationClient } from "@/components/marketplace/sample-conversation-client";
 import { MARKETPLACE_SEED } from "@/components/marketplace/marketplace-seed";
 import { loadStorefrontCatalog } from "@/lib/marketplace/load-storefront";
+import { getOrgId } from "@/lib/auth/helpers";
+import { buildListingSignInUrl } from "@/lib/marketplace/buy-box-auth";
 import { MarkdownPointer } from "@/components/seo/markdown-pointer";
 import { jobForMarketplaceSlug } from "@/lib/seo/agent-pages";
 import {
@@ -89,10 +91,32 @@ export default async function ListingDetailPage({ params }: ListingPageProps) {
   const categoryLabel = CATEGORY_META[agent.category].label;
   const mcpEndpoint = mcpEndpointFor(agent.slug);
   const snippet = mcpSnippetFor(agent.slug);
+  // Honest price label for the OG/SEO strip: a non-one-time model carries its
+  // own label ("$29/mo", "$2 per call"); fall back to the one-time derivation
+  // ("Free" / "$N/mo") otherwise. priceLabel(priceCents) alone would force "/mo"
+  // onto a per-call agent.
+  const priceText = agent.priceLabelOverride?.trim() || priceLabel(agent.priceCents);
   // Flywheel back-link: if a programmatic /ai-agents/[job] page maps to this
   // listing, surface it so the marketplace↔agent-page cross-links resolve both
   // ways (the agent page already links here).
   const programmaticJob = jobForMarketplaceSlug(agent.slug);
+
+  // Buy-box auth state. The page is PUBLIC (served on www + app, browsable by
+  // anonymous visitors), so getOrgId() may legitimately resolve to null — wrap it
+  // so it can NEVER throw and break this SEO page's render. When the visitor has
+  // no org (logged out, OR on www. where the host-only session cookie isn't
+  // sent), the client buy box redirects Install / Rent to the app-origin sign-in
+  // instead of calling the action (which would 500 with a masked error in prod).
+  let isAuthenticated = false;
+  try {
+    isAuthenticated = Boolean(await getOrgId());
+  } catch {
+    isAuthenticated = false;
+  }
+  // Sign-in always targets the APP origin (where the session cookie lives) with a
+  // callbackUrl back to this listing on the app origin, so post-login the buyer
+  // returns here already authenticated and can install.
+  const signInUrl = buildListingSignInUrl(agent.slug);
 
   // A real, rated listing (not a brand-new seed) — drives whether we emit
   // aggregateRating / the "⭐ rating" credibility line. Never fabricate a rating
@@ -369,11 +393,11 @@ export default async function ListingDetailPage({ params }: ListingPageProps) {
                   <div style={{ display: "flex", alignItems: "center", gap: 8, fontSize: 11, color: "rgba(246,242,234,0.75)", fontFamily: MKT.fontMono }}>
                     {hasRealRating ? (
                       <>
-                        <span style={{ color: MKT.greenLight }}>★ {agent.rating}</span>· {installsLabel(agent)} · {priceLabel(agent.priceCents)}
+                        <span style={{ color: MKT.greenLight }}>★ {agent.rating}</span>· {installsLabel(agent)} · {priceText}
                       </>
                     ) : (
                       <>
-                        <span style={{ color: MKT.greenLight }}>New</span> · {priceLabel(agent.priceCents)}
+                        <span style={{ color: MKT.greenLight }}>New</span> · {priceText}
                       </>
                     )}
                   </div>
@@ -408,7 +432,13 @@ export default async function ListingDetailPage({ params }: ListingPageProps) {
 
           {/* STICKY SIDEBAR — install + rent-via-MCP (client island) */}
           <aside className="sf-listing-aside" style={{ position: "sticky", top: 90, alignSelf: "start" }}>
-            <ListingActionsClient agent={agent} mcpEndpoint={mcpEndpoint} snippet={snippet} />
+            <ListingActionsClient
+              agent={agent}
+              mcpEndpoint={mcpEndpoint}
+              snippet={snippet}
+              isAuthenticated={isAuthenticated}
+              signInUrl={signInUrl}
+            />
           </aside>
         </div>
       </main>

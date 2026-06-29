@@ -30,12 +30,25 @@ export function ListingActionsClient({
   agent,
   mcpEndpoint,
   snippet,
+  isAuthenticated = false,
+  signInUrl = "/login",
 }: {
   agent: StorefrontAgent;
   mcpEndpoint: string;
   snippet: string;
+  // PUBLIC page: false for anonymous visitors and for anyone on www. (the
+  // host-only session cookie lives only on the app origin). When false, Install
+  // / Rent redirect to signInUrl (the app-origin sign-in) instead of calling the
+  // server action — which would 500 with a masked error in production.
+  isAuthenticated?: boolean;
+  signInUrl?: string;
 }): ReactElement {
   const router = useRouter();
+  // Send a logged-out buyer to the app-origin sign-in (with a callbackUrl back to
+  // this listing). Same path the action's `auth_required` response triggers.
+  const goSignIn = useCallback(() => {
+    window.location.href = signInUrl;
+  }, [signInUrl]);
   const [mcpOpen, setMcpOpen] = useState(false);
   const [copied, setCopied] = useState(false);
   const [phase, setPhase] = useState<Phase>("idle");
@@ -90,13 +103,28 @@ export function ListingActionsClient({
   const onInstall = useCallback(async () => {
     setError(null);
     // Demo/seed listings have no DB row to install — play the ceremony as a
-    // delightful preview, then land the buyer in their Studio agents list.
+    // delightful preview, then land the buyer in their Studio agents list. (No
+    // server action runs, so there's no auth/500 risk here.)
     if (agent.isSeed) {
       playCeremony();
       return;
     }
+    // Logged out (or on www., where the session cookie isn't present) → send the
+    // buyer to the app-origin sign-in instead of calling the action, which would
+    // 500 with a masked "An error occurred… digest…" string in production.
+    if (!isAuthenticated) {
+      goSignIn();
+      return;
+    }
     try {
       const result = await installAgentListingAction({ slug: agent.slug });
+      // Defense in depth: a stale/racey auth state can still come back
+      // unauthorized from the server — degrade to the same clean sign-in
+      // redirect rather than surfacing an error.
+      if (!result.ok && "reason" in result && result.reason === "auth_required") {
+        goSignIn();
+        return;
+      }
       if (result.ok && "checkoutUrl" in result && result.checkoutUrl) {
         window.location.href = result.checkoutUrl;
         return;
@@ -108,7 +136,7 @@ export function ListingActionsClient({
     } catch (err) {
       setError(err instanceof Error ? err.message : "Install failed. Please try again.");
     }
-  }, [agent.isSeed, agent.slug, playCeremony]);
+  }, [agent.isSeed, agent.slug, isAuthenticated, goSignIn, playCeremony]);
 
   const finishInstall = useCallback(() => {
     if (installedTemplateId) {
@@ -132,9 +160,16 @@ export function ListingActionsClient({
   const onGenerateKey = useCallback(async () => {
     setError(null);
     // Seed/demo listings have no DB row to mint a real key against — show a
-    // representative placeholder so the panel still demonstrates the flow.
+    // representative placeholder so the panel still demonstrates the flow. (No
+    // server action runs, so there's no auth/500 risk here.)
     if (agent.isSeed) {
       setRentalKey("rk_demo_preview_key_generate_on_a_live_listing");
+      return;
+    }
+    // Logged out (or on www.) → send the renter to the app-origin sign-in rather
+    // than calling the action (which would surface a masked error in prod).
+    if (!isAuthenticated) {
+      goSignIn();
       return;
     }
     setGenerating(true);
@@ -142,6 +177,10 @@ export function ListingActionsClient({
       const result = await generateAgentRentalKeyAction({ slug: agent.slug });
       if (result.ok) {
         setRentalKey(result.key);
+      } else if ("reason" in result && result.reason === "auth_required") {
+        // Defense in depth: a stale/racey auth state degrades to the clean
+        // sign-in redirect, never a surfaced error.
+        goSignIn();
       } else {
         setError(result.error || "Could not generate a rental key.");
       }
@@ -150,7 +189,7 @@ export function ListingActionsClient({
     } finally {
       setGenerating(false);
     }
-  }, [agent.isSeed, agent.slug]);
+  }, [agent.isSeed, agent.slug, isAuthenticated, goSignIn]);
 
   const copyKey = useCallback(() => {
     if (!rentalKey) return;

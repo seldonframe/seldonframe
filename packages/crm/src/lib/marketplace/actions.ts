@@ -514,13 +514,29 @@ export async function publishAgentTemplateAction(input: {
   return { slug: created.slug };
 }
 
-export async function installAgentListingAction(input: { slug: string }) {
+/** Auth seam for the buy-box actions — DI'd so the unit tests run with no
+ *  Next.js session (tsx's CJS interop makes module-mocking the @/ auth helpers
+ *  unreliable; see set-booking-policy.spec.ts). Defaults to the real helpers. */
+export type BuyBoxAuthDeps = {
+  getCurrentUser: typeof getCurrentUser;
+  getOrgId: typeof getOrgId;
+};
+
+export async function installAgentListingAction(
+  input: { slug: string },
+  _deps: BuyBoxAuthDeps = { getCurrentUser, getOrgId },
+) {
   assertWritable();
 
-  const user = await getCurrentUser();
-  const orgId = await getOrgId();
+  const user = await _deps.getCurrentUser();
+  const orgId = await _deps.getOrgId();
   if (!user?.id || !orgId) {
-    throw new Error("Unauthorized");
+    // Logged-out visitor (or on www., where the host-only session cookie isn't
+    // sent). Return a structured signal instead of throwing — in production Next
+    // masks a thrown Server Action error to a generic "An error occurred…
+    // digest…" string, which the buy box would render as a scary error. The
+    // client treats auth_required as "redirect to the app-origin sign-in".
+    return { ok: false as const, reason: "auth_required" as const };
   }
 
   const slug = String(input.slug ?? "").trim();
