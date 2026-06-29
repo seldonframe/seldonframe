@@ -154,6 +154,11 @@ export async function createMeteredAgentSubscription(
     priceModel: listing.priceModel === "per_outcome" ? "per_outcome" : "per_usage",
     // The per-unit amount; the per-cycle total is computed by Stripe from usage.
     amountCents: unitAmountCents,
+    // Metered: fee_cents stays 0 at subscribe time — there's no first-cycle amount
+    // to take a cut of yet (usage = 0). The 5% accrues PER reported unit as Stripe
+    // withholds application_fee_percent on each metered invoice; the earnings
+    // dashboard rolls metered revenue/fee from the per-call rental accrual
+    // (computeListingEarnings rentalRevenueCents/rentalFeeCents), not this snapshot.
     feeCents: 0,
     stripeMode,
     stripeCheckoutId: session.id,

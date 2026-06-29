@@ -41,7 +41,7 @@ import type {
   NewMarketplacePurchase,
 } from "@/db/schema/marketplace-purchases";
 import { isBillingEnabled, resolveBillingMode } from "./billing-mode";
-import { MARKETPLACE_FEE_PERCENT } from "@/lib/billing/gmv";
+import { MARKETPLACE_FEE_PERCENT, computeMarketplaceFeeCents } from "@/lib/billing/gmv";
 import {
   skip,
   type RecurringCheckoutListing,
@@ -93,8 +93,12 @@ export async function createMonthlyAgentSubscription(
   const stripeMode: MarketplaceStripeMode = resolveBillingMode(deps.env);
 
   const amountCents = price.priceCents;
-  // The fee is a PERCENT on a subscription (Stripe computes the cents each cycle).
+  // The fee is a PERCENT on a subscription (Stripe computes + withholds the cents
+  // each cycle via application_fee_percent). We ALSO snapshot the first-cycle fee
+  // in cents on the ledger row so the earnings dashboard's platform-cut isn't
+  // undercounted (a flat monthly price → the same cents every cycle).
   const feePercent = MARKETPLACE_FEE_PERCENT;
+  const feeCents = computeMarketplaceFeeCents(amountCents);
   const idempotencyKey = `mkt-monthly-${buyerOrgId}-${listing.id}`;
 
   // 6) Create-or-lookup a recurring MONTHLY price on the SELLER's CONNECTED
@@ -147,9 +151,9 @@ export async function createMonthlyAgentSubscription(
     sellerOrgId,
     priceModel: "monthly",
     amountCents,
-    // The recurring fee is a percent; the per-cycle cents are computed by Stripe.
-    // We record 0 here and let the webhook/earnings rollup carry settled amounts.
-    feeCents: 0,
+    // First-cycle platform cut (5% of the monthly amount). Stripe withholds the
+    // % each cycle; this snapshot keeps fee_cents non-zero so earnings reconcile.
+    feeCents,
     stripeMode,
     stripeCheckoutId: session.id,
     status: "pending",

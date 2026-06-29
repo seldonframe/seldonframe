@@ -180,6 +180,10 @@ describe("createMonthlyAgentSubscription — happy path", () => {
     assert.equal(row.stripeMode, "test");
     assert.equal(row.priceModel, "monthly");
     assert.equal(row.amountCents, 2900);
+    // The platform's cut is recorded as the FIRST-cycle fee (5% of $29 = 145¢) so
+    // the earnings dashboard's platform-cut isn't undercounted. Stripe still takes
+    // the % each cycle via application_fee_percent; this is the ledger snapshot.
+    assert.equal(row.feeCents, 145); // round(2900 * 5 / 100)
     assert.equal(row.buyerOrgId, "org-buyer-m");
     assert.equal(row.sellerOrgId, "org-seller-m");
     assert.equal(row.stripeCheckoutId, "cs_test_sub_123");
