@@ -1895,6 +1895,33 @@ C4 close-out with empirical SLICE 11 data.
 
 ---
 
+## L-20 — Stripe Connect: only a DIRECT charge moves the processing fee to the seller
+
+- **Trigger:** A live $1/mo marketplace sale (#139) settled, but the PLATFORM ate
+  Stripe's 34¢ processing fee (destination-charge default), so SF's 5% (5¢) was
+  net-negative. The instinct was to add `on_behalf_of: seller` to the destination
+  charge.
+- **Rule:** `on_behalf_of` on a destination charge does NOT shift Stripe's
+  processing fee — it only sets the merchant-of-record + the country-fee basis; the
+  PLATFORM balance is still debited (docs.stripe.com/connect/charges +
+  /direct-charges-fee-payer-behavior, confirmed 2026-06). The ONLY charge type where
+  the connected account bears the processing fee is a **DIRECT charge**
+  (`{ stripeAccount: seller }` + `application_fee_amount`/`_percent`, NO
+  `transfer_data`). Checkout supports it for both modes:
+  `payment_intent_data.application_fee_amount` (payment) and
+  `subscription_data.application_fee_percent` (subscription — the latter REQUIRES the
+  `Stripe-Account` header; the stripe-node SDK docstring says so). Consequences to
+  wire EVERY time you go direct: (1) the recurring price + meter must be created on
+  the connected account (`{ stripeAccount }` on `prices.*`/`billing.meters.*`); (2)
+  the customer + subscription live on the connected account, so the buyer
+  billing-portal + any usage/meter-event/subscription-item calls take
+  `{ stripeAccount }`; (3) the webhook endpoint must be registered for **Connect
+  events** (events carry `event.account`). The seller becomes merchant of record +
+  bears dispute/refund liability — correct for a marketplace, but state it. Always
+  RE-SMOKE a fresh charge after this switch and confirm the fee actually moved.
+
+---
+
 ## Template for new entries
 
 ```

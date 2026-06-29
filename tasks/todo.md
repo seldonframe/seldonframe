@@ -7,6 +7,28 @@ with a checkable plan, gets ticked off as it ships, and ends with a review block
 
 ## In flight
 
+### P4 / Task 8 — One shared Apps & tools catalog + agents-list clarity (primitive-composition generator) — DONE
+
+Plan: `docs/superpowers/plans/2026-06-26-primitive-composition-generator.md` Task 8. Worktree `icp3-wedge/packages/crm`. LIGHT unification — do NOT rebuild connectors. Do NOT commit/push.
+
+Recon facts (verified):
+- `TOOL_CATALOG` (`src/lib/agents/generate/tool-catalog.ts`) = postiz (vetted) + googlesheets→googledrive / googlecalendar / gmail / notion / slack (composio). PURE (no imports) → a client component may import it directly. No `toolCatalogForUi` exists yet.
+- `author-llm.ts` already builds its tool menu from `TOOL_CATALOG` via `buildToolMenu()` — one source already on the author side.
+- Editor `ComposioAppsSection` (`src/app/(dashboard)/studio/agents/[id]/editor-client.tsx`) renders chips from the `composioCatalog` prop (= all 8 `COMPOSIO_TOOLKITS`) + a hardcoded "Post to social (Postiz)" chip. Header already says "Apps & tools" (no visible "Composio").
+- Agents-list (`src/app/(dashboard)/studio/agents/page.tsx`) ALREADY shows `tmpl.name` + `triggerLabel(resolveAgentTrigger(bp.trigger, surface))` chip → change #3 already satisfied (verify only).
+- "Composio" within `studio/agents/**` is all comments / type names / action names / internal `kind:"composio"` checks — none user-visible. (The `/integrations` page names Composio in visible copy but is OUT of scope + is the legit BYO-key surface.)
+
+Steps:
+- [x] Add `ToolCatalogUiEntry` + `toolCatalogForUi()` to `tool-catalog.ts` (projection `{id,label,description,connectorKind,toolkitSlug?}`).
+- [x] Editor: `ComposioAppsSection` maps `toolCatalogForUi()` (composio entries toggle `toolkitSlug`; postiz/vetted entry opens add-form pre-selected). Dropped the separate hardcoded Postiz chip + the now-unused `composioCatalog` plumbing (editor `Props`/`ConnectorsCard`/`ComposioToolkitOption` type + the `COMPOSIO_TOOLKITS` import in page.tsx). Factored the pill into `AppToolChip` + `appChipLabel`.
+- [x] Verify agents-list shows name + trigger chip (ALREADY does at `studio/agents/page.tsx:163,153` — no change).
+- [x] Confirm no user-facing "Composio" remains in scope (all remaining occurrences = action name / component id / local vars / `kind:"composio"` checks / comments).
+- [x] Test: added a `toolCatalogForUi()` describe block to `tool-catalog.spec.ts` (same ids+order as `TOOL_CATALOG`, includes postiz, label/description/connectorKind verbatim, toolkitSlug present iff composio).
+- [x] Verify: specs pass (959, fail 0; tool-catalog spec 20/20) · tsc 0 · check-use-server clean · `pnpm build` exit 0.
+
+Review: LIGHT unification landed. One source of truth — editor quick-chips + author menu both derive from `TOOL_CATALOG`. Side effect (intended): the editor's quick-toggle now shows only the agent-bindable apps (5 composio + Postiz), no longer hubspot/quickbooks/outlook (which aren't in the bindable catalog); a previously-enabled non-catalog toolkit stays untouched in `enabled` (never silently removed). Change #3 (list name+trigger chip) was already implemented in an earlier task — verified, not rebuilt. NOT committed/pushed per instructions.
+
+
 ### Phase 3 (seller side) — Agent Marketplace Seller UI (feature/agent-marketplace-seller) — DONE
 
 Goal: a builder lists a Studio agent in a few clicks + sees earnings, with the
@@ -276,3 +298,45 @@ Ordered by staff-engineer priority after staging passes. Pick top-of-stack next.
 **Outstanding:** Every item in "Queued — post-staging" above depends on smoke
 passing first. If staging breaks in ways the checklist didn't anticipate,
 capture the pattern in [tasks/lessons.md](tasks/lessons.md).
+
+---
+
+## Review — Unified Agent Model P1, Task T4 (event-triggered outbound agents) — 2026-06-25
+
+**Done:** Wired review-requester (← `booking.completed`) + speed-to-lead (← `lead.created`) to fire on real SeldonEvents via a new DI'd orchestrator.
+
+- `src/lib/agents/triggers/run-event-agent.ts` — pure-ish DI orchestrator (`runEventAgent`); never throws; review one-per-contact throttle (per-`(contact,skill)`); speed-to-lead never throttled.
+- `src/lib/agents/triggers/run-event-agent-deps.ts` — production deps: `agent_templates` lookup (resolveAgentTrigger → event match), contact load, throttle probe over `smsMessages`+`emails` `metadata.source='agent:<skill>'`, sends via existing `sendSmsFromApi`/`sendEmailFromApi`.
+- `src/lib/events/listeners.ts` — hooked `runEventAgent` into the existing `bus.on("booking.completed")` + a NEW `bus.on("lead.created")`.
+- `src/lib/forms/actions.ts` + `src/app/api/v1/forms/submit/route.ts` — EMIT `lead.created` after the existing `form.submitted` emit (it wasn't emitted before).
+- `src/db/schema/agents.ts` — additive `AgentBlueprint.reviewUrl?` (jsonb, no migration).
+- `src/lib/emails/api.ts` — additive `metadata?` param on `sendEmailFromApi` (mirrors SMS) for the throttle tag.
+
+**Verify:** triggers specs 45/45 pass · typecheck `error TS` = 0 · check-use-server clean · `next build` exit 0. Not committed.
+
+---
+
+## #139 Marketplace billing — margin + ledger + race + success-state (2026-06-29)
+
+Money-safe: keep `SF_MARKETPLACE_BILLING` flag + DI'd fake-Stripe. Never charge in dev. Commit per piece; push to main only if green.
+
+**Research (DONE) — P1 margin mechanism.** Stripe docs (/connect/charges, /direct-charges-fee-payer-behavior, /connect/subscriptions) + stripe-node SDK confirm:
+- `on_behalf_of` on a destination charge does NOT shift the Stripe processing fee — the platform balance is still debited; it only sets the country-fee basis + merchant-of-record.
+- DIRECT CHARGES (`{ stripeAccount: seller }` + `application_fee_amount`/`_percent`, NO `transfer_data`) are the ONLY type where the connected account bears Stripe's processing fee and the platform `application_fee` arrives clean.
+- Checkout supports both modes on the connected account: `payment_intent_data.application_fee_amount` + `subscription_data.application_fee_percent`. SDK docstring: application_fee_percent "must be made on behalf of another account, using the Stripe-Account header."
+- Trade-offs (correct for a marketplace): seller = merchant of record + bears dispute/refund liability + settlement currency; the customer/price/subscription/invoices now live on the CONNECTED account → webhook must read `event.account`; buyer billing-portal runs on the connected account.
+
+- [x] **P1 — margin** (cb41e77c): one-time + monthly + metered → DIRECT charges (`{ stripeAccount }`, drop transfer_data, keep 5%); recurring price+meter create on the connected account; buyer billing-portal + metered usage/meter-event run on the connected account. Pure webhook handler unchanged (reconciles by the same ids; Stripe delivers Connect events).
+- [x] **P2 — fee ledger** (c3b81907): monthly persists `computeMarketplaceFeeCents(monthlyAmount)` first-cycle snapshot; metered stays 0 (documented per-usage accrual); `computeListingEarnings` unchanged + consistent (no double-count — it doesn't read this column).
+- [x] **P3 — webhook race** (a616d42a): invoice events carry a CUSTOMER-id fallback + stamp the sub id; applier retries by customer on a sub-id miss; `updatePurchaseByCustomerId` added; idempotent.
+- [x] **P4 — success state + 4-model verify** (70e884f7): `[slug]/page.tsx` reads `?purchased=true` → "You're subscribed/installed ✅" buy box; per_outcome test strengthened so all 4 models assert the direct-charge mechanism.
+
+**Verify:** marketplace unit tests 429/429 pass · `tsc --noEmit` 0 · `check-use-server.sh src` clean · `pnpm build` exit 0 (all routes compiled).
+
+**Margin mechanism (verified vs Stripe docs + stripe-node SDK):** DIRECT charges, not `on_behalf_of`. `on_behalf_of` on a destination charge does NOT shift Stripe's processing fee (platform balance still debited). A direct charge debits the fee from the connected (seller) account → SF's 5% application fee arrives clean.
+
+**Trade-offs accepted (correct for a marketplace):** seller = merchant of record + bears dispute/refund liability + settlement currency. Customer/subscription/invoices live on the connected account.
+
+**Re-smoke + Stripe reconfig Max needs:**
+1. Point the `/api/v1/marketplace/stripe/webhook` Stripe endpoint at **Connect** events ("Listen to events on Connected accounts") — the events now carry `event.account`. The signature secret is unchanged (`STRIPE_MARKETPLACE_WEBHOOK_SECRET`).
+2. Fresh $1/mo (or $1 one-time) smoke with `SF_MARKETPLACE_BILLING=true`: confirm on the **seller's** connected account the Stripe processing fee is debited from the SELLER and SF's 5% application fee lands clean on the platform (the prior smoke showed the platform eating the 34¢).
