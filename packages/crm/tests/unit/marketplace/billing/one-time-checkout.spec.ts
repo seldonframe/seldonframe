@@ -163,11 +163,10 @@ describe("createOneTimeAgentCheckout — happy path", () => {
     assert.equal(row.stripeCheckoutId, "cs_test_fake_123");
   });
 
-  test("stripeMode is 'live' only with the go-live flag + a live key", async () => {
+  test("stripeMode is 'live' (key-derived) when a live key is present", async () => {
     const { deps, inserted } = makeDeps({
       env: {
         SF_MARKETPLACE_BILLING: "true",
-        SF_MARKETPLACE_BILLING_LIVE: "true",
         STRIPE_SECRET_KEY: "sk_live_abc",
       },
     });

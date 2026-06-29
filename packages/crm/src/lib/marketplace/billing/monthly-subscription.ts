@@ -1,15 +1,16 @@
-// #139 P2 — monthly agent SUBSCRIPTION Checkout on the SELLER's connected account.
+// #139 P2 — monthly agent SUBSCRIPTION Checkout as a PLATFORM destination charge.
 //
-// THE PROOF: a Stripe Connect Checkout Session in `mode:"subscription"` for a
-// `monthly` paid marketplace agent listing. Stripe creates the Subscription and
-// runs the recurring monthly billing for us (the simplest path + mirrors P1's
-// hosted Checkout). The recurring monthly Price is created-or-looked-up on the
-// SELLER's connected account; the 5% MARKETPLACE_FEE_PERCENT rides as
-// `subscription_data.application_fee_percent` and the remainder routes to the
-// seller via `subscription_data.transfer_data.destination`. An idempotency key
-// keeps a re-attempt from creating a duplicate session, and a pending
-// marketplace_purchases row is persisted (the subscription id itself arrives via
-// the P4 webhook → updatePurchaseBySubscriptionId).
+// THE PROOF: a Stripe Checkout Session in `mode:"subscription"` for a `monthly`
+// paid marketplace agent listing, created on the PLATFORM (no { stripeAccount }).
+// Stripe creates the Subscription and runs the recurring monthly billing for us
+// (the simplest path + mirrors P1's hosted Checkout). The recurring monthly Price
+// is created-or-looked-up on the PLATFORM (same account as the session); the 5%
+// MARKETPLACE_FEE_PERCENT rides as `subscription_data.application_fee_percent` and
+// the remainder routes to the seller via `subscription_data.transfer_data.destination`
+// (a destination charge — the customer + subscription + price live on the
+// platform). An idempotency key keeps a re-attempt from creating a duplicate
+// session, and a pending marketplace_purchases row is persisted (the subscription
+// id itself arrives via the P4 webhook → updatePurchaseBySubscriptionId).
 //
 // ─────────────────────────────────────────────────────────────────────────────
 // MONEY-SAFETY (same contract as P1 — non-negotiable):
@@ -50,8 +51,9 @@ export type CreateMonthlyAgentSubscriptionInput = {
 };
 
 /**
- * Build a monthly Stripe Connect SUBSCRIPTION Checkout Session for a paid
- * `monthly` agent listing on the SELLER's connected account, persist a pending
+ * Build a monthly SUBSCRIPTION Checkout Session for a paid `monthly` agent
+ * listing as a PLATFORM destination charge (session + price + subscription on the
+ * platform; seller paid via transfer_data.destination), persist a pending
  * purchase row, and return the Checkout URL. Returns { skipped } (and makes NO
  * Stripe call) when the billing flag is OFF, the model isn't `monthly`, the
  * monthly price is non-positive, the seller isn't Connect-ready, or no Stripe
@@ -88,11 +90,11 @@ export async function createMonthlyAgentSubscription(
   const feePercent = MARKETPLACE_FEE_PERCENT;
   const idempotencyKey = `mkt-monthly-${buyerOrgId}-${listing.id}`;
 
-  // 6) Create-or-lookup a recurring MONTHLY price on the seller's connected
-  //    account for this listing's amount. The destination account owns the
-  //    product/price (the subscription bills on its books; SF takes the % fee).
+  // 6) Create-or-lookup a recurring MONTHLY price on the PLATFORM for this
+  //    listing's amount. The price + subscription live on the platform; the
+  //    seller is paid via the session's transfer_data.destination (a destination
+  //    charge), and SF takes the % application fee.
   const priceRef: RecurringPriceRef = await stripe.resolveRecurringPrice({
-    connectedAccountId: destination,
     listingId: listing.id,
     listingName: listing.name,
     unitAmountCents: amountCents,
@@ -100,8 +102,9 @@ export async function createMonthlyAgentSubscription(
     usageType: "licensed",
   });
 
-  // 7) Create the SUBSCRIPTION Checkout Session on the seller's connected
-  //    account. Stripe creates the subscription + handles recurring billing.
+  // 7) Create the SUBSCRIPTION Checkout Session on the PLATFORM (no stripeAccount).
+  //    Stripe creates the subscription + handles recurring billing; the funds
+  //    settle out to the seller via subscription_data.transfer_data.destination.
   const session = await stripe.checkout.sessions.create(
     {
       mode: "subscription",

@@ -153,6 +153,8 @@ describe("createMeteredAgentSubscription — happy path", () => {
     assert.equal(calls.length, 1);
     const { params, options } = calls[0];
     assert.equal(params.mode, "subscription");
+    // PLATFORM destination charge: created on the PLATFORM (NO { stripeAccount }).
+    assert.equal(options?.stripeAccount, undefined);
     // A metered line item carries the price, NO quantity (Stripe bills usage).
     assert.equal(params.line_items?.length, 1);
     assert.equal(params.line_items?.[0]?.price, "price_metered_1");

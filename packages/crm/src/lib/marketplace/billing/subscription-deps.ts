@@ -32,8 +32,8 @@ export type RecurringCheckoutListing = StorefrontPricingRow & {
   description?: string | null;
 };
 
-/** The reference to a recurring Price resolved on the seller's connected
- *  account. The metered path also returns the meter id it created/looked-up. */
+/** The reference to a recurring Price resolved on the PLATFORM account. The
+ *  metered path also returns the meter id it created/looked-up. */
 export type RecurringPriceRef = {
   /** The Stripe Price id (price_…) the Checkout line item references. */
   priceId: string;
@@ -41,13 +41,14 @@ export type RecurringPriceRef = {
   meterId?: string | null;
 };
 
-/** Params for create-or-lookup of a recurring Price on a connected account. */
+/** Params for create-or-lookup of a recurring Price on the PLATFORM account. No
+ *  connected-account id: the price + meter live on the platform (matching the
+ *  platform Checkout session); the seller destination is applied at the session
+ *  level via subscription_data.transfer_data, not on the price. */
 export type ResolveRecurringPriceParams = {
-  /** The seller's Stripe Connect account id the price is created on. */
-  connectedAccountId: string;
   /** The listing id (used to make the lookup_key stable + idempotent). */
   listingId: string;
-  /** The listing name (the product label on the connected account). */
+  /** The listing name (the product label on the platform account). */
   listingName: string;
   /** The flat unit amount in cents (per month for licensed; per unit for metered). */
   unitAmountCents: number;

@@ -7,10 +7,11 @@
 // application fee routed to SF; the rest transfers to the seller's account).
 //
 // MONEY-SAFE: `stripeMode` records whether the row was created against Stripe
-// TEST or LIVE keys (resolveBillingMode). v1 default is 'test'; a 'live' row is
-// only written when SF_MARKETPLACE_BILLING_LIVE=true AND a live key is present
-// AND the seller's Connect account is charges_enabled. No real card is charged in
-// any dev/test path — the whole flow is inert without a Stripe key.
+// TEST or LIVE keys (resolveBillingMode — KEY-DERIVED). A 'live' row is written
+// iff STRIPE_SECRET_KEY is a live key (sk_live_/rk_live_) AND billing is enabled
+// (SF_MARKETPLACE_BILLING=true) AND the seller's Connect account is charges_enabled;
+// a test key (or no key → inert) is always 'test'. No real card is charged in any
+// dev/test path — the whole flow is inert without a Stripe key.
 //
 // jsonb-free on purpose: this is a flat settlement ledger (mirrors invoices /
 // acp_checkout_sessions). Buyer-scoped reads use buyerOrgId; the webhook (P4)

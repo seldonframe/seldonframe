@@ -131,11 +131,14 @@ describe("createMonthlyAgentSubscription — happy path", () => {
     assert.equal(result.stripeMode, "test");
 
     // The recurring price was created-or-looked-up at the REAL monthly amount.
+    // (It carries NO connected-account id — the price is created on the PLATFORM;
+    // see recurring-price.spec.ts for the no-{stripeAccount} proof. The seller
+    // destination rides on the session's transfer_data, asserted below.)
     assert.equal(priceCalls.length, 1);
     assert.equal(priceCalls[0].unitAmountCents, 2900);
     assert.equal(priceCalls[0].interval, "month");
     assert.equal(priceCalls[0].usageType, "licensed");
-    assert.equal(priceCalls[0].connectedAccountId, "acct_seller_m");
+    assert.equal(priceCalls[0].listingId, "listing-m1");
 
     // Exactly one Checkout Session call.
     assert.equal(calls.length, 1);
@@ -143,6 +146,11 @@ describe("createMonthlyAgentSubscription — happy path", () => {
 
     // mode subscription.
     assert.equal(params.mode, "subscription");
+
+    // PLATFORM destination charge: the session is created on the PLATFORM (NO
+    // { stripeAccount } option) — the customer + subscription + price live on the
+    // platform; the seller is paid via transfer_data.destination below.
+    assert.equal(options?.stripeAccount, undefined);
 
     // Line item references the resolved recurring price.
     assert.equal(params.line_items?.length, 1);
@@ -174,11 +182,10 @@ describe("createMonthlyAgentSubscription — happy path", () => {
     assert.equal(row.stripeCheckoutId, "cs_test_sub_123");
   });
 
-  test("stripeMode is 'live' only with the go-live flag + a live key", async () => {
+  test("stripeMode is 'live' (key-derived) when a live key is present", async () => {
     const { deps, inserted } = makeDeps({
       env: {
         SF_MARKETPLACE_BILLING: "true",
-        SF_MARKETPLACE_BILLING_LIVE: "true",
         STRIPE_SECRET_KEY: "sk_live_abc",
       },
     });

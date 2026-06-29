@@ -5,30 +5,31 @@
 // resolveProcessor env-flag idiom, but pure + branchless so it's trivially
 // testable):
 //
-//   • resolveBillingMode(env) → 'test' | 'live'. LIVE is only returned when BOTH
-//     (a) SF_MARKETPLACE_BILLING_LIVE === "true" AND (b) a LIVE secret key is
-//     present (sk_live_…). Anything else — flag unset, a test/restricted key, no
-//     key — resolves to 'test'. So a row can only be stamped 'live' (i.e. a real
-//     charge attempted) under an explicit, deliberate go-live.
+//   • resolveBillingMode(env) → 'test' | 'live'. The mode is KEY-DERIVED: it is
+//     'live' iff STRIPE_SECRET_KEY is a live key (sk_live_… / rk_live_…), else
+//     'test' (a test/restricted-test key or no key). Because the label is read
+//     straight off the key in play, the 'live' stamp can NEVER disagree with the
+//     key that actually created the row — there is no separate go-live flag to
+//     fall out of sync with the configured key.
 //
 //   • canChargeListing({ priceModel, connectReady, billingEnabled }) → boolean.
-//     The per-install gate: charge ONLY a `onetime` listing whose seller is
-//     Connect-ready AND when the SF_MARKETPLACE_BILLING feature flag is ON. Any
-//     other model (monthly/per_usage/per_outcome — P2/P3), a not-ready seller, or
-//     the flag OFF (the default) → false → keep today's free-install behavior.
+//     The per-install gate: charge ONLY a settle-able listing whose seller is
+//     Connect-ready AND when the SF_MARKETPLACE_BILLING feature flag is ON. A
+//     not-ready seller, an unknown model, or the flag OFF (the default) → false →
+//     keep today's free-install behavior.
 //
 // Neither function ever touches Stripe or the network; the inert-without-a-key
-// guarantee is enforced separately by getStripeClient() returning null.
+// guarantee is enforced separately by getStripeClient() returning null. The
+// single enable switch is SF_MARKETPLACE_BILLING (isBillingEnabled); whether a
+// charge is REAL is then purely a function of which Stripe key is configured.
 
 import type { MarketplacePriceModel, MarketplaceStripeMode } from "@/db/schema/marketplace-purchases";
 
 /** The feature flag that turns marketplace fiat billing ON at all. Default OFF:
- *  an unset / non-"true" value keeps the current free-to-install behavior. */
+ *  an unset / non-"true" value keeps the current free-to-install behavior. This
+ *  is the SINGLE billing flag — there is no separate go-live flag; 'live' vs
+ *  'test' is derived from the Stripe key (resolveBillingMode). */
 export const MARKETPLACE_BILLING_FLAG = "SF_MARKETPLACE_BILLING";
-
-/** The SEPARATE go-live flag. Even with billing ON, a 'live' (real-money) charge
- *  also requires this === "true" AND a live key. Default OFF → test mode. */
-export const MARKETPLACE_BILLING_LIVE_FLAG = "SF_MARKETPLACE_BILLING_LIVE";
 
 /** A minimal env shape (so the gates take a plain record and stay pure/testable
  *  rather than reaching into process.env directly). */
@@ -43,19 +44,20 @@ export function isLiveStripeKey(key: string | undefined | null): boolean {
 }
 
 /**
- * Resolve the Stripe billing mode from the environment. Returns 'live' ONLY when
- * the explicit go-live flag is "true" AND a live secret key is present. Every
- * other combination (flag off, test key, restricted, or no key) → 'test'. This
- * is the single place that decides whether a real charge is even possible.
+ * Resolve the Stripe billing mode from the environment — KEY-DERIVED. Returns
+ * 'live' iff STRIPE_SECRET_KEY is a live key (sk_live_… / rk_live_…); every other
+ * case (a test/restricted-test key, or no key) → 'test'. The label therefore
+ * always matches the actual key in play: a row can only be stamped 'live' when a
+ * live key created it, so dev/test (a test key, or no key → inert) can never
+ * mislabel — or attempt — a real charge.
  */
 export function resolveBillingMode(env: BillingEnv): MarketplaceStripeMode {
-  const liveFlag = (env[MARKETPLACE_BILLING_LIVE_FLAG] ?? "").trim() === "true";
-  const liveKey = isLiveStripeKey(env.STRIPE_SECRET_KEY);
-  return liveFlag && liveKey ? "live" : "test";
+  return isLiveStripeKey(env.STRIPE_SECRET_KEY) ? "live" : "test";
 }
 
 /** True when the marketplace billing FEATURE flag is ON (SF_MARKETPLACE_BILLING
- *  === "true"). Default OFF — keeps the free-install path. */
+ *  === "true"). Default OFF — keeps the free-install path. The single enable
+ *  switch for marketplace fiat billing. */
 export function isBillingEnabled(env: BillingEnv): boolean {
   return (env[MARKETPLACE_BILLING_FLAG] ?? "").trim() === "true";
 }

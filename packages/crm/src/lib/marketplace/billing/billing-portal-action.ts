@@ -40,7 +40,7 @@ export async function createMarketplaceBillingPortalAction(input: {
   const returnUrl = `${baseUrl}/marketplace/${purchase.slug}`;
 
   const result = await resolveMarketplacePortalSession(
-    { stripeCustomerId: purchase.stripeCustomerId, sellerOrgId: purchase.sellerOrgId },
+    { stripeCustomerId: purchase.stripeCustomerId },
     buildMarketplacePortalDeps(returnUrl),
   );
 

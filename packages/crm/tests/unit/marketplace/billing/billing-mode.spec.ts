@@ -1,7 +1,8 @@
 // Unit tests for lib/marketplace/billing/billing-mode.ts — the PURE money-safety
-// gates. No I/O, no Stripe. The whole point is to prove a real ('live') charge is
-// only ever reachable under an explicit flag + a live key, and that charging is
-// off by default.
+// gates. No I/O, no Stripe. The mode is now KEY-DERIVED: the label ALWAYS matches
+// the actual Stripe key in play (a live key → 'live', anything else → 'test'), so
+// the 'live' label can never disagree with the key that created the row. Charging
+// is gated separately by the single SF_MARKETPLACE_BILLING enable flag.
 
 import { describe, test } from "node:test";
 import assert from "node:assert/strict";
@@ -13,57 +14,31 @@ import {
   resolveBillingMode,
 } from "../../../../src/lib/marketplace/billing/billing-mode";
 
-// ─── resolveBillingMode ──────────────────────────────────────────────────────
+// ─── resolveBillingMode (key-derived) ────────────────────────────────────────
 
 describe("resolveBillingMode", () => {
-  test("live ONLY when the go-live flag is 'true' AND a live key is present", () => {
-    assert.equal(
-      resolveBillingMode({
-        SF_MARKETPLACE_BILLING_LIVE: "true",
-        STRIPE_SECRET_KEY: "sk_live_abc123",
-      }),
-      "live",
-    );
+  test("live iff STRIPE_SECRET_KEY is a live key (sk_live_)", () => {
+    assert.equal(resolveBillingMode({ STRIPE_SECRET_KEY: "sk_live_abc123" }), "live");
   });
 
-  test("flag 'true' but a TEST key → test (never live on a test key)", () => {
-    assert.equal(
-      resolveBillingMode({
-        SF_MARKETPLACE_BILLING_LIVE: "true",
-        STRIPE_SECRET_KEY: "sk_test_abc123",
-      }),
-      "test",
-    );
+  test("a restricted live key (rk_live_) → live", () => {
+    assert.equal(resolveBillingMode({ STRIPE_SECRET_KEY: "rk_live_x" }), "live");
   });
 
-  test("a live key but the flag unset → test (no silent go-live)", () => {
-    assert.equal(resolveBillingMode({ STRIPE_SECRET_KEY: "sk_live_abc123" }), "test");
+  test("a TEST key → test", () => {
+    assert.equal(resolveBillingMode({ STRIPE_SECRET_KEY: "sk_test_abc123" }), "test");
   });
 
-  test("flag 'true' but NO key → test (inert)", () => {
-    assert.equal(resolveBillingMode({ SF_MARKETPLACE_BILLING_LIVE: "true" }), "test");
+  test("a restricted TEST key (rk_test_) → test", () => {
+    assert.equal(resolveBillingMode({ STRIPE_SECRET_KEY: "rk_test_x" }), "test");
   });
 
-  test("empty env → test", () => {
+  test("no key → test (inert)", () => {
     assert.equal(resolveBillingMode({}), "test");
   });
 
-  test("flag set to anything other than 'true' → test", () => {
-    assert.equal(
-      resolveBillingMode({ SF_MARKETPLACE_BILLING_LIVE: "1", STRIPE_SECRET_KEY: "sk_live_x" }),
-      "test",
-    );
-    assert.equal(
-      resolveBillingMode({ SF_MARKETPLACE_BILLING_LIVE: "TRUE", STRIPE_SECRET_KEY: "sk_live_x" }),
-      "test",
-    );
-  });
-
-  test("a restricted live key (rk_live_) counts as live", () => {
-    assert.equal(
-      resolveBillingMode({ SF_MARKETPLACE_BILLING_LIVE: "true", STRIPE_SECRET_KEY: "rk_live_x" }),
-      "live",
-    );
+  test("empty key → test", () => {
+    assert.equal(resolveBillingMode({ STRIPE_SECRET_KEY: "" }), "test");
   });
 });
 

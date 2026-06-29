@@ -8,10 +8,11 @@
 -- fiat-Connect settlement record for the storefront/rental install path.
 --
 -- MONEY-SAFE: `stripe_mode` records whether the row was created against Stripe
--- TEST or LIVE keys. v1 default is 'test' (resolveBillingMode); a 'live' row is
--- only ever written when SF_MARKETPLACE_BILLING_LIVE=true AND a live key is
--- present AND the seller's Connect account is charges_enabled. No real card is
--- charged in dev/test — the whole path is inert without a Stripe key.
+-- TEST or LIVE keys (resolveBillingMode — KEY-DERIVED). A 'live' row is written
+-- iff STRIPE_SECRET_KEY is a live key AND billing is enabled
+-- (SF_MARKETPLACE_BILLING=true) AND the seller's Connect account is charges_enabled;
+-- a test key (or no key → inert) is always 'test'. No real card is charged in
+-- dev/test — the whole path is inert without a Stripe key.
 --
 -- Buyer-scoped reads use (buyer_org_id); the webhook (P4) reconciles by
 -- (stripe_checkout_id); seller earnings (P5) roll up by (seller_org_id).

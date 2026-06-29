@@ -1,11 +1,11 @@
 // #139 P3 — metered (per_usage / per_outcome) agent SUBSCRIPTION + usage report.
 //
-// THE PROOF: a Stripe Connect Checkout Session in `mode:"subscription"` whose
-// recurring Price is METERED (usage-based), at the listing's per-call (per_usage)
-// or per-outcome (per_outcome) amount, on the SELLER's connected account — same
-// 5% application_fee_percent + seller transfer destination + idempotency + a
-// persisted pending purchase row as the monthly path. The renter is billed only
-// for what they consume; SeldonFrame reports the consumption.
+// THE PROOF: a Stripe Checkout Session in `mode:"subscription"` whose recurring
+// Price is METERED (usage-based), at the listing's per-call (per_usage) or
+// per-outcome (per_outcome) amount, created on the PLATFORM (no { stripeAccount })
+// — same 5% application_fee_percent + seller transfer destination + idempotency +
+// a persisted pending purchase row as the monthly path (a destination charge).
+// The renter is billed only for what they consume; SeldonFrame reports the usage.
 //
 // reportAgentUsage(...) pushes ONE usage record / meter event to Stripe. It is
 // wired (behind the flag, fail-soft) at the existing `agent_rental_call` accrual
@@ -68,9 +68,10 @@ function meteredUnitAmountCents(listing: RecurringCheckoutListing): number {
 
 /**
  * Build a METERED subscription Checkout Session for a `per_usage` / `per_outcome`
- * agent listing on the SELLER's connected account, persist a pending purchase
- * row, and return the Checkout URL. Returns { skipped } (NO Stripe call) when the
- * billing flag is OFF, the model isn't metered, the per-unit amount is
+ * agent listing as a PLATFORM destination charge (session + metered price + meter
+ * on the platform; seller paid via transfer_data.destination), persist a pending
+ * purchase row, and return the Checkout URL. Returns { skipped } (NO Stripe call)
+ * when the billing flag is OFF, the model isn't metered, the per-unit amount is
  * non-positive, the seller isn't Connect-ready, or no Stripe key is configured.
  */
 export async function createMeteredAgentSubscription(
@@ -103,10 +104,10 @@ export async function createMeteredAgentSubscription(
   const feePercent = MARKETPLACE_FEE_PERCENT;
   const idempotencyKey = `mkt-metered-${buyerOrgId}-${listing.id}`;
 
-  // 6) Create-or-lookup a METERED recurring price on the seller's connected
-  //    account (usage_type:"metered" + a meter the usage records report to).
+  // 6) Create-or-lookup a METERED recurring price on the PLATFORM
+  //    (usage_type:"metered" + a platform meter the usage records report to). The
+  //    seller is paid via the session's transfer_data.destination (destination charge).
   const priceRef: RecurringPriceRef = await stripe.resolveRecurringPrice({
-    connectedAccountId: destination,
     listingId: listing.id,
     listingName: listing.name,
     unitAmountCents,

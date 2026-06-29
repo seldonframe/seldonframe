@@ -15,14 +15,13 @@ import { stripeConnections } from "@/db/schema/payments";
 import { marketplacePurchases } from "@/db/schema/marketplace-purchases";
 import { getStripeClient } from "@seldonframe/payments";
 import { createPurchase } from "./purchases-store";
+import { resolveRecurringPriceLive } from "./recurring-price";
 import type {
   ConnectStatus,
   CreateOneTimeAgentCheckoutDeps,
   StripeCheckoutSeam,
 } from "./one-time-checkout";
 import type {
-  RecurringPriceRef,
-  ResolveRecurringPriceParams,
   SubscriptionCheckoutDeps,
   SubscriptionCheckoutSeam,
 } from "./subscription-deps";
@@ -64,82 +63,15 @@ export function buildOneTimeCheckoutDeps(): CreateOneTimeAgentCheckoutDeps {
 }
 
 // ─── P2/P3: recurring (subscription) deps ────────────────────────────────────
-
-/** A stable lookup_key so re-listing the same listing at the same amount reuses
- *  one Price on the seller's connected account (idempotent create-or-lookup). */
-function recurringLookupKey(params: ResolveRecurringPriceParams): string {
-  return [
-    "sf",
-    params.usageType === "metered" ? "metered" : "monthly",
-    params.listingId,
-    params.unitAmountCents,
-  ].join("_");
-}
-
-/** The (live) create-or-lookup of a recurring Price on the SELLER's connected
- *  account. For metered prices it also ensures a Stripe Meter exists and points
- *  the price at it. Runs on the connected account via `{ stripeAccount }`. */
-async function resolveRecurringPriceLive(
-  stripe: Stripe,
-  params: ResolveRecurringPriceParams,
-): Promise<RecurringPriceRef> {
-  const requestOpts: Stripe.RequestOptions = { stripeAccount: params.connectedAccountId };
-  const lookupKey = recurringLookupKey(params);
-
-  // 1) Reuse an existing price with this lookup_key if present.
-  const existing = await stripe.prices.list(
-    { lookup_keys: [lookupKey], active: true, limit: 1, expand: ["data.recurring"] },
-    requestOpts,
-  );
-  const found = existing.data[0];
-  if (found) {
-    const meterId =
-      typeof found.recurring?.meter === "string" ? found.recurring.meter : null;
-    return { priceId: found.id, meterId };
-  }
-
-  // 2) For metered, ensure a meter exists (event_name is stable per listing).
-  let meterId: string | null = null;
-  let eventName: string | undefined;
-  if (params.usageType === "metered") {
-    eventName = `sf_agent_usage_${params.listingId}`;
-    const meters = await stripe.billing.meters.list({ status: "active", limit: 100 }, requestOpts);
-    const existingMeter = meters.data.find((m) => m.event_name === eventName);
-    if (existingMeter) {
-      meterId = existingMeter.id;
-    } else {
-      const meter = await stripe.billing.meters.create(
-        {
-          display_name: `SeldonFrame agent usage — ${params.listingName}`.slice(0, 250),
-          event_name: eventName,
-          default_aggregation: { formula: "sum" },
-        },
-        requestOpts,
-      );
-      meterId = meter.id;
-    }
-  }
-
-  // 3) Create the recurring price (licensed flat monthly OR metered usage).
-  const price = await stripe.prices.create(
-    {
-      currency: "usd",
-      unit_amount: params.unitAmountCents,
-      lookup_key: lookupKey,
-      product_data: { name: `SeldonFrame Agent: ${params.listingName}` },
-      recurring: {
-        interval: params.interval,
-        usage_type: params.usageType,
-        ...(meterId ? { meter: meterId } : {}),
-      },
-    },
-    requestOpts,
-  );
-  return { priceId: price.id, meterId };
-}
+//
+// The recurring Price + Meter create-or-lookup lives in ./recurring-price.ts (so
+// its PLATFORM-only behavior — no { stripeAccount } — is unit-testable with a fake
+// Stripe). Here we just wrap the live client into the narrow seams.
 
 /** Wrap the live Stripe client into the narrow SubscriptionCheckoutSeam, or null
- *  when no key is configured (→ the creator skips / stays inert). */
+ *  when no key is configured (→ the creator skips / stays inert). Both the
+ *  Checkout session and the recurring price are created on the PLATFORM (no
+ *  stripeAccount); the seller is paid via the session's transfer_data.destination. */
 function getSubscriptionSeam(): SubscriptionCheckoutSeam | null {
   const stripe = getStripeClient();
   if (!stripe) return null;
@@ -149,6 +81,7 @@ function getSubscriptionSeam(): SubscriptionCheckoutSeam | null {
         create: (params, options) => stripe.checkout.sessions.create(params, options),
       },
     },
+    // The live Stripe client satisfies the narrower RecurringPriceStripe seam.
     resolveRecurringPrice: (params) => resolveRecurringPriceLive(stripe, params),
   };
 }
@@ -222,17 +155,14 @@ export function buildUsageReportDeps(): ReportAgentUsageDeps {
 
 // ─── P4: buyer billing-portal deps ───────────────────────────────────────────
 
-/** Build the production deps for resolveMarketplacePortalSession. The seller
- *  account is resolved via the SAME readConnectStatus the checkout uses (the
- *  customer + subscription live on that connected account). Inert without a
- *  Stripe key (getStripeClient() → null → the portal helper skips). */
+/** Build the production deps for resolveMarketplacePortalSession. The buyer's
+ *  customer + subscription live on the PLATFORM (the subscriptions are platform
+ *  destination charges), so the portal session is created on the platform for the
+ *  buyer's platform customer id — no connected-account resolution needed. Inert
+ *  without a Stripe key (getStripeClient() → null → the portal helper skips). */
 export function buildMarketplacePortalDeps(returnUrl: string): MarketplacePortalDeps {
   return {
     getStripe: () => getStripeClient() as BillingPortalSeam | null,
-    resolveSellerAccountId: async (sellerOrgId: string) => {
-      const status = await readConnectStatus(sellerOrgId);
-      return status.ready ? status.accountId : null;
-    },
     env: process.env as Record<string, string | undefined>,
     returnUrl,
   };
