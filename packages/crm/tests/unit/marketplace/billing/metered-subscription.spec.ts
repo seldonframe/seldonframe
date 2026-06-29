@@ -181,14 +181,20 @@ describe("createMeteredAgentSubscription — happy path", () => {
     assert.equal(inserted[0].stripeCheckoutId, "cs_test_metered_1");
   });
 
-  test("per_outcome → a metered subscription at the per-outcome amount", async () => {
+  test("per_outcome → a metered subscription at the per-outcome amount (DIRECT charge)", async () => {
     const { deps, calls, priceCalls, inserted } = makeDeps();
     const result = await createMeteredAgentSubscription({ ...INPUT, listing: PER_OUTCOME }, deps);
     assert.equal(result.ok, true);
     if (!result.ok) throw new Error("unreachable");
     assert.equal(priceCalls[0].unitAmountCents, 1000);
     assert.equal(priceCalls[0].usageType, "metered");
+    assert.equal(priceCalls[0].connectAccountId, "acct_seller_u");
     assert.equal(calls[0].params.metadata?.priceModel, "per_outcome");
+    // Same direct-charge mechanism as per_usage: created ON the connected account,
+    // 5% application_fee_percent, NO transfer_data.
+    assert.equal(calls[0].options?.stripeAccount, "acct_seller_u");
+    assert.equal(calls[0].params.subscription_data?.application_fee_percent, 5);
+    assert.equal(calls[0].params.subscription_data?.transfer_data, undefined);
     assert.equal(inserted[0].priceModel, "per_outcome");
     assert.equal(inserted[0].amountCents, 1000);
   });

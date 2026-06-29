@@ -32,6 +32,7 @@ export function ListingActionsClient({
   snippet,
   isAuthenticated = false,
   signInUrl = "/login",
+  justPurchased = false,
 }: {
   agent: StorefrontAgent;
   mcpEndpoint: string;
@@ -42,6 +43,10 @@ export function ListingActionsClient({
   // server action — which would 500 with a masked error in production.
   isAuthenticated?: boolean;
   signInUrl?: string;
+  // Stripe Checkout returned the buyer here with ?purchased=true. Show the clean
+  // "You're subscribed / installed ✅" confirmation instead of re-showing the
+  // "Install into my workspace" button (the "redirected nowhere" confusion).
+  justPurchased?: boolean;
 }): ReactElement {
   const router = useRouter();
   // Send a logged-out buyer to the app-origin sign-in (with a callbackUrl back to
@@ -219,6 +224,23 @@ export function ListingActionsClient({
   const paidBlurb = isMonthlyOverride
     ? "Billed monthly. Cancel anytime — the agent keeps everything it learned."
     : "Cancel anytime — the agent keeps everything it learned, running on your own workspace and keys.";
+
+  // A paid recurring/metered listing → "subscribed"; free/one-time → "installed".
+  const isRecurring = override ? /\/mo\b|\bper\b/i.test(override) : false;
+
+  // POST-PURCHASE (?purchased=true): Stripe Checkout returned the buyer here.
+  // Show a clean confirmation in the buy box instead of re-showing "Install"
+  // (the "redirected nowhere" confusion). The Rent-via-MCP panel still works for
+  // anyone who also wants to call the agent over MCP, so we keep it available.
+  if (justPurchased) {
+    return (
+      <PurchasedConfirmation
+        agent={agent}
+        isRecurring={isRecurring}
+        onOpenStudio={() => router.push("/studio/agents")}
+      />
+    );
+  }
 
   return (
     <>
@@ -453,6 +475,92 @@ function Assurance({ icon, text }: { icon: "check" | "shield"; text: string }): 
         <MarketplaceIcon name={icon} size={17} />
       </span>
       {text}
+    </div>
+  );
+}
+
+/**
+ * The post-Checkout success state shown in the buy box when the buyer returns
+ * with ?purchased=true. Replaces the price + "Install into my workspace" button
+ * with a clear "You're subscribed ✅ / installed" confirmation + an Open-in-Studio
+ * CTA — instead of re-showing the Install button (which looked like the redirect
+ * went nowhere). Recurring/metered listings read "subscribed"; free/one-time read
+ * "installed".
+ */
+function PurchasedConfirmation({
+  agent,
+  isRecurring,
+  onOpenStudio,
+}: {
+  agent: StorefrontAgent;
+  isRecurring: boolean;
+  onOpenStudio: () => void;
+}): ReactElement {
+  const heading = isRecurring ? "You're subscribed" : "Installed";
+  const blurb = isRecurring
+    ? `${agent.name} is set up in your Studio and billing is active. Manage or cancel anytime from your workspace billing.`
+    : `${agent.name} is set up in your Studio and ready to deploy.`;
+  return (
+    <div
+      style={{
+        background: "#fff",
+        border: "1px solid rgba(0,137,123,0.30)",
+        borderRadius: 20,
+        padding: 24,
+        boxShadow: "0 1px 2px rgba(34,29,23,0.05),0 20px 44px rgba(34,29,23,0.10)",
+      }}
+    >
+      <div
+        style={{
+          width: 52,
+          height: 52,
+          borderRadius: 15,
+          background: "rgba(0,137,123,0.10)",
+          color: MKT.green,
+          display: "flex",
+          alignItems: "center",
+          justifyContent: "center",
+          marginBottom: 16,
+        }}
+      >
+        <MarketplaceIcon name="check" size={28} stroke={2.6} />
+      </div>
+      <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 8 }}>
+        <h2 style={{ margin: 0, fontSize: 22, fontWeight: 700, letterSpacing: "-0.015em" }}>{heading}</h2>
+        <span style={{ fontSize: 20 }} aria-hidden>
+          ✅
+        </span>
+      </div>
+      <p style={{ margin: "0 0 20px", fontSize: 14.5, lineHeight: 1.55, color: "rgba(34,29,23,0.66)" }}>{blurb}</p>
+      <button
+        type="button"
+        className="sf-btn"
+        onClick={onOpenStudio}
+        style={{
+          width: "100%",
+          border: "none",
+          background: MKT.green,
+          color: "#fff",
+          fontFamily: "inherit",
+          fontWeight: 700,
+          fontSize: 16,
+          padding: 15,
+          borderRadius: 13,
+          cursor: "pointer",
+          boxShadow: "0 8px 20px rgba(0,137,123,0.28)",
+          display: "flex",
+          alignItems: "center",
+          justifyContent: "center",
+          gap: 9,
+        }}
+      >
+        Open in Studio
+        <MarketplaceIcon name="arrowRight" size={17} />
+      </button>
+      <div style={{ marginTop: 18, paddingTop: 16, borderTop: "1px solid rgba(34,29,23,0.10)", display: "flex", flexDirection: "column", gap: 11 }}>
+        <Assurance icon="check" text="Running on your own workspace and keys" />
+        {isRecurring ? <Assurance icon="check" text="Cancel anytime from workspace billing" /> : null}
+      </div>
     </div>
   );
 }

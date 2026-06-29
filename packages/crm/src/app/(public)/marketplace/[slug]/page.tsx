@@ -43,6 +43,8 @@ import {
 
 type ListingPageProps = {
   params: Promise<{ slug: string }>;
+  // Stripe Checkout returns the buyer here with ?purchased=true (the success_url).
+  searchParams: Promise<{ purchased?: string }>;
 };
 
 async function loadAgent(slug: string): Promise<{ agent: StorefrontAgent; others: StorefrontAgent[] } | null> {
@@ -82,8 +84,12 @@ export async function generateMetadata({ params }: ListingPageProps): Promise<Me
   };
 }
 
-export default async function ListingDetailPage({ params }: ListingPageProps) {
+export default async function ListingDetailPage({ params, searchParams }: ListingPageProps) {
   const { slug } = await params;
+  const { purchased } = await searchParams;
+  // Stripe Checkout redirects back to ?purchased=true on success — render the
+  // "You're subscribed / installed" confirmation instead of re-showing "Install".
+  const justPurchased = purchased === "true";
   const found = await loadAgent(slug);
   if (!found) notFound();
 
@@ -438,6 +444,7 @@ export default async function ListingDetailPage({ params }: ListingPageProps) {
               snippet={snippet}
               isAuthenticated={isAuthenticated}
               signInUrl={signInUrl}
+              justPurchased={justPurchased}
             />
           </aside>
         </div>
