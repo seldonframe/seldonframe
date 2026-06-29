@@ -10,7 +10,7 @@
 // they are not org-scoped on write. getPurchase IS org-scoped (the buyer can
 // only read its own purchases) — pass the buyer's orgId.
 
-import { and, eq } from "drizzle-orm";
+import { and, desc, eq } from "drizzle-orm";
 import { db } from "@/db";
 import {
   marketplacePurchases,
@@ -63,6 +63,39 @@ export async function updatePurchaseBySubscriptionId(
     .update(marketplacePurchases)
     .set({ ...patch, updatedAt: new Date() })
     .where(eq(marketplacePurchases.stripeSubscriptionId, key))
+    .returning();
+  return row ?? null;
+}
+
+/**
+ * Patch the most-recent purchase whose Stripe CUSTOMER id matches — the
+ * ordering-race fallback (P3): an `invoice.paid` that arrives before
+ * `checkout.session.completed` stamped the subscription id can still reconcile by
+ * customer id. Orders by createdAt desc + patches ONE row (a customer could in
+ * principle hold multiple marketplace subscriptions; the most recent pending one
+ * is the one this invoice is activating). Always bumps updatedAt. Returns the
+ * updated row, or null if no row carried that customer id. `id`/`createdAt` are
+ * not patchable.
+ */
+export async function updatePurchaseByCustomerId(
+  stripeCustomerId: string,
+  patch: Partial<Omit<NewMarketplacePurchase, "id" | "createdAt">>,
+): Promise<MarketplacePurchaseRow | null> {
+  const key = (stripeCustomerId ?? "").trim();
+  if (!key) return null;
+  // Resolve the single most-recent matching row's id, then patch by primary key
+  // (a plain UPDATE … ORDER BY LIMIT 1 isn't portable in Postgres).
+  const [target] = await db
+    .select({ id: marketplacePurchases.id })
+    .from(marketplacePurchases)
+    .where(eq(marketplacePurchases.stripeCustomerId, key))
+    .orderBy(desc(marketplacePurchases.createdAt))
+    .limit(1);
+  if (!target) return null;
+  const [row] = await db
+    .update(marketplacePurchases)
+    .set({ ...patch, updatedAt: new Date() })
+    .where(eq(marketplacePurchases.id, target.id))
     .returning();
   return row ?? null;
 }

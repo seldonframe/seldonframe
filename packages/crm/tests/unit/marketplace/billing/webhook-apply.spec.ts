@@ -21,7 +21,7 @@ import type { MarketplacePurchasePatch } from "../../../../src/lib/marketplace/b
 
 // ─── fakes ───────────────────────────────────────────────────────────────────
 
-type StoreCall = { kind: "checkout" | "subscription"; key: string; patch: MarketplacePurchasePatch };
+type StoreCall = { kind: "checkout" | "subscription" | "customer"; key: string; patch: MarketplacePurchasePatch };
 
 function makeFakeStore(opts?: { matched?: boolean }): {
   store: MarketplaceWebhookStore;
@@ -39,6 +39,33 @@ function makeFakeStore(opts?: { matched?: boolean }): {
     async updateBySubscriptionId(key, patch) {
       calls.push({ kind: "subscription", key, patch });
       return row;
+    },
+    async updateByCustomerId(key, patch) {
+      calls.push({ kind: "customer", key, patch });
+      return row;
+    },
+  };
+  return { store, calls };
+}
+
+/** A store where the SUBSCRIPTION-id lookup misses (no row carries the sub id yet
+ *  — models an invoice racing ahead of checkout.session.completed) but the
+ *  CUSTOMER-id lookup hits. Records every call. */
+function makeRaceStore(): { store: MarketplaceWebhookStore; calls: StoreCall[] } {
+  const calls: StoreCall[] = [];
+  const matchedRow = { id: "purchase-race" } as MarketplacePurchaseRow;
+  const store: MarketplaceWebhookStore = {
+    async updateByCheckoutId(key, patch) {
+      calls.push({ kind: "checkout", key, patch });
+      return matchedRow;
+    },
+    async updateBySubscriptionId(key, patch) {
+      calls.push({ kind: "subscription", key, patch });
+      return null; // ← the race: no row carries the subscription id yet.
+    },
+    async updateByCustomerId(key, patch) {
+      calls.push({ kind: "customer", key, patch });
+      return matchedRow; // ← reconciled by customer id instead.
     },
   };
   return { store, calls };
@@ -136,13 +163,49 @@ describe("handleMarketplaceWebhookRequest — verified event applies once", () =
     assert.equal(calls[0].patch.status, "canceled");
   });
 
-  test("unknown purchase (no row) → still 200, matched:false, ONE attempt", async () => {
+  test("unknown purchase (no row, no customer) → still 200, matched:false, ONE attempt", async () => {
     const { store, calls } = makeFakeStore({ matched: false });
     const event = ev("invoice.paid", { subscription: "sub_unknown" });
     const res = await handleMarketplaceWebhookRequest(GOOD_INPUT, { verify: verifyOk(event), store });
     assert.equal(res.status, 200);
     assert.equal(res.body.matched, false);
-    assert.equal(calls.length, 1);
+    assert.equal(calls.length, 1); // no customer on the invoice → no fallback attempt
+  });
+});
+
+// ─── P3 ordering race: subscription-id misses → customer-id fallback hits ─────
+
+describe("handleMarketplaceWebhookRequest — ordering-race fallback", () => {
+  test("invoice.paid that races ahead of the sub-id stamp reconciles by CUSTOMER id", async () => {
+    const { store, calls } = makeRaceStore();
+    // An invoice carrying BOTH a subscription id (no row has it yet) and a customer id.
+    const event = ev("invoice.paid", { subscription: "sub_race", customer: "cus_race" });
+    const res = await handleMarketplaceWebhookRequest(GOOD_INPUT, { verify: verifyOk(event), store });
+
+    assert.equal(res.status, 200);
+    // Tried the subscription key first (missed), then the customer key (hit).
+    assert.equal(calls.length, 2);
+    assert.equal(calls[0].kind, "subscription");
+    assert.equal(calls[0].key, "sub_race");
+    assert.equal(calls[1].kind, "customer");
+    assert.equal(calls[1].key, "cus_race");
+    // The customer-fallback write BACK-FILLS the subscription id so later invoices
+    // match by subscription directly.
+    assert.equal(calls[1].patch.stripeSubscriptionId, "sub_race");
+    assert.equal(calls[1].patch.status, "active");
+    // Activation succeeded (matched) + the body reports it matched by customer.
+    assert.equal(res.body.matched, true);
+    assert.equal(res.body.matchedBy, "customer");
+  });
+
+  test("when the subscription key already matches, the customer fallback is NOT tried", async () => {
+    const { store, calls } = makeFakeStore(); // sub-id lookup hits
+    const event = ev("invoice.paid", { subscription: "sub_ok", customer: "cus_ok" });
+    const res = await handleMarketplaceWebhookRequest(GOOD_INPUT, { verify: verifyOk(event), store });
+    assert.equal(res.status, 200);
+    assert.equal(calls.length, 1); // ← no fallback attempt; primary matched
+    assert.equal(calls[0].kind, "subscription");
+    assert.equal(res.body.matchedBy, "subscription");
   });
 });
 

@@ -20,12 +20,15 @@ import type Stripe from "stripe";
 import type { MarketplacePurchaseRow } from "@/db/schema/marketplace-purchases";
 import {
   handleMarketplaceStripeEvent,
+  type MarketplaceLookupBy,
   type MarketplacePurchasePatch,
 } from "./webhook-handler";
 
-/** The minimal store the applier writes through — the two reconciliation
- *  patchers added in P2/P3 (updatePurchaseByCheckoutId / ...BySubscriptionId).
- *  Each returns the patched row, or null when no row carried that key. */
+/** The minimal store the applier writes through — the reconciliation patchers
+ *  (updatePurchaseByCheckoutId / ...BySubscriptionId / ...ByCustomerId). Each
+ *  returns the patched row, or null when no row carried that key. The customer-id
+ *  patcher backs the ordering-race fallback (an invoice that races ahead of the
+ *  checkout.session.completed sub-id stamp can still match by customer). */
 export type MarketplaceWebhookStore = {
   updateByCheckoutId: (
     checkoutId: string,
@@ -33,6 +36,10 @@ export type MarketplaceWebhookStore = {
   ) => Promise<MarketplacePurchaseRow | null>;
   updateBySubscriptionId: (
     subscriptionId: string,
+    patch: MarketplacePurchasePatch,
+  ) => Promise<MarketplacePurchaseRow | null>;
+  updateByCustomerId: (
+    customerId: string,
     patch: MarketplacePurchasePatch,
   ) => Promise<MarketplacePurchaseRow | null>;
 };
@@ -102,10 +109,23 @@ export async function handleMarketplaceWebhookRequest(
     return { status: 200, body: { received: true, handled: false, reason: decision.reason } };
   }
 
-  const row =
-    decision.lookupBy === "checkout"
-      ? await deps.store.updateByCheckoutId(decision.lookupKey, decision.patch)
-      : await deps.store.updateBySubscriptionId(decision.lookupKey, decision.patch);
+  // Apply on the PRIMARY key; if no row carried it (e.g. an invoice raced ahead of
+  // the checkout.session.completed that stamps the subscription id), RETRY on the
+  // fallback key (customer id). The patch stamps the subscription id either way,
+  // so a fallback match back-fills it and later events match by subscription.
+  const apply = (by: MarketplaceLookupBy, key: string) =>
+    by === "checkout"
+      ? deps.store.updateByCheckoutId(key, decision.patch)
+      : by === "subscription"
+        ? deps.store.updateBySubscriptionId(key, decision.patch)
+        : deps.store.updateByCustomerId(key, decision.patch);
+
+  let row = await apply(decision.lookupBy, decision.lookupKey);
+  let matchedBy = decision.lookupBy;
+  if (!row && decision.fallback) {
+    row = await apply(decision.fallback.lookupBy, decision.fallback.lookupKey);
+    if (row) matchedBy = decision.fallback.lookupBy;
+  }
 
   // A verified event whose purchase row we don't have (unknown purchase) is a
   // no-op success — Stripe gets a 200 so it stops retrying; nothing changed.
@@ -116,6 +136,7 @@ export async function handleMarketplaceWebhookRequest(
       handled: true,
       eventType: decision.eventType,
       lookupBy: decision.lookupBy,
+      matchedBy,
       status: decision.status,
       matched: Boolean(row),
       purchaseId: row?.id ?? null,

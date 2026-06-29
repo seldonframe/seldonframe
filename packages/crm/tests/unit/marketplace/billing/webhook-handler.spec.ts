@@ -100,8 +100,27 @@ describe("handleMarketplaceStripeEvent — invoice paid", () => {
       assert.equal(d.lookupBy, "subscription");
       assert.equal(d.lookupKey, "sub_paid");
       assert.equal(d.status, "active");
+      // The patch stamps the subscription id so a customer-fallback match back-fills it.
+      assert.equal(d.patch.stripeSubscriptionId, "sub_paid");
     });
   }
+
+  test("ORDERING RACE: carries a CUSTOMER-id fallback + stamps the subscription id", () => {
+    // The whole point of P3: an invoice.paid that races ahead of
+    // checkout.session.completed (which stamps stripe_subscription_id) can still
+    // reconcile by customer id, and the patch back-fills the subscription id.
+    const d = expectHandled(handleMarketplaceStripeEvent(invoice("invoice.paid", { subscription: "sub_race", customer: "cus_race" })));
+    assert.equal(d.lookupBy, "subscription");
+    assert.equal(d.lookupKey, "sub_race");
+    assert.deepEqual(d.fallback, { lookupBy: "customer", lookupKey: "cus_race" });
+    assert.equal(d.patch.stripeSubscriptionId, "sub_race");
+    assert.equal(d.patch.stripeCustomerId, "cus_race");
+  });
+
+  test("no customer on the invoice → no fallback (only the subscription key)", () => {
+    const d = expectHandled(handleMarketplaceStripeEvent(invoice("invoice.paid", { subscription: "sub_x", customer: null })));
+    assert.equal(d.fallback, undefined);
+  });
 
   test("reads the subscription id from the newer parent.subscription_details shape", () => {
     const e = ev("invoice.paid", {

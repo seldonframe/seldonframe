@@ -3,6 +3,7 @@ import { verifyStripeWebhookWithSecret } from "@seldonframe/payments";
 import {
   updatePurchaseByCheckoutId,
   updatePurchaseBySubscriptionId,
+  updatePurchaseByCustomerId,
 } from "@/lib/marketplace/billing/purchases-store";
 import {
   handleMarketplaceWebhookRequest,
@@ -39,10 +40,12 @@ function getMarketplaceWebhookSecret(): string | null {
   );
 }
 
-/** DB-backed store: the P2/P3 reconciliation patchers. */
+/** DB-backed store: the reconciliation patchers (checkout / subscription /
+ *  customer — the customer patcher backs the P3 ordering-race fallback). */
 const store: MarketplaceWebhookStore = {
   updateByCheckoutId: (checkoutId, patch) => updatePurchaseByCheckoutId(checkoutId, patch),
   updateBySubscriptionId: (subscriptionId, patch) => updatePurchaseBySubscriptionId(subscriptionId, patch),
+  updateByCustomerId: (customerId, patch) => updatePurchaseByCustomerId(customerId, patch),
 };
 
 export async function POST(request: Request) {

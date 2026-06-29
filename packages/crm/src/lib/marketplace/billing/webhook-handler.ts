@@ -36,7 +36,7 @@ import type {
 } from "@/db/schema/marketplace-purchases";
 
 /** Which natural key the decision reconciles the purchase row on. */
-export type MarketplaceLookupBy = "checkout" | "subscription";
+export type MarketplaceLookupBy = "checkout" | "subscription" | "customer";
 
 /** The fields the webhook is allowed to patch on a purchase row. Intentionally a
  *  subset of the insert type so a typo can't write an arbitrary column. */
@@ -47,15 +47,25 @@ export type MarketplacePurchasePatch = Partial<
   >
 >;
 
+/** A single (key-kind, key) the applier can reconcile a row on. */
+export type MarketplaceLookupRef = { lookupBy: MarketplaceLookupBy; lookupKey: string };
+
 /** The pure decision the route applies. `handled:false` ⇒ the route does nothing
  *  (200, no store write). `handled:true` ⇒ the route patches the row found by
- *  (`lookupBy`, `lookupKey`) with `patch`. */
+ *  (`lookupBy`, `lookupKey`) with `patch` — and, if that primary key matches no
+ *  row, RETRIES with `fallback` (when present). The fallback makes activation
+ *  robust to webhook ORDERING: an `invoice.paid` that races ahead of the
+ *  `checkout.session.completed` that stamps the subscription id can still match
+ *  the row by CUSTOMER id (and the patch then stamps the subscription id so later
+ *  events match directly). */
 export type MarketplaceWebhookDecision =
   | { handled: false; reason: string }
   | {
       handled: true;
       lookupBy: MarketplaceLookupBy;
       lookupKey: string;
+      /** Optional second key tried only when the primary matches no row. */
+      fallback?: MarketplaceLookupRef;
       status: MarketplacePurchaseStatus;
       patch: MarketplacePurchasePatch;
       eventType: string;
@@ -130,13 +140,23 @@ export function handleMarketplaceStripeEvent(
       const invoice = event.data.object as Stripe.Invoice;
       const subscriptionId = invoiceSubscriptionId(invoice);
       if (!subscriptionId) return noop(`${event.type}_missing_subscription_id`);
-      const patch: MarketplacePurchasePatch = { status: "active" };
       const customerId = refId(invoice.customer);
+      // Stamp BOTH ids so a row matched by EITHER key ends up carrying the
+      // subscription id (a customer-id fallback match must back-fill the sub id so
+      // subsequent invoices match by subscription directly).
+      const patch: MarketplacePurchasePatch = {
+        status: "active",
+        stripeSubscriptionId: subscriptionId,
+      };
       if (customerId) patch.stripeCustomerId = customerId;
       return {
         handled: true,
         lookupBy: "subscription",
         lookupKey: subscriptionId,
+        // ORDERING-RACE fallback: if no row carries this subscription id yet (the
+        // invoice raced ahead of checkout.session.completed), match by the
+        // customer id instead. Only added when the invoice carries a customer.
+        ...(customerId ? { fallback: { lookupBy: "customer" as const, lookupKey: customerId } } : {}),
         status: "active",
         patch,
         eventType: event.type,
@@ -147,12 +167,21 @@ export function handleMarketplaceStripeEvent(
       const invoice = event.data.object as Stripe.Invoice;
       const subscriptionId = invoiceSubscriptionId(invoice);
       if (!subscriptionId) return noop("invoice.payment_failed_missing_subscription_id");
+      const customerId = refId(invoice.customer);
+      const patch: MarketplacePurchasePatch = {
+        status: "past_due",
+        stripeSubscriptionId: subscriptionId,
+      };
+      if (customerId) patch.stripeCustomerId = customerId;
       return {
         handled: true,
         lookupBy: "subscription",
         lookupKey: subscriptionId,
+        // Same ordering-race fallback as invoice.paid: match by customer id when
+        // no row carries the subscription id yet.
+        ...(customerId ? { fallback: { lookupBy: "customer" as const, lookupKey: customerId } } : {}),
         status: "past_due",
-        patch: { status: "past_due" },
+        patch,
         eventType: event.type,
       };
     }
