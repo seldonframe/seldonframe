@@ -63,6 +63,13 @@ export type DeploymentCustomization = {
    *  this field; the resolver (`resolveReviewUrl` → `firstNonEmpty`) treats
    *  null/blank identically to absent. Resolved on the runtime path. */
   reviewUrl?: string | null;
+  /** 2026-06-29 (marketplace buyer onboarding) — the buyer's resumable
+   *  setup-wizard progress (which onboarding steps are done). Rides this existing
+   *  jsonb so the buyer flow needs NO migration. Purely a buyer-surface concern:
+   *  the persona resolver (`resolveDeploymentPersona`) never reads it, so the
+   *  voice/chat runtime is byte-for-byte unaffected. Absent on agency-created
+   *  deployments. See lib/marketplace/onboarding/progress.ts. */
+  onboardingProgress?: import("@/lib/marketplace/onboarding/progress").OnboardingProgress;
 };
 
 /**

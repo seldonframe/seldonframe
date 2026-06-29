@@ -119,6 +119,13 @@ export type AgentBlueprint = {
    *  the agency never gets duplicate agents on re-run. Undefined for agents
    *  created any other way. Stored in the jsonb blueprint — no migration. */
   sourceTemplateId?: string;
+  /** 2026-06-29 (marketplace buyer onboarding) — when this blueprint was cloned
+   *  into a BUYER's org from a marketplace `marketplace_listings` row, the source
+   *  listing id. Used purely for IDEMPOTENCY: the buyer→deployment seam reuses
+   *  the buyer's existing template/deployment for a listing instead of cloning a
+   *  second copy on a re-purchase. Undefined for any other creation path. Stored
+   *  in the jsonb blueprint — no migration. */
+  sourceListingId?: string;
   /** 2026-06-25 (per-client booking policy) — a TEMPLATE's recommended booking
    *  rules (slot length / hours / buffer / lead time / required fields). Sparse:
    *  only the fields the builder set. resolveBookingPolicy layers the
