@@ -23,6 +23,7 @@ import { TypingDots } from "./marketplace-styles";
 import { MKT, priceColor, type StorefrontAgent } from "./marketplace-data";
 import { installAgentListingAction } from "@/lib/marketplace/actions";
 import { generateAgentRentalKeyAction } from "@/lib/marketplace/rental";
+import { shouldShowFinishCheckout } from "@/lib/marketplace/buy-box-auth";
 
 type Phase = "idle" | "installing" | "done";
 
@@ -33,6 +34,7 @@ export function ListingActionsClient({
   isAuthenticated = false,
   signInUrl = "/login",
   justPurchased = false,
+  installIntent = false,
 }: {
   agent: StorefrontAgent;
   mcpEndpoint: string;
@@ -47,6 +49,12 @@ export function ListingActionsClient({
   // "You're subscribed / installed ✅" confirmation instead of re-showing the
   // "Install into my workspace" button (the "redirected nowhere" confusion).
   justPurchased?: boolean;
+  // Post-signup buy-intent return (?install=1). When the buyer is back AND
+  // authenticated, show a prominent "Finish checkout →" nudge so they complete
+  // the purchase they started before signing up. NEVER auto-fires the charge —
+  // there is intentionally no mount effect that calls the action; the buyer
+  // clicks the button. Ignored once ?purchased=true takes over.
+  installIntent?: boolean;
 }): ReactElement {
   const router = useRouter();
   // Send a logged-out buyer to the app-origin sign-in (with a callbackUrl back to
@@ -242,17 +250,60 @@ export function ListingActionsClient({
     );
   }
 
+  // FINISH CHECKOUT (?install=1 + authenticated, still idle): the buyer started
+  // a purchase, signed up, and was routed back here. Surface a prominent nudge +
+  // amplify the primary CTA so they complete it. We DO NOT auto-fire the charge
+  // (no mount effect calls onInstall) — the buyer clicks the button, which keeps
+  // the single-click-to-pay contract and removes any double-charge risk. Seed
+  // listings have no real purchase, so they never show this (it would mislead).
+  // The gating is the pure `shouldShowFinishCheckout`; we AND in `phase==="idle"`
+  // so the banner disappears the moment the ceremony starts.
+  const showFinishCheckout =
+    shouldShowFinishCheckout({ installIntent, isAuthenticated, isSeed: agent.isSeed, justPurchased }) &&
+    phase === "idle";
+  const ctaLabel = showFinishCheckout
+    ? isFree
+      ? "Finish installing →"
+      : "Finish checkout →"
+    : "Install into my workspace";
+
   return (
     <>
       <div
         style={{
           background: "#fff",
-          border: "1px solid rgba(34,29,23,0.10)",
+          border: showFinishCheckout ? "1px solid rgba(0,137,123,0.45)" : "1px solid rgba(34,29,23,0.10)",
           borderRadius: 20,
           padding: 22,
-          boxShadow: "0 1px 2px rgba(34,29,23,0.05),0 20px 44px rgba(34,29,23,0.10)",
+          boxShadow: showFinishCheckout
+            ? "0 1px 2px rgba(34,29,23,0.05),0 20px 44px rgba(0,137,123,0.18)"
+            : "0 1px 2px rgba(34,29,23,0.05),0 20px 44px rgba(34,29,23,0.10)",
         }}
       >
+        {showFinishCheckout ? (
+          <div
+            className="sf-rise"
+            style={{
+              display: "flex",
+              alignItems: "flex-start",
+              gap: 10,
+              background: "rgba(0,137,123,0.08)",
+              border: "1px solid rgba(0,137,123,0.22)",
+              borderRadius: 12,
+              padding: "11px 13px",
+              marginBottom: 16,
+            }}
+          >
+            <span style={{ color: MKT.green, display: "flex", flex: "none", marginTop: 1 }}>
+              <MarketplaceIcon name="package" size={17} />
+            </span>
+            <span style={{ fontSize: 13.5, lineHeight: 1.45, color: "rgba(34,29,23,0.74)" }}>
+              You're signed in — <strong style={{ color: MKT.ink, fontWeight: 650 }}>finish setting up {agent.name}</strong>{" "}
+              to move it into your workspace.
+            </span>
+          </div>
+        ) : null}
+
         <div style={{ display: "flex", alignItems: "baseline", gap: 8 }}>
           <span style={{ fontSize: 30, fontWeight: 700, letterSpacing: "-0.02em", color: priceColor(agent.priceCents), fontFamily: MKT.fontMono }}>
             {bigAmount}
@@ -288,7 +339,7 @@ export function ListingActionsClient({
           }}
         >
           <MarketplaceIcon name="package" size={19} />
-          Install into my workspace
+          {ctaLabel}
         </button>
 
         <button

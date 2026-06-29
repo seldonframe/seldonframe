@@ -192,3 +192,129 @@ export function sanitizeNextPath(value: unknown): string {
   );
   return matched ? raw : "/clients/new";
 }
+
+// ─── Post-auth redirect safety (marketplace buy-intent return) ────────────────
+//
+// 2026-06-29 — A logged-out buyer who clicks Install/Rent on a PUBLIC agent
+// listing is sent to `/login?callbackUrl=<absolute app-origin listing URL>`
+// (see lib/marketplace/buy-box-auth.ts). The magic-link flow only honors a
+// SAME-ORIGIN relative `redirectTo`, and the action's allowlist must permit
+// `/marketplace/*` for the buy intent to survive and return them to the agent.
+//
+// Both the form adapter (`toInternalRedirectPath`, which converts the
+// `?callbackUrl=` into the hidden `redirectTo`) and the action allowlist
+// (`sanitizeRedirectTo` → delegates here) share this ONE open-redirect policy
+// so they can never drift. The allowlist below is the superset of every
+// internal target a post-auth redirect may legitimately land on.
+
+/**
+ * The set of internal path prefixes a post-authentication redirect may target.
+ * A value matches if it equals a prefix exactly OR begins with `${prefix}/`.
+ * Query strings are allowed (validated on the path portion only).
+ *
+ * Superset of VALID_NEXT_PREFIXES plus the signup-family stops and — the point
+ * of this change — `/marketplace` so a buyer returns to the agent listing they
+ * were buying. Deliberately small: every entry is a real, safe destination.
+ */
+const SAFE_REDIRECT_PREFIXES = [
+  "/clients/new",
+  "/dashboard",
+  "/settings/domain",
+  "/signup/connect-ai",
+  "/signup/billing",
+  "/claim",
+  "/welcome",
+  "/marketplace",
+] as const;
+
+/**
+ * True iff `value` is a SAFE same-origin internal redirect path: a string that
+ * begins with a single `/`, carries no embedded host (no `//`, no backslash, no
+ * control characters, no scheme), and whose path portion is on the allowlist.
+ *
+ * This is the open-redirect gate shared by the magic-link action and the form
+ * adapter. It NEVER returns true for an absolute URL (those have no leading
+ * `/`), a protocol-relative `//host`, or a scheme like `javascript:`/`data:`.
+ */
+export function isSafeInternalRedirect(value: unknown): boolean {
+  if (typeof value !== "string") return false;
+  const raw = value.trim();
+  if (!raw.startsWith("/")) return false; // absolute URLs + scheme tricks have no leading slash
+  if (raw.startsWith("//")) return false; // protocol-relative → foreign host
+  // Reject backslashes (browsers normalize `\` → `/`, so `/\evil.com` and
+  // `/marketplace\@evil.com` can smuggle a host) and any ASCII control char
+  // (tab/newline injected to defeat naive prefix checks).
+  if (/[\\\x00-\x1f]/.test(raw)) return false;
+  // Reject any `..` segment so a `/marketplace/..//evil.com` can't traverse out
+  // of the allowed prefix into a protocol-relative host.
+  if (raw.includes("..")) return false;
+
+  const pathOnly = raw.split(/[?#]/)[0]!;
+  return SAFE_REDIRECT_PREFIXES.some(
+    (prefix) => pathOnly === prefix || pathOnly.startsWith(`${prefix}/`),
+  );
+}
+
+/**
+ * Hosts whose absolute URLs we trust enough to extract a relative redirect path
+ * from. The buy box emits the callbackUrl as an absolute app-origin URL, so we
+ * accept that exact host plus the seldonframe.com family and localhost (dev /
+ * preview). An absolute URL to ANY other host returns null — we never rewrite a
+ * foreign URL's path into our own redirect (that would be an open-redirect by
+ * path-laundering). Pure (no env read at call sites that pass a host set).
+ */
+const TRUSTED_REDIRECT_HOSTS = new Set([
+  "app.seldonframe.com",
+  "www.seldonframe.com",
+  "seldonframe.com",
+  "localhost",
+  "127.0.0.1",
+]);
+
+function isTrustedRedirectHost(host: string): boolean {
+  const h = host.toLowerCase().replace(/:\d+$/, ""); // strip port
+  if (TRUSTED_REDIRECT_HOSTS.has(h)) return true;
+  // Any sub-host of seldonframe.com (e.g. staging.app.seldonframe.com) is ours.
+  return h.endsWith(".seldonframe.com");
+}
+
+/**
+ * Collapse a raw `callbackUrl` (which `buildListingSignInUrl` emits as an
+ * ABSOLUTE app-origin URL, but which may also arrive already-relative) into a
+ * SAFE same-origin RELATIVE path the magic-link `redirectTo` can carry — or
+ * `null` when it is not a safe internal target.
+ *
+ * Two accepted shapes:
+ *   1. An already-relative path → validated by `isSafeInternalRedirect`.
+ *   2. An absolute http(s) URL on a TRUSTED host (our app origin / a
+ *      *.seldonframe.com sub-host / localhost) → its host is discarded and the
+ *      pathname+search is re-validated.
+ * Everything else — a foreign host, a non-http scheme (javascript:/data:/
+ * mailto:), or a non-allowlisted path — returns `null` so the caller falls back
+ * to its default. We never path-launder a foreign URL into the redirect.
+ */
+export function toInternalRedirectPath(value: unknown): string | null {
+  if (typeof value !== "string") return null;
+  const raw = value.trim();
+  if (!raw) return null;
+
+  // Already-relative: validate as-is (covers the safe `/marketplace/...?install=1`).
+  if (raw.startsWith("/")) {
+    return isSafeInternalRedirect(raw) ? raw : null;
+  }
+
+  // Otherwise it must be an absolute http(s) URL — anything else (javascript:,
+  // data:, mailto:, bare word) is not a navigable internal target.
+  let parsed: URL;
+  try {
+    parsed = new URL(raw);
+  } catch {
+    return null;
+  }
+  if (parsed.protocol !== "https:" && parsed.protocol !== "http:") return null;
+  // CRITICAL open-redirect guard: only a trusted host's path may be extracted.
+  if (!isTrustedRedirectHost(parsed.host)) return null;
+
+  const relative = `${parsed.pathname}${parsed.search}`;
+  return isSafeInternalRedirect(relative) ? relative : null;
+}

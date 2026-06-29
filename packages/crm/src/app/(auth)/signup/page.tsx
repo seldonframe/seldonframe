@@ -27,7 +27,7 @@
 
 import { SignupForm } from "./signup-form";
 import Link from "next/link";
-import { buildSignupNextPath } from "@/lib/auth/signup-redirect";
+import { buildSignupNextPath, toInternalRedirectPath } from "@/lib/auth/signup-redirect";
 
 export default async function SignupPage({
   searchParams,
@@ -37,10 +37,17 @@ export default async function SignupPage({
     url?: string;
     biz?: string;
     intent?: string;
+    // Marketplace buy intent: the buy box (or the /login → "Start for free"
+    // link) forwards the agent listing here as ?callbackUrl=. When it resolves
+    // to a safe same-origin path it WINS over the default /clients/new redirect,
+    // so a brand-new signup returns to the agent they were buying.
+    callbackUrl?: string;
   }>;
 }) {
   const params = await searchParams;
   const token = typeof params.token === "string" ? params.token : "";
+  // null when absent/unsafe (never an open redirect).
+  const buyIntentRedirect = toInternalRedirectPath(params.callbackUrl);
 
   // Build the post-magic-link redirectTo. Two cases:
   //   1. Token-claim flow (visitor came via a claim invite) — preserve
@@ -58,6 +65,11 @@ export default async function SignupPage({
   let redirectTo: string;
   if (token) {
     redirectTo = `/claim?token=${encodeURIComponent(token)}`;
+  } else if (buyIntentRedirect) {
+    // Marketplace buy intent wins over the default build-flow landing: send the
+    // new account straight back to the agent listing (with ?install=1) so they
+    // can finish checkout. Safe + same-origin (toInternalRedirectPath).
+    redirectTo = buyIntentRedirect;
   } else {
     redirectTo = buildSignupNextPath({
       url: typeof params.url === "string" ? params.url : null,

@@ -44,7 +44,9 @@ import {
 type ListingPageProps = {
   params: Promise<{ slug: string }>;
   // Stripe Checkout returns the buyer here with ?purchased=true (the success_url).
-  searchParams: Promise<{ purchased?: string }>;
+  // The post-signup buy-intent return carries ?install=1 (buildListingSignInUrl)
+  // so the buy box can show a "Finish checkout →" nudge (no auto-charge).
+  searchParams: Promise<{ purchased?: string; install?: string }>;
 };
 
 async function loadAgent(slug: string): Promise<{ agent: StorefrontAgent; others: StorefrontAgent[] } | null> {
@@ -86,10 +88,15 @@ export async function generateMetadata({ params }: ListingPageProps): Promise<Me
 
 export default async function ListingDetailPage({ params, searchParams }: ListingPageProps) {
   const { slug } = await params;
-  const { purchased } = await searchParams;
+  const { purchased, install } = await searchParams;
   // Stripe Checkout redirects back to ?purchased=true on success — render the
   // "You're subscribed / installed" confirmation instead of re-showing "Install".
   const justPurchased = purchased === "true";
+  // Post-signup buy-intent return marker. The buy box turns this into a
+  // prominent "Finish checkout →" state (only once the buyer is authenticated)
+  // so they complete the purchase they started before signing up. It NEVER
+  // auto-fires the charge — the buyer clicks to pay.
+  const installIntent = install === "1";
   const found = await loadAgent(slug);
   if (!found) notFound();
 
@@ -445,6 +452,7 @@ export default async function ListingDetailPage({ params, searchParams }: Listin
               isAuthenticated={isAuthenticated}
               signInUrl={signInUrl}
               justPurchased={justPurchased}
+              installIntent={installIntent}
             />
           </aside>
         </div>

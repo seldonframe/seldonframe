@@ -22,6 +22,8 @@ import {
   buildSignupBillingRedirect,
   buildSignupConnectAiRedirect,
   sanitizeNextPath,
+  isSafeInternalRedirect,
+  toInternalRedirectPath,
 } from "../../../src/lib/auth/signup-redirect";
 
 describe("buildSignupNextPath", () => {
@@ -272,5 +274,124 @@ describe("sanitizeNextPath", () => {
     assert.equal(sanitizeNextPath(null), "/clients/new");
     assert.equal(sanitizeNextPath(undefined), "/clients/new");
     assert.equal(sanitizeNextPath(42), "/clients/new");
+  });
+});
+
+// 2026-06-29 — Marketplace buy-intent fix. A logged-out buyer who clicks
+// Install/Rent on a public listing is sent to /login?callbackUrl=<listing>.
+// For the buy intent to survive the magic-link round trip and return them to
+// the agent, the login/signup forms must thread a SAFE same-origin relative
+// path through `sendMagicLinkAction`'s `redirectTo`, and the action's
+// allowlist must PERMIT /marketplace/*. These two pure helpers own the
+// same-origin safety so the form (adapter) and the action (allowlist) share
+// one open-redirect policy.
+
+describe("isSafeInternalRedirect", () => {
+  test("allows the marketplace listing path (the buy-intent return target)", () => {
+    assert.equal(isSafeInternalRedirect("/marketplace/247-phone-receptionist"), true);
+    assert.equal(isSafeInternalRedirect("/marketplace/247-phone-receptionist?install=1"), true);
+    assert.equal(isSafeInternalRedirect("/marketplace"), true);
+  });
+
+  test("allows the existing signup-family + onboarding paths", () => {
+    assert.equal(isSafeInternalRedirect("/clients/new"), true);
+    assert.equal(isSafeInternalRedirect("/clients/new?url=https%3A%2F%2Fx.com&intent=build"), true);
+    assert.equal(isSafeInternalRedirect("/dashboard"), true);
+    assert.equal(isSafeInternalRedirect("/dashboard/billing"), true);
+    assert.equal(isSafeInternalRedirect("/settings/domain"), true);
+    assert.equal(isSafeInternalRedirect("/signup/connect-ai"), true);
+    assert.equal(isSafeInternalRedirect("/signup/billing"), true);
+    assert.equal(isSafeInternalRedirect("/claim"), true);
+    assert.equal(isSafeInternalRedirect("/claim?token=abc"), true);
+    assert.equal(isSafeInternalRedirect("/welcome"), true);
+  });
+
+  test("allows the REAL signup-form redirectTo shapes (?next= chain intact)", () => {
+    // The signup form already submits these — the new shared allowlist must not
+    // regress them (the encoded ?next= contains no literal `..`, so the traversal
+    // guard leaves it alone).
+    assert.equal(
+      isSafeInternalRedirect(
+        "/signup/connect-ai?next=%2Fclients%2Fnew%3Furl%3Dhttps%253A%252F%252Facme.com%26intent%3Dbuild",
+      ),
+      true,
+    );
+    assert.equal(isSafeInternalRedirect("/signup/billing?next=%2Fclients%2Fnew"), true);
+  });
+
+  test("rejects absolute URLs to any other host (open redirect)", () => {
+    assert.equal(isSafeInternalRedirect("https://evil.com"), false);
+    assert.equal(isSafeInternalRedirect("http://evil.com/marketplace/x"), false);
+    assert.equal(isSafeInternalRedirect("https://evil.com/clients/new"), false);
+  });
+
+  test("rejects protocol-relative // and scheme-relative tricks", () => {
+    assert.equal(isSafeInternalRedirect("//evil.com"), false);
+    assert.equal(isSafeInternalRedirect("//evil.com/marketplace/x"), false);
+    assert.equal(isSafeInternalRedirect("/\\evil.com"), false); // backslash smuggling
+    assert.equal(isSafeInternalRedirect("/\t/evil.com"), false); // control char
+  });
+
+  test("rejects javascript:/data: and other schemes", () => {
+    assert.equal(isSafeInternalRedirect("javascript:alert(1)"), false);
+    assert.equal(isSafeInternalRedirect("data:text/html,<script>"), false);
+    assert.equal(isSafeInternalRedirect("mailto:x@y.com"), false);
+  });
+
+  test("rejects non-leading-slash, unknown routes, and non-strings", () => {
+    assert.equal(isSafeInternalRedirect("marketplace/x"), false);
+    assert.equal(isSafeInternalRedirect("../etc/passwd"), false);
+    assert.equal(isSafeInternalRedirect("/admin"), false);
+    assert.equal(isSafeInternalRedirect("/super-admin/users"), false);
+    assert.equal(isSafeInternalRedirect(""), false);
+    assert.equal(isSafeInternalRedirect(null), false);
+    assert.equal(isSafeInternalRedirect(undefined), false);
+    assert.equal(isSafeInternalRedirect(42), false);
+  });
+
+  test("rejects a marketplace path smuggling a host via backslash or //", () => {
+    // Guard the exact open-redirect shapes a `/marketplace`-prefix allowlist
+    // could otherwise wave through if it only checked the leading segment.
+    assert.equal(isSafeInternalRedirect("/marketplace/..//evil.com"), false);
+    assert.equal(isSafeInternalRedirect("/marketplace\\@evil.com"), false);
+  });
+});
+
+describe("toInternalRedirectPath", () => {
+  test("returns a relative path for an absolute app-origin callbackUrl", () => {
+    // buildListingSignInUrl encodes the listing as an ABSOLUTE app-origin URL.
+    // The form must collapse it to a same-origin relative path (NextAuth's
+    // redirectTo + sanitizeRedirectTo only honor leading-slash internal paths).
+    assert.equal(
+      toInternalRedirectPath("https://app.seldonframe.com/marketplace/247-phone-receptionist?install=1"),
+      "/marketplace/247-phone-receptionist?install=1",
+    );
+    assert.equal(
+      toInternalRedirectPath("https://staging.app.seldonframe.com/marketplace/speed-to-lead"),
+      "/marketplace/speed-to-lead",
+    );
+  });
+
+  test("passes through an already-relative safe path", () => {
+    assert.equal(toInternalRedirectPath("/marketplace/x?install=1"), "/marketplace/x?install=1");
+    assert.equal(toInternalRedirectPath("/clients/new"), "/clients/new");
+  });
+
+  test("returns null for an absolute URL to a foreign host (no open redirect)", () => {
+    assert.equal(toInternalRedirectPath("https://evil.com/marketplace/x"), null);
+    assert.equal(toInternalRedirectPath("//evil.com/marketplace/x"), null);
+    assert.equal(toInternalRedirectPath("javascript:alert(1)"), null);
+  });
+
+  test("returns null for a same-origin URL whose PATH is not allowlisted", () => {
+    // Same host, but /admin isn't a permitted internal target — must not leak.
+    assert.equal(toInternalRedirectPath("https://app.seldonframe.com/admin"), null);
+  });
+
+  test("returns null for empty / non-string", () => {
+    assert.equal(toInternalRedirectPath(""), null);
+    assert.equal(toInternalRedirectPath(null), null);
+    assert.equal(toInternalRedirectPath(undefined), null);
+    assert.equal(toInternalRedirectPath(42), null);
   });
 });

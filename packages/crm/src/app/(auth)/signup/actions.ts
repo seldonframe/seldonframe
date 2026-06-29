@@ -4,6 +4,7 @@ import { z } from "zod";
 import { signIn } from "@/auth";
 import { assertWritable } from "@/lib/demo/server";
 import { resolveInboxUrl } from "@/lib/utils/email-inbox";
+import { isSafeInternalRedirect } from "@/lib/auth/signup-redirect";
 
 export type MagicLinkActionState = {
   error?: string;
@@ -39,30 +40,17 @@ function isRedirectControlFlowError(error: unknown) {
  * because it remains the destination for the "add a card to unlock more
  * workspaces" CTA fired from the over-limit upgrade prompt — same route,
  * just no longer the default magic-link redirect.
+ *
+ * 2026-06-29 — Allowlist now delegates to `isSafeInternalRedirect`
+ * (lib/auth/signup-redirect), which adds `/marketplace/*` so a buyer who
+ * signs up from a public agent listing's Install/Rent button RETURNS to the
+ * agent instead of being dumped on /clients/new with the buy intent lost.
+ * The open-redirect policy (leading slash only, no //, no scheme/host
+ * smuggling) is the SAME helper the login/signup forms use to turn the
+ * `?callbackUrl=` into the hidden `redirectTo` — one shared policy, no drift.
  */
 function sanitizeRedirectTo(value: unknown) {
-  const raw = typeof value === "string" ? value.trim() : "";
-  if (!raw.startsWith("/") || raw.startsWith("//")) {
-    return "/clients/new";
-  }
-
-  // Allow /signup/connect-ai (BYOK collection — new step 2/2) and
-  // /signup/billing (kept for opt-in card capture from the over-limit
-  // prompt), /clients/new (with arbitrary query) for the direct landing,
-  // /dashboard as a safety fallback, and /claim/... for the existing
-  // workspace-claim flow.
-  const pathOnly = raw.split("?")[0]!;
-  const allowed =
-    pathOnly === "/signup/connect-ai" ||
-    pathOnly === "/signup/billing" ||
-    pathOnly === "/clients/new" ||
-    pathOnly === "/dashboard" ||
-    pathOnly === "/claim" ||
-    pathOnly.startsWith("/clients/new/") ||
-    pathOnly.startsWith("/dashboard/") ||
-    pathOnly.startsWith("/claim/");
-
-  return allowed ? raw : "/clients/new";
+  return isSafeInternalRedirect(value) ? (value as string).trim() : "/clients/new";
 }
 
 export async function signInWithGoogleAction() {
@@ -76,9 +64,27 @@ export async function signInWithGoogleAction() {
   await signIn("google", { redirectTo: "/clients/new" });
 }
 
-export async function sendMagicLinkAction(_: MagicLinkActionState, formData: FormData): Promise<MagicLinkActionState> {
+// Test-only DI seam (the repo idiom from installAgentListingAction /
+// set-booking-policy: prefer dependency injection over mock.module, which is
+// unreliable under tsx's CJS interop). Production callers (the login/signup
+// forms via useActionState) pass exactly (prevState, formData), so the real
+// `signIn` + `assertWritable` defaults apply and `deps` is never serialized
+// across the client→server boundary. A unit test passes fakes to assert what
+// redirectTo gets threaded into signIn WITHOUT a real NextAuth/Postgres.
+type MagicLinkActionDeps = {
+  signIn: (provider: string, options: { email: string; redirect: boolean; redirectTo: string }) => Promise<unknown>;
+  assertWritable: () => void;
+};
+
+export async function sendMagicLinkAction(
+  _: MagicLinkActionState,
+  formData: FormData,
+  deps?: MagicLinkActionDeps,
+): Promise<MagicLinkActionState> {
+  const signInImpl = deps?.signIn ?? (signIn as MagicLinkActionDeps["signIn"]);
+  const assertWritableImpl = deps?.assertWritable ?? assertWritable;
   try {
-    assertWritable();
+    assertWritableImpl();
   } catch (error) {
     return { error: error instanceof Error ? error.message : "Sign in is unavailable in demo mode." };
   }
@@ -95,7 +101,7 @@ export async function sendMagicLinkAction(_: MagicLinkActionState, formData: For
   const redirectTo = sanitizeRedirectTo(formData.get("redirectTo"));
 
   try {
-    await signIn("resend", {
+    await signInImpl("resend", {
       email,
       redirect: false,
       redirectTo,

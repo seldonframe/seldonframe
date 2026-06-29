@@ -6,7 +6,7 @@ import { sendMagicLinkAction } from "./actions";
 import { DEMO_BLOCK_MESSAGE } from "@/lib/demo/constants";
 import { useDemoToast } from "@/components/shared/demo-toast-provider";
 
-export function LoginForm() {
+export function LoginForm({ redirectTo }: { redirectTo?: string | null }) {
   const { showDemoToast } = useDemoToast();
   const [state, action, pending] = useActionState(sendMagicLinkAction, {});
 
@@ -16,9 +16,18 @@ export function LoginForm() {
     }
   }, [showDemoToast, state.error]);
 
+  // When present (marketplace buy intent), carry the safe relative path into the
+  // magic-link action's `redirectTo` so post-login the buyer returns to the
+  // agent listing they were buying instead of the default /clients/new. The
+  // page already validated/relativized it via toInternalRedirectPath.
+  const signupHref = redirectTo
+    ? `/signup?callbackUrl=${encodeURIComponent(redirectTo)}`
+    : "/signup";
+
   return (
     <div className="space-y-5 text-foreground">
       <form action={action} className="space-y-3">
+        {redirectTo ? <input type="hidden" name="redirectTo" value={redirectTo} /> : null}
         <div className="space-y-1">
           <label htmlFor="email" className="text-label text-foreground">
             Email
@@ -62,7 +71,7 @@ export function LoginForm() {
       ) : null}
 
       <p className="text-center text-label text-[hsl(var(--color-text-secondary))]">
-        New here? <Link href="/signup" className="font-medium text-primary underline underline-offset-4">Start for free →</Link>
+        New here? <Link href={signupHref} className="font-medium text-primary underline underline-offset-4">Start for free →</Link>
       </p>
     </div>
   );

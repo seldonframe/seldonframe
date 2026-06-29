@@ -1,7 +1,23 @@
 import { LoginForm } from "./login-form";
 import Link from "next/link";
+import { toInternalRedirectPath } from "@/lib/auth/signup-redirect";
 
-export default function LoginPage() {
+export default async function LoginPage({
+  searchParams,
+}: {
+  // The public marketplace buy box sends a logged-out buyer here as
+  // /login?callbackUrl=<absolute app-origin listing URL> (buildListingSignInUrl).
+  // We read it, collapse it to a SAFE same-origin relative path, and thread it
+  // into the form's hidden `redirectTo` so the magic-link round trip returns the
+  // buyer to the agent listing instead of the default /clients/new. NextAuth
+  // also forwards its own ?callbackUrl on the /login verifyRequest page, so this
+  // param shape is already part of the auth surface.
+  searchParams: Promise<{ callbackUrl?: string }>;
+}) {
+  const params = await searchParams;
+  // null when absent/unsafe → form falls back to its own default redirect.
+  const redirectTo = toInternalRedirectPath(params.callbackUrl);
+
   return (
     <div className="space-y-6">
       <div className="space-y-4">
@@ -11,7 +27,7 @@ export default function LoginPage() {
             The operating system for your business.
           </p>
         </div>
-        <LoginForm />
+        <LoginForm redirectTo={redirectTo} />
       </div>
 
       <footer className="border-t border-border pt-4 text-xs text-[hsl(var(--color-text-secondary))]">
