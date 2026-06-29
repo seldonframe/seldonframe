@@ -53,9 +53,22 @@ export type MarketplaceWebhookVerify = (input: {
   secret: string;
 }) => Stripe.Event;
 
+/** OPTIONAL post-activation side-effect. Fired ONCE, best-effort, AFTER a
+ *  purchase row is matched + patched to `status:active` — the seam the buyer
+ *  flow uses to provision a buyer-owned deployment of the bought agent (so the
+ *  setup wizard has a target). It moves NO money (the charge already settled);
+ *  it is awaited but its errors are SWALLOWED so a provisioning hiccup can never
+ *  change the webhook's 200 response or the idempotent status patch. Absent in
+ *  tests + on the no-op path. */
+export type MarketplaceWebhookOnActivated = (
+  row: MarketplacePurchaseRow,
+) => Promise<void>;
+
 export type HandleMarketplaceWebhookDeps = {
   verify: MarketplaceWebhookVerify;
   store: MarketplaceWebhookStore;
+  /** Best-effort post-activation hook (see MarketplaceWebhookOnActivated). */
+  onActivated?: MarketplaceWebhookOnActivated;
 };
 
 export type HandleMarketplaceWebhookInput = {
@@ -125,6 +138,17 @@ export async function handleMarketplaceWebhookRequest(
   if (!row && decision.fallback) {
     row = await apply(decision.fallback.lookupBy, decision.fallback.lookupKey);
     if (row) matchedBy = decision.fallback.lookupBy;
+  }
+
+  // Best-effort post-activation: ONLY when a row matched AND the purchase flipped
+  // to `active`. Errors are swallowed so provisioning can never affect the 200 or
+  // re-trigger Stripe; it moves no money (the charge already settled).
+  if (row && decision.status === "active" && deps.onActivated) {
+    try {
+      await deps.onActivated(row);
+    } catch {
+      // swallow — the status patch already applied; the webhook still 200s.
+    }
   }
 
   // A verified event whose purchase row we don't have (unknown purchase) is a

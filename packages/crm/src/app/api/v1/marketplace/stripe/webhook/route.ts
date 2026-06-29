@@ -9,6 +9,7 @@ import {
   handleMarketplaceWebhookRequest,
   type MarketplaceWebhookStore,
 } from "@/lib/marketplace/billing/webhook-apply";
+import { provisionBuyerAgentFromPurchaseRow } from "@/lib/marketplace/actions";
 
 export const runtime = "nodejs";
 
@@ -61,6 +62,17 @@ export async function POST(request: Request) {
       verify: ({ rawBody: payload, signature: sig, secret: whsec }) =>
         verifyStripeWebhookWithSecret({ payload, signature: sig, webhookSecret: whsec }),
       store,
+      // On activation, provision the buyer-owned deployment of the bought agent
+      // so the setup wizard has a target. Best-effort (errors swallowed inside
+      // the applier) + money-safe (settlement already happened; this writes only
+      // a template + a draft deployment) + idempotent (one deployment per
+      // buyer+listing). A soul purchase is a no-op here.
+      onActivated: async (row) => {
+        await provisionBuyerAgentFromPurchaseRow({
+          buyerOrgId: row.buyerOrgId,
+          listingId: row.listingId,
+        });
+      },
     },
   );
 

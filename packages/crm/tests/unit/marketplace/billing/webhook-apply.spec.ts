@@ -222,6 +222,74 @@ describe("handleMarketplaceWebhookRequest — unknown event no-op", () => {
   });
 });
 
+// ─── onActivated hook: fires once on activation, best-effort (no money impact) ─
+
+describe("handleMarketplaceWebhookRequest — onActivated hook", () => {
+  test("fires with the matched row ONLY when the purchase flips to active", async () => {
+    const { store } = makeFakeStore();
+    const activated: MarketplacePurchaseRow[] = [];
+    const event = ev("checkout.session.completed", { id: "cs_act", customer: "cus_act" });
+    const res = await handleMarketplaceWebhookRequest(GOOD_INPUT, {
+      verify: verifyOk(event),
+      store,
+      onActivated: async (row) => {
+        activated.push(row);
+      },
+    });
+    assert.equal(res.status, 200);
+    assert.equal(activated.length, 1);
+    assert.equal(activated[0].id, "purchase-1");
+  });
+
+  test("does NOT fire on a NON-activation status (past_due)", async () => {
+    const { store } = makeFakeStore();
+    let fired = 0;
+    const event = ev("invoice.payment_failed", { subscription: "sub_pf" });
+    const res = await handleMarketplaceWebhookRequest(GOOD_INPUT, {
+      verify: verifyOk(event),
+      store,
+      onActivated: async () => {
+        fired += 1;
+      },
+    });
+    assert.equal(res.status, 200);
+    assert.equal(fired, 0); // past_due ≠ active
+  });
+
+  test("does NOT fire when no row matched (unknown purchase)", async () => {
+    const { store } = makeFakeStore({ matched: false });
+    let fired = 0;
+    const event = ev("checkout.session.completed", { id: "cs_x" });
+    const res = await handleMarketplaceWebhookRequest(GOOD_INPUT, {
+      verify: verifyOk(event),
+      store,
+      onActivated: async () => {
+        fired += 1;
+      },
+    });
+    assert.equal(res.status, 200);
+    assert.equal(res.body.matched, false);
+    assert.equal(fired, 0);
+  });
+
+  test("a THROWING hook never changes the 200 response (best-effort, money-safe)", async () => {
+    const { store, calls } = makeFakeStore();
+    const event = ev("checkout.session.completed", { id: "cs_boom", customer: "cus_boom" });
+    const res = await handleMarketplaceWebhookRequest(GOOD_INPUT, {
+      verify: verifyOk(event),
+      store,
+      onActivated: async () => {
+        throw new Error("provisioning blew up");
+      },
+    });
+    // The status patch still applied; the response is still a clean 200.
+    assert.equal(res.status, 200);
+    assert.equal(res.body.handled, true);
+    assert.equal(calls.length, 1);
+    assert.equal(calls[0].patch.status, "active");
+  });
+});
+
 // ─── idempotency: re-delivery applies the same single patch ──────────────────
 
 describe("handleMarketplaceWebhookRequest — idempotent re-delivery", () => {

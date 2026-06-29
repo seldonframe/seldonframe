@@ -25,6 +25,7 @@ import { MARKETPLACE_SEED } from "@/components/marketplace/marketplace-seed";
 import { loadStorefrontCatalog } from "@/lib/marketplace/load-storefront";
 import { getOrgId } from "@/lib/auth/helpers";
 import { buildListingSignInUrl } from "@/lib/marketplace/buy-box-auth";
+import { resolveBuyerSetupUrlForListingSlug } from "@/lib/marketplace/buyer/buyer-deployment";
 import { MarkdownPointer } from "@/components/seo/markdown-pointer";
 import { jobForMarketplaceSlug } from "@/lib/seo/agent-pages";
 import {
@@ -120,12 +121,22 @@ export default async function ListingDetailPage({ params, searchParams }: Listin
   // no org (logged out, OR on www. where the host-only session cookie isn't
   // sent), the client buy box redirects Install / Rent to the app-origin sign-in
   // instead of calling the action (which would 500 with a masked error in prod).
-  let isAuthenticated = false;
+  let buyerOrgId: string | null = null;
   try {
-    isAuthenticated = Boolean(await getOrgId());
+    buyerOrgId = await getOrgId();
   } catch {
-    isAuthenticated = false;
+    buyerOrgId = null;
   }
+  const isAuthenticated = Boolean(buyerOrgId);
+
+  // Post-purchase: deep-link "Set up your agent →" to the buyer's setup wizard
+  // once the webhook has provisioned their deployment of this listing. Only runs
+  // on the rare authenticated ?purchased=true path; null when not yet provisioned
+  // (a refresh re-resolves it) → the success card falls back to "Open in Studio".
+  const buyerSetupUrl =
+    justPurchased && buyerOrgId
+      ? await resolveBuyerSetupUrlForListingSlug(buyerOrgId, slug)
+      : null;
   // Sign-in always targets the APP origin (where the session cookie lives) with a
   // callbackUrl back to this listing on the app origin, so post-login the buyer
   // returns here already authenticated and can install.
@@ -453,6 +464,7 @@ export default async function ListingDetailPage({ params, searchParams }: Listin
               signInUrl={signInUrl}
               justPurchased={justPurchased}
               installIntent={installIntent}
+              buyerSetupUrl={buyerSetupUrl}
             />
           </aside>
         </div>

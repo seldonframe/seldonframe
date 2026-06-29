@@ -35,6 +35,7 @@ export function ListingActionsClient({
   signInUrl = "/login",
   justPurchased = false,
   installIntent = false,
+  buyerSetupUrl = null,
 }: {
   agent: StorefrontAgent;
   mcpEndpoint: string;
@@ -55,6 +56,11 @@ export function ListingActionsClient({
   // there is intentionally no mount effect that calls the action; the buyer
   // clicks the button. Ignored once ?purchased=true takes over.
   installIntent?: boolean;
+  // The buyer's setup-wizard URL for THIS listing, resolved server-side once the
+  // purchase provisioned their deployment (/agent/<id>/setup). Drives the
+  // post-purchase "Set up your agent →" deep-link; null until provisioned (the
+  // success card then falls back to "Open in Studio").
+  buyerSetupUrl?: string | null;
 }): ReactElement {
   const router = useRouter();
   // Send a logged-out buyer to the app-origin sign-in (with a callbackUrl back to
@@ -68,6 +74,10 @@ export function ListingActionsClient({
   const [step, setStep] = useState(0);
   const [error, setError] = useState<string | null>(null);
   const [installedTemplateId, setInstalledTemplateId] = useState<string | null>(null);
+  // The buyer-setup wizard target returned by a FREE install (the deployment was
+  // provisioned synchronously). When set, the ceremony's "finish" routes the
+  // buyer into onboarding instead of Studio.
+  const [installedSetupUrl, setInstalledSetupUrl] = useState<string | null>(null);
   // Phase 2 — the freshly-minted rental key + the real config snippet. Until the
   // renter clicks "Generate rental key" the panel shows the placeholder snippet
   // (with `Bearer sk_live_…`); after, the snippet carries the REAL key.
@@ -145,6 +155,11 @@ export function ListingActionsClient({
       if (result.ok && "templateId" in result && result.templateId) {
         setInstalledTemplateId(result.templateId);
       }
+      // A free install provisions the buyer's deployment synchronously and hands
+      // back the setup-wizard target — route there after the ceremony.
+      if (result.ok && "setupUrl" in result && result.setupUrl) {
+        setInstalledSetupUrl(result.setupUrl);
+      }
       playCeremony();
     } catch (err) {
       setError(err instanceof Error ? err.message : "Install failed. Please try again.");
@@ -152,12 +167,16 @@ export function ListingActionsClient({
   }, [agent.isSeed, agent.slug, isAuthenticated, goSignIn, playCeremony]);
 
   const finishInstall = useCallback(() => {
-    if (installedTemplateId) {
+    // Prefer the buyer-setup wizard (the bought agent's onboarding); fall back to
+    // the buyer's Studio template, then the agents list.
+    if (installedSetupUrl) {
+      router.push(installedSetupUrl);
+    } else if (installedTemplateId) {
       router.push(`/studio/agents/${installedTemplateId}`);
     } else {
       router.push("/studio/agents");
     }
-  }, [installedTemplateId, router]);
+  }, [installedSetupUrl, installedTemplateId, router]);
 
   const copySnippet = useCallback(() => {
     try {
@@ -245,7 +264,10 @@ export function ListingActionsClient({
       <PurchasedConfirmation
         agent={agent}
         isRecurring={isRecurring}
-        onOpenStudio={() => router.push("/studio/agents")}
+        hasSetup={Boolean(buyerSetupUrl)}
+        onPrimary={() =>
+          router.push(buyerSetupUrl ?? "/studio/agents")
+        }
       />
     );
   }
@@ -541,16 +563,23 @@ function Assurance({ icon, text }: { icon: "check" | "shield"; text: string }): 
 function PurchasedConfirmation({
   agent,
   isRecurring,
-  onOpenStudio,
+  hasSetup,
+  onPrimary,
 }: {
   agent: StorefrontAgent;
   isRecurring: boolean;
-  onOpenStudio: () => void;
+  // True once the buyer's deployment is provisioned and a setup URL is known →
+  // the primary CTA becomes "Set up your agent →" (onboarding); else "Open in
+  // Studio".
+  hasSetup: boolean;
+  onPrimary: () => void;
 }): ReactElement {
-  const heading = isRecurring ? "You're subscribed" : "Installed";
-  const blurb = isRecurring
-    ? `${agent.name} is set up in your Studio and billing is active. Manage or cancel anytime from your workspace billing.`
-    : `${agent.name} is set up in your Studio and ready to deploy.`;
+  const heading = isRecurring ? "You're subscribed" : "Purchased";
+  const blurb = hasSetup
+    ? `${agent.name} is yours. Set it up — add your business info, connect your tools, and go live in a few minutes.`
+    : isRecurring
+      ? `${agent.name} is set up in your Studio and billing is active. Manage or cancel anytime from your workspace billing.`
+      : `${agent.name} is set up in your Studio and ready to deploy.`;
   return (
     <div
       style={{
@@ -586,7 +615,7 @@ function PurchasedConfirmation({
       <button
         type="button"
         className="sf-btn"
-        onClick={onOpenStudio}
+        onClick={onPrimary}
         style={{
           width: "100%",
           border: "none",
@@ -605,7 +634,7 @@ function PurchasedConfirmation({
           gap: 9,
         }}
       >
-        Open in Studio
+        {hasSetup ? "Set up your agent" : "Open in Studio"}
         <MarketplaceIcon name="arrowRight" size={17} />
       </button>
       <div style={{ marginTop: 18, paddingTop: 16, borderTop: "1px solid rgba(34,29,23,0.10)", display: "flex", flexDirection: "column", gap: 11 }}>

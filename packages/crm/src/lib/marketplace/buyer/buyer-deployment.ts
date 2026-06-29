@@ -246,6 +246,38 @@ export function buildDefaultResolveBuyerDeploymentDeps(): ResolveBuyerDeployment
   };
 }
 
+/**
+ * Resolve the buyer's setup-wizard URL for a listing SLUG, if they already own a
+ * deployment of it — else null. Used by the listing page's `?purchased=true`
+ * success state to deep-link "Set up your agent →" once the webhook has
+ * provisioned the deployment (a page refresh re-resolves it). Lazy DB; returns
+ * null on any error so it can never break the SEO page render. Only ever runs on
+ * the rare authenticated post-purchase path, not the common anonymous render.
+ */
+export async function resolveBuyerSetupUrlForListingSlug(
+  buyerOrgId: string,
+  slug: string,
+): Promise<string | null> {
+  if (!buyerOrgId || !slug) return null;
+  try {
+    const { db } = await import("@/db");
+    const { marketplaceListings } = await import("@/db/schema/marketplace");
+    const { eq } = await import("drizzle-orm");
+    const { buyerSetupPath } = await import("@/lib/marketplace/buyer/buyer-routes");
+    const [listing] = await db
+      .select({ id: marketplaceListings.id })
+      .from(marketplaceListings)
+      .where(eq(marketplaceListings.slug, slug))
+      .limit(1);
+    if (!listing) return null;
+    const deps = buildDefaultResolveBuyerDeploymentDeps();
+    const existing = await deps.findExistingForListing({ buyerOrgId, listingId: listing.id });
+    return existing ? buyerSetupPath(existing.id) : null;
+  } catch {
+    return null;
+  }
+}
+
 /** The real store deps for getBuyerAgent. Lazy `import("@/db")`. */
 export function buildDefaultGetBuyerAgentDeps(): GetBuyerAgentDeps {
   return {

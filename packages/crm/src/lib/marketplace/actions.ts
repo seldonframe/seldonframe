@@ -27,6 +27,13 @@ import {
   buildOneTimeCheckoutDeps,
   buildSubscriptionCheckoutDeps,
 } from "@/lib/marketplace/billing/real-deps";
+import {
+  resolveOrCreateBuyerDeployment,
+  buildDefaultResolveBuyerDeploymentDeps,
+  resolveBuyerSetupUrlForListingSlug,
+  type BuyerListing,
+} from "@/lib/marketplace/buyer/buyer-deployment";
+import { buyerSetupPath } from "@/lib/marketplace/buyer/buyer-routes";
 
 type GeneratedFile = { path: string; content: string };
 
@@ -354,6 +361,12 @@ async function cloneAgentListingIntoOrg(listing: ListingInstallRow, buyerOrgId: 
     buyerOrgId,
   );
 
+  // Stamp the source listing id into the cloned blueprint (jsonb, no migration —
+  // mirrors the agency-deploy `sourceTemplateId` stamp). The buyer→deployment
+  // seam keys its idempotency on this so a re-purchase reuses the buyer's
+  // existing template/deployment instead of cloning a second copy.
+  const blueprint = { ...(args.blueprint ?? {}), sourceListingId: listing.id };
+
   const existing = await db
     .select({ slug: agentTemplates.slug })
     .from(agentTemplates)
@@ -362,13 +375,50 @@ async function cloneAgentListingIntoOrg(listing: ListingInstallRow, buyerOrgId: 
 
   const [created] = await db
     .insert(agentTemplates)
-    .values({ ...args, slug })
+    .values({ ...args, blueprint, slug })
     .returning({ id: agentTemplates.id });
 
   if (!created) {
     throw new Error("agent_templates insert returned no row");
   }
   return created.id;
+}
+
+/**
+ * Clone a kind:'agent' listing into the buyer org AND resolve the buyer-owned
+ * deployment of it (status 'draft') so the agent is RUNNABLE (the buyer's setup
+ * wizard configures it: phone, calendar, go-live). Idempotent at the deployment
+ * layer (one deployment per buyer+listing). Additive — NO money: this only
+ * writes a template + a draft deployment row; the charge already happened
+ * upstream (free → no charge; paid → Stripe). Returns the new template id + the
+ * deployment id (the buyer-setup redirect target). The deployment step is
+ * soft-fail: if it throws, the buyer still gets their cloned template (today's
+ * behavior) and `deploymentId` is null — the install never fails on it.
+ */
+async function provisionBuyerAgentFromListing(
+  listing: ListingInstallRow,
+  buyerOrgId: string,
+): Promise<{ templateId: string; deploymentId: string | null }> {
+  const templateId = await cloneAgentListingIntoOrg(listing, buyerOrgId);
+  try {
+    const buyerListing: BuyerListing = {
+      id: listing.id,
+      slug: listing.slug,
+      name: listing.name,
+      kind: listing.kind,
+      agentType: listing.agentType,
+      agentBlueprint: listing.agentBlueprint,
+    };
+    const result = await resolveOrCreateBuyerDeployment(
+      { buyerOrgId, listing: buyerListing, agentTemplateId: templateId },
+      buildDefaultResolveBuyerDeploymentDeps(),
+    );
+    return { templateId, deploymentId: result.ok ? result.deployment.id : null };
+  } catch {
+    // Soft-fail: a deployment hiccup must never break the buyer's purchase. They
+    // keep their cloned template; the wizard redirect just falls back to Studio.
+    return { templateId, deploymentId: null };
+  }
 }
 
 export async function finalizeSoulPurchaseFromWebhook(params: {
@@ -409,12 +459,13 @@ export async function finalizeSoulPurchaseFromWebhook(params: {
     return;
   }
 
-  // kind:'agent' → clone the blueprint into the buyer org. Same Stripe charge +
-  // 2% application fee already fired at the checkout site (purchaseAgentListing
-  // path), exactly like a paid soul. kind:'soul' (default) → the original soul
-  // install, untouched.
+  // kind:'agent' → clone the blueprint into the buyer org AND provision the
+  // buyer-owned deployment (so the bought agent is runnable + the setup wizard
+  // has a target). Same Stripe charge + fee already fired at the checkout site
+  // (purchaseAgentListing path), exactly like a paid soul — this step adds NO
+  // money. kind:'soul' (default) → the original soul install, untouched.
   if (listing.kind === "agent") {
-    await cloneAgentListingIntoOrg(listing, params.orgId);
+    await provisionBuyerAgentFromListing(listing, params.orgId);
   } else {
     await installSoulPackage(params.orgId, listing.soulPackage as SoulPackage);
   }
@@ -429,6 +480,45 @@ export async function finalizeSoulPurchaseFromWebhook(params: {
   revalidatePath(`/soul-marketplace/${listing.slug}`);
   revalidatePath("/marketplace");
   revalidatePath(`/marketplace/${listing.slug}`);
+}
+
+/**
+ * Provision the buyer-owned agent deployment when a #139 marketplace_purchases
+ * row flips to `active` (the webhook `onActivated` hook). Looks up the listing by
+ * the row's `listingId`; for a kind:'agent' listing, clones the blueprint into
+ * the buyer org + resolves the buyer deployment (idempotent — one per
+ * buyer+listing). Returns the buyer-setup target so the buyer's "Subscribed"
+ * surface can deep-link into onboarding.
+ *
+ * Money-safe: this runs AFTER settlement and moves NO money — it only writes a
+ * template + a draft deployment. Idempotent + best-effort (the webhook swallows
+ * its errors). A non-agent (soul) listing is a no-op here (soul install is the
+ * legacy webhook's job, untouched).
+ */
+export async function provisionBuyerAgentFromPurchaseRow(row: {
+  buyerOrgId: string;
+  listingId: string;
+}): Promise<{ deploymentId: string | null; setupUrl: string | null }> {
+  if (!row.buyerOrgId || !row.listingId) {
+    return { deploymentId: null, setupUrl: null };
+  }
+
+  const [listing] = (await db
+    .select(LISTING_INSTALL_COLUMNS)
+    .from(marketplaceListings)
+    .where(eq(marketplaceListings.id, row.listingId))
+    .limit(1)) as ListingInstallRow[];
+
+  // Only agent listings get a deployment; a soul purchase is handled elsewhere.
+  if (!listing || listing.kind !== "agent") {
+    return { deploymentId: null, setupUrl: null };
+  }
+
+  const { deploymentId } = await provisionBuyerAgentFromListing(listing, row.buyerOrgId);
+  // Keep the org's installed-listing marker in sync (idempotent) so the buyer's
+  // storefront state matches the legacy free/soul path.
+  await markOrgInstalledListing(row.buyerOrgId, listing.id);
+  return { deploymentId, setupUrl: buyerSetupPath(deploymentId) };
 }
 
 // ─── agent listings — publish + install ──────────────────────────────────────
@@ -571,10 +661,13 @@ export async function installAgentListingAction(
     throw new Error("Agent listing not found");
   }
 
-  // Idempotent: an org installs a given listing once.
+  // Idempotent: an org installs a given listing once. A returning buyer still
+  // gets routed into their setup wizard (best-effort resolve; null → the client
+  // falls back to Studio).
   const alreadyInstalled = await hasOrgInstalledListing(orgId, listing.id);
   if (alreadyInstalled) {
-    return { ok: true as const };
+    const setupUrl = await resolveBuyerSetupUrlForListingSlug(orgId, listing.slug);
+    return { ok: true as const, setupUrl };
   }
 
   const price = Number(listing.price ?? 0);
@@ -610,9 +703,14 @@ export async function installAgentListingAction(
     // else: fall through to the free-install path below (today's behavior).
   }
 
-  // FREE → clone immediately into the buyer org.
+  // FREE → clone immediately into the buyer org AND provision a buyer-owned
+  // deployment so the agent is runnable. Returns the setup-wizard target so the
+  // buyer lands in onboarding (not just an editable template). No money.
   if (price <= 0) {
-    const templateId = await cloneAgentListingIntoOrg(listing as ListingInstallRow, orgId);
+    const { templateId, deploymentId } = await provisionBuyerAgentFromListing(
+      listing as ListingInstallRow,
+      orgId,
+    );
     await markOrgInstalledListing(orgId, listing.id);
 
     await db
@@ -623,7 +721,14 @@ export async function installAgentListingAction(
     revalidatePath("/marketplace");
     revalidatePath(`/marketplace/${listing.slug}`);
 
-    return { ok: true as const, templateId };
+    return {
+      ok: true as const,
+      templateId,
+      deploymentId,
+      // The buyer-setup wizard target (null when the deployment soft-failed → the
+      // client falls back to Studio).
+      setupUrl: buyerSetupPath(deploymentId),
+    };
   }
 
   // PAID (onetime) → reuse the soul Stripe-checkout path. metadata.type "soul_purchase"
