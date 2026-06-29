@@ -36,7 +36,7 @@ export async function createMarketplaceBillingPortalAction(input: {
   const purchase = await getPurchase(purchaseId, orgId);
   if (!purchase) return { ok: false, reason: "not_found" };
 
-  const baseUrl = process.env.NEXT_PUBLIC_APP_URL || "http://localhost:3000";
+  const baseUrl = process.env.NEXT_PUBLIC_APP_URL?.trim() || "https://app.seldonframe.com";
   const returnUrl = `${baseUrl}/marketplace/${purchase.slug}`;
 
   const result = await resolveMarketplacePortalSession(

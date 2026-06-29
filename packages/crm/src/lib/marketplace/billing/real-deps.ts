@@ -57,7 +57,7 @@ export function buildOneTimeCheckoutDeps(): CreateOneTimeAgentCheckoutDeps {
     readConnectStatus,
     createPurchase,
     env: process.env as Record<string, string | undefined>,
-    baseUrl: process.env.NEXT_PUBLIC_APP_URL || "http://localhost:3000",
+    baseUrl: process.env.NEXT_PUBLIC_APP_URL?.trim() || "https://app.seldonframe.com",
     now: () => new Date(),
   };
 }
@@ -94,7 +94,7 @@ export function buildSubscriptionCheckoutDeps(): SubscriptionCheckoutDeps {
     readConnectStatus,
     createPurchase,
     env: process.env as Record<string, string | undefined>,
-    baseUrl: process.env.NEXT_PUBLIC_APP_URL || "http://localhost:3000",
+    baseUrl: process.env.NEXT_PUBLIC_APP_URL?.trim() || "https://app.seldonframe.com",
     now: () => new Date(),
   };
 }

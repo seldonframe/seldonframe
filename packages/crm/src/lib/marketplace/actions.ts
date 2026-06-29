@@ -667,7 +667,7 @@ export async function installAgentListingAction(
     throw new Error("Stripe is not configured.");
   }
 
-  const baseUrl = process.env.NEXT_PUBLIC_APP_URL || "http://localhost:3000";
+  const baseUrl = process.env.NEXT_PUBLIC_APP_URL?.trim() || "https://app.seldonframe.com";
   const session = await stripe.checkout.sessions.create({
     mode: "payment",
     success_url: `${baseUrl}/marketplace/${listing.slug}?purchased=true`,
@@ -838,7 +838,7 @@ export async function purchaseSoulListingAction(formData: FormData) {
     throw new Error("Stripe is not configured.");
   }
 
-  const baseUrl = process.env.NEXT_PUBLIC_APP_URL || "http://localhost:3000";
+  const baseUrl = process.env.NEXT_PUBLIC_APP_URL?.trim() || "https://app.seldonframe.com";
   const session = await stripe.checkout.sessions.create({
     mode: "payment",
     success_url: `${baseUrl}/soul-marketplace/${listing.slug}/install?purchased=true`,
@@ -1016,7 +1016,7 @@ export async function purchaseMarketplaceBlockAction(formData: FormData) {
     throw new Error("Stripe is not configured.");
   }
 
-  const baseUrl = process.env.NEXT_PUBLIC_APP_URL || "http://localhost:3000";
+  const baseUrl = process.env.NEXT_PUBLIC_APP_URL?.trim() || "https://app.seldonframe.com";
   const session = await stripe.checkout.sessions.create({
     mode: "payment",
     success_url: `${baseUrl}/templates/${blockId}?purchased=true`,
@@ -1433,7 +1433,7 @@ export async function approveGeneratedBlockAction(formData: FormData) {
     .set({ generationStatus: "approved", updatedAt: new Date() })
     .where(eq(marketplaceBlocks.blockId, blockId));
 
-  const appUrl = process.env.NEXT_PUBLIC_APP_URL || "http://localhost:3000";
+  const appUrl = process.env.NEXT_PUBLIC_APP_URL?.trim() || "https://app.seldonframe.com";
   await sendAdminReviewNotification({
     blockId,
     blockName: row.name,
