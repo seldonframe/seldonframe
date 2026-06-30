@@ -19,7 +19,9 @@ Recon (verified, read from code):
 - [x] **Task 1 — discover** — DONE (bea60956). `discoverCatalog` + entry mappers + `POST /api/v1/build/discover`. 12 tests.
 - [x] **Task 2 — inspect** — DONE. `buildInspectView`/`agentRunInputSchema` (7 tests) + `POST /api/v1/build/inspect`; tool schema via ensureSession→createMcpClient.listTools (fail-soft permissive).
 - [x] **Task 3 — run** — DONE. `computeRunCost` (micro-dollars, 12 tests) + `POST /api/v1/build/run`. Agent→rental turn / tool→Composio execute; records `build_run_usage` (flag-gated, fire-and-forget) but NEVER charges; errors→cost 0, not recorded. Money-safety audit: no Stripe/charge/settle in build/.
-- [ ] **Task 4 — verify + ship**: extend `buildSkillMd()` (discover/inspect/run); gate (tests/tsc/check-use-server/build); push origin HEAD:main.
+- [x] **Task 4 — verify + ship** — DONE. `buildSkillMd()` §7 documents discover→inspect→run + endpoints + the "recorded not charged" contract (10 skill-md tests). FINAL GATE: 50 build tests pass · tsc 0 · check-use-server clean · `pnpm build` exit 0 (all 3 endpoints registered).
+
+**Review:** P1 shipped the unified discover→inspect→run interface over the catalog (agents = published listings, tools = Composio actions), Composio-first. Pure cores TDD'd: `discoverCatalog` (ranker), `buildInspectView`, `computeRunCost` (micro-dollars + 5% fee echo). MONEY-SAFE: run records a `build_run_usage` meter event behind `SF_MARKETPLACE_BILLING` but NEVER charges (no Stripe path in build/); errors → cost 0, not billable. SHAs: discover bea60956 · inspect 8d6b03c1 · run e94821b2 · skill-md+ship (this commit).
 
 ### P4 / Task 8 — One shared Apps & tools catalog + agents-list clarity (primitive-composition generator) — DONE
 

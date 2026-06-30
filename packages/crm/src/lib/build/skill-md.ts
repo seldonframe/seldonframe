@@ -111,6 +111,43 @@ Under the hood your IDE agent calls:
   (after the 5% fee).
 - **\`get_agent_metrics\`** — per-agent conversations, eval pass-rate, and health.
 
+## 7. Run anything in the catalog: discover → inspect → run
+
+The same MCP key lets you RUN what's already on the marketplace — whole **agents**
+AND single **tools** (Composio's connected actions) — through one consistent
+flow. Every sellable thing is discovered, priced, and run the same way:
+
+- **discover** — natural-language search → ranked results, each with its price:
+
+  \`\`\`
+  POST https://seldonframe.com/api/v1/build/discover
+  { "query": "send an email to a customer", "limit": 5 }
+  → { "results": [ { "id", "type": "agent"|"tool", "provider?", "name",
+                     "description", "price": { "type", "amountCents" }, "score" } ] }
+  \`\`\`
+
+- **inspect** — the input schema + pricing + docs, so you know how to call it:
+
+  \`\`\`
+  POST https://seldonframe.com/api/v1/build/inspect
+  { "type": "tool", "id": "GMAIL_SEND_EMAIL" }
+  → { "id", "type", "name", "description", "inputSchema", "price", "docUrl?" }
+  \`\`\`
+
+- **run** — execute with structured input; get the result back inline:
+
+  \`\`\`
+  POST https://seldonframe.com/api/v1/build/run
+  { "type": "agent", "id": "ace-receptionist", "input": { "message": "Do you do emergency calls?" } }
+  → { "runId", "status": "completed", "output", "price",
+      "billing": { "calculatedCost", "amountCents", "charged": false } }
+  \`\`\`
+
+  An agent is run by sending it a \`message\`; a tool is run with the arguments
+  its \`inputSchema\` describes. **A run returns its \`calculatedCost\` (the
+  cost is recorded) but is NOT charged yet — a prepaid wallet draws it down in a
+  later phase.** Errors are never billed (only successful runs accrue).
+
 ---
 
 ## The one-paragraph flow
@@ -119,7 +156,8 @@ Under the hood your IDE agent calls:
 \`wst_\` key from \`${SKILL_MD_KEYS_PATH}\` → *"build me a 24/7 receptionist and
 list it for $0.10/call"* → \`create_agent\` → \`run_agent_evals\` →
 \`publish_agent\` → \`set_usage_price\`. Build, test, list, price — without ever
-opening a dashboard.
+opening a dashboard. And to USE the catalog: **discover** → **inspect** →
+**run** any agent or tool, each priced, the cost recorded (not charged in P1).
 
 Human-browsable quickstart: https://seldonframe.com${SKILL_MD_BUILD_PATH}
 `;

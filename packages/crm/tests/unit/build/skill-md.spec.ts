@@ -56,6 +56,24 @@ describe("buildSkillMd", () => {
     assert.match(md, /listing is free|free to list|costs nothing to list/i);
   });
 
+  test("documents the discover -> inspect -> run flow over the catalog (P1)", () => {
+    // The unit a builder RUNS (agents + tools), not just builds: the three
+    // Monid-shaped steps and their endpoints must be present so an IDE agent
+    // learns to consume the catalog, each result carrying a price.
+    for (const step of ["discover", "inspect", "run"]) {
+      assert.match(md, new RegExp(`\\b${step}\\b`, "i"), `SKILL.md should name the ${step} step`);
+    }
+    assert.match(md, /\/api\/v1\/build\/discover/);
+    assert.match(md, /\/api\/v1\/build\/inspect/);
+    assert.match(md, /\/api\/v1\/build\/run/);
+  });
+
+  test("is money-honest about run: a run returns its cost but is not charged in P1", () => {
+    // The P1 money-safety contract surfaced to the reader: run computes/records
+    // the cost; the prepaid wallet (charging) is the next phase.
+    assert.match(md, /calculatedcost|cost is recorded|not charged|wallet/i);
+  });
+
   test("is deterministic (same output every call)", () => {
     assert.equal(buildSkillMd(), md);
   });
