@@ -151,3 +151,12 @@ export * from "./acp";
 // key + charges_enabled; inert without a Stripe key. See
 // lib/marketplace/billing/*.
 export * from "./marketplace-purchases";
+
+// 2026-06-30 — Builder Marketplace (spec 1ff09dcb) P2: the PREPAID WALLET.
+// Two additive tables — wallet_accounts (one balance per org+mode) +
+// wallet_transactions (the append-only ledger with a UNIQUE idempotency_key).
+// A Stripe top-up funds the balance; every successful build run draws it down by
+// a LEDGER decrement (no Stripe call per run). Money-safe: never negative, no
+// double-debit (UNIQUE idempotency_key), inert without a Stripe key. See
+// lib/build/wallet-ledger.ts + lib/build/wallet-store.ts.
+export * from "./wallet";

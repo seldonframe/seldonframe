@@ -253,6 +253,13 @@
       "when": 1782601672296,
       "tag": "0058_marketplace_purchases",
       "breakpoints": true
+    },
+    {
+      "idx": 36,
+      "version": "7",
+      "when": 1782688072296,
+      "tag": "0059_build_wallet",
+      "breakpoints": true
     }
   ]
 }
