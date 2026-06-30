@@ -43,6 +43,7 @@ import {
   ConnectToolStep,
   type ConnectToolSeed,
 } from "@/components/buyer/steps/connect-tool-step";
+import { PhoneStep, type PhoneSeed } from "@/components/buyer/steps/phone-step";
 
 export type SetupWizardClientProps = {
   deploymentId: string;
@@ -63,19 +64,6 @@ export type SetupWizardClientProps = {
   phoneSeed: PhoneSeed;
   /** Recap rows for the go_live step (business name, phone, calendar). */
   goLiveSummary: GoLiveSummaryRow[];
-};
-
-/** The phone step's seed (the step component lands in Task 9; the shape is
- *  defined here so the page + wizard agree on it now). */
-export type PhoneSeed = {
-  /** The deployment's current E.164 number, if any. */
-  phoneNumber: string | null;
-  /** How it was acquired ('provisioned' | 'byo' | null). */
-  numberOrigin: string | null;
-  /** Default area code (derived from the buyer's contact phone) for "Get a number". */
-  defaultAreaCode: string;
-  /** Whether this agent requires a number (voice surface) — drives the copy. */
-  required: boolean;
 };
 
 /** Index of the first step whose kind isn't done (the resume point), clamped. */
@@ -298,8 +286,9 @@ export function SetupWizardClient(props: SetupWizardClientProps) {
 //
 // Keyed on `step.kind`. Returns the rendered node + whether the step OWNS its
 // footer (rich steps render their own Back + primary action; simple steps reuse
-// the wizard's generic footer). The rich screens land across phases; until each
-// is wired, the kind renders the honest StepPlaceholder (generic footer).
+// the wizard's generic footer). business_info / connect_tool / phone / go_live
+// ship rich screens; the social/test kinds (brand_info, cadence, preview, test)
+// still render the honest StepPlaceholder with the generic footer (later phases).
 
 type RenderArgs = {
   step: OnboardingStep;
@@ -354,10 +343,19 @@ function renderStep(args: RenderArgs): { node: React.ReactNode; ownsFooter: bool
       };
     }
 
-    // phone gets its rich screen in Task 9; until then the honest placeholder +
-    // generic footer keeps the wizard walkable.
     case "phone":
-      return { ownsFooter: false, node: <StepPlaceholder step={step} /> };
+      return {
+        ownsFooter: true,
+        node: (
+          <PhoneStep
+            deploymentId={props.deploymentId}
+            seed={props.phoneSeed}
+            canGoBack={canGoBack}
+            onBack={args.onBack}
+            onContinue={args.onGenericComplete}
+          />
+        ),
+      };
 
     case "go_live":
       return {

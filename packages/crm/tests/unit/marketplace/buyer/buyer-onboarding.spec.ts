@@ -13,6 +13,7 @@ import {
   validateBusinessInfo,
   goLiveBlockers,
   canGoLive,
+  normalizeUsPhoneToE164,
 } from "../../../../src/lib/marketplace/buyer/buyer-onboarding";
 import type { OnboardingStep } from "../../../../src/lib/marketplace/onboarding/steps";
 
@@ -169,4 +170,45 @@ test("goLiveBlockers: a connector-less chat agent (business_info + go_live) clea
   ];
   assert.equal(canGoLive(chatSteps, { doneKinds: [] }), false);
   assert.equal(canGoLive(chatSteps, { doneKinds: ["business_info"] }), true);
+});
+
+// ─── normalizeUsPhoneToE164 (BYO forward number) ─────────────────────────────
+
+test("normalizeUsPhoneToE164: accepts the natural ways an SMB owner types a number", () => {
+  for (const input of [
+    "(602) 555-0148",
+    "602-555-0148",
+    "602.555.0148",
+    "6025550148",
+    " 602 555 0148 ",
+  ]) {
+    assert.equal(normalizeUsPhoneToE164(input), "+16025550148", `input: ${input}`);
+  }
+});
+
+test("normalizeUsPhoneToE164: an 11-digit number with country code 1 normalizes", () => {
+  assert.equal(normalizeUsPhoneToE164("1 (602) 555-0148"), "+16025550148");
+  assert.equal(normalizeUsPhoneToE164("16025550148"), "+16025550148");
+});
+
+test("normalizeUsPhoneToE164: an already-E.164 value passes through (incl. non-US)", () => {
+  assert.equal(normalizeUsPhoneToE164("+16025550148"), "+16025550148");
+  assert.equal(normalizeUsPhoneToE164("+442071838750"), "+442071838750");
+});
+
+test("normalizeUsPhoneToE164: rejects an invalid NANP area code (leading 0 or 1)", () => {
+  assert.equal(normalizeUsPhoneToE164("0025550148"), null);
+  assert.equal(normalizeUsPhoneToE164("1025550148"), null);
+});
+
+test("normalizeUsPhoneToE164: rejects too-short / too-long / junk", () => {
+  for (const input of ["", "   ", "555-0148", "123", "60255501480000000", "abc", "+", "+12"]) {
+    assert.equal(normalizeUsPhoneToE164(input), null, `input: ${JSON.stringify(input)}`);
+  }
+});
+
+test("normalizeUsPhoneToE164: tolerates non-string input (jsonb/edge)", () => {
+  assert.equal(normalizeUsPhoneToE164(undefined), null);
+  assert.equal(normalizeUsPhoneToE164(null), null);
+  assert.equal(normalizeUsPhoneToE164(6025550148 as unknown), null);
 });

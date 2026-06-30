@@ -158,5 +158,47 @@ export function canGoLive(
   return goLiveBlockers(steps, progress).length === 0;
 }
 
+// ─── phone normalization (BYO "forward my number") ───────────────────────────
+
+/**
+ * Normalize a buyer-typed phone number to E.164 (the form `activateDeploymentAction`
+ * requires). The buyer wizard must accept the natural way an SMB owner writes
+ * their number — "(602) 555-0148", "602-555-0148", "6025550148" — not force them
+ * to know E.164. Pure; conservative (US/NANP-focused since the deployment number
+ * pool is NANP):
+ *
+ *   - strips all non-digits (and a leading "+"),
+ *   - a 10-digit NANP number → "+1" + digits,
+ *   - an 11-digit number starting with "1" → "+" + digits,
+ *   - an already-E.164 "+…" value is validated + returned as-is,
+ *   - anything else (too short/long, a non-NANP length) → null (the UI asks the
+ *     buyer to re-check rather than send a bad number to Twilio).
+ *
+ * Returns the E.164 string or null. Never throws.
+ */
+export function normalizeUsPhoneToE164(raw: unknown): string | null {
+  if (typeof raw !== "string") return null;
+  const trimmed = raw.trim();
+  if (!trimmed) return null;
+
+  // Already E.164? Validate the shape and accept it verbatim (lets a buyer who
+  // DOES know their international number through unchanged).
+  if (trimmed.startsWith("+")) {
+    return /^\+[1-9]\d{7,14}$/.test(trimmed) ? trimmed : null;
+  }
+
+  const digits = trimmed.replace(/\D/g, "");
+  if (digits.length === 10) {
+    // Bare NANP number — area code must be valid (2-9 leading).
+    if (!/^[2-9]\d{9}$/.test(digits)) return null;
+    return `+1${digits}`;
+  }
+  if (digits.length === 11 && digits.startsWith("1")) {
+    if (!/^1[2-9]\d{9}$/.test(digits)) return null;
+    return `+${digits}`;
+  }
+  return null;
+}
+
 /** Re-export so the wizard can resolve its resume point from one import. */
 export { firstIncompleteStep };
