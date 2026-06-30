@@ -57,9 +57,10 @@ claude mcp add seldonframe --transport http ${SKILL_MD_MCP_URL} \\
   --header "Authorization: Bearer <YOUR_KEY>"
 \`\`\`
 
-Once connected you get the SeldonFrame build/run/sell tools (\`create_agent\`,
-\`update_agent_blueprint\`, \`run_agent_evals\`, \`publish_agent\`,
-\`set_usage_price\`, \`list_my_listings\`, \`list_agents\`, \`get_agent_metrics\`, …).
+Once connected you get the SeldonFrame build/test/run/sell tools (\`create_agent\`,
+\`update_agent_blueprint\`, \`send_conversation_turn\`, \`run_agent_evals\`,
+\`publish_agent\`, \`set_usage_price\`, \`tail_agent_conversations\`,
+\`get_agent_metrics\`, \`list_my_listings\`, \`list_agents\`, …).
 
 ## 2. Get a key
 
@@ -91,6 +92,8 @@ Under the hood your IDE agent calls:
 
 ## 4. Test it before you sell it
 
+- **\`send_conversation_turn\`** — send the agent one live message and read its
+  reply (and the tools it called). Try it like a customer before you publish.
 - **\`run_agent_evals\`** — runs the agent's eval suite and returns a pass-rate
   summary with the judge's findings. Publishing a *live* agent is eval-gated, so
   fix what fails here first.
@@ -100,16 +103,25 @@ Under the hood your IDE agent calls:
 - **\`publish_agent\`** — lists the agent on the SeldonFrame marketplace so
   buyers (and other agents over MCP) can discover and run it.
 - **\`set_usage_price\`** — set how you charge. **Listing is free; this sets your
-  price, it does not charge anyone.** You earn only on real, successful runs (you
-  keep 95% — SeldonFrame's take is a clean 5% on usage). Models:
+  price, it does not charge anyone.** You earn only on real, successful runs —
+  SeldonFrame's only fee is a clean 5% on usage (you keep the rest), with no
+  upfront cost. Models:
   - \`per_call\` — e.g. **$0.10 per call** → \`set_usage_price({ listingId, model: "per_call", amountCents: 10 })\`
   - \`per_outcome\` — e.g. **$10 per booking** → \`set_usage_price({ listingId, model: "per_outcome", amountCents: 1000, outcomeType: "booking" })\`
 
-## 6. Track it
+## 6. Observe & improve
 
+- **\`tail_agent_conversations\`** / **\`get_agent_conversation\`** /
+  **\`replay_conversation\`** — stream the logs of every real run, read a full
+  transcript, or replay one to debug it.
+- **\`get_agent_metrics\`** — per-agent conversations, eval pass-rate, validator
+  pass-rate, and health at a glance.
 - **\`list_my_listings\`** — your listings with installs, runs, and net earnings
-  (after the 5% fee).
-- **\`get_agent_metrics\`** — per-agent conversations, eval pass-rate, and health.
+  (after the clean 5% usage fee).
+- **The Brain learns.** Every run is logged, and the eval findings plus your
+  edits become lessons (\`write_brain_note\` / \`read_brain_path\`) that are
+  recalled into your next \`create_agent\` — so each agent you build is a little
+  smarter than the last.
 
 ## 7. Run anything in the catalog: discover → inspect → run
 

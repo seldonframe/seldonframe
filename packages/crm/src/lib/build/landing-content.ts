@@ -147,11 +147,53 @@ export function buildLandingConnectSnippet(): string {
 
 export type PricingPoint = { icon: "check" | "dollar" | "shield" | "trending"; text: string };
 
-/** The four honest pricing facts, each a checked line. No subscription; list
- *  free; keep 95%; prepaid wallet; errors never charged. */
+/** The honest pricing facts, each a checked line. Framing leads with the
+ *  builder's win — free to list, no upfront cost — and states SeldonFrame's
+ *  fee plainly (a clean 5% on usage, only on success) without making "keep 95%"
+ *  the headline. Low-key by design (the AWS/Vercel/Neon/Monid register). */
 export const PRICING_POINTS: PricingPoint[] = [
   { icon: "dollar", text: "Listing is free. No subscription, no seat fee, no upfront cost." },
   { icon: "trending", text: `You earn per call. Set per-call or per-outcome pricing from your IDE.` },
-  { icon: "check", text: `You keep ${BUILDER_KEEP_PCT}%. SeldonFrame takes a clean ${SELDONFRAME_FEE_PCT}% on real usage — nothing else.` },
+  { icon: "check", text: `SeldonFrame's only fee is a clean ${SELDONFRAME_FEE_PCT}% on usage — taken only when a run succeeds. We make money when you do.` },
   { icon: "shield", text: "Prepaid wallet draws down per run, and errored runs are never charged." },
+];
+
+// ─── the low-key FAQ (the bottom-of-page "common questions") ──────────────────
+
+export type FaqItem = { q: string; a: string };
+
+/**
+ * The understated "Common questions" block at the foot of /build — the
+ * AWS/Vercel/Neon/Monid register, where the fee is a plain factual line rather
+ * than a headline. Also the page's home for the truth that SeldonFrame is a full
+ * agent-building toolchain: build, TEST (send a live turn), EVAL (gated publish),
+ * OBSERVE (logs + replay), and a Brain that learns from every run — not just
+ * build → list → run. Pure copy; rendered verbatim by the page + the .md twin +
+ * pinned by tests, so the fee line + the primitive names never drift.
+ */
+export const BUILD_FAQ: FaqItem[] = [
+  {
+    q: "Do I need to host anything?",
+    a: "No. SeldonFrame runs your agent — voice, chat, SMS, and email — on its own infrastructure. You bring the keys your agent calls (for a voice agent, an OpenAI key); everything else runs on us.",
+  },
+  {
+    q: "How does pricing work?",
+    a: "Pay-per-call. You set each agent's rate — per call or per outcome — from your IDE. Listing is free: no subscription, no seat fee, no minimums.",
+  },
+  {
+    q: "What does SeldonFrame charge?",
+    a: `A clean ${SELDONFRAME_FEE_PCT}% on usage, taken only when a run succeeds. Nothing upfront — we only make money when you do.`,
+  },
+  {
+    q: "Can I test, eval, and watch my agent before I sell it?",
+    a: "Yes — testing, evals, and logs are first-class. Send a live test turn with send_conversation_turn, run the eval suite with run_agent_evals (publishing a live agent is eval-gated), then watch every run with tail_agent_conversations and replay_conversation. The Brain logs all activity and feeds the lessons back into your next build.",
+  },
+  {
+    q: "A run failed. Am I charged?",
+    a: "No. Only successful runs draw down the wallet — errored runs are never billed.",
+  },
+  {
+    q: "Which editors and agents work?",
+    a: "Any MCP client — Claude Code, Cursor, Codex — plus the same workspace key over the CLI and the HTTP API.",
+  },
 ];

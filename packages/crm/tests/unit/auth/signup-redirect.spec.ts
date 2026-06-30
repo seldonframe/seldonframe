@@ -293,6 +293,15 @@ describe("isSafeInternalRedirect", () => {
     assert.equal(isSafeInternalRedirect("/marketplace"), true);
   });
 
+  test("allows the /build builder surface (developer-key sign-in return target)", () => {
+    // A logged-out developer from SKILL.md clicking "Get a developer key" is sent
+    // to /login?callbackUrl=/build/keys. Without /build allowlisted the callback
+    // collapsed to /clients/new (the SMB flow). Covers the three builder pages.
+    assert.equal(isSafeInternalRedirect("/build"), true);
+    assert.equal(isSafeInternalRedirect("/build/keys"), true);
+    assert.equal(isSafeInternalRedirect("/build/wallet"), true);
+  });
+
   test("allows the existing signup-family + onboarding paths", () => {
     assert.equal(isSafeInternalRedirect("/clients/new"), true);
     assert.equal(isSafeInternalRedirect("/clients/new?url=https%3A%2F%2Fx.com&intent=build"), true);
@@ -375,6 +384,7 @@ describe("toInternalRedirectPath", () => {
   test("passes through an already-relative safe path", () => {
     assert.equal(toInternalRedirectPath("/marketplace/x?install=1"), "/marketplace/x?install=1");
     assert.equal(toInternalRedirectPath("/clients/new"), "/clients/new");
+    assert.equal(toInternalRedirectPath("/build/keys"), "/build/keys");
   });
 
   test("returns null for an absolute URL to a foreign host (no open redirect)", () => {

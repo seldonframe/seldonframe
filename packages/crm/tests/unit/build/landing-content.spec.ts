@@ -25,6 +25,7 @@ import {
   KEY_PLACEHOLDER,
   buildLandingConnectSnippet,
   PRICING_POINTS,
+  BUILD_FAQ,
 } from "../../../src/lib/build/landing-content";
 import { SKILL_MD_MCP_URL, SKILL_MD_KEYS_PATH, buildSkillMd } from "../../../src/lib/build/skill-md";
 
@@ -91,13 +92,32 @@ describe("/build landing content", () => {
     assert.match(snippet, /Authorization: Bearer/);
   });
 
-  test("pricing points are money-honest: free to list, keep 95%, 5% fee, errors not charged", () => {
+  test("pricing points are money-honest + low-key: free to list, no upfront, 5% on usage only, errors free", () => {
+    // The framing leads with the builder's win (free, no upfront) and states the
+    // fee plainly as a clean 5% on usage — WITHOUT making "keep 95%" the headline
+    // (that emphasis moved off the page per the 2026-06-30 low-key pricing pass).
     const joined = PRICING_POINTS.map((p) => p.text).join(" ").toLowerCase();
     assert.match(joined, /listing is free|free to list/);
     assert.match(joined, /no subscription/);
-    assert.match(joined, /95%/);
+    assert.match(joined, /no upfront cost|nothing upfront/);
     assert.match(joined, /5%/);
     assert.match(joined, /errored runs are never charged|never charged/);
+  });
+
+  test("the FAQ is the low-key home for the fee + the full build/test/eval/observe toolchain", () => {
+    // Bottom-of-page "common questions" (Monid register): the 5% fee is a plain
+    // factual line here, not a headline. AND it pins the truth that SeldonFrame is
+    // a full toolchain — test (send_conversation_turn), eval (run_agent_evals),
+    // observe (tail_agent_conversations), and a Brain that learns — not just
+    // build → list → run.
+    assert.ok(BUILD_FAQ.length >= 4, "the FAQ has real questions");
+    const joined = BUILD_FAQ.map((f) => `${f.q} ${f.a}`).join(" ").toLowerCase();
+    assert.match(joined, /5%/, "the fee is stated in the FAQ");
+    assert.match(joined, /only when a run succeeds|never billed|never charged/);
+    assert.match(joined, /send_conversation_turn/, "test-a-turn is surfaced");
+    assert.match(joined, /run_agent_evals/, "evals are surfaced");
+    assert.match(joined, /tail_agent_conversations|replay_conversation/, "logs/observability surfaced");
+    assert.match(joined, /brain/, "the Brain-learns loop is surfaced");
   });
 
   test("content arrays are non-empty (the page has something to render)", () => {
@@ -105,5 +125,6 @@ describe("/build landing content", () => {
     assert.ok(RENTABLE_TYPES.length === 3);
     assert.ok(IDE_CHAT.length >= 2);
     assert.ok(PRICING_POINTS.length >= 3);
+    assert.ok(BUILD_FAQ.length >= 4);
   });
 });

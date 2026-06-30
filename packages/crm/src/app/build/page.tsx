@@ -31,14 +31,12 @@ import {
   BUILD_SETUP_COMMAND,
   BUILD_KEYS_PATH,
   BUILD_WALLET_PATH,
-  BUILDER_KEEP_PCT,
-  SELDONFRAME_FEE_PCT,
   FLOW_STEPS,
   RENTABLE_TYPES,
   IDE_CHAT,
   IDE_TOOL_CHAIN,
   buildLandingConnectSnippet,
-  PRICING_POINTS,
+  BUILD_FAQ,
 } from "@/lib/build/landing-content";
 
 // SEO/GEO via the shared builder-surface helper: per-page Metadata with a
@@ -49,7 +47,7 @@ export const metadata: Metadata = buildPageMetadata({
   markdownPath: "/build.md",
   title: "Build & sell an AI agent — from your IDE | SeldonFrame for Builders",
   description:
-    "set up https://seldonframe.com/SKILL.md, connect the SeldonFrame MCP, and ask your agent to build, test, list, and price an AI agent — without a dashboard. Get paid per call. List free; keep 95%.",
+    "set up https://seldonframe.com/SKILL.md, connect the SeldonFrame MCP, and ask your agent to build, test, list, and price an AI agent — without a dashboard. Get paid per call. Free to list, no upfront fee — SeldonFrame earns only a small share of usage.",
   ogTitle: "Build & sell an AI agent — from your IDE",
   ogDescription:
     "One command — set up https://seldonframe.com/SKILL.md — and your IDE agent can build, eval, list, and price an agent over MCP. MCP-native. No dashboard. No subscription.",
@@ -122,11 +120,25 @@ export default function BuildLandingPage(): ReactElement {
     },
   };
 
+  // FAQPage schema from the same BUILD_FAQ the page renders — a GEO/SEO win
+  // (FAQ rich results + a citable, agent-legible answer for the fee + the
+  // build/test/eval/observe toolchain). Never drifts from the visible FAQ.
+  const faqLd = {
+    "@context": "https://schema.org",
+    "@type": "FAQPage",
+    mainEntity: BUILD_FAQ.map((f) => ({
+      "@type": "Question",
+      name: f.q,
+      acceptedAnswer: { "@type": "Answer", text: f.a },
+    })),
+  };
+
   return (
     <div className="sf-mkt" style={{ minHeight: "100vh", background: MKT.paper, color: MKT.ink, fontFamily: MKT.fontSans }}>
       <MarketplaceStyles />
       <MarkdownPointer href="/build.md" />
       <script type="application/ld+json" dangerouslySetInnerHTML={{ __html: JSON.stringify(jsonLd) }} />
+      <script type="application/ld+json" dangerouslySetInnerHTML={{ __html: JSON.stringify(faqLd) }} />
       <style>{`
         .sf-build-link { color: ${MKT.green}; font-weight: 600; text-decoration: none; }
         .sf-build-link:hover { text-decoration: underline; }
@@ -144,8 +156,8 @@ export default function BuildLandingPage(): ReactElement {
         {/* ── 3 · THE 3-STEP FLOW ───────────────────────────────────────────── */}
         <ThreeStepFlow />
 
-        {/* ── 4 · PRICING ───────────────────────────────────────────────────── */}
-        <Pricing />
+        {/* ── 4 · COMMON QUESTIONS (low-key pricing + toolchain FAQ) ─────────── */}
+        <CommonQuestions />
 
         {/* ── 5 · CONNECT ───────────────────────────────────────────────────── */}
         <Connect />
@@ -238,9 +250,8 @@ function HeroAside(): ReactElement {
           </div>
         ))}
       </div>
-      <div style={{ marginTop: 18, paddingTop: 16, borderTop: "1px solid rgba(34,29,23,0.10)", display: "flex", alignItems: "baseline", justifyContent: "space-between" }}>
-        <span style={{ fontSize: 13, color: "rgba(34,29,23,0.5)" }}>You keep</span>
-        <span style={{ fontFamily: MKT.fontMono, fontWeight: 700, fontSize: 26, letterSpacing: "-0.02em", color: MKT.green }}>{BUILDER_KEEP_PCT}%</span>
+      <div style={{ marginTop: 18, paddingTop: 16, borderTop: "1px solid rgba(34,29,23,0.10)" }}>
+        <span style={{ fontSize: 13, color: "rgba(34,29,23,0.5)" }}>Free to list · pay only on usage</span>
       </div>
     </div>
   );
@@ -454,60 +465,52 @@ function Dot({ c }: { c: string }): ReactElement {
 }
 
 // ───────────────────────────────────────────────────────────────────────────
-// 4 · PRICING
+// 4 · COMMON QUESTIONS  (the low-key pricing + toolchain FAQ — Monid register)
 // ───────────────────────────────────────────────────────────────────────────
+//
+// Pricing is deliberately NOT a headline here. Builders care that there's no
+// upfront fee and that we only earn on real usage — the exact 5% lives as one
+// plain factual line inside the FAQ, the way AWS/Vercel/Neon/Monid state it.
+// This block is also the page's honest home for the full toolchain (test, eval,
+// observe, Brain-learns), so /build reads as "build → test → eval → list →
+// price → run → observe", not just "build → list → run".
 
-function Pricing(): ReactElement {
+function CommonQuestions(): ReactElement {
   return (
     <section style={{ marginTop: SECTION_GAP }}>
-      <div style={sectionKicker}>Pricing</div>
-      <h2 style={{ margin: "0 0 30px", fontSize: 32, fontWeight: 700, letterSpacing: "-0.025em" }}>
-        List free. Earn per call. <span style={{ color: MKT.green }}>Keep {BUILDER_KEEP_PCT}%.</span>
+      <div style={sectionKicker}>Pricing &amp; FAQ</div>
+      <h2 style={{ margin: "0 0 8px", fontSize: 32, fontWeight: 700, letterSpacing: "-0.025em" }}>
+        Common{" "}
+        <span style={{ fontFamily: MKT.fontSerif, fontStyle: "italic", fontWeight: 500 }}>questions.</span>
       </h2>
+      <p style={{ margin: "0 0 26px", fontSize: 16.5, lineHeight: 1.5, color: "rgba(34,29,23,0.62)", maxWidth: 620 }}>
+        No upfront fee. SeldonFrame earns only a small share of real usage — so we make money when you do.
+      </p>
 
-      <div className="sf-build-price" style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 18, alignItems: "stretch" }}>
-        {/* the headline split */}
-        <div
-          style={{
-            background: MKT.dark,
-            color: MKT.paper,
-            borderRadius: 22,
-            padding: "32px 30px",
-            display: "flex",
-            flexDirection: "column",
-            justifyContent: "center",
-          }}
-        >
-          <div style={{ fontSize: 13, fontWeight: 600, letterSpacing: "0.1em", textTransform: "uppercase", color: "rgba(246,242,234,0.5)", marginBottom: 14 }}>
-            Your cut of every paid run
-          </div>
-          <div style={{ display: "flex", alignItems: "baseline", gap: 12 }}>
-            <span style={{ fontFamily: MKT.fontMono, fontWeight: 700, fontSize: 72, letterSpacing: "-0.04em", color: MKT.greenLight, lineHeight: 1 }}>
-              {BUILDER_KEEP_PCT}%
-            </span>
-            <span style={{ fontSize: 16, color: "rgba(246,242,234,0.6)" }}>to you</span>
-          </div>
-          <p style={{ margin: "16px 0 0", fontSize: 15, lineHeight: 1.55, color: "rgba(246,242,234,0.7)" }}>
-            SeldonFrame takes a clean {SELDONFRAME_FEE_PCT}% on real usage — and nothing else. No listing fee, no seat
-            fee, no subscription. We don&apos;t tax your work.
-          </p>
-        </div>
-
-        {/* the honest facts */}
-        <div style={{ ...card, borderRadius: 22, padding: "30px 28px", display: "flex", flexDirection: "column", gap: 16, justifyContent: "center" }}>
-          {PRICING_POINTS.map((p) => (
-            <div key={p.text} style={{ display: "flex", alignItems: "flex-start", gap: 12 }}>
-              <span style={{ ...iconTile(34), marginTop: 1 }}>
-                <MarketplaceIcon name={p.icon as MarketplaceIconName} size={16} />
-              </span>
-              <span style={{ fontSize: 15, lineHeight: 1.5, color: "rgba(34,29,23,0.74)" }}>{p.text}</span>
+      <div style={{ ...card, borderRadius: 22, overflow: "hidden" }}>
+        {BUILD_FAQ.map((f, i) => (
+          <div
+            key={f.q}
+            style={{
+              padding: "20px 26px",
+              borderTop: i === 0 ? "none" : "1px solid rgba(34,29,23,0.08)",
+            }}
+          >
+            <div style={{ fontWeight: 600, fontSize: 16, letterSpacing: "-0.01em", marginBottom: 6, color: MKT.ink }}>
+              {f.q}
             </div>
-          ))}
-          <Link href={BUILD_WALLET_PATH} className="sf-build-link" style={{ marginTop: 4, display: "inline-flex", alignItems: "center", gap: 7, fontSize: 15 }}>
-            <MarketplaceIcon name="dollar" size={16} /> Top up your prepaid wallet <MarketplaceIcon name="arrowRight" size={15} />
-          </Link>
-        </div>
+            <p style={{ margin: 0, fontSize: 14.5, lineHeight: 1.55, color: "rgba(34,29,23,0.6)" }}>{f.a}</p>
+          </div>
+        ))}
       </div>
+
+      <Link
+        href={BUILD_WALLET_PATH}
+        className="sf-build-link"
+        style={{ marginTop: 16, display: "inline-flex", alignItems: "center", gap: 7, fontSize: 14 }}
+      >
+        <MarketplaceIcon name="dollar" size={15} /> Top up your prepaid wallet <MarketplaceIcon name="arrowRight" size={14} />
+      </Link>
     </section>
   );
 }

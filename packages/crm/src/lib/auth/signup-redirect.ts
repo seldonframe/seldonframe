@@ -225,6 +225,12 @@ const SAFE_REDIRECT_PREFIXES = [
   "/claim",
   "/welcome",
   "/marketplace",
+  // 2026-06-30 — the builder-marketplace surface. A logged-out developer who
+  // arrives from SKILL.md and clicks "Get a developer key" is sent to
+  // /login?callbackUrl=/build/keys; without /build here that callbackUrl fails
+  // the allowlist and collapses to /clients/new (the SMB build flow), stranding
+  // the builder. Covers /build, /build/keys, and /build/wallet.
+  "/build",
 ] as const;
 
 /**

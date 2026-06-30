@@ -119,6 +119,33 @@ export function renderBuildMarkdown(baseUrl: string = BUILD_BASE_URL): string {
   );
   lines.push("");
 
+  // ── Test, observe & improve (the rest of the toolchain) ─────────────────────
+  lines.push("## Test, observe & improve");
+  lines.push("");
+  lines.push(
+    "Building is only the start — SeldonFrame gives your agent the full toolchain:",
+  );
+  lines.push("");
+  lines.push(
+    "- **Test** — `send_conversation_turn` runs one live turn against the agent so " +
+      "you can try it before publishing.",
+  );
+  lines.push(
+    "- **Eval** — `run_agent_evals` runs the eval suite and returns a pass-rate " +
+      "summary with the judge's findings. Publishing a live agent is eval-gated.",
+  );
+  lines.push(
+    "- **Observe** — `tail_agent_conversations`, `get_agent_conversation`, and " +
+      "`replay_conversation` stream the logs of every real run; `get_agent_metrics` " +
+      "rolls up health (eval pass-rate, validator pass-rate, conversations).",
+  );
+  lines.push(
+    "- **Improve** — the Brain logs all activity (`write_brain_note` / " +
+      "`read_brain_path`) and feeds the lessons back into your next build, so each " +
+      "generation gets smarter.",
+  );
+  lines.push("");
+
   // ── Run anything in the catalog (discover → inspect → run) ───────────────────
   lines.push("## Run anything in the catalog");
   lines.push("");
@@ -143,9 +170,10 @@ export function renderBuildMarkdown(baseUrl: string = BUILD_BASE_URL): string {
   lines.push("## Pricing");
   lines.push("");
   lines.push(
-    `List free. Earn per call. You keep **${BUILDER_KEEP_PCT}%** of every paid run; ` +
-      `SeldonFrame takes a clean **${SELDONFRAME_FEE_PCT}%** on real usage — and ` +
-      "nothing else. No listing fee, no seat fee, no subscription.",
+    `Listing is free — no upfront cost, no subscription, no seat fee. SeldonFrame's ` +
+      `only fee is a clean **${SELDONFRAME_FEE_PCT}%** on successful usage (you keep ` +
+      `the other **${BUILDER_KEEP_PCT}%**), and errored runs are never charged. We ` +
+      "make money when you do.",
   );
   lines.push("");
   for (const p of PRICING_POINTS) {
