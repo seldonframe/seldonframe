@@ -77,6 +77,12 @@ const CSS = `
     .sf-build-dark{padding:30px 22px 26px !important}
     .sf-build-steps{grid-template-columns:1fr !important}
     .sf-build-cta{padding:28px 22px !important}
+    /* developer landing (additive sections) */
+    .sf-build-hero-grid{grid-template-columns:1fr !important;gap:30px !important}
+    .sf-build-flow-grid{grid-template-columns:1fr !important}
+    .sf-build-type-grid{grid-template-columns:1fr !important}
+    .sf-build-foot-grid{grid-template-columns:1fr !important}
+    .sf-build-price{grid-template-columns:1fr !important;gap:26px !important}
 
     /* industry directory ----------------------------------------------------- */
     .sf-dir-sec{padding-left:18px !important;padding-right:18px !important}
