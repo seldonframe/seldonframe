@@ -165,6 +165,27 @@ export async function resolveAgentKeyStatus(orgId: string): Promise<AgentKeyStat
   );
 }
 
+/** An org's decrypted BYOK provider keys (empty strings when unset). Used by the
+ *  marketplace buyer key-routing: a bought agent runs on the BUILDER (template
+ *  author) org's keys, resolved through this then handed to the pure
+ *  `resolveDeploymentAiKey`. Reading both providers in one shot keeps the voice
+ *  (OpenAI) + chat (Anthropic) routing on a single org read. */
+export async function resolveOrgProviderKeys(
+  orgId: string,
+): Promise<{ openai: string; anthropic: string }> {
+  if (!orgId) return { openai: "", anthropic: "" };
+  const [org] = await db
+    .select({ integrations: organizations.integrations })
+    .from(organizations)
+    .where(eq(organizations.id, orgId))
+    .limit(1);
+  const integrations = readOrgAiIntegrations(org?.integrations);
+  return {
+    openai: decryptIfNeeded(integrations.openai?.apiKey),
+    anthropic: decryptIfNeeded(integrations.anthropic?.apiKey),
+  };
+}
+
 export async function getAIClient(params: { orgId: string; userId?: string | null }): Promise<AIClientResolution> {
   const [org] = await db
     .select({ integrations: organizations.integrations })

@@ -62,6 +62,12 @@ import {
 // to the existing workspace resolution below when no active deployment matches.
 import { resolveDeploymentByNumber } from "@/lib/agents/voice/resolve-deployment-by-number";
 import { loadDeploymentVoiceContext } from "@/lib/agents/voice/deployment-voice";
+// Task 12 (marketplace buyer onboarding) — route a deployment's voice call to the
+// BUILDER's (template author's) OpenAI key first, fail-soft to the platform key.
+import {
+  resolveDeploymentRuntimeKey,
+  buildDefaultDeploymentRuntimeKeyDeps,
+} from "@/lib/agents/deployment-ai-key-runtime";
 
 // Node runtime (not edge) — we use node:crypto for HMAC and the Node global
 // WebSocket/undici options bag for the realtime control socket.
@@ -287,12 +293,35 @@ export async function POST(request: Request): Promise<Response> {
               }
             : {};
 
-          // Run the call on the SAME platform OpenAI Realtime key the existing
-          // path uses (BYOK-for-voice is a later refinement — key handling is
-          // unchanged). Tools + template persona + template voice are passed.
+          // BUILDER-KEY ROUTING (marketplace buyer onboarding, Task 12): a
+          // deployment runs the BUILDER's (template author's) agent, so the OpenAI
+          // Realtime key should be the BUILDER's — resolved from the deployment's
+          // TEMPLATE owner org (NOT deployment.builderOrgId, which is the BUYER for
+          // a bought agent) — and only fail-soft to the platform key. Best-effort:
+          // any resolve error degrades to the platform `apiKey` (never drops the
+          // call). `source`/`ready` are logged so a builder with NO key (ready:
+          // false) is visible — the call still answers on the platform key when one
+          // exists; only with NO key anywhere does it stay unanswered.
+          const depKey = await resolveDeploymentRuntimeKey(
+            // A number-resolved deployment is a voice (phone) surface by
+            // definition; pass it explicitly (the narrow row omits `surface`).
+            { surface: "phone", agentTemplateId: deployment.agentTemplateId },
+            {
+              ...buildDefaultDeploymentRuntimeKeyDeps(),
+              platform: { openai: apiKey, anthropic: process.env.ANTHROPIC_API_KEY ?? null },
+            },
+          ).catch(() => null);
+          const voiceApiKey = depKey?.apiKey ?? apiKey;
+          logEvent("voice_call_deployment_key_resolved", {
+            call_id: callId,
+            deployment_id: deployment.id,
+            key_source: depKey?.source ?? "platform",
+            key_ready: depKey?.ready ?? Boolean(apiKey),
+          });
+
           await runVoiceCall({
             callId,
-            apiKey,
+            apiKey: voiceApiKey,
             toolContext: dctx.ctx,
             instructions: dctx.instructions,
             audioVoice: dctx.audioVoice,
