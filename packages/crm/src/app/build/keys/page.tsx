@@ -16,14 +16,18 @@ import { apiKeys } from "@/db/schema";
 import { auth } from "@/auth";
 import { getOrgId } from "@/lib/auth/helpers";
 import { ApiKeyManager } from "@/components/settings/api-key-manager";
+import { buildPageMetadata } from "@/lib/seo/page-metadata";
 
 export const dynamic = "force-dynamic";
 
-export const metadata = {
+// Shared builder-surface SEO: canonical + OpenGraph (no `.md` twin — this is an
+// authed key panel, not a discoverable content page).
+export const metadata = buildPageMetadata({
+  path: "/build/keys",
   title: "Developer keys — SeldonFrame for Builders",
   description:
     "Mint the workspace bearer your IDE's MCP connector uses to build, test, and sell agents on SeldonFrame.",
-};
+});
 
 export default async function BuildKeysPage() {
   const session = await auth();

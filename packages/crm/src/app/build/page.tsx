@@ -25,6 +25,8 @@ import { MarketplaceStyles } from "@/components/marketplace/marketplace-styles";
 import { MarketplaceIcon, type MarketplaceIconName } from "@/components/marketplace/marketplace-icons";
 import { MKT } from "@/components/marketplace/marketplace-data";
 import { CopyCommand } from "@/components/build/copy-command";
+import { MarkdownPointer } from "@/components/seo/markdown-pointer";
+import { buildPageMetadata } from "@/lib/seo/page-metadata";
 import {
   BUILD_SETUP_COMMAND,
   BUILD_KEYS_PATH,
@@ -39,19 +41,19 @@ import {
   PRICING_POINTS,
 } from "@/lib/build/landing-content";
 
-export const metadata: Metadata = {
+// SEO/GEO via the shared builder-surface helper: per-page Metadata with a
+// canonical, an OpenGraph card, AND the `text/markdown` alternate pointing at the
+// /build.md twin (the GEO discoverability hook crawlers/agents follow).
+export const metadata: Metadata = buildPageMetadata({
+  path: "/build",
+  markdownPath: "/build.md",
   title: "Build & sell an AI agent — from your IDE | SeldonFrame for Builders",
   description:
     "set up https://seldonframe.com/SKILL.md, connect the SeldonFrame MCP, and ask your agent to build, test, list, and price an AI agent — without a dashboard. Get paid per call. List free; keep 95%.",
-  alternates: { canonical: "/build" },
-  openGraph: {
-    title: "Build & sell an AI agent — from your IDE",
-    description:
-      "One command — set up https://seldonframe.com/SKILL.md — and your IDE agent can build, eval, list, and price an agent over MCP. MCP-native. No dashboard. No subscription.",
-    url: "/build",
-    type: "website",
-  },
-};
+  ogTitle: "Build & sell an AI agent — from your IDE",
+  ogDescription:
+    "One command — set up https://seldonframe.com/SKILL.md — and your IDE agent can build, eval, list, and price an agent over MCP. MCP-native. No dashboard. No subscription.",
+});
 
 const connectSnippet = buildLandingConnectSnippet();
 
@@ -123,6 +125,7 @@ export default function BuildLandingPage(): ReactElement {
   return (
     <div className="sf-mkt" style={{ minHeight: "100vh", background: MKT.paper, color: MKT.ink, fontFamily: MKT.fontSans }}>
       <MarketplaceStyles />
+      <MarkdownPointer href="/build.md" />
       <script type="application/ld+json" dangerouslySetInnerHTML={{ __html: JSON.stringify(jsonLd) }} />
       <style>{`
         .sf-build-link { color: ${MKT.green}; font-weight: 600; text-decoration: none; }

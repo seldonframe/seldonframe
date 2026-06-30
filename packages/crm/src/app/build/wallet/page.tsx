@@ -18,14 +18,18 @@ import { getOrgId } from "@/lib/auth/helpers";
 import { getWalletBalanceMicros } from "@/lib/build/wallet-store";
 import { formatMicrosUsd } from "@/lib/build/wallet-format";
 import { WalletTopupClient } from "@/components/build/wallet-topup-client";
+import { buildPageMetadata } from "@/lib/seo/page-metadata";
 
 export const dynamic = "force-dynamic";
 
-export const metadata = {
+// Shared builder-surface SEO: canonical + OpenGraph (no `.md` twin — this is an
+// authed wallet panel, not a discoverable content page).
+export const metadata = buildPageMetadata({
+  path: "/build/wallet",
   title: "Build wallet — SeldonFrame for Builders",
   description:
     "Top up a prepaid balance; every build run draws it down. Listing is free — you only pay on real usage.",
-};
+});
 
 const KIND_LABEL: Record<string, string> = {
   topup: "Top-up",
