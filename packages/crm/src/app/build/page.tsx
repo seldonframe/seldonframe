@@ -143,6 +143,13 @@ export default function BuildLandingPage(): ReactElement {
         .sf-build-link { color: ${MKT.green}; font-weight: 600; text-decoration: none; }
         .sf-build-link:hover { text-decoration: underline; }
         .sf-build-code { font-family: ${MKT.fontMono}; font-size: 0.92em; background: ${MKT.green10}; color: ${MKT.green}; padding: 2px 6px; border-radius: 6px; }
+        .sf-faq-item > summary { list-style: none; cursor: pointer; display: flex; align-items: center; justify-content: space-between; gap: 16px; padding: 18px 24px; font-weight: 600; font-size: 16px; letter-spacing: -0.01em; color: ${MKT.ink}; outline: none; }
+        .sf-faq-item > summary::-webkit-details-marker { display: none; }
+        .sf-faq-item > summary:hover { background: rgba(34,29,23,0.025); }
+        .sf-faq-item > summary:focus-visible { box-shadow: inset 0 0 0 2px ${MKT.green}; border-radius: 12px; }
+        .sf-faq-chevron { flex: none; color: rgba(34,29,23,0.4); transition: transform 0.2s ease; }
+        .sf-faq-item[open] > summary .sf-faq-chevron { transform: rotate(180deg); }
+        .sf-faq-a { margin: 0; padding: 0 24px 20px; font-size: 14.5px; line-height: 1.55; color: rgba(34,29,23,0.6); max-width: 760px; }
       `}</style>
       <MarketplaceNav active="sell" />
 
@@ -487,20 +494,36 @@ function CommonQuestions(): ReactElement {
         No upfront fee. SeldonFrame earns only a small share of real usage — so we make money when you do.
       </p>
 
+      {/* Collapsible accordion via native <details> — no client JS, so /build
+          stays a pure server component. First item open so the section reads as
+          content + signals the expand affordance. */}
       <div style={{ ...card, borderRadius: 22, overflow: "hidden" }}>
         {BUILD_FAQ.map((f, i) => (
-          <div
+          <details
             key={f.q}
-            style={{
-              padding: "20px 26px",
-              borderTop: i === 0 ? "none" : "1px solid rgba(34,29,23,0.08)",
-            }}
+            open={i === 0}
+            className="sf-faq-item"
+            style={{ borderTop: i === 0 ? "none" : "1px solid rgba(34,29,23,0.08)" }}
           >
-            <div style={{ fontWeight: 600, fontSize: 16, letterSpacing: "-0.01em", marginBottom: 6, color: MKT.ink }}>
-              {f.q}
-            </div>
-            <p style={{ margin: 0, fontSize: 14.5, lineHeight: 1.55, color: "rgba(34,29,23,0.6)" }}>{f.a}</p>
-          </div>
+            <summary>
+              <span>{f.q}</span>
+              <svg
+                className="sf-faq-chevron"
+                width={18}
+                height={18}
+                viewBox="0 0 24 24"
+                fill="none"
+                stroke="currentColor"
+                strokeWidth={2.2}
+                strokeLinecap="round"
+                strokeLinejoin="round"
+                aria-hidden="true"
+              >
+                <polyline points="6 9 12 15 18 9" />
+              </svg>
+            </summary>
+            <p className="sf-faq-a">{f.a}</p>
+          </details>
         ))}
       </div>
 

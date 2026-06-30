@@ -79,12 +79,13 @@ export type RentableType = {
 };
 
 /** The three things every workspace key can rent through one flow, one balance.
- *  "1000+" tools is the Composio surface; Skills + Agents are the SF catalog. */
+ *  Tools = the 1000+ connected-action surface; Skills + Agents are the SF catalog.
+ *  (We state "1000+ tools" to the builder, not the upstream vendor name.) */
 export const RENTABLE_TYPES: RentableType[] = [
   {
     icon: "package",
     name: "Tools",
-    count: "1000+ Composio actions",
+    count: "1000+ tools",
     body: "Send an email, create a calendar event, update a CRM — call a single connected action and pay per call.",
   },
   {

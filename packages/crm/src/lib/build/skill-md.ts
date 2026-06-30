@@ -126,7 +126,7 @@ Under the hood your IDE agent calls:
 ## 7. Run anything in the catalog: discover → inspect → run
 
 The same MCP key lets you RUN what's already on the marketplace — whole **agents**
-AND single **tools** (Composio's connected actions) — through one consistent
+AND single **tools** (1000+ connected actions) — through one consistent
 flow. Every sellable thing is discovered, priced, and run the same way:
 
 - **discover** — natural-language search → ranked results, each with its price:

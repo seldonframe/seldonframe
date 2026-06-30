@@ -59,14 +59,18 @@ describe("/build landing content", () => {
     assert.match(joined, /never charged|errors/);
   });
 
-  test("the three rentable types are Tools, Skills, Agents — with the 1000+ Composio surface", () => {
+  test("the three rentable types are Tools, Skills, Agents — Tools is the 1000+ surface (no vendor name)", () => {
     assert.deepEqual(
       RENTABLE_TYPES.map((t) => t.name),
       ["Tools", "Skills", "Agents"],
     );
     const tools = RENTABLE_TYPES.find((t) => t.name === "Tools");
     assert.ok(tools);
-    assert.match(`${tools.count} ${tools.body}`.toLowerCase(), /1000\+|composio/);
+    assert.match(tools.count, /1000\+/);
+    // 2026-06-30 — Max's call: the builder page states "1000+ tools", not the
+    // upstream vendor. Lock that the vendor name never leaks onto /build (or its
+    // .md twin, which renders the same RENTABLE_TYPES).
+    assert.doesNotMatch(`${tools.count} ${tools.body}`, /composio/i);
   });
 
   test("the IDE chat shows the realistic build-and-list ask + the real tool chain", () => {
