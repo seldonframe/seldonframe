@@ -20,6 +20,7 @@ import {
   buildDefaultGetBuyerAgentDeps,
 } from "@/lib/marketplace/buyer/buyer-deployment";
 import { buyerAgentPath } from "@/lib/marketplace/buyer/buyer-routes";
+import { buildSetupWizardView } from "@/lib/marketplace/buyer/setup-view";
 import { BuyerShell } from "@/components/buyer/buyer-shell";
 import { SetupWizardClient } from "./setup-wizard-client";
 
@@ -50,6 +51,11 @@ export default async function BuyerSetupPage({
   const agentName = view.deployment.clientName || "your agent";
   const homeHref = buyerAgentPath(view.deployment.id) ?? "/";
 
+  // Shape the serializable per-step seed data (business-info prefill, connected
+  // toolkits, phone state, go-live recap) for the client wizard. Pure mapping
+  // over the loaded deployment + steps — unit-tested in setup-view.spec.ts.
+  const wizard = buildSetupWizardView(view);
+
   return (
     <BuyerShell finishLaterHref={homeHref} wordmarkSuffix="Setup">
       <SetupWizardClient
@@ -59,6 +65,10 @@ export default async function BuyerSetupPage({
         steps={view.steps}
         doneKinds={view.progress.doneKinds}
         businessName={view.deployment.customization?.businessInfo?.name ?? ""}
+        businessInfoSeed={wizard.businessInfoSeed}
+        connectedToolkits={wizard.connectedToolkits}
+        phoneSeed={wizard.phoneSeed}
+        goLiveSummary={wizard.goLiveSummary}
       />
     </BuyerShell>
   );
