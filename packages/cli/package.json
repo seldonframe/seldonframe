@@ -1,0 +1,45 @@
+{
+  "name": "@seldonframe/cli",
+  "version": "0.1.0",
+  "description": "Terminal client for the SeldonFrame builder marketplace — discover, inspect, and run agents and tools, and check your prepaid wallet.",
+  "keywords": [
+    "seldonframe",
+    "cli",
+    "agents",
+    "marketplace",
+    "mcp",
+    "ai"
+  ],
+  "license": "MIT",
+  "homepage": "https://seldonframe.com",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/seldonframe/seldonframe.git",
+    "directory": "packages/cli"
+  },
+  "bugs": {
+    "url": "https://github.com/seldonframe/seldonframe/issues"
+  },
+  "type": "module",
+  "bin": {
+    "seldonframe": "./dist/cli.js"
+  },
+  "files": [
+    "dist",
+    "README.md"
+  ],
+  "engines": {
+    "node": ">=18"
+  },
+  "scripts": {
+    "build": "tsc -p tsconfig.json",
+    "typecheck": "tsc -p tsconfig.json --noEmit",
+    "test": "node --import tsx --test tests/**/*.spec.ts",
+    "prepublishOnly": "npm run build"
+  },
+  "devDependencies": {
+    "@types/node": "^20",
+    "tsx": "^4.19.2",
+    "typescript": "^5"
+  }
+}
