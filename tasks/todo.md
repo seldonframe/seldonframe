@@ -7,6 +7,20 @@ with a checkable plan, gets ticked off as it ships, and ends with a review block
 
 ## In flight
 
+### P1 — Builder marketplace: unified discover → inspect → run (spec 1ff09dcb) — IN PROGRESS
+
+Worktree `icp3-wedge/packages/crm`. MONEY-SAFE: P1 = interface + COST CALC + usage RECORD only. NO live charge / NO Stripe call (the prepaid wallet is P2). Errors → cost 0, not recorded billable. Cost is micro-dollars (Monid `billing.calculatedCost`).
+
+Recon (verified, read from code):
+- Catalog sources: AGENTS = `marketplaceListings` (kind='agent', isPublished, pricing cols price_model/per_call_price_cents/per_outcome_price_cents/outcome_type). TOOLS = `COMPOSIO_TOOLKITS` + `DEFAULT_TOOLS_BY_TOOLKIT` (`src/lib/integrations/composio/catalog.ts`).
+- Agent exec: `resolveRentalAgent(slug)` + `runAgentRentalTurn({agent,message})` (`src/lib/marketplace/agent-rental-run.ts`) → stateless turn on creator BYOK. Tool exec: `new Composio({apiKey}).tools.execute(slug,{userId:orgId,arguments,dangerouslySkipVersionCheck:true})`; key via `resolveComposioKey(orgId)` (null = inert).
+- Pricing: `normalizePricingForPersist`/`storefrontPriceFromRow` (`pricing-model.ts`); 5% fee = `computeMarketplaceFeeCents` (`billing/gmv.ts`, MARKETPLACE_FEE_PERCENT=5). Auth: `guardApiRequest` (bearer wst_). Usage record: `trackEvent(event,props,{orgId})` fire-and-forget into seldonframeEvents.
+
+- [ ] **Task 1 — discover** (PURE `discoverCatalog` TDD + `buildCatalogEntries` + MCP endpoint). `src/lib/build/discover.ts`. `POST /api/v1/build/discover {query,limit}`. Commit `feat(build): discover over agents + tools`.
+- [ ] **Task 2 — inspect** (PURE `buildInspectView` TDD + endpoint). `POST /api/v1/build/inspect {type,id}`. Commit `feat(build): inspect a catalog entry`.
+- [ ] **Task 3 — run** (PURE `computeRunCost` TDD + endpoint, execute + record, NO charge). `POST /api/v1/build/run {type,id,input}`. Behind `SF_MARKETPLACE_BILLING` where relevant. Commit `feat(build): run an entry — execute + cost (no charge)`.
+- [ ] **Task 4 — verify + ship**: extend `buildSkillMd()` (discover/inspect/run); gate (tests/tsc/check-use-server/build); push origin HEAD:main.
+
 ### P4 / Task 8 — One shared Apps & tools catalog + agents-list clarity (primitive-composition generator) — DONE
 
 Plan: `docs/superpowers/plans/2026-06-26-primitive-composition-generator.md` Task 8. Worktree `icp3-wedge/packages/crm`. LIGHT unification — do NOT rebuild connectors. Do NOT commit/push.
