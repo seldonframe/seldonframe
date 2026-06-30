@@ -24,6 +24,7 @@
 
 import { NextRequest, NextResponse } from "next/server";
 import { getDeployment, updateDeployment } from "@/lib/deployments/store";
+import { resolveCalendarCallbackRedirect } from "@/lib/deployments/calendar-return";
 import { listConnections } from "@/lib/integrations/composio/client";
 import type { ToolkitConnection } from "@/lib/integrations/composio/client";
 import type {
@@ -97,17 +98,23 @@ export function resolveCalendarRefFromCallback(args: {
   };
 }
 
-/** Where we send the operator back (success or failure) — the Clients screen. */
-function clientsUrl(appUrl: string, outcome: "connected" | "error"): string {
-  return `${appUrl}/studio/clients?calendar=${outcome}`;
-}
-
 export async function GET(
   req: NextRequest,
   { params }: { params: Promise<{ id: string }> },
 ): Promise<NextResponse> {
   const appUrl =
     process.env.NEXT_PUBLIC_APP_URL?.trim() || "https://app.seldonframe.com";
+
+  // Parse the buyer returnTo BEFORE the try so even the crash path bounces back
+  // to the wizard (not the agency Clients page) when a buyer initiated the flow.
+  let returnTo: string | null = null;
+  try {
+    returnTo = new URL(req.url).searchParams.get("returnTo");
+  } catch {
+    returnTo = null;
+  }
+  const redirectTo = (outcome: "connected" | "error") =>
+    resolveCalendarCallbackRedirect({ appUrl, returnTo, outcome });
 
   try {
     const { id } = await params;
@@ -120,7 +127,7 @@ export async function GET(
 
     const deployment = await getDeployment(id);
     if (!deployment) {
-      return NextResponse.redirect(clientsUrl(appUrl, "error"));
+      return NextResponse.redirect(redirectTo("error"));
     }
 
     // SECURITY: verify against the deployment ENTITY's live connections (agency
@@ -138,13 +145,13 @@ export async function GET(
     });
 
     if ("error" in resolved) {
-      return NextResponse.redirect(clientsUrl(appUrl, "error"));
+      return NextResponse.redirect(redirectTo("error"));
     }
 
     await updateDeployment({ id, patch: { calendarRef: resolved.calendarRef } });
-    return NextResponse.redirect(clientsUrl(appUrl, "connected"));
+    return NextResponse.redirect(redirectTo("connected"));
   } catch {
     // Never 500 the OAuth return — bounce back with an error flag.
-    return NextResponse.redirect(clientsUrl(appUrl, "error"));
+    return NextResponse.redirect(redirectTo("error"));
   }
 }

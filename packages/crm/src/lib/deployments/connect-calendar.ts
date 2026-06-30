@@ -25,6 +25,7 @@
 
 import { getOrgId } from "@/lib/auth/helpers";
 import { getDeployment } from "./store";
+import { safeBuyerReturnTo } from "./calendar-return";
 import { createConnectLink } from "@/lib/integrations/composio/client";
 import type { Deployment } from "@/db/schema/deployments";
 
@@ -73,10 +74,16 @@ const CALENDAR_TOOLKITS = new Set<string>(["googlecalendar", "outlook"]);
  * to the same entity + verifies the resulting connection before persisting
  * calendarRef.
  *
+ * When `input.returnTo` is a SAFE buyer path (`/agent/…`, validated by
+ * `safeBuyerReturnTo`), it is URL-encoded into the callback URL so the OAuth
+ * return lands the buyer back on their wizard instead of the agency Clients page
+ * (BUG 1). An absent/unsafe returnTo is dropped → the callback keeps its agency
+ * default, so the agency connect flow is unchanged.
+ *
  * @param deps - optional DI (tests inject fakes; defaults are the real impls).
  */
 export async function startCalendarConnect(
-  input: { deploymentId: string; toolkit: CalendarToolkit },
+  input: { deploymentId: string; toolkit: CalendarToolkit; returnTo?: string | null },
   deps?: Partial<StartCalendarConnectDeps>,
 ): Promise<StartCalendarConnectResult> {
   const resolveOrgId = deps?.getOrgId ?? getOrgId;
@@ -100,7 +107,13 @@ export async function startCalendarConnect(
 
   const appUrl =
     process.env.NEXT_PUBLIC_APP_URL?.trim() || "https://app.seldonframe.com";
-  const callbackUrl = `${appUrl}/api/deployments/${input.deploymentId}/calendar/callback?toolkit=${input.toolkit}`;
+  // Append a validated buyer returnTo so the OAuth callback bounces back to the
+  // wizard (agency flow passes no returnTo → unchanged /studio/clients default).
+  const safeReturnTo = safeBuyerReturnTo(input.returnTo);
+  const returnToQuery = safeReturnTo
+    ? `&returnTo=${encodeURIComponent(safeReturnTo)}`
+    : "";
+  const callbackUrl = `${appUrl}/api/deployments/${input.deploymentId}/calendar/callback?toolkit=${input.toolkit}${returnToQuery}`;
 
   // Key = the agency org; entity (Composio user_id) = the deployment id.
   const { redirectUrl } = await connect(

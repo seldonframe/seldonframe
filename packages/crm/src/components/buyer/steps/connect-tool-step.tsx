@@ -33,6 +33,7 @@ import {
   startCalendarConnect,
   type CalendarToolkit,
 } from "@/lib/deployments/connect-calendar";
+import { buyerSetupPath } from "@/lib/marketplace/buyer/buyer-routes";
 import { getComposioToolkit } from "@/lib/integrations/composio/catalog";
 
 /** The two toolkits the calendar connect supports. */
@@ -85,6 +86,10 @@ export function ConnectToolStep({
       const r = await startCalendarConnect({
         deploymentId,
         toolkit: toolkit as CalendarToolkit,
+        // Land the buyer BACK on this wizard after OAuth (not the agency Clients
+        // page). The wizard re-resolves the connected state from the persisted
+        // calendarRef and resumes at this step's success view (BUG 1 fix).
+        returnTo: buyerSetupPath(deploymentId),
       });
       if (r.ok) {
         // Hand off to Composio's consent screen; the callback persists

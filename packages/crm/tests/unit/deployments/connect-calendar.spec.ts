@@ -19,6 +19,10 @@ import { describe, test } from "node:test";
 import assert from "node:assert/strict";
 
 import { startCalendarConnect } from "../../../src/lib/deployments/connect-calendar";
+import {
+  safeBuyerReturnTo,
+  resolveCalendarCallbackRedirect,
+} from "../../../src/lib/deployments/calendar-return";
 import { resolveCalendarRefFromCallback } from "../../../src/app/api/deployments/[id]/calendar/callback/route";
 import type { Deployment } from "../../../src/db/schema/deployments";
 import type { ToolkitConnection } from "../../../src/lib/integrations/composio/client";
@@ -233,5 +237,199 @@ describe("resolveCalendarRefFromCallback", () => {
       connections: [conn({ connectedAccountId: "ca_real", slug: "gmail", connected: true })],
     });
     assert.deepEqual(out, { error: "not_verified" });
+  });
+});
+
+// ── 3. safeBuyerReturnTo (Bug 1 — buyer wizard returnTo validation) ───────────
+//
+// The buyer's connect-calendar threads a `returnTo` so the OAuth callback lands
+// back on the wizard (NOT the agency Clients page). It MUST be an internal buyer
+// `/agent/...` path — anything else (a foreign host, a non-/agent path, scheme
+// tricks) is rejected so the callback falls back to the safe agency default.
+
+describe("safeBuyerReturnTo", () => {
+  test("accepts the buyer wizard setup path", () => {
+    assert.equal(safeBuyerReturnTo("/agent/dep_42/setup"), "/agent/dep_42/setup");
+  });
+
+  test("accepts the My Agent home path", () => {
+    assert.equal(safeBuyerReturnTo("/agent/dep_42"), "/agent/dep_42");
+  });
+
+  test("accepts a buyer path carrying a query string", () => {
+    assert.equal(
+      safeBuyerReturnTo("/agent/dep_42/setup?step=phone"),
+      "/agent/dep_42/setup?step=phone",
+    );
+  });
+
+  test("rejects a non-/agent internal path (no agency-surface laundering)", () => {
+    assert.equal(safeBuyerReturnTo("/studio/clients"), null);
+    assert.equal(safeBuyerReturnTo("/dashboard"), null);
+    assert.equal(safeBuyerReturnTo("/agentupling"), null); // prefix-collision guard
+  });
+
+  test("rejects absolute URLs, protocol-relative, and scheme tricks", () => {
+    assert.equal(safeBuyerReturnTo("https://evil.com/agent/dep_42"), null);
+    assert.equal(safeBuyerReturnTo("//evil.com/agent/dep_42"), null);
+    assert.equal(safeBuyerReturnTo("/agent/..//evil.com"), null);
+    assert.equal(safeBuyerReturnTo("/agent/dep\\x"), null);
+    assert.equal(safeBuyerReturnTo("javascript:alert(1)"), null);
+  });
+
+  test("rejects empties + non-strings", () => {
+    assert.equal(safeBuyerReturnTo(""), null);
+    assert.equal(safeBuyerReturnTo("   "), null);
+    assert.equal(safeBuyerReturnTo(null), null);
+    assert.equal(safeBuyerReturnTo(undefined), null);
+    assert.equal(safeBuyerReturnTo(123), null);
+  });
+});
+
+// ── 4. resolveCalendarCallbackRedirect (Bug 1 — where the OAuth return lands) ──
+//
+// The callback computes its redirect from the (validated) returnTo param. A safe
+// buyer `/agent/...` returnTo lands the buyer back on the wizard with the
+// ?calendar=<outcome> flag; absent/invalid returnTo keeps the AGENCY default
+// (/studio/clients?calendar=<outcome>) so the agency flow never regresses.
+
+describe("resolveCalendarCallbackRedirect", () => {
+  const appUrl = "https://app.seldonframe.com";
+
+  test("buyer returnTo → back to the wizard with the calendar flag (connected)", () => {
+    const url = resolveCalendarCallbackRedirect({
+      appUrl,
+      returnTo: "/agent/dep_42/setup",
+      outcome: "connected",
+    });
+    assert.equal(url, "https://app.seldonframe.com/agent/dep_42/setup?calendar=connected");
+  });
+
+  test("buyer returnTo → back to the wizard with the calendar flag (error)", () => {
+    const url = resolveCalendarCallbackRedirect({
+      appUrl,
+      returnTo: "/agent/dep_42/setup",
+      outcome: "error",
+    });
+    assert.equal(url, "https://app.seldonframe.com/agent/dep_42/setup?calendar=error");
+  });
+
+  test("buyer returnTo that already has a query → flag is appended with &", () => {
+    const url = resolveCalendarCallbackRedirect({
+      appUrl,
+      returnTo: "/agent/dep_42/setup?step=phone",
+      outcome: "connected",
+    });
+    assert.equal(
+      url,
+      "https://app.seldonframe.com/agent/dep_42/setup?step=phone&calendar=connected",
+    );
+  });
+
+  test("NO returnTo → the AGENCY default (/studio/clients) is unchanged", () => {
+    assert.equal(
+      resolveCalendarCallbackRedirect({ appUrl, returnTo: null, outcome: "connected" }),
+      "https://app.seldonframe.com/studio/clients?calendar=connected",
+    );
+    assert.equal(
+      resolveCalendarCallbackRedirect({ appUrl, returnTo: undefined, outcome: "error" }),
+      "https://app.seldonframe.com/studio/clients?calendar=error",
+    );
+  });
+
+  test("UNSAFE returnTo → falls back to the AGENCY default (no open redirect)", () => {
+    assert.equal(
+      resolveCalendarCallbackRedirect({
+        appUrl,
+        returnTo: "https://evil.com/agent/x",
+        outcome: "connected",
+      }),
+      "https://app.seldonframe.com/studio/clients?calendar=connected",
+    );
+    assert.equal(
+      resolveCalendarCallbackRedirect({
+        appUrl,
+        returnTo: "/dashboard",
+        outcome: "connected",
+      }),
+      "https://app.seldonframe.com/studio/clients?calendar=connected",
+    );
+  });
+});
+
+// ── 5. startCalendarConnect threads returnTo into the callback URL ─────────────
+
+describe("startCalendarConnect — returnTo threading", () => {
+  test("a safe buyer returnTo is encoded into the callback URL", async () => {
+    const calls: Array<{ callbackUrl: string }> = [];
+    const res = await startCalendarConnect(
+      {
+        deploymentId: "dep_42",
+        toolkit: "googlecalendar",
+        returnTo: "/agent/dep_42/setup",
+      },
+      {
+        getOrgId: async () => "builder_1",
+        getDeployment: async () =>
+          deployment({ id: "dep_42", builderOrgId: "builder_1", clientOrgId: null }),
+        createConnectLink: async (_orgId, _toolkit, callbackUrl) => {
+          calls.push({ callbackUrl });
+          return { redirectUrl: "https://consent.composio/abc" };
+        },
+      },
+    );
+    assert.equal(res.ok, true);
+    assert.equal(calls.length, 1);
+    // The callback carries the returnTo (URL-encoded) so the OAuth return knows to
+    // land the buyer back on their wizard rather than the agency Clients page.
+    assert.ok(
+      calls[0].callbackUrl.includes(
+        `returnTo=${encodeURIComponent("/agent/dep_42/setup")}`,
+      ),
+      `callbackUrl had returnTo: ${calls[0].callbackUrl}`,
+    );
+  });
+
+  test("an UNSAFE returnTo is dropped from the callback URL (agency default preserved)", async () => {
+    const calls: Array<{ callbackUrl: string }> = [];
+    await startCalendarConnect(
+      {
+        deploymentId: "dep_42",
+        toolkit: "googlecalendar",
+        returnTo: "https://evil.com/agent/x",
+      },
+      {
+        getOrgId: async () => "builder_1",
+        getDeployment: async () =>
+          deployment({ id: "dep_42", builderOrgId: "builder_1", clientOrgId: null }),
+        createConnectLink: async (_orgId, _toolkit, callbackUrl) => {
+          calls.push({ callbackUrl });
+          return { redirectUrl: "https://consent.composio/abc" };
+        },
+      },
+    );
+    assert.equal(calls.length, 1);
+    assert.ok(
+      !calls[0].callbackUrl.includes("returnTo="),
+      `callbackUrl must NOT carry an unsafe returnTo: ${calls[0].callbackUrl}`,
+    );
+  });
+
+  test("no returnTo (agency flow) → callback URL has no returnTo param", async () => {
+    const calls: Array<{ callbackUrl: string }> = [];
+    await startCalendarConnect(
+      { deploymentId: "dep_42", toolkit: "googlecalendar" },
+      {
+        getOrgId: async () => "builder_1",
+        getDeployment: async () =>
+          deployment({ id: "dep_42", builderOrgId: "builder_1", clientOrgId: null }),
+        createConnectLink: async (_orgId, _toolkit, callbackUrl) => {
+          calls.push({ callbackUrl });
+          return { redirectUrl: "https://consent.composio/abc" };
+        },
+      },
+    );
+    assert.equal(calls.length, 1);
+    assert.ok(!calls[0].callbackUrl.includes("returnTo="));
   });
 });
