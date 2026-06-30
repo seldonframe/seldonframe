@@ -29,7 +29,11 @@ import { getOrgId } from "@/lib/auth/helpers";
 import { assertWritable } from "@/lib/demo/server";
 import { getDeployment, updateDeployment } from "@/lib/deployments/store";
 import type { Deployment } from "@/db/schema/deployments";
-import type { DeploymentCustomization } from "@/lib/agents/persona/deployment-customization";
+import type { AgentBlueprint } from "@/db/schema/agents";
+import {
+  resolveDeploymentPersona,
+  type DeploymentCustomization,
+} from "@/lib/agents/persona/deployment-customization";
 import {
   markStepDone,
   type OnboardingProgress,
@@ -244,4 +248,171 @@ export async function goLiveAction(
   }
   revalidatePath(buyerAgentPath(loaded.deployment.id) ?? "/");
   return { ok: true, agentPath: buyerAgentPath(loaded.deployment.id) ?? "/" };
+}
+
+// ─── runBuyerTestTurnAction (the test/"hear it work" step — chat sandbox) ─────
+
+export type BuyerTestTurnInput = {
+  /** The chat history so far (plain user/assistant text); the latest user
+   *  message is the last element. */
+  messages: { role: "user" | "assistant"; content: string }[];
+};
+
+export type RunBuyerTestTurnResult =
+  | { ok: true; reply: string; toolNotes: string[] }
+  | {
+      ok: false;
+      error:
+        | "unauthorized"
+        | "not_found"
+        | "not_ready"
+        | "bad_input"
+        | "runtime_error";
+      message?: string;
+    };
+
+const MAX_BUYER_TEST_MESSAGES = 30;
+const MAX_BUYER_TEST_CHARS = 2000;
+
+/** Friendly, customer-safe labels for tools the agent may reach for in the test
+ *  (so the buyer sees "checked availability" rather than a raw tool name). */
+const BUYER_TOOL_LABELS: Record<string, string> = {
+  look_up_availability: "checked availability",
+  book_appointment: "would book an appointment",
+  find_my_existing_appointment: "looked up an existing appointment",
+  reschedule_appointment: "would reschedule",
+  cancel_appointment: "would cancel",
+  escalate_to_human: "would take a message for you",
+  take_message: "would take a message",
+  get_quote_range: "looked up a price range",
+  provide_faq_answer: "answered from your FAQ",
+};
+
+/**
+ * Run ONE sandboxed test turn against the BUYER's agent — the "hear it work"
+ * step's chat path. MONEY-SAFE by construction: it runs through
+ * `runStatelessAgentTurn` with `testMode: true`, so every WRITE tool
+ * (book_appointment / take_message / escalate) returns a synthetic result and
+ * writes NOTHING, and the turn is NON-persisting (no conversation/booking/
+ * message row). No live connectors fire (the sandbox uses native tools only).
+ *
+ * The agent speaks AS the buyer's business: we build the effective persona from
+ * the deployment's customization (`resolveDeploymentPersona` → greeting/script/
+ * faq/services) layered onto the template blueprint, name the business via the
+ * resolved business name, and ground it in the deployment's captured client soul.
+ *
+ * Key routing: the turn runs on the BUILDER's (template author's) Anthropic key —
+ * the deployment → template → `agentTemplates.builderOrgId` → that org's
+ * `getAIClient`. If the builder configured no usable key we return `not_ready`
+ * (the agent isn't ready to talk yet) rather than crashing — the buyer can still
+ * go live and call the number.
+ */
+export async function runBuyerTestTurnAction(
+  deploymentId: string,
+  input: BuyerTestTurnInput,
+): Promise<RunBuyerTestTurnResult> {
+  assertWritable();
+  const loaded = await loadOwnedDeployment(deploymentId);
+  if (!loaded.ok) return loaded;
+
+  // Sanitize + bound the incoming history.
+  const messages = (Array.isArray(input?.messages) ? input.messages : [])
+    .filter(
+      (m): m is { role: "user" | "assistant"; content: string } =>
+        !!m && (m.role === "user" || m.role === "assistant") && typeof m.content === "string",
+    )
+    .map((m) => ({ role: m.role, content: m.content.trim().slice(0, MAX_BUYER_TEST_CHARS) }))
+    .filter((m) => m.content.length > 0)
+    .slice(-MAX_BUYER_TEST_MESSAGES);
+  if (messages.length === 0) {
+    return { ok: false, error: "bad_input", message: "No message to send." };
+  }
+
+  // Load the template (the source blueprint) AND identify the BUILDER org whose
+  // key the deployed agent runs on (NOT the buyer's org).
+  const { db } = await import("@/db");
+  const { agentTemplates } = await import("@/db/schema/agent-templates");
+  const { organizations } = await import("@/db/schema/organizations");
+  const { eq } = await import("drizzle-orm");
+  const [tpl] = await db
+    .select()
+    .from(agentTemplates)
+    .where(eq(agentTemplates.id, loaded.deployment.agentTemplateId))
+    .limit(1);
+  const templateBlueprint = (tpl?.blueprint ?? {}) as AgentBlueprint;
+  const builderOrgId = tpl?.builderOrgId ?? loaded.deployment.builderOrgId;
+
+  // Resolve the BUILDER's Anthropic client (BYOK → platform fallback). The
+  // stateless runtime is Anthropic-only, so a null client (no key anywhere) ⇒
+  // the agent isn't ready to chat yet.
+  const { getAIClient } = await import("@/lib/ai/client");
+  const resolution = await getAIClient({ orgId: builderOrgId });
+  if (!resolution.client) {
+    return {
+      ok: false,
+      error: "not_ready",
+      message:
+        "This agent isn’t quite ready to chat yet — it’s still being set up. You can still go live and take real calls.",
+    };
+  }
+
+  // Compose the EFFECTIVE persona the live agent would use, then layer it onto
+  // the template blueprint so the sandbox agent speaks AS the buyer's business.
+  const persona = resolveDeploymentPersona({
+    templateGreeting: templateBlueprint.greeting ?? null,
+    templateScript: templateBlueprint.customSkillMd ?? null,
+    templateVoiceId: templateBlueprint.voice ?? null,
+    templateFaq: templateBlueprint.faq ?? null,
+    templateServices: null,
+    customization: loaded.deployment.customization ?? null,
+    clientName: loaded.deployment.clientName,
+  });
+  const effectiveBlueprint: AgentBlueprint = {
+    ...templateBlueprint,
+    ...(persona.greeting ? { greeting: persona.greeting } : {}),
+    ...(persona.prompt ? { customSkillMd: persona.prompt } : {}),
+    ...(persona.faq ? { faq: persona.faq } : {}),
+  };
+  const businessName =
+    persona.businessName || loaded.deployment.clientName || "your business";
+
+  // The deployment's captured client soul (narrow) so the agent names/describes
+  // the client + lists services. Absent → name-only (the resolver tolerates it).
+  const clientSoul = loaded.deployment.clientContext?.soul ?? null;
+  const soul = clientSoul
+    ? ({
+        businessName: clientSoul.businessName ?? businessName,
+        businessDescription: clientSoul.businessDescription,
+        services: clientSoul.services,
+        voice: clientSoul.voice,
+      } as unknown as import("@/lib/agents/stateless-turn").RunStatelessAgentTurnInput["soul"])
+    : null;
+
+  // Workspace clock/slug for read-only grounding (availability tool + temporal).
+  const [org] = await db
+    .select({ slug: organizations.slug, timezone: organizations.timezone })
+    .from(organizations)
+    .where(eq(organizations.id, loaded.orgId))
+    .limit(1);
+
+  const { runStatelessAgentTurn } = await import("@/lib/agents/stateless-turn");
+  const result = await runStatelessAgentTurn({
+    orgId: loaded.orgId,
+    orgSlug: org?.slug ?? "",
+    orgName: businessName,
+    soul,
+    timezone: org?.timezone ?? "UTC",
+    blueprint: effectiveBlueprint,
+    messages,
+    testMode: true, // money-safe: every write tool is stubbed; nothing persists.
+    client: resolution.client,
+  });
+
+  if (!result.ok) {
+    return { ok: false, error: "runtime_error", message: result.message };
+  }
+  const toolNotes = result.toolCalls.map(
+    (tc) => BUYER_TOOL_LABELS[tc.name] ?? tc.name.replace(/_/g, " "),
+  );
+  return { ok: true, reply: result.reply, toolNotes };
 }

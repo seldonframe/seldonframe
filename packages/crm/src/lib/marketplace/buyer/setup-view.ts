@@ -18,6 +18,7 @@
 
 import type { BuyerAgentView } from "@/lib/marketplace/buyer/buyer-deployment";
 import type { BusinessInfoServiceInput } from "@/lib/marketplace/buyer/buyer-onboarding";
+import { resolveDeploymentPersona } from "@/lib/agents/persona/deployment-customization";
 import { deriveAreaCode } from "@/lib/deployments/margin";
 
 // ─── view types (structurally match the wizard's client prop types) ──────────
@@ -39,10 +40,20 @@ export type PhoneSeedView = {
 
 export type GoLiveSummaryRowView = { label: string; value: string };
 
+export type TestStepSeedView = {
+  /** The agent's phone number (E.164), if any — the voice "test line". */
+  phoneNumber: string | null;
+  /** Whether this agent answers a phone (a voice surface) — drives the test UI. */
+  isVoice: boolean;
+  /** The agent's effective opening line (the first chat bubble). */
+  greeting: string;
+};
+
 export type SetupWizardView = {
   businessInfoSeed: BusinessInfoSeedView;
   connectedToolkits: Record<string, boolean>;
   phoneSeed: PhoneSeedView;
+  testStepSeed: TestStepSeedView;
   goLiveSummary: GoLiveSummaryRowView[];
 };
 
@@ -131,11 +142,28 @@ export function buildSetupWizardView(view: BuyerAgentView): SetupWizardView {
   }
 
   // Phone state.
+  const isVoice = agentRequiresNumber(view);
   const phoneSeed: PhoneSeedView = {
     phoneNumber: d.phoneNumber ?? null,
     numberOrigin: d.numberOrigin ?? null,
     defaultAreaCode: deriveAreaCode(d.clientContact?.phone) ?? "",
-    required: agentRequiresNumber(view),
+    required: isVoice,
+  };
+
+  // Test-step seed: the agent's effective greeting (the deployment persona over
+  // the template blueprint) for the first chat bubble, plus the test-line number.
+  const bp = view.blueprint ?? {};
+  const persona = resolveDeploymentPersona({
+    templateGreeting: bp.greeting ?? null,
+    customization,
+    clientName: d.clientName,
+  });
+  const testStepSeed: TestStepSeedView = {
+    phoneNumber: d.phoneNumber ?? null,
+    isVoice,
+    greeting:
+      persona.greeting?.trim() ||
+      `Thanks for calling ${businessInfoSeed.name || d.clientName || "us"}! How can I help today?`,
   };
 
   // Go-live recap rows.
@@ -155,5 +183,5 @@ export function buildSetupWizardView(view: BuyerAgentView): SetupWizardView {
     });
   }
 
-  return { businessInfoSeed, connectedToolkits, phoneSeed, goLiveSummary };
+  return { businessInfoSeed, connectedToolkits, phoneSeed, testStepSeed, goLiveSummary };
 }

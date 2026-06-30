@@ -44,6 +44,7 @@ import {
   type ConnectToolSeed,
 } from "@/components/buyer/steps/connect-tool-step";
 import { PhoneStep, type PhoneSeed } from "@/components/buyer/steps/phone-step";
+import { TestStep, type TestStepSeed } from "@/components/buyer/steps/test-step";
 
 export type SetupWizardClientProps = {
   deploymentId: string;
@@ -62,6 +63,8 @@ export type SetupWizardClientProps = {
   connectedToolkits: Record<string, boolean>;
   /** Current phone state for the phone step (consumed in Task 9). */
   phoneSeed: PhoneSeed;
+  /** Seed for the test ("hear it work") step — test-line number + greeting. */
+  testStepSeed: TestStepSeed;
   /** Recap rows for the go_live step (business name, phone, calendar). */
   goLiveSummary: GoLiveSummaryRow[];
 };
@@ -286,8 +289,8 @@ export function SetupWizardClient(props: SetupWizardClientProps) {
 //
 // Keyed on `step.kind`. Returns the rendered node + whether the step OWNS its
 // footer (rich steps render their own Back + primary action; simple steps reuse
-// the wizard's generic footer). business_info / connect_tool / phone / go_live
-// ship rich screens; the social/test kinds (brand_info, cadence, preview, test)
+// the wizard's generic footer). business_info / connect_tool / phone / test /
+// go_live ship rich screens; the social kinds (brand_info, cadence, preview)
 // still render the honest StepPlaceholder with the generic footer (later phases).
 
 type RenderArgs = {
@@ -357,6 +360,20 @@ function renderStep(args: RenderArgs): { node: React.ReactNode; ownsFooter: bool
         ),
       };
 
+    case "test":
+      return {
+        ownsFooter: true,
+        node: (
+          <TestStep
+            deploymentId={props.deploymentId}
+            seed={props.testStepSeed}
+            canGoBack={canGoBack}
+            onBack={args.onBack}
+            onContinue={args.onGenericComplete}
+          />
+        ),
+      };
+
     case "go_live":
       return {
         ownsFooter: true,
@@ -378,7 +395,6 @@ function renderStep(args: RenderArgs): { node: React.ReactNode; ownsFooter: bool
     case "brand_info":
     case "cadence":
     case "preview":
-    case "test":
     default:
       return { ownsFooter: false, node: <StepPlaceholder step={step} /> };
   }

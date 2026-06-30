@@ -168,3 +168,44 @@ test("tolerates an empty deployment (jsonb edges) without throwing", () => {
   assert.equal(v.phoneSeed.phoneNumber, null);
   assert.equal(v.connectedToolkits.googlecalendar, false);
 });
+
+// ─── testStepSeed (the "hear it work" step) ──────────────────────────────────
+
+test("testStepSeed: a voice agent is voice + carries the test-line number", () => {
+  const v = buildSetupWizardView(makeView({ phoneNumber: "+16025550148" }));
+  assert.equal(v.testStepSeed.isVoice, true); // a phone step is present
+  assert.equal(v.testStepSeed.phoneNumber, "+16025550148");
+});
+
+test("testStepSeed: a chat agent (no phone step) is not voice and has no test line", () => {
+  const chatSteps: OnboardingStep[] = [
+    { kind: "business_info", label: "About your business", required: true },
+    { kind: "test", label: "Hear it work", required: false },
+    { kind: "go_live", label: "Go live", required: true },
+  ];
+  const v = buildSetupWizardView(makeView({}, chatSteps));
+  assert.equal(v.testStepSeed.isVoice, false);
+  assert.equal(v.testStepSeed.phoneNumber, null);
+});
+
+test("testStepSeed: greeting fills the template's {business_name} placeholder from the customization", () => {
+  const view = makeView({ customization: { businessInfo: { name: "Acme Plumbing" } } });
+  view.blueprint = { greeting: "Thanks for calling {business_name}!" };
+  const v = buildSetupWizardView(view);
+  assert.equal(v.testStepSeed.greeting, "Thanks for calling Acme Plumbing!");
+});
+
+test("testStepSeed: a full greeting override on the customization wins verbatim", () => {
+  const view = makeView({
+    customization: { greeting: "Northgate Plumbing, how can I help?" },
+  });
+  view.blueprint = { greeting: "Thanks for calling {business_name}!" };
+  const v = buildSetupWizardView(view);
+  assert.equal(v.testStepSeed.greeting, "Northgate Plumbing, how can I help?");
+});
+
+test("testStepSeed: falls back to a constructed greeting when the blueprint has none", () => {
+  const v = buildSetupWizardView(makeView({ clientName: "Northgate Plumbing" }));
+  assert.ok(v.testStepSeed.greeting.includes("Northgate Plumbing"));
+  assert.ok(v.testStepSeed.greeting.length > 0);
+});

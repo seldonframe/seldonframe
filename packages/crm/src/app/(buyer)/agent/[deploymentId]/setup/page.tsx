@@ -68,6 +68,7 @@ export default async function BuyerSetupPage({
         businessInfoSeed={wizard.businessInfoSeed}
         connectedToolkits={wizard.connectedToolkits}
         phoneSeed={wizard.phoneSeed}
+        testStepSeed={wizard.testStepSeed}
         goLiveSummary={wizard.goLiveSummary}
       />
     </BuyerShell>
