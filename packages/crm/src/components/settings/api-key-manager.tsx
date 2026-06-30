@@ -3,6 +3,10 @@
 import { useState, useTransition } from "react";
 import { Copy, Check, KeyRound, Trash2, Eye, EyeOff, AlertCircle } from "lucide-react";
 import { mintApiKeyAction, revokeApiKeyAction } from "@/lib/workspace/actions";
+import { buildMcpConnectSnippet } from "@/lib/build/developer-key";
+
+/** The SeldonFrame MCP origin the connect snippet points at (mirrors SKILL.md). */
+const MCP_URL = "https://mcp.seldonframe.com/v1";
 
 /**
  * P0-4: client-side wrapper around the mint / revoke server actions.
@@ -181,9 +185,15 @@ export function ApiKeyManager({ keys }: { keys: KeyRow[] }) {
               </summary>
               <div className="mt-2 space-y-2 pl-4">
                 <p className="text-muted-foreground">
-                  <strong className="text-foreground">For the MCP server:</strong>{" "}
-                  set <code className="font-mono">SELDONFRAME_API_KEY</code> in your
-                  shell:
+                  <strong className="text-foreground">Connect the MCP (build & sell from your IDE):</strong>{" "}
+                  add SeldonFrame as a Streamable-HTTP connector:
+                </p>
+                <pre className="rounded-md border bg-background p-2 text-[11px] font-mono overflow-x-auto">
+                  {buildMcpConnectSnippet(revealedKey.token, MCP_URL)}
+                </pre>
+                <p className="text-muted-foreground">
+                  <strong className="text-foreground">Or via SELDONFRAME_API_KEY:</strong>{" "}
+                  set it in your shell:
                 </p>
                 <pre className="rounded-md border bg-background p-2 text-[11px] font-mono overflow-x-auto">
                   {`export SELDONFRAME_API_KEY=${revealedKey.token}\n# then restart Claude Code`}
