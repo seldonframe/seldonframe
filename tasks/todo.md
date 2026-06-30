@@ -16,8 +16,8 @@ Recon (verified, read from code):
 - Agent exec: `resolveRentalAgent(slug)` + `runAgentRentalTurn({agent,message})` (`src/lib/marketplace/agent-rental-run.ts`) → stateless turn on creator BYOK. Tool exec: `new Composio({apiKey}).tools.execute(slug,{userId:orgId,arguments,dangerouslySkipVersionCheck:true})`; key via `resolveComposioKey(orgId)` (null = inert).
 - Pricing: `normalizePricingForPersist`/`storefrontPriceFromRow` (`pricing-model.ts`); 5% fee = `computeMarketplaceFeeCents` (`billing/gmv.ts`, MARKETPLACE_FEE_PERCENT=5). Auth: `guardApiRequest` (bearer wst_). Usage record: `trackEvent(event,props,{orgId})` fire-and-forget into seldonframeEvents.
 
-- [ ] **Task 1 — discover** (PURE `discoverCatalog` TDD + `buildCatalogEntries` + MCP endpoint). `src/lib/build/discover.ts`. `POST /api/v1/build/discover {query,limit}`. Commit `feat(build): discover over agents + tools`.
-- [ ] **Task 2 — inspect** (PURE `buildInspectView` TDD + endpoint). `POST /api/v1/build/inspect {type,id}`. Commit `feat(build): inspect a catalog entry`.
+- [x] **Task 1 — discover** — DONE (bea60956). `discoverCatalog` + entry mappers + `POST /api/v1/build/discover`. 12 tests.
+- [x] **Task 2 — inspect** — DONE. `buildInspectView`/`agentRunInputSchema` (7 tests) + `POST /api/v1/build/inspect`; tool schema via ensureSession→createMcpClient.listTools (fail-soft permissive).
 - [ ] **Task 3 — run** (PURE `computeRunCost` TDD + endpoint, execute + record, NO charge). `POST /api/v1/build/run {type,id,input}`. Behind `SF_MARKETPLACE_BILLING` where relevant. Commit `feat(build): run an entry — execute + cost (no charge)`.
 - [ ] **Task 4 — verify + ship**: extend `buildSkillMd()` (discover/inspect/run); gate (tests/tsc/check-use-server/build); push origin HEAD:main.
 
