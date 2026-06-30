@@ -416,3 +416,61 @@ export async function runBuyerTestTurnAction(
   );
   return { ok: true, reply: result.reply, toolNotes };
 }
+
+// ─── openBuyerBillingPortalAction (My Agent home → "Manage billing") ──────────
+
+export type OpenBuyerBillingPortalResult =
+  | { ok: true; url: string }
+  | { ok: false; reason: "unauthorized" | "not_found" | "no_billing" | string };
+
+/**
+ * Open the Stripe Billing Portal for the BUYER's agent — the home's "Manage
+ * billing". Resolves the deployment's backing marketplace purchase (the buyer's
+ * cloned template stamps `sourceListingId`; the purchase row carries the same
+ * listingId), then delegates to the existing org-scoped, flag-gated, money-safe
+ * `createMarketplaceBillingPortalAction`. Returns `no_billing` when there's no
+ * paid purchase (a free agent) so the home can show a calm message rather than an
+ * error.
+ */
+export async function openBuyerBillingPortalAction(
+  deploymentId: string,
+): Promise<OpenBuyerBillingPortalResult> {
+  const loaded = await loadOwnedDeployment(deploymentId);
+  if (!loaded.ok) return loaded.error === "unauthorized"
+    ? { ok: false, reason: "unauthorized" }
+    : { ok: false, reason: "not_found" };
+
+  // Resolve the listing this agent was bought from (stamped on the template).
+  const { db } = await import("@/db");
+  const { agentTemplates } = await import("@/db/schema/agent-templates");
+  const { marketplacePurchases } = await import("@/db/schema/marketplace-purchases");
+  const { and, eq, inArray } = await import("drizzle-orm");
+  const [tpl] = await db
+    .select({ blueprint: agentTemplates.blueprint })
+    .from(agentTemplates)
+    .where(eq(agentTemplates.id, loaded.deployment.agentTemplateId))
+    .limit(1);
+  const listingId =
+    (tpl?.blueprint as { sourceListingId?: string } | null)?.sourceListingId ?? null;
+  if (!listingId) return { ok: false, reason: "no_billing" };
+
+  const [purchase] = await db
+    .select({ id: marketplacePurchases.id })
+    .from(marketplacePurchases)
+    .where(
+      and(
+        eq(marketplacePurchases.buyerOrgId, loaded.orgId),
+        eq(marketplacePurchases.listingId, listingId),
+        inArray(marketplacePurchases.status, ["active", "past_due"]),
+      ),
+    )
+    .limit(1);
+  if (!purchase) return { ok: false, reason: "no_billing" };
+
+  const { createMarketplaceBillingPortalAction } = await import(
+    "@/lib/marketplace/billing/billing-portal-action"
+  );
+  const result = await createMarketplaceBillingPortalAction({ purchaseId: purchase.id });
+  if (result.ok) return { ok: true, url: result.url };
+  return { ok: false, reason: result.reason };
+}
