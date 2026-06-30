@@ -39,6 +39,10 @@ import {
   GoLiveStep,
   type GoLiveSummaryRow,
 } from "@/components/buyer/steps/go-live-step";
+import {
+  ConnectToolStep,
+  type ConnectToolSeed,
+} from "@/components/buyer/steps/connect-tool-step";
 
 export type SetupWizardClientProps = {
   deploymentId: string;
@@ -330,9 +334,28 @@ function renderStep(args: RenderArgs): { node: React.ReactNode; ownsFooter: bool
         ),
       };
 
-    // connect_tool + phone get their rich screens in Task 8 + Task 9; until then
-    // the honest placeholder + generic footer keeps the wizard walkable.
-    case "connect_tool":
+    case "connect_tool": {
+      const toolkit = step.toolkit ?? "";
+      const seed: ConnectToolSeed = {
+        toolkit,
+        connected: Boolean(props.connectedToolkits[toolkit]),
+      };
+      return {
+        ownsFooter: true,
+        node: (
+          <ConnectToolStep
+            deploymentId={props.deploymentId}
+            seed={seed}
+            canGoBack={canGoBack}
+            onBack={args.onBack}
+            onContinue={args.onGenericComplete}
+          />
+        ),
+      };
+    }
+
+    // phone gets its rich screen in Task 9; until then the honest placeholder +
+    // generic footer keeps the wizard walkable.
     case "phone":
       return { ownsFooter: false, node: <StepPlaceholder step={step} /> };
 
