@@ -52,7 +52,7 @@ export async function POST(request: Request): Promise<Response> {
   }
 
   const source =
-    type === "agent" ? await resolveAgentSource(id) : await resolveToolSource(orgId, id);
+    type === "agent" ? await resolveAgentSource(id) : await resolveToolSource(id);
 
   if (!source) {
     return NextResponse.json(
@@ -131,12 +131,20 @@ function isKnownAction(toolkitSlug: string, actionSlug: string): boolean {
   return defaultToolsForToolkits([toolkitSlug]).includes(actionSlug);
 }
 
-async function resolveToolSource(orgId: string, actionSlug: string): Promise<InspectSource | null> {
+async function resolveToolSource(actionSlug: string): Promise<InspectSource | null> {
   const toolkit = toolkitForAction(actionSlug);
   if (!toolkit || !isKnownAction(toolkit, actionSlug)) return null;
 
   const entry = composioToolToCatalogEntry(toolkit, actionSlug);
-  const inputSchema = await fetchToolInputSchema(orgId, toolkit, actionSlug);
+
+  // P1 returns a permissive input schema for tools (run still works — Composio
+  // validates server-side) + a docUrl to the real per-field reference. The rich
+  // per-action JSON Schema is a deliberate follow-on: the per-workspace Composio
+  // MCP session runs in TOOL-ROUTER mode (its tools/list exposes only meta-tools,
+  // NOT the direct action — see lib/integrations/composio/connector.ts), so the
+  // real schema needs the SDK raw-tools getter, which this codebase doesn't yet
+  // wire. Permissive-now keeps inspect honest, fast, and inert without keys.
+  const inputSchema: JsonSchema = { type: "object", properties: {}, additionalProperties: true };
 
   return {
     type: "tool",
@@ -145,43 +153,7 @@ async function resolveToolSource(orgId: string, actionSlug: string): Promise<Ins
     name: entry.name,
     description: entry.description,
     price: entry.price,
-    ...(inputSchema ? { inputSchema } : {}),
+    inputSchema,
     docUrl: `https://docs.composio.dev/toolkits/${toolkit}`,
   };
-}
-
-/**
- * Fetch a Composio action's REAL input schema via the codebase MCP client.
- * Best-effort + fail-soft: opens a session for the org (null without a key),
- * lists the toolkit's tools, finds the action by name, returns its inputSchema.
- * Any failure (no key, network, action absent) → null → buildInspectView falls
- * back to a permissive schema. Never throws (so inspect stays robust + inert
- * without Composio configured).
- */
-async function fetchToolInputSchema(
-  orgId: string,
-  toolkit: string,
-  actionSlug: string,
-): Promise<JsonSchema | null> {
-  try {
-    const [{ ensureSession }, { createMcpClient }] = await Promise.all([
-      import("@/lib/integrations/composio/client"),
-      import("@/lib/agents/mcp/client"),
-    ]);
-    const session = await ensureSession(orgId, [toolkit]);
-    if (!session) return null; // Composio not configured → permissive fallback.
-
-    const client = createMcpClient({ endpoint: session.mcpUrl, headers: session.mcpHeaders });
-    const tools = await client.listTools();
-    const match = tools.find((t) => t.name.toUpperCase() === actionSlug.toUpperCase());
-    if (!match || typeof match.inputSchema !== "object") return null;
-
-    const schema = match.inputSchema as Record<string, unknown>;
-    const type = typeof schema.type === "string" ? (schema.type as string) : "object";
-    return { ...schema, type } as JsonSchema;
-  } catch (err) {
-    const detail = err instanceof Error ? err.message : String(err);
-    console.warn(`[build.inspect] tool schema fetch failed toolkit=${toolkit} action=${actionSlug}: ${detail}`);
-    return null;
-  }
 }

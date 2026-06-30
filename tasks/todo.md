@@ -18,7 +18,7 @@ Recon (verified, read from code):
 
 - [x] **Task 1 — discover** — DONE (bea60956). `discoverCatalog` + entry mappers + `POST /api/v1/build/discover`. 12 tests.
 - [x] **Task 2 — inspect** — DONE. `buildInspectView`/`agentRunInputSchema` (7 tests) + `POST /api/v1/build/inspect`; tool schema via ensureSession→createMcpClient.listTools (fail-soft permissive).
-- [ ] **Task 3 — run** (PURE `computeRunCost` TDD + endpoint, execute + record, NO charge). `POST /api/v1/build/run {type,id,input}`. Behind `SF_MARKETPLACE_BILLING` where relevant. Commit `feat(build): run an entry — execute + cost (no charge)`.
+- [x] **Task 3 — run** — DONE. `computeRunCost` (micro-dollars, 12 tests) + `POST /api/v1/build/run`. Agent→rental turn / tool→Composio execute; records `build_run_usage` (flag-gated, fire-and-forget) but NEVER charges; errors→cost 0, not recorded. Money-safety audit: no Stripe/charge/settle in build/.
 - [ ] **Task 4 — verify + ship**: extend `buildSkillMd()` (discover/inspect/run); gate (tests/tsc/check-use-server/build); push origin HEAD:main.
 
 ### P4 / Task 8 — One shared Apps & tools catalog + agents-list clarity (primitive-composition generator) — DONE

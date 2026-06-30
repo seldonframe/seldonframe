@@ -29,6 +29,9 @@ export type CatalogPrice = {
   type: "per_call" | "per_result" | "per_outcome";
   amountCents: number;
   outcomeType?: OutcomeType;
+  /** per_result only: a flat base fee added on top of amountCents × items.
+   *  Omitted (treated as 0) for per_call / per_outcome. */
+  baseCents?: number;
 };
 
 /** One sellable thing in the catalog — an agent or a single tool — in the shape
