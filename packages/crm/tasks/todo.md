@@ -72,10 +72,18 @@
 - **GAP:** (a) no public SKILL.md route; (b) no user-facing key issue/reveal/revoke surface (mintWorkspaceToken is the primitive but no /build panel); (c) no `set_usage_price` write path; (d) no builder `list_my_listings` + earnings read endpoint.
 
 ## Plan
-- [ ] T2: PURE `buildSkillMd()` + spec → route `app/SKILL.md/route.ts` (text/markdown) + `seldonframe.com/SKILL.md` covered (same host; env override). Commit.
-- [ ] T3: developer-key issue/reveal-once/revoke — pure `formatDeveloperKeyName`/redaction helpers (TDD) + `POST/GET/DELETE /api/v1/build/keys` reusing mintWorkspaceToken + a `/build/keys` panel. Commit.
-- [ ] T4: gap MCP tools as op-dispatch `POST /api/v1/build/listings` — `set_usage_price` (normalizePricingForPersist write, org-scoped, NO charge) + `list_my_listings` (computeListingEarnings read). Pure resolver TDD. Commit.
-- [ ] T5: `/build` quickstart page + final gate (tests/tsc/check-use-server/pnpm build) + push.
+- [x] T2: PURE `buildSkillMd()` + spec → route `app/SKILL.md/route.ts` (text/markdown) + `seldonframe.com/SKILL.md` covered (same host; env override). Commit.
+- [x] T3: developer-key issue/reveal-once/revoke — pure `formatDeveloperKeyName`/redaction helpers (TDD) + `POST/GET/DELETE /api/v1/build/keys` reusing mintWorkspaceToken + a `/build/keys` panel. Commit.
+- [x] T4: gap MCP tools as op-dispatch `POST /api/v1/build/listings` — `set_usage_price` (normalizePricingForPersist write, org-scoped, NO charge) + `list_my_listings` (computeListingEarnings read). Pure resolver TDD. Commit.
+- [x] T5: `/build` quickstart page + final gate (tests/tsc/check-use-server/pnpm build) + push.
 
 ## Money-safety
 set_usage_price only WRITES the additive pricing columns (display/intent). No Stripe call, no charge, no settlement. Listing stays free; publish gate already blocks paid-without-Connect.
+
+
+## Review (P0 shipped)
+- T2 SKILL.md → /SKILL.md (static, text/markdown) + buildSkillMd() pure (8 specs). SHA 379adae2.
+- T3 dev key → REUSED /settings/api ApiKeyManager (one mint/revoke path) + buildMcpConnectSnippet wired into reveal panel + /build/keys page. SHA ede72002.
+- T4 gaps → POST /api/v1/build/listings op-dispatch: set_usage_price (resolveUsagePriceUpdate, 7 specs, additive write, charged:false) + list_my_listings (computeListingEarnings). SHA dd13f957.
+- T5 /build quickstart (IDE funnel) + final gate: 17 build specs pass · tsc 0 · check-use-server clean · pnpm build exit 0 (Compiled successfully 34.6s; /SKILL.md ○ static, /build + /build/keys + /api/v1/build/listings ƒ).
+- Money-safety: NO charge path. set_usage_price writes pricing columns only; listing free; publish gate still blocks paid-without-Connect.
