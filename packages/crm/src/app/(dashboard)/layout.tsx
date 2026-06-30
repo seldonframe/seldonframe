@@ -1,5 +1,6 @@
 import { requireAuth } from "@/lib/auth/helpers";
 import { getOrgId } from "@/lib/auth/helpers";
+import { enforceBuyerAgencyShellGuard } from "@/lib/marketplace/buyer/buyer-surface-guard-server";
 import { isAdminTokenUserId } from "@/lib/auth/admin-token";
 import { isOperatorPortalUserId } from "@/lib/auth/operator-portal-context";
 import { isSuperAdminUser } from "@/lib/auth/super-admin";
@@ -48,6 +49,13 @@ export default async function DashboardLayout({
   registerCrmEventListeners();
 
   const session = await requireAuth();
+
+  // Bug 2: a marketplace BUYER-only org (bought an agent, not an agency) must
+  // never render the agency shell — bounce them to their "My Agent" home so they
+  // only ever see the minimal buyer surface. One chokepoint covers every agency
+  // route (/studio/*, /dashboard, /contacts, …). Agency operators unaffected;
+  // fail-open. Runs before the agency data fetch below so a buyer skips it.
+  await enforceBuyerAgencyShellGuard();
   const [soul, personality] = await Promise.all([getSoul(), getPersonality()]);
   const user = session.user;
   const avatarFallback = user?.name?.trim()?.charAt(0)?.toUpperCase() || user?.email?.charAt(0)?.toUpperCase() || "U";

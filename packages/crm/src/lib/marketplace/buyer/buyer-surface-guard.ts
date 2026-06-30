@@ -16,11 +16,43 @@
 // Pure: no DB, no request object — the caller resolves the two booleans (+ the
 // target deployment id) and the path. Nothing throws.
 
-/** The agency surfaces a buyer-only org is redirected AWAY from. A buyer should
- *  never land on the agency client-builder or the agency dashboard. Matched as
- *  exact paths or path prefixes (so `/clients/new` and `/clients/new?x=y` both
- *  match, and the dashboard root matches). */
-const AGENCY_SURFACE_PREFIXES = ["/clients/new", "/clients", "/orgs"] as const;
+/** The agency surfaces a buyer-only org is redirected AWAY from — every root in
+ *  the agency left-nav (see components/layout/nav-config.ts) plus the agency-only
+ *  command-palette destinations. A marketplace buyer should NEVER land on any of
+ *  these; they belong on their focused "My Agent" home.
+ *
+ *  Matched as exact paths OR `${prefix}/…` sub-paths (so `/studio`, `/studio/agents`,
+ *  and `/contacts/c-1?x=y` all match) — a bare substring like `/studious` or
+ *  `/clientside` does NOT match (segment-boundary check in `isAgencySurfacePath`).
+ *
+ *  Bug 2: previously only `/clients/new`, `/clients`, `/orgs` were covered, so a
+ *  buyer-only org could still reach `/studio/*`, `/dashboard`, `/contacts`, etc.
+ *  and render the full agency shell. This set now mirrors the whole agency nav. */
+const AGENCY_SURFACE_PREFIXES = [
+  // Overview / builder
+  "/dashboard",
+  "/studio",
+  "/automations",
+  // Customers
+  "/contacts",
+  "/bookings",
+  "/forms",
+  // Inbox
+  "/conversations",
+  "/emails",
+  // Money
+  "/deals",
+  "/proposals",
+  // Portfolio / multi-org
+  "/clients",
+  "/orgs",
+  // System
+  "/integrations",
+  "/settings",
+  // Agency-only command-palette destinations
+  "/soul-marketplace",
+  "/seldon",
+] as const;
 
 /** Is this org a marketplace BUYER and NOT an agency operator? Pure. */
 export function isBuyerOnlyOrg(input: {

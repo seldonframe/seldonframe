@@ -20,7 +20,10 @@ import { redirect } from "next/navigation";
 
 import { getOrgId } from "@/lib/auth/helpers";
 import { resolveBuilderAgency } from "@/lib/deployments/store";
-import { shouldRedirectToBuyerAgent } from "@/lib/marketplace/buyer/buyer-surface-guard";
+import {
+  isBuyerOnlyOrg,
+  shouldRedirectToBuyerAgent,
+} from "@/lib/marketplace/buyer/buyer-surface-guard";
 
 /** Resolve the caller org's FIRST buyer deployment id (a deployment whose cloned
  *  template is stamped `sourceListingId`), or null. Buyer-only orgs typically own
@@ -84,5 +87,41 @@ export async function enforceBuyerSurfaceGuard(pathname: string): Promise<void> 
   }
   // redirect() throws NEXT_REDIRECT — call it OUTSIDE the try so the guard's
   // catch never swallows the navigation.
+  if (to) redirect(to);
+}
+
+/**
+ * Enforce the buyer-surface guard for the AGENCY DASHBOARD SHELL — call this once
+ * from the `(dashboard)` layout (the single chokepoint that renders the full
+ * agency left-nav). Because that layout wraps ONLY agency surfaces, rendering it
+ * at all is the signal: a BUYER-only org reaching ANY `(dashboard)` route is
+ * `redirect()`-ed to their "My Agent" home — so they only ever see the minimal
+ * buyer shell (Bug 2: hide every agency nav item a buyer can't use).
+ *
+ * Path-independent on purpose: no fragile pathname-from-headers read, and no way
+ * for a single un-listed agency sub-route to leak through. Agency operators are
+ * 100% unaffected — `isBuyerOnlyOrg` is false for anyone owning a partner_agencies
+ * row. Fail-open on any error (a legitimate operator is never locked out).
+ */
+export async function enforceBuyerAgencyShellGuard(): Promise<void> {
+  let to: string | null = null;
+  try {
+    const orgId = await getOrgId();
+    if (!orgId) return; // unauthenticated → the layout's own auth gate handles it.
+
+    const [agencyId, buyerDeploymentId] = await Promise.all([
+      resolveBuilderAgency(orgId).catch(() => null),
+      findFirstBuyerDeploymentId(orgId),
+    ]);
+
+    const buyerOnly = isBuyerOnlyOrg({
+      isAgencyOperator: Boolean(agencyId),
+      hasBuyerDeployment: Boolean(buyerDeploymentId),
+    });
+    // Only redirect when we have a concrete target (never emit a broken /agent/).
+    if (buyerOnly && buyerDeploymentId) to = `/agent/${buyerDeploymentId}`;
+  } catch {
+    return; // fail-open: never block a legitimate operator on a guard error.
+  }
   if (to) redirect(to);
 }

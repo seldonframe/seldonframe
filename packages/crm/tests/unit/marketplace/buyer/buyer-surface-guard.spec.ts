@@ -35,13 +35,50 @@ test("isAgencySurfacePath: matches /clients/new, /clients, /orgs (and their subp
   assert.equal(isAgencySurfacePath("/orgs"), true);
 });
 
+test("isAgencySurfacePath: covers /studio/* and the other agency roots (Bug 2 — the full agency nav set)", () => {
+  // The agency-builder Studio (the exact surface Max reported the buyer landing on).
+  assert.equal(isAgencySurfacePath("/studio"), true);
+  assert.equal(isAgencySurfacePath("/studio/agents"), true);
+  assert.equal(isAgencySurfacePath("/studio/clients"), true);
+  assert.equal(isAgencySurfacePath("/studio/earnings?tab=payouts"), true);
+  // Every other left-nav root a buyer should never see.
+  assert.equal(isAgencySurfacePath("/dashboard"), true);
+  assert.equal(isAgencySurfacePath("/contacts"), true);
+  assert.equal(isAgencySurfacePath("/contacts/c-1"), true);
+  assert.equal(isAgencySurfacePath("/deals"), true);
+  assert.equal(isAgencySurfacePath("/bookings"), true);
+  assert.equal(isAgencySurfacePath("/forms"), true);
+  assert.equal(isAgencySurfacePath("/conversations"), true);
+  assert.equal(isAgencySurfacePath("/emails"), true);
+  assert.equal(isAgencySurfacePath("/proposals"), true);
+  assert.equal(isAgencySurfacePath("/automations"), true);
+  assert.equal(isAgencySurfacePath("/integrations"), true);
+  assert.equal(isAgencySurfacePath("/settings"), true);
+  assert.equal(isAgencySurfacePath("/soul-marketplace"), true);
+  assert.equal(isAgencySurfacePath("/seldon"), true);
+});
+
 test("isAgencySurfacePath: does NOT match the buyer's own surface or unrelated paths", () => {
   assert.equal(isAgencySurfacePath("/agent/dep-1"), false);
   assert.equal(isAgencySurfacePath("/agent/dep-1/setup"), false);
-  assert.equal(isAgencySurfacePath("/dashboard"), false);
-  assert.equal(isAgencySurfacePath("/settings"), false);
-  // Guard against an accidental prefix collision (/clientside should NOT match).
+  assert.equal(isAgencySurfacePath("/"), false);
+  assert.equal(isAgencySurfacePath("/login"), false);
+  assert.equal(isAgencySurfacePath("/marketplace"), false);
+  // Guard against accidental prefix collisions (substring ≠ path segment).
   assert.equal(isAgencySurfacePath("/clientside"), false);
+  assert.equal(isAgencySurfacePath("/studious"), false);
+  assert.equal(isAgencySurfacePath("/settings-export"), false);
+  assert.equal(isAgencySurfacePath("/dashboards"), false);
+});
+
+test("shouldRedirectToBuyerAgent: a buyer on /studio is redirected to their agent (Bug 2)", () => {
+  const r = shouldRedirectToBuyerAgent({
+    pathname: "/studio/agents",
+    isAgencyOperator: false,
+    hasBuyerDeployment: true,
+    buyerDeploymentId: "dep-7",
+  });
+  assert.deepEqual(r, { redirect: true, to: "/agent/dep-7" });
 });
 
 test("shouldRedirectToBuyerAgent: a buyer on /clients/new is redirected to their agent", () => {
