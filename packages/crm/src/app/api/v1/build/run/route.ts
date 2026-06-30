@@ -31,6 +31,13 @@ import { trackEvent } from "@/lib/analytics/track";
 import { isBillingEnabled } from "@/lib/marketplace/billing/billing-mode";
 import { agentListingToCatalogEntry, type CatalogPrice } from "@/lib/build/discover";
 import { computeRunCost, type RunCost } from "@/lib/build/run-cost";
+import {
+  gateRunAffordability,
+  settleRunDrawdown,
+  type RunDrawdownDeps,
+  type RunGateResult,
+} from "@/lib/build/run-drawdown";
+import { buildRunDrawdownDeps } from "@/lib/build/run-drawdown-deps";
 import { COMPOSIO_TOOLKITS, defaultToolsForToolkits } from "@/lib/integrations/composio/catalog";
 
 type Body = { type?: unknown; id?: unknown; input?: unknown };
@@ -40,16 +47,22 @@ function str(v: unknown): string {
 }
 
 /** The billing block on every response. On error, calculatedCost is 0 + not
- *  recorded (charged:false ALWAYS — P1 never charges). */
+ *  recorded (charged:false). In P2 `charged` becomes true when the prepaid wallet
+ *  is funded AND the billing flag is on (a LEDGER debit — NO Stripe call per run);
+ *  it stays false when the wallet/flag is off (P1's money-safe behavior). */
 type BillingBlock = {
   calculatedCost: number; // micro-dollars (Monid)
   amountCents: number;
   feeCents: number;
   netCents: number;
-  /** ALWAYS false in P1 — recorded, not charged. Explicit for money-safety. */
-  charged: false;
+  /** True when the wallet was actually debited for this run (P2). false on error,
+   *  on a 0-cost run, or when the wallet/flag is off (P1 behavior). */
+  charged: boolean;
   /** Whether a billable usage event was recorded (success + flag on). */
   recorded: boolean;
+  /** The renter's wallet balance after the debit, in micro-dollars (present only
+   *  when charged). */
+  balanceMicros?: number;
 };
 
 const ZERO_BILLING: BillingBlock = {
@@ -84,33 +97,52 @@ export async function POST(request: Request): Promise<Response> {
 
   const runId = `run_${randomUUID()}`;
 
+  // The DB-backed wallet seams (gate + debit + earning). Built once per request and
+  // threaded through so the agent/tool paths share one wallet view. Inert when the
+  // billing flag is off (the deps' billingEnabled is false → no wallet touch).
+  const drawdownDeps = buildRunDrawdownDeps();
+
   if (type === "agent") {
-    return runAgent({ request, renterOrgId, runId, slug: id, input });
+    return runAgent({ request, renterOrgId, runId, slug: id, input, drawdownDeps });
   }
-  return runTool({ request, renterOrgId, runId, actionSlug: id, input });
+  return runTool({ request, renterOrgId, runId, actionSlug: id, input, drawdownDeps });
 }
 
-// ── shared: record a SUCCESSFUL run's cost (NO charge) ────────────────────────
+// ── shared: record a SUCCESSFUL run's cost + draw down the wallet ─────────────
 //
-// Records the computed cost as a usage event (the meter) — gated behind
-// SF_MARKETPLACE_BILLING so it's inert in dev. NEVER charges. Returns the billing
-// block (recorded reflects whether the event was actually logged).
-function recordRunUsage(args: {
+// Records the computed cost as a usage event (the meter) AND — in P2 — draws the
+// cost down from the prepaid WALLET (a LEDGER debit, NO Stripe call per run) +
+// accrues the builder's earning. Both are gated behind SF_MARKETPLACE_BILLING so
+// they're inert in dev. The debit is idempotent on runId and can never drive the
+// balance negative. Returns the billing block (`charged` reflects whether the
+// wallet was actually debited; false when the wallet/flag is off — P1 behavior).
+async function recordRunUsage(args: {
   type: "agent" | "tool";
   id: string;
   renterOrgId: string;
   creatorOrgId?: string;
   cost: RunCost;
   runId: string;
-}): BillingBlock {
+  drawdownDeps: RunDrawdownDeps;
+}): Promise<BillingBlock> {
   const flagOn = isBillingEnabled(process.env);
   const recorded = flagOn && args.cost.amountCents >= 0;
 
+  // P2 — DRAW DOWN THE WALLET (ledger debit, NO Stripe call) + accrue the builder
+  // earning. Idempotent on runId; never negative. charged:false when the flag is
+  // off / the run is free / the balance couldn't cover it at settle.
+  const settle = await settleRunDrawdown(args.drawdownDeps, {
+    renterOrgId: args.renterOrgId,
+    sellerOrgId: args.creatorOrgId,
+    runId: args.runId,
+    cost: args.cost,
+  });
+
   if (recorded) {
-    // Fire-and-forget usage event — the meter, NOT a charge. amount_cents +
-    // fee_cents are recorded for the P2 wallet to draw down against later. The
-    // event name is build_run_usage (distinct from the x402 agent_rental_call so
-    // the two rails never cross-count).
+    // Fire-and-forget usage event — the meter. amount_cents + fee_cents recorded
+    // for analytics; the actual money move is the wallet debit above. The event
+    // name is build_run_usage (distinct from the x402 agent_rental_call so the two
+    // rails never cross-count).
     trackEvent(
       "build_run_usage",
       {
@@ -122,7 +154,7 @@ function recordRunUsage(args: {
         amount_cents: args.cost.amountCents,
         fee_cents: args.cost.feeCents,
         calculated_cost_micros: args.cost.calculatedCost,
-        charged: false, // explicit: P1 records, never charges.
+        charged: settle.charged,
       },
       { orgId: args.renterOrgId },
     );
@@ -133,8 +165,11 @@ function recordRunUsage(args: {
     amountCents: args.cost.amountCents,
     feeCents: args.cost.feeCents,
     netCents: args.cost.netCents,
-    charged: false,
+    charged: settle.charged,
     recorded,
+    ...(settle.charged && settle.balanceMicros !== undefined
+      ? { balanceMicros: settle.balanceMicros }
+      : {}),
   };
 }
 
@@ -145,8 +180,9 @@ async function runAgent(args: {
   runId: string;
   slug: string;
   input: Record<string, unknown>;
+  drawdownDeps: RunDrawdownDeps;
 }): Promise<Response> {
-  const { request, renterOrgId, runId, slug, input } = args;
+  const { request, renterOrgId, runId, slug, input, drawdownDeps } = args;
 
   const { resolveRentalAgent, runAgentRentalTurn } = await import(
     "@/lib/marketplace/agent-rental-run"
@@ -177,6 +213,18 @@ async function runAgent(args: {
     outcomeType: agent.outcomeType ?? null,
   }).price;
 
+  // A single agent turn = one per_call/per_outcome unit (resultCount 1). For these
+  // flat models the cost is known upfront, so the affordability GATE is exact.
+  const cost = computeRunCost(price, 1);
+
+  // P2 — GATE BEFORE EXECUTION: when the wallet is enforced and can't cover the
+  // cost, return 402 and do NOT run the agent (no work for free, no negative
+  // balance). Flag off / free run → allowed.
+  const gate = await gateRunAffordability(drawdownDeps, renterOrgId, cost);
+  if (!gate.allowed) {
+    return insufficientBalance(request, renterOrgId, runId, "agent", slug, price, gate);
+  }
+
   let turn: Awaited<ReturnType<typeof runAgentRentalTurn>>;
   try {
     turn = await runAgentRentalTurn({
@@ -195,15 +243,15 @@ async function runAgent(args: {
     return errorRun(request, renterOrgId, runId, "agent", slug, turn.message);
   }
 
-  // Success: a single agent turn = one per_call/per_outcome unit (resultCount 1).
-  const cost = computeRunCost(price, 1);
-  const billing = recordRunUsage({
+  // Success: debit the wallet (ledger only) + accrue the builder earning.
+  const billing = await recordRunUsage({
     type: "agent",
     id: slug,
     renterOrgId,
     creatorOrgId: agent.creatorOrgId,
     cost,
     runId,
+    drawdownDeps,
   });
 
   logEvent(
@@ -238,8 +286,9 @@ async function runTool(args: {
   runId: string;
   actionSlug: string;
   input: Record<string, unknown>;
+  drawdownDeps: RunDrawdownDeps;
 }): Promise<Response> {
-  const { request, renterOrgId, runId, actionSlug, input } = args;
+  const { request, renterOrgId, runId, actionSlug, input, drawdownDeps } = args;
 
   const toolkit = toolkitForAction(actionSlug);
   if (!toolkit || !defaultToolsForToolkits([toolkit]).includes(actionSlug)) {
@@ -300,7 +349,14 @@ async function runTool(args: {
   }
 
   const cost = computeRunCost(price, resultCountOf(providerResponse));
-  const billing = recordRunUsage({ type: "tool", id: actionSlug, renterOrgId, cost, runId });
+  const billing = await recordRunUsage({
+    type: "tool",
+    id: actionSlug,
+    renterOrgId,
+    cost,
+    runId,
+    drawdownDeps,
+  });
 
   logEvent(
     "build_run",
@@ -375,4 +431,44 @@ function errorRun(
     price,
     billing: { ...ZERO_BILLING },
   });
+}
+
+// ── 402: insufficient wallet balance — the run did NOT execute ────────────────
+//
+// P2: the affordability gate failed (the prepaid wallet can't cover this run). We
+// return 402 and DO NOT execute — no work done for free, no negative balance, no
+// charge. The body carries the price + the (uncharged) cost + the current balance
+// so the caller knows how much to top up.
+function insufficientBalance(
+  request: Request,
+  renterOrgId: string,
+  runId: string,
+  type: "agent" | "tool",
+  id: string,
+  price: CatalogPrice,
+  gate: RunGateResult,
+): Response {
+  logEvent(
+    "build_run",
+    { type, id, status: "insufficient_balance", amount_cents: 0, recorded: false },
+    { request, orgId: renterOrgId, status: 402, severity: "warn" },
+  );
+  return NextResponse.json(
+    {
+      runId,
+      status: "insufficient_balance",
+      error: "Insufficient wallet balance. Top up at /build/wallet to run this.",
+      price,
+      billing: {
+        calculatedCost: gate.costMicros,
+        amountCents: Math.round(gate.costMicros / 10_000),
+        feeCents: 0,
+        netCents: 0,
+        charged: false,
+        recorded: false,
+        balanceMicros: gate.balanceMicros,
+      },
+    },
+    { status: 402 },
+  );
 }
