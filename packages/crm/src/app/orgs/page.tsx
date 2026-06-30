@@ -4,6 +4,7 @@ import { auth } from "@/auth";
 import { UpgradePlanCheckoutButton } from "@/components/orgs/upgrade-plan-checkout-button";
 import { getWorkspaceLimitStatus, listManagedOrganizations, setActiveOrgAction } from "@/lib/billing/orgs";
 import { getPlan } from "@/lib/billing/plans";
+import { enforceBuyerSurfaceGuard } from "@/lib/marketplace/buyer/buyer-surface-guard-server";
 
 export default async function OrganizationsPage({
   searchParams,
@@ -16,6 +17,12 @@ export default async function OrganizationsPage({
   if (!session?.user?.id) {
     redirect("/login");
   }
+
+  // Marketplace buyer onboarding (Task 13): a BUYER-only org belongs on their "My
+  // Agent" home, not the agency multi-client dashboard. Runs BEFORE the agency
+  // plan-gate so a buyer lands on their agent (not the generic /dashboard bounce).
+  // Additive + fail-open — agency operators fall through unaffected.
+  await enforceBuyerSurfaceGuard("/orgs");
 
   const plan = getPlan(session.user.planId ?? "");
 

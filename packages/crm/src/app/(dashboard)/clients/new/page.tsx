@@ -25,6 +25,7 @@ import { redirect } from "next/navigation";
 import { auth } from "@/auth";
 import { OnboardingShell } from "@/components/onboarding/shell";
 import { getOnboardingState } from "@/lib/onboarding/state";
+import { enforceBuyerSurfaceGuard } from "@/lib/marketplace/buyer/buyer-surface-guard-server";
 import { ClientsNewForm } from "./clients-new-form";
 
 export const dynamic = "force-dynamic";
@@ -59,6 +60,11 @@ export default async function ClientsNewPage({
     const qs = cb.toString();
     redirect(`/login?callbackUrl=${encodeURIComponent(`/clients/new${qs ? `?${qs}` : ""}`)}`);
   }
+
+  // Marketplace buyer onboarding (Task 13): a BUYER-only org (owns a bought-agent
+  // deployment, is not an agency operator) belongs on their "My Agent" home, not
+  // the agency client-builder. Additive + fail-open — agency operators unaffected.
+  await enforceBuyerSurfaceGuard("/clients/new");
 
   const { source, url, biz, intent, agent, vertical } = await searchParams;
 
