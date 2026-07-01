@@ -384,3 +384,19 @@ Money-safe: keep `SF_MARKETPLACE_BILLING` flag + DI'd fake-Stripe. Never charge 
 **Re-smoke + Stripe reconfig Max needs:**
 1. Point the `/api/v1/marketplace/stripe/webhook` Stripe endpoint at **Connect** events ("Listen to events on Connected accounts") — the events now carry `event.account`. The signature secret is unchanged (`STRIPE_MARKETPLACE_WEBHOOK_SECRET`).
 2. Fresh $1/mo (or $1 one-time) smoke with `SF_MARKETPLACE_BILLING=true`: confirm on the **seller's** connected account the Stripe processing fee is debited from the SELLER and SF's 5% application fee lands clean on the platform (the prior smoke showed the platform eating the 34¢).
+
+---
+
+### Distribution skill pack — `skills/seldonframe-agent-business/` (branch `feature/agent-business-skill-pack`)
+
+Package the build → test → deploy → sell → get-paid loop as a distribution-ready SKILL.md for the Claude-skills ecosystem lists (travisvn + BehiSecc awesome-claude-skills, VoltAgent/awesome-agent-skills, Aradotso/trending-skills). Max submits himself — this branch only prepares.
+
+- [x] Ground the tool surface: every MCP tool name from `skills/mcp-server/src/tools.js` only; sell/payout = REST ops + CLI + Studio (no MCP listing tools exist — verified)
+- [x] RED baseline: capture what an undocumented agent invents (done — invented add_agent_tools/configure_voice_channel/configure_payment_receiver; misused submit_soul/create_subscription/send_sms; skipped evals)
+- [x] Write `SKILL.md` (frontmatter per agentskills spec; 5-verb quickstart; progressive keys; grounding table; guardrails: no key handling, no real charges in dev, no force:true, wizardUrl human-only)
+- [x] Write `README.md` (short) + `SUBMISSION-KIT.md` (per-list entry lines, categories, exact steps, Max checklist)
+- [x] Mechanical grounding check: tool names in SKILL.md ⊆ tools.js names
+- [x] GREEN retrieval test: fresh subagent with ONLY the SKILL.md answers the loop correctly + refuses guardrail violations
+- [x] Commit on branch; review block below
+
+**Review:** Pack lives at `skills/seldonframe-agent-business/{SKILL.md,README.md,SUBMISSION-KIT.md}` on `feature/agent-business-skill-pack`. Grounding: all 25 MCP tool names in the SKILL.md verified present in `skills/mcp-server/src/tools.js`; sell/get-paid documented as what they really are (Studio listing panel [human] + `set_usage_price`/`list_my_listings` ops on `/api/v1/build/listings` + `/api/v1/build/payout` [API/CLI]) since no MCP listing/payout tools exist. RED baseline (haiku, no skill): invented add_agent_tools/configure_voice_channel/configure_payment_receiver, misused submit_soul/create_subscription/send_sms, skipped evals → fed the grounding table. GREEN (haiku, skill only): correct 11-step loop with surfaces labeled, refused force:true, refused real-message testing, correct payout statuses, verbatim wizardUrl relay, no-key-upfront. Two tester-reported wording gaps patched post-GREEN (queued archetypes not creatable via create_agent; blueprint patchable-field list) — informational, sourced from tools.js. NOT submitted anywhere — SUBMISSION-KIT.md has Max's ordered checklist (merge→republish 1.57→topics→smoke→3 PRs; Aradotso is auto-ingest).
