@@ -33,7 +33,10 @@ import {
 import { guardApiRequest } from "@/lib/api/guard";
 import { buildBuilderLadder, buildLifecycleView, deriveBuilderSignals } from "@/lib/build/builder-ladder";
 import { loadAgentMarketplaceStatusForOrg } from "@/lib/marketplace/agent-marketplace-status";
-import { getBuilderEarningsMicros, getWalletBalanceMicros } from "@/lib/build/wallet-store";
+import { getBuilderEarningsMicros, getWalletBalanceMicros, getWithdrawableEarningsMicros } from "@/lib/build/wallet-store";
+import { isBillingEnabled } from "@/lib/marketplace/billing/billing-mode";
+import { stripeConnections } from "@/db/schema";
+import { MIN_WITHDRAW_USD } from "@/lib/build/payout";
 
 export async function GET(request: Request) {
   const guard = await guardApiRequest(request);
@@ -254,6 +257,30 @@ export async function GET(request: Request) {
     .filter((l) => l.listed && l.slug)
     .map((l) => `/marketplace/${l.slug}`);
 
+  // Payout signal (additive) — only when marketplace billing is ON. Two cheap DB
+  // reads (NO Stripe call on this hot path); the authoritative payouts_enabled +
+  // transfer check happens at requestPayout time. Off → undefined → "coming_soon".
+  let payoutSignal:
+    | { connected: boolean; withdrawableUsd: number; minUsd: number }
+    | undefined;
+  try {
+    if (isBillingEnabled(process.env as Record<string, string | undefined>)) {
+      const [conn] = await db
+        .select({ id: stripeConnections.id })
+        .from(stripeConnections)
+        .where(and(eq(stripeConnections.orgId, orgId), eq(stripeConnections.isActive, true)))
+        .limit(1);
+      const withdrawableMicros = await getWithdrawableEarningsMicros(orgId);
+      payoutSignal = {
+        connected: Boolean(conn),
+        withdrawableUsd: Math.round((withdrawableMicros / 1_000_000) * 100) / 100,
+        minUsd: MIN_WITHDRAW_USD,
+      };
+    }
+  } catch {
+    /* leave payoutSignal undefined → "coming_soon" */
+  }
+
   const lifecycle = buildLifecycleView({
     agents: agentStats.map((a) => {
       const mk = marketplaceStatuses.find((m) => m.slug === a.slug);
@@ -269,6 +296,7 @@ export async function GET(request: Request) {
     }),
     earningsAccruedUsd: Math.round((earningsMicros / 1_000_000) * 100) / 100,
     walletBalanceUsd: Math.round((walletMicros / 1_000_000) * 100) / 100,
+    payout: payoutSignal,
   });
 
   // 6. Compose response. Designed to be self-explanatory to an LLM:

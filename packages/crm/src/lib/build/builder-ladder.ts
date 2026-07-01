@@ -182,13 +182,36 @@ export type AgentLifecycle = {
   eval_pass_rate: number | null;
   live: boolean;
 };
+/** The payout status the builder-block surfaces. `coming_soon` = not wired / flag
+ *  off; `connect_stripe` = no active Connect account; `below_min` = under the
+ *  threshold; `{ available_usd }` = ready to withdraw. */
+export type PayoutStatus =
+  | "coming_soon"
+  | "connect_stripe"
+  | "below_min"
+  | { available_usd: number };
+
 export type LifecycleView = {
-  earnings: { accrued_usd: number; payout_status: "coming_soon" };
+  earnings: { accrued_usd: number; payout_status: PayoutStatus };
   agents: AgentLifecycle[];
   fund_hint: string | null;
 };
 
 const LOW_BALANCE_USD = 1;
+
+/** The builder-block payout status. No signal (flag off / not wired) → coming_soon
+ *  (honest "withdrawals coming soon"). Otherwise: not connected → connect_stripe;
+ *  withdrawable ≥ min → available; else below_min. The AUTHORITATIVE payouts_enabled
+ *  + transfer check happens at requestPayout time — this is the cheap display hint
+ *  (no Stripe call on the hot get_workspace_state path). */
+function payoutStatus(
+  p: { connected: boolean; withdrawableUsd: number; minUsd: number } | undefined,
+): PayoutStatus {
+  if (!p) return "coming_soon";
+  if (!p.connected) return "connect_stripe";
+  if (p.withdrawableUsd >= p.minUsd) return { available_usd: Math.round(p.withdrawableUsd * 100) / 100 };
+  return "below_min";
+}
 
 function agentStage(a: AgentLifecycleInput): BuilderRungKind | "live" {
   if (a?.status === "live") return "live";
@@ -202,6 +225,7 @@ export function buildLifecycleView(input: {
   agents?: AgentLifecycleInput[];
   earningsAccruedUsd?: number;
   walletBalanceUsd?: number;
+  payout?: { connected: boolean; withdrawableUsd: number; minUsd: number };
 }): LifecycleView {
   const agentsIn = Array.isArray(input?.agents) ? input.agents : [];
   const balance = Number(input?.walletBalanceUsd);
@@ -210,7 +234,7 @@ export function buildLifecycleView(input: {
   return {
     earnings: {
       accrued_usd: Number.isFinite(earningsUsd) ? earningsUsd : 0,
-      payout_status: "coming_soon",
+      payout_status: payoutStatus(input?.payout),
     },
     agents: agentsIn.map((a) => ({
       name: a.name,

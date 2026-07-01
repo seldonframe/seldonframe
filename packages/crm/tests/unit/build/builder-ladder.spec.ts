@@ -150,4 +150,33 @@ describe("buildLifecycleView", () => {
     assert.equal(v.earnings.accrued_usd, 0);
     assert.equal(v.fund_hint, null);
   });
+
+  test("no payout signal → payout_status stays 'coming_soon' (flag-off / not wired)", () => {
+    const v = buildLifecycleView({ agents: [AGENT], earningsAccruedUsd: 12.5, walletBalanceUsd: 5 });
+    assert.equal(v.earnings.payout_status, "coming_soon");
+  });
+
+  test("payout signal, not connected → 'connect_stripe'", () => {
+    const v = buildLifecycleView({
+      agents: [AGENT], earningsAccruedUsd: 12.5, walletBalanceUsd: 5,
+      payout: { connected: false, withdrawableUsd: 12.5, minUsd: 10 },
+    });
+    assert.equal(v.earnings.payout_status, "connect_stripe");
+  });
+
+  test("connected + withdrawable ≥ min → { available_usd }", () => {
+    const v = buildLifecycleView({
+      agents: [AGENT], earningsAccruedUsd: 12.5, walletBalanceUsd: 5,
+      payout: { connected: true, withdrawableUsd: 12.5, minUsd: 10 },
+    });
+    assert.deepEqual(v.earnings.payout_status, { available_usd: 12.5 });
+  });
+
+  test("connected + withdrawable < min → 'below_min'", () => {
+    const v = buildLifecycleView({
+      agents: [AGENT], earningsAccruedUsd: 4, walletBalanceUsd: 5,
+      payout: { connected: true, withdrawableUsd: 4, minUsd: 10 },
+    });
+    assert.equal(v.earnings.payout_status, "below_min");
+  });
 });
