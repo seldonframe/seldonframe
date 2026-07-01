@@ -59,6 +59,25 @@ export async function guardApiRequest(request: Request) {
     return { orgId: bearer.orgId };
   }
 
+  // A caller that PRESENTED a workspace bearer (Authorization: Bearer wst_…) that
+  // did NOT resolve must get a clear 401 — never fall through to the legacy
+  // x-org-id path and emit a baffling "Missing x-org-id". This bit the CLI/MCP
+  // when a placeholder or expired wst_ key was used: the token looked fine but
+  // resolveWorkspaceBearer returned null, so the request landed in Mode 2 and the
+  // error blamed a header the bearer caller never needed to send.
+  const authorization = request.headers.get("authorization") ?? "";
+  if (/^bearer\s+wst_/i.test(authorization.trim())) {
+    return {
+      error: NextResponse.json(
+        {
+          error:
+            "Invalid or expired workspace key. Mint a fresh one at https://seldonframe.com/build/keys.",
+        },
+        { status: 401 },
+      ),
+    };
+  }
+
   // Mode 2: legacy x-org-id + x-api-key. Unchanged behavior so
   // existing external integrations keep working.
   if (!headerOrgId) {
