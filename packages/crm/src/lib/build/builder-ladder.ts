@@ -206,11 +206,10 @@ export function buildLifecycleView(input: {
   const agentsIn = Array.isArray(input?.agents) ? input.agents : [];
   const balance = Number(input?.walletBalanceUsd);
   const lowBalance = Number.isFinite(balance) && balance < LOW_BALANCE_USD;
+  const earningsUsd = Number(input?.earningsAccruedUsd);
   return {
     earnings: {
-      accrued_usd: Number.isFinite(input?.earningsAccruedUsd)
-        ? input.earningsAccruedUsd
-        : 0,
+      accrued_usd: Number.isFinite(earningsUsd) ? earningsUsd : 0,
       payout_status: "coming_soon",
     },
     agents: agentsIn.map((a) => ({
