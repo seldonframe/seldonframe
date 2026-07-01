@@ -47,6 +47,17 @@ export type OrganizationIntegrations = {
     expiresAt?: number;
     scope?: string;
   };
+  /** Tier-0 voice-deploy metered billing (2026-07-01 spec §3) — the SF-managed
+   *  Twilio SUBACCOUNT for this builder-org: isolated billing rollup to SF's
+   *  master account, one-API-call suspend/reactivate, and its own Elastic SIP
+   *  Trunk pointed at SF's shared OpenAI SIP endpoint. Set/read via
+   *  lib/telephony/sf-managed.ts (ensureBuilderSubaccount/ensureSubaccountTrunk).
+   *  authToken is encrypted at rest, same "v1." scheme as BYO twilio.authToken. */
+  sfTelephony?: {
+    subaccountSid: string;
+    authToken: string;
+    trunkSid?: string;
+  };
 };
 
 export type OrganizationSubscription = {
