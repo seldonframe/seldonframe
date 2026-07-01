@@ -21,6 +21,7 @@ import {
 } from "./commands/marketplace.js";
 import { runLoginCommand } from "./commands/login.js";
 import { runStatusCommand } from "./commands/status.js";
+import { runPayoutCommand } from "./commands/payout.js";
 import { errorToMessage, promptLine } from "./lib/io.js";
 
 /** Build an ApiClient from the active stored key + the (overridable) API base. */
@@ -77,6 +78,8 @@ export async function dispatch(args: ParsedArgs, writer: Writer): Promise<number
       return runWalletCommand(args, buildClient(), writer);
     case "status":
       return runStatusCommand(args, buildClient(), writer);
+    case "payout":
+      return runPayoutCommand(args, buildClient(), writer);
     case "help":
       writer.out(HELP_TEXT);
       return 0;

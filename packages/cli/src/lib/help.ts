@@ -19,6 +19,7 @@ COMMANDS
   run --type <agent|tool> --id <id> -i <json|@file>
                                        Run an entry → result + honest billing
   status                               Your lifecycle: agents · earnings · balance · next action
+  payout                               Withdraw your earnings to your bank (Stripe)
   wallet balance                       Show your prepaid wallet balance + accrued earnings
   wallet topup --amount <usd>          Fund your prepaid wallet (Stripe Checkout)
 

@@ -21,7 +21,18 @@ export async function runStatusCommand(args: ParsedArgs, client: ApiClient, writ
   for (const a of b.agents ?? []) {
     writer.out(`  • ${a.name} (${a.slug}) — ${a.live ? "live" : a.stage}`);
   }
-  writer.out(`  earnings: $${(b.earnings?.accrued_usd ?? 0).toFixed(2)} (${b.earnings?.payout_status === "coming_soon" ? "withdrawals coming soon" : (b.earnings?.payout_status ?? "")})`);
+  const ps = b.earnings?.payout_status;
+  const payoutLabel =
+    typeof ps === "object" && ps !== null
+      ? `$${ps.available_usd.toFixed(2)} ready to withdraw — run \`seldonframe payout\``
+      : ps === "connect_stripe"
+        ? "connect your bank to withdraw"
+        : ps === "below_min"
+          ? "below the $10 withdrawal minimum"
+          : ps === "coming_soon" || !ps
+            ? "withdrawals coming soon"
+            : String(ps);
+  writer.out(`  earnings: $${(b.earnings?.accrued_usd ?? 0).toFixed(2)} (${payoutLabel})`);
   writer.out(`  balance:  $${(b.wallet_balance_usd ?? 0).toFixed(2)}`);
   if (b.fund_hint) writer.out(`  ${b.fund_hint}`);
   if (b.next_action) writer.out(`\n→ Next: ${b.next_action}`);

@@ -67,13 +67,19 @@ export type RunResult = {
 
 export type WalletBalance = { balance: Money; earnings: Money };
 
+export type PayoutResult =
+  | { status: "paid"; amountUsd: number; transferId: string }
+  | { status: "connect_required"; onboardingUrl: string | null }
+  | { status: "below_min"; withdrawableUsd: number; minUsd: number }
+  | { status: "disabled" };
+
 export type WorkspaceState = {
   ok: boolean;
   workspace?: { name?: string };
   builder?: {
     next_action?: string;
     progress?: { done: number; total: number };
-    earnings?: { accrued_usd: number; payout_status: string };
+    earnings?: { accrued_usd: number; payout_status: string | { available_usd: number } };
     agents?: { name: string; slug: string; stage: string; live: boolean }[];
     wallet_balance_usd?: number;
     fund_hint?: string | null;
@@ -188,6 +194,10 @@ export class ApiClient {
     return this.request<{ ok: boolean; checkoutUrl?: string; reason?: string }>(
       "POST", "/api/v1/build/wallet/topup", { amountUsd },
     );
+  }
+
+  async payout(): Promise<PayoutResult> {
+    return this.request<PayoutResult>("POST", "/api/v1/build/payout");
   }
 
   /** The single request path: auth header + JSON body + honest error mapping. */
