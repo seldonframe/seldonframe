@@ -58,6 +58,19 @@ export type OrganizationIntegrations = {
     authToken: string;
     trunkSid?: string;
   };
+  /** Tier-2 voice-deploy metered billing (2026-07-01 spec §3, Task 8) — the
+   *  builder's OWN OpenAI project for the per-org webhook path
+   *  (app/api/v1/voice/openai/webhook/[orgId]). $0 SF fees: the call runs on
+   *  the builder's key against the builder's OpenAI project, never metered.
+   *  apiKey + webhookSecret are encrypted at rest, same "v1." scheme as BYO
+   *  twilio.authToken / sfTelephony.authToken; projectId is plaintext (not a
+   *  secret). Set/read via lib/telephony/openai-voice-store.ts
+   *  (getOrgOpenAiVoice/setOrgOpenAiVoice). */
+  openaiVoice?: {
+    projectId: string;
+    apiKey: string;
+    webhookSecret: string;
+  };
 };
 
 export type OrganizationSubscription = {
