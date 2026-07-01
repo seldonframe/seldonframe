@@ -164,3 +164,69 @@ export function deriveBuilderSignals(input: BuilderSignalInput): BuilderSignals 
     ),
   };
 }
+
+// ── the full lifecycle view (superset of the sell ladder) ─────────────────────
+export type AgentLifecycleInput = {
+  name: string;
+  slug: string;
+  status: string;
+  eval_total: number;
+  eval_meets_publish_gate: boolean | null;
+  listed: boolean;
+  priced: boolean;
+};
+export type AgentLifecycle = {
+  name: string;
+  slug: string;
+  stage: BuilderRungKind | "live";
+  eval_pass_rate: number | null;
+  live: boolean;
+};
+export type LifecycleView = {
+  earnings: { accrued_usd: number; payout_status: "coming_soon" };
+  agents: AgentLifecycle[];
+  fund_hint: string | null;
+};
+
+const LOW_BALANCE_USD = 1;
+
+function agentStage(a: AgentLifecycleInput): BuilderRungKind | "live" {
+  if (a?.status === "live") return "live";
+  if (a?.listed && !a?.priced) return "price";
+  if (a?.listed) return "list";
+  if (a?.eval_meets_publish_gate === true) return "list";
+  return "eval";
+}
+
+export function buildLifecycleView(input: {
+  agents?: AgentLifecycleInput[];
+  earningsAccruedUsd?: number;
+  walletBalanceUsd?: number;
+}): LifecycleView {
+  const agentsIn = Array.isArray(input?.agents) ? input.agents : [];
+  const balance = Number(input?.walletBalanceUsd);
+  const lowBalance = Number.isFinite(balance) && balance < LOW_BALANCE_USD;
+  return {
+    earnings: {
+      accrued_usd: Number.isFinite(input?.earningsAccruedUsd)
+        ? input.earningsAccruedUsd
+        : 0,
+      payout_status: "coming_soon",
+    },
+    agents: agentsIn.map((a) => ({
+      name: a.name,
+      slug: a.slug,
+      stage: agentStage(a),
+      eval_pass_rate:
+        (a?.eval_total ?? 0) > 0 && typeof a?.eval_meets_publish_gate === "boolean"
+          ? a.eval_meets_publish_gate
+            ? 1
+            : 0
+          : null,
+      live: a?.status === "live",
+    })),
+    fund_hint: lowBalance
+      ? "Low balance — run `seldonframe wallet topup` to run marketplace tools/agents. (Not needed just to build and sell.)"
+      : null,
+  };
+}

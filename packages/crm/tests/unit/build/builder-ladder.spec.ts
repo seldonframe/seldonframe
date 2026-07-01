@@ -9,6 +9,7 @@ import assert from "node:assert/strict";
 import {
   buildBuilderLadder,
   deriveBuilderSignals,
+  buildLifecycleView,
   type BuilderSignals,
 } from "../../../src/lib/build/builder-ladder";
 
@@ -117,5 +118,37 @@ describe("deriveBuilderSignals", () => {
     const s = deriveBuilderSignals({});
     assert.equal(s.hasAgent, false);
     assert.equal(s.hasListing, false);
+  });
+});
+
+describe("buildLifecycleView", () => {
+  const AGENT = { name: "Ace", slug: "ace", status: "live", eval_total: 11, eval_meets_publish_gate: true, listed: true, priced: true };
+
+  test("maps an agent to its furthest stage (live) + surfaces earnings", () => {
+    const v = buildLifecycleView({ agents: [AGENT], earningsAccruedUsd: 12.5, walletBalanceUsd: 5 });
+    assert.equal(v.agents[0]!.stage, "live");
+    assert.equal(v.agents[0]!.live, true);
+    assert.equal(v.earnings.accrued_usd, 12.5);
+    assert.equal(v.earnings.payout_status, "coming_soon");
+  });
+
+  test("listed-but-unpriced → price stage; built-only-no-eval → eval stage", () => {
+    const listed = buildLifecycleView({ agents: [{ ...AGENT, status: "test", priced: false }], earningsAccruedUsd: 0, walletBalanceUsd: 5 });
+    assert.equal(listed.agents[0]!.stage, "price");
+    const built = buildLifecycleView({ agents: [{ ...AGENT, status: "draft", eval_total: 0, eval_meets_publish_gate: null, listed: false, priced: false }], earningsAccruedUsd: 0, walletBalanceUsd: 5 });
+    assert.equal(built.agents[0]!.stage, "eval");
+  });
+
+  test("fund_hint fires only when balance < $1; null otherwise", () => {
+    assert.match(buildLifecycleView({ agents: [AGENT], earningsAccruedUsd: 0, walletBalanceUsd: 0 }).fund_hint!, /wallet topup/);
+    assert.equal(buildLifecycleView({ agents: [AGENT], earningsAccruedUsd: 0, walletBalanceUsd: 5 }).fund_hint, null);
+  });
+
+  test("tolerates empty/malformed input", () => {
+    // @ts-expect-error — jsonb edge
+    const v = buildLifecycleView({});
+    assert.deepEqual(v.agents, []);
+    assert.equal(v.earnings.accrued_usd, 0);
+    assert.equal(v.fund_hint, null);
   });
 });
