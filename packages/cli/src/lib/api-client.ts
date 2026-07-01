@@ -73,6 +73,37 @@ export type PayoutResult =
   | { status: "below_min"; withdrawableUsd: number; minUsd: number }
   | { status: "disabled" };
 
+/** A single unmet (or met) requirement the deploy wizard walks through — mirrors
+ *  DeployRequirement in packages/crm/src/lib/deployments/deploy-readiness.ts. */
+export type DeployRequirement = {
+  kind: "calendar_oauth" | "other_connector" | "telephony" | "business_info";
+  toolkit?: string;
+  met: boolean;
+  label: string;
+};
+
+export type DeploySource = { templateId: string } | { listingSlug: string };
+
+export type DeployPhone =
+  | { mode: "forward"; number: string }
+  | { mode: "provision"; areaCode: string };
+
+/** Mirrors the JSON shapes returned by POST /api/v1/build/deploy
+ *  (packages/crm/src/app/api/v1/build/deploy/route.ts). The CLI does NO deploy
+ *  logic of its own — it relays this verdict honestly. */
+export type DeployResult =
+  | { ok: true; status: "disabled" }
+  | {
+      ok: true;
+      status: "needs_connect";
+      deploymentId: string;
+      requirements: DeployRequirement[];
+      missing: DeployRequirement[];
+      wizardUrl: string;
+    }
+  | { ok: true; status: "live"; deploymentId: string; phoneNumber: string | null }
+  | { ok: false; reason: string };
+
 export type WorkspaceState = {
   ok: boolean;
   workspace?: { name?: string };
@@ -198,6 +229,12 @@ export class ApiClient {
 
   async payout(): Promise<PayoutResult> {
     return this.request<PayoutResult>("POST", "/api/v1/build/payout");
+  }
+
+  async deploy(input: { source: DeploySource; phone?: DeployPhone }): Promise<DeployResult> {
+    const body: Record<string, unknown> = { source: input.source };
+    if (input.phone !== undefined) body.phone = input.phone;
+    return this.request<DeployResult>("POST", "/api/v1/build/deploy", body);
   }
 
   /** The single request path: auth header + JSON body + honest error mapping. */
