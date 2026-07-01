@@ -145,7 +145,6 @@ describe("buildLifecycleView", () => {
   });
 
   test("tolerates empty/malformed input", () => {
-    // @ts-expect-error — jsonb edge
     const v = buildLifecycleView({});
     assert.deepEqual(v.agents, []);
     assert.equal(v.earnings.accrued_usd, 0);
