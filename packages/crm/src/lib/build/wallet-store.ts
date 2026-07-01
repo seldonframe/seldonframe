@@ -383,6 +383,15 @@ export async function debitVoiceUsage(args: {
       await db.delete(walletTransactions).where(eq(walletTransactions.idempotencyKey, key));
       return { ok: true, applied: false, duplicate: false, drainedMicros: 0, shortfallMicros: amount };
     }
+
+    // The retry succeeded with a re-split `drained` that can differ from the
+    // amount the ledger row was inserted with (split.drainedMicros, from the
+    // FIRST balance read). Bring the row into agreement with the money that
+    // ACTUALLY moved — the ledger must never overstate a drain.
+    await db
+      .update(walletTransactions)
+      .set({ amountMicros: drained })
+      .where(eq(walletTransactions.idempotencyKey, key));
   }
 
   return { ok: true, applied: true, duplicate: false, drainedMicros: drained, shortfallMicros: shortfall };
