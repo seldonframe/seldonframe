@@ -21,7 +21,7 @@
 export const runtime = "nodejs";
 
 import { NextResponse } from "next/server";
-import { and, eq, ne } from "drizzle-orm";
+import { and, eq, ne, sql } from "drizzle-orm";
 import { db } from "@/db";
 import { deployments } from "@/db/schema/deployments";
 import { agentTemplates } from "@/db/schema/agent-templates";
@@ -139,27 +139,50 @@ async function resolveListingSource(orgId: string, listingSlug: string): Promise
     agentBlueprint: listing.agentBlueprint,
   };
 
-  // Clone the listing's blueprint into a fresh draft template owned by the
-  // caller (mirrors lib/marketplace/actions.ts:cloneAgentListingIntoOrg — that
-  // helper is module-private, so this reuses the same exported primitives).
-  const args = buildInstalledAgentTemplate(buyerListing satisfies AgentListingForBuyer, orgId);
-  const blueprint: AgentBlueprint = { ...(args.blueprint ?? {}), sourceListingId: listing.id };
-  const existingSlugs = await db
-    .select({ slug: agentTemplates.slug })
+  // Resolve-or-reuse: a repeated deploy call for the same listing must not
+  // pile up orphaned clones. Look for a template THIS org already cloned from
+  // THIS listing (the same sourceListingId jsonb-stamp match
+  // findExistingForListing uses in buyer-deployment.ts, but queried directly
+  // against agentTemplates alone — we need the template BEFORE a deployment
+  // necessarily exists, so we can't join through deployments here).
+  const [existingTemplate] = await db
+    .select()
     .from(agentTemplates)
-    .where(eq(agentTemplates.builderOrgId, orgId));
-  const slug = resolveUniqueTemplateSlug(args.name, existingSlugs.map((r) => r.slug));
+    .where(
+      and(
+        eq(agentTemplates.builderOrgId, orgId),
+        sql`${agentTemplates.blueprint} ->> 'sourceListingId' = ${listing.id}`,
+      ),
+    )
+    .limit(1);
 
-  const [createdTemplate] = await db
-    .insert(agentTemplates)
-    .values({ ...args, blueprint, slug })
-    .returning();
-  if (!createdTemplate) {
-    return { ok: false, reason: "listing_not_found" };
+  let ownedTemplate: { id: string; type: string; blueprint: AgentBlueprint };
+  if (existingTemplate) {
+    ownedTemplate = existingTemplate;
+  } else {
+    // Clone the listing's blueprint into a fresh draft template owned by the
+    // caller (mirrors lib/marketplace/actions.ts:cloneAgentListingIntoOrg — that
+    // helper is module-private, so this reuses the same exported primitives).
+    const args = buildInstalledAgentTemplate(buyerListing satisfies AgentListingForBuyer, orgId);
+    const blueprint: AgentBlueprint = { ...(args.blueprint ?? {}), sourceListingId: listing.id };
+    const existingSlugs = await db
+      .select({ slug: agentTemplates.slug })
+      .from(agentTemplates)
+      .where(eq(agentTemplates.builderOrgId, orgId));
+    const slug = resolveUniqueTemplateSlug(args.name, existingSlugs.map((r) => r.slug));
+
+    const [createdTemplate] = await db
+      .insert(agentTemplates)
+      .values({ ...args, blueprint, slug })
+      .returning();
+    if (!createdTemplate) {
+      return { ok: false, reason: "listing_not_found" };
+    }
+    ownedTemplate = createdTemplate;
   }
 
   const result = await resolveOrCreateBuyerDeployment(
-    { buyerOrgId: orgId, listing: buyerListing, agentTemplateId: createdTemplate.id },
+    { buyerOrgId: orgId, listing: buyerListing, agentTemplateId: ownedTemplate.id },
     buildDefaultResolveBuyerDeploymentDeps(),
   );
   if (!result.ok) {
@@ -170,8 +193,8 @@ async function resolveListingSource(orgId: string, listingSlug: string): Promise
   return {
     ok: true,
     deployment: result.deployment,
-    templateType: createdTemplate.type,
-    blueprint: createdTemplate.blueprint,
+    templateType: ownedTemplate.type,
+    blueprint: ownedTemplate.blueprint,
   };
 }
 
