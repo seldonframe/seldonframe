@@ -36,8 +36,10 @@ import type { MarketplaceStripeMode } from "@/db/schema/marketplace-purchases";
 
 /** The kind of a wallet transaction. `topup` = money in (Stripe Checkout);
  *  `debit` = a per-run drawdown (ledger decrement, no Stripe call); `earning` =
- *  the builder's accrued net (cost − 5% fee) on a run they sold. */
-export type WalletTransactionKind = "topup" | "debit" | "earning";
+ *  the builder's accrued net (cost − 5% fee) on a run they sold; `payout` = a
+ *  withdrawal of accrued earnings to the builder's bank (a Stripe Connect
+ *  Transfer), which SUBTRACTS from what's withdrawable. */
+export type WalletTransactionKind = "topup" | "debit" | "earning" | "payout";
 
 /** One prepaid balance per (org, Stripe mode). A workspace tops this up via
  *  Stripe Checkout; every successful build run draws it down. Never negative. */
@@ -85,7 +87,7 @@ export const walletTransactions = pgTable(
     /** The Stripe session/event id backing a top-up. Nullable for debits. */
     stripeRef: text("stripe_ref"),
     /** UNIQUE dedupe key — the LAST-LINE money-safety backstop. topup: the Stripe
-     *  session id; debit: `debit:<runId>`; earning: `earning:<runId>`. A duplicate
+     *  session id; debit: `debit:<runId>`; earning: `earning:<runId>`; payout: `payout:<transferId>`. A duplicate
      *  insert violates this constraint → the store treats it as an idempotent
      *  no-op, so a credit/debit can NEVER apply twice. */
     idempotencyKey: text("idempotency_key").notNull(),

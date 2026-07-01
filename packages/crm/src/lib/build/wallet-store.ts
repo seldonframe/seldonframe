@@ -293,3 +293,48 @@ export async function getBuilderEarningsMicros(sellerOrgId: string): Promise<num
     );
   return nonNegMicros(Number(row?.total ?? 0));
 }
+
+/**
+ * The builder's WITHDRAWABLE earnings (micro-dollars) = Σ earning − Σ payout,
+ * clamped ≥ 0. This is what a payout may transfer (vs getBuilderEarningsMicros,
+ * which stays GROSS — lifetime earned — for the "$X earned" surface + the payout
+ * idempotency high-water mark). Org-scoped, mode-agnostic (mirrors the gross reader).
+ */
+export async function getWithdrawableEarningsMicros(sellerOrgId: string): Promise<number> {
+  const [row] = await db
+    .select({
+      total: sql<string>`COALESCE(SUM(CASE
+        WHEN ${walletTransactions.kind} = 'earning' THEN ${walletTransactions.amountMicros}
+        WHEN ${walletTransactions.kind} = 'payout' THEN -${walletTransactions.amountMicros}
+        ELSE 0 END), 0)`,
+    })
+    .from(walletTransactions)
+    .where(eq(walletTransactions.orgId, sellerOrgId));
+  return nonNegMicros(Number(row?.total ?? 0));
+}
+
+/**
+ * Record a completed payout as a `payout` ledger row (SUBTRACTS from withdrawable).
+ * Idempotent on `payout:<transferId>` (the wallet ledger's UNIQUE dedupe backstop):
+ * a re-record of the same Stripe transfer is a no-op → one transfer maps to exactly
+ * one ledger row even if recordBuilderPayout is retried after a mid-flight crash.
+ * Never throws on a duplicate.
+ */
+export async function recordBuilderPayout(args: {
+  orgId: string;
+  amountMicros: number;
+  transferId: string;
+}): Promise<{ ok: true; applied: boolean }> {
+  const amount = nonNegMicros(args.amountMicros);
+  const transferId = (args.transferId ?? "").trim();
+  if (amount <= 0 || !transferId) return { ok: true, applied: false };
+
+  const fresh = await insertLedgerRow({
+    orgId: args.orgId,
+    kind: "payout",
+    amountMicros: amount,
+    idempotencyKey: `payout:${transferId}`,
+    stripeRef: transferId,
+  });
+  return { ok: true, applied: fresh };
+}
