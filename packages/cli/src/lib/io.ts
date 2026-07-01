@@ -57,14 +57,14 @@ export function resolveInput(value: string | undefined): Record<string, unknown>
  *  401 → "add a key"; 402 → "top up"; NoKeyError → "add a key". */
 export function errorToMessage(err: unknown): string {
   if (err instanceof NoKeyError) {
-    return "No active key. Run `seldonframe keys add --label <name> --key wst_…` (mint one at https://app.seldonframe.com/build/keys).";
+    return "No key yet. Run `seldonframe login` — paste your key once and it verifies for you. (Mint one at https://app.seldonframe.com/build/keys.)";
   }
   if (err instanceof NetworkError) {
     return `${err.message} Check your connection or SELDONFRAME_API_BASE_URL.`;
   }
   if (err instanceof ApiError) {
     if (err.status === 401) {
-      return "Unauthorized (401). Your key is missing or invalid — run `seldonframe keys add` with a fresh wst_ key from https://app.seldonframe.com/build/keys.";
+      return "Unauthorized (401) — your key is missing or invalid. Run `seldonframe login` to paste a fresh key (mint at https://app.seldonframe.com/build/keys).";
     }
     if (err.status === 402) {
       return "Insufficient balance (402) — top up at https://app.seldonframe.com/build/wallet.";

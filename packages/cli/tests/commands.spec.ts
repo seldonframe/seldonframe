@@ -157,7 +157,7 @@ describe("discover command", () => {
     assert.match(err.join("\n"), /positive number/);
   });
 
-  test("a 401 maps to the keys-add hint and exits 1", async () => {
+  test("a 401 maps to the login hint and exits 1", async () => {
     const { writer, err } = capture();
     const code = await runDiscoverCommand(
       parseArgs(["discover", "-q", "x"]),
@@ -165,7 +165,7 @@ describe("discover command", () => {
       writer,
     );
     assert.equal(code, 1);
-    assert.match(err.join("\n"), /keys add/);
+    assert.match(err.join("\n"), /seldonframe login/);
   });
 });
 
@@ -285,7 +285,7 @@ describe("wallet command", () => {
     assert.match(out.join("\n"), /\$1\.25 USD/);
   });
 
-  test("no active key → the keys-add hint (NoKeyError), exits 1", async () => {
+  test("no active key → the login hint (NoKeyError), exits 1", async () => {
     const { writer, err } = capture();
     const code = await runWalletCommand(
       parseArgs(["wallet", "balance"]),
@@ -293,6 +293,6 @@ describe("wallet command", () => {
       writer,
     );
     assert.equal(code, 1);
-    assert.match(err.join("\n"), /keys add/);
+    assert.match(err.join("\n"), /seldonframe login/);
   });
 });

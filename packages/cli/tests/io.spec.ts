@@ -23,13 +23,13 @@ describe("parseInputObject", () => {
 });
 
 describe("errorToMessage", () => {
-  test("NoKeyError → the keys add hint", () => {
-    assert.match(errorToMessage(new NoKeyError()), /seldonframe keys add/);
+  test("NoKeyError → the login hint", () => {
+    assert.match(errorToMessage(new NoKeyError()), /seldonframe login/);
     assert.match(errorToMessage(new NoKeyError()), /build\/keys/);
   });
 
-  test("401 → the keys add hint", () => {
-    assert.match(errorToMessage(new ApiError(401, "Unauthorized")), /keys add/);
+  test("401 → the login hint", () => {
+    assert.match(errorToMessage(new ApiError(401, "Unauthorized")), /seldonframe login/);
     assert.match(errorToMessage(new ApiError(401, "Unauthorized")), /401/);
   });
 

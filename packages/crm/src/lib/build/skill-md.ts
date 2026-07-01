@@ -74,6 +74,11 @@ claude mcp add seldonframe --transport http ${SKILL_MD_MCP_URL} \\
   --header "Authorization: Bearer <YOUR_KEY>"
 \`\`\`
 
+**Then restart your IDE (or run \`/mcp\` → reconnect).** MCP connectors are read
+at session start, so the SeldonFrame tools are NOT callable in the same session
+you added them in — this is the #1 "why can't the agent see the tools" gotcha.
+Reconnect first, *then* come back and ask your agent to build.
+
 Once connected you get the SeldonFrame build/test/run/sell tools (\`create_agent\`,
 \`update_agent_blueprint\`, \`send_conversation_turn\`, \`run_agent_evals\`,
 \`publish_agent\`, \`set_usage_price\`, \`tail_agent_conversations\`,
