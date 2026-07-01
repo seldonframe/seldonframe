@@ -31,9 +31,9 @@ import {
   workspaceSecrets,
 } from "@/db/schema";
 import { guardApiRequest } from "@/lib/api/guard";
-import { buildBuilderLadder, deriveBuilderSignals } from "@/lib/build/builder-ladder";
+import { buildBuilderLadder, buildLifecycleView, deriveBuilderSignals } from "@/lib/build/builder-ladder";
 import { loadAgentMarketplaceStatusForOrg } from "@/lib/marketplace/agent-marketplace-status";
-import { getWalletBalanceMicros } from "@/lib/build/wallet-store";
+import { getBuilderEarningsMicros, getWalletBalanceMicros } from "@/lib/build/wallet-store";
 
 export async function GET(request: Request) {
   const guard = await guardApiRequest(request);
@@ -186,7 +186,7 @@ export async function GET(request: Request) {
   // awaits). The two builder reads (marketplace status + wallet balance) fold in
   // here so they add no wall-clock latency, and are fail-soft so the `builder`
   // block always renders.
-  const [contactsCount, bookingsCount, dealsCount, marketplaceStatuses, walletMicros] =
+  const [contactsCount, bookingsCount, dealsCount, marketplaceStatuses, walletMicros, earningsMicros] =
     await Promise.all([
       db
         .select({ n: count() })
@@ -207,6 +207,7 @@ export async function GET(request: Request) {
         .then((m) => [...m.values()])
         .catch(() => []),
       getWalletBalanceMicros(orgId).catch(() => 0),
+      getBuilderEarningsMicros(orgId).catch(() => 0),
     ]);
 
   const baseDomain =
@@ -252,6 +253,23 @@ export async function GET(request: Request) {
   const listingLinks = marketplaceStatuses
     .filter((l) => l.listed && l.slug)
     .map((l) => `/marketplace/${l.slug}`);
+
+  const lifecycle = buildLifecycleView({
+    agents: agentStats.map((a) => {
+      const mk = marketplaceStatuses.find((m) => m.slug === a.slug);
+      return {
+        name: a.name,
+        slug: a.slug,
+        status: a.status,
+        eval_total: a.stats.eval_total,
+        eval_meets_publish_gate: a.stats.eval_meets_publish_gate,
+        listed: Boolean(mk?.listed),
+        priced: ["per_usage", "per_outcome"].includes(String(mk?.priceModel ?? "")),
+      };
+    }),
+    earningsAccruedUsd: Math.round((earningsMicros / 1_000_000) * 100) / 100,
+    walletBalanceUsd: Math.round((walletMicros / 1_000_000) * 100) / 100,
+  });
 
   // 6. Compose response. Designed to be self-explanatory to an LLM:
   // each section answers a question Claude Code would otherwise have
@@ -309,6 +327,9 @@ export async function GET(request: Request) {
       rungs: builderLadder.rungs,
       wallet_balance_usd: Math.round((walletMicros / 1_000_000) * 100) / 100,
       listing_links: listingLinks,
+      earnings: lifecycle.earnings,
+      agents: lifecycle.agents,
+      fund_hint: lifecycle.fund_hint,
     },
   });
 }
