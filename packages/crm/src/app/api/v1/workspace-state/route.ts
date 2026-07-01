@@ -31,6 +31,9 @@ import {
   workspaceSecrets,
 } from "@/db/schema";
 import { guardApiRequest } from "@/lib/api/guard";
+import { buildBuilderLadder, deriveBuilderSignals } from "@/lib/build/builder-ladder";
+import { loadAgentMarketplaceStatusForOrg } from "@/lib/marketplace/agent-marketplace-status";
+import { getWalletBalanceMicros } from "@/lib/build/wallet-store";
 
 export async function GET(request: Request) {
   const guard = await guardApiRequest(request);
@@ -179,24 +182,32 @@ export async function GET(request: Request) {
     }),
   );
 
-  // 4. High-level counts (single round-trip via parallel awaits)
-  const [contactsCount, bookingsCount, dealsCount] = await Promise.all([
-    db
-      .select({ n: count() })
-      .from(contacts)
-      .where(eq(contacts.orgId, orgId))
-      .then((r) => Number(r[0]?.n ?? 0)),
-    db
-      .select({ n: count() })
-      .from(bookings)
-      .where(eq(bookings.orgId, orgId))
-      .then((r) => Number(r[0]?.n ?? 0)),
-    db
-      .select({ n: count() })
-      .from(deals)
-      .where(eq(deals.orgId, orgId))
-      .then((r) => Number(r[0]?.n ?? 0)),
-  ]);
+  // 4. High-level counts + builder-lens reads (single round-trip via parallel
+  // awaits). The two builder reads (marketplace status + wallet balance) fold in
+  // here so they add no wall-clock latency, and are fail-soft so the `builder`
+  // block always renders.
+  const [contactsCount, bookingsCount, dealsCount, marketplaceStatuses, walletMicros] =
+    await Promise.all([
+      db
+        .select({ n: count() })
+        .from(contacts)
+        .where(eq(contacts.orgId, orgId))
+        .then((r) => Number(r[0]?.n ?? 0)),
+      db
+        .select({ n: count() })
+        .from(bookings)
+        .where(eq(bookings.orgId, orgId))
+        .then((r) => Number(r[0]?.n ?? 0)),
+      db
+        .select({ n: count() })
+        .from(deals)
+        .where(eq(deals.orgId, orgId))
+        .then((r) => Number(r[0]?.n ?? 0)),
+      loadAgentMarketplaceStatusForOrg(orgId)
+        .then((m) => [...m.values()])
+        .catch(() => []),
+      getWalletBalanceMicros(orgId).catch(() => 0),
+    ]);
 
   const baseDomain =
     process.env.WORKSPACE_BASE_DOMAIN?.trim() || "app.seldonframe.com";
@@ -220,6 +231,27 @@ export async function GET(request: Request) {
       .limit(1);
     composioConfigured = secretRow.length > 0;
   }
+
+  // Builder lens (additive): compute the build→sell ladder from data we already
+  // have (agentStats + the marketplace/wallet reads folded into the Promise.all
+  // above). Attached as the `builder` block; the SKILL directs builder-agents to
+  // follow it and ignore the operator counts/next_steps. Operators just ignore it.
+  const builderLadder = buildBuilderLadder(
+    deriveBuilderSignals({
+      agentCount: agentRows.length,
+      agentStats: agentStats.map((a) => ({
+        eval_total: a.stats.eval_total,
+        eval_meets_publish_gate: a.stats.eval_meets_publish_gate,
+      })),
+      marketplaceStatuses: marketplaceStatuses.map((l) => ({
+        listed: l.listed,
+        priceModel: l.priceModel,
+      })),
+    }),
+  );
+  const listingLinks = marketplaceStatuses
+    .filter((l) => l.listed && l.slug)
+    .map((l) => `/marketplace/${l.slug}`);
 
   // 6. Compose response. Designed to be self-explanatory to an LLM:
   // each section answers a question Claude Code would otherwise have
@@ -266,6 +298,18 @@ export async function GET(request: Request) {
           a.status !== "live" && (a.stats.eval_total === 0 || !a.stats.eval_meets_publish_gate),
       ),
     }),
+    // Builder lens (additive) — see the computation above. The operator fields
+    // (counts, integrations, next_steps) are untouched; a builder-agent follows
+    // this block and, per the SKILL, ignores the operator furniture.
+    builder: {
+      goal: "Build and sell an AI agent — from your IDE.",
+      current_rung: builderLadder.currentRung,
+      next_action: builderLadder.nextAction,
+      progress: builderLadder.progress,
+      rungs: builderLadder.rungs,
+      wallet_balance_usd: Math.round((walletMicros / 1_000_000) * 100) / 100,
+      listing_links: listingLinks,
+    },
   });
 }
 
