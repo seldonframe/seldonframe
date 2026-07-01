@@ -17,6 +17,12 @@
 // isPhoneInUseError), passing the bearer-resolved orgId explicitly. This is
 // byte-for-byte the same business logic (ownership guard, needs-number gate,
 // phone-in-use mapping) — only the org-resolution seam differs.
+//
+// Orchestration: the core control flow (flag gate → resolve source → readiness
+// → phone → go-live) lives in `runDeploy` (@/lib/deployments/deploy-orchestrator),
+// DI'd over the seams below, so it's unit-testable with fakes. This file wires
+// the REAL deps (this DB, this Twilio, this store) and maps the result to the
+// route's JSON contract, UNCHANGED from before the extraction.
 
 export const runtime = "nodejs";
 
@@ -34,6 +40,7 @@ import { resolveDeployReadiness } from "@/lib/deployments/deploy-readiness-deps"
 import {
   getAgentTemplate,
   resolveUniqueTemplateSlug,
+  surfaceForType,
   type AgentTemplateType,
 } from "@/lib/agent-templates/store";
 import { getDeployment, createDeployment, updateDeployment } from "@/lib/deployments/store";
@@ -44,25 +51,26 @@ import { provisionVoiceNumber } from "@/lib/telephony/provision-voice-number";
 import {
   resolveOrCreateBuyerDeployment,
   buildDefaultResolveBuyerDeploymentDeps,
+  surfaceForAgentType,
   type BuyerListing,
 } from "@/lib/marketplace/buyer/buyer-deployment";
 import { buildInstalledAgentTemplate, type AgentListingForBuyer } from "@/lib/marketplace/agent-listings";
 import { goLiveBlockers } from "@/lib/marketplace/buyer/buyer-onboarding";
 import { normalizeBlueprintForOnboarding, buildOnboardingSteps } from "@/lib/marketplace/onboarding/steps";
 import { markStepDone, emptyProgress } from "@/lib/marketplace/onboarding/progress";
+import {
+  runDeploy,
+  statusForDeployResult,
+  type ResolvedSource,
+  type ApplyPhoneResult,
+  type RunDeployDeps,
+} from "@/lib/deployments/deploy-orchestrator";
 
 function deployEnabled(): boolean {
   return process.env.SF_DEPLOY_ENABLED === "1" || process.env.SF_DEPLOY_ENABLED === "true";
 }
 
 // ─── source resolution (idempotent) ─────────────────────────────────────────
-
-type ResolvedSource =
-  | { ok: true; deployment: Deployment; templateType: string; blueprint: AgentBlueprint }
-  | {
-      ok: false;
-      reason: "invalid_source" | "template_not_found" | "listing_not_found" | "invalid_input";
-    };
 
 /** Self-built path: an existing agent_templates row the caller already owns.
  *  Idempotent — reuses any non-canceled deployment already resolved for
@@ -93,6 +101,10 @@ async function resolveTemplateSource(orgId: string, templateId: string): Promise
     builderOrgId: orgId,
     agentTemplateId: templateId,
     clientName: template.name,
+    // Without this, createDeployment defaults surface to "phone" even for a chat
+    // template (I-1) — reuse the SAME agentType→surface mapping the buyer path
+    // uses so a self-built chat deployment is correctly reached via "embed".
+    surface: surfaceForAgentType(template.type),
   });
   if (!created.ok) {
     // "unauthorized" can't happen (orgId is already verified non-empty above);
@@ -202,10 +214,6 @@ async function resolveListingSource(orgId: string, listingSlug: string): Promise
 //     provisionDeploymentNumberAction, org-parameterized instead of session-
 //     gated — see the file-header note) ──────────────────────────────────────
 
-type ApplyPhoneResult =
-  | { ok: true; deployment: Deployment; outbound?: true }
-  | { ok: false; reason: string; missing?: ("twilio" | "trunk")[] };
-
 async function applyForwardedNumber(
   deployment: Deployment,
   templateType: string,
@@ -214,7 +222,7 @@ async function applyForwardedNumber(
 ): Promise<ApplyPhoneResult> {
   if (!isE164(phoneNumber)) return { ok: false, reason: "invalid_phone" };
 
-  const needsNumber = deploymentNeedsNumber(blueprint.trigger, templateType);
+  const needsNumber = deploymentNeedsNumber(blueprint.trigger, surfaceForType(templateType as AgentTemplateType));
   try {
     const result = await updateDeployment({
       id: deployment.id,
@@ -239,7 +247,7 @@ async function applyProvisionedNumber(
 ): Promise<ApplyPhoneResult> {
   if (!isAreaCode(areaCode)) return { ok: false, reason: "invalid_area_code" };
 
-  const needsNumber = deploymentNeedsNumber(blueprint.trigger, templateType);
+  const needsNumber = deploymentNeedsNumber(blueprint.trigger, surfaceForType(templateType as AgentTemplateType));
   if (!needsNumber) {
     const activated = await updateDeployment({ id: deployment.id, patch: { status: "active" } });
     if (!activated.ok) return { ok: false, reason: activated.error };
@@ -292,7 +300,17 @@ async function applyGoLive(
 ): Promise<{ ok: true; deployment: Deployment } | { ok: false; reason: string }> {
   const normalized = normalizeBlueprintForOnboarding(templateType, blueprint);
   const steps = buildOnboardingSteps(normalized);
-  const progress = deployment.customization?.onboardingProgress ?? emptyProgress();
+  let progress = deployment.customization?.onboardingProgress ?? emptyProgress();
+  // This route never routes through the buyer wizard's markStepDoneAction("phone")
+  // — applyForwardedNumber/applyProvisionedNumber attach deployment.phoneNumber
+  // directly. So an attached number must count as the `phone` step being done for
+  // THIS go-live check, or goLiveBlockers wrongly reports it unmet (C-1: a voice
+  // deploy with a freshly-attached number was permanently stuck "blocked"). Mirror
+  // the wizard's markStepDone mechanism rather than special-casing the blocker
+  // list — chat-only deploys never populate phoneNumber, so they're unaffected.
+  if (deployment.phoneNumber) {
+    progress = markStepDone(progress, "phone");
+  }
   const blockers = goLiveBlockers(steps, progress);
   if (blockers.length > 0) {
     return { ok: false, reason: "blocked" };
@@ -312,89 +330,45 @@ async function applyGoLive(
 
 // ─── the route ───────────────────────────────────────────────────────────────
 
+/** Wire the REAL seams (this DB, this Twilio, this store) for `runDeploy`. */
+function buildRealRunDeployDeps(): RunDeployDeps {
+  return {
+    deployEnabled,
+    resolveSource: async (orgId, body) => {
+      const templateId = body.source?.templateId?.trim();
+      const listingSlug = body.source?.listingSlug?.trim();
+      if (templateId) return resolveTemplateSource(orgId, templateId);
+      if (listingSlug) return resolveListingSource(orgId, listingSlug);
+      return { ok: false, reason: "invalid_source" };
+    },
+    resolveDeployReadiness: ({ orgId, templateType, blueprint, deployment }) =>
+      resolveDeployReadiness({ orgId, templateType, blueprint, deployment }),
+    deploymentNeedsNumber: (blueprint, templateType) =>
+      deploymentNeedsNumber(blueprint.trigger, surfaceForType(templateType as AgentTemplateType)),
+    applyPhone: (orgId, deployment, templateType, blueprint, phone) =>
+      phone.mode === "forward"
+        ? applyForwardedNumber(deployment, templateType, blueprint, phone.number)
+        : applyProvisionedNumber(orgId, deployment, templateType, blueprint, phone.areaCode),
+    wizardUrlFor: (wizardPath) => {
+      const base = process.env.NEXT_PUBLIC_APP_URL?.trim() || "https://app.seldonframe.com";
+      return `${base}${wizardPath}`;
+    },
+    applyGoLive: (deployment, templateType, blueprint) =>
+      applyGoLive(deployment, templateType, blueprint),
+  };
+}
+
 export async function POST(request: Request) {
   const guard = await guardApiRequest(request);
   if ("error" in guard) return guard.error;
   const orgId = guard.orgId;
   if (!orgId) return NextResponse.json({ ok: false, reason: "unauthorized" }, { status: 401 });
-  if (!deployEnabled()) return NextResponse.json({ ok: true, status: "disabled" });
 
   const body = (await request.json().catch(() => ({}))) as {
     source?: { templateId?: string; listingSlug?: string };
     phone?: { mode: "forward"; number: string } | { mode: "provision"; areaCode: string };
   };
 
-  const templateId = body.source?.templateId?.trim();
-  const listingSlug = body.source?.listingSlug?.trim();
-
-  let resolved: ResolvedSource;
-  if (templateId) {
-    resolved = await resolveTemplateSource(orgId, templateId);
-  } else if (listingSlug) {
-    resolved = await resolveListingSource(orgId, listingSlug);
-  } else {
-    return NextResponse.json({ ok: false, reason: "invalid_source" }, { status: 400 });
-  }
-
-  if (!resolved.ok) {
-    const status =
-      resolved.reason === "invalid_source" || resolved.reason === "invalid_input" ? 400 : 404;
-    return NextResponse.json({ ok: false, reason: resolved.reason }, { status });
-  }
-
-  let { deployment } = resolved;
-  const { templateType, blueprint } = resolved;
-
-  // 2. Readiness.
-  const readiness = await resolveDeployReadiness({
-    orgId,
-    templateType,
-    blueprint,
-    deployment,
-  });
-  if (!readiness.ready) {
-    const base = process.env.NEXT_PUBLIC_APP_URL?.trim() || "https://app.seldonframe.com";
-    return NextResponse.json({
-      ok: true,
-      status: "needs_connect",
-      deploymentId: deployment.id,
-      requirements: readiness.requirements,
-      missing: readiness.missing,
-      wizardUrl: `${base}${readiness.wizardPath}`,
-    });
-  }
-
-  // 3. Ready → apply phone (forward → paste-a-number; provision → get-a-number)
-  //    then go live. A deployment that already has its number (or needs none)
-  //    can skip straight to go-live even with no `phone` in the body.
-  const needsNumber = deploymentNeedsNumber(blueprint.trigger, templateType);
-  if (needsNumber && !deployment.phoneNumber) {
-    if (!body.phone) {
-      return NextResponse.json({ ok: false, reason: "phone_required" }, { status: 400 });
-    }
-    const phoneResult =
-      body.phone.mode === "forward"
-        ? await applyForwardedNumber(deployment, templateType, blueprint, body.phone.number)
-        : await applyProvisionedNumber(orgId, deployment, templateType, blueprint, body.phone.areaCode);
-
-    if (!phoneResult.ok) {
-      return NextResponse.json(
-        { ok: false, reason: phoneResult.reason, missing: phoneResult.missing },
-        { status: 400 },
-      );
-    }
-    deployment = phoneResult.deployment;
-  }
-
-  const goLive = await applyGoLive(deployment, templateType, blueprint);
-  if (!goLive.ok) {
-    return NextResponse.json({ ok: false, reason: goLive.reason }, { status: 400 });
-  }
-
-  return NextResponse.json({
-    ok: true,
-    status: "live",
-    deploymentId: goLive.deployment.id,
-    phoneNumber: goLive.deployment.phoneNumber ?? null,
-  });
+  const result = await runDeploy({ orgId, body }, buildRealRunDeployDeps());
+  return NextResponse.json(result, { status: statusForDeployResult(result) });
 }

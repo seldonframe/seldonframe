@@ -62,8 +62,10 @@ export type PlanBuyerDeploymentInput = {
 /** Map a template type → the deployment surface it's reached on. A voice agent
  *  answers a PHONE; a chat agent is embedded. Mirrors the deployment surface
  *  vocabulary (phone | embed | link | sms | email), distinct from the agent's
- *  channel. */
-function surfaceForAgentType(agentType: string | null | undefined): DeploymentSurface {
+ *  channel. Exported so other deployment-creation call sites (e.g. the
+ *  self-serve deploy route's self-built path) can reuse the SAME mapping rather
+ *  than reinvent it or fall through to createDeployment's phone default. */
+export function surfaceForAgentType(agentType: string | null | undefined): DeploymentSurface {
   return agentType === "chat_assistant" ? "embed" : "phone";
 }
 
