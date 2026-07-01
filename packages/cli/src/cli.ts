@@ -11,7 +11,7 @@ import { HELP_TEXT } from "./lib/help.js";
 import { getVersion } from "./lib/version.js";
 import { consoleWriter, type Writer } from "./lib/output.js";
 import { ApiClient } from "./lib/api-client.js";
-import { processConfigEnv, loadActiveKey } from "./lib/key-store.js";
+import { processConfigEnv, resolveApiKey, addKey, loadStore, saveStore } from "./lib/key-store.js";
 import { runKeysCommand } from "./commands/keys.js";
 import {
   runDiscoverCommand,
@@ -19,14 +19,15 @@ import {
   runRunCommand,
   runWalletCommand,
 } from "./commands/marketplace.js";
-import { errorToMessage } from "./lib/io.js";
+import { runLoginCommand } from "./commands/login.js";
+import { errorToMessage, promptLine } from "./lib/io.js";
 
 /** Build an ApiClient from the active stored key + the (overridable) API base. */
 function buildClient(): ApiClient {
   const cfg = processConfigEnv();
   return new ApiClient({
     baseUrl: process.env.SELDONFRAME_API_BASE_URL ?? "https://app.seldonframe.com",
-    apiKey: loadActiveKey(cfg),
+    apiKey: resolveApiKey(cfg),
   });
 }
 
@@ -46,6 +47,25 @@ export async function dispatch(args: ParsedArgs, writer: Writer): Promise<number
   switch (args.command) {
     case "keys":
       return runKeysCommand(args, writer, processConfigEnv());
+    case "login":
+      return runLoginCommand(args, writer, {
+        promptKey: promptLine,
+        verifyKey: async (key) => {
+          try {
+            await new ApiClient({
+              baseUrl: process.env.SELDONFRAME_API_BASE_URL ?? "https://app.seldonframe.com",
+              apiKey: key,
+            }).walletBalance();
+            return true;
+          } catch {
+            return false;
+          }
+        },
+        storeKey: (label, key) => {
+          const cfg = processConfigEnv();
+          saveStore(addKey(loadStore(cfg), label, key), cfg);
+        },
+      });
     case "discover":
       return runDiscoverCommand(args, buildClient(), writer);
     case "inspect":

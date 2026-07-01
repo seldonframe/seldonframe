@@ -7,6 +7,7 @@ USAGE
   seldonframe <command> [options] [--json]
 
 COMMANDS
+  login                                Paste + verify your key once (easiest setup)
   keys add --label <l> --key <wst_…>   Store a workspace bearer key (first = active)
   keys list                            List stored keys (masked)
   keys activate <label>                Make a stored key the active one
@@ -27,10 +28,15 @@ GLOBAL OPTIONS
 
 AUTH
   Commands that hit the API use your ACTIVE key as: Authorization: Bearer wst_…
-  Mint a key at https://app.seldonframe.com/build/keys, then:
+  Easiest — paste + verify once:
+    seldonframe login
+  Or store it directly (mint at https://app.seldonframe.com/build/keys):
     seldonframe keys add --label main --key wst_…
+  Or skip storage with the env var (great for CI / one-off):
+    SELDONFRAME_API_KEY=wst_… seldonframe wallet balance
 
 ENVIRONMENT
+  SELDONFRAME_API_KEY        Use this key instead of the stored one (zero-setup / CI)
   SELDONFRAME_API_BASE_URL   Override the API base (default https://app.seldonframe.com)
   SELDONFRAME_CONFIG_DIR     Override where keys are stored
 

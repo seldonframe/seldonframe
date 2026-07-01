@@ -114,3 +114,16 @@ export function saveStore(store: KeyStoreData, cfg: ConfigEnv = processConfigEnv
 export function loadActiveKey(cfg: ConfigEnv = processConfigEnv()): string | null {
   return activeKey(loadStore(cfg));
 }
+
+/**
+ * The API key the client should actually use. `SELDONFRAME_API_KEY` (explicit,
+ * ephemeral — zero-setup, ideal for CI or a one-off shell) takes precedence over
+ * the stored active key. This lets a builder run any command with just
+ * `SELDONFRAME_API_KEY=wst_… seldonframe …` — no `keys add`, nothing to mangle.
+ * Pure over the injected cfg.env.
+ */
+export function resolveApiKey(cfg: ConfigEnv = processConfigEnv()): string | null {
+  const fromEnv = cfg.env.SELDONFRAME_API_KEY?.trim();
+  if (fromEnv) return fromEnv;
+  return activeKey(loadStore(cfg));
+}

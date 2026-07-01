@@ -3,7 +3,22 @@
 // HONEST hint. Kept thin; the parsing core (parseInputObject) is pure + tested.
 
 import { readFileSync } from "node:fs";
+import { createInterface } from "node:readline";
 import { ApiError, NoKeyError, NetworkError } from "./api-client.js";
+
+/** Read a single line from stdin behind a prompt (echoed). Impure. Used by
+ *  `login` so a builder pastes their key into a prompt — far more reliable than
+ *  a shell arg (no quote/truncation gremlins), and the echo lets them SEE the
+ *  full key landed. Resolves the trimmed line. */
+export function promptLine(question: string): Promise<string> {
+  const rl = createInterface({ input: process.stdin, output: process.stdout });
+  return new Promise((resolve) => {
+    rl.question(question, (answer) => {
+      rl.close();
+      resolve(answer);
+    });
+  });
+}
 
 /** Parse a JSON object string into a record. Pure. Throws a clear message when
  *  the JSON is invalid or isn't an object. */
