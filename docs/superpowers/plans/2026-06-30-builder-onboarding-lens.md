@@ -580,4 +580,12 @@ git push origin HEAD:main
 
 ## Review
 
-_(Fill in after execution: which tasks landed, whether Task 4 was deferred, the live-smoke result — paste `set up https://seldonframe.com/SKILL.md` into a Claude Code OUTSIDE the repo and confirm the agent reads the `builder` block and drives the ladder instead of the operator dashboard.)_
+**Executed inline 2026-06-30.** Tasks 1–3 landed (per-task commits); Task 4 **deferred**; Task 5 verify passed.
+
+- **Task 1** — `builder-ladder.ts` (`buildBuilderLadder` + `deriveBuilderSignals`), 10 tests. TDD caught a real bug: flipping the terminal `observe` rung to "current" dropped it from the status-based done count (5/6 not 6/6) → fixed by counting from the `done` map before the flip.
+- **Task 2** — additive `builder` block on `get_workspace_state`; the marketplace-status + wallet reads fold into the existing `Promise.all` (no added latency, fail-soft); `counts`/`integrations`/`next_steps` untouched.
+- **Task 3** — SKILL.md "Start here" director section: call `get_workspace_state` first, follow the `builder` block, ignore counts/operator next_steps, 401→reconnect.
+- **Task 4 — DEFERRED.** `mcp.seldonframe.com/v1` probes **404** on a bare GET (ambiguous — MCP Streamable-HTTP endpoints often 404 without a POST handshake), while the builder connected successfully via **npx stdio** (`npx @seldonframe/mcp`). Rewriting the connect docs on a guess risks documenting a non-working recipe — needs a call on which transport works end-to-end, then unify SKILL.md + developer-key + docs + QUICKSTART. **Open.**
+- **Task 5** — 44 build specs pass, typecheck clean (only stale `.next/validator`), check:use-server clean, `pnpm build` green.
+
+**Live-smoke (owner):** paste `set up https://seldonframe.com/SKILL.md` into a Claude Code OUTSIDE the repo → the agent should read the `builder` block and drive the ladder (build → … → observe), not the operator dashboard.
