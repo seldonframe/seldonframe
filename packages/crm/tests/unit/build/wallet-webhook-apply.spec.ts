@@ -59,6 +59,46 @@ describe("applyWalletTopupWebhook — credits", () => {
   });
 });
 
+describe("applyWalletTopupWebhook — onTopupCredited hook seam (Task 7, R4)", () => {
+  test("a THROWING hook → the credit still succeeds (same 200/credited:true result)", async () => {
+    const { deps, credited } = makeDeps({
+      onTopupCredited: async () => {
+        throw new Error("reactivate blew up");
+      },
+    });
+    const res = await applyWalletTopupWebhook(GOOD_INPUT, deps);
+    assert.equal(res.status, 200);
+    assert.equal(res.body.credited, true);
+    assert.equal(credited.length, 1);
+  });
+
+  test("a failed/ok:false credit → the hook is NEVER called", async () => {
+    let hookCalls = 0;
+    const { deps } = makeDeps({
+      credit: async () => ({ ok: false }),
+      onTopupCredited: async () => {
+        hookCalls += 1;
+      },
+    });
+    const res = await applyWalletTopupWebhook(GOOD_INPUT, deps);
+    assert.equal(res.status, 200);
+    assert.equal(res.body.credited, true); // "credited" reflects the decision reaching the credit call, not its outcome
+    assert.equal(hookCalls, 0);
+  });
+
+  test("a successful credit → the hook is called exactly once with the decision's orgId", async () => {
+    const calls: string[] = [];
+    const { deps } = makeDeps({
+      onTopupCredited: async (orgId) => {
+        calls.push(orgId);
+      },
+    });
+    const res = await applyWalletTopupWebhook(GOOD_INPUT, deps);
+    assert.equal(res.status, 200);
+    assert.deepEqual(calls, ["org-1"]);
+  });
+});
+
 describe("applyWalletTopupWebhook — fail-closed / no-ops", () => {
   test("missing secret → 400, NO credit", async () => {
     const { deps, credited } = makeDeps();

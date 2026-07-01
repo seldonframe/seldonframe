@@ -1374,3 +1374,45 @@ export async function markDeploymentScheduleFired(
     })
     .where(eq(deployments.id, deploymentId));
 }
+
+// ─── listSfManagedDeploymentsForRent (Task 7 — the monthly rent cron) ───────
+
+/** One row the rent cron plans against — see planMonthlyRent
+ *  (lib/telephony/rent-planner.ts). */
+export type SfManagedRentDeployment = {
+  deploymentId: string;
+  orgId: string;
+  delinquentSince: string | null;
+};
+
+/**
+ * List every ACTIVE deployment whose number was acquired via the SF-managed
+ * (Tier 0) path — `status = 'active' AND numberOrigin = 'sf_managed'` — with
+ * its builder orgId and current `delinquentSince` marker, for the monthly
+ * rent cron's planMonthlyRent input. Mirrors listScheduledAgentDeployments's
+ * shape (a plain `where` filter, lazy DB import, no DI — this runs only from
+ * the cron route). Reuses getDelinquentSince (delinquency.ts) to read the
+ * reserved customization key so both call sites agree on ONE parsing rule.
+ * Returns [] when there are none.
+ */
+export async function listSfManagedDeploymentsForRent(): Promise<SfManagedRentDeployment[]> {
+  const { db } = await import("@/db");
+  const { deployments } = await import("@/db/schema/deployments");
+  const { and, eq } = await import("drizzle-orm");
+  const { getDelinquentSince } = await import("@/lib/telephony/delinquency");
+
+  const rows = await db
+    .select({
+      id: deployments.id,
+      builderOrgId: deployments.builderOrgId,
+      customization: deployments.customization,
+    })
+    .from(deployments)
+    .where(and(eq(deployments.status, "active"), eq(deployments.numberOrigin, "sf_managed")));
+
+  return rows.map((r) => ({
+    deploymentId: r.id,
+    orgId: r.builderOrgId,
+    delinquentSince: getDelinquentSince({ customization: r.customization }),
+  }));
+}

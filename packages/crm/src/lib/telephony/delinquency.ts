@@ -131,3 +131,58 @@ export async function listDelinquentSfManagedDeploymentIds(orgId: string): Promi
 
   return rows.filter((r) => getDelinquentSince({ customization: r.customization })).map((r) => r.id);
 }
+
+// ─── Org-scoped stamp (the usage-shortfall webhook's write side — R3) ───────
+
+/**
+ * Stamp `delinquentSince` (now, only where unset) on every ACTIVE sf_managed
+ * deployment for `orgId`. This is the reactivation-hole fix (Task 6 review,
+ * Important #1): the OpenAI webhook's `onShortfall` hook used to only
+ * suspend the builder's Twilio subaccount on a metered-usage shortfall —
+ * never stamping a marker — so a later top-up (whose reactivate hook keys
+ * off `listDelinquentSfManagedDeploymentIds`, i.e. the marker) had nothing to
+ * find and never reactivated a usage-suspended org. By stamping here too, the
+ * SAME top-up hook that already reactivates rent-delinquent orgs (Task 6)
+ * becomes the universal reactivator for BOTH failure modes (unpaid rent from
+ * this cron, and a mid-month usage shortfall from the webhook).
+ *
+ * Scoped to `status = 'active'` (not merely `numberOrigin = 'sf_managed'`) —
+ * a canceled/paused deployment has no subaccount to reactivate later, so
+ * there is nothing worth marking on it. "Only where unset": re-stamping an
+ * already-delinquent deployment would reset its 30-day release clock (see
+ * planMonthlyRent's grace window in rent-planner.ts), which a repeat
+ * shortfall on an already-marked deployment must NOT do — the marker records
+ * the FIRST unpaid moment, not the most recent one.
+ *
+ * Fail-soft: never throws. The caller (the webhook's onShortfall) already
+ * runs under meterCallEnd's own try/catch, but this is belt-and-suspenders
+ * exactly like every other hook in this module. Lazy DB import (real path
+ * only).
+ */
+export async function stampDelinquencyForOrg(orgId: string): Promise<void> {
+  if (!orgId) return;
+  try {
+    const { db } = await import("@/db");
+    const { deployments } = await import("@/db/schema/deployments");
+    const { and, eq } = await import("drizzle-orm");
+
+    const rows = await db
+      .select({ id: deployments.id, customization: deployments.customization })
+      .from(deployments)
+      .where(
+        and(
+          eq(deployments.builderOrgId, orgId),
+          eq(deployments.numberOrigin, "sf_managed"),
+          eq(deployments.status, "active"),
+        ),
+      );
+
+    const now = new Date();
+    for (const row of rows) {
+      if (getDelinquentSince({ customization: row.customization })) continue; // already marked — preserve its original timestamp
+      await setDelinquentSince(row.id, now);
+    }
+  } catch {
+    // fail-soft — never let a stamp failure crash the shortfall hook's caller
+  }
+}

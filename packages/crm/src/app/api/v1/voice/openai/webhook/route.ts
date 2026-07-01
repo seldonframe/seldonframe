@@ -92,6 +92,13 @@ import { getWalletBalanceMicros, debitVoiceUsage } from "@/lib/build/wallet-stor
 // try/catch (voice-metering-orchestration.ts), so this cannot throw into the
 // call teardown path.
 import { suspendBuilderSubaccount, buildSfManagedDeps } from "@/lib/telephony/sf-managed";
+// Voice deploy + metered billing (Task 7, R3 — closes the reactivation hole
+// flagged in the Task 6 review): stamp `delinquentSince` on the org's active
+// sf_managed deployments BEFORE suspending, so a later top-up (whose
+// reactivate hook keys off this exact marker — wallet-webhook-apply.ts) also
+// reactivates an org suspended for a mid-month USAGE shortfall, not just one
+// suspended by the rent cron. Fail-soft internally (never throws).
+import { stampDelinquencyForOrg } from "@/lib/telephony/delinquency";
 
 // Node runtime (not edge) — we use node:crypto for HMAC and the Node global
 // WebSocket/undici options bag for the realtime control socket.
@@ -471,6 +478,12 @@ export async function POST(request: Request): Promise<Response> {
                     debitVoiceUsage,
                     onShortfall: async (orgId) => {
                       console.warn("[voice-billing] shortfall", orgId);
+                      // R3: stamp BEFORE suspending — the top-up hook's
+                      // reactivate logic keys off this marker, so an org
+                      // suspended here for a usage shortfall (not just one
+                      // suspended by the rent cron) also gets automatically
+                      // reactivated on its next top-up.
+                      await stampDelinquencyForOrg(orgId);
                       await suspendBuilderSubaccount(orgId, buildSfManagedDeps());
                     },
                   },

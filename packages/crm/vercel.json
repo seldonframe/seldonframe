@@ -46,6 +46,10 @@
     {
       "path": "/api/cron/reconcile-workspace-billing",
       "schedule": "30 2 * * *"
+    },
+    {
+      "path": "/api/cron/voice-rent",
+      "schedule": "0 6 1 * *"
     }
   ]
 }
