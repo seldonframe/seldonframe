@@ -38,6 +38,11 @@ import {
   acceptCall,
   runVoiceCall,
   buildPostCallSmsBody,
+  // Voice deploy + metered billing (Task 4, F1 fix) — end the already-accepted
+  // SIP leg when a metered call is blocked for low wallet balance, instead of
+  // falling through to the un-metered workspace fallback (unbounded free
+  // platform voice on a $0 wallet). Best-effort, never throws.
+  hangupCall,
 } from "@/lib/agents/voice/openai-realtime";
 import {
   resolveVoiceContextByNumber,
@@ -294,6 +299,48 @@ export async function POST(request: Request): Promise<Response> {
               { severity: "warn" },
             );
           }
+        }
+
+        // Voice deploy + metered billing (Task 4, F1 cost-leak fix) — a metered
+        // call blocked for low wallet balance must END here, NOT fall through to
+        // the un-metered workspace fallback below. The SIP leg was already
+        // accepted unconditionally (see the giant comment on `after()`), so
+        // falling through would run a full tool-less receptionist conversation
+        // (up to MAX_CALL_MS ≈ 4 min) on the PLATFORM key that is NEVER debited
+        // (metering lives only inside the skipped `if (dctx)` block) — i.e. a
+        // $0-wallet builder could trigger unbounded free platform voice minutes
+        // on repeat calls, exactly the abuse the gate exists to prevent. So we
+        // tear down the accepted leg (best-effort — hangupCall never throws) and
+        // return the SAME success ACK the route always returns (the webhook
+        // delivery only needs the 2xx; the call is ending at the SIP layer). This
+        // branch is reachable ONLY when `meteredGateBlocked === true`, which is
+        // ONLY ever set inside `if (metered)` above — so the flag-off path, the
+        // funded metered path, and the workspace fallback are all untouched.
+        if (meteredGateBlocked) {
+          try {
+            await hangupCall({ callId, apiKey });
+            logEvent("voice_call_low_balance_hangup", {
+              call_id: callId,
+              deployment_id: deployment.id,
+              builder_org_id: deployment.builderOrgId,
+            });
+            console.warn("[voice-billing] low_balance_hangup", {
+              orgId: deployment.builderOrgId,
+              callId,
+            });
+          } catch (err) {
+            logEvent(
+              "voice_call_low_balance_hangup_error",
+              {
+                call_id: callId,
+                deployment_id: deployment.id,
+                builder_org_id: deployment.builderOrgId,
+                error: err instanceof Error ? err.message : String(err),
+              },
+              { severity: "error" },
+            );
+          }
+          return; // do NOT fall through to the un-metered workspace fallback.
         }
 
         // Compose the persona from the agent TEMPLATE blueprint + the builder
