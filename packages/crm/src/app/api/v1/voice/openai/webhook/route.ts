@@ -68,6 +68,18 @@ import {
   resolveDeploymentRuntimeKey,
   buildDefaultDeploymentRuntimeKeyDeps,
 } from "@/lib/agents/deployment-ai-key-runtime";
+// Voice deploy + metered billing (Task 4) — strictly ADDITIVE, flag-gated via
+// SF_VOICE_MANAGED. isMeteredCall()/gateMeteredAccept()/meterCallEnd() are the
+// pure DI "money brain" (Task 3); getWalletBalanceMicros/debitVoiceUsage are the
+// real DB deps (Task 2). When the flag is off (or on the legacy workspace path,
+// which never reaches this branch), `metered` is false and every new branch
+// below is a no-op — byte-for-byte the pre-Task-4 behavior.
+import {
+  isMeteredCall,
+  gateMeteredAccept,
+  meterCallEnd,
+} from "@/lib/telephony/voice-metering-orchestration";
+import { getWalletBalanceMicros, debitVoiceUsage } from "@/lib/build/wallet-store";
 
 // Node runtime (not edge) — we use node:crypto for HMAC and the Node global
 // WebSocket/undici options bag for the realtime control socket.
@@ -243,21 +255,65 @@ export async function POST(request: Request): Promise<Response> {
           agent_template_id: deployment.agentTemplateId,
         });
 
+        // Voice deploy + metered billing (Task 4) — this call is on the
+        // deployment path (never the legacy workspace path below), so it's a
+        // metering CANDIDATE. `metered` is false whenever SF_VOICE_MANAGED is
+        // off, making every branch below a no-op — byte-for-byte the pre-Task-4
+        // behavior. NOTE: the SIP leg was already accepted (unconditionally,
+        // before the deployment even resolved) — the giant comment above
+        // `after()` explains why accept and the WS-open in runVoiceCall must
+        // stay sub-second apart, so we cannot defer/skip THAT accept here.
+        // "Do NOT accept the call" therefore means: do not let THIS deployment
+        // serve it — skip straight to the EXACT SAME `dctx === null` fallthrough
+        // a compose failure already takes today (a few lines down), which
+        // resolves the workspace fallback and still answers with a greeting
+        // persona rather than dropping the call — i.e. today's missed-call
+        // handling, unchanged.
+        const metered = isMeteredCall({
+          env: process.env,
+          viaDeployment: true,
+          perOrgWebhook: false,
+        });
+
+        let meteredGateBlocked = false;
+        if (metered) {
+          const gate = await gateMeteredAccept(deployment.builderOrgId, {
+            env: process.env,
+            getBalanceMicros: getWalletBalanceMicros,
+          });
+          if (!gate.accept) {
+            meteredGateBlocked = true;
+            logEvent(
+              "voice_low_balance",
+              {
+                call_id: callId,
+                deployment_id: deployment.id,
+                builder_org_id: deployment.builderOrgId,
+                reason: gate.reason,
+              },
+              { severity: "warn" },
+            );
+          }
+        }
+
         // Compose the persona from the agent TEMPLATE blueprint + the builder
         // org's soul/timezone/intake; scope tools to the builder org (real
-        // booking). Null → the template is missing; fall through to the existing
-        // path rather than dropping the call.
-        const dctx = await loadDeploymentVoiceContext({
-          deployment,
-          now: new Date(),
-        }).catch((err) => {
-          logEvent(
-            "voice_call_deployment_compose_error",
-            { call_id: callId, error: err instanceof Error ? err.message : String(err) },
-            { severity: "error" },
-          );
-          return null;
-        });
+        // booking). Null → the template is missing (or the metered gate above
+        // blocked it); fall through to the existing path rather than dropping
+        // the call.
+        const dctx = meteredGateBlocked
+          ? null
+          : await loadDeploymentVoiceContext({
+              deployment,
+              now: new Date(),
+            }).catch((err) => {
+              logEvent(
+                "voice_call_deployment_compose_error",
+                { call_id: callId, error: err instanceof Error ? err.message : String(err) },
+                { severity: "error" },
+              );
+              return null;
+            });
 
         if (dctx) {
           // Caller-ID → tool context (same as the workspace path): auto-fill the
@@ -302,32 +358,89 @@ export async function POST(request: Request): Promise<Response> {
           // call). `source`/`ready` are logged so a builder with NO key (ready:
           // false) is visible — the call still answers on the platform key when one
           // exists; only with NO key anywhere does it stay unanswered.
-          const depKey = await resolveDeploymentRuntimeKey(
-            // A number-resolved deployment is a voice (phone) surface by
-            // definition; pass it explicitly (the narrow row omits `surface`).
-            { surface: "phone", agentTemplateId: deployment.agentTemplateId },
-            {
-              ...buildDefaultDeploymentRuntimeKeyDeps(),
-              platform: { openai: apiKey, anthropic: process.env.ANTHROPIC_API_KEY ?? null },
-            },
-          ).catch(() => null);
-          const voiceApiKey = depKey?.apiKey ?? apiKey;
+          //
+          // Voice deploy + metered billing (Task 4): on a METERED call the
+          // platform (SF-managed) key is forced instead, and
+          // resolveDeploymentRuntimeKey is skipped entirely — it resolves a key
+          // scoped to the TEMPLATE OWNER's OpenAI project, which would fail
+          // cross-project against the shared platform SIP trunk a metered call
+          // runs on. Unmetered calls (flag off) are 100% unchanged below.
+          const depKey = metered
+            ? null
+            : await resolveDeploymentRuntimeKey(
+                // A number-resolved deployment is a voice (phone) surface by
+                // definition; pass it explicitly (the narrow row omits `surface`).
+                { surface: "phone", agentTemplateId: deployment.agentTemplateId },
+                {
+                  ...buildDefaultDeploymentRuntimeKeyDeps(),
+                  platform: { openai: apiKey, anthropic: process.env.ANTHROPIC_API_KEY ?? null },
+                },
+              ).catch(() => null);
+          const voiceApiKey = metered ? apiKey : (depKey?.apiKey ?? apiKey);
           logEvent("voice_call_deployment_key_resolved", {
             call_id: callId,
             deployment_id: deployment.id,
-            key_source: depKey?.source ?? "platform",
-            key_ready: depKey?.ready ?? Boolean(apiKey),
+            key_source: metered ? "platform_metered" : (depKey?.source ?? "platform"),
+            key_ready: metered ? true : (depKey?.ready ?? Boolean(apiKey)),
           });
 
-          await runVoiceCall({
-            callId,
-            apiKey: voiceApiKey,
-            toolContext: dctx.ctx,
-            instructions: dctx.instructions,
-            audioVoice: dctx.audioVoice,
-            greeting: dctx.greeting,
-            ...depTranscriptCallbacks,
-          });
+          // Voice deploy + metered billing (Task 4) — bracket the call with a
+          // wall-clock proxy for connected duration. `runVoiceCall` resolves a
+          // CallEndReason only (no duration/timestamp field), and the route
+          // does not otherwise capture an accept timestamp, so Date.now() around
+          // the await is the best available signal — matches the brief's
+          // accepted fallback. The `finally` guarantees the debit still fires
+          // (with the elapsed time up to that point) even if runVoiceCall
+          // throws instead of resolving normally.
+          const meteredCallStartedAt = Date.now();
+          try {
+            await runVoiceCall({
+              callId,
+              apiKey: voiceApiKey,
+              toolContext: dctx.ctx,
+              instructions: dctx.instructions,
+              audioVoice: dctx.audioVoice,
+              greeting: dctx.greeting,
+              ...depTranscriptCallbacks,
+            });
+          } finally {
+            if (metered) {
+              try {
+                const meterResult = await meterCallEnd(
+                  {
+                    orgId: deployment.builderOrgId,
+                    callId,
+                    seconds: (Date.now() - meteredCallStartedAt) / 1000,
+                  },
+                  {
+                    env: process.env,
+                    debitVoiceUsage,
+                    onShortfall: async (o) => {
+                      console.warn("[voice-billing] shortfall", o);
+                    },
+                  },
+                );
+                logEvent("voice_call_deployment_metered_end", {
+                  call_id: callId,
+                  deployment_id: deployment.id,
+                  builder_org_id: deployment.builderOrgId,
+                  ...meterResult,
+                });
+              } catch (err) {
+                // meterCallEnd is fail-soft internally, but nothing added here
+                // may throw into the call teardown path — belt-and-suspenders.
+                logEvent(
+                  "voice_call_deployment_metering_error",
+                  {
+                    call_id: callId,
+                    deployment_id: deployment.id,
+                    error: err instanceof Error ? err.message : String(err),
+                  },
+                  { severity: "error" },
+                );
+              }
+            }
+          }
           return; // deployment handled the call — do NOT run the workspace path.
         }
         // dctx === null → fall through to the existing workspace path below.
