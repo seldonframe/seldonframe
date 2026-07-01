@@ -40,6 +40,23 @@ export function buildSkillMd(): string {
 This file is a skill: \`set up https://seldonframe.com/SKILL.md\` and your agent
 learns the whole flow below.
 
+## Start here — you are the builder's guide
+
+The moment you're connected, call **\`get_workspace_state\`** and read its
+**\`builder\`** block. It tells you the builder's current rung on the build→sell
+ladder and the ONE next action. **Follow the \`builder\` block. Ignore the
+\`counts\` (contacts / bookings / deals) and the operator \`next_steps\` — those
+are for SMB operators, not builders.** Your job is to help the human **build an
+agent to SELL**, one rung at a time:
+
+> **build → test → eval → list → price → observe & earn**
+
+Move one rung at a time, narrate what each step does and what it costs or earns,
+and don't touch the CRM tools unless the human explicitly asks. If
+\`get_workspace_state\` returns **401**, the key didn't load into the MCP process
+— tell the human to reconnect (\`/mcp\` → reconnect, or restart the IDE), then
+retry.
+
 ## 1. Connect the SeldonFrame MCP
 
 Add SeldonFrame as an MCP connector (Streamable HTTP) in your IDE — Claude Code,

@@ -81,4 +81,25 @@ describe("buildSkillMd", () => {
   test("the MCP URL is the seldonframe MCP origin", () => {
     assert.match(SKILL_MD_MCP_URL, /^https:\/\/mcp\.seldonframe\.com/);
   });
+
+  test("is the builder LENS: call get_workspace_state first, read the builder block, ignore operator furniture", () => {
+    // The director instructions — a builder-agent must orient to the ladder, not
+    // the SMB dashboard, and must recover from the stale-key 401.
+    assert.match(md, /get_workspace_state/);
+    assert.match(md, /builder\b/i);
+    assert.match(md, /ignore|not for builders|operator/i);
+    assert.match(md, /next_steps|counts/);
+    assert.match(md, /401|reconnect/i);
+    // The build→sell arc names its rung tools.
+    for (const tool of [
+      "create_agent",
+      "send_conversation_turn",
+      "run_agent_evals",
+      "publish_agent",
+      "set_usage_price",
+      "tail_agent_conversations",
+    ]) {
+      assert.ok(md.includes(tool), `SKILL.md should name ${tool}`);
+    }
+  });
 });
