@@ -18,7 +18,9 @@ COMMANDS
                                        Show an entry's input schema, pricing, and docs
   run --type <agent|tool> --id <id> -i <json|@file>
                                        Run an entry → result + honest billing
+  status                               Your lifecycle: agents · earnings · balance · next action
   wallet balance                       Show your prepaid wallet balance + accrued earnings
+  wallet topup --amount <usd>          Fund your prepaid wallet (Stripe Checkout)
 
   --help, -h                           Show this help
   --version, -V                        Show the version

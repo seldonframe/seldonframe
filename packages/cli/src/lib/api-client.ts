@@ -67,6 +67,19 @@ export type RunResult = {
 
 export type WalletBalance = { balance: Money; earnings: Money };
 
+export type WorkspaceState = {
+  ok: boolean;
+  workspace?: { name?: string };
+  builder?: {
+    next_action?: string;
+    progress?: { done: number; total: number };
+    earnings?: { accrued_usd: number; payout_status: string };
+    agents?: { name: string; slug: string; stage: string; live: boolean }[];
+    wallet_balance_usd?: number;
+    fund_hint?: string | null;
+  };
+};
+
 /** A minimal fetch signature — exactly what we use — so a fake is trivial. */
 export type FetchLike = (
   url: string,
@@ -165,6 +178,16 @@ export class ApiClient {
 
   async walletBalance(): Promise<WalletBalance> {
     return this.request<WalletBalance>("GET", "/api/v1/build/wallet/balance");
+  }
+
+  async workspaceState(): Promise<WorkspaceState> {
+    return this.request<WorkspaceState>("GET", "/api/v1/workspace-state");
+  }
+
+  async walletTopup(amountUsd: number): Promise<{ ok: boolean; checkoutUrl?: string; reason?: string }> {
+    return this.request<{ ok: boolean; checkoutUrl?: string; reason?: string }>(
+      "POST", "/api/v1/build/wallet/topup", { amountUsd },
+    );
   }
 
   /** The single request path: auth header + JSON body + honest error mapping. */

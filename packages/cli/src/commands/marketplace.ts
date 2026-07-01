@@ -12,6 +12,7 @@ import type { ParsedArgs } from "../lib/args.js";
 import type { Writer } from "../lib/output.js";
 import { emit } from "../lib/output.js";
 import type { ApiClient } from "../lib/api-client.js";
+import { pollUntilFunded } from "../lib/poll.js";
 import {
   formatDiscover,
   formatInspect,
@@ -113,7 +114,31 @@ export async function runWalletCommand(
   client: ApiClient,
   writer: Writer,
 ): Promise<number> {
-  // The only wallet subcommand is `balance`. Anything else is a usage error.
+  if (args.subcommand === "topup") {
+    const amountUsd = Number(args.flags.amount);
+    if (!Number.isFinite(amountUsd) || amountUsd <= 0) {
+      writer.err("Usage: seldonframe wallet topup --amount <usd>  (e.g. --amount 20)");
+      return 1;
+    }
+    const res = await client.walletTopup(amountUsd);
+    if (!res.ok || !res.checkoutUrl) {
+      writer.err(`Top-up unavailable (${res.reason ?? "unknown"}). Fund at https://app.seldonframe.com/build/wallet.`);
+      return 1;
+    }
+    const start = (await client.walletBalance()).balance.value;
+    writer.out(`Open this to pay $${amountUsd.toFixed(2)}:\n  ${res.checkoutUrl}`);
+    writer.out("Waiting for payment…");
+    const funded = await pollUntilFunded({
+      startUsd: start,
+      getBalanceUsd: async () => (await client.walletBalance()).balance.value,
+      sleep: (ms) => new Promise((r) => setTimeout(r, ms)),
+      maxAttempts: 40,
+    });
+    writer.out(funded ? `✓ funded $${amountUsd.toFixed(2)}.` : "Still processing — check https://app.seldonframe.com/build/wallet.");
+    return 0;
+  }
+
+  // The only other wallet subcommand is `balance`. Anything else is a usage error.
   if (args.subcommand && args.subcommand !== "balance") {
     writer.err(`Unknown wallet subcommand "${args.subcommand}". Try: seldonframe wallet balance.`);
     return 1;
