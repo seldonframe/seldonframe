@@ -9,15 +9,19 @@
 // reason instead of charging.
 
 import Link from "next/link";
-import { desc, eq } from "drizzle-orm";
+import { and, desc, eq } from "drizzle-orm";
 import { Wallet, ArrowLeft } from "lucide-react";
 import { db } from "@/db";
 import { walletTransactions } from "@/db/schema/wallet";
+import { stripeConnections } from "@/db/schema";
 import { auth } from "@/auth";
 import { getOrgId } from "@/lib/auth/helpers";
-import { getWalletBalanceMicros } from "@/lib/build/wallet-store";
+import { getWalletBalanceMicros, getWithdrawableEarningsMicros } from "@/lib/build/wallet-store";
 import { formatMicrosUsd } from "@/lib/build/wallet-format";
+import { isBillingEnabled } from "@/lib/marketplace/billing/billing-mode";
+import { MIN_WITHDRAW_USD } from "@/lib/build/payout";
 import { WalletTopupClient } from "@/components/build/wallet-topup-client";
+import { WalletWithdrawClient } from "@/components/build/wallet-withdraw-client";
 import { buildPageMetadata } from "@/lib/seo/page-metadata";
 
 export const dynamic = "force-dynamic";
@@ -35,6 +39,7 @@ const KIND_LABEL: Record<string, string> = {
   topup: "Top-up",
   debit: "Run",
   earning: "Earning",
+  payout: "Withdrawal",
 };
 
 export default async function BuildWalletPage() {
@@ -83,6 +88,25 @@ export default async function BuildWalletPage() {
   // Test-mode wallet is the dev/default; a live wallet only exists once a live
   // top-up funds it. Read the test balance (the only one reachable in dev).
   const balanceMicros = await getWalletBalanceMicros(orgId, "test");
+
+  // Withdraw signal for the Withdraw island — only gathered when billing is on
+  // (money-safe: no Connect lookup / withdrawable read otherwise).
+  const billingOn = isBillingEnabled(process.env as Record<string, string | undefined>);
+  let withdraw: { withdrawableUsd: number; connected: boolean; minUsd: number } | null = null;
+  if (billingOn) {
+    const [conn] = await db
+      .select({ id: stripeConnections.id })
+      .from(stripeConnections)
+      .where(and(eq(stripeConnections.orgId, orgId), eq(stripeConnections.isActive, true)))
+      .limit(1);
+    const withdrawableMicros = await getWithdrawableEarningsMicros(orgId);
+    withdraw = {
+      withdrawableUsd: Math.round((withdrawableMicros / 1_000_000) * 100) / 100,
+      connected: Boolean(conn),
+      minUsd: MIN_WITHDRAW_USD,
+    };
+  }
+
   const recent = await db
     .select({
       id: walletTransactions.id,
@@ -108,6 +132,13 @@ export default async function BuildWalletPage() {
           </p>
         </div>
         <WalletTopupClient />
+        {withdraw ? (
+          <WalletWithdrawClient
+            withdrawableUsd={withdraw.withdrawableUsd}
+            connected={withdraw.connected}
+            minUsd={withdraw.minUsd}
+          />
+        ) : null}
       </div>
 
       <div className="rounded-xl border bg-card p-6 space-y-3">
