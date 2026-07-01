@@ -845,6 +845,12 @@ export type DeploymentPatch = Partial<{
    *  gated calendar-connect callback after OAuth; null clears it. Deliberately NOT
    *  accepted by CreateDeploymentSchema — only this gated writer sets it. */
   calendarRef: DeploymentCalendarRef | null;
+  /** How the deployed agent books (native | external_link | api_mcp | cal_com).
+   *  Set by the calendar-connect callback (via calendarConnectPatch) to flip
+   *  native/unset → 'api_mcp' once a real calendar is connected, so
+   *  book_appointment routes to the connected calendar instead of silently
+   *  staying native. */
+  bookingMode: BookingMode;
   /** The per-client booking policy (slot length / hours / buffer / lead time /
    *  required fields) — a sparse Partial<BookingPolicy> merged over the template
    *  default by resolveBookingPolicy. Set by the gated setBookingPolicyAction;
@@ -926,6 +932,9 @@ export async function updateDeployment(
   }
   if (p.calendarRef !== undefined) {
     patch.calendarRef = p.calendarRef;
+  }
+  if (p.bookingMode !== undefined) {
+    patch.bookingMode = p.bookingMode;
   }
   if (p.bookingPolicy !== undefined) {
     patch.bookingPolicy = p.bookingPolicy;

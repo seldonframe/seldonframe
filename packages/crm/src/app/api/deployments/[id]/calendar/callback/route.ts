@@ -25,6 +25,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { getDeployment, updateDeployment } from "@/lib/deployments/store";
 import { resolveCalendarCallbackRedirect } from "@/lib/deployments/calendar-return";
+import { calendarConnectPatch } from "@/lib/deployments/calendar-connect-patch";
 import { listConnections } from "@/lib/integrations/composio/client";
 import type { ToolkitConnection } from "@/lib/integrations/composio/client";
 import type {
@@ -148,7 +149,24 @@ export async function GET(
       return NextResponse.redirect(redirectTo("error"));
     }
 
-    await updateDeployment({ id, patch: { calendarRef: resolved.calendarRef } });
+    // Flip bookingMode to api_mcp on a fresh calendar connect (native/unset
+    // only — never downgrades an explicit external mode) so the deployed
+    // agent's book_appointment actually reaches the connected calendar
+    // instead of silently staying native. Pure helper, unit-tested (A1).
+    // `toolkit!`: resolveCalendarRefFromCallback only reaches the success
+    // branch (no "error" in resolved) when toolkit is a non-null, known
+    // calendar toolkit — see its guard above — so this narrows a proven
+    // invariant, not an assumption.
+    await updateDeployment({
+      id,
+      patch: {
+        calendarRef: resolved.calendarRef,
+        ...calendarConnectPatch({
+          currentBookingMode: deployment.bookingMode,
+          toolkit: toolkit!,
+        }),
+      },
+    });
     return NextResponse.redirect(redirectTo("connected"));
   } catch {
     // Never 500 the OAuth return — bounce back with an error flag.
