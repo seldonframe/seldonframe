@@ -16,22 +16,20 @@
 //        correct, type-correct call, and it matches the convention already
 //        used by deploy-readiness-deps.ts (surfaceForType(type) at line 35).
 //
-//        IMPORTANT — verified empirically (see the "PRE-FIX BEHAVIOR
-//        DOCUMENTED" test below): for a template with NO blueprint.trigger,
-//        deploymentNeedsNumber/agentNeedsNumber (agent-trigger.ts) resolves
-//        the absent trigger to the safe "inbound" default and returns `true`
-//        for EVERY inbound channel — it does not branch on channel at all.
-//        So passing the raw vs. the surface-mapped string does NOT, by
-//        itself, change deploymentNeedsNumber's boolean output for a
-//        trigger-less chat template today (both resolve to `true`). The
-//        surface-arg fix is still correct to make (type safety + convention),
-//        but a trigger-less chat template deploy will still hit
-//        `phone_required` today — that is a SEPARATE, pre-existing
-//        disagreement between deploymentNeedsNumber (channel-blind) and
-//        computeDeployReadiness / buildOnboardingSteps (which correctly omits
-//        a `phone` step for a chat surface), and is OUT OF SCOPE for this
-//        task's three named call-site fixes. Flagged separately; not silently
-//        patched here to avoid scope creep beyond what was asked.
+//        FOLLOW-UP FIX (now closed): the surface-arg fix alone was NOT
+//        sufficient — for a template with NO blueprint.trigger,
+//        deploymentNeedsNumber/agentNeedsNumber (agent-trigger.ts) resolved
+//        the absent trigger to the safe "inbound" default and used to return
+//        `true` for EVERY inbound channel (it didn't branch on channel at
+//        all), so a trigger-less CHAT template still hit `phone_required`
+//        even with the surface-arg fix in place. Root-caused and fixed in
+//        agent-trigger.ts: `agentNeedsNumber`'s inbound case now returns
+//        `trigger.channel === "voice" || trigger.channel === "sms"` — only
+//        those two channels RECEIVE on a phone line/number; inbound chat
+//        receives on a web widget and inbound email on an inbox, so neither
+//        needs one. See the "the C-2 fix: a trigger-less chat template
+//        resolves to needing NO phone" test below for the corrected,
+//        end-to-end behavior (chat → status:"live", not phone_required).
 //
 // `runDeploy` (src/lib/deployments/deploy-orchestrator.ts) is the extracted,
 // DI'd core orchestration the route wires with real seams; here every seam is
@@ -202,38 +200,40 @@ describe("runDeploy — C-1: voice deploy with a freshly-attached number goes li
 // ─── C-2: the surface-arg fix at the three named call sites ─────────────────
 
 describe("runDeploy — C-2: the surface-arg fix (deploymentNeedsNumber receives the mapped surface, not the raw templateType)", () => {
-  test("PRE-FIX BEHAVIOR DOCUMENTED (real production code): for an ABSENT trigger, deploymentNeedsNumber is true for BOTH the raw templateType and the surfaceForType-mapped surface", () => {
+  test("the C-2 fix (real production code): for an ABSENT trigger, the surfaceForType-mapped chat surface resolves to needing NO phone (the raw templateType string still doesn't match a known channel, which is WHY the surface-arg fix matters)", () => {
     // This calls the REAL margin.ts deploymentNeedsNumber + the REAL
-    // agent-templates/store.ts surfaceForType — no fakes. It documents,
-    // precisely, why the surface-arg fix (route.ts now passes
-    // surfaceForType(templateType) at all three deploymentNeedsNumber call
-    // sites instead of the raw templateType) is the objectively correct,
-    // type-safe, convention-matching call to make, while ALSO being honest
-    // that it does not by itself flip this specific boolean for a
-    // trigger-less template: agentNeedsNumber (agent-trigger.ts) switches
-    // only on trigger.kind, never on channel, and an absent trigger clamps to
-    // the inbound default for any unrecognized OR recognized channel string.
-    const surface = surfaceForType("chat_assistant");
-    assert.equal(surface, "chat");
-    assert.equal(deploymentNeedsNumber(undefined, "chat_assistant"), true, "raw templateType");
-    assert.equal(deploymentNeedsNumber(undefined, surface), true, "surfaceForType-mapped surface");
-    // Same holds for voice — both forms already agreed (this was never
-    // ambiguous for voice; only chat's absent-trigger case is subtle).
+    // agent-templates/store.ts surfaceForType — no fakes. It documents the
+    // fully-closed C-2 fix, which needs BOTH companion changes together:
+    //   1. the surface-arg fix (already landed): pass surfaceForType(type)
+    //      ("chat"/"voice"), not the raw templateType string
+    //      ("chat_assistant"/"voice_receptionist") — the raw string is not a
+    //      recognized channel, so it falls back to the safe inbound-VOICE
+    //      default regardless of the actual surface, which is why it STILL
+    //      shows true below (a separate, pre-existing quirk of that
+    //      fallback — not what this task's fix targets).
+    //   2. THIS task's fix: agentNeedsNumber's inbound case (agent-trigger.ts)
+    //      now branches on trigger.channel — voice/sms → true, chat/email →
+    //      false — so once surfaceForType correctly resolves the channel to
+    //      "chat", the trigger-less chat template needs NO phone.
+    const chatSurface = surfaceForType("chat_assistant");
+    assert.equal(chatSurface, "chat");
+    // The raw templateType doesn't match a known channel → falls back to the
+    // inbound-voice default → still true. This is unaffected by this task's
+    // fix; it is exactly the gap the (already-landed) surface-arg fix exists
+    // to close by passing the MAPPED surface instead, asserted next.
+    assert.equal(deploymentNeedsNumber(undefined, "chat_assistant"), true, "raw templateType (unmapped, falls back to inbound-voice default)");
+    assert.equal(deploymentNeedsNumber(undefined, chatSurface), false, "surfaceForType-mapped surface (THIS fix: chat correctly needs no phone)");
+    // Voice is unaffected — both forms still agree, and still need a number.
     assert.equal(deploymentNeedsNumber(undefined, "voice_receptionist"), true, "raw templateType");
     assert.equal(deploymentNeedsNumber(undefined, surfaceForType("voice_receptionist")), true, "surfaceForType-mapped surface");
   });
 
-  test("the fixed call sites are exercised through runDeploy without throwing or diverging in shape — chat, ready, needsNumber true, no phone in body → phone_required (documents the residual, OUT-OF-SCOPE gap, not silently hidden)", async () => {
-    // With deploymentNeedsNumber wired to its REAL, current, correct-per-today
-    // value for a trigger-less chat template (true), and readiness reporting
-    // ready (a separate, already-passing gate), the route still asks for a
-    // phone here. That is NOT the C-1/C-2 regressions this task fixes — it is
-    // a distinct, pre-existing disagreement between deploymentNeedsNumber
-    // (channel-blind) and the onboarding step list (which correctly excludes
-    // a `phone` step for chat), living in computeDeployReadiness /
-    // buildOnboardingSteps, untouched by this task's three named call-site
-    // fixes. Documented here rather than silently patched to avoid scope
-    // creep — see this task's report for the flagged follow-up.
+  test("the fixed call sites are exercised through runDeploy — chat, ready, no trigger stored (needsNumber now correctly FALSE), no phone in body → status:live (C-2 closed, not phone_required)", async () => {
+    // With deploymentNeedsNumber wired to its REAL, current, CORRECT value for
+    // a trigger-less chat template (false, post-fix), and readiness reporting
+    // ready (a separate, already-passing gate), the route no longer asks for
+    // a phone — it goes straight to live. This is the real C-2 regression
+    // path: a chat deploy must not hit phone_required.
     const deps = fakeDeps({
       resolveSource: async () => ({
         ok: true,
@@ -244,12 +244,14 @@ describe("runDeploy — C-2: the surface-arg fix (deploymentNeedsNumber receives
       resolveDeployReadiness: async () => READY,
       deploymentNeedsNumber: (blueprint, templateType) =>
         deploymentNeedsNumber(blueprint.trigger, surfaceForType(templateType as "voice_receptionist" | "chat_assistant")),
+      applyGoLive: async (deployment) => ({ ok: true, deployment: fakeDeployment({ ...deployment, status: "active" }) }),
     });
 
     const result = await runDeploy({ orgId: "org-1", body: { source: { templateId: "tmpl-1" } } }, deps);
 
-    assert.equal(result.ok, false);
-    assert.equal((result as { reason?: string }).reason, "phone_required");
+    assert.equal(result.ok, true);
+    assert.equal((result as { status?: string }).status, "live");
+    assert.notEqual((result as { reason?: string }).reason, "phone_required");
   });
 
   test("voice template + inbound trigger + surfaceForType-mapped surface → needsNumber true (voice's correct, unaffected behavior)", async () => {

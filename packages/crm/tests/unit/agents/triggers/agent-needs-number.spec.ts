@@ -3,7 +3,10 @@
 // org's shared number)?
 //
 // The rule (see agent-trigger.ts):
-//   • inbound (any channel)                  → TRUE  (the receptionist RECEIVES)
+//   • inbound voice/sms                      → TRUE  (they RECEIVE on a phone
+//                                               line/number)
+//   • inbound chat/email                     → FALSE (a web widget / an inbox,
+//                                               neither is a phone number)
 //   • event whose slug is inbound-ish (missed_call) → TRUE  (forward-in + text-back)
 //   • event that is pure-outbound (booking.completed / lead.created / invoice.paid)
 //                                            → FALSE (only SENDS)
@@ -27,13 +30,26 @@ import {
 } from "../../../../src/lib/agents/triggers/agent-trigger";
 
 describe("agentNeedsNumber", () => {
-  test("inbound (any channel) → true", () => {
-    const channels = ["voice", "chat", "email", "sms"] as const;
+  test("inbound voice/sms → true (they RECEIVE on a phone line/number)", () => {
+    const channels = ["voice", "sms"] as const;
     for (const channel of channels) {
       assert.equal(
         agentNeedsNumber({ kind: "inbound", channel }),
         true,
         `inbound/${channel} should need a number`,
+      );
+    }
+  });
+
+  test("inbound chat/email → false (a web widget / an inbox, not a phone number)", () => {
+    // The C-2 fix: these used to be channel-blindly TRUE (any inbound channel),
+    // which made a chat-surface deploy incorrectly hit phone_required.
+    const channels = ["chat", "email"] as const;
+    for (const channel of channels) {
+      assert.equal(
+        agentNeedsNumber({ kind: "inbound", channel }),
+        false,
+        `inbound/${channel} should NOT need a number`,
       );
     }
   });

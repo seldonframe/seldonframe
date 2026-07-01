@@ -75,7 +75,11 @@ const INBOUND_ISH_EVENTS: ReadonlySet<string> = new Set(["missed_call"]);
  * from the client org's shared number). Pure; takes the already-resolved
  * `AgentTrigger` (use resolveAgentTrigger first for a loose/stored shape).
  *
- *   • inbound (any channel)        → TRUE  (the receptionist RECEIVES on a line)
+ *   • inbound voice/sms           → TRUE  (they RECEIVE on a phone line/number:
+ *                                     a call needs a line, a texting number needs
+ *                                     one too)
+ *   • inbound chat/email          → FALSE (chat receives on a web widget, email on
+ *                                     an inbox — neither is a phone number)
  *   • event whose slug is inbound-ish (missed_call) → TRUE  (forward-in + text-back
  *                                     round-trip needs a dedicated line)
  *   • event that is pure-outbound (booking.completed / lead.created / invoice.paid)
@@ -85,12 +89,14 @@ const INBOUND_ISH_EVENTS: ReadonlySet<string> = new Set(["missed_call"]);
  * This is the precise gate the activation paths use to decide whether to route a
  * deployment through the get-a-number flow or activate it phone-less — it is the
  * COMPLEMENT of "pure outbound", carving the missed-call agent back out of the
- * phone-less default that `isOutboundDeployment` (kind !== "inbound") would give it.
+ * phone-less default that `isOutboundDeployment` (kind !== "inbound") would give it,
+ * while also carving inbound chat/email back OUT of the phone-owning default that a
+ * channel-blind "inbound → true" would incorrectly give them.
  */
 export function agentNeedsNumber(trigger: AgentTrigger): boolean {
   switch (trigger.kind) {
     case "inbound":
-      return true;
+      return trigger.channel === "voice" || trigger.channel === "sms";
     case "event":
       return INBOUND_ISH_EVENTS.has(trigger.event);
     case "schedule":

@@ -39,12 +39,17 @@ import type { Deployment } from "../../../src/db/schema/deployments";
 // ── 1. deploymentNeedsNumber ────────────────────────────────────────────────────
 
 describe("deploymentNeedsNumber", () => {
-  test("inbound trigger → true", () => {
+  test("inbound voice/sms → true (a phone line/number)", () => {
     assert.equal(
       deploymentNeedsNumber({ kind: "inbound", channel: "voice" }),
       true,
     );
-    assert.equal(deploymentNeedsNumber({ kind: "inbound", channel: "chat" }), true);
+    assert.equal(deploymentNeedsNumber({ kind: "inbound", channel: "sms" }), true);
+  });
+
+  test("inbound chat/email → false (C-2: a web widget / an inbox, not a phone number)", () => {
+    assert.equal(deploymentNeedsNumber({ kind: "inbound", channel: "chat" }), false);
+    assert.equal(deploymentNeedsNumber({ kind: "inbound", channel: "email" }), false);
   });
 
   test("event 'missed_call' → true (the exception this task adds)", () => {
