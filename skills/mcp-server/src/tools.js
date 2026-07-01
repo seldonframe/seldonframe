@@ -4777,6 +4777,78 @@ export const TOOLS = [
     },
   },
 
+  // ───────────────────────────────────────────────────────────────────────
+  // v1.57.0 — DEPLOY-TO-SELL. The self-serve deployment verb: take a
+  // builder-owned template (or a purchased marketplace listing) and turn
+  // it into a REAL, answering agent — one call, idempotent, resumable
+  // across the human-only connect steps (calendar OAuth / phone number).
+  // This is the money moment: a builder goes from "I built an agent" to
+  // "I'm earning from it" without leaving the IDE except for the one-time
+  // OAuth/Twilio connect screen the wizardUrl points at.
+  // ───────────────────────────────────────────────────────────────────────
+
+  {
+    name: "deploy_agent",
+    description:
+      "USE WHEN USER SAYS: 'deploy this agent', 'go live with my template', 'sell this agent — get it answering', 'launch the receptionist I built', 'turn my template into a real number', 'ship this to a client'. " +
+      "Deploys a self-built template (source.template_id) or an installed marketplace listing (source.listing_slug) into a REAL, answering agent for THIS workspace — the deploy-to-sell / earn moment, not just a build step. Idempotent: calling it again for the same source resumes the same deployment instead of creating a duplicate. " +
+      "RESUMABLE TWO-STEP FLOW — read the `status` field: " +
+      "• status='needs_connect' → NOT live yet. `requirements`/`missing` list what's unmet (calendar OAuth, another connector, a phone number, business info) and `wizardUrl` is a ONE-TIME human-only link (calendar OAuth + Twilio number can't be done by an agent). Relay it verbatim: 'Open this once to connect your calendar / phone number: <wizardUrl>' — then, once the human confirms they've done it, call deploy_agent again with the SAME source (and `phone` if the agent needs a number) to proceed. " +
+      "• status='live' → deployed and answering right now. Tell the operator the number (if any) is live and taking real calls/bookings — this is revenue-generating, not a sandbox. " +
+      "• status='disabled' → the deploy verb isn't enabled for this environment yet. " +
+      "PHONE: only required when the template needs a number and none is attached yet — pass phone={mode:'forward', number:'+1...'} to forward an existing line, or phone={mode:'provision', area_code:'512'} to buy a new Twilio number (requires the workspace's own Twilio creds — surfaced as a `telephony` requirement if missing). " +
+      "Exactly one of source.template_id / source.listing_slug is required — template_id for something you built with create_agent-style tools in THIS workspace, listing_slug for a marketplace agent you're installing to run for a client.",
+    inputSchema: obj(
+      {
+        workspace_id: str("Workspace id (bearer workspace)."),
+        source: {
+          type: "object",
+          description:
+            "Exactly one of template_id (a template this workspace built) or listing_slug (a published marketplace listing to install-and-deploy).",
+          properties: {
+            template_id: str("Id of an agent_templates row owned by this workspace."),
+            listing_slug: str("Slug of a published marketplace listing (kind='agent') to clone in and deploy."),
+          },
+        },
+        phone: {
+          type: "object",
+          description:
+            "Only needed when deploy_agent (or an earlier call) reported a 'telephony' requirement and no number is attached yet. Pass ONE mode.",
+          properties: {
+            mode: {
+              type: "string",
+              enum: ["forward", "provision"],
+              description: "'forward' = point an existing number at the agent; 'provision' = buy a new Twilio number.",
+            },
+            number: str("E.164 phone number to forward, e.g. '+15125550148'. Required when mode='forward'."),
+            area_code: str("3-digit US/NANP area code to provision a new number in, e.g. '512'. Required when mode='provision'."),
+          },
+        },
+      },
+      ["workspace_id", "source"],
+    ),
+    handler: async (args) => {
+      const ws = args.workspace_id;
+      const source = args.source ?? {};
+      const body = {
+        source: {
+          ...(source.template_id ? { templateId: source.template_id } : {}),
+          ...(source.listing_slug ? { listingSlug: source.listing_slug } : {}),
+        },
+      };
+      if (args.phone?.mode === "forward") {
+        body.phone = { mode: "forward", number: args.phone.number };
+      } else if (args.phone?.mode === "provision") {
+        body.phone = { mode: "provision", areaCode: args.phone.area_code };
+      }
+      const result = await api("POST", "/build/deploy", {
+        body,
+        workspace_id: ws,
+      });
+      return result;
+    },
+  },
+
   {
     name: "update_agent_blueprint",
     description:

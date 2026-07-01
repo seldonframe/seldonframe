@@ -37,6 +37,19 @@ import { getBuilderEarningsMicros, getWalletBalanceMicros, getWithdrawableEarnin
 import { isBillingEnabled } from "@/lib/marketplace/billing/billing-mode";
 import { stripeConnections } from "@/db/schema";
 import { MIN_WITHDRAW_USD } from "@/lib/build/payout";
+// deploy_readiness (Task C3) — TEMPLATE-level readiness (no deployment
+// required yet). Reuses the exact building blocks the impure
+// resolveDeployReadiness (lib/deployments/deploy-readiness-deps.ts) composes
+// for an existing deployment; here there is none, so wizardPath/progress are
+// dropped rather than faked. See computeTemplateDeployReadiness below.
+import { listAgentTemplates, surfaceForType, type AgentTemplateType } from "@/lib/agent-templates/store";
+import { normalizeBlueprintForOnboarding, buildOnboardingSteps } from "@/lib/marketplace/onboarding/steps";
+import { computeToolConnectionStatuses } from "@/lib/agents/mcp/tool-connection";
+import { isBindingConnectedForOrg } from "@/lib/agents/mcp/binding-connection";
+import { deploymentNeedsNumber } from "@/lib/deployments/margin";
+import { resolveBuilderTelephony } from "@/lib/telephony/config";
+import { computeDeployReadiness, type DeployReadiness } from "@/lib/deployments/deploy-readiness";
+import type { AgentTemplate } from "@/db/schema/agent-templates";
 
 export async function GET(request: Request) {
   const guard = await guardApiRequest(request);
@@ -299,6 +312,20 @@ export async function GET(request: Request) {
     payout: payoutSignal,
   });
 
+  // Template deploy_readiness (additive, Task C3) — a per-template heads-up on
+  // what's missing before `deploy_agent` can go live, computed WITHOUT a
+  // deployment (most builder templates don't have one yet). Mirrors
+  // resolveDeployReadiness (lib/deployments/deploy-readiness-deps.ts) exactly,
+  // minus the two deployment-only inputs: `deployment.phoneNumber` (no
+  // deployment ⇒ never yet attached) and onboarding `progress` (no
+  // deployment ⇒ null, same as a freshly-created one). wizardPath is dropped
+  // (deploy_agent is the verb that creates the deployment + the real wizard
+  // link) in favor of a boolean hint. FAIL-SOFT end-to-end: any failure —
+  // listing templates, or scoring one template — drops that piece silently so
+  // the operator-facing fields above are byte-for-byte unaffected and
+  // get_workspace_state never breaks on this account.
+  const templateReadiness = await buildTemplateDeployReadiness(orgId);
+
   // 6. Compose response. Designed to be self-explanatory to an LLM:
   // each section answers a question Claude Code would otherwise have
   // to ask via separate tool calls.
@@ -358,8 +385,113 @@ export async function GET(request: Request) {
       earnings: lifecycle.earnings,
       agents: lifecycle.agents,
       fund_hint: lifecycle.fund_hint,
+      // Additive (Task C3) — per-TEMPLATE deploy readiness (see
+      // buildTemplateDeployReadiness below). Distinct from `agents` above
+      // (which reflects already-created `agents` rows / lifecycle stage);
+      // `templates` covers agent_templates rows a builder may not have
+      // deployed at all yet, so deploy_agent's "what's still missing" is
+      // knowable before the first deploy attempt. Omitted (never an empty
+      // array masquerading as "no templates") only when the whole read
+      // failed — see the fail-soft wrapper.
+      ...(templateReadiness ? { templates: templateReadiness } : {}),
     },
   });
+}
+
+// ─── deploy_readiness (Task C3) ──────────────────────────────────────────────
+
+type TemplateDeployReadinessEntry = {
+  id: string;
+  name: string;
+  slug: string;
+  type: string;
+  status: string;
+  deploy_readiness: {
+    ready: boolean;
+    requirements: DeployReadiness["requirements"];
+    missing: DeployReadiness["missing"];
+  } | null;
+};
+
+/** Score ONE template's deploy readiness without a deployment. Mirrors
+ *  resolveDeployReadiness (lib/deployments/deploy-readiness-deps.ts) — same
+ *  four inputs (onboarding steps / live tool-connection statuses / telephony
+ *  need+connected / progress) fed into the SAME pure computeDeployReadiness —
+ *  except `deployment.phoneNumber` and `deployment.customization` don't exist
+ *  pre-deploy, so telephonyConnected relies solely on the org's BYO Twilio
+ *  creds and progress is always null (identical to a just-created deployment,
+ *  which starts with no onboarding progress either). Never throws — a bad
+ *  blueprint shape degrades to `null` (caller omits the field for that
+ *  template) rather than failing the whole templates list. */
+async function computeTemplateDeployReadiness(
+  orgId: string,
+  template: Pick<AgentTemplate, "type" | "blueprint">,
+): Promise<DeployReadiness | null> {
+  try {
+    const blueprint = template.blueprint ?? {};
+    const normalized = normalizeBlueprintForOnboarding(template.type, blueprint);
+    const steps = buildOnboardingSteps(normalized);
+
+    const toolStatuses = await computeToolConnectionStatuses(blueprint.connectors ?? [], (binding) =>
+      isBindingConnectedForOrg(orgId, binding),
+    );
+
+    const surface = surfaceForType(template.type as AgentTemplateType);
+    const telephonyNeeded = deploymentNeedsNumber(blueprint.trigger, surface);
+    const telephony = await resolveBuilderTelephony(orgId);
+    const telephonyConnected = telephony.ok === true;
+
+    return computeDeployReadiness({
+      steps,
+      toolStatuses,
+      telephonyNeeded,
+      telephonyConnected,
+      progress: null,
+      wizardPath: "",
+    });
+  } catch (err) {
+    console.warn(
+      "[workspace-state] computeTemplateDeployReadiness failed:",
+      err instanceof Error ? err.message : String(err),
+    );
+    return null;
+  }
+}
+
+/** List the builder's templates and score each one's deploy readiness, in
+ *  parallel. Fail-soft at every layer: listAgentTemplates throwing (or the
+ *  whole function erroring for any other reason) returns `null` — the caller
+ *  then OMITS `builder.templates` entirely rather than shipping a broken or
+ *  empty-looking array, so the operator-facing response is byte-for-byte
+ *  unaffected. A single template's scoring failure does not drop the others
+ *  (computeTemplateDeployReadiness itself never throws — see above). */
+async function buildTemplateDeployReadiness(
+  orgId: string,
+): Promise<TemplateDeployReadinessEntry[] | null> {
+  try {
+    const templates = await listAgentTemplates(orgId);
+    return await Promise.all(
+      templates.map(async (t) => {
+        const readiness = await computeTemplateDeployReadiness(orgId, t);
+        return {
+          id: t.id,
+          name: t.name,
+          slug: t.slug,
+          type: t.type,
+          status: t.status,
+          deploy_readiness: readiness
+            ? { ready: readiness.ready, requirements: readiness.requirements, missing: readiness.missing }
+            : null,
+        };
+      }),
+    );
+  } catch (err) {
+    console.warn(
+      "[workspace-state] buildTemplateDeployReadiness failed:",
+      err instanceof Error ? err.message : String(err),
+    );
+    return null;
+  }
 }
 
 function composeNextSteps(input: {
