@@ -50,6 +50,13 @@ export type ProvisionVoiceNumberInput = {
   deploymentId: string;
   areaCode: string;
   trunkSid?: string; // if not provided, caller is expected to have set it on deps
+  /** How the number was acquired, persisted onto `numberOrigin` alongside the
+   *  sid (Task 6, voice-deploy metered billing). Defaults to "provisioned" —
+   *  the BYO-Twilio path (every existing caller) is byte-for-byte unchanged.
+   *  The SF-managed orchestrator (provision-sf-managed.ts) passes
+   *  "sf_managed" so release-on-cancel and billing can tell the two number
+   *  origins apart. */
+  numberOrigin?: string;
 };
 
 // ─── State machine ────────────────────────────────────────────────────────────
@@ -70,6 +77,7 @@ export async function provisionVoiceNumber(
   deps: ProvisionVoiceNumberDeps,
   input: ProvisionVoiceNumberInput & { trunkSid?: string },
 ): Promise<ProvisionVoiceNumberResult> {
+  const numberOrigin = input.numberOrigin ?? "provisioned";
   const deployment = await deps.loadDeployment(input.deploymentId);
   if (!deployment) {
     return { ok: false, error: "deployment_not_found" };
@@ -131,7 +139,7 @@ export async function provisionVoiceNumber(
     await deps.updateDeployment(deployment.id, {
       phoneNumber,
       phoneNumberSid,
-      numberOrigin: "provisioned",
+      numberOrigin,
     });
   }
 

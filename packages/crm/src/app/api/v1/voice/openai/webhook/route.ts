@@ -85,6 +85,13 @@ import {
   meterCallEnd,
 } from "@/lib/telephony/voice-metering-orchestration";
 import { getWalletBalanceMicros, debitVoiceUsage } from "@/lib/build/wallet-store";
+// Voice deploy + metered billing (Task 6) — the onShortfall hook suspends the
+// builder's SF-managed Twilio subaccount on a metered shortfall.
+// suspendBuilderSubaccount is fail-soft internally (never throws); this call
+// site's onShortfall is itself already wrapped by meterCallEnd's own
+// try/catch (voice-metering-orchestration.ts), so this cannot throw into the
+// call teardown path.
+import { suspendBuilderSubaccount, buildSfManagedDeps } from "@/lib/telephony/sf-managed";
 
 // Node runtime (not edge) — we use node:crypto for HMAC and the Node global
 // WebSocket/undici options bag for the realtime control socket.
@@ -462,8 +469,9 @@ export async function POST(request: Request): Promise<Response> {
                   {
                     env: process.env,
                     debitVoiceUsage,
-                    onShortfall: async (o) => {
-                      console.warn("[voice-billing] shortfall", o);
+                    onShortfall: async (orgId) => {
+                      console.warn("[voice-billing] shortfall", orgId);
+                      await suspendBuilderSubaccount(orgId, buildSfManagedDeps());
                     },
                   },
                 );

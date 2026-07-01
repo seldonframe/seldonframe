@@ -64,6 +64,7 @@ import type { SoulV4 } from "@/lib/soul-compiler/schema";
 import { resolveBuilderTelephony } from "@/lib/telephony/config";
 import { createTwilioTelephonyClient } from "@/lib/telephony/twilio-client";
 import { provisionVoiceNumber } from "@/lib/telephony/provision-voice-number";
+import { ensureBuilderSubaccount, buildSfManagedDeps } from "@/lib/telephony/sf-managed";
 
 export type CreateDeploymentActionResult =
   | { ok: true; id: string }
@@ -704,12 +705,20 @@ export type CancelDeploymentActionResult =
 /**
  * Cancel a deployment (→ 'canceled'). Org-guarded.
  *
- * Release-on-cancel: if the number was PROVISIONED by SeldonFrame
- * (numberOrigin === 'provisioned') and a phoneNumberSid is on file, we release
- * it from the builder's Twilio account so they stop paying for it. Release is
- * BEST-EFFORT — if the Twilio call throws (already released, network), we log
- * and still cancel the row. BYO numbers (numberOrigin !== 'provisioned') are
- * never released — the builder owns them.
+ * Release-on-cancel: if the number was acquired THROUGH SeldonFrame — BYO
+ * ('provisioned', bought in the builder's OWN Twilio account) OR SF-managed
+ * ('sf_managed', bought in the builder's Twilio SUBACCOUNT under SF's master —
+ * Task 6, voice-deploy metered billing) — and a phoneNumberSid is on file, we
+ * release it so the builder stops paying for it. Release is BEST-EFFORT — if
+ * the Twilio call throws (already released, network, creds gone), we log and
+ * still cancel the row. Any other numberOrigin (byo / null / legacy) is never
+ * released — the builder owns that number outright.
+ *
+ * The two origins release through DIFFERENT Twilio accounts (the builder's own
+ * vs. their SF-managed subaccount), so each resolves its own client; the
+ * fail-soft behavior and the "still cancel the row regardless" outcome are
+ * IDENTICAL for both — sf_managed is additive, the BYO path is byte-for-byte
+ * unchanged.
  *
  * After a successful release we null phoneNumber + phoneNumberSid so the row no
  * longer points at a dead number (and frees the unique phone index). Pause, by
@@ -738,11 +747,16 @@ export async function cancelDeploymentAction(
     return { ok: false, error: "not_found" };
   }
 
-  // Release-on-cancel for SeldonFrame-provisioned numbers (best-effort).
-  const shouldRelease =
+  // Release-on-cancel for SeldonFrame-acquired numbers (best-effort). BYO
+  // ('provisioned') releases through the builder's OWN Twilio account (the
+  // ORIGINAL, unchanged path); sf_managed releases through their SF-managed
+  // Twilio SUBACCOUNT (Task 6, additive).
+  const shouldReleaseByo =
     existing.numberOrigin === "provisioned" && Boolean(existing.phoneNumberSid);
+  const shouldReleaseSfManaged =
+    existing.numberOrigin === "sf_managed" && Boolean(existing.phoneNumberSid);
 
-  if (shouldRelease) {
+  if (shouldReleaseByo) {
     try {
       const telephony = await resolveBuilderTelephony(orgId);
       if (telephony.ok) {
@@ -762,6 +776,35 @@ export async function cancelDeploymentAction(
     } catch (err) {
       // Already released / network / etc. — swallow and still cancel.
       console.warn("[deployments][cancel] number release failed (continuing)", {
+        deploymentId: existing.id,
+        error: err instanceof Error ? err.message : String(err),
+      });
+    }
+  } else if (shouldReleaseSfManaged) {
+    try {
+      // The org's persisted sfTelephony subaccount creds (decrypted). An
+      // sf_managed deployment always has a subaccount already on file (it was
+      // created by provisionSfManagedNumber before the number was bought), so
+      // this is the zero-Twilio-call "already persisted" fast path of
+      // ensureBuilderSubaccount — it never CREATES a new subaccount here.
+      const subaccount = await ensureBuilderSubaccount(orgId, buildSfManagedDeps());
+      if (subaccount.ok) {
+        const client = createTwilioTelephonyClient({
+          accountSid: subaccount.subaccountSid,
+          authToken: subaccount.authToken,
+        });
+        await client.releaseNumber({ phoneNumberSid: existing.phoneNumberSid! });
+      } else {
+        // Creds gone / not configured — can't call Twilio. Cancel anyway; the
+        // number may linger in the subaccount but we don't block the cancel.
+        console.warn(
+          "[deployments][cancel] skipping sf_managed release — subaccount unresolved",
+          { deploymentId: existing.id, error: subaccount.error },
+        );
+      }
+    } catch (err) {
+      // Already released / network / etc. — swallow and still cancel.
+      console.warn("[deployments][cancel] sf_managed number release failed (continuing)", {
         deploymentId: existing.id,
         error: err instanceof Error ? err.message : String(err),
       });
@@ -791,8 +834,9 @@ export async function cancelDeploymentAction(
     // The partial unique index `deployments_phone_number_uniq` counts ANY
     // non-null phone_number — even on a canceled row — so leaving it set
     // permanently locks that number from reuse and the NEXT activation throws a
-    // 23505 unique violation (→ a 500 on /studio/clients). `shouldRelease` gates
-    // only the Twilio CARRIER release above, NOT whether we free our column.
+    // 23505 unique violation (→ a 500 on /studio/clients). `shouldReleaseByo` /
+    // `shouldReleaseSfManaged` gate only the Twilio CARRIER release above, NOT
+    // whether we free our column.
     patch: { status: "canceled", phoneNumber: null, phoneNumberSid: null },
     deps: _deps,
   });
