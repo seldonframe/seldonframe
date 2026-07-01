@@ -15,7 +15,7 @@
 So a builder is told to run an SMB chatbot, never "build an agent to sell." Plus the response foregrounds **operator furniture** (contacts/bookings/deals counts, Twilio-not-configured nags) that a builder does not care about. Result: "am I creating a chatbot? … this is an onboarding, right?" Secondary friction: **two divergent connect recipes** (hosted HTTP `--header` vs local `npx … -e SELDONFRAME_API_KEY`) + the 401-stale-process dance.
 
 ## Decisions (locked)
-1. **Approach B — reframe the entry.** A `lens: "builder"` branch in `get_workspace_state` returns a builder-framed `next_steps` (the build→sell ladder) and hides operator furniture. No new MCP tool, no migration, no persisted workspace flag. The lens is **ephemeral/per-session**, set by the SKILL passing the hint. (Rejected: a dedicated `start_building` tool = net-new surface; pure-skill = leaves the misleading operator `next_steps` firing.)
+1. **Approach B (additive form) — reframe via an additive builder block + the SKILL as the lens.** `get_workspace_state` ALWAYS attaches a small `builder` block (the build→sell ladder: current rung + the one next action, computed from data it already has). The rewritten SKILL — read only by builder-agents — directs the agent to follow the `builder` block and ignore the CRM `counts` + operator `next_steps`. The operator path is unchanged (they ignore the extra block). **Why additive, not a `lens` param:** the `@seldonframe/mcp` server is a separately-published package (NOT in this repo — confirmed: no in-repo MCP server), so a tool arg can't be added from here; and `guardApiRequest` exposes only `orgId`, not the calling key, so there is no in-repo server-side builder signal without tagging keys. Additive is the thinnest fully-in-repo path and textbook thin-harness/fat-skill. **No new tool, no MCP-package change, no migration, no persisted flag, no key tagging.** (Rejected: `lens` param = out-of-repo MCP change; builder-key auto-detect = more surface + existing keys need re-mint; dedicated `start_building` tool = net-new surface; pure-skill = no deterministic ground truth.)
 2. **Thin harness + fat skills + Brain (Karpathy).** The only harness change is one **pure** ladder function + a small branch in the existing route. The SKILL.md is the *director* — it carries the narration, the one-rung-at-a-time discipline, and the "ignore CRM" instruction. The Brain (evals + loop-memory + lessons) is already the learning substrate; we make it a *visible rung*.
 3. **Eval / test / logs are visible rungs**, not afterthoughts — the exact gap the builder felt.
 4. **One workspace, first free, single Soul** — the lens reframes; it does not create a separate builder workspace.
@@ -41,18 +41,14 @@ Notes:
 Four focused units:
 
 1. **`src/lib/build/builder-ladder.ts` (NEW, pure).** `buildBuilderLadder(signals): BuilderLadder` — takes a small signal object (agent count, per-agent eval-gate booleans, listing+price presence per the builder's listings, wallet balance, marketplace base URL) and returns `{ rungs: BuilderRung[], currentRung, nextActions: string[], progress: {done, total} }`. No I/O, no clock, no `"use server"`. Unit-tested exhaustively (each rung transition). This is the analogue of `buildOnboardingSteps`.
-2. **`get_workspace_state` lens branch** (`src/app/api/v1/workspace-state/route.ts`, small edit). Accept `?lens=builder`. The **MCP tool `get_workspace_state` gains an optional `lens` arg** that maps to the query param (wherever the MCP tool schema is defined — the `@seldonframe/mcp` server / tool registry; the plan locates it), so the SKILL can pass `get_workspace_state({ lens: "builder" })`. When `lens=builder`:
-   - Gather the builder signals (reuse the agent+eval data already computed; add a cheap `list_my_listings`-style read for listing/price presence + wallet balance).
-   - Replace `next_steps` with `buildBuilderLadder(...).nextActions`.
-   - Add a `builder` block: the ladder rungs with status + progress, the wallet balance, and listing links.
-   - **Hide operator furniture:** omit `counts.{contacts,bookings,deals}` and the operator-only integration nags (Twilio/Kit/Mailchimp); keep only builder-relevant integrations (anthropic/openai for running/voice, composio for tools). Non-builder callers are unchanged.
-3. **`src/lib/build/skill-md.ts` rewrite** (the fat director). Reframe SKILL.md so the agent: (a) calls `get_workspace_state({ lens: "builder" })` **first** and treats a 401 as "reconnect, your key didn't load"; (b) acts as the onboarding host — states the goal ("build an agent to **sell**"), walks the ladder **one rung at a time**, narrates each step + its cost/earn; (c) **ignores CRM/bookings/contacts tools unless explicitly asked**; (d) explicitly names the test/eval/observe tools at their rungs. The build→test→eval→list→price→observe arc is the spine.
+2. **`get_workspace_state` additive `builder` block** (`src/app/api/v1/workspace-state/route.ts`, additive edit). Compute the builder signals — `agentCount` + per-agent `eval_meets_publish_gate` are ALREADY computed; add a cheap listing/price read + wallet balance, folded into the EXISTING `Promise.all` so wall-clock latency is unchanged — and attach a `builder` block for every caller: `{ rungs, current_rung, next_action, progress, wallet_balance_usd, listing_links }`. **Purely additive** — `next_steps`, `counts`, `integrations` are untouched, so the operator response is byte-for-byte unchanged except for the extra block. No `lens` param, no MCP-package change. The *hiding* of operator furniture happens in the SKILL (the lens), not the route.
+3. **`src/lib/build/skill-md.ts` rewrite** (the fat director — this is where the lens lives). Reframe SKILL.md so the agent: (a) calls `get_workspace_state` **first**, reads the `builder` block (current rung + next action), and **ignores the `counts` + operator `next_steps`**; treats a 401 as "reconnect, your key didn't load"; (b) acts as the onboarding host — states the goal ("build an agent to **sell**"), walks the ladder **one rung at a time**, narrates each step + its cost/earn; (c) **ignores CRM/bookings/contacts tools unless explicitly asked**; (d) explicitly names the test/eval/observe tools at their rungs. The build→test→eval→list→price→observe arc is the spine.
 4. **Connect consolidation** (SKILL.md + `/build` + `src/app/docs/getting-started/connect-claude-code`). One canonical hosted-HTTP recipe; npx/stdio demoted to a footnote.
 
 No migration. No new MCP tool. No persisted flag.
 
 ## Data flow
-`set up SKILL.md` → agent reads the (rewritten) SKILL → calls `get_workspace_state({ lens: "builder" })` → gets the ladder + the one next action + a clean builder view → guides the human through that rung → the rung's tool call advances state → agent re-calls `get_workspace_state({ lens: "builder" })` to re-orient → … → rung 6 (observe & earn).
+`set up SKILL.md` → agent reads the (rewritten) SKILL → calls `get_workspace_state` → reads the `builder` block (current rung + the one next action) and, per the SKILL, ignores `counts` + operator `next_steps` → guides the human through that rung → the rung's tool call advances state → agent re-calls `get_workspace_state` to re-orient → … → rung 6 (observe & earn).
 
 ## Error handling
 - **401 on `get_workspace_state`** → the SKILL instructs: "your key didn't load into the MCP process — reconnect (`/mcp` → reconnect, or restart), then retry." (Fixes the stale-process confusion deterministically.)
@@ -66,8 +62,8 @@ No migration. No new MCP tool. No persisted flag.
 
 ## Testing
 - **`builder-ladder.spec.ts`:** each rung transition (empty → Build; agent-no-eval → Eval; eval-pass-no-listing → List; listed-no-price → Price; priced → Observe); the self-adapt case (existing agents → List); progress counts; determinism.
-- **workspace-state lens test:** `lens=builder` returns builder `next_steps` (mentions build/sell + the ladder tools), includes the `builder` block, and **omits** `counts.contacts/bookings/deals`; default (no lens) is byte-for-byte unchanged.
-- **SKILL.md pins:** names `get_workspace_state({ lens: "builder" })` as step one, the one-canonical hosted-HTTP connect, the 401-reconnect instruction, and the test/eval/logs tools at their rungs; deterministic output.
+- **workspace-state builder-block test:** the response includes a `builder` block whose `current_rung`/`next_action` match the ladder for the given state (empty → Build; existing agents, no listing → List; etc.), and the existing `counts`/`next_steps`/`integrations` are still present (additive — operator path unchanged).
+- **SKILL.md pins:** names `get_workspace_state` as step one + the instruction to read the `builder` block and ignore `counts`/operator `next_steps`; the one-canonical hosted-HTTP connect; the 401-reconnect instruction; the test/eval/logs tools at their rungs; deterministic output.
 
 ## Out of scope
 - A persisted "builder workspace" type or a web builder dashboard (this is IDE/MCP-native).
@@ -76,6 +72,6 @@ No migration. No new MCP tool. No persisted flag.
 - Auto-detecting builder-intent from key origin (possible future; the SKILL passing `lens` is enough now).
 
 ## Open items (resolve in the plan)
-- Exact shape of the cheap listing/price/wallet read added to the lens branch (reuse `list_my_listings` internals vs a direct query).
+- Exact shape of the cheap listing/price/wallet read feeding the `builder` block (reuse `list_my_listings` / `loadAgentMarketplaceStatusForOrg` internals vs a direct query), folded into the route's existing `Promise.all`.
 - Whether the `builder` block should include a short "earnings so far" line (nice-to-have) or defer to `/build/wallet`.
 - Copy pass on the six `nextAction` strings (they're load-bearing — pin them in the pure module + tests).
