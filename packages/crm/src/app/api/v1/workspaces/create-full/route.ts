@@ -19,6 +19,17 @@ import { checkRateLimit } from "@/lib/utils/rate-limit";
 // v1.51 — auto-chatbot + client portal URL + tier upsell.
 import { createAgent } from "@/lib/agents/store";
 import { buildTierUpsell } from "@/lib/workspace/tier-upsell";
+// Smoke FIX-4 — /clients/new parity: after the atomic create, run the SAME
+// landing enrichment the dashboard + web-onboarding flows run (health-template
+// autopick + the R1 multi-page generation step) so an MCP-created workspace
+// gets the real multi-page site, not the legacy soul-seeded single page.
+import { applyLandingTemplateForWorkspace } from "@/lib/landing/apply-landing-template";
+import { runR1LandingStep } from "@/lib/landing/r1-landing-step";
+
+// The atomic create already makes several sequential LLM calls; the R1 parity
+// step adds two more (payload + ONE batched service-pages call). Same guard
+// class as /api/v1/landing/r1/generate (60s for its single call).
+export const maxDuration = 300;
 
 type Body = {
   business_name?: unknown;
@@ -246,6 +257,53 @@ export async function POST(request: Request) {
     { request, orgId: workspaceId, status: 200, durationMs: Date.now() - startedAt }
   );
 
+  // Smoke FIX-4 — landing parity with /clients/new (paste/URL onboarding).
+  // Order copied from run-create-from-paste.ts steps 7d2→7e: health-template
+  // autopick first, then the R1 multi-page payload (landing + per-service
+  // detail pages). Both fail-soft: any failure leaves the soul-seeded landing
+  // in place and NEVER blocks workspace creation.
+  let landingEngine: "r1" | "soul_seed" = "soul_seed";
+  let landingArchetype: string | null = null;
+  try {
+    await applyLandingTemplateForWorkspace(workspaceId, {
+      businessName: input.business_name,
+      businessDescription: input.business_description,
+      services: input.services,
+    });
+  } catch (err) {
+    logEvent(
+      "landing_template_autopick_failed",
+      { workspace_id: workspaceId, error: err instanceof Error ? err.message : String(err) },
+      { request, status: 200, severity: "warn" }
+    );
+  }
+  const platformKey = process.env.ANTHROPIC_API_KEY?.trim();
+  if (platformKey) {
+    const r1 = await runR1LandingStep({
+      workspaceId,
+      facts: input,
+      byokKey: platformKey,
+      // Full multi-page parity: service detail pages ON (unlike the keyless
+      // ChatGPT tool, which trades them away for chat-client latency).
+    });
+    if (r1.ok) {
+      landingEngine = "r1";
+      landingArchetype = r1.archetype;
+    } else {
+      logEvent(
+        "r1_landing_step_failed",
+        { workspace_id: workspaceId, reason: r1.reason },
+        { request, status: 200, severity: "warn" }
+      );
+    }
+  } else {
+    logEvent(
+      "r1_landing_step_skipped_no_key",
+      { workspace_id: workspaceId },
+      { request, status: 200, severity: "warn" }
+    );
+  }
+
   // v1.51 — auto-create a draft chatbot scaffold so every workspace
   // ships with the AI chatbot ready to publish. Operator can refine
   // FAQ + publish to live via update_website_chatbot + publish_agent.
@@ -290,6 +348,11 @@ export async function POST(request: Request) {
         ? "Paste this <script> onto the client's existing website (anywhere before </body>). The chatbot is in TEST mode by default — call publish_agent({ agent_id, status: 'live' }) once you've reviewed/edited the FAQ via update_website_chatbot."
         : null,
       chatbot_agent_id: chatbotAgentId,
+      // FIX-4 observability: which landing engine actually rendered. "r1"
+      // means the /clients/new-grade multi-page site; "soul_seed" means the
+      // R1 step failed (or no platform key) and the legacy seed remains.
+      landing_engine: landingEngine,
+      landing_archetype: landingArchetype,
       ...upsell,
     },
     { status: 200 }
