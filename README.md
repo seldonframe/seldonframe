@@ -49,6 +49,7 @@ An agent isn't a chatbot UI; it's three independent axes:
 - **Trigger** — *when it runs*: **inbound** (a call / chat / email / SMS arrives) · **event** (a domain event fires — `booking.completed`, `lead.created`, `invoice.paid`…) · **schedule** (a cron cadence).
 - **Skill** — *what it does*: receptionist · review-requester · speed-to-lead · win-back · digest…
 - **Channel** — *how it speaks*: voice · web chat · SMS · email · internal digest.
+- **Tools** — *what it can touch*: native tools (book against the real calendar · read/write the CRM · send SMS & email · take a message) **plus 1,000+ app integrations via Composio** (Google Calendar, Sheets, Slack, HubSpot, Notion, …), bound per-agent.
 
 `surface: voice | chat` (the old receptionist-only knob) is just one point in this space — `trigger=inbound`. One builder creates any agent; the marketplace sells any agent.
 
@@ -64,8 +65,8 @@ Two non-negotiables drive the roadmap: **the checker must be separate from the m
 |---|---|---|
 | **Trigger** | ✅ Shipped | Inbound + **event** triggers on the `SeldonEvent` bus. `booking.completed` → review-requester; `lead.created` → speed-to-lead, both sending outbound SMS/email. |
 | **State** | ✅ Shipped | Agent **loop-memory** in **Brain v2** — agents recall what they did before acting and record after. The review "ask once per customer" throttle is now a memory recall, not a bespoke flag. |
-| **Verify** (maker ≠ checker) | 🚧 In progress | A separate strict checker gates output before send — deterministic rubric (link/name present, length-bounded) first, an optional eval/LLM checker for judgment. |
-| **Guardrails / Stop** | 🚧 In progress | Per-agent guardrail layer (quote-guard, enforced read-back, throttle) + default brakes (max-iterations / token budget / no-progress) on looping or scheduled agents. |
+| **Verify** (maker ≠ checker) | ✅ Shipped | Deterministic validators grade every run — pass rates surface on each agent's health card and `/runs`; `run_agent_evals` replays scripted scenarios. Rolling out: the same checker as a hard pre-send gate + an LLM judge for judgment calls. |
+| **Guardrails / Stop** | ✅ Shipped | Quote-guard (never invent prices), enforced read-back before booking, per-contact throttles, booking-policy enforcement (hours · duration · required fields), hard call/iteration caps. Rolling out: generic token-budget brakes for long-looping agents. |
 | **Generate-by-default** | 🗺 Roadmap | One English sentence → trigger + skill + channel + guardrail + checker + state + stop, generated together. *"text every customer for a Google review the day after their job — never twice, only if completed"* emits all of it. |
 ### The loop, drawn
 
@@ -154,7 +155,7 @@ Agents that do real work end up touching real money — so the rails are platfor
 
 ## Use SeldonFrame from any IDE
 
-One npm package — [`@seldonframe/mcp`](https://www.npmjs.com/package/@seldonframe/mcp) — runs as a local MCP server in every major AI-native editor. Pick yours, paste the snippet, and ask your agent to build a workspace. **First workspace is free and needs no API key.**
+One npm package — [`@seldonframe/mcp`](https://www.npmjs.com/package/@seldonframe/mcp) — runs as a local MCP server in every major AI-native editor. Pick yours, paste the snippet, and ask your agent to build a workspace — your own website, booking page, intake form, and CRM, with the agent wired in. **First workspace is free and needs no API key.**
 
 <details>
 <summary><strong>Claude Code</strong></summary>
@@ -267,7 +268,7 @@ See the same six snippets, kept in sync, at [seldonframe.com/build](https://seld
 
 ## When you're ready to sell
 
-Your builder hub is **[seldonframe.com/build](https://seldonframe.com/build)** — publish an agent, set the price (monthly, per-call, per-outcome, or one-time), and any LLM can rent it over MCP. We ship the commodity agents as everyone's free floor, we never build vertical agents that compete with yours, and we never train on your prompts or data.
+Your builder hub is **[seldonframe.com/build](https://seldonframe.com/build)** — publish an agent, set the price (monthly, per-call, per-outcome, or one-time), and any LLM can rent it over MCP. **Every published agent gets a free storefront**: a public listing page with schema.org markup, a markdown twin, and `llms.txt` coverage — so both humans *and* AI agents can discover and buy it. We ship the commodity agents as everyone's free floor, we never build vertical agents that compete with yours, and we never train on your prompts or data.
 
 ## Pricing — no surprises
 

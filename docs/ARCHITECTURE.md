@@ -13,6 +13,7 @@ An agent isn't a chatbot UI; it's three independent axes:
 - **Trigger** — *when it runs*: **inbound** (a call / chat / email / SMS arrives) · **event** (a domain event fires — `booking.completed`, `lead.created`, `invoice.paid`…) · **schedule** (a cron cadence).
 - **Skill** — *what it does*: receptionist · review-requester · speed-to-lead · win-back · digest…
 - **Channel** — *how it speaks*: voice · web chat · SMS · email · internal digest.
+- **Tools** — *what it can touch*: native tools (book against the real calendar · read/write the CRM · send SMS & email · take a message) **plus 1,000+ app integrations via Composio** (Google Calendar, Sheets, Slack, HubSpot, Notion, …), bound per-agent.
 
 `surface: voice | chat` (the old receptionist-only knob) is just one point in this space — `trigger=inbound`. One builder creates any agent; the marketplace sells any agent.
 
@@ -28,8 +29,8 @@ Two non-negotiables drive the roadmap: **the checker must be separate from the m
 |---|---|---|
 | **Trigger** | ✅ Shipped | Inbound + **event** triggers on the `SeldonEvent` bus. `booking.completed` → review-requester; `lead.created` → speed-to-lead, both sending outbound SMS/email. |
 | **State** | ✅ Shipped | Agent **loop-memory** in **Brain v2** — agents recall what they did before acting and record after. The review "ask once per customer" throttle is now a memory recall, not a bespoke flag. |
-| **Verify** (maker ≠ checker) | 🚧 In progress | A separate strict checker gates output before send — deterministic rubric (link/name present, length-bounded) first, an optional eval/LLM checker for judgment. |
-| **Guardrails / Stop** | 🚧 In progress | Per-agent guardrail layer (quote-guard, enforced read-back, throttle) + default brakes (max-iterations / token budget / no-progress) on looping or scheduled agents. |
+| **Verify** (maker ≠ checker) | ✅ Shipped | Deterministic validators grade every run — pass rates surface on each agent's health card and `/runs`; `run_agent_evals` replays scripted scenarios. Rolling out: the same checker as a hard pre-send gate + an LLM judge for judgment calls. |
+| **Guardrails / Stop** | ✅ Shipped | Quote-guard (never invent prices), enforced read-back before booking, per-contact throttles, booking-policy enforcement (hours · duration · required fields), hard call/iteration caps. Rolling out: generic token-budget brakes for long-looping agents. |
 | **Generate-by-default** | 🗺 Roadmap | One English sentence → trigger + skill + channel + guardrail + checker + state + stop, generated together. *"text every customer for a Google review the day after their job — never twice, only if completed"* emits all of it. |
 
 ### The pieces
@@ -204,9 +205,10 @@ The bets we're making, in rough order. Each is contributor-friendly — drop int
 
 ### Soon
 
-- **Voice + SMS transports** — same chatbot, three channels. The chatbot you build today answers the phone tomorrow. Twilio + Vapi/Retell on the voice side; Twilio + WhatsApp Business on messaging. Eval-gated per channel (different scenarios for "phone interruptions" vs "late-night SMS").
-- **Self-improving agents** — runtime telemetry feeds back into skill-pack proposals. After 100 conversations, an agent can say *"I noticed customers ask about X 30 times — here's a draft skill addition. Approve or reject?"* Operator stays in the loop; agent does the work.
-- **Renderer-level motion preset gating** — `minimal` short-circuits motion entirely; `editorial` adds Counter, MagneticButton, TextReveal.
+- **SF-managed metered voice numbers (Tier-0)** — a funded wallet means `seldonframe deploy` provisions a real phone number and goes live in one command: no Twilio account, no OpenAI key, minutes metered against the prepaid ledger. (Built — activating.)
+- **The `improve` verb** — the eval gym on real runs: replay an agent against its last ~50 real conversations, surface failure modes, propose a blueprint patch, re-eval, redeploy. The self-improving loop with the operator holding approve/reject.
+- **The owner control room** — client-facing transcripts, an escalations queue, and approval gates (draft → approve → act) as a per-deployment autonomy dial you earn upward.
+- **ChatGPT App** — the marketplace inside ChatGPT (the Apps SDK speaks MCP, which every SeldonFrame agent already speaks).
 
 ### Mid-term — where the architecture starts to compound
 
