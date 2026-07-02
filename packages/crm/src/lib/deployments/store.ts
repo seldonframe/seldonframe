@@ -1416,3 +1416,49 @@ export async function listSfManagedDeploymentsForRent(): Promise<SfManagedRentDe
     delinquentSince: getDelinquentSince({ customization: r.customization }),
   }));
 }
+
+// ─── listActiveSfManagedDeploymentsForOrg (T10 review F3 — the
+//     workspace-state voice_billing surface, org-scoped) ────────────────────
+
+/**
+ * List every ACTIVE, SF-managed deployment for ONE org — the org-scoped twin
+ * of listSfManagedDeploymentsForRent (that one is deliberately global, for
+ * the cron; this one exists so workspace-state can surface `voice_billing`
+ * per deployment for the CALLING org only, never leaking cross-org rows).
+ * Same query shape (status='active' AND numberOrigin='sf_managed'), narrowed
+ * to builderOrgId, plus getDelinquentSince (delinquency.ts) so both org- and
+ * cron-scoped callers agree on the exact same parsing rule. Returns []
+ * (never throws internally — the caller wraps in fail-soft per this repo's
+ * "money read hiccup must never 500 the endpoint" convention) when there are
+ * none for this org.
+ */
+export async function listActiveSfManagedDeploymentsForOrg(
+  orgId: string,
+): Promise<SfManagedRentDeployment[]> {
+  if (!orgId) return [];
+  const { db } = await import("@/db");
+  const { deployments } = await import("@/db/schema/deployments");
+  const { and, eq } = await import("drizzle-orm");
+  const { getDelinquentSince } = await import("@/lib/telephony/delinquency");
+
+  const rows = await db
+    .select({
+      id: deployments.id,
+      builderOrgId: deployments.builderOrgId,
+      customization: deployments.customization,
+    })
+    .from(deployments)
+    .where(
+      and(
+        eq(deployments.builderOrgId, orgId),
+        eq(deployments.status, "active"),
+        eq(deployments.numberOrigin, "sf_managed"),
+      ),
+    );
+
+  return rows.map((r) => ({
+    deploymentId: r.id,
+    orgId: r.builderOrgId,
+    delinquentSince: getDelinquentSince({ customization: r.customization }),
+  }));
+}

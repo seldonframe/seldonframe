@@ -114,6 +114,13 @@ export type WorkspaceState = {
     agents?: { name: string; slug: string; stage: string; live: boolean }[];
     wallet_balance_usd?: number;
     fund_hint?: string | null;
+    /** T10 review, F3 — per-deployment voice billing health for every active
+     *  sf_managed (Tier-0) voice deployment this org owns. Additive; absent
+     *  when the server's read failed (fail-soft) or there are none. */
+    voice_deployments?: {
+      deployment_id: string;
+      voice_billing: { suspended: boolean; low_balance: boolean };
+    }[];
   };
 };
 

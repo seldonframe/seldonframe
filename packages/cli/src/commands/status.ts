@@ -34,6 +34,17 @@ export async function runStatusCommand(args: ParsedArgs, client: ApiClient, writ
             : String(ps);
   writer.out(`  earnings: $${(b.earnings?.accrued_usd ?? 0).toFixed(2)} (${payoutLabel})`);
   writer.out(`  balance:  $${(b.wallet_balance_usd ?? 0).toFixed(2)}`);
+  // T10 review, F3 — additive: only a suspended or low-balance voice
+  // deployment gets a line; a healthy one stays silent (matches this
+  // renderer's existing "only surface what needs the builder's attention"
+  // style, e.g. fund_hint/next_action below).
+  for (const d of b.voice_deployments ?? []) {
+    if (d.voice_billing.suspended) {
+      writer.out(`  ⚠ voice deployment ${d.deployment_id} is suspended — top up to reactivate.`);
+    } else if (d.voice_billing.low_balance) {
+      writer.out(`  ⚠ voice deployment ${d.deployment_id}: low balance — top up to avoid suspension.`);
+    }
+  }
   if (b.fund_hint) writer.out(`  ${b.fund_hint}`);
   if (b.next_action) writer.out(`\n→ Next: ${b.next_action}`);
   return 0;

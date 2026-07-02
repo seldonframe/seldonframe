@@ -149,18 +149,40 @@ export type RunDeployDeps = {
     phone: NonNullable<RunDeployInput["body"]["phone"]>,
   ) => Promise<ApplyPhoneResult>;
   /**
+   * T10 review, F2 — whether the org has BYO Twilio creds configured
+   * (wraps `resolveBuilderTelephony(orgId)` success/failure). The spec's text
+   * is explicit that the SF-managed path applies when "no BYO creds but
+   * Tier-0 available" — a BYO-equipped org running a bare `seldonframe
+   * deploy` must get the EXACT pre-Task-10 outcome (`phone_required`), not a
+   * surprise SF number + rent debit. Consulted before EITHER Tier-0 entry
+   * point (4a's zero-connect attempt and 4b's rescue) — both are gated on
+   * this being `false`, and neither ever calls Tier-0 when it's `true`.
+   */
+  hasByoTelephony: (orgId: string) => Promise<boolean>;
+  /**
    * Task 10 — the deploy-verb Tier-0 payoff. Tried whenever a number is
-   * needed, none is attached, and the flow would otherwise fall back on
+   * needed, none is attached, BYO telephony is absent (F2's
+   * `hasByoTelephony` gate), and the flow would otherwise fall back on
    * missing BYO Twilio creds (no `phone` in the body at all, OR `applyPhone`
-   * failing specifically because BYO creds are missing) — i.e. exactly the
-   * "no BYO creds" gap Tier-0 exists to fill. The real wiring
-   * (buildDefaultProvisionSfManagedDeps) checks voiceManagedEnabled + master
-   * creds + wallet balance internally and reports `available:false` with
-   * ZERO side effects when Tier-0 isn't a live option for this deploy.
+   * failing with EXACTLY `needs_telephony` — T10 review F1: every OTHER
+   * applyPhone failure reason, e.g. `invalid_phone`/`phone_in_use`/
+   * `invalid_area_code`/`attach_failed`, is a real, unrelated failure that
+   * must pass through unchanged, never triggering an unconsented SF-managed
+   * purchase). The real wiring (buildDefaultProvisionSfManagedDeps) checks
+   * voiceManagedEnabled + master creds + wallet balance internally and
+   * reports `available:false` with ZERO side effects when Tier-0 isn't a
+   * live option for this deploy.
+   *
+   * `areaCode` (T10 review F1) — the caller's explicit area code
+   * (`body.phone.areaCode` when `phone.mode==="provision"`), so it wins over
+   * clientContact-derivation/the 512 default at the real wiring's own
+   * fallback chain. `undefined` when the caller supplied none (forward mode,
+   * or no `phone` in the body at all — the 4a zero-connect path).
    */
   provisionSfManagedIfAvailable: (
     orgId: string,
     deployment: Deployment,
+    areaCode: string | undefined,
   ) => Promise<ProvisionSfManagedIfAvailableResult>;
   /** Compute the go-live wizard URL base for a `needs_connect` response. */
   wizardUrlFor: (wizardPath: string) => string;
@@ -183,14 +205,20 @@ export type RunDeployDeps = {
  *   2. resolve source (fails) → the typed source error
  *   3. readiness not ready    → {status:"needs_connect", wizardUrl, …}
  *   4. needs a number + none attached:
- *        4a. no `phone` in body → try Tier-0 FIRST (the "ZERO connects"
- *            payoff: a funded wallet needs no body input at all). Tier-0
- *            unavailable → {reason:"phone_required"}, byte-identical to
- *            pre-Task-10.
- *        4b. `phone` in body → apply it (BYO forward/provision). On failure,
- *            Tier-0 rescues ONLY when it's actually available — an
- *            unavailable Tier-0 surfaces the ORIGINAL applyPhone failure
- *            unchanged (never silently swaps a caller-visible reason).
+ *        4a. no `phone` in body → BYO absent (F2's `hasByoTelephony` gate)
+ *            → try Tier-0 FIRST (the "ZERO connects" payoff: a funded wallet
+ *            needs no body input at all). BYO PRESENT, or Tier-0 unavailable
+ *            → {reason:"phone_required"}, byte-identical to pre-Task-10.
+ *        4b. `phone` in body → apply it (BYO forward/provision). On a
+ *            failure whose reason is EXACTLY `needs_telephony` (F1 —
+ *            consent-scoped: this is the one reason that means "no BYO
+ *            creds configured") AND BYO absent (F2), Tier-0 rescues ONLY
+ *            when it's actually available. Every OTHER applyPhone failure
+ *            reason (invalid_phone / phone_in_use / invalid_area_code /
+ *            attach_failed / …) — or a BYO-present org — surfaces the
+ *            ORIGINAL applyPhone failure unchanged; Tier-0 is never even
+ *            consulted (never silently swaps a caller-visible reason for an
+ *            unconsented SF-managed purchase).
  *        Either path: a Tier-0 attempt that IS available but fails for a
  *        real reason (insufficient_balance / twilio_error / …) is a hard
  *        failure — it rides the pre-existing `{ok:false,reason}` shape, so
@@ -234,12 +262,21 @@ export async function runDeploy(
   //    skip straight to go-live even with no `phone` in the body.
   const needsNumber = deps.deploymentNeedsNumber(blueprint, templateType);
   if (needsNumber && !deployment.phoneNumber) {
+    // F2 — Tier-0 (both 4a and 4b) is gated on BYO telephony being ABSENT.
+    // Only read this when a number is actually needed and unattached (the
+    // exact scope of this whole branch) — a chat-only or already-numbered
+    // deploy never touches it.
+    const byoPresent = await deps.hasByoTelephony(input.orgId);
+
     if (!input.body.phone) {
       // No phone input at all — the deploy-verb Tier-0 payoff (Task 10):
       // try SF's zero-connect instant number BEFORE demanding one from the
-      // caller. Unavailable (not configured / wallet not funded) → the
-      // pre-Task-10 behavior, byte-identical.
-      const tier0 = await deps.provisionSfManagedIfAvailable(input.orgId, deployment);
+      // caller. BYO present, or Tier-0 unavailable (not configured / wallet
+      // not funded) → the pre-Task-10 behavior, byte-identical.
+      if (byoPresent) {
+        return { ok: false, reason: "phone_required" };
+      }
+      const tier0 = await deps.provisionSfManagedIfAvailable(input.orgId, deployment, undefined);
       if (tier0.ok) {
         deployment = tier0.deployment;
       } else if (tier0.available) {
@@ -248,20 +285,20 @@ export async function runDeploy(
         return { ok: false, reason: "phone_required" };
       }
     } else {
-      const phoneResult = await deps.applyPhone(
-        input.orgId,
-        deployment,
-        templateType,
-        blueprint,
-        input.body.phone,
-      );
+      const phone = input.body.phone;
+      const phoneResult = await deps.applyPhone(input.orgId, deployment, templateType, blueprint, phone);
       if (phoneResult.ok) {
         deployment = phoneResult.deployment;
-      } else {
-        // BYO failed — Tier-0 rescues ONLY when it's a live option; an
-        // unavailable Tier-0 must not mask the original, caller-supplied
-        // phone mode's real failure reason.
-        const tier0 = await deps.provisionSfManagedIfAvailable(input.orgId, deployment);
+      } else if (phoneResult.reason === "needs_telephony" && !byoPresent) {
+        // F1 — the rescue is CONSENT-SCOPED to exactly this one reason: it's
+        // the only applyPhone failure that means "no BYO creds configured",
+        // which is the whole gap Tier-0 exists to fill. Every other reason
+        // (invalid_phone / phone_in_use / invalid_area_code / attach_failed)
+        // — and a BYO-present org even on needs_telephony (F2) — falls
+        // straight to the `else` below, unchanged, WITHOUT ever invoking the
+        // Tier-0 seam (a real consent boundary, not just an ignored result).
+        const areaCode = phone.mode === "provision" ? phone.areaCode : undefined;
+        const tier0 = await deps.provisionSfManagedIfAvailable(input.orgId, deployment, areaCode);
         if (tier0.ok) {
           deployment = tier0.deployment;
         } else if (tier0.available) {
@@ -269,6 +306,8 @@ export async function runDeploy(
         } else {
           return { ok: false, reason: phoneResult.reason, missing: phoneResult.missing };
         }
+      } else {
+        return { ok: false, reason: phoneResult.reason, missing: phoneResult.missing };
       }
     }
   }

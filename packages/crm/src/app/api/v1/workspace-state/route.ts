@@ -52,6 +52,9 @@ import { computeDeployReadiness, type DeployReadiness } from "@/lib/deployments/
 // Task 10 — Tier-0 (SF-managed, zero-connect) availability signal.
 import { voiceManagedEnabled, TIER0_READY_FLOOR_MICROS } from "@/lib/telephony/voice-metering";
 import { resolveMasterTwilio } from "@/lib/telephony/sf-managed";
+// T10 review, F3 — per-deployment voice_billing (suspended/low_balance).
+import { computeVoiceBillingSignal } from "@/lib/telephony/delinquency";
+import { listActiveSfManagedDeploymentsForOrg } from "@/lib/deployments/store";
 import type { AgentTemplate } from "@/db/schema/agent-templates";
 
 export async function GET(request: Request) {
@@ -344,6 +347,18 @@ export async function GET(request: Request) {
     walletMicros >= TIER0_READY_FLOOR_MICROS;
   const templateReadiness = await buildTemplateDeployReadiness(orgId, tier0Available);
 
+  // voice_billing (T10 review, F3) — for every ACTIVE sf_managed voice
+  // deployment this org owns, surface whether it's currently suspended
+  // (a delinquentSince marker from Task 6/7's rent cron or the usage-
+  // shortfall webhook) and/or the wallet is below the accept floor (the SAME
+  // ACCEPT_FLOOR_MICROS the live-call accept-gate uses — see
+  // computeVoiceBillingSignal). Reuses the SAME `walletMicros` balance
+  // already fetched above (zero extra DB round trips), so this is additive
+  // to `tier0Available`'s cost, not a second wallet read. Entirely fail-soft:
+  // any failure (listing this org's sf_managed deployments) drops the whole
+  // block silently — this endpoint must never 500 from a wallet/DB hiccup.
+  const voiceBilling = await buildVoiceBillingForOrg(orgId, walletMicros);
+
   // 6. Compose response. Designed to be self-explanatory to an LLM:
   // each section answers a question Claude Code would otherwise have
   // to ask via separate tool calls.
@@ -412,6 +427,14 @@ export async function GET(request: Request) {
       // array masquerading as "no templates") only when the whole read
       // failed — see the fail-soft wrapper.
       ...(templateReadiness ? { templates: templateReadiness } : {}),
+      // Additive (T10 review, F3) — per-deployment voice_billing signal for
+      // every active sf_managed voice deployment this org owns. Omitted
+      // entirely (never an empty array masquerading as "no voice
+      // deployments") only when the whole read failed — see
+      // buildVoiceBillingForOrg's fail-soft wrapper. An org with zero active
+      // sf_managed deployments gets `voice_deployments: []`, which IS a
+      // meaningful, successfully-computed answer (distinct from omission).
+      ...(voiceBilling ? { voice_deployments: voiceBilling } : {}),
     },
   });
 }
@@ -525,6 +548,49 @@ async function buildTemplateDeployReadiness(
   } catch (err) {
     console.warn(
       "[workspace-state] buildTemplateDeployReadiness failed:",
+      err instanceof Error ? err.message : String(err),
+    );
+    return null;
+  }
+}
+
+// ─── voice_billing (T10 review, F3) ─────────────────────────────────────────
+
+type VoiceDeploymentBillingEntry = {
+  deployment_id: string;
+  voice_billing: { suspended: boolean; low_balance: boolean };
+};
+
+/**
+ * List this org's active sf_managed voice deployments and attach each one's
+ * `voice_billing` signal (suspended / low_balance) via the pure
+ * computeVoiceBillingSignal (delinquency.ts) — `suspended` per-deployment
+ * (its own delinquentSince marker), `low_balance` shared across all of them
+ * (one wallet per org; `walletMicros` is the SAME balance already fetched for
+ * `builder.wallet_balance_usd`/`tier0Available` above, so this adds ZERO
+ * extra DB round trips). Entirely fail-soft: listActiveSfManagedDeploymentsForOrg
+ * throwing (or anything else in here failing) returns `null` — the caller
+ * OMITS `builder.voice_deployments` entirely rather than 500ing the whole
+ * endpoint over a wallet/DB hiccup. An org with no active sf_managed
+ * deployments still gets a successfully-computed `[]` (never null on the
+ * happy path) — distinct from the omission-on-failure case.
+ */
+async function buildVoiceBillingForOrg(
+  orgId: string,
+  walletMicros: number,
+): Promise<VoiceDeploymentBillingEntry[] | null> {
+  try {
+    const deployments = await listActiveSfManagedDeploymentsForOrg(orgId);
+    return deployments.map((d) => ({
+      deployment_id: d.deploymentId,
+      voice_billing: computeVoiceBillingSignal({
+        delinquentSince: d.delinquentSince,
+        balanceMicros: walletMicros,
+      }),
+    }));
+  } catch (err) {
+    console.warn(
+      "[workspace-state] buildVoiceBillingForOrg failed:",
       err instanceof Error ? err.message : String(err),
     );
     return null;

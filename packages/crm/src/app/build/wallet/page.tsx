@@ -16,7 +16,11 @@ import { walletTransactions } from "@/db/schema/wallet";
 import { stripeConnections } from "@/db/schema";
 import { auth } from "@/auth";
 import { getOrgId } from "@/lib/auth/helpers";
-import { getWalletBalanceMicros, getWithdrawableEarningsMicros } from "@/lib/build/wallet-store";
+import {
+  getWalletBalanceMicros,
+  getWithdrawableEarningsMicros,
+  resolveWalletStripeMode,
+} from "@/lib/build/wallet-store";
 import { formatMicrosUsd } from "@/lib/build/wallet-format";
 import { isBillingEnabled } from "@/lib/marketplace/billing/billing-mode";
 import { MIN_WITHDRAW_USD } from "@/lib/build/payout";
@@ -85,9 +89,13 @@ export default async function BuildWalletPage() {
     );
   }
 
-  // Test-mode wallet is the dev/default; a live wallet only exists once a live
-  // top-up funds it. Read the test balance (the only one reachable in dev).
-  const balanceMicros = await getWalletBalanceMicros(orgId, "test");
+  // T10 review, F4 — read the SAME wallet a top-up actually credits
+  // (resolveWalletStripeMode — key-derived, "test" in dev/no Stripe key,
+  // "live" only with a real live key) instead of a hardcoded "test" literal.
+  // Left unthreaded, a live builder would see this page (the exact page the
+  // top-up success URL lands on) read $0.00 forever even after a real
+  // top-up funded their live wallet.
+  const balanceMicros = await getWalletBalanceMicros(orgId, resolveWalletStripeMode(process.env));
 
   // Withdraw signal for the Withdraw island — only gathered when billing is on
   // (money-safe: no Connect lookup / withdrawable read otherwise).

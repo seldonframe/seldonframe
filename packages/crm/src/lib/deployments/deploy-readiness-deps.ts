@@ -26,13 +26,21 @@ import type { Deployment } from "@/db/schema/deployments";
  * stripeMode-resolved wallet every metered path debits) holds at least
  * TIER0_READY_FLOOR_MICROS. Short-circuits on the cheap env checks before
  * ever touching the DB for a balance read.
+ *
+ * T10 review, F5 — the balance read fails CLOSED (`.catch(() => 0)`): a
+ * wallet/DB hiccup here must degrade to "Tier-0 unavailable"
+ * (needs_connect/phone_required, the pre-Task-10 experience), never to a
+ * false "available" that could offer a purchase path on bad data. This
+ * mirrors this same file's `readiness.ready` gate, which already fails safe
+ * on any thrown error upstream — money-safety means erring toward "ask the
+ * builder to connect BYO Twilio" over "silently assume they're funded."
  */
 async function resolveTier0Available(orgId: string): Promise<boolean> {
   if (!voiceManagedEnabled(process.env) || !resolveMasterTwilio(process.env)) {
     return false;
   }
   const stripeMode = resolveWalletStripeMode(process.env);
-  const balanceMicros = await getWalletBalanceMicros(orgId, stripeMode);
+  const balanceMicros = await getWalletBalanceMicros(orgId, stripeMode).catch(() => 0);
   return balanceMicros >= TIER0_READY_FLOOR_MICROS;
 }
 

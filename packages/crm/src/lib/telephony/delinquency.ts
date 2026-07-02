@@ -20,6 +20,7 @@
 
 import type { Deployment } from "@/db/schema/deployments";
 import type { DeploymentCustomization } from "@/lib/agents/persona/deployment-customization";
+import { shouldAcceptMeteredCall } from "@/lib/telephony/voice-metering";
 
 /** The reserved key under `deployments.customization` where the delinquency
  *  marker (an ISO timestamp) lives. `_`-prefixed + exported as a named
@@ -38,6 +39,33 @@ export function getDelinquentSince(
 ): string | null {
   const raw = (deployment.customization as Record<string, unknown> | null)?.[DELINQUENT_SINCE_KEY];
   return typeof raw === "string" && raw.trim() ? raw : null;
+}
+
+// ─── voice_billing signal (T10 review, F3) ──────────────────────────────────
+
+/** The `voice_billing` shape workspace-state surfaces per active sf_managed
+ *  deployment — see computeVoiceBillingSignal. */
+export type VoiceBillingSignal = { suspended: boolean; low_balance: boolean };
+
+/**
+ * Pure combinator for workspace-state's `voice_billing` block: `suspended` is
+ * exactly "this deployment carries a `delinquentSince` marker right now" (the
+ * same invariant rent-planner.ts's planMonthlyRent already treats as
+ * "currently delinquent" — a marker present but under the 30-day release
+ * grace); `low_balance` is exactly the inverse of shouldAcceptMeteredCall
+ * (voice-metering.ts) — the SAME floor the live-call accept-gate uses, so
+ * this signal never disagrees with what would actually happen on the next
+ * inbound call. No I/O — the caller resolves `delinquentSince` (getDelinquentSince)
+ * and `balanceMicros` (getWalletBalanceMicros, mode-threaded) beforehand.
+ */
+export function computeVoiceBillingSignal(input: {
+  delinquentSince: string | null;
+  balanceMicros: number;
+}): VoiceBillingSignal {
+  return {
+    suspended: input.delinquentSince !== null,
+    low_balance: !shouldAcceptMeteredCall(input.balanceMicros),
+  };
 }
 
 // ─── Store-level set / clear (org-scoped, additive) ──────────────────────────

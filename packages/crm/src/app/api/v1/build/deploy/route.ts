@@ -321,14 +321,17 @@ async function applyProvisionedNumber(
  * reports `available:true` with the reason — the orchestrator surfaces this
  * directly rather than masking it behind phone_required/needs_telephony.
  *
- * Area code: a true zero-connect flow can't ask the caller for one, so this
- * best-effort-derives it from the deployment's own client contact phone
- * (deriveAreaCode — the SAME extractor the buyer wizard's "Get a number"
- * pre-fill uses) and falls back to a well-known always-serviced NANP area
- * code (512, Austin TX) when no contact phone is on file — Twilio's search
- * still returns candidates nationally-adjacent to a real area code, and a
- * genuine `no_numbers_available` still surfaces honestly rather than being
- * swallowed.
+ * Area code (T10 review F1): the caller's explicit `requestedAreaCode` (from
+ * `body.phone.areaCode` when `phone.mode==="provision"`) wins when present —
+ * a caller who typed an area code should get THAT area code even on the
+ * Tier-0 rescue path, not a silently-substituted one. Absent (forward mode,
+ * or the true zero-connect 4a path with no `phone` in the body at all) falls
+ * back to the same best-effort chain as before: derive it from the
+ * deployment's own client contact phone (deriveAreaCode — the SAME extractor
+ * the buyer wizard's "Get a number" pre-fill uses), then a well-known
+ * always-serviced NANP area code (512, Austin TX) — Twilio's search still
+ * returns candidates nationally-adjacent to a real area code, and a genuine
+ * `no_numbers_available` still surfaces honestly rather than being swallowed.
  */
 async function applyTier0IfAvailable(
   // Unused: the RunDeployDeps signature mirrors applyPhone's (orgId,
@@ -339,8 +342,10 @@ async function applyTier0IfAvailable(
   // bearer-resolved orgId).
   _orgId: string,
   deployment: Deployment,
+  requestedAreaCode: string | undefined,
 ): Promise<ProvisionSfManagedIfAvailableResult> {
-  const areaCode = deriveAreaCode(deployment.clientContact?.phone) ?? DEFAULT_TIER0_AREA_CODE;
+  const areaCode =
+    requestedAreaCode ?? deriveAreaCode(deployment.clientContact?.phone) ?? DEFAULT_TIER0_AREA_CODE;
 
   const result = await provisionSfManagedNumber(
     { deployment, areaCode },
@@ -416,7 +421,13 @@ function buildRealRunDeployDeps(): RunDeployDeps {
       phone.mode === "forward"
         ? applyForwardedNumber(deployment, templateType, blueprint, phone.number)
         : applyProvisionedNumber(orgId, deployment, templateType, blueprint, phone.areaCode),
-    provisionSfManagedIfAvailable: (orgId, deployment) => applyTier0IfAvailable(orgId, deployment),
+    // T10 review F2 — gate BOTH Tier-0 entry points on BYO telephony being
+    // absent. resolveBuilderTelephony is the exact primitive
+    // applyProvisionedNumber's own needs_telephony check already uses; this
+    // is a read-only success/failure probe (no side effects either way).
+    hasByoTelephony: async (orgId) => (await resolveBuilderTelephony(orgId)).ok === true,
+    provisionSfManagedIfAvailable: (orgId, deployment, areaCode) =>
+      applyTier0IfAvailable(orgId, deployment, areaCode),
     wizardUrlFor: (wizardPath) => {
       const base = process.env.NEXT_PUBLIC_APP_URL?.trim() || "https://app.seldonframe.com";
       return `${base}${wizardPath}`;
