@@ -156,13 +156,18 @@ async function run() {
           reactivated += 1;
         }
       } else {
-        // insufficient — suspend + stamp (only if unset, so a repeat
-        // shortfall never resets the 30-day release clock).
-        await suspendBuilderSubaccount(item.orgId, buildSfManagedDeps());
-        suspended += 1;
+        // insufficient — STAMP FIRST, then suspend (final-review Important #1:
+        // suspend never throws, but setDelinquentSince can; stamping after a
+        // successful suspend risks a suspended org with NO marker — which the
+        // top-up hook can never reactivate and a later paid month treats as
+        // never-delinquent. Same stamp-before-suspend order as the webhook's
+        // onShortfall path. Only-if-unset so a repeat shortfall never resets
+        // the 30-day release clock).
         if (!wasDelinquent) {
           await setDelinquentSince(item.deploymentId, now);
         }
+        await suspendBuilderSubaccount(item.orgId, buildSfManagedDeps());
+        suspended += 1;
       }
     } catch (err) {
       errors.push({
