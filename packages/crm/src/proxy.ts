@@ -23,6 +23,12 @@ const publicPrefixes = ["/api/v1", "/api/auth"];
 const defaultAppHosts = new Set(["app.seldonframe.com", "localhost", "127.0.0.1"]);
 const marketingHosts = new Set(["seldonframe.com", "www.seldonframe.com"]);
 const appHostFallback = "app.seldonframe.com";
+// The builder MCP host the /build page's connect snippet + SKILL.md advertise
+// (mirrors SKILL_MD_MCP_URL / MCP_URL — src/lib/build/skill-md.ts,
+// src/components/settings/api-key-manager.tsx). Hardcoded like those two, for
+// the same reason: it's one fixed, publicly-documented URL, not a per-tenant
+// domain.
+const builderMcpHosts = new Set(["mcp.seldonframe.com"]);
 
 function normalizeHost(host: string | null) {
   if (!host) return "";
@@ -499,6 +505,35 @@ function handleHomeNegotiation(request: NextRequest): NextResponse | null {
   return res;
 }
 
+// ─── Builder MCP host rewrite (mcp.seldonframe.com/v1) ────────────────────────
+//
+// The /build page's connect snippet + SKILL.md tell an IDE agent to
+// `claude mcp add seldonframe --transport http https://mcp.seldonframe.com/v1
+// --header "Authorization: Bearer wst_..."`. Before this handler existed, that
+// host had NO special-casing here at all, so a request to it fell all the way
+// through to the generic non-appHost branch below (a wasted /api/v1/public/
+// domain lookup treating it as an unknown custom workspace domain) and then to
+// Next's own router, which served the marketing catch-all as HTML 200/404 —
+// "failed to connect" for every MCP client.
+//
+// This owns EVERY request to the mcp host (not just `/v1`) so nothing on this
+// host ever reaches authProxy or the workspace-domain lookup — there is no
+// session cookie, no org, nothing to authenticate against a browser-facing
+// flow here; the endpoint is bearer-only (see guardApiRequest in the route).
+// Only `/v1` (POST/GET/OPTIONS) has a real handler
+// (app/api/mcp/v1/route.ts) — it is rewritten (not redirected) so the
+// advertised URL stays exactly what a client dialed. Root `mcp.seldonframe.com/`
+// and any other path pass straight through to Next's router (a future health/
+// docs page can live there without touching this rewrite).
+function handleBuilderMcpHost(request: NextRequest, host: string): NextResponse | null {
+  if (!builderMcpHosts.has(host)) return null;
+  if (request.nextUrl.pathname !== "/v1") return NextResponse.next();
+
+  const url = request.nextUrl.clone();
+  url.pathname = "/api/mcp/v1";
+  return NextResponse.rewrite(url);
+}
+
 const authProxy = auth(async (request) => {
   const pathname = request.nextUrl.pathname;
   const host = getRequestHost(request);
@@ -646,6 +681,13 @@ export async function proxy(request: NextRequest, event: NextFetchEvent) {
   const host = getRequestHost(request);
   const appHost = isAppHost(host);
   const hostWorkspaceSlug = resolveWorkspaceSlugFromHost(host);
+
+  // Builder MCP host — checked FIRST and returns immediately when matched, so
+  // mcp.seldonframe.com never reaches the workspace-domain lookup below (which
+  // would otherwise treat it as an unrecognized custom domain) or authProxy
+  // (there's no session here — the endpoint is bearer-only).
+  const mcpHandled = handleBuilderMcpHost(request, host);
+  if (mcpHandled) return mcpHandled;
 
   // Agent-Markdown negotiation: ONLY the marketplace HTML pages, ONLY on the
   // app/preview host (where /marketplace actually lives — custom workspace hosts
@@ -819,5 +861,13 @@ export const config = {
     // every matched /ai-agents path, so none reach the auth/onboarding pipeline.
     "/ai-agents",
     "/ai-agents/:path*",
+    // Builder MCP host rewrite — mcp.seldonframe.com/v1 only. `/v1` is a path
+    // this matcher admits on EVERY host, but handleBuilderMcpHost immediately
+    // no-ops (returns null) unless the request's Host is actually
+    // mcp.seldonframe.com (builderMcpHosts), so this can never collide with a
+    // real `/v1` page on app.seldonframe.com or a workspace subdomain — there
+    // isn't one today, and even if one existed later it would only be shadowed
+    // on the mcp host itself, never on any other host.
+    "/v1",
   ],
 };
