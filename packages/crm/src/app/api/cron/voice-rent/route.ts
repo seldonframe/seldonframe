@@ -34,7 +34,7 @@ import { NextResponse } from "next/server";
 import { rentMonthKey, numberRentMicros, voiceManagedEnabled } from "@/lib/telephony/voice-metering";
 import { planMonthlyRent } from "@/lib/telephony/rent-planner";
 import { listSfManagedDeploymentsForRent, getDeployment, updateDeployment } from "@/lib/deployments/store";
-import { debitNumberRent } from "@/lib/build/wallet-store";
+import { debitNumberRent, resolveWalletStripeMode } from "@/lib/build/wallet-store";
 import {
   suspendBuilderSubaccount,
   reactivateBuilderSubaccount,
@@ -119,6 +119,10 @@ async function run() {
   const now = new Date();
   const monthKey = rentMonthKey(now);
   const amountMicros = numberRentMicros(env);
+  // Task 10, Controller-assigned B (activation blocker): drain the SAME
+  // wallet a top-up actually credits (key-derived — mirrors the credit path)
+  // instead of always draining the default "test" wallet.
+  const stripeMode = resolveWalletStripeMode(env);
 
   const deployments = await listSfManagedDeploymentsForRent();
   const plan = planMonthlyRent({ monthKey, deployments, now });
@@ -141,6 +145,7 @@ async function run() {
         deploymentId: item.deploymentId,
         monthKey,
         amountMicros,
+        stripeMode,
       });
 
       if (result.ok) {

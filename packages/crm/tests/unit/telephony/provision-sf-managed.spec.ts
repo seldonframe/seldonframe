@@ -17,9 +17,11 @@ import assert from "node:assert/strict";
 
 import {
   provisionSfManagedNumber,
+  mapProvisionErrorToSfManagedError,
   type ProvisionSfManagedDeps,
   type ProvisionSfManagedResult,
 } from "../../../src/lib/telephony/provision-sf-managed";
+import type { ProvisionError } from "../../../src/lib/telephony/provision-voice-number";
 import type { Deployment } from "@/db/schema/deployments";
 
 // ─── Fixtures ─────────────────────────────────────────────────────────────────
@@ -321,5 +323,42 @@ describe("provisionSfManagedNumber — Twilio-side failure", () => {
 
     assert.deepEqual(result, { ok: false, error: "twilio_error" });
     assert.equal(calls.runStateMachine.length, 0);
+  });
+});
+
+// ─── Task 10, Controller-assigned A: no_numbers_available taxonomy widening ──
+
+describe("provisionSfManagedNumber — runStateMachine reporting no_numbers_available (the orchestration doesn't re-collapse it)", () => {
+  test("a runStateMachine fake returning no_numbers_available passes through untouched", async () => {
+    const { deps, calls } = buildFakeDeps({
+      runStateMachine: async () => ({ ok: false, error: "no_numbers_available" }),
+    });
+
+    const result = await provisionSfManagedNumber(
+      { deployment: fakeDeployment(), areaCode: "415" },
+      deps,
+    );
+
+    assert.deepEqual(result, { ok: false, error: "no_numbers_available" });
+    assert.equal(calls.runStateMachine.length, 1);
+  });
+});
+
+// ─── mapProvisionErrorToSfManagedError (PURE) ────────────────────────────────
+// The exact collapse point (buildDefaultProvisionSfManagedDeps's runStateMachine,
+// ~L220-231) extracted to a pure fn so this is testable without a live DB/Twilio
+// client. no_numbers_available passes through; everything else still collapses
+// to twilio_error, unchanged.
+
+describe("mapProvisionErrorToSfManagedError (pure)", () => {
+  test("no_numbers_available passes through AS-IS (the widened taxonomy)", () => {
+    assert.equal(mapProvisionErrorToSfManagedError("no_numbers_available"), "no_numbers_available");
+  });
+
+  test("every other provisionVoiceNumber error still collapses to twilio_error", () => {
+    const others: ProvisionError[] = ["deployment_not_found", "provisioning_unavailable", "attach_failed"];
+    for (const error of others) {
+      assert.equal(mapProvisionErrorToSfManagedError(error), "twilio_error", `expected ${error} → twilio_error`);
+    }
   });
 });

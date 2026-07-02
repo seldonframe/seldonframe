@@ -3,7 +3,12 @@
 // either hands back the Wizard link for the human-only connect steps or
 // applies the phone + goes live. Money-safe: BYO Twilio/BYOK, no charge path;
 // flag-gated; inert without the builder's own creds (readiness simply reports
-// unmet).
+// unmet) — EXCEPT for the Task 10 Tier-0 path (applyTier0IfAvailable), which
+// is the intentional, wallet-metered exception: a funded wallet lets a voice
+// deploy go live with ZERO connects by provisioning an SF-owned number
+// (rent-before-buy via provisionSfManagedNumber — see its own money-safety
+// invariants). Tier-0 itself stays inert without SF_VOICE_MANAGED + master
+// Twilio creds configured, exactly like every other seam here.
 //
 // Composition note: the brief's reference snippet called the interactive
 // wizard's session-authed "use server" actions directly (activateDeployment-
@@ -44,10 +49,14 @@ import {
   type AgentTemplateType,
 } from "@/lib/agent-templates/store";
 import { getDeployment, createDeployment, updateDeployment } from "@/lib/deployments/store";
-import { isE164, isAreaCode, isPhoneInUseError, deploymentNeedsNumber } from "@/lib/deployments/margin";
+import { isE164, isAreaCode, isPhoneInUseError, deploymentNeedsNumber, deriveAreaCode } from "@/lib/deployments/margin";
 import { resolveBuilderTelephony } from "@/lib/telephony/config";
 import { createTwilioTelephonyClient } from "@/lib/telephony/twilio-client";
 import { provisionVoiceNumber } from "@/lib/telephony/provision-voice-number";
+import {
+  provisionSfManagedNumber,
+  buildDefaultProvisionSfManagedDeps,
+} from "@/lib/telephony/provision-sf-managed";
 import {
   resolveOrCreateBuyerDeployment,
   buildDefaultResolveBuyerDeploymentDeps,
@@ -63,8 +72,14 @@ import {
   statusForDeployResult,
   type ResolvedSource,
   type ApplyPhoneResult,
+  type ProvisionSfManagedIfAvailableResult,
   type RunDeployDeps,
 } from "@/lib/deployments/deploy-orchestrator";
+
+/** A well-known, always-serviced NANP area code (Austin, TX) — the zero-
+ *  connect Tier-0 fallback's last resort when a deployment has no client
+ *  contact phone to derive an area code from (deriveAreaCode returns null). */
+const DEFAULT_TIER0_AREA_CODE = "512";
 
 function deployEnabled(): boolean {
   return process.env.SF_DEPLOY_ENABLED === "1" || process.env.SF_DEPLOY_ENABLED === "true";
@@ -290,6 +305,58 @@ async function applyProvisionedNumber(
   return { ok: true, deployment: fresh };
 }
 
+// ─── Tier-0 (SF-managed) fallback — Task 10, the deploy-verb payoff ─────────
+//     "seldonframe deploy" with a funded wallet ⇒ instant SF number ⇒ live,
+//     with ZERO connects. Tried by runDeploy exactly where BYO Twilio is
+//     missing (no `phone` in the body at all, or applyPhone's needs_telephony
+//     failure) — see deploy-orchestrator.ts's RunDeployDeps doc comment.
+
+/**
+ * Wraps provisionSfManagedNumber (real deps) as the RunDeployDeps
+ * `provisionSfManagedIfAvailable` seam: `not_configured` (the feature is off,
+ * or SF has no master Twilio creds) maps to `available:false` — a pure
+ * no-op the orchestrator falls through from to its pre-Task-10 behavior.
+ * Every OTHER provisionSfManagedNumber failure (insufficient_balance /
+ * twilio_error / no_numbers_available) is a REAL attempt that failed, so it
+ * reports `available:true` with the reason — the orchestrator surfaces this
+ * directly rather than masking it behind phone_required/needs_telephony.
+ *
+ * Area code: a true zero-connect flow can't ask the caller for one, so this
+ * best-effort-derives it from the deployment's own client contact phone
+ * (deriveAreaCode — the SAME extractor the buyer wizard's "Get a number"
+ * pre-fill uses) and falls back to a well-known always-serviced NANP area
+ * code (512, Austin TX) when no contact phone is on file — Twilio's search
+ * still returns candidates nationally-adjacent to a real area code, and a
+ * genuine `no_numbers_available` still surfaces honestly rather than being
+ * swallowed.
+ */
+async function applyTier0IfAvailable(
+  // Unused: the RunDeployDeps signature mirrors applyPhone's (orgId,
+  // deployment) shape for consistency, but provisionSfManagedNumber reads
+  // deployment.builderOrgId internally (the deploy verb already guarantees
+  // orgId === deployment.builderOrgId — see resolveTemplateSource /
+  // resolveListingSource, both of which stamp builderOrgId from this same
+  // bearer-resolved orgId).
+  _orgId: string,
+  deployment: Deployment,
+): Promise<ProvisionSfManagedIfAvailableResult> {
+  const areaCode = deriveAreaCode(deployment.clientContact?.phone) ?? DEFAULT_TIER0_AREA_CODE;
+
+  const result = await provisionSfManagedNumber(
+    { deployment, areaCode },
+    buildDefaultProvisionSfManagedDeps(),
+  );
+
+  if (result.ok) {
+    const fresh = (await getDeployment(deployment.id)) ?? deployment;
+    return { ok: true, deployment: fresh };
+  }
+  if (result.error === "not_configured") {
+    return { ok: false, available: false };
+  }
+  return { ok: false, available: true, reason: result.error };
+}
+
 // ─── go-live (mirrors app/(buyer)/agent/actions.ts:goLiveAction,
 //     org-parameterized) ─────────────────────────────────────────────────────
 
@@ -349,6 +416,7 @@ function buildRealRunDeployDeps(): RunDeployDeps {
       phone.mode === "forward"
         ? applyForwardedNumber(deployment, templateType, blueprint, phone.number)
         : applyProvisionedNumber(orgId, deployment, templateType, blueprint, phone.areaCode),
+    provisionSfManagedIfAvailable: (orgId, deployment) => applyTier0IfAvailable(orgId, deployment),
     wizardUrlFor: (wizardPath) => {
       const base = process.env.NEXT_PUBLIC_APP_URL?.trim() || "https://app.seldonframe.com";
       return `${base}${wizardPath}`;

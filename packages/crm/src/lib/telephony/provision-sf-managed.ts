@@ -47,8 +47,11 @@ import {
   resolveMasterTwilio,
 } from "./sf-managed";
 import { createTwilioTelephonyClient } from "./twilio-client";
-import { provisionVoiceNumber } from "./provision-voice-number";
-import { debitNumberRent as debitNumberRentReal } from "@/lib/build/wallet-store";
+import { provisionVoiceNumber, type ProvisionError } from "./provision-voice-number";
+import {
+  debitNumberRent as debitNumberRentReal,
+  resolveWalletStripeMode,
+} from "@/lib/build/wallet-store";
 import { getDeployment, updateDeployment } from "@/lib/deployments/store";
 
 // ─── Types ────────────────────────────────────────────────────────────────────
@@ -56,7 +59,13 @@ import { getDeployment, updateDeployment } from "@/lib/deployments/store";
 export type ProvisionSfManagedError =
   | "not_configured"
   | "insufficient_balance"
-  | "twilio_error";
+  | "twilio_error"
+  // Task 10, Controller-assigned A (T6 review): the state machine's search
+  // returning zero candidates for the requested area code is a DISTINCT,
+  // actionable failure (try a different area code) from a generic Twilio API
+  // error — collapsing it to "twilio_error" hid that distinction from every
+  // caller (runDeploy's Tier-0 fallback included).
+  | "no_numbers_available";
 
 export type ProvisionSfManagedResult =
   | { ok: true; phoneNumber: string }
@@ -182,6 +191,29 @@ export async function provisionSfManagedNumber(
   });
 }
 
+// ─── mapProvisionErrorToSfManagedError (PURE) ────────────────────────────────
+
+/**
+ * Task 10, Controller-assigned A (T6 review) — the state-machine → SF-managed
+ * error mapping, extracted to a pure function so the collapse behavior is
+ * unit-testable without a live DB/Twilio client (runStateMachine's closure
+ * below bakes in the real store, which a unit test can't easily fake at that
+ * exact call site).
+ *
+ * `no_numbers_available` (the area-code search returned zero candidates) now
+ * passes through AS-IS — it's a distinct, actionable failure ("try a
+ * different area code"), not a generic Twilio API error. Every OTHER
+ * provisionVoiceNumber failure (deployment_not_found / provisioning_
+ * unavailable / attach_failed) still collapses to `twilio_error`, unchanged:
+ * from the SF-managed caller's perspective those all mean "couldn't finish
+ * acquiring the number" and none of them are actionable the way an empty
+ * search result is.
+ */
+export function mapProvisionErrorToSfManagedError(error: ProvisionError): ProvisionSfManagedError {
+  if (error === "no_numbers_available") return "no_numbers_available";
+  return "twilio_error";
+}
+
 // ─── Real-deps builder (production wiring) ───────────────────────────────────
 
 /**
@@ -190,17 +222,24 @@ export async function provisionSfManagedNumber(
  * an override only in tests that want to exercise this builder directly
  * (unit tests otherwise construct ProvisionSfManagedDeps by hand — see
  * provision-sf-managed.spec.ts).
+ *
+ * stripeMode (Task 10, Controller-assigned B — the activation blocker):
+ * resolveWalletStripeMode(env) is the SAME key-derived resolver the top-up
+ * credit path uses, so this month's rent debits the wallet a top-up actually
+ * funded instead of always draining the default "test" wallet while a live
+ * top-up credits "live".
  */
 export function buildDefaultProvisionSfManagedDeps(
   env: Record<string, string | undefined> = process.env,
 ): ProvisionSfManagedDeps {
   const sfManagedDeps = buildSfManagedDeps(env);
   const appBaseUrl = env.NEXT_PUBLIC_APP_URL?.trim() || "https://app.seldonframe.com";
+  const stripeMode = resolveWalletStripeMode(env);
 
   return {
     env,
     now: () => new Date(),
-    debitNumberRent: debitNumberRentReal,
+    debitNumberRent: (args) => debitNumberRentReal({ ...args, stripeMode }),
     ensureBuilderSubaccount: (orgId) => ensureBuilderSubaccountReal(orgId, sfManagedDeps),
     ensureSubaccountTrunk: (subCreds) => ensureSubaccountTrunkReal(subCreds, sfManagedDeps),
     runStateMachine: async ({ client, trunkSid, deploymentId, areaCode, numberOrigin }) => {
@@ -220,15 +259,15 @@ export function buildDefaultProvisionSfManagedDeps(
       if (result.ok) return result;
       // provisionVoiceNumber's own error taxonomy (deployment_not_found /
       // no_numbers_available / provisioning_unavailable / attach_failed) is
-      // richer than ProvisionSfManagedResult's — from the SF-managed caller's
-      // perspective any state-machine failure means "couldn't finish
-      // acquiring the number", which collapses to twilio_error. The detailed
-      // reason is still logged so it isn't lost for debugging.
+      // richer than ProvisionSfManagedResult's; mapProvisionErrorToSfManagedError
+      // (above) now passes no_numbers_available through and collapses every
+      // other reason to twilio_error. The detailed reason is still logged so
+      // it isn't lost for debugging either way.
       console.warn("[provision-sf-managed] state_machine_failed", {
         deploymentId,
         error: result.error,
       });
-      return { ok: false, error: "twilio_error" };
+      return { ok: false, error: mapProvisionErrorToSfManagedError(result.error) };
     },
   };
 }

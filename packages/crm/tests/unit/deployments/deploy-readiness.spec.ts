@@ -59,3 +59,62 @@ describe("computeDeployReadiness", () => {
     assert.deepEqual(r.requirements, []);
   });
 });
+
+// ─── Tier-0-available telephony (Task 10) ────────────────────────────────────
+// Telephony is met when BYO Twilio is connected OR SF's Tier-0 instant-number
+// path is available (voiceManagedEnabled && master creds && wallet ≥ floor —
+// resolved upstream; this pure fn only ORs the two booleans together).
+
+describe("computeDeployReadiness — Tier-0-available telephony", () => {
+  test("no BYO telephony but Tier-0 available → telephony requirement MET, ready", () => {
+    const r = computeDeployReadiness({
+      steps: VOICE_STEPS, toolStatuses: [CAL_CONNECTED],
+      telephonyNeeded: true, telephonyConnected: false, tier0Available: true,
+      progress: { doneKinds: ["business_info"] }, wizardPath: "/agent/dep1/setup",
+    });
+    assert.equal(r.ready, true);
+    assert.equal(r.missing.length, 0);
+    const telephonyReq = r.requirements.find((req) => req.kind === "telephony");
+    assert.ok(telephonyReq);
+    assert.equal(telephonyReq!.met, true);
+  });
+
+  test("neither BYO nor Tier-0 → telephony requirement UNMET with the dual-option copy", () => {
+    const r = computeDeployReadiness({
+      steps: VOICE_STEPS, toolStatuses: [CAL_CONNECTED],
+      telephonyNeeded: true, telephonyConnected: false, tier0Available: false,
+      progress: { doneKinds: ["business_info"] }, wizardPath: "/agent/dep1/setup",
+    });
+    assert.equal(r.ready, false);
+    const telephonyReq = r.missing.find((req) => req.kind === "telephony");
+    assert.ok(telephonyReq, "telephony should be in missing");
+    assert.equal(
+      telephonyReq!.label,
+      "Top up your wallet for an instant SF number, or connect your own Twilio.",
+    );
+  });
+
+  test("BYO connected + Tier-0 unavailable → still met (BYO alone is sufficient)", () => {
+    const r = computeDeployReadiness({
+      steps: VOICE_STEPS, toolStatuses: [CAL_CONNECTED],
+      telephonyNeeded: true, telephonyConnected: true, tier0Available: false,
+      progress: { doneKinds: ["business_info"] }, wizardPath: "/agent/dep1/setup",
+    });
+    assert.equal(r.ready, true);
+  });
+
+  test("tier0Available absent (undefined) → prior behavior byte-identical (falls back to telephonyConnected alone)", () => {
+    const withoutField = computeDeployReadiness({
+      steps: VOICE_STEPS, toolStatuses: [CAL_UNCONNECTED],
+      telephonyNeeded: true, telephonyConnected: false,
+      progress: { doneKinds: ["business_info"] }, wizardPath: "/agent/dep1/setup",
+    });
+    const withFalseField = computeDeployReadiness({
+      steps: VOICE_STEPS, toolStatuses: [CAL_UNCONNECTED],
+      telephonyNeeded: true, telephonyConnected: false, tier0Available: false,
+      progress: { doneKinds: ["business_info"] }, wizardPath: "/agent/dep1/setup",
+    });
+    assert.deepEqual(withoutField, withFalseField);
+    assert.equal(withoutField.ready, false);
+  });
+});

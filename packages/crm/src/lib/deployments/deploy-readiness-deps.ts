@@ -13,8 +13,28 @@ import { deploymentNeedsNumber } from "@/lib/deployments/margin";
 import { surfaceForType, type AgentTemplateType } from "@/lib/agent-templates/store";
 import { resolveBuilderTelephony } from "@/lib/telephony/config";
 import { buyerSetupPath } from "@/lib/marketplace/buyer/buyer-routes";
+import { voiceManagedEnabled, TIER0_READY_FLOOR_MICROS } from "@/lib/telephony/voice-metering";
+import { resolveMasterTwilio } from "@/lib/telephony/sf-managed";
+import { getWalletBalanceMicros, resolveWalletStripeMode } from "@/lib/build/wallet-store";
 import type { AgentBlueprint } from "@/db/schema/agents";
 import type { Deployment } from "@/db/schema/deployments";
+
+/**
+ * Task 10 — whether SF's Tier-0 (zero-connect) instant-number path can
+ * satisfy this org's telephony requirement RIGHT NOW: the feature is on, SF
+ * has master Twilio creds configured, and the org's wallet (the SAME
+ * stripeMode-resolved wallet every metered path debits) holds at least
+ * TIER0_READY_FLOOR_MICROS. Short-circuits on the cheap env checks before
+ * ever touching the DB for a balance read.
+ */
+async function resolveTier0Available(orgId: string): Promise<boolean> {
+  if (!voiceManagedEnabled(process.env) || !resolveMasterTwilio(process.env)) {
+    return false;
+  }
+  const stripeMode = resolveWalletStripeMode(process.env);
+  const balanceMicros = await getWalletBalanceMicros(orgId, stripeMode);
+  return balanceMicros >= TIER0_READY_FLOOR_MICROS;
+}
 
 export async function resolveDeployReadiness(args: {
   orgId: string;
@@ -38,6 +58,11 @@ export async function resolveDeployReadiness(args: {
   // has BYO Twilio creds so the deploy verb can provision/forward one.
   const telephony = await resolveBuilderTelephony(orgId);
   const telephonyConnected = Boolean(deployment.phoneNumber) || telephony.ok === true;
+  // Tier-0 (Task 10) — only worth a wallet-balance read when telephony is
+  // actually needed and BYO didn't already satisfy it; skips the DB round
+  // trip entirely for chat-only deploys and already-connected voice deploys.
+  const tier0Available =
+    telephonyNeeded && !telephonyConnected ? await resolveTier0Available(orgId) : false;
 
   // progress lives on the deployment customization (onboardingProgress); tolerate absence.
   const progress = deployment.customization?.onboardingProgress ?? null;
@@ -47,7 +72,7 @@ export async function resolveDeployReadiness(args: {
   const wizardPath = buyerSetupPath(deployment.id) ?? "/agent";
 
   return computeDeployReadiness({
-    steps, toolStatuses, telephonyNeeded, telephonyConnected, progress,
+    steps, toolStatuses, telephonyNeeded, telephonyConnected, tier0Available, progress,
     wizardPath,
   });
 }

@@ -45,6 +45,7 @@ import {
   type RunDeployDeps,
   type ResolvedSource,
   type ApplyPhoneResult,
+  type ProvisionSfManagedIfAvailableResult,
 } from "../../../src/lib/deployments/deploy-orchestrator";
 import type { DeployReadiness } from "../../../src/lib/deployments/deploy-readiness";
 import type { Deployment } from "../../../src/db/schema/deployments";
@@ -112,6 +113,11 @@ function fakeDeps(overrides: Partial<RunDeployDeps> = {}): RunDeployDeps {
     resolveDeployReadiness: async () => READY,
     deploymentNeedsNumber: () => false,
     applyPhone: async () => ({ ok: true, deployment: fakeDeployment({ phoneNumber: "+15125550148" }) }),
+    // Default: Tier-0 is simply not configured/offered — every pre-Task-10
+    // test (and any test that doesn't care about Tier-0) sees zero behavior
+    // change, since `available:false` always falls straight through to the
+    // pre-existing phone_required / applyPhone-failure handling.
+    provisionSfManagedIfAvailable: async () => ({ ok: false, available: false }),
     wizardUrlFor: (wizardPath) => `https://app.seldonframe.com${wizardPath}`,
     applyGoLive: async (deployment) => ({ ok: true, deployment }),
     ...overrides,
@@ -376,7 +382,7 @@ describe("runDeploy — source resolution errors", () => {
 // ─── phone application errors pass through with `missing` ────────────────────
 
 describe("runDeploy — phone application errors", () => {
-  test("needs a number, none attached, phone provided, applyPhone fails → the phone error (with missing)", async () => {
+  test("needs a number, none attached, phone provided, applyPhone fails, Tier-0 NOT available → the original phone error passes through unchanged (with missing)", async () => {
     const deps = fakeDeps({
       resolveSource: async () => ({
         ok: true,
@@ -390,6 +396,9 @@ describe("runDeploy — phone application errors", () => {
         reason: "needs_telephony",
         missing: ["twilio"],
       }),
+      // Tier-0 not configured/available — must fall straight through to the
+      // pre-existing applyPhone failure, byte-for-byte.
+      provisionSfManagedIfAvailable: async () => ({ ok: false, available: false }),
     });
 
     const result = await runDeploy(
@@ -399,5 +408,250 @@ describe("runDeploy — phone application errors", () => {
 
     assert.deepEqual(result, { ok: false, reason: "needs_telephony", missing: ["twilio"] });
     assert.equal(statusForDeployResult(result), 400);
+  });
+});
+
+// ─── Task 10: Tier-0 (SF-managed) deploy-verb payoff ────────────────────────
+// Funded wallet ⇒ instant SF number ⇒ live, with ZERO connects. Tier-0 is
+// attempted as a fallback exactly where the flow would otherwise require BYO
+// Twilio: (a) no `phone` in the body at all (today: phone_required), and
+// (b) applyPhone failing specifically because BYO creds are missing (today:
+// needs_telephony passes straight through). `available:false` (Tier-0 not
+// configured/offered) is a no-op fallthrough in BOTH cases — the flag-off
+// byte-identical-behavior guarantee.
+
+describe("runDeploy — Task 10: Tier-0-managed provisioning", () => {
+  test("funded wallet + no BYO creds + NO phone in body → Tier-0 invoked, number attached, phone step done like BYO, goes live", async () => {
+    let tier0Called: { orgId: string; deploymentId: string } | null = null;
+    let appliedPhoneDeployment: Deployment | null = null;
+
+    const deps = fakeDeps({
+      resolveSource: async () => ({
+        ok: true,
+        deployment: fakeDeployment({ surface: "phone", phoneNumber: null }),
+        templateType: "voice_receptionist",
+        blueprint: { trigger: { kind: "inbound", channel: "voice" } } as AgentBlueprint,
+      }),
+      deploymentNeedsNumber: () => true,
+      provisionSfManagedIfAvailable: async (orgId, deployment): Promise<ProvisionSfManagedIfAvailableResult> => {
+        tier0Called = { orgId, deploymentId: deployment.id };
+        const updated = fakeDeployment({ ...deployment, phoneNumber: "+15125550199", status: "active" });
+        appliedPhoneDeployment = updated;
+        return { ok: true, deployment: updated };
+      },
+      // Mirrors the FIXED applyGoLive from the C-1 suite: an attached
+      // phoneNumber (however it got attached — BYO or Tier-0) satisfies the
+      // `phone` onboarding step.
+      applyGoLive: async (deployment) => {
+        if (deployment.phoneNumber) {
+          return { ok: true, deployment: fakeDeployment({ ...deployment, status: "active" }) };
+        }
+        return { ok: false, reason: "blocked" };
+      },
+    });
+
+    const result = await runDeploy(
+      { orgId: "org-1", body: { source: { templateId: "tmpl-1" } } }, // NO phone — zero connects
+      deps,
+    );
+
+    assert.ok(tier0Called, "provisionSfManagedIfAvailable should have been invoked");
+    const tier0Call = tier0Called as { orgId: string; deploymentId: string };
+    assert.equal(tier0Call.orgId, "org-1");
+    assert.equal(tier0Call.deploymentId, "dep-1");
+    assert.ok(appliedPhoneDeployment, "Tier-0 should have attached a number");
+    assert.equal(result.ok, true);
+    assert.equal((result as { status?: string }).status, "live", `expected live, got ${JSON.stringify(result)}`);
+    assert.equal((result as { phoneNumber?: string | null }).phoneNumber, "+15125550199");
+    assert.equal(statusForDeployResult(result), 200);
+  });
+
+  test("unfunded wallet (Tier-0 NOT available) + no BYO + no phone in body → phone_required, exactly like before Task 10", async () => {
+    let tier0Called = false;
+    const deps = fakeDeps({
+      resolveSource: async () => ({
+        ok: true,
+        deployment: fakeDeployment({ phoneNumber: null }),
+        templateType: "voice_receptionist",
+        blueprint: { trigger: { kind: "inbound", channel: "voice" } } as AgentBlueprint,
+      }),
+      deploymentNeedsNumber: () => true,
+      provisionSfManagedIfAvailable: async (): Promise<ProvisionSfManagedIfAvailableResult> => {
+        tier0Called = true;
+        return { ok: false, available: false };
+      },
+    });
+
+    const result = await runDeploy({ orgId: "org-1", body: { source: { templateId: "tmpl-1" } } }, deps);
+
+    assert.ok(tier0Called, "Tier-0 should still be consulted before falling back to phone_required");
+    assert.deepEqual(result, { ok: false, reason: "phone_required" });
+    assert.equal(statusForDeployResult(result), 400);
+  });
+
+  test("Tier-0 available but rent-refused (insufficient_balance) ⇒ {ok:false, reason:\"insufficient_balance\"} — rides the existing error shape", async () => {
+    const deps = fakeDeps({
+      resolveSource: async () => ({
+        ok: true,
+        deployment: fakeDeployment({ phoneNumber: null }),
+        templateType: "voice_receptionist",
+        blueprint: { trigger: { kind: "inbound", channel: "voice" } } as AgentBlueprint,
+      }),
+      deploymentNeedsNumber: () => true,
+      provisionSfManagedIfAvailable: async (): Promise<ProvisionSfManagedIfAvailableResult> => ({
+        ok: false,
+        available: true,
+        reason: "insufficient_balance",
+      }),
+    });
+
+    const result = await runDeploy({ orgId: "org-1", body: { source: { templateId: "tmpl-1" } } }, deps);
+
+    assert.deepEqual(result, { ok: false, reason: "insufficient_balance" });
+    assert.equal(statusForDeployResult(result), 400);
+  });
+
+  test("Tier-0 available but Twilio-side failure (twilio_error) ⇒ {ok:false, reason:\"twilio_error\"}", async () => {
+    const deps = fakeDeps({
+      resolveSource: async () => ({
+        ok: true,
+        deployment: fakeDeployment({ phoneNumber: null }),
+        templateType: "voice_receptionist",
+        blueprint: { trigger: { kind: "inbound", channel: "voice" } } as AgentBlueprint,
+      }),
+      deploymentNeedsNumber: () => true,
+      provisionSfManagedIfAvailable: async (): Promise<ProvisionSfManagedIfAvailableResult> => ({
+        ok: false,
+        available: true,
+        reason: "twilio_error",
+      }),
+    });
+
+    const result = await runDeploy({ orgId: "org-1", body: { source: { templateId: "tmpl-1" } } }, deps);
+
+    assert.deepEqual(result, { ok: false, reason: "twilio_error" });
+    assert.equal(statusForDeployResult(result), 400);
+  });
+
+  test("no_numbers_available (Controller-A taxonomy) surfaces through runDeploy untouched", async () => {
+    const deps = fakeDeps({
+      resolveSource: async () => ({
+        ok: true,
+        deployment: fakeDeployment({ phoneNumber: null }),
+        templateType: "voice_receptionist",
+        blueprint: { trigger: { kind: "inbound", channel: "voice" } } as AgentBlueprint,
+      }),
+      deploymentNeedsNumber: () => true,
+      provisionSfManagedIfAvailable: async (): Promise<ProvisionSfManagedIfAvailableResult> => ({
+        ok: false,
+        available: true,
+        reason: "no_numbers_available",
+      }),
+    });
+
+    const result = await runDeploy({ orgId: "org-1", body: { source: { templateId: "tmpl-1" } } }, deps);
+
+    assert.deepEqual(result, { ok: false, reason: "no_numbers_available" });
+  });
+
+  test("body.phone IS provided (mode:provision) but applyPhone fails needs_telephony, Tier-0 available and succeeds → Tier-0 wins, goes live", async () => {
+    // Documents the brief's \"instead\" — even when the caller supplied a
+    // provision request, a missing-BYO-creds failure still gets the Tier-0
+    // fallback rescue, not just the zero-body-phone path.
+    let applyPhoneCalled = false;
+    let tier0Called = false;
+    const deps = fakeDeps({
+      resolveSource: async () => ({
+        ok: true,
+        deployment: fakeDeployment({ phoneNumber: null }),
+        templateType: "voice_receptionist",
+        blueprint: { trigger: { kind: "inbound", channel: "voice" } } as AgentBlueprint,
+      }),
+      deploymentNeedsNumber: () => true,
+      applyPhone: async (): Promise<ApplyPhoneResult> => {
+        applyPhoneCalled = true;
+        return { ok: false, reason: "needs_telephony", missing: ["twilio"] };
+      },
+      provisionSfManagedIfAvailable: async (_orgId, deployment): Promise<ProvisionSfManagedIfAvailableResult> => {
+        tier0Called = true;
+        return { ok: true, deployment: fakeDeployment({ ...deployment, phoneNumber: "+15125550111", status: "active" }) };
+      },
+      applyGoLive: async (deployment) => ({ ok: true, deployment: fakeDeployment({ ...deployment, status: "active" }) }),
+    });
+
+    const result = await runDeploy(
+      { orgId: "org-1", body: { source: { templateId: "tmpl-1" }, phone: { mode: "provision", areaCode: "512" } } },
+      deps,
+    );
+
+    assert.ok(applyPhoneCalled, "applyPhone (the BYO path) should still be tried first");
+    assert.ok(tier0Called, "Tier-0 should rescue the needs_telephony failure");
+    assert.equal(result.ok, true);
+    assert.equal((result as { status?: string }).status, "live");
+    assert.equal((result as { phoneNumber?: string | null }).phoneNumber, "+15125550111");
+  });
+
+  test("flag off (SF_DEPLOY_ENABLED=false via deployEnabled) → status:disabled, provisionSfManagedIfAvailable NEVER invoked", async () => {
+    let tier0Called = false;
+    const deps = fakeDeps({
+      deployEnabled: () => false,
+      provisionSfManagedIfAvailable: async (): Promise<ProvisionSfManagedIfAvailableResult> => {
+        tier0Called = true;
+        return { ok: false, available: false };
+      },
+    });
+
+    const result = await runDeploy({ orgId: "org-1", body: {} }, deps);
+
+    assert.deepEqual(result, { ok: true, status: "disabled" });
+    assert.equal(tier0Called, false, "flag-off must short-circuit before touching any seam, Tier-0 included");
+  });
+
+  test("chat template needing NO number at all never consults Tier-0 (byte-identical prior behavior)", async () => {
+    let tier0Called = false;
+    const deps = fakeDeps({
+      resolveSource: async () => ({
+        ok: true,
+        deployment: fakeDeployment({ surface: "embed", phoneNumber: null }),
+        templateType: "chat_assistant",
+        blueprint: {} as AgentBlueprint,
+      }),
+      deploymentNeedsNumber: () => false,
+      provisionSfManagedIfAvailable: async (): Promise<ProvisionSfManagedIfAvailableResult> => {
+        tier0Called = true;
+        return { ok: false, available: false };
+      },
+      applyGoLive: async (deployment) => ({ ok: true, deployment: fakeDeployment({ ...deployment, status: "active" }) }),
+    });
+
+    const result = await runDeploy({ orgId: "org-1", body: { source: { templateId: "tmpl-1" } } }, deps);
+
+    assert.equal(tier0Called, false, "a deployment that needs no number must never touch the Tier-0 seam");
+    assert.equal(result.ok, true);
+    assert.equal((result as { status?: string }).status, "live");
+  });
+
+  test("deployment already HAS a phoneNumber → never consults Tier-0 (byte-identical prior behavior)", async () => {
+    let tier0Called = false;
+    const deps = fakeDeps({
+      resolveSource: async () => ({
+        ok: true,
+        deployment: fakeDeployment({ surface: "phone", phoneNumber: "+15125550148" }),
+        templateType: "voice_receptionist",
+        blueprint: { trigger: { kind: "inbound", channel: "voice" } } as AgentBlueprint,
+      }),
+      deploymentNeedsNumber: () => true,
+      provisionSfManagedIfAvailable: async (): Promise<ProvisionSfManagedIfAvailableResult> => {
+        tier0Called = true;
+        return { ok: false, available: false };
+      },
+      applyGoLive: async (deployment) => ({ ok: true, deployment: fakeDeployment({ ...deployment, status: "active" }) }),
+    });
+
+    const result = await runDeploy({ orgId: "org-1", body: { source: { templateId: "tmpl-1" } } }, deps);
+
+    assert.equal(tier0Called, false, "an already-numbered deployment must never touch the Tier-0 seam");
+    assert.equal(result.ok, true);
+    assert.equal((result as { status?: string }).status, "live");
   });
 });

@@ -84,7 +84,7 @@ import {
   gateMeteredAccept,
   meterCallEnd,
 } from "@/lib/telephony/voice-metering-orchestration";
-import { getWalletBalanceMicros, debitVoiceUsage } from "@/lib/build/wallet-store";
+import { getWalletBalanceMicros, debitVoiceUsage, resolveWalletStripeMode } from "@/lib/build/wallet-store";
 // Voice deploy + metered billing (Task 6) — the onShortfall hook suspends the
 // builder's SF-managed Twilio subaccount on a metered shortfall.
 // suspendBuilderSubaccount is fail-soft internally (never throws); this call
@@ -296,9 +296,14 @@ export async function POST(request: Request): Promise<Response> {
 
         let meteredGateBlocked = false;
         if (metered) {
+          // Task 10, Controller-assigned B (activation blocker): read the
+          // SAME wallet a top-up actually credits (resolveWalletStripeMode —
+          // key-derived, mirrors the credit path) instead of always reading
+          // the default "test" wallet regardless of which key is live.
           const gate = await gateMeteredAccept(deployment.builderOrgId, {
             env: process.env,
-            getBalanceMicros: getWalletBalanceMicros,
+            getBalanceMicros: (orgId) =>
+              getWalletBalanceMicros(orgId, resolveWalletStripeMode(process.env)),
           });
           if (!gate.accept) {
             meteredGateBlocked = true;
@@ -475,7 +480,11 @@ export async function POST(request: Request): Promise<Response> {
                   },
                   {
                     env: process.env,
-                    debitVoiceUsage,
+                    // Task 10, Controller-assigned B — same stripeMode as the
+                    // accept-gate read above, so the debit drains the wallet
+                    // the accept-gate just checked (never a mismatched mode).
+                    debitVoiceUsage: (args) =>
+                      debitVoiceUsage({ ...args, stripeMode: resolveWalletStripeMode(process.env) }),
                     onShortfall: async (orgId) => {
                       console.warn("[voice-billing] shortfall", orgId);
                       // R3: stamp BEFORE suspending — the top-up hook's

@@ -102,6 +102,27 @@ export type ApplyGoLiveResult =
   | { ok: true; deployment: Deployment }
   | { ok: false; reason: string };
 
+/**
+ * Task 10 — the Tier-0 (SF-managed, zero-connect) fallback's result. Three
+ * shapes, not two, because "not offered" and "offered but failed" must be
+ * handled differently by the caller:
+ *   - `available:false`  → Tier-0 isn't configured/offered at all (the
+ *     `provisionSfManagedNumber` `not_configured` case) — a pure no-op the
+ *     orchestrator falls through from, straight to the pre-Task-10 behavior
+ *     (`phone_required` or the original applyPhone failure), byte-identical.
+ *   - `available:true, reason:…` → Tier-0 WAS attempted (it's configured/
+ *     offered) but failed for a real reason (insufficient balance, a Twilio-
+ *     side error, no numbers in the area) — this is a genuine failure the
+ *     caller must see, not something to silently paper over with
+ *     phone_required.
+ *   - `ok:true` → Tier-0 provisioned a number; the returned deployment has it
+ *     attached (mirrors ApplyPhoneResult's ok:true shape).
+ */
+export type ProvisionSfManagedIfAvailableResult =
+  | { ok: true; deployment: Deployment }
+  | { ok: false; available: false }
+  | { ok: false; available: true; reason: string };
+
 export type RunDeployDeps = {
   /** SF_DEPLOY_ENABLED flag check. */
   deployEnabled: () => boolean;
@@ -127,6 +148,20 @@ export type RunDeployDeps = {
     blueprint: AgentBlueprint,
     phone: NonNullable<RunDeployInput["body"]["phone"]>,
   ) => Promise<ApplyPhoneResult>;
+  /**
+   * Task 10 — the deploy-verb Tier-0 payoff. Tried whenever a number is
+   * needed, none is attached, and the flow would otherwise fall back on
+   * missing BYO Twilio creds (no `phone` in the body at all, OR `applyPhone`
+   * failing specifically because BYO creds are missing) — i.e. exactly the
+   * "no BYO creds" gap Tier-0 exists to fill. The real wiring
+   * (buildDefaultProvisionSfManagedDeps) checks voiceManagedEnabled + master
+   * creds + wallet balance internally and reports `available:false` with
+   * ZERO side effects when Tier-0 isn't a live option for this deploy.
+   */
+  provisionSfManagedIfAvailable: (
+    orgId: string,
+    deployment: Deployment,
+  ) => Promise<ProvisionSfManagedIfAvailableResult>;
   /** Compute the go-live wizard URL base for a `needs_connect` response. */
   wizardUrlFor: (wizardPath: string) => string;
   /** Flip the deployment live, gated on onboarding completeness. */
@@ -147,10 +182,21 @@ export type RunDeployDeps = {
  *   1. flag off               → {status:"disabled"}
  *   2. resolve source (fails) → the typed source error
  *   3. readiness not ready    → {status:"needs_connect", wizardUrl, …}
- *   4. needs a number + none attached + no `phone` in body → {reason:"phone_required"}
- *   5. apply phone (fails)    → the phone error (+ `missing` when present)
- *   6. go live (fails)        → the go-live error (typically {reason:"blocked"})
- *   7. otherwise              → {status:"live", deploymentId, phoneNumber}
+ *   4. needs a number + none attached:
+ *        4a. no `phone` in body → try Tier-0 FIRST (the "ZERO connects"
+ *            payoff: a funded wallet needs no body input at all). Tier-0
+ *            unavailable → {reason:"phone_required"}, byte-identical to
+ *            pre-Task-10.
+ *        4b. `phone` in body → apply it (BYO forward/provision). On failure,
+ *            Tier-0 rescues ONLY when it's actually available — an
+ *            unavailable Tier-0 surfaces the ORIGINAL applyPhone failure
+ *            unchanged (never silently swaps a caller-visible reason).
+ *        Either path: a Tier-0 attempt that IS available but fails for a
+ *        real reason (insufficient_balance / twilio_error / …) is a hard
+ *        failure — it rides the pre-existing `{ok:false,reason}` shape, so
+ *        the JSON contract never grows a new top-level field.
+ *   5. go live (fails)    → the go-live error (typically {reason:"blocked"})
+ *   6. otherwise          → {status:"live", deploymentId, phoneNumber}
  */
 export async function runDeploy(
   input: RunDeployInput,
@@ -182,25 +228,49 @@ export async function runDeploy(
     };
   }
 
-  // 3. Ready → apply phone (forward → paste-a-number; provision → get-a-number)
-  //    then go live. A deployment that already has its number (or needs none)
-  //    can skip straight to go-live even with no `phone` in the body.
+  // 3. Ready → apply phone (forward → paste-a-number; provision → get-a-number;
+  //    or Tier-0 → an instant SF-provisioned number, zero connects) then go
+  //    live. A deployment that already has its number (or needs none) can
+  //    skip straight to go-live even with no `phone` in the body.
   const needsNumber = deps.deploymentNeedsNumber(blueprint, templateType);
   if (needsNumber && !deployment.phoneNumber) {
     if (!input.body.phone) {
-      return { ok: false, reason: "phone_required" };
+      // No phone input at all — the deploy-verb Tier-0 payoff (Task 10):
+      // try SF's zero-connect instant number BEFORE demanding one from the
+      // caller. Unavailable (not configured / wallet not funded) → the
+      // pre-Task-10 behavior, byte-identical.
+      const tier0 = await deps.provisionSfManagedIfAvailable(input.orgId, deployment);
+      if (tier0.ok) {
+        deployment = tier0.deployment;
+      } else if (tier0.available) {
+        return { ok: false, reason: tier0.reason };
+      } else {
+        return { ok: false, reason: "phone_required" };
+      }
+    } else {
+      const phoneResult = await deps.applyPhone(
+        input.orgId,
+        deployment,
+        templateType,
+        blueprint,
+        input.body.phone,
+      );
+      if (phoneResult.ok) {
+        deployment = phoneResult.deployment;
+      } else {
+        // BYO failed — Tier-0 rescues ONLY when it's a live option; an
+        // unavailable Tier-0 must not mask the original, caller-supplied
+        // phone mode's real failure reason.
+        const tier0 = await deps.provisionSfManagedIfAvailable(input.orgId, deployment);
+        if (tier0.ok) {
+          deployment = tier0.deployment;
+        } else if (tier0.available) {
+          return { ok: false, reason: tier0.reason };
+        } else {
+          return { ok: false, reason: phoneResult.reason, missing: phoneResult.missing };
+        }
+      }
     }
-    const phoneResult = await deps.applyPhone(
-      input.orgId,
-      deployment,
-      templateType,
-      blueprint,
-      input.body.phone,
-    );
-    if (!phoneResult.ok) {
-      return { ok: false, reason: phoneResult.reason, missing: phoneResult.missing };
-    }
-    deployment = phoneResult.deployment;
   }
 
   const goLive = await deps.applyGoLive(deployment, templateType, blueprint);

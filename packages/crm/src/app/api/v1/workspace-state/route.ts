@@ -33,7 +33,7 @@ import {
 import { guardApiRequest } from "@/lib/api/guard";
 import { buildBuilderLadder, buildLifecycleView, deriveBuilderSignals } from "@/lib/build/builder-ladder";
 import { loadAgentMarketplaceStatusForOrg } from "@/lib/marketplace/agent-marketplace-status";
-import { getBuilderEarningsMicros, getWalletBalanceMicros, getWithdrawableEarningsMicros } from "@/lib/build/wallet-store";
+import { getBuilderEarningsMicros, getWalletBalanceMicros, getWithdrawableEarningsMicros, resolveWalletStripeMode } from "@/lib/build/wallet-store";
 import { isBillingEnabled } from "@/lib/marketplace/billing/billing-mode";
 import { stripeConnections } from "@/db/schema";
 import { MIN_WITHDRAW_USD } from "@/lib/build/payout";
@@ -49,6 +49,9 @@ import { isBindingConnectedForOrg } from "@/lib/agents/mcp/binding-connection";
 import { deploymentNeedsNumber } from "@/lib/deployments/margin";
 import { resolveBuilderTelephony } from "@/lib/telephony/config";
 import { computeDeployReadiness, type DeployReadiness } from "@/lib/deployments/deploy-readiness";
+// Task 10 — Tier-0 (SF-managed, zero-connect) availability signal.
+import { voiceManagedEnabled, TIER0_READY_FLOOR_MICROS } from "@/lib/telephony/voice-metering";
+import { resolveMasterTwilio } from "@/lib/telephony/sf-managed";
 import type { AgentTemplate } from "@/db/schema/agent-templates";
 
 export async function GET(request: Request) {
@@ -222,7 +225,13 @@ export async function GET(request: Request) {
       loadAgentMarketplaceStatusForOrg(orgId)
         .then((m) => [...m.values()])
         .catch(() => []),
-      getWalletBalanceMicros(orgId).catch(() => 0),
+      // Task 10, Controller-assigned B: read the SAME wallet a top-up
+      // actually credits (resolveWalletStripeMode — key-derived) instead of
+      // always reading the default "test" wallet. This is what
+      // builder.wallet_balance_usd (dashboard + `seldonframe status`) shows,
+      // so an unthreaded read here would silently show $0 forever on a live
+      // configuration.
+      getWalletBalanceMicros(orgId, resolveWalletStripeMode(process.env)).catch(() => 0),
       getBuilderEarningsMicros(orgId).catch(() => 0),
     ]);
 
@@ -324,7 +333,16 @@ export async function GET(request: Request) {
   // listing templates, or scoring one template — drops that piece silently so
   // the operator-facing fields above are byte-for-byte unaffected and
   // get_workspace_state never breaks on this account.
-  const templateReadiness = await buildTemplateDeployReadiness(orgId);
+  //
+  // tier0Available (Task 10) — computed ONCE, org-wide (it doesn't depend on
+  // the template), reusing the `walletMicros` balance already fetched above
+  // in the same Promise.all — adds ZERO extra DB round trips even though
+  // buildTemplateDeployReadiness scores every template.
+  const tier0Available =
+    voiceManagedEnabled(process.env) &&
+    Boolean(resolveMasterTwilio(process.env)) &&
+    walletMicros >= TIER0_READY_FLOOR_MICROS;
+  const templateReadiness = await buildTemplateDeployReadiness(orgId, tier0Available);
 
   // 6. Compose response. Designed to be self-explanatory to an LLM:
   // each section answers a question Claude Code would otherwise have
@@ -411,21 +429,31 @@ type TemplateDeployReadinessEntry = {
     requirements: DeployReadiness["requirements"];
     missing: DeployReadiness["missing"];
   } | null;
+  /** Task 10 — SF's zero-connect Tier-0 instant-number path is available for
+   *  this org right now (voiceManagedEnabled && master creds && wallet ≥
+   *  TIER0_READY_FLOOR_MICROS). Org-wide, not template-specific; echoed on
+   *  every entry so a consumer never has to separately resolve the wallet
+   *  balance to know a voice deploy can go instantly live. */
+  tier0_available: boolean;
 };
 
 /** Score ONE template's deploy readiness without a deployment. Mirrors
  *  resolveDeployReadiness (lib/deployments/deploy-readiness-deps.ts) — same
- *  four inputs (onboarding steps / live tool-connection statuses / telephony
- *  need+connected / progress) fed into the SAME pure computeDeployReadiness —
- *  except `deployment.phoneNumber` and `deployment.customization` don't exist
- *  pre-deploy, so telephonyConnected relies solely on the org's BYO Twilio
- *  creds and progress is always null (identical to a just-created deployment,
- *  which starts with no onboarding progress either). Never throws — a bad
- *  blueprint shape degrades to `null` (caller omits the field for that
- *  template) rather than failing the whole templates list. */
+ *  inputs (onboarding steps / live tool-connection statuses / telephony
+ *  need+connected+Tier-0-available / progress) fed into the SAME pure
+ *  computeDeployReadiness — except `deployment.phoneNumber` and
+ *  `deployment.customization` don't exist pre-deploy, so telephonyConnected
+ *  relies solely on the org's BYO Twilio creds and progress is always null
+ *  (identical to a just-created deployment, which starts with no onboarding
+ *  progress either). `tier0Available` (Task 10) is org-wide and passed in
+ *  from the caller rather than re-resolved per template — see
+ *  buildTemplateDeployReadiness. Never throws — a bad blueprint shape
+ *  degrades to `null` (caller omits the field for that template) rather than
+ *  failing the whole templates list. */
 async function computeTemplateDeployReadiness(
   orgId: string,
   template: Pick<AgentTemplate, "type" | "blueprint">,
+  tier0Available: boolean,
 ): Promise<DeployReadiness | null> {
   try {
     const blueprint = template.blueprint ?? {};
@@ -446,6 +474,7 @@ async function computeTemplateDeployReadiness(
       toolStatuses,
       telephonyNeeded,
       telephonyConnected,
+      tier0Available,
       progress: null,
       wizardPath: "",
     });
@@ -464,15 +493,22 @@ async function computeTemplateDeployReadiness(
  *  then OMITS `builder.templates` entirely rather than shipping a broken or
  *  empty-looking array, so the operator-facing response is byte-for-byte
  *  unaffected. A single template's scoring failure does not drop the others
- *  (computeTemplateDeployReadiness itself never throws — see above). */
+ *  (computeTemplateDeployReadiness itself never throws — see above).
+ *  `tier0Available` (Task 10) is resolved ONCE by the caller (org-wide, reuses
+ *  the wallet balance already fetched for `builder.wallet_balance_usd` — zero
+ *  extra DB round trips even with N templates) and echoed alongside each
+ *  entry's `deploy_readiness` as `tier0_available` so a consumer doesn't have
+ *  to separately fetch/interpret the wallet balance to know an instant-number
+ *  deploy is on the table. */
 async function buildTemplateDeployReadiness(
   orgId: string,
+  tier0Available: boolean,
 ): Promise<TemplateDeployReadinessEntry[] | null> {
   try {
     const templates = await listAgentTemplates(orgId);
     return await Promise.all(
       templates.map(async (t) => {
-        const readiness = await computeTemplateDeployReadiness(orgId, t);
+        const readiness = await computeTemplateDeployReadiness(orgId, t, tier0Available);
         return {
           id: t.id,
           name: t.name,
@@ -482,6 +518,7 @@ async function buildTemplateDeployReadiness(
           deploy_readiness: readiness
             ? { ready: readiness.ready, requirements: readiness.requirements, missing: readiness.missing }
             : null,
+          tier0_available: tier0Available,
         };
       }),
     );

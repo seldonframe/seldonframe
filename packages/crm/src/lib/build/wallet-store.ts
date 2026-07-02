@@ -38,6 +38,21 @@ import {
 } from "@/db/schema/wallet";
 import type { MarketplaceStripeMode } from "@/db/schema/marketplace-purchases";
 import { debitIdempotencyKey } from "@/lib/build/wallet-ledger";
+import { resolveBillingMode } from "@/lib/marketplace/billing/billing-mode";
+
+/**
+ * resolveWalletStripeMode — the SAME key-derived resolver every metered call
+ * site (voice webhook accept-gate + debit, SF-managed number rent, the rent
+ * cron, Tier-0 readiness) must use to pick a wallet, re-exported here so
+ * telephony/voice code doesn't need to import from `lib/marketplace/billing`.
+ * Deliberately NOT a reimplementation — `resolveBillingMode` is already the
+ * exact key-derived source the top-up credit path (wallet-topup.ts) and the
+ * existing debit/read paths (run-drawdown-deps.ts, wallet/balance/route.ts)
+ * use, so this alias guarantees the wallet a top-up credits is always the
+ * wallet every metered path debits, with zero risk of a second
+ * implementation drifting out of sync. Pure; no I/O.
+ */
+export const resolveWalletStripeMode = resolveBillingMode;
 
 /** The result of a credit/debit: the new balance (micro-dollars) + whether the
  *  op actually moved money (`applied`) or was an idempotent no-op (`duplicate`).
