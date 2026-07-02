@@ -59,7 +59,7 @@ test("markStepDone tolerates a malformed progress (jsonb edge)", () => {
 
 test("firstIncompleteStep returns the first step whose kind is not done", () => {
   const steps = buildOnboardingSteps({ surface: ["voice"], connectors: [] });
-  // steps: business_info, phone, test, go_live
+  // steps: business_info, phone, connect_openai_voice, test, go_live
   const progress = markStepDone(emptyProgress(), "business_info");
   const next = firstIncompleteStep(steps, progress);
   assert.equal(next?.kind, "phone");
@@ -70,6 +70,7 @@ test("firstIncompleteStep skips ALL done kinds (not just the first)", () => {
   let progress = emptyProgress();
   progress = markStepDone(progress, "business_info");
   progress = markStepDone(progress, "phone");
+  progress = markStepDone(progress, "connect_openai_voice");
   const next = firstIncompleteStep(steps, progress);
   assert.equal(next?.kind, "test");
 });

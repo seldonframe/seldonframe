@@ -9,17 +9,19 @@
 //   • a slim progress bar + "Step N of M" counter (the "endowed progress effect"
 //     — step 1 already reads as real progress),
 //   • a switch keyed on `step.kind` that renders the right screen; the rich
-//     screens (business_info, go_live in P1; connect_tool, phone in P2) ship in
-//     this build, the rest render a quiet "coming in this build" placeholder,
+//     screens (business_info, go_live in P1; connect_tool, phone in P2;
+//     connect_openai_voice in P4/Task 9) ship in this build, the rest render a
+//     quiet "coming in this build" placeholder,
 //   • Back / Continue nav; each completed step saves via a buyer action so the
 //     wizard is RESUMABLE (close + return to the exact step).
 //
 // Footer model: a SIMPLE step (placeholder, test/preview) uses the wizard's
 // generic Back + Continue footer (renders nothing itself + sets ownsFooter
-// false). A RICH step (business_info, go_live, connect_tool, phone) owns its OWN
-// footer — its primary action validates/connects/activates, then calls back into
-// the wizard to record progress + advance. The switch returns `ownsFooter` so the
-// wizard knows to suppress the generic footer for those kinds.
+// false). A RICH step (business_info, go_live, connect_tool, phone,
+// connect_openai_voice) owns its OWN footer — its primary action validates/
+// connects/activates, then calls back into the wizard to record progress +
+// advance. The switch returns `ownsFooter` so the wizard knows to suppress the
+// generic footer for those kinds.
 //
 // The server page resolves the agent + the saved progress and passes a
 // serializable view; this island only renders + calls the buyer actions.
@@ -44,6 +46,10 @@ import {
   type ConnectToolSeed,
 } from "@/components/buyer/steps/connect-tool-step";
 import { PhoneStep, type PhoneSeed } from "@/components/buyer/steps/phone-step";
+import {
+  ConnectOpenAiVoiceStep,
+  type ConnectOpenAiVoiceSeed,
+} from "@/components/buyer/steps/connect-openai-voice-step";
 import { TestStep, type TestStepSeed } from "@/components/buyer/steps/test-step";
 
 export type SetupWizardClientProps = {
@@ -61,8 +67,11 @@ export type SetupWizardClientProps = {
   /** Per-toolkit connected state for connect_tool steps (toolkit slug → connected).
    *  Consumed by the connect_tool step in Task 8. */
   connectedToolkits: Record<string, boolean>;
-  /** Current phone state for the phone step (consumed in Task 9). */
+  /** Current phone state for the phone step. */
   phoneSeed: PhoneSeed;
+  /** Seed for the connect_openai_voice step (Tier 2 opt-in) — this org's
+   *  webhook URL + whether they've already connected. */
+  openAiVoiceSeed: ConnectOpenAiVoiceSeed;
   /** Seed for the test ("hear it work") step — test-line number + greeting. */
   testStepSeed: TestStepSeed;
   /** Recap rows for the go_live step (business name, phone, calendar). */
@@ -353,6 +362,19 @@ function renderStep(args: RenderArgs): { node: React.ReactNode; ownsFooter: bool
           <PhoneStep
             deploymentId={props.deploymentId}
             seed={props.phoneSeed}
+            canGoBack={canGoBack}
+            onBack={args.onBack}
+            onContinue={args.onGenericComplete}
+          />
+        ),
+      };
+
+    case "connect_openai_voice":
+      return {
+        ownsFooter: true,
+        node: (
+          <ConnectOpenAiVoiceStep
+            seed={props.openAiVoiceSeed}
             canGoBack={canGoBack}
             onBack={args.onBack}
             onContinue={args.onGenericComplete}

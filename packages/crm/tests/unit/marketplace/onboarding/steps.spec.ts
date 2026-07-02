@@ -20,14 +20,14 @@ import {
 
 // ─── buildOnboardingSteps (the engine, normalized input) ─────────────────────
 
-test("receptionist: business → calendar → phone → test → go-live", () => {
+test("receptionist: business → calendar → phone → connect openai voice → test → go-live", () => {
   const steps = buildOnboardingSteps({
     surface: ["voice", "sms"],
     connectors: [{ kind: "composio", toolkit: "googlecalendar" }],
   });
   assert.deepEqual(
     steps.map((s) => s.kind),
-    ["business_info", "connect_tool", "phone", "test", "go_live"],
+    ["business_info", "connect_tool", "phone", "connect_openai_voice", "test", "go_live"],
   );
   assert.equal(steps[1].toolkit, "googlecalendar");
 });
@@ -79,6 +79,30 @@ test("social surface ends with a 'preview' step, not 'test'", () => {
   const kinds = steps.map((s) => s.kind);
   assert.ok(kinds.includes("preview"));
   assert.ok(!kinds.includes("test"));
+});
+
+test("connect_openai_voice is voice-only, right after phone, and skippable", () => {
+  const voiceSteps = buildOnboardingSteps({ surface: ["voice"], connectors: [] });
+  const kinds = voiceSteps.map((s) => s.kind);
+  const phoneIdx = kinds.indexOf("phone");
+  const voiceStepIdx = kinds.indexOf("connect_openai_voice");
+  assert.ok(phoneIdx >= 0, "voice surface must include phone");
+  assert.equal(voiceStepIdx, phoneIdx + 1, "connect_openai_voice must come immediately after phone");
+
+  const step = voiceSteps.find((s) => s.kind === "connect_openai_voice");
+  assert.equal(step?.required, false, "must never gate go-live");
+
+  const chatSteps = buildOnboardingSteps({ surface: ["chat"], connectors: [] });
+  assert.ok(
+    !chatSteps.some((s) => s.kind === "connect_openai_voice"),
+    "a non-voice surface must not get the step",
+  );
+
+  const socialSteps = buildOnboardingSteps({ surface: ["social"], connectors: [] });
+  assert.ok(
+    !socialSteps.some((s) => s.kind === "connect_openai_voice"),
+    "a social surface (no phone) must not get the step either",
+  );
 });
 
 test("every step has a non-empty label", () => {
@@ -157,7 +181,7 @@ test("normalize: end-to-end — a real receptionist blueprint builds the recepti
   const steps = buildOnboardingSteps(norm);
   assert.deepEqual(
     steps.map((s) => s.kind),
-    ["business_info", "connect_tool", "phone", "test", "go_live"],
+    ["business_info", "connect_tool", "phone", "connect_openai_voice", "test", "go_live"],
   );
 });
 

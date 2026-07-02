@@ -32,6 +32,7 @@ export type OnboardingStepKind =
   | "brand_info"
   | "connect_tool"
   | "phone"
+  | "connect_openai_voice"
   | "cadence"
   | "preview"
   | "test"
@@ -88,10 +89,16 @@ const hasSocial = (surface: string[]): boolean =>
  *      native; a social poster can be previewed before connecting).
  *   3. phone — only for a voice surface; required (a voice agent with no number
  *      can't answer).
- *   4. cadence — only for a social surface; skippable.
- *   5. preview (social) | test (everything else) — the "hear it work" peak;
+ *   4. connect_openai_voice — only for a voice surface, right after phone;
+ *      SKIPPABLE (Tier-2 "bring your own OpenAI voice project" opt-in — see
+ *      lib/telephony/connect-openai-voice.ts. Unlike connect_tool this isn't
+ *      derived from the blueprint's bound connectors; it's a standing advanced
+ *      option offered to every voice deployment, so it's unconditional on
+ *      `hasVoice` rather than data-driven).
+ *   5. cadence — only for a social surface; skippable.
+ *   6. preview (social) | test (everything else) — the "hear it work" peak;
  *      skippable.
- *   6. go_live — always required + last.
+ *   7. go_live — always required + last.
  *
  * A malformed/empty blueprint (no surface) yields [business_info, test, go_live].
  */
@@ -122,23 +129,30 @@ export function buildOnboardingSteps(bp: OnboardingBlueprint): OnboardingStep[] 
   }
 
   // 3. Phone — voice surfaces only (required: a voice agent needs a number).
+  // 4. Connect OpenAI voice project — right after phone, same voice-only gate,
+  //    but SKIPPABLE (an advanced $0-SF-fees opt-in, not a go-live blocker).
   if (hasVoice(surface)) {
     steps.push({ kind: "phone", label: "Your phone", required: true });
+    steps.push({
+      kind: "connect_openai_voice",
+      label: "Connect your OpenAI voice project",
+      required: false,
+    });
   }
 
-  // 4. Cadence — social surfaces only (skippable).
+  // 5. Cadence — social surfaces only (skippable).
   if (social) {
     steps.push({ kind: "cadence", label: "Posting cadence", required: false });
   }
 
-  // 5. The "hear it work" peak — preview a post (social) or test the agent.
+  // 6. The "hear it work" peak — preview a post (social) or test the agent.
   steps.push(
     social
       ? { kind: "preview", label: "Preview a post", required: false }
       : { kind: "test", label: "Hear it work", required: false },
   );
 
-  // 6. Go live — always required + last.
+  // 7. Go live — always required + last.
   steps.push({ kind: "go_live", label: "Go live", required: true });
 
   return steps;

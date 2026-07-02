@@ -49,6 +49,14 @@ export type TestStepSeedView = {
   greeting: string;
 };
 
+export type OpenAiVoiceSeedView = {
+  /** Whether the org already has Tier-2 credentials stored. */
+  connected: boolean;
+  /** This org's per-org webhook URL (always present — derived from orgId,
+   *  independent of whether they've connected anything yet). */
+  webhookUrl: string;
+};
+
 export type SetupWizardView = {
   businessInfoSeed: BusinessInfoSeedView;
   connectedToolkits: Record<string, boolean>;
@@ -90,6 +98,27 @@ function deriveHoursWindow(
  *  for a voice surface, so a present phone step is the real source of truth. */
 function agentRequiresNumber(view: BuyerAgentView): boolean {
   return view.steps.some((s) => s.kind === "phone");
+}
+
+/**
+ * Build the connect_openai_voice step's seed. Pure — takes the org's ALREADY-
+ * LOADED Tier-2 voice credentials (or null when never configured) rather than
+ * reading them itself, since that's an ORG-level row (organizations.integrations
+ * .openaiVoice), not part of `BuyerAgentView` (which is deployment-scoped) —
+ * unlike every other seed in this module, this one needs a caller-supplied
+ * extra input. The page calls `getOrgOpenAiVoice(orgId)` once and passes the
+ * result here, mirroring the same appUrl-fallback idiom used elsewhere
+ * (lib/proposals/notify-prospect.ts) for the webhook URL.
+ */
+export function buildOpenAiVoiceSeed(
+  orgId: string,
+  orgVoice: { projectId: string } | null,
+  appUrl: string = process.env.NEXT_PUBLIC_APP_URL ?? "https://app.seldonframe.com",
+): OpenAiVoiceSeedView {
+  return {
+    connected: orgVoice !== null,
+    webhookUrl: `${appUrl}/api/v1/voice/openai/webhook/${orgId}`,
+  };
 }
 
 // ─── the assembler ───────────────────────────────────────────────────────────

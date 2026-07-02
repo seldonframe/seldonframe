@@ -20,7 +20,8 @@ import {
   buildDefaultGetBuyerAgentDeps,
 } from "@/lib/marketplace/buyer/buyer-deployment";
 import { buyerAgentPath } from "@/lib/marketplace/buyer/buyer-routes";
-import { buildSetupWizardView } from "@/lib/marketplace/buyer/setup-view";
+import { buildSetupWizardView, buildOpenAiVoiceSeed } from "@/lib/marketplace/buyer/setup-view";
+import { getOrgOpenAiVoice } from "@/lib/telephony/openai-voice-store";
 import { BuyerShell } from "@/components/buyer/buyer-shell";
 import { SetupWizardClient } from "./setup-wizard-client";
 
@@ -56,6 +57,14 @@ export default async function BuyerSetupPage({
   // over the loaded deployment + steps — unit-tested in setup-view.spec.ts.
   const wizard = buildSetupWizardView(view);
 
+  // The connect_openai_voice seed needs one extra ORG-level read
+  // (organizations.integrations.openaiVoice) that isn't part of BuyerAgentView
+  // (a deployment-scoped view) — see buildOpenAiVoiceSeed's doc comment. Always
+  // computed (cheap single-row read) even for a non-voice agent, same as every
+  // other seed here; the wizard simply never renders the step for those.
+  const orgVoice = await getOrgOpenAiVoice(orgId);
+  const openAiVoiceSeed = buildOpenAiVoiceSeed(orgId, orgVoice);
+
   return (
     <BuyerShell finishLaterHref={homeHref} wordmarkSuffix="Setup">
       <SetupWizardClient
@@ -68,6 +77,7 @@ export default async function BuyerSetupPage({
         businessInfoSeed={wizard.businessInfoSeed}
         connectedToolkits={wizard.connectedToolkits}
         phoneSeed={wizard.phoneSeed}
+        openAiVoiceSeed={openAiVoiceSeed}
         testStepSeed={wizard.testStepSeed}
         goLiveSummary={wizard.goLiveSummary}
       />

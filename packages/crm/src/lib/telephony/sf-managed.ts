@@ -225,6 +225,81 @@ export async function ensureSubaccountTrunk(
   }
 }
 
+// ─── ensureTrunkForCreds (Tier 2 — BYO Twilio, caller-supplied creds+URI) ──────
+
+export type EnsureTrunkForCredsResult =
+  | { ok: true; trunkSid: string }
+  | { ok: false; error: "twilio_error" };
+
+/**
+ * The Tier-2 (BYO OpenAI project) sibling of `ensureSubaccountTrunk` — same
+ * list-and-match idempotency (`pickTrunkWithOrigination`) and the same
+ * `TwilioTelephonyClient` trunk methods, but deliberately NOT bent to that
+ * function's Tier-0 shape:
+ *
+ *   - Takes the origination URI and the Twilio creds as EXPLICIT arguments
+ *     (no `OPENAI_SIP_ORIGINATION_URI` env read — Task 5's env is the SHARED
+ *     platform SIP endpoint; Tier 2 points at the BUILDER's own OpenAI
+ *     project, a per-call URI the caller derives from their stored
+ *     `projectId`).
+ *   - Persists NOTHING org-side. `ensureSubaccountTrunk` writes a `trunkSid`
+ *     into `integrations.sfTelephony` via a reverse-jsonb lookup keyed by the
+ *     subaccount sid; there is no equivalent Tier-2 bucket to write into (the
+ *     org's own Twilio account isn't a "subaccount" SF manages), and a v1
+ *     goal is to avoid a schema change for this. Idempotency instead comes
+ *     from list-and-match on every call — cheap (a builder's account has at
+ *     most a handful of trunks) and always correct even if the org's Twilio
+ *     account changes trunks out from under us.
+ *   - Runs on the BYO account's OWN creds, not a subaccount's — the account
+ *     IS the trunking owner here, so the "subaccount creds only" rule
+ *     `ensureSubaccountTrunk` enforces is satisfied trivially (there's only
+ *     ever one set of creds in play).
+ *
+ * A minimal deps shape (just `subClientFor`) rather than the full
+ * `SfManagedDeps` — this helper never touches master creds, env, or org
+ * integrations at all, so it doesn't need the rest of that bag.
+ *
+ * Any client throw (list OR create) is caught and mapped to `twilio_error` —
+ * mirrors every other Twilio-touching function in this module: never
+ * propagates to the caller (here, the Tier-2 connect action treats a trunk
+ * failure as best-effort, never failing the whole connect).
+ */
+export async function ensureTrunkForCreds(
+  input: {
+    creds: { accountSid: string; authToken: string };
+    originationSipUri: string;
+  },
+  deps: Pick<SfManagedDeps, "subClientFor">,
+): Promise<EnsureTrunkForCredsResult> {
+  try {
+    const client = deps.subClientFor(input.creds);
+
+    const trunks = await client.listTrunksWithOrigination?.();
+    const reusable = trunks ? pickTrunkWithOrigination(trunks, input.originationSipUri) : null;
+    if (reusable) {
+      return { ok: true, trunkSid: reusable };
+    }
+
+    const created = await client.createTrunkWithOrigination?.({
+      friendlyName: `byo-voice-${input.creds.accountSid}`,
+      originationSipUri: input.originationSipUri,
+    });
+    if (!created) {
+      // Neither optional trunk method is wired on this client — same
+      // "configuration gap, not a network failure" stance as
+      // ensureBuilderSubaccount's analogous branch, but this helper's result
+      // type has no `not_configured` member (its only failure mode is a
+      // Twilio call going wrong), so a client this bare is reported the same
+      // as any other unusable-client case.
+      return { ok: false, error: "twilio_error" };
+    }
+
+    return { ok: true, trunkSid: created.trunkSid };
+  } catch {
+    return { ok: false, error: "twilio_error" };
+  }
+}
+
 // ─── suspend / reactivateBuilderSubaccount ─────────────────────────────────────
 
 /**
