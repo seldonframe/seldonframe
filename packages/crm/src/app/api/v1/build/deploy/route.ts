@@ -44,6 +44,7 @@ import { guardApiRequest } from "@/lib/api/guard";
 import { resolveDeployReadiness } from "@/lib/deployments/deploy-readiness-deps";
 import {
   getAgentTemplate,
+  resolveAgentAsTemplate,
   resolveUniqueTemplateSlug,
   surfaceForType,
   type AgentTemplateType,
@@ -87,14 +88,47 @@ function deployEnabled(): boolean {
 
 // ─── source resolution (idempotent) ─────────────────────────────────────────
 
-/** Self-built path: an existing agent_templates row the caller already owns.
- *  Idempotent — reuses any non-canceled deployment already resolved for
- *  (orgId, templateId) instead of creating a second one on every call. */
+/** Self-built path: an existing agent_templates row the caller already owns,
+ *  OR (product-gap fix) a workspace agent converted into one on the fly.
+ *
+ *  `POST /api/v1/build/deploy` only ever accepted a marketplace TEMPLATE
+ *  source. When a Claude Code session builds a workspace AGENT (the `agents`
+ *  table — createAgent / the Studio generator) and says "deploy it", the id
+ *  it has is an `agents.id`, not an `agent_templates.id` — the ONLY id-shaped
+ *  field on the wire is `source.templateId` (there is no separate `agentId`
+ *  field; see docs/superpowers/specs/2026-07-01-self-serve-agent-deployment-
+ *  design.md Part C), so that call used to 404 with `template_not_found`, the
+ *  session pivoted to `publish_agent`, and the Tier-0 instant-phone path was
+ *  never reached (observed twice in prod logs).
+ *
+ *  Fix: when `templateId` doesn't resolve to an owned agent_templates row,
+ *  additively try resolveAgentAsTemplate (agent-templates/store.ts) —
+ *  resolves the id as a workspace agent IN THE CALLER'S OWN ORG (org-scoped;
+ *  a cross-org id resolves to null, identical to a nonexistent id) and
+ *  converts it into an agent_templates row via buildTemplateFromAgent (same
+ *  mapper style as buildInstalledAgentTemplate), resolve-or-reuse idempotent
+ *  on `blueprint.sourceAgentId` (mirrors resolveListingSource's
+ *  `sourceListingId` idiom). A miss (no template AND no agent by this id in
+ *  this org) preserves the EXACT pre-existing `template_not_found` outcome.
+ *
+ *  Either way, the rest of this function (idempotent deployment lookup,
+ *  surfaceForAgentType, error mapping) is UNCHANGED — it's keyed off the
+ *  resolved template's own id, so readiness/phone/go-live/Tier-0 all come
+ *  free regardless of which path produced the template. */
 async function resolveTemplateSource(orgId: string, templateId: string): Promise<ResolvedSource> {
-  const template = await getAgentTemplate(templateId);
+  let template = await getAgentTemplate(templateId);
   if (!template || template.builderOrgId !== orgId) {
-    return { ok: false, reason: "template_not_found" };
+    template = await resolveAgentAsTemplate(orgId, templateId);
+    if (!template) {
+      return { ok: false, reason: "template_not_found" };
+    }
   }
+  // IMPORTANT: from here on, key every lookup/write off the RESOLVED
+  // template's own id, never the raw `templateId` param — on the agent-bridge
+  // path above, `templateId` is actually an `agents.id`, which is NOT a valid
+  // agentTemplateId (a different table's PK). Using the raw param here would
+  // silently create a deployment pointing at a nonexistent template id.
+  const resolvedTemplateId = template.id;
 
   const [existing] = await db
     .select()
@@ -102,7 +136,7 @@ async function resolveTemplateSource(orgId: string, templateId: string): Promise
     .where(
       and(
         eq(deployments.builderOrgId, orgId),
-        eq(deployments.agentTemplateId, templateId),
+        eq(deployments.agentTemplateId, resolvedTemplateId),
         ne(deployments.status, "canceled"),
       ),
     )
@@ -114,7 +148,7 @@ async function resolveTemplateSource(orgId: string, templateId: string): Promise
 
   const created = await createDeployment({
     builderOrgId: orgId,
-    agentTemplateId: templateId,
+    agentTemplateId: resolvedTemplateId,
     clientName: template.name,
     // Without this, createDeployment defaults surface to "phone" even for a chat
     // template (I-1) — reuse the SAME agentType→surface mapping the buyer path

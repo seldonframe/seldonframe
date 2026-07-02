@@ -16,21 +16,25 @@ import assert from "node:assert/strict";
 
 import {
   buildDefaultTemplateBlueprint,
+  buildTemplateFromAgent,
   capabilitiesForSurface,
   createAgentTemplate,
   mergeTemplateBlueprint,
+  resolveAgentAsTemplate,
   resolveUniqueTemplateSlug,
   slugifyTemplateName,
   surfaceForType,
+  templateTypeForAgentChannel,
   updateAgentTemplate,
   ALL_TEMPLATE_CAPABILITIES,
   DEFAULT_CHAT_ASSISTANT_CAPABILITIES,
   DEFAULT_VOICE_RECEPTIONIST_CAPABILITIES,
   type CreateAgentTemplateDeps,
+  type ResolveAgentAsTemplateDeps,
   type UpdateAgentTemplateDeps,
 } from "../../../src/lib/agent-templates/store";
 import type { AgentTemplate } from "../../../src/db/schema/agent-templates";
-import type { AgentBlueprint } from "../../../src/db/schema/agents";
+import type { Agent, AgentBlueprint } from "../../../src/db/schema/agents";
 
 // ---------------------------------------------------------------------
 // slugifyTemplateName
@@ -444,5 +448,234 @@ describe("updateAgentTemplate", () => {
     const result = await updateAgentTemplate({ id: "nope", patch: { greeting: "x" }, deps });
     assert.equal(result.ok, false);
     if (!result.ok) assert.equal(result.error, "template_not_found");
+  });
+});
+
+// ---------------------------------------------------------------------
+// templateTypeForAgentChannel + buildTemplateFromAgent
+// (product-gap fix: workspace-built agents are valid deploy sources)
+// ---------------------------------------------------------------------
+
+describe("templateTypeForAgentChannel", () => {
+  test("channel:'voice' → voice_receptionist", () => {
+    assert.equal(templateTypeForAgentChannel("voice"), "voice_receptionist");
+  });
+
+  test("channel:'web_chat' → chat_assistant", () => {
+    assert.equal(templateTypeForAgentChannel("web_chat"), "chat_assistant");
+  });
+
+  test("channel:'sms' → chat_assistant (sms shares the chat capability set — no dedicated sms template type)", () => {
+    assert.equal(templateTypeForAgentChannel("sms"), "chat_assistant");
+  });
+
+  test("channel:'email' → chat_assistant (same reasoning as sms)", () => {
+    assert.equal(templateTypeForAgentChannel("email"), "chat_assistant");
+  });
+
+  test("an unrecognized/future channel string falls back to chat_assistant (never throws)", () => {
+    assert.equal(templateTypeForAgentChannel("carrier_pigeon"), "chat_assistant");
+  });
+});
+
+describe("buildTemplateFromAgent", () => {
+  function fakeAgent(over: Partial<Agent> = {}): Pick<Agent, "orgId" | "name" | "channel" | "blueprint" | "id"> {
+    return {
+      id: "agent-1",
+      orgId: "org-1",
+      name: "Front Desk Bot",
+      channel: "voice",
+      blueprint: {
+        archetype: "voice-receptionist",
+        greeting: "Thanks for calling!",
+        capabilities: ["book_appointment", "take_message"],
+      },
+      ...over,
+    };
+  }
+
+  test("maps orgId → builderOrgId, name verbatim, status always 'draft'", () => {
+    const args = buildTemplateFromAgent(fakeAgent());
+    assert.equal(args.builderOrgId, "org-1");
+    assert.equal(args.name, "Front Desk Bot");
+    assert.equal(args.status, "draft");
+  });
+
+  test("derives type from channel via templateTypeForAgentChannel", () => {
+    assert.equal(buildTemplateFromAgent(fakeAgent({ channel: "voice" })).type, "voice_receptionist");
+    assert.equal(buildTemplateFromAgent(fakeAgent({ channel: "web_chat" })).type, "chat_assistant");
+  });
+
+  test("stamps blueprint.sourceAgentId with the agent's id (the idempotency marker)", () => {
+    const args = buildTemplateFromAgent(fakeAgent({ id: "agent-42" }));
+    assert.equal(args.blueprint.sourceAgentId, "agent-42");
+  });
+
+  test("carries the agent's own blueprint fields through (greeting, capabilities, …)", () => {
+    const args = buildTemplateFromAgent(fakeAgent());
+    assert.equal(args.blueprint.greeting, "Thanks for calling!");
+    assert.deepEqual(args.blueprint.capabilities, ["book_appointment", "take_message"]);
+    assert.equal(args.blueprint.archetype, "voice-receptionist");
+  });
+
+  test("blueprint is a DEFENSIVE COPY — mutating the returned template's blueprint never reaches back into the agent's own blueprint object", () => {
+    const agent = fakeAgent();
+    const args = buildTemplateFromAgent(agent);
+    (args.blueprint.capabilities as string[]).push("mutated");
+    assert.deepEqual(agent.blueprint?.capabilities, ["book_appointment", "take_message"], "the source agent's blueprint must be untouched");
+  });
+
+  test("a null/undefined agent blueprint produces an empty-plus-stamp blueprint (never throws)", () => {
+    const args = buildTemplateFromAgent(fakeAgent({ blueprint: undefined as unknown as AgentBlueprint }));
+    assert.equal(args.blueprint.sourceAgentId, "agent-1");
+    assert.equal(args.blueprint.greeting, undefined);
+  });
+});
+
+// ---------------------------------------------------------------------
+// resolveAgentAsTemplate (DI'd orchestration)
+// (product-gap fix: workspace-built agents are valid deploy sources)
+// ---------------------------------------------------------------------
+
+describe("resolveAgentAsTemplate", () => {
+  function fakeAgentRow(over: Partial<Agent> = {}): Pick<Agent, "id" | "orgId" | "name" | "channel" | "blueprint"> {
+    return {
+      id: "agent-1",
+      orgId: "org-1",
+      name: "Front Desk Bot",
+      channel: "voice",
+      blueprint: { archetype: "voice-receptionist", greeting: "Hi!" },
+      ...over,
+    };
+  }
+
+  test("agent found in org, no existing template ⇒ generates + inserts a NEW template stamped with sourceAgentId, resolves a unique slug", async () => {
+    let insertedValues: Record<string, unknown> | null = null;
+    const deps: ResolveAgentAsTemplateDeps = {
+      findAgentInOrg: async (orgId, agentId) => {
+        assert.equal(orgId, "org-1");
+        assert.equal(agentId, "agent-1");
+        return fakeAgentRow();
+      },
+      findTemplateBySourceAgentId: async () => null, // no prior generation
+      listSlugs: async () => ["front-desk-bot"], // force a collision → -2
+      insert: async (values) => {
+        insertedValues = values as unknown as Record<string, unknown>;
+        return fakeTemplate({ ...values, id: "tmpl-generated-1" });
+      },
+    };
+
+    const result = await resolveAgentAsTemplate("org-1", "agent-1", deps);
+
+    assert.ok(result, "must resolve a template");
+    assert.equal(result?.id, "tmpl-generated-1");
+    assert.ok(insertedValues, "insert must be called");
+    const values = insertedValues as unknown as Record<string, unknown>;
+    assert.equal(values.builderOrgId, "org-1");
+    assert.equal(values.type, "voice_receptionist");
+    assert.equal(values.status, "draft");
+    assert.equal(values.slug, "front-desk-bot-2", "collision resolved via resolveUniqueTemplateSlug");
+    const blueprint = values.blueprint as AgentBlueprint;
+    assert.equal(blueprint.sourceAgentId, "agent-1", "idempotency stamp present");
+    assert.equal(blueprint.greeting, "Hi!", "agent's own blueprint fields carried through");
+  });
+
+  test("repeat call for the SAME (orgId, agentId) ⇒ REUSES the existing generated template, never calls insert again (idempotent — no duplicate templates on repeat deploy)", async () => {
+    let insertCalled = false;
+    const existing = fakeTemplate({
+      id: "tmpl-generated-1",
+      blueprint: { archetype: "voice-receptionist", sourceAgentId: "agent-1" },
+    });
+    const deps: ResolveAgentAsTemplateDeps = {
+      findAgentInOrg: async () => fakeAgentRow(),
+      findTemplateBySourceAgentId: async (orgId, agentId) => {
+        assert.equal(orgId, "org-1");
+        assert.equal(agentId, "agent-1");
+        return existing;
+      },
+      listSlugs: async () => {
+        throw new Error("listSlugs should not be called on the reuse path");
+      },
+      insert: async () => {
+        insertCalled = true;
+        throw new Error("insert should not be called on the reuse path");
+      },
+    };
+
+    const result = await resolveAgentAsTemplate("org-1", "agent-1", deps);
+
+    assert.equal(insertCalled, false, "a repeat deploy must reuse, not duplicate, the generated template");
+    assert.equal(result?.id, "tmpl-generated-1");
+    assert.deepEqual(result, existing);
+  });
+
+  test("agent id exists but belongs to a DIFFERENT org ⇒ resolves to null (never leaks cross-org existence, never generates a template from another org's agent)", async () => {
+    let findTemplateCalled = false;
+    let insertCalled = false;
+    const deps: ResolveAgentAsTemplateDeps = {
+      // Mirrors the real org-scoped WHERE clause: an agent belonging to
+      // "org-2" queried under "org-1" must resolve to null, identical to a
+      // wholly nonexistent id.
+      findAgentInOrg: async (orgId, agentId) => {
+        assert.equal(orgId, "org-1");
+        assert.equal(agentId, "agent-owned-by-org-2");
+        return null;
+      },
+      findTemplateBySourceAgentId: async () => {
+        findTemplateCalled = true;
+        return null;
+      },
+      listSlugs: async () => [],
+      insert: async () => {
+        insertCalled = true;
+        throw new Error("insert should not be called for a cross-org agent id");
+      },
+    };
+
+    const result = await resolveAgentAsTemplate("org-1", "agent-owned-by-org-2", deps);
+
+    assert.equal(result, null, "a cross-org agent id must resolve to null, same as a nonexistent id");
+    assert.equal(insertCalled, false);
+    // findTemplateBySourceAgentId is a short-circuit optimization detail, not a
+    // guaranteed no-call — but insert (the only side effect) must never fire.
+    void findTemplateCalled;
+  });
+
+  test("agent id does not exist at all ⇒ resolves to null (the caller falls through to template_not_found, byte-identical to a nonexistent templateId)", async () => {
+    const deps: ResolveAgentAsTemplateDeps = {
+      findAgentInOrg: async () => null,
+      findTemplateBySourceAgentId: async () => {
+        throw new Error("should not be reached — findAgentInOrg already missed");
+      },
+      listSlugs: async () => [],
+      insert: async () => {
+        throw new Error("should not be reached — findAgentInOrg already missed");
+      },
+    };
+
+    const result = await resolveAgentAsTemplate("org-1", "nope", deps);
+    assert.equal(result, null);
+  });
+
+  test("derives the template TYPE from the agent's channel (voice → voice_receptionist, web_chat → chat_assistant) via templateTypeForAgentChannel", async () => {
+    const cases: Array<[string, "voice_receptionist" | "chat_assistant"]> = [
+      ["voice", "voice_receptionist"],
+      ["web_chat", "chat_assistant"],
+      ["sms", "chat_assistant"],
+    ];
+    for (const [channel, expectedType] of cases) {
+      let insertedType: string | null = null;
+      const deps: ResolveAgentAsTemplateDeps = {
+        findAgentInOrg: async () => fakeAgentRow({ channel }),
+        findTemplateBySourceAgentId: async () => null,
+        listSlugs: async () => [],
+        insert: async (values) => {
+          insertedType = values.type as string;
+          return fakeTemplate({ ...values, id: "tmpl-x" });
+        },
+      };
+      await resolveAgentAsTemplate("org-1", "agent-1", deps);
+      assert.equal(insertedType, expectedType, `channel:'${channel}'`);
+    }
   });
 });

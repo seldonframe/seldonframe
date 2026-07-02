@@ -19,7 +19,7 @@ import type {
   AgentTemplateStatus,
   NewAgentTemplate,
 } from "@/db/schema/agent-templates";
-import type { AgentBlueprint } from "@/db/schema/agents";
+import type { Agent, AgentBlueprint } from "@/db/schema/agents";
 
 // ─── archetype defaults ──────────────────────────────────────────────────────
 //
@@ -45,6 +45,20 @@ export type AgentSurface = "voice" | "chat" | "sms" | "email";
  *  the channel adapters, not a distinct template type. */
 export function surfaceForType(type: AgentTemplateType): AgentSurface {
   return type === "chat_assistant" ? "chat" : "voice";
+}
+
+/**
+ * Product-gap fix (agent-as-deploy-source) — map a workspace AGENT's `channel`
+ * column onto the constrained `AgentTemplateType` a template row needs. Pure —
+ * no DB. Mirrors surfaceForType's inverse: `channel === "voice"` is the only
+ * case that becomes `voice_receptionist`; every other channel (web_chat / sms /
+ * email) becomes `chat_assistant`, matching the doc comment above
+ * `AgentSurface` that sms/email agents "share the chat capability set" with
+ * web chat (they run the same text-agent loop, just via a different channel
+ * adapter) — there is no dedicated sms/email template TYPE to map to instead.
+ */
+export function templateTypeForAgentChannel(channel: string): AgentTemplateType {
+  return channel === "voice" ? "voice_receptionist" : "chat_assistant";
 }
 
 /**
@@ -216,6 +230,155 @@ export function resolveUniqueTemplateSlug(
   }
   // Pathological fallback — astronomically unlikely.
   return `${base}-${Date.now()}`;
+}
+
+// ─── buildTemplateFromAgent (product-gap fix: agent-as-deploy-source) ────────
+//
+// `POST /api/v1/build/deploy` only ever accepted a marketplace TEMPLATE
+// source (templateId | listingSlug). When a Claude Code session builds a
+// workspace AGENT (the `agents` table — created via createAgent/the Studio
+// generator) and says "deploy it", there is no matching source and the route
+// 404s. Rather than teach the deploy verb a SECOND parallel flow, this
+// converts the agent into an agent_templates row on the fly and lets the
+// EXISTING template flow (readiness → phone → go-live, Tier-0 included)
+// handle it unchanged — mirrors buildInstalledAgentTemplate's exact shape
+// (a Pick<NewAgentTemplate, …> the caller inserts), just with an AGENT as the
+// source instead of a marketplace listing's cloned blueprint.
+
+/**
+ * The agent_templates INSERT for a template generated FROM a workspace
+ * agent, minus the slug (the caller resolves a per-builder-unique slug
+ * against the DB, exactly like buildInstalledAgentTemplate). Pure — no DB.
+ *
+ * The blueprint is a DEFENSIVE COPY (structuredClone) of the agent's own
+ * blueprint, stamped with `blueprint.sourceAgentId` (AgentBlueprint,
+ * db/schema/agents.ts) so a repeat "deploy it" call resolves the SAME
+ * generated template instead of cloning a fresh one every time — this
+ * mirrors the resolve-or-reuse idiom resolveListingSource already
+ * established for listing-cloned templates (`blueprint ->> 'sourceListingId'
+ * = listing.id`); the route's agent-source resolver runs the equivalent
+ * `blueprint ->> 'sourceAgentId' = agent.id` query. `type` is derived from
+ * the agent's `channel` (templateTypeForAgentChannel) since agents carry a
+ * free-text `archetype` string, not the constrained AgentTemplateType a
+ * template row requires. Status starts 'draft' — the deploy flow doesn't
+ * gate on template status, so this needs no eval/publish step to be
+ * immediately deployable.
+ */
+export function buildTemplateFromAgent(
+  agent: Pick<Agent, "orgId" | "name" | "channel" | "blueprint" | "id">,
+): Pick<NewAgentTemplate, "builderOrgId" | "name" | "type" | "blueprint" | "status"> {
+  const blueprint: AgentBlueprint = {
+    ...structuredClone(agent.blueprint ?? {}),
+    sourceAgentId: agent.id,
+  };
+  return {
+    builderOrgId: agent.orgId,
+    name: agent.name,
+    type: templateTypeForAgentChannel(agent.channel),
+    blueprint,
+    status: "draft",
+  };
+}
+
+// ─── resolveAgentAsTemplate (DI'd orchestration) ─────────────────────────────
+//
+// The impure half of the agent-as-deploy-source bridge: given a caller-owned
+// (org-scoped) workspace agent id, resolve-or-create the agent_templates row
+// that `POST /api/v1/build/deploy`'s resolveTemplateSource then treats exactly
+// like any other owned template. DI'd (repo convention) so it's unit-testable
+// with fakes — no live Postgres, no route/HTTP layer needed to exercise the
+// resolve-or-reuse idempotency or the cross-org rejection.
+
+export type ResolveAgentAsTemplateDeps = {
+  /** Load the workspace agent by id, org-scoped. Returns null if the id
+   *  doesn't exist OR belongs to a different org — the caller must never
+   *  distinguish these two cases (never leak cross-org existence). */
+  findAgentInOrg: (
+    orgId: string,
+    agentId: string,
+  ) => Promise<Pick<Agent, "id" | "orgId" | "name" | "channel" | "blueprint"> | null>;
+  /** Find an agent_templates row this builder already generated from this
+   *  agent (the `blueprint.sourceAgentId` jsonb-stamp match) — the
+   *  resolve-or-reuse idempotency check, mirroring resolveListingSource's
+   *  `sourceListingId` match. */
+  findTemplateBySourceAgentId: (orgId: string, agentId: string) => Promise<AgentTemplate | null>;
+  /** Existing template slugs for this builder (to resolve a unique slug for
+   *  the newly-generated template, exactly like createAgentTemplate). */
+  listSlugs: (orgId: string) => Promise<string[]>;
+  /** Insert the generated agent_templates row and return it. */
+  insert: (values: NewAgentTemplate) => Promise<AgentTemplate>;
+};
+
+function buildDefaultResolveAgentAsTemplateDeps(): ResolveAgentAsTemplateDeps {
+  return {
+    findAgentInOrg: async (orgId, agentId) => {
+      const { db } = await import("@/db");
+      const { agents } = await import("@/db/schema/agents");
+      const { and, eq } = await import("drizzle-orm");
+      const rows = await db
+        .select()
+        .from(agents)
+        .where(and(eq(agents.id, agentId), eq(agents.orgId, orgId)))
+        .limit(1);
+      return rows[0] ?? null;
+    },
+    findTemplateBySourceAgentId: async (orgId, agentId) => {
+      const { db } = await import("@/db");
+      const { agentTemplates } = await import("@/db/schema/agent-templates");
+      const { and, eq, sql } = await import("drizzle-orm");
+      const rows = await db
+        .select()
+        .from(agentTemplates)
+        .where(
+          and(
+            eq(agentTemplates.builderOrgId, orgId),
+            sql`${agentTemplates.blueprint} ->> 'sourceAgentId' = ${agentId}`,
+          ),
+        )
+        .limit(1);
+      return rows[0] ?? null;
+    },
+    // Reuse createAgentTemplate's own default deps for the slug/insert seams —
+    // they operate on the same agentTemplates table with the same signatures.
+    ...buildDefaultCreateDeps(),
+  };
+}
+
+/**
+ * Resolve-or-create the agent_templates row that represents a workspace agent
+ * as a deploy source (the product-gap fix — see buildTemplateFromAgent's doc
+ * comment for the full "why"). Org-scoped: `agentId` is looked up ONLY within
+ * `orgId` — a cross-org id (an agent belonging to a different workspace)
+ * resolves to `null`, identical to a nonexistent id, so the caller (the
+ * route's resolveTemplateSource) reports the SAME `template_not_found` either
+ * way and never leaks cross-org existence.
+ *
+ * Idempotent: a repeat call for the same (orgId, agentId) reuses the template
+ * already stamped with `blueprint.sourceAgentId === agentId` instead of
+ * generating a duplicate on every "deploy it" call.
+ */
+export async function resolveAgentAsTemplate(
+  orgId: string,
+  agentId: string,
+  deps?: Partial<ResolveAgentAsTemplateDeps>,
+): Promise<AgentTemplate | null> {
+  const defaults = buildDefaultResolveAgentAsTemplateDeps();
+  const findAgentInOrg = deps?.findAgentInOrg ?? defaults.findAgentInOrg;
+  const findTemplateBySourceAgentId = deps?.findTemplateBySourceAgentId ?? defaults.findTemplateBySourceAgentId;
+  const listSlugs = deps?.listSlugs ?? defaults.listSlugs;
+  const insert = deps?.insert ?? defaults.insert;
+
+  const agent = await findAgentInOrg(orgId, agentId);
+  if (!agent) return null;
+
+  const existingTemplate = await findTemplateBySourceAgentId(orgId, agentId);
+  if (existingTemplate) return existingTemplate;
+
+  const args = buildTemplateFromAgent(agent);
+  const existingSlugs = await listSlugs(orgId);
+  const slug = resolveUniqueTemplateSlug(args.name, existingSlugs);
+
+  return insert({ ...args, slug });
 }
 
 // ─── patch merge ─────────────────────────────────────────────────────────────

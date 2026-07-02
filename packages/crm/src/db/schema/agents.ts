@@ -126,6 +126,16 @@ export type AgentBlueprint = {
    *  second copy on a re-purchase. Undefined for any other creation path. Stored
    *  in the jsonb blueprint — no migration. */
   sourceListingId?: string;
+  /** 2026-07 (deploy-verb agent-as-deploy-source bridge) — when this blueprint
+   *  belongs to a TEMPLATE that was generated on the fly from a workspace
+   *  AGENT (the `agents` table) so `POST /api/v1/build/deploy` could deploy
+   *  it via the existing template flow, the source `agents.id`. Used purely
+   *  for IDEMPOTENCY: a repeat "deploy it" call for the same agent reuses the
+   *  template already carrying this id instead of generating a duplicate.
+   *  Undefined for any other creation path (a template built directly in the
+   *  Studio, a listing-cloned template, …). Stored in the jsonb blueprint —
+   *  no migration. See lib/agent-templates/store.ts:buildTemplateFromAgent. */
+  sourceAgentId?: string;
   /** 2026-06-25 (per-client booking policy) — a TEMPLATE's recommended booking
    *  rules (slot length / hours / buffer / lead time / required fields). Sparse:
    *  only the fields the builder set. resolveBookingPolicy layers the

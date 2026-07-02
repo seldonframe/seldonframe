@@ -1027,3 +1027,127 @@ describe("runDeploy — T10 review F2: Tier-0 (4a + 4b) requires BYO telephony t
     assert.equal(result.ok, true);
   });
 });
+
+// ─── product-gap fix: workspace-built agents are valid deploy sources ───────
+// The real fix lives entirely INSIDE the route's real `resolveSource`
+// implementation (resolveTemplateSource's fallback to
+// resolveAgentAsTemplate — see route.ts + agent-templates/store.ts, both
+// unit-tested directly with DI'd fakes in
+// tests/unit/agent-templates/store.spec.ts:resolveAgentAsTemplate).
+// `runDeploy` itself never branches on WHICH kind of source produced a
+// `ResolvedSource` — it only ever sees the same three-field shape
+// ({deployment, templateType, blueprint}) regardless of whether a template
+// id, a listing slug, or (now) a bridged workspace-agent id resolved it. This
+// suite proves that CONTRACT at the orchestrator boundary: once source
+// resolution succeeds via the agent-bridge, the downstream flow (readiness →
+// Tier-0 → go-live) is BYTE-IDENTICAL to a plain template-source deploy — the
+// orchestrator needed zero changes, exactly as the brief mandates.
+
+describe("runDeploy — product-gap fix: the agent-bridge's ResolvedSource flows through unchanged", () => {
+  test("a ResolvedSource produced by the agent-bridge (template_not_found on templateId, then bridged via resolveAgentAsTemplate) reaches the SAME Tier-0-funded live outcome as a plain template source", async () => {
+    // Models exactly what route.ts's real resolveSource now does: templateId
+    // doesn't match an owned template, so it falls back to the agent bridge,
+    // which resolves-or-creates an agent_templates row and returns the
+    // IDENTICAL ResolvedSource shape a plain template hit would have
+    // returned. The orchestrator must not be able to tell the difference.
+    let tier0Called = false;
+    const deps = fakeDeps({
+      resolveSource: async (_orgId, body) => {
+        // The caller passed an agents.id in source.templateId; the real
+        // resolveTemplateSource's first getAgentTemplate lookup would miss
+        // (not an agent_templates row), then resolveAgentAsTemplate bridges
+        // it — represented here by returning the bridged template's
+        // resulting ResolvedSource directly (the DB-wiring itself is
+        // separately unit-tested in agent-templates/store.spec.ts).
+        assert.equal(body.source?.templateId, "agent-1", "the agent's id rode the templateId slot, per the wire contract");
+        return {
+          ok: true,
+          deployment: fakeDeployment({ agentTemplateId: "tmpl-generated-from-agent-1", phoneNumber: null }),
+          templateType: "voice_receptionist",
+          blueprint: { trigger: { kind: "inbound", channel: "voice" }, sourceAgentId: "agent-1" } as AgentBlueprint,
+        };
+      },
+      deploymentNeedsNumber: () => true,
+      hasByoTelephony: async () => false, // no BYO — Tier-0 is the payoff path
+      provisionSfManagedIfAvailable: async (_orgId, deployment): Promise<ProvisionSfManagedIfAvailableResult> => {
+        tier0Called = true;
+        return { ok: true, deployment: fakeDeployment({ ...deployment, phoneNumber: "+15125550199", status: "active" }) };
+      },
+      applyGoLive: async (deployment) => {
+        if (deployment.phoneNumber) {
+          return { ok: true, deployment: fakeDeployment({ ...deployment, status: "active" }) };
+        }
+        return { ok: false, reason: "blocked" };
+      },
+    });
+
+    const result = await runDeploy(
+      { orgId: "org-1", body: { source: { templateId: "agent-1" } } }, // zero connects — no `phone` in body
+      deps,
+    );
+
+    assert.ok(tier0Called, "the Tier-0 payoff must be reachable through an agent-bridged source, exactly like a template source");
+    assert.equal(result.ok, true);
+    assert.equal((result as { status?: string }).status, "live", `expected live, got ${JSON.stringify(result)}`);
+    assert.equal((result as { phoneNumber?: string | null }).phoneNumber, "+15125550199");
+    assert.equal(statusForDeployResult(result), 200);
+  });
+
+  test("regression pin: a PLAIN template source (no agent bridge involved) is completely unaffected — byte-identical outcome shape", async () => {
+    // Guards against the agent-bridge fix accidentally changing behavior for
+    // the untouched, pre-existing template path.
+    const deps = fakeDeps({
+      resolveSource: async () => ({
+        ok: true,
+        deployment: fakeDeployment({ phoneNumber: "+15125550148" }),
+        templateType: "voice_receptionist",
+        blueprint: { trigger: { kind: "inbound", channel: "voice" } } as AgentBlueprint,
+      }),
+      deploymentNeedsNumber: () => true,
+      applyGoLive: async (deployment) => ({ ok: true, deployment: fakeDeployment({ ...deployment, status: "active" }) }),
+    });
+
+    const result = await runDeploy({ orgId: "org-1", body: { source: { templateId: "tmpl-1" } } }, deps);
+
+    assert.deepEqual(result, { ok: true, status: "live", deploymentId: "dep-1", phoneNumber: "+15125550148" });
+  });
+
+  test("regression pin: a PLAIN listing source (marketplace path, no agent bridge involved) is completely unaffected — byte-identical outcome shape", async () => {
+    const deps = fakeDeps({
+      resolveSource: async () => ({
+        ok: true,
+        deployment: fakeDeployment({ surface: "embed", phoneNumber: null }),
+        templateType: "chat_assistant",
+        blueprint: {} as AgentBlueprint,
+      }),
+      deploymentNeedsNumber: () => false,
+      applyGoLive: async (deployment) => ({ ok: true, deployment: fakeDeployment({ ...deployment, status: "active" }) }),
+    });
+
+    const result = await runDeploy({ orgId: "org-1", body: { source: { listingSlug: "hvac-receptionist" } } }, deps);
+
+    assert.deepEqual(result, { ok: true, status: "live", deploymentId: "dep-1", phoneNumber: null });
+  });
+
+  test("cross-org agent id (the agent bridge's ownership guard) surfaces as the EXISTING template_not_found outcome — byte-identical to today's unowned-template 404", async () => {
+    const deps = fakeDeps({
+      resolveSource: async (): Promise<ResolvedSource> => {
+        // Models the real route: getAgentTemplate misses (not a template),
+        // resolveAgentAsTemplate ALSO misses (the agent belongs to a
+        // different org — resolveAgentAsTemplate's findAgentInOrg returns
+        // null, never distinguishing "no such agent" from "someone else's
+        // agent") — so resolveTemplateSource reports the SAME
+        // template_not_found it always has.
+        return { ok: false, reason: "template_not_found" };
+      },
+    });
+
+    const result = await runDeploy(
+      { orgId: "org-1", body: { source: { templateId: "agent-owned-by-another-org" } } },
+      deps,
+    );
+
+    assert.deepEqual(result, { ok: false, reason: "template_not_found" });
+    assert.equal(statusForDeployResult(result), 404);
+  });
+});
