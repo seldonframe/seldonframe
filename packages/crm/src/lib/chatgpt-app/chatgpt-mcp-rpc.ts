@@ -125,11 +125,14 @@ export function buildChatGptToolsList(): { tools: ChatGptToolDescriptor[] } {
             url: { type: "string", description: "The live public URL of the new workspace." },
             workspaceToken: {
               type: "string",
-              description: "Private token to pass to deploy_agent later in this conversation.",
+              description:
+                "An EPHEMERAL, single-workspace management handle (not an account credential or " +
+                "API key) that expires in about 7 days. Pass it to deploy_agent later in this " +
+                "same conversation to add agents to this workspace.",
             },
             claimUrl: {
               type: "string",
-              description: "Link to manage/claim the workspace (no signup, 7-day expiry).",
+              description: "Link to manage the workspace (no signup, expires in about 7 days).",
             },
           },
           required: ["url", "workspaceToken"],
@@ -138,11 +141,11 @@ export function buildChatGptToolsList(): { tools: ChatGptToolDescriptor[] } {
       {
         name: BROWSE_MARKETPLACE_TOOL,
         description:
-          "List AI agents available to add to a SeldonFrame workspace (e.g. receptionist, " +
+          "List free AI agents available to add to a SeldonFrame workspace (e.g. receptionist, " +
           "review-requester, booking concierge, lead-qualifier). USE-WHEN the user wants to " +
           "see what agents they can add, or asks for an agent that does a specific job. " +
-          "Returns each agent's name, what it does, its price, and its slug — pass the slug " +
-          "to deploy_agent to install it.",
+          "Returns each free agent's name, what it does, and its slug — pass the slug to " +
+          "deploy_agent to install it.",
         inputSchema: {
           type: "object",
           properties: {
@@ -163,7 +166,7 @@ export function buildChatGptToolsList(): { tools: ChatGptToolDescriptor[] } {
           properties: {
             agents: {
               type: "array",
-              description: "The matching marketplace agents.",
+              description: "The matching free agents.",
               items: {
                 type: "object",
                 properties: {
@@ -171,9 +174,8 @@ export function buildChatGptToolsList(): { tools: ChatGptToolDescriptor[] } {
                   name: { type: "string" },
                   description: { type: ["string", "null"] },
                   niche: { type: "string" },
-                  price: { type: "number", description: "Price in cents; 0 = free." },
                 },
-                required: ["slug", "name", "price"],
+                required: ["slug", "name"],
               },
             },
           },
@@ -183,11 +185,10 @@ export function buildChatGptToolsList(): { tools: ChatGptToolDescriptor[] } {
       {
         name: DEPLOY_AGENT_TOOL,
         description:
-          "Install a marketplace agent into a workspace you built earlier in this chat. " +
+          "Installs a free agent into the workspace you built earlier in this chat. " +
           "USE-WHEN the user picks an agent (by slug, from browse_marketplace) to add to " +
           "their workspace. Pass the workspace_token returned by build_workspace and the " +
-          "agent's slug. Free agents are installed immediately; paid agents return a link to " +
-          "complete the purchase (this tool never charges a card).",
+          "agent's slug. Paid agents are managed on seldonframe.com, not through ChatGPT.",
         inputSchema: {
           type: "object",
           properties: {
@@ -210,9 +211,7 @@ export function buildChatGptToolsList(): { tools: ChatGptToolDescriptor[] } {
           properties: {
             ok: { type: "boolean", description: "Whether the install resolved (false carries a friendly error)." },
             name: { type: "string" },
-            url: { type: "string", description: "Where to manage the workspace after a free install." },
-            paid: { type: "boolean", description: "True when the agent is paid (returned a claim link, not installed)." },
-            claimUrl: { type: "string", description: "Purchase link for a paid agent." },
+            url: { type: "string", description: "Where to manage the workspace after a successful install." },
             error: { type: "string" },
           },
           required: ["ok"],
@@ -339,15 +338,9 @@ export function assembleWorkspaceSource(input: {
 
 // ─── formatters ──────────────────────────────────────────────────────────────
 
-/** Render a price in cents as a buyer-facing label. 0 → "Free". */
-export function priceLabel(cents: number): string {
-  if (!cents || cents <= 0) return "Free";
-  const dollars = cents / 100;
-  // Whole-dollar prices show without cents; otherwise two decimals.
-  return Number.isInteger(dollars) ? `$${dollars}` : `$${dollars.toFixed(2)}`;
-}
-
-/** Render a list of marketplace agents as a readable, LLM-friendly block. */
+/** Render a list of free marketplace agents as a readable, LLM-friendly block.
+ *  No price is shown — every agent this tool lists is free, so a price label
+ *  would be pure noise (and a commerce signal we deliberately omit). */
 export function formatMarketplaceList(rows: MarketplaceAgentRow[]): string {
   if (rows.length === 0) {
     return "No agents matched. Try a broader search, or build a workspace first with build_workspace.";
@@ -355,7 +348,7 @@ export function formatMarketplaceList(rows: MarketplaceAgentRow[]): string {
   const lines = rows.map((row) => {
     const desc = (row.description ?? "").trim();
     const blurb = desc ? ` — ${desc}` : "";
-    return `• ${row.name}${blurb}\n  ${row.niche} · ${priceLabel(row.price)} · slug: ${row.slug}`;
+    return `• ${row.name}${blurb}\n  ${row.niche} · slug: ${row.slug}`;
   });
   return `${rows.length} agent${rows.length === 1 ? "" : "s"} available:\n\n${lines.join("\n\n")}\n\nTo add one, call deploy_agent with its slug and your workspace_token.`;
 }
@@ -376,19 +369,10 @@ export function formatBuildResult(input: { url: string; claimUrl?: string }): st
   return lines.join("\n");
 }
 
-/** Render the deploy_agent result for the free (installed) or paid (claim) branch. */
-export function formatDeployResult(input: {
-  name: string;
-  url?: string;
-  paid?: boolean;
-  claimUrl?: string;
-}): string {
-  if (input.paid) {
-    return (
-      `"${input.name}" is a paid agent, so it wasn't installed automatically. ` +
-      `Complete the purchase to add it to your workspace: ${input.claimUrl ?? ""}`.trimEnd()
-    );
-  }
+/** Render the deploy_agent result: installed (free), or a friendly not-available
+ *  message. Never renders a claim/purchase link — paid agents are managed on
+ *  seldonframe.com, not through ChatGPT. */
+export function formatDeployResult(input: { name: string; url?: string }): string {
   const where = input.url ? ` Manage it here: ${input.url}` : "";
   return `Installed "${input.name}" into your workspace.${where}`;
 }

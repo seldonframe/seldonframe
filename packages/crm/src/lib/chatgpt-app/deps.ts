@@ -8,12 +8,19 @@
 // so it can export non-async values. The route imports buildRealDeps() and
 // hands the result to handleChatGptRpc.
 //
-// MONEY-SAFETY + COMMERCE-FREE: deploy() NEVER charges. The ChatGPT app surface
-// is deliberately commerce-free for OpenAI's physical-goods-only policy — browse
-// returns ONLY free agents (price === 0), deploy installs only free agents, and
-// a paid slug returns a friendly "add it from your dashboard" message with NO
-// purchase link. No Stripe call, no checkout, no outbound purchase direction —
-// so the app's "links/directs users out to make purchases" answer is NO.
+// FREE-UTILITY ONLY + COMMERCE-FREE (OpenAI App-policy compliance): deploy()
+// NEVER charges and NEVER links out to a purchase. browse() returns ONLY free
+// agents, deploy() installs ONLY free agents, and a paid/non-free slug returns
+// a friendly ok:false message with NO claim/purchase URL, NO price, and NO CTA.
+// No Stripe call, no checkout, no outbound purchase direction — so the app's
+// "links/directs users out to make purchases" answer is NO.
+//
+// "Free" is decided via storefrontPriceFromRow(...).isPaid — the SAME
+// model-aware pricing read the storefront uses — NOT the raw `price` column.
+// A listing can be free on `price` (0) yet paid under `priceModel: "monthly"`
+// (its amount lives in monthly_price_cents); reading `price` alone would let
+// that listing slip through as "free". Both the browse filter and the deploy
+// gate below read the full pricing-menu columns for this reason.
 
 import { and, eq } from "drizzle-orm";
 import { db } from "@/db";
@@ -31,6 +38,7 @@ import {
   type AgentListingForBuyer,
   type MarketplaceAgentRow,
 } from "@/lib/marketplace/agent-listings";
+import { storefrontPriceFromRow } from "@/lib/marketplace/pricing-model";
 import { resolveUniqueTemplateSlug } from "@/lib/agent-templates/store";
 import {
   STARTER_TEMPLATES,
@@ -160,14 +168,23 @@ async function buildWorkspace(ip: string, args: BuildWorkspaceArgs): Promise<Bui
   };
 }
 
-/** The columns the deploy path reads off a marketplace_listings row. `price`
- *  (cents) drives the free-vs-paid branch; the agent fields drive the clone. */
+/** The columns the deploy path reads off a marketplace_listings row. The full
+ *  pricing-menu set (not just `price`) drives the free-vs-paid branch via
+ *  storefrontPriceFromRow — a `monthly`/`per_usage`/`per_outcome` listing keeps
+ *  `price` at 0 and carries its amount in the matching *_cents column, so
+ *  reading `price` alone would misclassify it as free. The agent fields drive
+ *  the clone. */
 const DEPLOY_LISTING_COLUMNS = {
   id: marketplaceListings.id,
   slug: marketplaceListings.slug,
   name: marketplaceListings.name,
   kind: marketplaceListings.kind,
   price: marketplaceListings.price,
+  priceModel: marketplaceListings.priceModel,
+  monthlyPriceCents: marketplaceListings.monthlyPriceCents,
+  perCallPriceCents: marketplaceListings.perCallPriceCents,
+  perOutcomePriceCents: marketplaceListings.perOutcomePriceCents,
+  outcomeType: marketplaceListings.outcomeType,
   agentType: marketplaceListings.agentType,
   agentBlueprint: marketplaceListings.agentBlueprint,
 } as const;
@@ -178,11 +195,12 @@ const DEPLOY_LISTING_COLUMNS = {
  *   - Resolve the target org from the workspace_token (the bearer encodes the
  *     orgId). Invalid/expired → ok:false with a friendly message.
  *   - Resolve the PUBLISHED kind:'agent' listing by slug.
- *   - FREE (price === 0): clone the blueprint into the buyer org as a fresh
- *     DRAFT agent_templates row (the same clone the install action does), and
- *     return the workspace admin URL.
- *   - PAID (price > 0): return a claim URL to the public marketplace page.
- *     DO NOT CHARGE — no Stripe call on this path.
+ *   - FREE (storefrontPriceFromRow(...).isPaid === false): clone the blueprint
+ *     into the buyer org as a fresh DRAFT agent_templates row (the same clone
+ *     the install action does), and return the workspace admin URL.
+ *   - PAID (isPaid === true): ok:false with a friendly message pointing at
+ *     seldonframe.com. NO claim/purchase URL, NO price, NO CTA — this tool
+ *     never charges and never links out to buy anything.
  */
 async function deploy(input: { workspaceToken: string; slug: string }): Promise<DeployAgentResult> {
   const resolved = await validateRawWorkspaceToken(input.workspaceToken);
@@ -225,13 +243,17 @@ async function deploy(input: { workspaceToken: string; slug: string }): Promise<
     return { ok: false, error: `No published agent found with slug "${input.slug}". Try browse_marketplace first.` };
   }
 
-  // PAID → NOT added from ChatGPT, and NO purchase link. The app stays
-  // commerce-free (OpenAI physical-goods-only policy); premium agents are added
-  // later from the SeldonFrame dashboard, never sold or linked-to in-chat.
-  if ((listing.price ?? 0) > 0) {
+  // PAID (any pricing model) → NOT added from ChatGPT, and NO purchase link.
+  // The app stays free-utility-only (OpenAI App-policy compliance); premium
+  // agents are explored/managed later on seldonframe.com, never sold or
+  // linked-to in-chat. storefrontPriceFromRow reads the SELECTED pricing
+  // model's column (not just the legacy `price` field), so a monthly/
+  // per-usage/per-outcome listing is correctly classified as paid even though
+  // `price` itself is 0.
+  if (storefrontPriceFromRow(listing).isPaid) {
     return {
       ok: false,
-      error: `"${listing.name}" is a premium agent and can't be added from ChatGPT. Build or keep your free workspace, then add premium agents anytime from your SeldonFrame dashboard.`,
+      error: `"${listing.name}" isn't available to install through ChatGPT — try one of the free agents from browse_marketplace instead.`,
     };
   }
 
@@ -290,11 +312,14 @@ export function buildRealDeps(ip: string): ChatGptMcpDeps {
         if (q && !`${r.name} ${r.description ?? ""}`.toLowerCase().includes(q)) return false;
         return true;
       });
-      // Plus any FREE published marketplace listings (paid excluded — the app is
-      // commerce-free; any starter-id collision de-dupes to the starter).
+      // Plus any FREE published marketplace listings (paid excluded under ANY
+      // pricing model — storefrontPriceFromRow reads the SELECTED model's
+      // column, not just the legacy `price` field, so a monthly/per-usage/
+      // per-outcome listing with price:0 is still correctly excluded here;
+      // any starter-id collision de-dupes to the starter).
       const listings = (
         await listMarketplaceAgentsFromDb({ q: filters.query, niche: filters.niche })
-      ).filter((r) => (r.price ?? 0) === 0 && !STARTER_IDS.has(r.slug));
+      ).filter((r) => !storefrontPriceFromRow(r).isPaid && !STARTER_IDS.has(r.slug));
       return [...starters, ...listings];
     },
     deploy,

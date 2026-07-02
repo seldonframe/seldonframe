@@ -209,8 +209,12 @@ describe("handleChatGptRpc — browse_marketplace", () => {
     const content = result.content as Array<{ text: string }>;
     assert.match(content[0].text, /Review Requester/);
     assert.match(content[0].text, /review-requester/);
-    const structured = result.structuredContent as { agents?: unknown[] };
+    const structured = result.structuredContent as { agents?: Array<Record<string, unknown>> };
     assert.equal(structured.agents?.length, 1);
+    // structuredContent mirrors the declared output schema — no price (or any
+    // other undeclared MarketplaceAgentRow column) leaks onto the wire.
+    assert.equal(structured.agents?.[0]?.slug, "review-requester");
+    assert.ok(!("price" in (structured.agents?.[0] ?? {})), "browse structuredContent must not emit price");
   });
 
   test("empty args browse is allowed (no required fields)", async () => {
@@ -239,13 +243,12 @@ describe("handleChatGptRpc — deploy_agent", () => {
     assert.equal((result.structuredContent as { ok?: boolean }).ok, true);
   });
 
-  test("paid deploy → claim URL, no install language", async () => {
+  test("paid/non-free slug → ok:false friendly message with NO purchase URL or price", async () => {
     const h = makeHarness({
       deploy: async () => ({
-        ok: true,
-        paid: true,
-        name: "Booking Concierge",
-        claimUrl: "https://app.seldonframe.com/marketplace/booking-concierge",
+        ok: false,
+        error:
+          '"Booking Concierge" isn\'t available to install through ChatGPT — try one of the free agents from browse_marketplace instead.',
       }),
     });
     const out = await handleChatGptRpc(
@@ -253,9 +256,12 @@ describe("handleChatGptRpc — deploy_agent", () => {
       h.deps,
     );
     const result = (out.body as { result?: Record<string, unknown> }).result!;
+    assert.equal(result.isError, true);
     const content = result.content as Array<{ text: string }>;
-    assert.match(content[0].text, /marketplace\/booking-concierge/);
-    assert.equal((result.structuredContent as { paid?: boolean }).paid, true);
+    assert.match(content[0].text, /isn't available to install through ChatGPT/);
+    // Free-utility contract: nothing in the response may carry a link out,
+    // a claim/purchase URL, or a price.
+    assert.doesNotMatch(JSON.stringify(result), /claimUrl|https?:\/\//);
   });
 
   test("expired/invalid token → deploy returns ok:false → isError result", async () => {

@@ -16,7 +16,11 @@
 // SAME conversation. Connecting an EXISTING SF account (OAuth 2.1 AS) is a
 // documented follow-on, NOT in v1.
 //
-// MONEY-SAFETY: paid agents return a claim URL — deploy NEVER charges a card.
+// FREE-UTILITY ONLY (OpenAI App-policy compliance): this app never sells or
+// upsells. browse_marketplace lists ONLY free agents; deploy_agent installs
+// ONLY free agents. A paid/non-free slug returns a friendly ok:false message
+// with NO claim/purchase URL, NO price, and NO purchase CTA — deploy NEVER
+// charges a card and never directs the user out to buy anything.
 //
 // This route is a THIN wrapper: it reads the IP for the build rate-limit, binds
 // the real deps (lib/chatgpt-app/deps), and maps the DI'd handler's

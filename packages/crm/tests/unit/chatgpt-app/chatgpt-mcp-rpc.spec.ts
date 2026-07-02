@@ -277,15 +277,17 @@ const ROWS: MarketplaceAgentRow[] = [
 ];
 
 describe("formatMarketplaceList", () => {
-  test("renders a row per agent with a Free and a $-priced label + the slug", () => {
+  test("renders a row per agent with the slug and NO price labels (free-utility surface)", () => {
     const text = formatMarketplaceList(ROWS);
     assert.match(text, /Review Requester/);
     assert.match(text, /Booking Concierge/);
-    assert.match(text, /Free/);
-    assert.match(text, /\$49/);
     // the slug is the deploy handle — it must be present for each
     assert.match(text, /review-requester/);
     assert.match(text, /booking-concierge/);
+    // free-utility contract: no price rendering of any kind, even for a row
+    // that carries a nonzero legacy price column
+    assert.doesNotMatch(text, /\$/);
+    assert.doesNotMatch(text, /Free/);
   });
 
   test("renders a friendly empty-state when there are no rows", () => {
@@ -311,9 +313,10 @@ describe("formatDeployResult", () => {
     assert.match(text, /agents\/abc/);
   });
 
-  test("paid deploy renders a claim URL and does not imply it was installed", () => {
-    const text = formatDeployResult({ name: "Booking Concierge", paid: true, claimUrl: "https://app.seldonframe.com/marketplace/booking-concierge" });
-    assert.match(text, /Booking Concierge/);
-    assert.match(text, /marketplace\/booking-concierge/);
+  test("deploy result without a url still names the agent and stays link-free", () => {
+    const text = formatDeployResult({ name: "Review Requester" });
+    assert.match(text, /Review Requester/);
+    assert.doesNotMatch(text, /https?:\/\//);
+    assert.doesNotMatch(text, /undefined/);
   });
 });

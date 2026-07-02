@@ -49,7 +49,7 @@ import type { MarketplaceAgentRow } from "@/lib/marketplace/agent-listings";
  *  alongside the tool metadata to understand the cross-tool flow. Kept concise +
  *  self-contained in the first ~512 chars per the Apps SDK guidance. */
 export const CHATGPT_SERVER_INSTRUCTIONS =
-  "SeldonFrame builds a complete front office (public website, booking page, intake form, CRM, and AI chatbot) for a local service business from one short description, then lets you add AI agents to it. Typical flow: call build_workspace first to create the workspace and get a workspace_token, then browse_marketplace to list agents, then deploy_agent with that token plus an agent slug. build_workspace needs no login and returns a live public URL. Paid agents return a purchase link — this server never charges a card.";
+  "SeldonFrame builds a complete front office (public website, booking page, intake form, CRM, and AI chatbot) for a local service business from one short description, then lets you add free AI agents to it. Typical flow: call build_workspace first to create the workspace and get a workspace_token, then browse_marketplace to list free agents, then deploy_agent with that token plus an agent slug. build_workspace needs no login and returns a live public URL. This server never charges a card and never links out to make a purchase.";
 
 /** The result of building an anonymous workspace (the route maps the real
  *  createAnonymousWorkspace return onto this). The workspaceToken threads
@@ -60,15 +60,15 @@ export type BuildWorkspaceResult = {
   workspaceToken: string;
 };
 
-/** The result of deploying an agent. Free agents instantiate inline (url);
- *  paid agents return a claim URL and NEVER charge from this path. ok:false
- *  carries a friendly error (e.g. an expired workspace token). */
+/** The result of deploying an agent. Free agents instantiate inline (url).
+ *  ok:false carries a friendly error — including "this agent isn't available
+ *  to install through ChatGPT" for a paid/non-free agent. NEVER carries a
+ *  claim/purchase URL or a price; paid agents are managed on seldonframe.com,
+ *  not through ChatGPT. */
 export type DeployAgentResult = {
   ok: boolean;
   name?: string;
   url?: string;
-  paid?: boolean;
-  claimUrl?: string;
   error?: string;
 };
 
@@ -169,7 +169,16 @@ async function handleToolsCall(
       }
       return runTool(id, deps, async () => {
         const rows = await deps.browse(parsed.value);
-        return toolResult(formatMarketplaceList(rows), { agents: rows });
+        // structuredContent mirrors the DECLARED output schema exactly — the
+        // raw MarketplaceAgentRow carries extra columns (price, rating, …)
+        // that the free-utility surface deliberately does not emit.
+        const agents = rows.map((row) => ({
+          slug: row.slug,
+          name: row.name,
+          description: row.description,
+          niche: row.niche,
+        }));
+        return toolResult(formatMarketplaceList(rows), { agents });
       });
     }
 
@@ -186,7 +195,7 @@ async function handleToolsCall(
           return toolTextResult(result.error ?? "Could not deploy that agent.", true);
         }
         return toolResult(
-          formatDeployResult({ name: result.name ?? "the agent", url: result.url, paid: result.paid, claimUrl: result.claimUrl }),
+          formatDeployResult({ name: result.name ?? "the agent", url: result.url }),
           { ...result },
         );
       });
