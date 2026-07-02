@@ -198,3 +198,110 @@ export const BUILD_FAQ: FaqItem[] = [
     a: "Any MCP client — Claude Code, Cursor, Codex — plus the same workspace key over the CLI and the HTTP API.",
   },
 ];
+
+// ─── "One server. Every IDE." — the per-IDE install section ──────────────────
+//
+// Distinct from the Connect section above (which wires the *builder
+// marketplace* MCP over Streamable HTTP with a minted `wst_` key). This section
+// is the OTHER on-ramp: installing the published `@seldonframe/mcp` npm package
+// as a local stdio server, so an IDE agent can spin up a full workspace (site +
+// booking + intake + CRM + agents) with zero upfront key — first workspace is
+// free. Six entries, one per IDE, each independently verified against that
+// IDE's own current docs (see render-build-markdown.ts / the /build page for
+// the citation trail in source comments). File-config snippets only — no
+// deeplinks, since none of the six IDEs documents a verified one-click install
+// URI for a third-party stdio MCP server today.
+
+export type IdeInstallEntry = {
+  key: "claude-code" | "cursor" | "windsurf" | "vscode" | "zed" | "codex";
+  name: string;
+  /** How the snippet should be rendered: a shell one-liner, or a config file
+   *  (path + language for syntax highlighting + the file contents). */
+  kind: "cli" | "file";
+  /** Present when kind === "cli". */
+  cliCommand?: string;
+  /** Present when kind === "file". */
+  filePath?: string;
+  fileLanguage?: "json" | "toml";
+  fileContents?: string;
+};
+
+/** The npm package every snippet installs — published, working today. */
+export const IDE_NPM_PACKAGE = "@seldonframe/mcp";
+
+/** `npx -y @seldonframe/mcp` — the stdio command every IDE ultimately runs. */
+export const IDE_NPX_COMMAND = `npx -y ${IDE_NPM_PACKAGE}`;
+
+export const IDE_INSTALLS: IdeInstallEntry[] = [
+  {
+    key: "claude-code",
+    name: "Claude Code",
+    kind: "cli",
+    cliCommand: `claude mcp add seldonframe -- ${IDE_NPX_COMMAND}`,
+  },
+  {
+    key: "cursor",
+    name: "Cursor",
+    kind: "file",
+    filePath: "~/.cursor/mcp.json",
+    fileLanguage: "json",
+    fileContents: JSON.stringify(
+      { mcpServers: { seldonframe: { command: "npx", args: ["-y", IDE_NPM_PACKAGE] } } },
+      null,
+      2,
+    ),
+  },
+  {
+    key: "windsurf",
+    name: "Windsurf",
+    kind: "file",
+    filePath: "~/.codeium/windsurf/mcp_config.json",
+    fileLanguage: "json",
+    fileContents: JSON.stringify(
+      { mcpServers: { seldonframe: { command: "npx", args: ["-y", IDE_NPM_PACKAGE] } } },
+      null,
+      2,
+    ),
+  },
+  {
+    key: "vscode",
+    name: "VS Code",
+    kind: "file",
+    filePath: ".vscode/mcp.json",
+    fileLanguage: "json",
+    fileContents: JSON.stringify(
+      { servers: { seldonframe: { command: "npx", args: ["-y", IDE_NPM_PACKAGE] } } },
+      null,
+      2,
+    ),
+  },
+  {
+    key: "zed",
+    name: "Zed",
+    kind: "file",
+    filePath: "settings.json",
+    fileLanguage: "json",
+    fileContents: JSON.stringify(
+      {
+        context_servers: {
+          seldonframe: { source: "custom", command: "npx", args: ["-y", IDE_NPM_PACKAGE] },
+        },
+      },
+      null,
+      2,
+    ),
+  },
+  {
+    key: "codex",
+    name: "Codex CLI",
+    kind: "file",
+    filePath: "~/.codex/config.toml",
+    fileLanguage: "toml",
+    fileContents: ["[mcp_servers.seldonframe]", 'command = "npx"', `args = ["-y", "${IDE_NPM_PACKAGE}"]`].join("\n"),
+  },
+];
+
+/** The natural-language example an operator says once connected — the same
+ *  "no upfront key" line used on the /build page + README + .md twin. */
+export const IDE_NO_KEY_EXAMPLE =
+  "build me an AI receptionist for an HVAC company";

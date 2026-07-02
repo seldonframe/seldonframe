@@ -37,6 +37,8 @@ import {
   IDE_TOOL_CHAIN,
   buildLandingConnectSnippet,
   BUILD_FAQ,
+  IDE_INSTALLS,
+  IDE_NO_KEY_EXAMPLE,
 } from "@/lib/build/landing-content";
 
 // SEO/GEO via the shared builder-surface helper: per-page Metadata with a
@@ -169,7 +171,10 @@ export default function BuildLandingPage(): ReactElement {
         {/* ── 5 · CONNECT ───────────────────────────────────────────────────── */}
         <Connect />
 
-        {/* ── 6 · FOOTER CTAs ───────────────────────────────────────────────── */}
+        {/* ── 6 · ONE SERVER, EVERY IDE ─────────────────────────────────────── */}
+        <InstallInYourIde />
+
+        {/* ── 7 · FOOTER CTAs ───────────────────────────────────────────────── */}
         <FooterCtas />
       </main>
 
@@ -596,7 +601,63 @@ function Connect(): ReactElement {
 }
 
 // ───────────────────────────────────────────────────────────────────────────
-// 6 · FOOTER CTAs
+// 6 · ONE SERVER, EVERY IDE
+// ───────────────────────────────────────────────────────────────────────────
+//
+// The other on-ramp: install the PUBLISHED @seldonframe/mcp npm package as a
+// local stdio server (vs. Connect above, which wires the builder-marketplace
+// MCP over Streamable HTTP with a minted key). Six IDEs, one package, zero
+// upfront key — the first workspace is free, so the whole snippet needs no
+// SELDONFRAME_API_KEY line at all. Each config was verified against that IDE's
+// own current docs (see landing-content.ts's IDE_INSTALLS for the exact
+// snippets; citation trail lives in the PR description / build report).
+
+function InstallInYourIde(): ReactElement {
+  return (
+    <section id="install" style={{ marginTop: SECTION_GAP }}>
+      <div style={sectionKicker}>One server. Every IDE.</div>
+      <h2 style={{ margin: "0 0 8px", fontSize: 32, fontWeight: 700, letterSpacing: "-0.025em" }}>
+        Install in{" "}
+        <span style={{ fontFamily: MKT.fontSerif, fontStyle: "italic", fontWeight: 500 }}>your IDE.</span>
+      </h2>
+      <p style={{ margin: "0 0 26px", fontSize: 16.5, lineHeight: 1.5, color: "rgba(34,29,23,0.62)", maxWidth: 660 }}>
+        One npm package, six editors. Pick yours, paste the snippet, and your agent can build a full workspace —
+        website, booking, intake, CRM — from one sentence.
+      </p>
+
+      <div className="sf-build-ide-grid" style={{ display: "grid", gridTemplateColumns: "repeat(2, 1fr)", gap: 16 }}>
+        {IDE_INSTALLS.map((ide) => (
+          <div key={ide.key} style={{ ...card, padding: "22px 22px 20px", display: "flex", flexDirection: "column", gap: 12 }}>
+            <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
+              <span style={iconTile(36)}>
+                <MarketplaceIcon name="terminal" size={17} />
+              </span>
+              <span style={{ fontWeight: 700, fontSize: 16, letterSpacing: "-0.01em" }}>{ide.name}</span>
+            </div>
+            {ide.kind === "cli" ? (
+              <CopyCommand command={ide.cliCommand!} ariaLabel={`Copy the ${ide.name} install command`} />
+            ) : (
+              <div>
+                <div style={{ fontFamily: MKT.fontMono, fontSize: 12, color: "rgba(34,29,23,0.46)", marginBottom: 6 }}>
+                  {ide.filePath}
+                </div>
+                <CopyCommand command={ide.fileContents!} multiline ariaLabel={`Copy the ${ide.name} MCP config`} />
+              </div>
+            )}
+          </div>
+        ))}
+      </div>
+
+      <p style={{ margin: "20px 2px 0", fontSize: 14.5, lineHeight: 1.6, color: "rgba(34,29,23,0.6)" }}>
+        First workspace is free and needs no API key. Then just say:{" "}
+        <em style={{ fontFamily: MKT.fontSerif, fontStyle: "italic" }}>&ldquo;{IDE_NO_KEY_EXAMPLE}&rdquo;</em>
+      </p>
+    </section>
+  );
+}
+
+// ───────────────────────────────────────────────────────────────────────────
+// 7 · FOOTER CTAs
 // ───────────────────────────────────────────────────────────────────────────
 
 function FooterCtas(): ReactElement {

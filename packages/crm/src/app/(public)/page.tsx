@@ -9,6 +9,7 @@
 //
 // Order (2026-06-22 positioning v2 — one idea per section ladder):
 //   Nav (fixed) → Hero (+ demo marquee) → BuildSteps (the 60s demo)
+//   → IdeStrip ("Every IDE" — 2026-07-01, links to /build#install)
 //   → Modules (Run rung) → SmbCta (Sell rung) → Agents (Hire agents)
 //   → AgencyMath (Build & sell rung) → Pricing → ProofStrip
 //   → FAQ → FinalCta → Footer.
@@ -41,6 +42,7 @@ import { MarketingHero } from "@/components/landing/marketing-hero";
 import { MarketingProofStrip } from "@/components/landing/marketing-proof-strip";
 import { MarketingAgencyMath } from "@/components/landing/marketing-agency-math";
 import { MarketingBuildSteps } from "@/components/landing/marketing-build-steps";
+import { MarketingIdeStrip } from "@/components/landing/marketing-ide-strip";
 import { MarketingModules, MarketingAgents } from "@/components/landing/marketing-modules";
 import { MarketingSmbCta } from "@/components/landing/marketing-smb-cta";
 import { LandingMarketingPricingSection } from "@/components/landing/marketing-pricing-section";
@@ -89,6 +91,7 @@ export default async function PublicHomePage() {
             ladder to one idea per rung; the component still ships. */}
         <MarketingHero />
         <MarketingBuildSteps />
+        <MarketingIdeStrip />
         <MarketingModules />
         <MarketingSmbCta />
         <MarketingAgents />

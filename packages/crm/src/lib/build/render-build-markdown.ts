@@ -28,6 +28,8 @@ import {
   IDE_TOOL_CHAIN,
   PRICING_POINTS,
   buildLandingConnectSnippet,
+  IDE_INSTALLS,
+  IDE_NO_KEY_EXAMPLE,
 } from "@/lib/build/landing-content";
 
 /** The canonical public origin for absolute links in the Markdown. Defaults to
@@ -100,6 +102,38 @@ export function renderBuildMarkdown(baseUrl: string = BUILD_BASE_URL): string {
   lines.push("```bash");
   lines.push(buildLandingConnectSnippet());
   lines.push("```");
+  lines.push("");
+
+  // ── One server. Every IDE. — the OTHER on-ramp: the published npm package ──
+  // (a local stdio server), distinct from the Streamable-HTTP builder-key
+  // connect above. Needs no key at all — first workspace is free.
+  lines.push("## One server. Every IDE.");
+  lines.push("");
+  lines.push(
+    "Install the published `@seldonframe/mcp` package as a local stdio server in " +
+      "any of these editors — no upfront key required, since your first workspace " +
+      "is free:",
+  );
+  lines.push("");
+  for (const ide of IDE_INSTALLS) {
+    lines.push(`### ${ide.name}`);
+    lines.push("");
+    if (ide.kind === "cli") {
+      lines.push("```bash");
+      lines.push(ide.cliCommand!);
+      lines.push("```");
+    } else {
+      lines.push(`\`${ide.filePath}\`:`);
+      lines.push("");
+      lines.push("```" + ide.fileLanguage);
+      lines.push(ide.fileContents!);
+      lines.push("```");
+    }
+    lines.push("");
+  }
+  lines.push(
+    `First workspace is free and needs no API key. Then just say: _"${IDE_NO_KEY_EXAMPLE}."_`,
+  );
   lines.push("");
 
   // ── Build → list → price ────────────────────────────────────────────────────
