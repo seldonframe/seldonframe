@@ -15,9 +15,16 @@
  * @param {string|null} args.aestheticArchetype — workspace's classified
  *   archetype (from snapshot.theme.aestheticArchetype). Used in the
  *   closing landing-page nudge.
+ * @param {string|null} [args.adminUrl] — bearer-token-scoped admin URL
+ *   (built in tools.js as `${appHost}/admin/${workspaceId}?token=${bearer}`,
+ *   same variable the welcome-email path already uses). Takes priority
+ *   over snapshot.ops_stack.admin_url, which is tokenless (the snapshot
+ *   endpoint has no bearer to mint one) and 404s at /admin/invalid if
+ *   printed as-is. Falls back to the tokenless value only if omitted, so
+ *   existing callers that don't pass it keep working.
  * @returns {string} the formatted operator summary
  */
-export function buildFinalizeSummary({ snapshot, durationSec, aestheticArchetype }) {
+export function buildFinalizeSummary({ snapshot, durationSec, aestheticArchetype, adminUrl = null }) {
   const ws = snapshot.workspace ?? {};
   const businessName = ws.name ?? "Your workspace";
   const chatbot = snapshot.chatbot ?? null;
@@ -57,7 +64,10 @@ export function buildFinalizeSummary({ snapshot, durationSec, aestheticArchetype
   // Ops stack URLs
   lines.push(`📅 Booking: ${opsStack.booking_url ?? snapshot.public_urls?.book ?? ""}`);
   lines.push(`📝 Intake:  ${opsStack.intake_url ?? snapshot.public_urls?.intake ?? ""}`);
-  lines.push(`🔧 Admin:   ${opsStack.admin_url ?? ""}`);
+  // The token-bearing adminUrl (computed in tools.js from the workspace's
+  // bearer) is required to open the dashboard — the snapshot's
+  // ops_stack.admin_url has no token and 404s at /admin/invalid if clicked.
+  lines.push(`🔧 Admin:   ${adminUrl ?? opsStack.admin_url ?? ""}`);
   lines.push("");
 
   // 7-automation callout

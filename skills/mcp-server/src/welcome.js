@@ -109,7 +109,7 @@ of v1.28.0 this is **ONE tool call**:
      // /settings/integrations/llm. Pass explicitly only when you need
      // per-workspace billing isolation (white-label / agency).
    })
-   // → returns { agent, embed_url, turn_url, dashboard_url, llm_mode, next_steps }
+   // → returns { agent, embed_url, turn_api_url, turn_api_method: "POST", dashboard_url, llm_mode, next_steps }
    // Internally: creates agent, publishes to test. Skips set_llm_key when
    // no key supplied (platform fallback in lib/ai/client.ts handles inference).
 

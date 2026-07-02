@@ -914,6 +914,9 @@ export const TOOLS = [
         snapshot,
         durationSec: 0, // smoke test reports actual duration via Vercel logs, not the summary text
         aestheticArchetype,
+        adminUrl, // token-bearing (same variable the welcome-email body uses below) —
+        // without this the summary's Admin line falls back to the snapshot's
+        // tokenless ops_stack.admin_url and 404s at /admin/invalid when clicked.
       });
 
       return {
@@ -5086,11 +5089,13 @@ export const TOOLS = [
           error: "publish_failed_but_agent_created",
           agent: createResult.agent,
           embed_url: createResult.embed_url,
-          turn_url: createResult.turn_url,
+          turn_api_url: createResult.turn_url,
+          turn_api_method: "POST",
           publish_detail: publishResult,
           steps,
           next_steps: [
             `Agent ${agentId} was created but couldn't be published to test. Call publish_agent({ agent_id: '${agentId}', status: 'test' }) manually, or check the dashboard at /agents/${agentId}`,
+            `Turn API (POST) — this is not a clickable link, it's a POST-only endpoint: curl -sX POST ${createResult.turn_url} -H "Content-Type: application/json" -d '{"message":"hi"}'`,
           ],
         };
       }
@@ -5114,7 +5119,8 @@ export const TOOLS = [
         ok: true,
         agent: createResult.agent,
         embed_url: createResult.embed_url,
-        turn_url: createResult.turn_url,
+        turn_api_url: createResult.turn_url,
+        turn_api_method: "POST",
         dashboard_url: dashboardUrl,
         sandbox_url: `${dashboardUrl}/test`,
         llm_mode: llmMode,
@@ -5125,6 +5131,7 @@ export const TOOLS = [
           `3. When ready, publish to live: call publish_agent({ agent_id: '${agentId}', status: 'live' }) — auto-runs eval gate, requires ≥87.5% pass.`,
           `4. Add to the operator's SF-hosted landing page (one MCP call): embed_chatbot_on_workspace_landing({ workspace_id, agent_id: '${agentId}' }) — the chatbot bubble appears bottom-right on every public page. (For an external website the operator owns, paste this snippet manually: <script src="${createResult.embed_url}" async></script>)`,
           `5. ${llmKeyNote}`,
+          `6. Turn API (POST) — not a clickable link, it's a POST-only endpoint: curl -sX POST ${createResult.turn_url} -H "Content-Type: application/json" -d '{"message":"hi"}'`,
         ],
       };
     },
