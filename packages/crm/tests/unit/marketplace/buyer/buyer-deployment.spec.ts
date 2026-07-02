@@ -227,10 +227,11 @@ test("getBuyerAgent: returns the deployment + blueprint + steps + progress", asy
   const result = await getBuyerAgent("dep-1", "buyer-1", deps);
   assert.ok(result);
   assert.equal(result?.deployment.id, "dep-1");
-  // Voice + googlecalendar → the receptionist step list.
+  // Voice + googlecalendar → the receptionist step list (connect_openai_voice
+  // is the skippable Tier-2 opt-in every voice surface gets, right after phone).
   assert.deepEqual(
     result?.steps.map((s) => s.kind),
-    ["business_info", "connect_tool", "phone", "test", "go_live"],
+    ["business_info", "connect_tool", "phone", "connect_openai_voice", "test", "go_live"],
   );
   assert.deepEqual(result?.progress.doneKinds, []);
 });

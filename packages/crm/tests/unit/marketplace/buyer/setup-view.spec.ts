@@ -8,7 +8,7 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
 
-import { buildSetupWizardView } from "../../../../src/lib/marketplace/buyer/setup-view";
+import { buildSetupWizardView, buildOpenAiVoiceSeed } from "../../../../src/lib/marketplace/buyer/setup-view";
 import type { BuyerAgentView } from "../../../../src/lib/marketplace/buyer/buyer-deployment";
 import type { OnboardingStep } from "../../../../src/lib/marketplace/onboarding/steps";
 
@@ -208,4 +208,26 @@ test("testStepSeed: falls back to a constructed greeting when the blueprint has 
   const v = buildSetupWizardView(makeView({ clientName: "Northgate Plumbing" }));
   assert.ok(v.testStepSeed.greeting.includes("Northgate Plumbing"));
   assert.ok(v.testStepSeed.greeting.length > 0);
+});
+
+// ─── buildOpenAiVoiceSeed (Tier-2 opt-in seed) ────────────────────────────────
+
+test("buildOpenAiVoiceSeed: not connected when the org has no stored credentials", () => {
+  const seed = buildOpenAiVoiceSeed("org-1", null, "https://app.example.com");
+  assert.deepEqual(seed, {
+    connected: false,
+    webhookUrl: "https://app.example.com/api/v1/voice/openai/webhook/org-1",
+  });
+});
+
+test("buildOpenAiVoiceSeed: connected when credentials exist; webhookUrl still derived from orgId", () => {
+  const seed = buildOpenAiVoiceSeed("org-2", { projectId: "proj_abc" }, "https://app.example.com");
+  assert.equal(seed.connected, true);
+  assert.equal(seed.webhookUrl, "https://app.example.com/api/v1/voice/openai/webhook/org-2");
+});
+
+test("buildOpenAiVoiceSeed: defaults the app URL when none is supplied", () => {
+  const seed = buildOpenAiVoiceSeed("org-3", null);
+  assert.ok(seed.webhookUrl.endsWith("/api/v1/voice/openai/webhook/org-3"));
+  assert.ok(seed.webhookUrl.startsWith("http"));
 });
