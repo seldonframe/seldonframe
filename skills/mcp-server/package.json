@@ -50,7 +50,7 @@
   "homepage": "https://seldonframe.com",
   "repository": {
     "type": "git",
-    "url": "https://github.com/seldonframe/seldonframe",
+    "url": "git+https://github.com/seldonframe/seldonframe.git",
     "directory": "skills/mcp-server"
   },
   "publishConfig": {

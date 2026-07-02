@@ -14,7 +14,7 @@
   "homepage": "https://seldonframe.com",
   "repository": {
     "type": "git",
-    "url": "https://github.com/seldonframe/seldonframe.git",
+    "url": "git+https://github.com/seldonframe/seldonframe.git",
     "directory": "packages/cli"
   },
   "bugs": {
@@ -22,7 +22,7 @@
   },
   "type": "module",
   "bin": {
-    "seldonframe": "./dist/cli.js"
+    "seldonframe": "dist/cli.js"
   },
   "files": [
     "dist",
