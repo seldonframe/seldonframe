@@ -83,6 +83,7 @@ const CSS = `
     .sf-build-type-grid{grid-template-columns:1fr !important}
     .sf-build-foot-grid{grid-template-columns:1fr !important}
     .sf-build-price{grid-template-columns:1fr !important;gap:26px !important}
+    .sf-build-ide-grid{grid-template-columns:1fr !important}
 
     /* industry directory ----------------------------------------------------- */
     .sf-dir-sec{padding-left:18px !important;padding-right:18px !important}

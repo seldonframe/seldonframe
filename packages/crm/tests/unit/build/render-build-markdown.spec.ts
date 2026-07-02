@@ -20,6 +20,9 @@ import {
   BUILDER_KEEP_PCT,
   SELDONFRAME_FEE_PCT,
   buildLandingConnectSnippet,
+  IDE_INSTALLS,
+  IDE_NPM_PACKAGE,
+  IDE_NO_KEY_EXAMPLE,
 } from "../../../src/lib/build/landing-content";
 
 describe("renderBuildMarkdown", () => {
@@ -85,5 +88,43 @@ describe("renderBuildMarkdown", () => {
 
   test("is deterministic (same output every call)", () => {
     assert.equal(renderBuildMarkdown(), md);
+  });
+
+  describe("One server. Every IDE.", () => {
+    test("has the section heading", () => {
+      assert.match(md, /## One server\. Every IDE\./);
+    });
+
+    test("names all six IDEs with an H3 each", () => {
+      for (const ide of IDE_INSTALLS) {
+        assert.match(md, new RegExp(`### ${ide.name.replace(/[.*+?^${}()|[\\]\\\\]/g, "\\\\$&")}`));
+      }
+      assert.equal(IDE_INSTALLS.length, 6, "expected exactly 6 IDE entries");
+    });
+
+    test("every entry's exact snippet is embedded verbatim (no drift from landing-content)", () => {
+      for (const ide of IDE_INSTALLS) {
+        const snippet = ide.kind === "cli" ? ide.cliCommand! : ide.fileContents!;
+        assert.ok(md.includes(snippet), `/build.md must embed the ${ide.name} snippet verbatim`);
+      }
+    });
+
+    test("file-based entries print their config path", () => {
+      for (const ide of IDE_INSTALLS.filter((i) => i.kind === "file")) {
+        assert.ok(md.includes(ide.filePath!), `/build.md must print the ${ide.name} config path`);
+      }
+    });
+
+    test("every snippet installs the published npm package", () => {
+      for (const ide of IDE_INSTALLS) {
+        const snippet = ide.kind === "cli" ? ide.cliCommand! : ide.fileContents!;
+        assert.ok(snippet.includes(IDE_NPM_PACKAGE), `${ide.name} snippet must reference ${IDE_NPM_PACKAGE}`);
+      }
+    });
+
+    test("states no upfront key is needed and gives the natural-language example", () => {
+      assert.match(md, /no upfront key|needs no API key/i);
+      assert.ok(md.includes(IDE_NO_KEY_EXAMPLE), "must include the example prompt");
+    });
   });
 });

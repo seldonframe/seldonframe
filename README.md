@@ -207,6 +207,117 @@ Requires: Node 20+, Postgres 15+, an Anthropic or OpenAI API key. See [docs/gett
 
 ---
 
+## Use SeldonFrame from any IDE
+
+One npm package — [`@seldonframe/mcp`](https://www.npmjs.com/package/@seldonframe/mcp) — runs as a local MCP server in every major AI-native editor. Pick yours, paste the snippet, and ask your agent to build a workspace. **First workspace is free and needs no API key.**
+
+<details>
+<summary><strong>Claude Code</strong></summary>
+
+```bash
+claude mcp add seldonframe -- npx -y @seldonframe/mcp
+```
+
+</details>
+
+<details>
+<summary><strong>Cursor</strong></summary>
+
+Add to `~/.cursor/mcp.json`:
+
+```json
+{
+  "mcpServers": {
+    "seldonframe": {
+      "command": "npx",
+      "args": ["-y", "@seldonframe/mcp"]
+    }
+  }
+}
+```
+
+</details>
+
+<details>
+<summary><strong>Windsurf</strong></summary>
+
+Add to `~/.codeium/windsurf/mcp_config.json`:
+
+```json
+{
+  "mcpServers": {
+    "seldonframe": {
+      "command": "npx",
+      "args": ["-y", "@seldonframe/mcp"]
+    }
+  }
+}
+```
+
+</details>
+
+<details>
+<summary><strong>VS Code (Copilot agent mode)</strong></summary>
+
+Add to `.vscode/mcp.json`:
+
+```json
+{
+  "servers": {
+    "seldonframe": {
+      "command": "npx",
+      "args": ["-y", "@seldonframe/mcp"]
+    }
+  }
+}
+```
+
+</details>
+
+<details>
+<summary><strong>Zed</strong></summary>
+
+Add to `settings.json`:
+
+```json
+{
+  "context_servers": {
+    "seldonframe": {
+      "source": "custom",
+      "command": "npx",
+      "args": ["-y", "@seldonframe/mcp"]
+    }
+  }
+}
+```
+
+</details>
+
+<details>
+<summary><strong>Codex CLI</strong></summary>
+
+Add to `~/.codex/config.toml`:
+
+```toml
+[mcp_servers.seldonframe]
+command = "npx"
+args = ["-y", "@seldonframe/mcp"]
+```
+
+Or one line: `codex mcp add seldonframe -- npx -y @seldonframe/mcp`
+
+</details>
+
+Once connected, restart your IDE (MCP connectors load at session start), then just say:
+
+```
+> Build a workspace for [business name]. [city, state]. [services]. [phone, optional].
+```
+
+See the same six snippets, kept in sync, at [seldonframe.com/build](https://seldonframe.com/build#install).
+
+---
+
 ## FAQ
 
 ### How does SeldonFrame compare to GoHighLevel?
