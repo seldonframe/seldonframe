@@ -855,6 +855,14 @@ export const config = {
     // owns this path entirely and returns next() (+ the sf_ref cookie when
     // ?ref= is present) before any other pipeline stage can touch it.
     "/build",
+    // FIX-6b: R1 multi-page service links. Generated sites emit root-relative
+    // /services/<svc> hrefs on workspace subdomains + custom domains. WITHOUT
+    // this entry those requests never reach the proxy at all (this matcher is
+    // a whitelist), so BOTH service renderers (/w/[slug]/services and the /s
+    // catch-all's services branch) were unreachable and every multipage
+    // site's service links 404'd — on the app host the path stays unhandled
+    // and 404s exactly as before.
+    "/services/:path*",
     "/l/:path*",
     "/book/:path*",
     "/forms/:path*",

@@ -160,7 +160,7 @@ export default async function PublicSPage({ params }: PageProps) {
       const navServices = getServicePages(payload).map((p) => ({ slug: p.slug, name: p.name }));
       // On the subdomain the workspace IS the root, so links stay relative to "/".
       return (
-        <SiteShell archetype={payload.hero.archetype} mode={payload.theme?.mode ?? "light"}>
+        <SiteShell archetype={payload.hero.archetype} mode={payload.theme?.mode ?? "light"} workspaceId={r1Data.orgId}>
           <Navbar
             archetype={payload.hero.archetype}
             businessName={payload.hero.businessName}
@@ -215,7 +215,7 @@ export default async function PublicSPage({ params }: PageProps) {
       // /services/<slug> (root-relative), which is correct on the subdomain.
       const serviceBaseHref = navServices.length > 0 ? "/" : undefined;
       return (
-        <SiteShell archetype={payload.hero.archetype} mode={payload.theme?.mode ?? "light"}>
+        <SiteShell archetype={payload.hero.archetype} mode={payload.theme?.mode ?? "light"} workspaceId={r1Data.orgId}>
           <Navbar
             archetype={payload.hero.archetype}
             businessName={payload.hero.businessName}
