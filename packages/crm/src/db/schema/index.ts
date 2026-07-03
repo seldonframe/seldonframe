@@ -166,3 +166,8 @@ export * from "./wallet";
 // (propose-only blueprint patch + failure-cluster rationale, applied ONLY by
 // applyImproveProposal). Additive. See db/schema/eval-runs.ts.
 export * from "./eval-runs";
+// 2026-07-02 — Virality Pack Task 5: referrals (MONEY, inert behind
+// SF_REFERRALS_ENABLED). One additive table — one row per referee EVER
+// (UNIQUE(refereeOrgId)). Credits are wallet_transactions rows only (kind
+// 'referral_credit'), never Stripe. See lib/growth/referrals.ts.
+export * from "./referrals";

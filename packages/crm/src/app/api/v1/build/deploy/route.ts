@@ -76,6 +76,8 @@ import {
   type ProvisionSfManagedIfAvailableResult,
   type RunDeployDeps,
 } from "@/lib/deployments/deploy-orchestrator";
+import { buildShareCard, type ShareCardKind } from "@/lib/build/share-card";
+import { maybeCreditReferral, buildRealReferralsDeps } from "@/lib/growth/referrals";
 
 /** A well-known, always-serviced NANP area code (Austin, TX) — the zero-
  *  connect Tier-0 fallback's last resort when a deployment has no client
@@ -434,6 +436,82 @@ async function applyGoLive(
   return { ok: true, deployment: result.deployment };
 }
 
+// ─── share card (virality pack, Task 2 — additive, success-only) ───────────
+//
+// "I just shipped a 24/7 AI agent from my IDE" growth loop: the success
+// response gains a `share: { card_url, post_url, text }` field so a builder
+// can post about the deploy immediately. Deliberately NOT threaded through
+// `runDeploy`/`DeployResult` (deploy-orchestrator.ts) — that type is the
+// CLI/MCP tool's byte-for-byte JSON contract (see its own file header) and
+// only carries `deploymentId`/`phoneNumber` on a live result, not the
+// business name or a start timestamp. Instead this re-fetches the
+// deployment row (already-imported `getDeployment`) purely to read
+// `clientName` (→ businessName) and `createdAt` (→ startedAt for the
+// "shipped in N minutes" copy) — a cheap, read-only lookup keyed off the
+// `deploymentId` the route already has in scope, with zero impact on the
+// existing control flow or fields.
+//
+// `kind` is derived from the deployment's own `surface` column rather than
+// re-deriving templateType (which isn't in `POST`'s scope after `runDeploy`
+// returns) — "phone" is the voice-reachable surface, everything else
+// (embed/link/sms/email) reads as a generic "agent" per buildShareCard's own
+// voice/non-voice split (nounForKind).
+//
+// Fail-soft: this is a nice-to-have on top of an already-successful deploy.
+// Any error while building the share card (a race where the deployment row
+// vanished between go-live and this lookup, etc.) must never turn a genuine
+// "live" deploy into a failed HTTP response — the field is simply omitted.
+function shareKindForSurface(surface: string): ShareCardKind {
+  return surface === "phone" ? "voice" : "chat";
+}
+
+async function buildShareForLiveDeployment(
+  deploymentId: string,
+): Promise<{ cardUrl: string; text: string; postUrl: string } | null> {
+  try {
+    const deployment = await getDeployment(deploymentId);
+    if (!deployment) return null;
+    const share = buildShareCard({
+      businessName: deployment.clientName,
+      startedAt: deployment.createdAt ?? null,
+      now: new Date(),
+      kind: shareKindForSurface(deployment.surface),
+    });
+    return share;
+  } catch {
+    return null;
+  }
+}
+
+// ─── referral credit (virality pack, Task 5 — additive, success-only, MONEY) ─
+//
+// A deploy going live is the credit-worthy event: the deploying org
+// (`orgId` — the bearer-resolved caller, i.e. the REFEREE if they were
+// referred at workspace-creation time) just proved out the referral by
+// shipping something real. maybeCreditReferral itself is inert unless
+// SF_REFERRALS_ENABLED is on AND a 'pending' referrals row exists for this
+// org — every other case (flag off, no referral on file, already credited)
+// is a pure no-op that costs one cheap read.
+//
+// Deliberately NOT threaded through runDeploy/DeployResult — same reasoning
+// as the share-card block above (that type is the CLI/MCP tool's frozen
+// JSON contract). Added ALONGSIDE the share-card block, not inside
+// deploy-orchestrator.ts, per the plan.
+//
+// Fail-soft: a referral-credit bug must NEVER turn a genuine "live" deploy
+// into a failed HTTP response, and must never surface in the response body
+// either (unlike the share card, there is nothing the CLI/MCP caller needs
+// to DO with a credit — it's a silent wallet-ledger side effect). Any
+// error is swallowed after being logged.
+async function maybeCreditReferralForLiveDeployment(orgId: string): Promise<void> {
+  try {
+    await maybeCreditReferral(orgId, buildRealReferralsDeps());
+  } catch {
+    // Swallow — see the fail-soft note above. This path is never allowed
+    // to affect the deploy response.
+  }
+}
+
 // ─── the route ───────────────────────────────────────────────────────────────
 
 /** Wire the REAL seams (this DB, this Twilio, this store) for `runDeploy`. */
@@ -483,5 +561,31 @@ export async function POST(request: Request) {
   };
 
   const result = await runDeploy({ orgId, body }, buildRealRunDeployDeps());
+
+  // Additive only: a successful "live" deploy gains a `share` field for the
+  // deploy share-card growth loop. Every other result shape (disabled,
+  // needs_connect, any error) is returned completely unchanged — see the
+  // "share card" section above for why this isn't threaded through
+  // `runDeploy` itself.
+  if (result.ok && result.status === "live") {
+    // Virality pack Task 5 — referral credit, fail-soft, silent (no response
+    // field; see maybeCreditReferralForLiveDeployment's own doc comment).
+    // Fired for EVERY live deploy, not just the first — maybeCreditReferral
+    // is itself idempotent (a no-op once the referral is already credited),
+    // so this never double-credits on repeat deploys of the same org.
+    await maybeCreditReferralForLiveDeployment(orgId);
+
+    const share = await buildShareForLiveDeployment(result.deploymentId);
+    if (share) {
+      return NextResponse.json(
+        {
+          ...result,
+          share: { card_url: share.cardUrl, post_url: share.postUrl, text: share.text },
+        },
+        { status: statusForDeployResult(result) },
+      );
+    }
+  }
+
   return NextResponse.json(result, { status: statusForDeployResult(result) });
 }

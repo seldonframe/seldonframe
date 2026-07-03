@@ -560,6 +560,66 @@ export async function getWithdrawableEarningsMicros(sellerOrgId: string): Promis
 }
 
 /**
+ * Credit a referral bonus (money IN, virality pack Task 5) — a LEDGER
+ * increment, NEVER Stripe. This is the SAME shape as creditTopupToWallet
+ * (ensure the wallet → insert the ledger row as the dedupe backstop → on a
+ * fresh insert, balance += amount), generalized only in that the caller
+ * supplies the idempotency key directly rather than deriving it from a
+ * Stripe session id — lib/growth/referrals.ts passes the two UNIQUE keys the
+ * plan mandates (`referral:referrer:<refereeOrgId>` /
+ * `referral:referee:<refereeOrgId>`), one per side of the referral, so each
+ * side can be credited independently and idempotently. Idempotent on
+ * `idempotencyKey`: a replayed call (maybeCreditReferral called twice for an
+ * already-credited referee) is a no-op that credits ONCE. Never throws.
+ */
+export async function creditReferralToWallet(args: {
+  orgId: string;
+  amountMicros: number;
+  idempotencyKey: string;
+  stripeMode?: MarketplaceStripeMode;
+}): Promise<WalletApplyResult> {
+  const stripeMode = args.stripeMode ?? "test";
+  const amount = nonNegMicros(args.amountMicros);
+  const key = (args.idempotencyKey ?? "").trim();
+  if (amount <= 0 || !key) return { ok: false, reason: "invalid" };
+
+  await ensureWallet(args.orgId, stripeMode);
+
+  const fresh = await insertLedgerRow({
+    orgId: args.orgId,
+    kind: "referral_credit",
+    amountMicros: amount,
+    idempotencyKey: key,
+  });
+
+  if (!fresh) {
+    // Duplicate — credited already. Return the current balance, money unchanged.
+    return {
+      ok: true,
+      balanceMicros: await getWalletBalanceMicros(args.orgId, stripeMode),
+      applied: false,
+      duplicate: true,
+    };
+  }
+
+  const [updated] = await db
+    .update(walletAccounts)
+    .set({
+      balanceMicros: sql`${walletAccounts.balanceMicros} + ${amount}`,
+      updatedAt: new Date(),
+    })
+    .where(and(eq(walletAccounts.orgId, args.orgId), eq(walletAccounts.stripeMode, stripeMode)))
+    .returning({ balanceMicros: walletAccounts.balanceMicros });
+
+  return {
+    ok: true,
+    balanceMicros: nonNegMicros(updated?.balanceMicros ?? 0),
+    applied: true,
+    duplicate: false,
+  };
+}
+
+/**
  * Record a completed payout as a `payout` ledger row (SUBTRACTS from withdrawable).
  * Idempotent on `payout:<transferId>` (the wallet ledger's UNIQUE dedupe backstop):
  * a re-record of the same Stripe transfer is a no-op → one transfer maps to exactly

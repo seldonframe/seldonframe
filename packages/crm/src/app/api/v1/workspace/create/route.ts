@@ -13,6 +13,12 @@ import { compileSoulService } from "@/lib/soul-compiler/service";
 import { checkRateLimit } from "@/lib/utils/rate-limit";
 // v1.51 — client portal URL + tier upsell shared with create-full route.
 import { buildTierUpsell } from "@/lib/workspace/tier-upsell";
+// Virality pack Task 5 — referral attribution capture (MONEY, inert behind
+// SF_REFERRALS_ENABLED). readRefCookieFromHeader reads the sf_ref cookie
+// proxy.ts set on /build; recordReferral stamps the attribution row. Both
+// are no-ops when the flag is off or the cookie is absent.
+import { readRefCookieFromHeader } from "@/lib/growth/ref-cookie";
+import { recordReferral, buildRealReferralsDeps } from "@/lib/growth/referrals";
 
 type WorkspaceCreateBody = {
   url?: unknown;
@@ -191,6 +197,30 @@ async function handleAnonymousCreate(request: Request, body: WorkspaceCreateBody
       services: servicesInput,
       testimonials: testimonialsInput,
     });
+    // Virality pack Task 5 — record referral attribution when the visitor
+    // arrived via /build?ref=<referrerOrgId> (proxy.ts's sf_ref cookie).
+    // FAIL-SOFT: this MCP client's own cookie jar rarely carries a browser
+    // cookie set by a DIFFERENT origin's /build page load, but when it
+    // does (or a future same-origin flow threads it through), capture it —
+    // recordReferral itself is a no-op when the flag is off, the cookie is
+    // absent, or it's a self-referral. Never let this block or fail the
+    // workspace-creation response.
+    try {
+      const refererOrgId = readRefCookieFromHeader(request.headers.get("cookie"));
+      if (refererOrgId) {
+        await recordReferral(
+          { referrerOrgId: refererOrgId, refereeOrgId: result.orgId, source: "powered_by" },
+          buildRealReferralsDeps(),
+        );
+      }
+    } catch (referralError) {
+      logEvent(
+        "referral_record_failed",
+        { error: referralError instanceof Error ? referralError.message : String(referralError) },
+        { request, orgId: result.orgId, status: 200, severity: "warn" }
+      );
+    }
+
     const urls = buildWorkspaceUrls(result.slug, WORKSPACE_BASE_DOMAIN, result.orgId);
     // C6: thread the bearer token into structured URL builder so it
     // produces the single-click `admin_url` for the operator. Without

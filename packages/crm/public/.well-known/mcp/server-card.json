@@ -1,0 +1,15 @@
+{
+  "name": "SeldonFrame",
+  "description": "Build, deploy, and sell AI agents for local-service businesses from your IDE. build_workspace creates a live site + booking + CRM + AI receptionist in about 3 minutes; deploy, test, and sell agents through the same server.",
+  "url": "https://mcp.seldonframe.com/v1",
+  "transport": "streamable-http",
+  "authentication": { "type": "bearer", "instructions": "Use the workspace token (wst_...) returned by workspace creation, or create a free workspace first - no signup required." },
+  "vendor": { "name": "SeldonFrame", "url": "https://www.seldonframe.com" },
+  "documentation": "https://www.seldonframe.com/build",
+  "tools_summary": [
+    "discover_tools / inspect_tool / run_tool - the full SeldonFrame build surface over one bridge",
+    "create_full_workspace - website + booking + intake + CRM + AI chatbot from business facts",
+    "deploy_agent - take a built agent live (phone/chat) with readiness checks",
+    "browse/sell - marketplace listing and earnings surfaces"
+  ]
+}
