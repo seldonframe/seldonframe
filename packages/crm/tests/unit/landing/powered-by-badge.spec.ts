@@ -10,11 +10,16 @@
 
 import { describe, test } from "node:test";
 import assert from "node:assert/strict";
+import fs from "node:fs/promises";
+import path from "node:path";
+import { fileURLToPath } from "node:url";
 
 import {
   buildPoweredByHref,
   PoweredByBadge,
 } from "../../../src/components/landing-r1/powered-by-badge";
+
+const __dirname = path.dirname(fileURLToPath(import.meta.url));
 
 type AnyEl = { props?: Record<string, unknown>; type?: unknown };
 
@@ -128,11 +133,9 @@ describe("PoweredByBadge", () => {
   });
 
   test("is a zero-client-JS server component — no 'use client' directive in source", async () => {
-    const fs = await import("node:fs/promises");
-    const path = await import("node:path");
     const src = await fs.readFile(
       path.resolve(
-        import.meta.dirname,
+        __dirname,
         "../../../src/components/landing-r1/powered-by-badge.tsx",
       ),
       "utf8",
