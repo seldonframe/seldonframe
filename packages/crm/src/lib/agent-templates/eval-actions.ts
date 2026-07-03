@@ -33,9 +33,9 @@
 
 "use server";
 
-import { eq } from "drizzle-orm";
+import { and, eq } from "drizzle-orm";
 import { db } from "@/db";
-import { organizations } from "@/db/schema";
+import { agentTemplates, organizations } from "@/db/schema";
 import type { AgentBlueprint } from "@/db/schema/agents";
 import { getOrgId } from "@/lib/auth/helpers";
 import { assertWritable } from "@/lib/demo/server";
@@ -45,11 +45,13 @@ import { resolveStudioBuildGate, NEEDS_BYOK_MESSAGE } from "./studio-build-gate"
 import { makeBrainMemoryStoreForOrg } from "@/lib/agents/memory/brain-memory-store";
 import { makeLlmScenarioGenerator } from "@/lib/agents/evals/generate-scenarios";
 import { makeLlmCustomerSim } from "@/lib/agents/evals/sim-llm";
-import { makeLlmEvalGrader } from "@/lib/agents/evals/score-llm";
+import { makeLlmEvalGrader, DEFAULT_EVAL_MODEL } from "@/lib/agents/evals/score-llm";
 import {
   runAgentEvals,
   makeStatelessAgentReply,
 } from "@/lib/agents/evals/run-agent-evals";
+import { recordEvalRun } from "@/lib/agents/evals/eval-runs-store";
+import { persistTemplateEvalRun } from "@/lib/agents/evals/persist-template-run";
 
 /** One scenario's verdict, shaped for the UI: did it pass the hard gates, and if
  *  not, which check NAMES failed (safety / mustNotDo / criteria — the gates, not
@@ -177,5 +179,50 @@ export async function runAgentEvalsAction(
 
   const lessonsRecorded = results.filter((r) => r.score.passed === false).length;
 
+  // Persist the run + revive agent_templates.eval_score (Task 3, improve verb
+  // + trust rail: docs/superpowers/plans/2026-07-02-improve-verb-trust-rail.md).
+  // FAIL-SOFT: persistTemplateEvalRun never throws (it logs + swallows any
+  // failure internally) — the operator's result below is computed either way,
+  // so a persistence hiccup can never turn a successful eval run into a
+  // failed action. graderModel mirrors the EXACT resolution
+  // makeLlmEvalGrader/score-llm.ts uses at call time (env override else the
+  // Haiku default) so the persisted row reflects the model that actually
+  // graded this run, not a guess.
+  await persistTemplateEvalRun(
+    {
+      orgId,
+      templateId: agentTemplateId,
+      result: { results, summary },
+      graderModel: process.env.ANTHROPIC_EVAL_MODEL?.trim() || DEFAULT_EVAL_MODEL,
+    },
+    {
+      recordEvalRun,
+      updateTemplateEvalScore,
+    },
+  );
+
   return { ok: true, summary, scenarios, lessonsRecorded };
+}
+
+/**
+ * Org-scoped `agent_templates.eval_score` write — the real
+ * `updateTemplateEvalScore` dependency `persistTemplateEvalRun` calls.
+ * Scoped by BOTH `id` and `builderOrgId` (defense in depth: the action
+ * already checked ownership before running the eval, but a persistence-layer
+ * write should never rely solely on an earlier guard having run).
+ */
+async function updateTemplateEvalScore(args: {
+  orgId: string;
+  templateId: string;
+  evalScore: number;
+}): Promise<void> {
+  await db
+    .update(agentTemplates)
+    .set({ evalScore: args.evalScore })
+    .where(
+      and(
+        eq(agentTemplates.id, args.templateId),
+        eq(agentTemplates.builderOrgId, args.orgId),
+      ),
+    );
 }

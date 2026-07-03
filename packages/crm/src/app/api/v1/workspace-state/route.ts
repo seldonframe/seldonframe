@@ -56,6 +56,10 @@ import { resolveMasterTwilio } from "@/lib/telephony/sf-managed";
 import { computeVoiceBillingSignal } from "@/lib/telephony/delinquency";
 import { listActiveSfManagedDeploymentsForOrg } from "@/lib/deployments/store";
 import type { AgentTemplate } from "@/db/schema/agent-templates";
+// Task 3, improve verb + trust rail — the durable eval_runs signal (T2/T3:
+// docs/superpowers/plans/2026-07-02-improve-verb-trust-rail.md), additive to
+// the existing agentEvals-derived `stats.eval_*` fields below.
+import { getLatestEvalRun } from "@/lib/agents/evals/eval-runs-store";
 
 export async function GET(request: Request) {
   const guard = await guardApiRequest(request);
@@ -174,6 +178,32 @@ export async function GET(request: Request) {
         (p) => p === true,
       ).length;
 
+      // Task 3 (improve verb + trust rail) — the durable eval_runs signal,
+      // additive alongside the agentEvals-derived `stats.eval_*` fields
+      // above (a different, older mechanism this doesn't replace). Fail-soft
+      // per-agent: any read failure (e.g. a transient DB hiccup) yields
+      // `null` for THIS agent only — it must never 500 the whole
+      // workspace-state response, and one agent's failure never drops the
+      // others (each agent's read is independent inside this same
+      // Promise.all, so failures don't cascade).
+      let lastEvalRun: { pass_rate: number; at: string } | null = null;
+      try {
+        const latest = await getLatestEvalRun({
+          orgId,
+          subjectKind: "agent",
+          subjectId: agent.id,
+        });
+        lastEvalRun = latest
+          ? { pass_rate: latest.passRate, at: latest.createdAt.toISOString() }
+          : null;
+      } catch (err) {
+        console.warn("[workspace-state] getLatestEvalRun failed:", {
+          agentId: agent.id,
+          error: err instanceof Error ? err.message : String(err),
+        });
+        lastEvalRun = null;
+      }
+
       return {
         id: agent.id,
         name: agent.name,
@@ -200,6 +230,11 @@ export async function GET(request: Request) {
             ? mostRecentRun.toISOString()
             : null,
         },
+        // Additive (Task 3) — the durable eval_runs record's latest entry
+        // for this agent (subjectKind 'agent'), independent of the
+        // agentEvals-derived stats above. `null` when the agent has never
+        // had a durable run recorded yet OR the read failed (fail-soft).
+        last_eval_run: lastEvalRun,
       };
     }),
   );

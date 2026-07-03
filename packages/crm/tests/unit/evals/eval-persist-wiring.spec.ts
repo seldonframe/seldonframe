@@ -30,10 +30,15 @@
 import { describe, test, mock } from "node:test";
 import assert from "node:assert/strict";
 
-import { persistTemplateEvalRun } from "@/lib/agents/evals/persist-template-run";
+import {
+  persistTemplateEvalRun,
+  type PersistTemplateEvalRunDeps,
+} from "@/lib/agents/evals/persist-template-run";
 import type { AgentEvalResult, RunAgentEvalsResult } from "@/lib/agents/evals/run-agent-evals";
 import type { EvalScenario, EvalScore, EvalTranscript } from "@/lib/agents/evals/eval-types";
 import type { NewEvalRun } from "@/db/schema/eval-runs";
+
+type UpdateEvalScoreArgs = Parameters<PersistTemplateEvalRunDeps["updateTemplateEvalScore"]>[0];
 
 // ─── fakes (mirrors eval-runs-store.spec.ts's fixtures) ─────────────────────
 
@@ -113,7 +118,7 @@ const BASE_ARGS = {
 describe("persistTemplateEvalRun — happy path", () => {
   test("records exactly one eval_runs row (subjectKind:'template', kind:'manual') and updates evalScore to the SAME row's passRate", async () => {
     const recordEvalRun = mock.fn(async (_row: NewEvalRun) => ({ id: "run-1" }));
-    const updateTemplateEvalScore = mock.fn(async () => {});
+    const updateTemplateEvalScore = mock.fn(async (_args: UpdateEvalScoreArgs) => {});
 
     await persistTemplateEvalRun(BASE_ARGS, { recordEvalRun, updateTemplateEvalScore });
 
@@ -142,7 +147,7 @@ describe("persistTemplateEvalRun — happy path", () => {
 
   test("a perfect run persists passRate 100 and threads it through to the update call", async () => {
     const recordEvalRun = mock.fn(async (_row: NewEvalRun) => ({ id: "run-2" }));
-    const updateTemplateEvalScore = mock.fn(async () => {});
+    const updateTemplateEvalScore = mock.fn(async (_args: UpdateEvalScoreArgs) => {});
 
     await persistTemplateEvalRun(
       { ...BASE_ARGS, result: fakeRunResult([fakeResult()]) },
@@ -160,7 +165,7 @@ describe("persistTemplateEvalRun — failure isolation (never throws, never fail
     const recordEvalRun = mock.fn(async () => {
       throw new Error("connection refused");
     });
-    const updateTemplateEvalScore = mock.fn(async () => {});
+    const updateTemplateEvalScore = mock.fn(async (_args: UpdateEvalScoreArgs) => {});
     const warnCalls: unknown[][] = [];
     const originalWarn = console.warn;
     console.warn = (...args: unknown[]) => {
