@@ -1,3 +1,4 @@
+<!-- mcp-name: io.github.seldonframe/mcp -->
 # @seldonframe/mcp
 
 Official SeldonFrame MCP server for Claude Code and Claude Desktop.

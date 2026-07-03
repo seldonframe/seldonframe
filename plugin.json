@@ -1,0 +1,6 @@
+{
+  "name": "seldonframe",
+  "description": "Build, deploy, and sell AI agents for local-service businesses - website, booking, CRM, and an AI receptionist from one conversation.",
+  "version": "1.59.0",
+  "author": { "name": "SeldonFrame", "url": "https://www.seldonframe.com" }
+}

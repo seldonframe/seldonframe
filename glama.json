@@ -1,0 +1,8 @@
+{
+  "$schema": "https://glama.ai/mcp/schemas/server.json",
+  "maintainers": ["seldonframe"],
+  "name": "SeldonFrame",
+  "description": "Build, deploy, and sell AI agents for local-service businesses from your IDE. One conversation creates a live workspace: website, booking, CRM, intake, and an AI receptionist on a real subdomain.",
+  "category": "business",
+  "keywords": ["mcp-server", "ai-agents", "crm", "small-business", "voice-agent", "website-builder"]
+}

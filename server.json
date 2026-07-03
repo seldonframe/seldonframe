@@ -1,0 +1,21 @@
+{
+  "$schema": "https://static.modelcontextprotocol.io/schemas/2025-12-11/server.schema.json",
+  "name": "io.github.seldonframe/mcp",
+  "description": "Build, deploy, and sell AI agents for local-service businesses - from your IDE.",
+  "version": "1.59.0",
+  "repository": {
+    "url": "https://github.com/seldonframe/seldonframe",
+    "source": "github"
+  },
+  "packages": [
+    {
+      "registryType": "npm",
+      "identifier": "@seldonframe/mcp",
+      "version": "1.59.0",
+      "transport": { "type": "stdio" }
+    }
+  ],
+  "remotes": [
+    { "type": "streamable-http", "url": "https://mcp.seldonframe.com/v1" }
+  ]
+}
