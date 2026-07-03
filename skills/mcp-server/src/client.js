@@ -2,6 +2,10 @@ import { mkdirSync, readFileSync, writeFileSync, existsSync } from "node:fs";
 import { homedir, hostname } from "node:os";
 import { join } from "node:path";
 import { VERSION } from "./welcome.js";
+// v1.59.2 — SSRF guard for fetchText, which fetches operator-supplied URLs
+// directly from the MCP server's machine (fetch_source_for_soul's
+// underlying implementation). See src/security.js for the guard + tests.
+import { assertPublicHttpUrl } from "./security.js";
 
 const API_BASE =
   process.env.SELDONFRAME_API_BASE ?? "https://app.seldonframe.com/api/v1";
@@ -170,18 +174,48 @@ export async function api(method, path, opts = {}) {
   return data;
 }
 
+// v1.59.2 — this fetches a URL the OPERATOR supplies (fetch_source_for_soul's
+// "scrape my existing website" feature), directly from the machine the MCP
+// server runs on. Without a guard, an operator (or a compromised/malicious
+// upstream prompt) could point this at http://localhost:PORT, a LAN device,
+// or a cloud metadata endpoint and have the MCP process fetch it on their
+// behalf. assertPublicHttpUrl rejects non-public targets; redirects are
+// followed MANUALLY (max 3 hops) so a public URL that 30x's to a private
+// one can't slip past the initial check.
+const MAX_REDIRECTS = 3;
+
 export async function fetchText(url, { maxBytes = 256 * 1024 } = {}) {
-  const res = await fetch(url, {
-    headers: { "User-Agent": `seldonframe-mcp/${VERSION} (+soul-compiler)` },
-    redirect: "follow",
-  });
+  let currentUrl = url;
+  let res;
+  for (let hop = 0; ; hop++) {
+    await assertPublicHttpUrl(currentUrl);
+    res = await fetch(currentUrl, {
+      headers: { "User-Agent": `seldonframe-mcp/${VERSION} (+soul-compiler)` },
+      redirect: "manual",
+    });
+    const isRedirect = res.status >= 300 && res.status < 400;
+    if (!isRedirect) break;
+    if (hop >= MAX_REDIRECTS) {
+      throw new Error(
+        `Fetch ${url} failed: exceeded ${MAX_REDIRECTS} redirects (stopped at ${currentUrl}).`,
+      );
+    }
+    const location = res.headers.get("location");
+    if (!location) {
+      throw new Error(
+        `Fetch ${currentUrl} returned redirect status ${res.status} with no Location header.`,
+      );
+    }
+    // Location may be relative — resolve against the URL that produced it.
+    currentUrl = new URL(location, currentUrl).toString();
+  }
   if (!res.ok) {
     throw new Error(`Fetch ${url} failed: ${res.status} ${res.statusText}`);
   }
   const raw = await res.text();
   const truncated = raw.length > maxBytes;
   const html = truncated ? raw.slice(0, maxBytes) : raw;
-  return { html, truncated, status: res.status, final_url: res.url };
+  return { html, truncated, status: res.status, final_url: res.url || currentUrl };
 }
 
 export function htmlToText(html) {

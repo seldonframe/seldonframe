@@ -2,16 +2,21 @@
 
 You now have full control over SeldonFrame directly from Claude Code.
 
-## Secure API Key Management
+## API Key Management
 
-Seldon never asks you to paste secrets into normal chat.
-When a key is needed, I open a dedicated secure input flow (masked, not saved in history).
+Keys come from one of two places: an environment variable already set on
+your machine (e.g. `ANTHROPIC_API_KEY`), or a value you pass explicitly as
+a tool argument. There is no separate masked-input flow — this is a normal
+MCP tool call like any other.
 
-Your keys are:
-- Stored encrypted and scoped only to this workspace
-- Never logged in plaintext
-- Decrypted only in memory for the exact operation needed
-- Fully auditable (you can see last used time and rotation history)
+If a tool is about to store a key it found in your environment, it asks
+for your OK first and tells you exactly which variable it found — it
+never sends that value anywhere without your confirmation. A key you pass
+explicitly as a tool argument counts as that confirmation.
+
+Recommendation: prefer setting keys as environment variables over pasting
+them into chat, since chat history isn't a secrets store. Once stored,
+keys are encrypted at rest and never echoed back in tool results.
 
 Say: “Show me my connected keys” or “Rotate my Resend key” anytime.
 

@@ -8,7 +8,7 @@
 // stripped. `create_full_workspace` is the only workspace-creation
 // path mentioned anywhere in this briefing.
 
-export const VERSION = "1.59.1";
+export const VERSION = "1.59.2";
 
 export const WELCOME_MARKDOWN = `# SeldonFrame — create a real Business OS in one conversation
 
@@ -108,8 +108,17 @@ of v1.28.0 this is **ONE tool call**:
      // platform key automatically. Operator can BYOK later via
      // /settings/integrations/llm. Pass explicitly only when you need
      // per-workspace billing isolation (white-label / agency).
+     //
+     // v1.59.2 — if you omit anthropic_api_key AND the MCP server's
+     // environment has ANTHROPIC_API_KEY set, this call returns
+     // needs_consent: true instead of building anything. ASK THE USER
+     // before storing a key found in the environment ("I found an
+     // Anthropic key in your environment — OK to store it in your
+     // SeldonFrame workspace?"), then re-call with
+     // confirm_store_env_key: true.
    })
    // → returns { agent, embed_url, turn_api_url, turn_api_method: "POST", dashboard_url, llm_mode, next_steps }
+   // or, if an env key needs consent first: { ok: true, needs_consent: true, env_var_found, message }.
    // Internally: creates agent, publishes to test. Skips set_llm_key when
    // no key supplied (platform fallback in lib/ai/client.ts handles inference).
 
@@ -125,18 +134,25 @@ billing (e.g. Acme AI agency managing Cypress Pine HVAC + Sunset
 Dental), pass anthropic_api_key explicitly per workspace instead of
 relying on platform fallback.
 
-### v1.40.10 — LLM key handling
+### v1.40.10 — LLM key handling (v1.59.2 — consent gate on path 2)
 
 build_website_chatbot has THREE possible LLM-key paths, in priority
 order:
 
 1. **Explicit** — \`anthropic_api_key: 'sk-ant-...'\` arg → workspace
-   stored as BYOK, operator pays Anthropic directly.
+   stored as BYOK, operator pays Anthropic directly. Passing the key
+   explicitly IS consent — this path is never gated.
 2. **Env-inherited** — process.env.ANTHROPIC_API_KEY in the MCP
-   server's environment → workspace stored as BYOK with that key.
+   server's environment → the DEFAULT is to ASK FIRST, not store
+   silently. The first call (no confirm_store_env_key) returns
+   \`{ needs_consent: true, env_var_found, message }\` and does nothing
+   else. Tell the operator what was found and ask permission; only
+   after they agree, re-call with \`confirm_store_env_key: true\` to
+   store the key as BYOK and continue the bundle.
 3. **Platform fallback** — neither explicit nor env → no BYOK
-   stored. The workspace uses SeldonFrame's platform Anthropic key
-   automatically (via lib/ai/client.ts -> getAIClient). Operator
+   stored, no consent needed (nothing of the operator's is
+   transmitted). The workspace uses SeldonFrame's platform Anthropic
+   key automatically (via lib/ai/client.ts -> getAIClient). Operator
    sees no setup friction; they can BYOK later in
    /settings/integrations/llm.
 
@@ -145,7 +161,8 @@ the operator: "Your chatbot is using SeldonFrame's shared Anthropic
 key. You can switch to your own anytime in Settings → Integrations
 → LLM, no code changes needed." This removes the "where do I get an
 Anthropic key" question from the critical path of a first-time
-chatbot setup.
+chatbot setup — and it means path 2's consent step only ever comes up
+when an env key actually exists, not as a blocking default.
 
 For custom flows (different archetype, custom capability allowlist,
 multi-step blueprint construction), drop down to the primitives:

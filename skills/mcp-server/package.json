@@ -1,6 +1,6 @@
 {
   "name": "@seldonframe/mcp",
-  "version": "1.59.1",
+  "version": "1.59.2",
   "mcpName": "io.github.seldonframe/mcp",
   "description": "Open-source GoHighLevel alternative for agencies. 146+ MCP tools that let Claude Code spin up white-labeled client workspaces — CRM, booking, intake forms, landing pages, AI chatbot, and pre-wired agent archetypes (speed-to-lead, missed-call-text-back, review-requester) — in minutes. AGPL-3.0.",
   "license": "AGPL-3.0-or-later",
@@ -17,8 +17,9 @@
   },
   "scripts": {
     "start": "node src/index.js",
-    "check:syntax": "node --check --input-type=module < src/index.js && node --check --input-type=module < src/client.js && node --check --input-type=module < src/tools.js && node --check --input-type=module < src/welcome.js",
-    "prepublishOnly": "npm run check:syntax"
+    "check:syntax": "node --check --input-type=module < src/index.js && node --check --input-type=module < src/client.js && node --check --input-type=module < src/tools.js && node --check --input-type=module < src/welcome.js && node --check --input-type=module < src/security.js",
+    "test": "node --test tests/*.test.mjs",
+    "prepublishOnly": "npm run check:syntax && npm run test"
   },
   "dependencies": {
     "@modelcontextprotocol/sdk": "^1.0.4"
