@@ -2,10 +2,19 @@
 //
 // Bridges the PURE ledger (wallet-ledger.ts) to Postgres. The pure ops own the
 // arithmetic + the invariants; this module owns persistence + the idempotency
-// BACKSTOP. The DB is neon-http (stateless, single round-trip — NO interactive
-// transactions), so money-safety here rests on two atomic primitives instead of
-// a multi-statement tx:
+// BACKSTOP.
 //
+// Postgres RLS Phase 1 (spec docs/superpowers/specs/2026-07-03-postgres-rls-
+// defense-in-depth-design.md): every function below now opens its DB work
+// through withOrgRls(orgId, tx => …) instead of the raw module-level `db`.
+// withOrgRls is INERT until Max sets DATABASE_URL_APP — until then it passes
+// `tx` through as the exact same `db` these functions always used, so this
+// rewiring is a no-op in behavior today and only starts enforcing tenant
+// isolation at the database layer once the env var is set. See src/db/rls.ts
+// for the full mechanism.
+//
+// Money-safety invariants (UNCHANGED by this rewiring — RLS is a second,
+// independent lock, not a replacement):
 //   1) INSERT the ledger row first with onConflictDoNothing on the UNIQUE
 //      idempotency_key. If nothing inserted → it's a DUPLICATE (a webhook
 //      re-delivery, or the same runId twice) → we no-op and return the current
@@ -29,7 +38,7 @@
 // never funds a live run.
 
 import { and, eq, sql } from "drizzle-orm";
-import { db } from "@/db";
+import { withOrgRls, type RlsDb } from "@/db/rls";
 import {
   walletAccounts,
   walletTransactions,
@@ -69,48 +78,63 @@ function nonNegMicros(n: unknown): number {
 }
 
 /** Ensure (and return) the org's wallet row for a Stripe mode, creating it at a 0
- *  balance on first touch. Idempotent via the UNIQUE(org_id, stripe_mode) index. */
+ *  balance on first touch. Idempotent via the UNIQUE(org_id, stripe_mode) index.
+ *  Runs inside the caller's withOrgRls tx when called from another store
+ *  function (pass `tx` through); opens its OWN withOrgRls when called directly. */
 export async function ensureWallet(
   orgId: string,
   stripeMode: MarketplaceStripeMode = "test",
+  tx?: RlsDb,
 ): Promise<WalletAccountRow> {
-  await db
-    .insert(walletAccounts)
-    .values({ orgId, stripeMode, balanceMicros: 0 })
-    .onConflictDoNothing({ target: [walletAccounts.orgId, walletAccounts.stripeMode] });
-  const [row] = await db
-    .select()
-    .from(walletAccounts)
-    .where(and(eq(walletAccounts.orgId, orgId), eq(walletAccounts.stripeMode, stripeMode)))
-    .limit(1);
-  if (!row) throw new Error("wallet_accounts upsert returned no row");
-  return row;
+  const run = async (db: RlsDb) => {
+    await db
+      .insert(walletAccounts)
+      .values({ orgId, stripeMode, balanceMicros: 0 })
+      .onConflictDoNothing({ target: [walletAccounts.orgId, walletAccounts.stripeMode] });
+    const [row] = await db
+      .select()
+      .from(walletAccounts)
+      .where(and(eq(walletAccounts.orgId, orgId), eq(walletAccounts.stripeMode, stripeMode)))
+      .limit(1);
+    if (!row) throw new Error("wallet_accounts upsert returned no row");
+    return row;
+  };
+  return tx ? run(tx) : withOrgRls(orgId, run);
 }
 
 /** The current balance (micro-dollars) for an org+mode. 0 when no wallet yet. */
 export async function getWalletBalanceMicros(
   orgId: string,
   stripeMode: MarketplaceStripeMode = "test",
+  tx?: RlsDb,
 ): Promise<number> {
-  const [row] = await db
-    .select({ balanceMicros: walletAccounts.balanceMicros })
-    .from(walletAccounts)
-    .where(and(eq(walletAccounts.orgId, orgId), eq(walletAccounts.stripeMode, stripeMode)))
-    .limit(1);
-  return nonNegMicros(row?.balanceMicros ?? 0);
+  const run = async (db: RlsDb) => {
+    const [row] = await db
+      .select({ balanceMicros: walletAccounts.balanceMicros })
+      .from(walletAccounts)
+      .where(and(eq(walletAccounts.orgId, orgId), eq(walletAccounts.stripeMode, stripeMode)))
+      .limit(1);
+    return nonNegMicros(row?.balanceMicros ?? 0);
+  };
+  return tx ? run(tx) : withOrgRls(orgId, run);
 }
 
 /** Insert a ledger row keyed by idempotencyKey. Returns true if THIS call
  *  inserted it (money should move), false if a row already existed (duplicate →
- *  no-op). The UNIQUE(idempotency_key) constraint is the dedupe backstop. */
-async function insertLedgerRow(args: {
-  orgId: string;
-  kind: WalletTransactionKind;
-  amountMicros: number;
-  idempotencyKey: string;
-  runId?: string;
-  stripeRef?: string;
-}): Promise<boolean> {
+ *  no-op). The UNIQUE(idempotency_key) constraint is the dedupe backstop.
+ *  Always called from WITHIN another function's withOrgRls tx — never opens
+ *  its own, since it has no independent entry point. */
+async function insertLedgerRow(
+  db: RlsDb,
+  args: {
+    orgId: string;
+    kind: WalletTransactionKind;
+    amountMicros: number;
+    idempotencyKey: string;
+    runId?: string;
+    stripeRef?: string;
+  },
+): Promise<boolean> {
   const inserted = await db
     .insert(walletTransactions)
     .values({
@@ -131,7 +155,7 @@ async function insertLedgerRow(args: {
  * id) — a re-applied credit (webhook re-delivery) is a no-op that credits ONCE.
  * Steps: ensure the wallet → insert the ledger row (dedupe backstop) → on a fresh
  * insert, balance += amount. Returns the new balance. Never negative; never throws
- * on a duplicate.
+ * on a duplicate. The whole sequence runs inside ONE withOrgRls tx.
  */
 export async function creditTopupToWallet(args: {
   orgId: string;
@@ -145,41 +169,42 @@ export async function creditTopupToWallet(args: {
   const key = (args.idempotencyKey ?? "").trim();
   if (amount <= 0 || !key) return { ok: false, reason: "invalid" };
 
-  await ensureWallet(args.orgId, stripeMode);
+  return withOrgRls(args.orgId, async (db) => {
+    await ensureWallet(args.orgId, stripeMode, db);
 
-  const fresh = await insertLedgerRow({
-    orgId: args.orgId,
-    kind: "topup",
-    amountMicros: amount,
-    idempotencyKey: key,
-    stripeRef: args.stripeRef,
-  });
+    const fresh = await insertLedgerRow(db, {
+      orgId: args.orgId,
+      kind: "topup",
+      amountMicros: amount,
+      idempotencyKey: key,
+      stripeRef: args.stripeRef,
+    });
 
-  if (!fresh) {
-    // Duplicate — credited already. Return the current balance, money unchanged.
+    if (!fresh) {
+      return {
+        ok: true,
+        balanceMicros: await getWalletBalanceMicros(args.orgId, stripeMode, db),
+        applied: false,
+        duplicate: true,
+      };
+    }
+
+    const [updated] = await db
+      .update(walletAccounts)
+      .set({
+        balanceMicros: sql`${walletAccounts.balanceMicros} + ${amount}`,
+        updatedAt: new Date(),
+      })
+      .where(and(eq(walletAccounts.orgId, args.orgId), eq(walletAccounts.stripeMode, stripeMode)))
+      .returning({ balanceMicros: walletAccounts.balanceMicros });
+
     return {
       ok: true,
-      balanceMicros: await getWalletBalanceMicros(args.orgId, stripeMode),
-      applied: false,
-      duplicate: true,
+      balanceMicros: nonNegMicros(updated?.balanceMicros ?? 0),
+      applied: true,
+      duplicate: false,
     };
-  }
-
-  const [updated] = await db
-    .update(walletAccounts)
-    .set({
-      balanceMicros: sql`${walletAccounts.balanceMicros} + ${amount}`,
-      updatedAt: new Date(),
-    })
-    .where(and(eq(walletAccounts.orgId, args.orgId), eq(walletAccounts.stripeMode, stripeMode)))
-    .returning({ balanceMicros: walletAccounts.balanceMicros });
-
-  return {
-    ok: true,
-    balanceMicros: nonNegMicros(updated?.balanceMicros ?? 0),
-    applied: true,
-    duplicate: false,
-  };
+  });
 }
 
 /**
@@ -189,7 +214,8 @@ export async function creditTopupToWallet(args: {
  * `WHERE balance_micros >= amount` guard, so if the balance can't cover it 0 rows
  * update — we then DELETE the just-inserted ledger row (so the run can be retried
  * once funded) and return "insufficient". The run endpoint also checks canAfford
- * BEFORE executing; this is the authoritative second line.
+ * BEFORE executing; this is the authoritative second line. Runs inside ONE
+ * withOrgRls tx.
  */
 export async function debitWalletForRun(args: {
   orgId: string;
@@ -202,66 +228,63 @@ export async function debitWalletForRun(args: {
   const runId = (args.runId ?? "").trim();
   if (!runId) return { ok: false, reason: "invalid" };
 
-  // A 0-cost run draws nothing down — success, no ledger row.
-  if (amount <= 0) {
+  return withOrgRls(args.orgId, async (db) => {
+    if (amount <= 0) {
+      return {
+        ok: true,
+        balanceMicros: await getWalletBalanceMicros(args.orgId, stripeMode, db),
+        applied: false,
+        duplicate: false,
+      };
+    }
+
+    await ensureWallet(args.orgId, stripeMode, db);
+    const key = debitIdempotencyKey(runId);
+
+    const fresh = await insertLedgerRow(db, {
+      orgId: args.orgId,
+      kind: "debit",
+      amountMicros: amount,
+      idempotencyKey: key,
+      runId,
+    });
+
+    if (!fresh) {
+      return {
+        ok: true,
+        balanceMicros: await getWalletBalanceMicros(args.orgId, stripeMode, db),
+        applied: false,
+        duplicate: true,
+      };
+    }
+
+    const decremented = await db
+      .update(walletAccounts)
+      .set({
+        balanceMicros: sql`${walletAccounts.balanceMicros} - ${amount}`,
+        updatedAt: new Date(),
+      })
+      .where(
+        and(
+          eq(walletAccounts.orgId, args.orgId),
+          eq(walletAccounts.stripeMode, stripeMode),
+          sql`${walletAccounts.balanceMicros} >= ${amount}`,
+        ),
+      )
+      .returning({ balanceMicros: walletAccounts.balanceMicros });
+
+    if (decremented.length === 0) {
+      await db.delete(walletTransactions).where(eq(walletTransactions.idempotencyKey, key));
+      return { ok: false, reason: "insufficient" };
+    }
+
     return {
       ok: true,
-      balanceMicros: await getWalletBalanceMicros(args.orgId, stripeMode),
-      applied: false,
+      balanceMicros: nonNegMicros(decremented[0]?.balanceMicros ?? 0),
+      applied: true,
       duplicate: false,
     };
-  }
-
-  await ensureWallet(args.orgId, stripeMode);
-  const key = debitIdempotencyKey(runId);
-
-  const fresh = await insertLedgerRow({
-    orgId: args.orgId,
-    kind: "debit",
-    amountMicros: amount,
-    idempotencyKey: key,
-    runId,
   });
-
-  if (!fresh) {
-    // This run already debited — no-op (never double-debit).
-    return {
-      ok: true,
-      balanceMicros: await getWalletBalanceMicros(args.orgId, stripeMode),
-      applied: false,
-      duplicate: true,
-    };
-  }
-
-  // ATOMIC, NEVER-NEGATIVE decrement: only subtract when the balance covers it.
-  const decremented = await db
-    .update(walletAccounts)
-    .set({
-      balanceMicros: sql`${walletAccounts.balanceMicros} - ${amount}`,
-      updatedAt: new Date(),
-    })
-    .where(
-      and(
-        eq(walletAccounts.orgId, args.orgId),
-        eq(walletAccounts.stripeMode, stripeMode),
-        sql`${walletAccounts.balanceMicros} >= ${amount}`,
-      ),
-    )
-    .returning({ balanceMicros: walletAccounts.balanceMicros });
-
-  if (decremented.length === 0) {
-    // Guard failed — the balance can't cover it. Roll back the ledger row we just
-    // inserted so this run can be retried after a top-up (and never half-debits).
-    await db.delete(walletTransactions).where(eq(walletTransactions.idempotencyKey, key));
-    return { ok: false, reason: "insufficient" };
-  }
-
-  return {
-    ok: true,
-    balanceMicros: nonNegMicros(decremented[0]?.balanceMicros ?? 0),
-    applied: true,
-    duplicate: false,
-  };
 }
 
 /** Pure drain split: how much of a voice debit the balance can cover. Voice
@@ -296,7 +319,8 @@ export function splitVoiceDrain(
  * drainedMicros` guard (drained ≤ the balance we read, so it normally
  * succeeds); if a concurrent debit races us and the guard fails, we re-read +
  * re-split ONCE and retry, otherwise we DELETE the just-inserted ledger row and
- * report a full shortfall (nothing moved).
+ * report a full shortfall (nothing moved). All of this runs inside ONE
+ * withOrgRls tx.
  */
 export async function debitVoiceUsage(args: {
   orgId: string;
@@ -317,99 +341,89 @@ export async function debitVoiceUsage(args: {
     return { ok: true, applied: false, duplicate: false, drainedMicros: 0, shortfallMicros: 0 };
   }
 
-  await ensureWallet(args.orgId, stripeMode);
-  const key = `voice:${callId}`;
+  return withOrgRls(args.orgId, async (db) => {
+    await ensureWallet(args.orgId, stripeMode, db);
+    const key = `voice:${callId}`;
 
-  const balance = await getWalletBalanceMicros(args.orgId, stripeMode);
-  const split = splitVoiceDrain(balance, amount);
+    const balance = await getWalletBalanceMicros(args.orgId, stripeMode, db);
+    const split = splitVoiceDrain(balance, amount);
 
-  // Empty wallet — nothing to drain. Skip the insert (a 0-amount ledger row is
-  // noise); the caller suspends the agent off the returned shortfall instead.
-  if (split.drainedMicros === 0) {
-    return {
-      ok: true,
-      applied: false,
-      duplicate: false,
-      drainedMicros: 0,
-      shortfallMicros: split.shortfallMicros,
-    };
-  }
+    if (split.drainedMicros === 0) {
+      return {
+        ok: true,
+        applied: false,
+        duplicate: false,
+        drainedMicros: 0,
+        shortfallMicros: split.shortfallMicros,
+      };
+    }
 
-  const fresh = await insertLedgerRow({
-    orgId: args.orgId,
-    kind: "voice_debit",
-    amountMicros: split.drainedMicros,
-    idempotencyKey: key,
-    runId: callId,
+    const fresh = await insertLedgerRow(db, {
+      orgId: args.orgId,
+      kind: "voice_debit",
+      amountMicros: split.drainedMicros,
+      idempotencyKey: key,
+      runId: callId,
+    });
+
+    if (!fresh) {
+      return { ok: true, applied: false, duplicate: true, drainedMicros: 0, shortfallMicros: 0 };
+    }
+
+    let drained = split.drainedMicros;
+    let shortfall = split.shortfallMicros;
+
+    let decremented = await db
+      .update(walletAccounts)
+      .set({
+        balanceMicros: sql`${walletAccounts.balanceMicros} - ${drained}`,
+        updatedAt: new Date(),
+      })
+      .where(
+        and(
+          eq(walletAccounts.orgId, args.orgId),
+          eq(walletAccounts.stripeMode, stripeMode),
+          sql`${walletAccounts.balanceMicros} >= ${drained}`,
+        ),
+      )
+      .returning({ balanceMicros: walletAccounts.balanceMicros });
+
+    if (decremented.length === 0) {
+      const rebalance = await getWalletBalanceMicros(args.orgId, stripeMode, db);
+      const resplit = splitVoiceDrain(rebalance, amount);
+      drained = resplit.drainedMicros;
+      shortfall = resplit.shortfallMicros;
+
+      if (drained > 0) {
+        decremented = await db
+          .update(walletAccounts)
+          .set({
+            balanceMicros: sql`${walletAccounts.balanceMicros} - ${drained}`,
+            updatedAt: new Date(),
+          })
+          .where(
+            and(
+              eq(walletAccounts.orgId, args.orgId),
+              eq(walletAccounts.stripeMode, stripeMode),
+              sql`${walletAccounts.balanceMicros} >= ${drained}`,
+            ),
+          )
+          .returning({ balanceMicros: walletAccounts.balanceMicros });
+      }
+
+      if (drained === 0 || decremented.length === 0) {
+        await db.delete(walletTransactions).where(eq(walletTransactions.idempotencyKey, key));
+        return { ok: true, applied: false, duplicate: false, drainedMicros: 0, shortfallMicros: amount };
+      }
+
+      await db
+        .update(walletTransactions)
+        .set({ amountMicros: drained })
+        .where(eq(walletTransactions.idempotencyKey, key));
+    }
+
+    return { ok: true, applied: true, duplicate: false, drainedMicros: drained, shortfallMicros: shortfall };
   });
-
-  if (!fresh) {
-    // This call already drained the wallet — no-op (never double-debit).
-    return { ok: true, applied: false, duplicate: true, drainedMicros: 0, shortfallMicros: 0 };
-  }
-
-  let drained = split.drainedMicros;
-  let shortfall = split.shortfallMicros;
-
-  // ATOMIC, NEVER-NEGATIVE decrement: only subtract when the balance covers it.
-  let decremented = await db
-    .update(walletAccounts)
-    .set({
-      balanceMicros: sql`${walletAccounts.balanceMicros} - ${drained}`,
-      updatedAt: new Date(),
-    })
-    .where(
-      and(
-        eq(walletAccounts.orgId, args.orgId),
-        eq(walletAccounts.stripeMode, stripeMode),
-        sql`${walletAccounts.balanceMicros} >= ${drained}`,
-      ),
-    )
-    .returning({ balanceMicros: walletAccounts.balanceMicros });
-
-  if (decremented.length === 0) {
-    // A concurrent debit raced us between the read and the guarded update —
-    // re-read the balance, re-split against the fresh number, and retry ONCE.
-    const rebalance = await getWalletBalanceMicros(args.orgId, stripeMode);
-    const resplit = splitVoiceDrain(rebalance, amount);
-    drained = resplit.drainedMicros;
-    shortfall = resplit.shortfallMicros;
-
-    if (drained > 0) {
-      decremented = await db
-        .update(walletAccounts)
-        .set({
-          balanceMicros: sql`${walletAccounts.balanceMicros} - ${drained}`,
-          updatedAt: new Date(),
-        })
-        .where(
-          and(
-            eq(walletAccounts.orgId, args.orgId),
-            eq(walletAccounts.stripeMode, stripeMode),
-            sql`${walletAccounts.balanceMicros} >= ${drained}`,
-          ),
-        )
-        .returning({ balanceMicros: walletAccounts.balanceMicros });
-    }
-
-    if (drained === 0 || decremented.length === 0) {
-      // Still can't drain anything — roll back the ledger row we inserted so
-      // this call leaves no trace of a debit that never happened.
-      await db.delete(walletTransactions).where(eq(walletTransactions.idempotencyKey, key));
-      return { ok: true, applied: false, duplicate: false, drainedMicros: 0, shortfallMicros: amount };
-    }
-
-    // The retry succeeded with a re-split `drained` that can differ from the
-    // amount the ledger row was inserted with (split.drainedMicros, from the
-    // FIRST balance read). Bring the row into agreement with the money that
-    // ACTUALLY moved — the ledger must never overstate a drain.
-    await db
-      .update(walletTransactions)
-      .set({ amountMicros: drained })
-      .where(eq(walletTransactions.idempotencyKey, key));
-  }
-
-  return { ok: true, applied: true, duplicate: false, drainedMicros: drained, shortfallMicros: shortfall };
 }
 
 /**
@@ -419,7 +433,13 @@ export async function debitVoiceUsage(args: {
  * <monthKey>` — replaying the same month is a no-op. NEVER NEGATIVE: the
  * balance UPDATE carries a `WHERE balance_micros >= amount` guard; if the
  * balance can't cover it, 0 rows update and we DELETE the just-inserted ledger
- * row (so rent can be retried once funded) and return "insufficient".
+ * row (so rent can be retried once funded) and return "insufficient". Runs
+ * inside ONE withOrgRls tx.
+ *
+ * Called by /api/cron/voice-rent per-deployment, each with THAT deployment's
+ * own orgId — the cron's overall sweep is cross-org, but each individual
+ * debitNumberRent call here is correctly single-org-scoped (see this plan's
+ * Locate-first item 5 for why the cron itself needs no other change).
  */
 export async function debitNumberRent(args: {
   orgId: string;
@@ -434,65 +454,62 @@ export async function debitNumberRent(args: {
   const monthKey = (args.monthKey ?? "").trim();
   if (!deploymentId || !monthKey) return { ok: false, reason: "invalid" };
 
-  // A 0-cost rent draws nothing down — success, no ledger row.
-  if (amount <= 0) {
+  return withOrgRls(args.orgId, async (db) => {
+    if (amount <= 0) {
+      return {
+        ok: true,
+        balanceMicros: await getWalletBalanceMicros(args.orgId, stripeMode, db),
+        applied: false,
+        duplicate: false,
+      };
+    }
+
+    await ensureWallet(args.orgId, stripeMode, db);
+    const key = `rent:${deploymentId}:${monthKey}`;
+
+    const fresh = await insertLedgerRow(db, {
+      orgId: args.orgId,
+      kind: "number_rent",
+      amountMicros: amount,
+      idempotencyKey: key,
+    });
+
+    if (!fresh) {
+      return {
+        ok: true,
+        balanceMicros: await getWalletBalanceMicros(args.orgId, stripeMode, db),
+        applied: false,
+        duplicate: true,
+      };
+    }
+
+    const decremented = await db
+      .update(walletAccounts)
+      .set({
+        balanceMicros: sql`${walletAccounts.balanceMicros} - ${amount}`,
+        updatedAt: new Date(),
+      })
+      .where(
+        and(
+          eq(walletAccounts.orgId, args.orgId),
+          eq(walletAccounts.stripeMode, stripeMode),
+          sql`${walletAccounts.balanceMicros} >= ${amount}`,
+        ),
+      )
+      .returning({ balanceMicros: walletAccounts.balanceMicros });
+
+    if (decremented.length === 0) {
+      await db.delete(walletTransactions).where(eq(walletTransactions.idempotencyKey, key));
+      return { ok: false, reason: "insufficient" };
+    }
+
     return {
       ok: true,
-      balanceMicros: await getWalletBalanceMicros(args.orgId, stripeMode),
-      applied: false,
+      balanceMicros: nonNegMicros(decremented[0]?.balanceMicros ?? 0),
+      applied: true,
       duplicate: false,
     };
-  }
-
-  await ensureWallet(args.orgId, stripeMode);
-  const key = `rent:${deploymentId}:${monthKey}`;
-
-  const fresh = await insertLedgerRow({
-    orgId: args.orgId,
-    kind: "number_rent",
-    amountMicros: amount,
-    idempotencyKey: key,
   });
-
-  if (!fresh) {
-    // This deployment's rent for this month already debited — no-op.
-    return {
-      ok: true,
-      balanceMicros: await getWalletBalanceMicros(args.orgId, stripeMode),
-      applied: false,
-      duplicate: true,
-    };
-  }
-
-  // ATOMIC, NEVER-NEGATIVE decrement: only subtract when the balance covers it.
-  const decremented = await db
-    .update(walletAccounts)
-    .set({
-      balanceMicros: sql`${walletAccounts.balanceMicros} - ${amount}`,
-      updatedAt: new Date(),
-    })
-    .where(
-      and(
-        eq(walletAccounts.orgId, args.orgId),
-        eq(walletAccounts.stripeMode, stripeMode),
-        sql`${walletAccounts.balanceMicros} >= ${amount}`,
-      ),
-    )
-    .returning({ balanceMicros: walletAccounts.balanceMicros });
-
-  if (decremented.length === 0) {
-    // Guard failed — the balance can't cover it. Roll back the ledger row so
-    // this month's rent can be retried after a top-up.
-    await db.delete(walletTransactions).where(eq(walletTransactions.idempotencyKey, key));
-    return { ok: false, reason: "insufficient" };
-  }
-
-  return {
-    ok: true,
-    balanceMicros: nonNegMicros(decremented[0]?.balanceMicros ?? 0),
-    applied: true,
-    duplicate: false,
-  };
 }
 
 /**
@@ -501,7 +518,8 @@ export async function debitNumberRent(args: {
  * the builder is owed; the actual payout via Connect is a follow-up. It does NOT
  * move the renter's balance (the debit already did) and adds to the SELLER org's
  * earnings ledger only — so it credits the seller wallet's running total of what
- * they've earned. Never throws on a duplicate.
+ * they've earned. Never throws on a duplicate. Scoped to the SELLER org's
+ * withOrgRls context (the org whose earnings ledger this row belongs to).
  */
 export async function accrueBuilderEarning(args: {
   sellerOrgId: string;
@@ -509,35 +527,39 @@ export async function accrueBuilderEarning(args: {
   netMicros: number;
   stripeMode?: MarketplaceStripeMode;
 }): Promise<{ ok: true; applied: boolean }> {
-  const stripeMode = args.stripeMode ?? "test";
   const amount = nonNegMicros(args.netMicros);
   const runId = (args.runId ?? "").trim();
   if (amount <= 0 || !runId) return { ok: true, applied: false };
 
-  const fresh = await insertLedgerRow({
-    orgId: args.sellerOrgId,
-    kind: "earning",
-    amountMicros: amount,
-    idempotencyKey: `earning:${runId}`,
-    runId,
+  return withOrgRls(args.sellerOrgId, async (db) => {
+    const fresh = await insertLedgerRow(db, {
+      orgId: args.sellerOrgId,
+      kind: "earning",
+      amountMicros: amount,
+      idempotencyKey: `earning:${runId}`,
+      runId,
+    });
+    return { ok: true, applied: fresh };
   });
-  return { ok: true, applied: fresh };
 }
 
-/** Sum a builder's accrued earnings (micro-dollars) across all `earning` rows. */
+/** Sum a builder's accrued earnings (micro-dollars) across all `earning` rows.
+ *  Scoped to the seller org's withOrgRls context. */
 export async function getBuilderEarningsMicros(sellerOrgId: string): Promise<number> {
-  const [row] = await db
-    .select({
-      total: sql<string>`COALESCE(SUM(${walletTransactions.amountMicros}), 0)`,
-    })
-    .from(walletTransactions)
-    .where(
-      and(
-        eq(walletTransactions.orgId, sellerOrgId),
-        eq(walletTransactions.kind, "earning"),
-      ),
-    );
-  return nonNegMicros(Number(row?.total ?? 0));
+  return withOrgRls(sellerOrgId, async (db) => {
+    const [row] = await db
+      .select({
+        total: sql<string>`COALESCE(SUM(${walletTransactions.amountMicros}), 0)`,
+      })
+      .from(walletTransactions)
+      .where(
+        and(
+          eq(walletTransactions.orgId, sellerOrgId),
+          eq(walletTransactions.kind, "earning"),
+        ),
+      );
+    return nonNegMicros(Number(row?.total ?? 0));
+  });
 }
 
 /**
@@ -547,16 +569,18 @@ export async function getBuilderEarningsMicros(sellerOrgId: string): Promise<num
  * idempotency high-water mark). Org-scoped, mode-agnostic (mirrors the gross reader).
  */
 export async function getWithdrawableEarningsMicros(sellerOrgId: string): Promise<number> {
-  const [row] = await db
-    .select({
-      total: sql<string>`COALESCE(SUM(CASE
-        WHEN ${walletTransactions.kind} = 'earning' THEN ${walletTransactions.amountMicros}
-        WHEN ${walletTransactions.kind} = 'payout' THEN -${walletTransactions.amountMicros}
-        ELSE 0 END), 0)`,
-    })
-    .from(walletTransactions)
-    .where(eq(walletTransactions.orgId, sellerOrgId));
-  return nonNegMicros(Number(row?.total ?? 0));
+  return withOrgRls(sellerOrgId, async (db) => {
+    const [row] = await db
+      .select({
+        total: sql<string>`COALESCE(SUM(CASE
+          WHEN ${walletTransactions.kind} = 'earning' THEN ${walletTransactions.amountMicros}
+          WHEN ${walletTransactions.kind} = 'payout' THEN -${walletTransactions.amountMicros}
+          ELSE 0 END), 0)`,
+      })
+      .from(walletTransactions)
+      .where(eq(walletTransactions.orgId, sellerOrgId));
+    return nonNegMicros(Number(row?.total ?? 0));
+  });
 }
 
 /**
@@ -570,7 +594,8 @@ export async function getWithdrawableEarningsMicros(sellerOrgId: string): Promis
  * `referral:referee:<refereeOrgId>`), one per side of the referral, so each
  * side can be credited independently and idempotently. Idempotent on
  * `idempotencyKey`: a replayed call (maybeCreditReferral called twice for an
- * already-credited referee) is a no-op that credits ONCE. Never throws.
+ * already-credited referee) is a no-op that credits ONCE. Never throws. Runs
+ * inside ONE withOrgRls tx.
  */
 export async function creditReferralToWallet(args: {
   orgId: string;
@@ -583,40 +608,41 @@ export async function creditReferralToWallet(args: {
   const key = (args.idempotencyKey ?? "").trim();
   if (amount <= 0 || !key) return { ok: false, reason: "invalid" };
 
-  await ensureWallet(args.orgId, stripeMode);
+  return withOrgRls(args.orgId, async (db) => {
+    await ensureWallet(args.orgId, stripeMode, db);
 
-  const fresh = await insertLedgerRow({
-    orgId: args.orgId,
-    kind: "referral_credit",
-    amountMicros: amount,
-    idempotencyKey: key,
-  });
+    const fresh = await insertLedgerRow(db, {
+      orgId: args.orgId,
+      kind: "referral_credit",
+      amountMicros: amount,
+      idempotencyKey: key,
+    });
 
-  if (!fresh) {
-    // Duplicate — credited already. Return the current balance, money unchanged.
+    if (!fresh) {
+      return {
+        ok: true,
+        balanceMicros: await getWalletBalanceMicros(args.orgId, stripeMode, db),
+        applied: false,
+        duplicate: true,
+      };
+    }
+
+    const [updated] = await db
+      .update(walletAccounts)
+      .set({
+        balanceMicros: sql`${walletAccounts.balanceMicros} + ${amount}`,
+        updatedAt: new Date(),
+      })
+      .where(and(eq(walletAccounts.orgId, args.orgId), eq(walletAccounts.stripeMode, stripeMode)))
+      .returning({ balanceMicros: walletAccounts.balanceMicros });
+
     return {
       ok: true,
-      balanceMicros: await getWalletBalanceMicros(args.orgId, stripeMode),
-      applied: false,
-      duplicate: true,
+      balanceMicros: nonNegMicros(updated?.balanceMicros ?? 0),
+      applied: true,
+      duplicate: false,
     };
-  }
-
-  const [updated] = await db
-    .update(walletAccounts)
-    .set({
-      balanceMicros: sql`${walletAccounts.balanceMicros} + ${amount}`,
-      updatedAt: new Date(),
-    })
-    .where(and(eq(walletAccounts.orgId, args.orgId), eq(walletAccounts.stripeMode, stripeMode)))
-    .returning({ balanceMicros: walletAccounts.balanceMicros });
-
-  return {
-    ok: true,
-    balanceMicros: nonNegMicros(updated?.balanceMicros ?? 0),
-    applied: true,
-    duplicate: false,
-  };
+  });
 }
 
 /**
@@ -624,7 +650,7 @@ export async function creditReferralToWallet(args: {
  * Idempotent on `payout:<transferId>` (the wallet ledger's UNIQUE dedupe backstop):
  * a re-record of the same Stripe transfer is a no-op → one transfer maps to exactly
  * one ledger row even if recordBuilderPayout is retried after a mid-flight crash.
- * Never throws on a duplicate.
+ * Never throws on a duplicate. Scoped to the payee org's withOrgRls context.
  */
 export async function recordBuilderPayout(args: {
   orgId: string;
@@ -635,12 +661,14 @@ export async function recordBuilderPayout(args: {
   const transferId = (args.transferId ?? "").trim();
   if (amount <= 0 || !transferId) return { ok: true, applied: false };
 
-  const fresh = await insertLedgerRow({
-    orgId: args.orgId,
-    kind: "payout",
-    amountMicros: amount,
-    idempotencyKey: `payout:${transferId}`,
-    stripeRef: transferId,
+  return withOrgRls(args.orgId, async (db) => {
+    const fresh = await insertLedgerRow(db, {
+      orgId: args.orgId,
+      kind: "payout",
+      amountMicros: amount,
+      idempotencyKey: `payout:${transferId}`,
+      stripeRef: transferId,
+    });
+    return { ok: true, applied: fresh };
   });
-  return { ok: true, applied: fresh };
 }
