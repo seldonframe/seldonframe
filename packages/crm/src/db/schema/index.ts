@@ -160,3 +160,9 @@ export * from "./marketplace-purchases";
 // double-debit (UNIQUE idempotency_key), inert without a Stripe key. See
 // lib/build/wallet-ledger.ts + lib/build/wallet-store.ts.
 export * from "./wallet";
+
+// 2026-07-02 — Improve verb + trust rail (migration 0060): eval_runs (durable
+// eval-suite results, manual/improve/publish-gate) + agent_improve_proposals
+// (propose-only blueprint patch + failure-cluster rationale, applied ONLY by
+// applyImproveProposal). Additive. See db/schema/eval-runs.ts.
+export * from "./eval-runs";

@@ -104,6 +104,21 @@ export const blockRatings = pgTable(
   ]
 );
 
+// 2026-07-02 — Improve verb + trust rail. The marketplace buyer-facing trust
+// badge: a snapshot of a listing's latest eval score + how often the
+// improve verb's proposals get accepted, computed from eval_runs /
+// agent_improve_proposals and cached here so listing pages don't join
+// against those tables on every render. Nullable — absent = no eval history
+// yet (pre-badge listings render unchanged).
+export type ListingTrustStats = {
+  evalPassRate: number;
+  scenarioCount: number;
+  graderModel: string | null;
+  lastRunAt: string;
+  runsCount: number;
+  improveAcceptRate: number | null;
+};
+
 export const marketplaceListings = pgTable(
   "marketplace_listings",
   {
@@ -155,6 +170,9 @@ export const marketplaceListings = pgTable(
     stripeConnectAccountId: text("stripe_connect_account_id"),
     isPublished: boolean("is_published").notNull().default(false),
     isFeatured: boolean("is_featured").notNull().default(false),
+    // Cached trust-badge snapshot (eval pass rate + improve accept rate).
+    // Nullable — absent means no eval history yet.
+    trustStats: jsonb("trust_stats").$type<ListingTrustStats | null>(),
     createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
     updatedAt: timestamp("updated_at", { withTimezone: true }).notNull().defaultNow(),
   },
