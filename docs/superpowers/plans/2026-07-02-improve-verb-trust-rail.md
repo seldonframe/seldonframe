@@ -232,7 +232,12 @@ export type ImproveRunDeps = {
   env: { sampleSize: number; maxScenarios: number; patchMaxBytes: number };
 };
 export type ImproveRunResult =
-  | { ok: true; proposalId: string | null; baseline: { passRate: number; total: number }; candidate: { passRate: number; total: number } | null; clusters: FailureCluster[]; note?: string }
+  | { ok: true; proposalId: string | null; baseline: { passRate: number; total: number }; candidate: { passRate: number; total: number } | null;
+      /** Research addendum §1: per-scenario flips between baseline and candidate on the IDENTICAL scenario set (paired differences — arxiv 2411.00640). null when no candidate ran. */
+      paired: { improved: number; regressed: number; unchanged: number; criticalRegressed: boolean } | null;
+      /** Research addendum §2 small-N honesty: "better" ONLY when improved-regressed >= 3 AND !criticalRegressed; else "inconclusive". */
+      verdict: "better" | "inconclusive" | "worse" | null;
+      clusters: FailureCluster[]; note?: string }
   | { ok: false; reason: "agent_not_found" | "no_conversations" | "no_scenarios" | string };
 export async function runImproveForAgent(args: { agentId: string; orgId: string }, deps: ImproveRunDeps): Promise<ImproveRunResult>;
 ```
@@ -240,7 +245,7 @@ export async function runImproveForAgent(args: { agentId: string; orgId: string 
 - The real-deps assembly (T9) implements `runEvals` by calling `runDeployedAgentEvals` with a `loadAgent` dep that returns the shadow blueprint when provided — the runner itself is untouched.
 
 **Steps:**
-- [ ] TDD with full fakes (the big spec, ~10 cases): happy path persists 2 runs + 1 proposal with correct kinds/versions; perfect baseline → no proposal, note set; proposer null → ok with proposalId null + note; guardrail rejection → same; runEvals guard (`agent_has_connectors_unsafe`) → ok:false with that reason; no conversations → `no_conversations`; scenario cap enforced; deterministic scenarios precede LLM ones; persistence failure → ok:false not throw; candidate never runs when patch invalid.
+- [ ] TDD with full fakes (the big spec, ~12 cases): happy path persists 2 runs + 1 proposal with correct kinds/versions; perfect baseline → no proposal, note set; proposer null → ok with proposalId null + note; guardrail rejection → same; runEvals guard (`agent_has_connectors_unsafe`) → ok:false with that reason; no conversations → `no_conversations`; scenario cap enforced; deterministic scenarios precede LLM ones; persistence failure → ok:false not throw; candidate never runs when patch invalid; PAIRED: per-scenario flip counts computed by scenario id across the two runs (2 improved 1 regressed 5 unchanged fixture) and `verdict` follows the honesty rule (net<3 → "inconclusive"; any critical-validator scenario regressing → never "better"; net<=-3 → "worse").
 - [ ] Implement.
 - [ ] Specs PASS → tsc → commit: `feat(improve): DI orchestrator — baseline/shadow-candidate replay + propose-only persistence (TDD)`
 
@@ -302,7 +307,7 @@ export async function dismissImproveProposalAction(proposalId: string): Promise<
 
 **Steps:**
 - [ ] TDD `diffBlueprintFields` (changed field, unchanged omitted, array field serialization).
-- [ ] Panel: "Improve" button → `runImproveAction` → renders clusters (mode + count + evidence), baseline→candidate score delta, field diff, Apply / Dismiss buttons wired to the T9 actions. Loading + error states per run-evals.tsx conventions.
+- [ ] Panel: "Improve" button → `runImproveAction` → renders clusters (mode + count + evidence), the PAIRED flip counts ("3 scenarios improved · 1 regressed · 20 unchanged") with the verdict chip — "better" green ONLY per the honesty rule; "inconclusive" renders as neutral with the literal copy "Small sample — apply on judgment, not on the score." — then field diff, Apply / Dismiss wired to T9. Loading + error states per run-evals.tsx conventions. Never render an aggregate percentage as the headline (small-N honesty).
 - [ ] tsc → use-server → commit: `feat(studio): improve panel — clusters, score delta, field diff, apply/dismiss`
 
 ### Task 13: trust_stats copy-through + buyer badge

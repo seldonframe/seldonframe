@@ -160,9 +160,65 @@ an agency asks) · DSPy-style auto-optimization of prompts (improve v2) ·
 listing accept-rate display (stub only) · a general observability UI (we are
 not building a LangSmith).
 
-## Research addendum (lands when wf_542c3413-bc8 completes)
+## Research addendum (wf_542c3413-bc8 — 22 adversarially-verified claims, 2026-07-03)
 
-Parameters research refines WITHOUT restructuring: sample size + stratification
-(§1), grader bias mitigations + minimum-N for meaningful deltas (§2), final
-failure taxonomy (§3), badge copy/design + anti-gaming details (§4), per-turn
-telemetry attribute set (§5), any rejected-practice warnings (§6).
+**Design validated by primary sources:**
+- The loop shape is the documented industry pattern: LangSmith's production
+  workflow is literally "add failing production traces to your dataset, create
+  targeted evaluators, validate fixes with offline experiments, redeploy"
+  (docs.langchain.com/langsmith/evaluation). Langfuse prescribes the same
+  failure-driven sampling.
+- Sizing: Anthropic — "20-50 simple tasks drawn from real failures is a great
+  start"; LangSmith — 10–20 curated examples. Our sample 50 / max 24 scenarios
+  is right-sized (anthropic.com/engineering/demystifying-evals-for-ai-agents).
+- Signal-driven sampling (validator-failed + negative signals first, never
+  random) matches LangSmith's negative-feedback/errors/LLM-flagged guidance.
+  ADDITION: `agentConversations.operatorQuality` negative marks are a
+  second-priority sampling signal after validator failures.
+- Deterministic-over-judge: Anthropic explicitly ("deterministic graders where
+  possible, LLM graders where necessary… closely calibrated with human
+  experts"). Naked judges fail objective grading 70% of the time; REFERENCE-
+  GUIDED judging cuts that to 15% (MT-Bench, arxiv 2306.05685) — our grader is
+  already criteria-anchored; keep pricing/state checks deterministic, always.
+- Propose-only + human gate mirrors LangSmith's annotation-queue norm (a human
+  sits between production traces and the suite).
+
+**Parameter changes adopted:**
+1. **Paired-differences scoring** (arxiv 2411.00640): before/after runs replay
+   the SAME scenario set, so report per-scenario flips
+   (`paired { improved, regressed, unchanged }`) — a "free" variance reduction
+   vs comparing aggregate rates.
+2. **Small-N honesty rule:** a 3pp delta needs ~969 questions at 80% power; at
+   N≈24 only large effects are real. Display rule: the candidate is called
+   "better" ONLY if net flips ≥ 3 AND no critical-validator scenario regressed;
+   otherwise "inconclusive — apply on judgment, not on the score."
+3. **Cheap-grader verbosity guard** (arxiv 2306.05685: cheap judges are fooled
+   by padded answers 91.3% vs 8.7% for frontier): the grader rubric must state
+   "longer is not better; judge ONLY against the listed criteria; padding and
+   repetition are not evidence of success." Verify score-llm.ts's prompt has
+   an equivalent line; add it if absent (one-line, guarded by its existing
+   specs).
+4. Independent-grader posture (self-preference bias, arxiv 2404.13076) is
+   directionally satisfied (Haiku ≠ generator model) but same-family; ACCEPTED
+   RISK v1, with human calibration of the grader against operator labels
+   queued as an improve-v2 item.
+
+**Explicitly rejected for our stage (evidence-backed):**
+- Pairwise judging instead of rubric scoring — the pairwise-beats-rubric claim
+  was REFUTED 0-3 in verification; keep absolute criteria-anchored scoring +
+  paired flips.
+- Embedding+k-means clustering machinery (Clio-scale, 94% reconstruction at
+  ~20k transcripts) — at ≤24 failures/run, deterministic validator buckets +
+  direct LLM labels win; revisit only at fleet scale.
+- Auto-apply of patches at any threshold — no source supports it; every
+  documented loop keeps a human gate.
+- Large synthetic suites — small, curated, real-failure sets are the
+  documented best practice at this stage.
+- Significance claims on small-N score deltas (see honesty rule).
+
+Taxonomy note: our 7 symptom/domain modes stay (more patch-actionable for SMB
+agents than MAST's 14 system modes or AgentErrorTaxonomy's 5 module modes —
+both noted as v2 candidates once volume justifies finer granularity).
+Marketplace-trust evidence came back thin (that research angle produced no
+surviving claims) — the badge design stands on first-principles anti-gaming:
+platform-computed only, never self-reported, absent > faked.
