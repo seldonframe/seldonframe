@@ -191,6 +191,18 @@ Code at any time:
 - \`run_agent_evals\` — manual eval suite trigger
 - \`replay_conversation\` — re-run a past chat against current blueprint
 
+### v1.59.0 — the builder ladder gains a 5th verb: improve
+
+The full ladder is now **build → test → deploy → sell → improve**. Once
+an agent has real conversation history, \`improve_agent({ agent_id })\`
+replays it as graded evals, clusters the failure modes, and proposes a
+blueprint patch with paired before/after scores — never applying
+anything on its own. Review the proposal with the operator, then call
+\`apply_improvement({ proposal_id })\` if it looks good. Treat an
+\"inconclusive\" verdict as a real answer, not a soft failure — small
+samples can't support a confident "better," so apply on judgment, not
+on the score.
+
 The dashboard surfaces (\`/agents\`, \`/agents/[id]/test\`, \`/agents/[id]/settings\`,
 \`/agents/[id]/evals\`, \`/agents/[id]/conversations\`) provide the same view
 without leaving the browser — operators iterate FAQ/pricing/greeting inline
@@ -464,6 +476,24 @@ further natural-language requests ("change the headline to …",
   title, description.
 - **\`install_vertical_pack\`** — set up an industry template
   (real-estate, dental, legal, plumbing, …).
+- **\`improve_agent\`** (v1.59.0) — replays an agent's recent REAL
+  conversations as graded evals, clusters the failure modes, and
+  proposes a blueprint patch with paired before/after scores; it never
+  applies anything by itself. Takes 1-3 minutes (two eval replay
+  passes) and needs the workspace's own Anthropic key (BYOK), same gate
+  as \`run_agent_evals\`. Treat verdict='inconclusive' as an honest
+  answer, not a failure — the sample is too small to call "better," so
+  relay it to the operator as "small sample — apply on judgment, not
+  on the score."
+- **\`apply_improvement\`** (v1.59.0) — applies a proposal from
+  \`improve_agent\`'s \`proposalId\` after the operator reviews it,
+  re-validating the patch against the current blueprint and creating a
+  new version, exactly like \`update_agent_blueprint\`. This is the
+  ONLY tool that can move an improve proposal onto the live blueprint —
+  \`improve_agent\` is propose-only by construction. Re-run
+  \`run_agent_evals\` (or \`publish_agent({status:'live'})\`, which
+  auto-evals) after applying to confirm the new version still clears
+  the safety gate.
 - **\`list_contacts\`** / **\`create_contact\`** / **\`update_contact\`** —
   manage the CRM.
 - **\`list_deals\`** / **\`create_deal\`** / **\`move_deal_stage\`** —

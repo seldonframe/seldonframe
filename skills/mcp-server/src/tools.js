@@ -4852,6 +4852,78 @@ export const TOOLS = [
     },
   },
 
+  // ───────────────────────────────────────────────────────────────────────
+  // v1.59.0 — IMPROVE. The 5th verb of the builder ladder: build → test →
+  // deploy → sell → improve. `improve_agent` replays an agent's own recent
+  // REAL conversations as graded evals against the current blueprint AND a
+  // proposed patch (a shadow candidate), clusters the failure modes, and
+  // hands back a paired before/after score diff — a marketplace-legible
+  // trust signal, not just a debugging tool. `apply_improvement` is the
+  // ONLY way a proposal's patch ever reaches the live blueprint: the pair
+  // together IS the propose-only contract — improve_agent can never apply
+  // anything on its own, by construction (see packages/crm/src/lib/agents/
+  // improve/improve-run.ts — nothing in that module imports
+  // updateAgentBlueprint).
+  // ───────────────────────────────────────────────────────────────────────
+
+  {
+    name: "improve_agent",
+    description:
+      "USE WHEN USER SAYS: 'improve the agent', 'make the chatbot better', 'why does the agent keep messing up', 'learn from real conversations', 'find what's going wrong and fix it', 'run the improve loop'. " +
+      "Replays the agent's recent REAL conversations as graded evals, clusters the failure modes, and PROPOSES a blueprint patch with before/after scores (paired per-scenario flips + an honest verdict — 'inconclusive' means the sample is too small to call). NEVER applies anything — review the proposal, then call apply_improvement. Takes 1-3 minutes (two replay passes). " +
+      "Needs the workspace's OWN Anthropic key (BYOK) — unbounded build/test-tier LLM cost, same gate as run_agent_evals; returns ok:false reason='no_llm_key' (402) if unset, point the operator at configure_llm_provider. " +
+      "Also returns ok:false (422) with a reason string when there's nothing to replay yet: 'no_conversations' (agent hasn't talked to anyone real), 'no_scenarios' (none of the sampled conversations converted cleanly), or 'agent_not_found'. " +
+      "On success (ok:true): `proposalId` is null when the baseline was already perfect ('nothing to improve') or no patch was proposed/it failed guardrails (note explains why) — in those cases there's nothing to apply. Otherwise pass `proposalId` straight to apply_improvement if the operator approves. " +
+      "`verdict` is 'better' ONLY when paired.improved - paired.regressed >= 3 AND no critical scenario regressed; 'worse' on a clear net regression; otherwise 'inconclusive' — AT THAT SAMPLE SIZE ONLY LARGE EFFECTS ARE REAL, so relay verdict='inconclusive' to the operator as: 'Small sample — apply on judgment, not on the score.' Never round an inconclusive verdict up to sounding like a pass.",
+    inputSchema: obj(
+      {
+        workspace_id: str("Workspace id (bearer workspace)."),
+        agent_id: str("Agent id from list_agents / create_agent / deploy_agent."),
+      },
+      ["workspace_id", "agent_id"],
+    ),
+    handler: async (args) => {
+      const ws = args.workspace_id;
+      const result = await api("POST", "/build/improve", {
+        body: { agent_id: args.agent_id },
+        workspace_id: ws,
+      });
+      if (result?.ok && result.verdict === "inconclusive") {
+        return {
+          ...result,
+          guidance:
+            "Small sample — apply on judgment, not on the score. The paired flip counts and cluster evidence are real; the verdict just isn't confident enough to call 'better' at this sample size. Read the clusters yourself before deciding whether to apply_improvement.",
+        };
+      }
+      return result;
+    },
+  },
+
+  {
+    name: "apply_improvement",
+    description:
+      "USE WHEN USER SAYS: 'apply that improvement', 'go with the proposed fix', 'apply the patch', 'yes, use the better version', 'accept the improve_agent proposal'. " +
+      "Applies a previously PROPOSED patch (from improve_agent's `proposalId`) after human review — this is the ONLY tool that can move an improve proposal's patch onto the live blueprint. Re-validates the patch against the agent's CURRENT blueprint before writing (it may have moved since the proposal was created) and creates a new agent_versions snapshot, exactly like update_agent_blueprint. " +
+      "Version drift doesn't block the apply — if the blueprint changed since the proposal was made, the result just carries a `note: 'applied over vN'` so you know it landed on a newer base than it was proposed against. " +
+      "Rejects (ok:false, 422) with a reason when the proposal can't be applied: 'not_found' (wrong id/org, or already resolved), 'not_proposed' (already applied or dismissed — improve proposals are one-shot), 'revalidation_failed' (the patch no longer passes the guardrail against the current blueprint). None of these ever touch the blueprint. " +
+      "After applying, the agent is on a new version — suggest re-running run_agent_evals or publish_agent({status:'live'}) (which auto-evals) to confirm the new version still passes the safety gate before the operator relies on it.",
+    inputSchema: obj(
+      {
+        workspace_id: str("Workspace id (bearer workspace)."),
+        proposal_id: str("Proposal id from improve_agent's `proposalId` field."),
+      },
+      ["workspace_id", "proposal_id"],
+    ),
+    handler: async (args) => {
+      const ws = args.workspace_id;
+      const result = await api("POST", "/build/improve/apply", {
+        body: { proposal_id: args.proposal_id },
+        workspace_id: ws,
+      });
+      return result;
+    },
+  },
+
   {
     name: "update_agent_blueprint",
     description:
