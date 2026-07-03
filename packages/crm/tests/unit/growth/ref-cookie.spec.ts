@@ -7,6 +7,7 @@ import assert from "node:assert/strict";
 
 import {
   resolveRefCookieValue,
+  readRefCookieFromHeader,
   REF_COOKIE_NAME,
   REF_COOKIE_MAX_AGE_SECONDS,
   REF_COOKIE_OPTIONS,
@@ -42,6 +43,46 @@ describe("resolveRefCookieValue — capture decision", () => {
 
   test("a DIFFERENT ref than the current cookie → overwrites with the new value", () => {
     assert.equal(resolveRefCookieValue("org_referrer_2", "org_referrer_1"), "org_referrer_2");
+  });
+});
+
+describe("readRefCookieFromHeader — extracting sf_ref from a raw Cookie header", () => {
+  test("absent header → null", () => {
+    assert.equal(readRefCookieFromHeader(null), null);
+    assert.equal(readRefCookieFromHeader(undefined), null);
+    assert.equal(readRefCookieFromHeader(""), null);
+  });
+
+  test("header present but no sf_ref cookie → null", () => {
+    assert.equal(readRefCookieFromHeader("other_cookie=abc; another=def"), null);
+  });
+
+  test("sf_ref is the only cookie", () => {
+    assert.equal(readRefCookieFromHeader("sf_ref=org_referrer_1"), "org_referrer_1");
+  });
+
+  test("sf_ref is one of several cookies, in any position", () => {
+    assert.equal(
+      readRefCookieFromHeader("a=1; sf_ref=org_referrer_1; b=2"),
+      "org_referrer_1",
+    );
+    assert.equal(readRefCookieFromHeader("sf_ref=org_referrer_1; b=2"), "org_referrer_1");
+    assert.equal(readRefCookieFromHeader("a=1; sf_ref=org_referrer_1"), "org_referrer_1");
+  });
+
+  test("URI-decodes the cookie value", () => {
+    assert.equal(
+      readRefCookieFromHeader(`sf_ref=${encodeURIComponent("org with spaces")}`),
+      "org with spaces",
+    );
+  });
+
+  test("a cookie NAMED sf_ref_other is not mistaken for sf_ref", () => {
+    assert.equal(readRefCookieFromHeader("sf_ref_other=nope"), null);
+  });
+
+  test("an empty sf_ref value → null", () => {
+    assert.equal(readRefCookieFromHeader("sf_ref=; b=2"), null);
   });
 });
 

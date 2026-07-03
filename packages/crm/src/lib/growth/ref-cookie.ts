@@ -65,3 +65,23 @@ export function resolveRefCookieValue(
   if (ref === (currentCookieValue ?? "").trim()) return null; // already captured — no-op
   return ref;
 }
+
+/**
+ * Read the sf_ref cookie's value out of a raw `Cookie` request header
+ * string. Pure string parsing (mirrors this repo's existing
+ * readScoreFromCookie idiom in api/v1/access-check/route.ts) so any Route
+ * Handler that has `request.headers.get("cookie")` in scope — e.g. the
+ * anonymous workspace-creation route — can read the referrer's org id
+ * WITHOUT importing next/headers' cookies() API (which is read-write and
+ * heavier than a one-line regex extraction needs to be here).
+ *
+ * Returns null when the header is absent or the cookie isn't present.
+ * Never throws on a malformed header.
+ */
+export function readRefCookieFromHeader(cookieHeader: string | null | undefined): string | null {
+  if (!cookieHeader) return null;
+  const match = cookieHeader.match(/(?:^|;\s*)sf_ref=([^;]+)/);
+  if (!match) return null;
+  const value = decodeURIComponent(match[1] ?? "").trim();
+  return value.length > 0 ? value : null;
+}
