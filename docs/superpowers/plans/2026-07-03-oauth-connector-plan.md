@@ -133,11 +133,15 @@ export const oauthRefreshTokens = pgTable(
 
 2. Add to `packages/crm/src/db/schema/index.ts`: `export * from "./oauth";` (place it alphabetically near the other `export * from "./oauth-ish"` neighbors — check the file for exact ordering convention first; if the barrel isn't alphabetized, just append at the end near `api-keys`).
 
-3. **[AMENDED at execution time — coordinator ruling 2026-07-03.]** Hand-write `drizzle/0063_oauth_clients.sql` — do NOT run `drizzle-kit generate`. Why: this repo's journal-idx and on-disk-filename numbering are independent sequences by long-standing accident (85 `.sql` files on disk vs 40 journal entries; `drizzle-kit generate` derives the filename prefix from the journal count and emitted `0040_oauth_clients.sql`, colliding with the out-of-band `0040_partner_agencies.sql` baseline file), and `generate` is a documented drift gotcha here (it bundles phantom `CREATE` statements for tables that were pushed without migrations). The repo's established convention — how `0060_eval_trust_rail` (idx 37), `0061_referrals` (idx 38), and `0062_wallet_rls` (idx 39) all landed, and what `scripts/check-migrations-journaled.mjs`'s own maintenance notes document — is: a hand-written SQL file whose FILENAME number continues the on-disk sequence (→ `0063`), plus a hand-appended journal entry whose `idx` continues the JOURNAL sequence (→ `idx: 40`). Write the three `CREATE TABLE IF NOT EXISTS` statements + `CREATE INDEX IF NOT EXISTS` indexes transcribed column-for-column from step 1's schema file (the schema file is the source of truth), in `0061_referrals.sql`'s style (header comment, quoted identifiers, idempotent). No `meta/NNNN_snapshot.json` file (0060–0062 have none).
+3. Generate the migration (do NOT hand-write the SQL — let drizzle-kit do it, so the journal entry format is guaranteed correct):
+   ```bash
+   cd packages/crm && npx drizzle-kit generate --name oauth_clients
+   ```
+   Confirm the generated file is named `drizzle/0063_oauth_clients.sql` (drizzle-kit auto-numbers from the journal — this should just work given the confirmed `idx: 39` tail, but verify the output filename before proceeding; if it generates a different number, STOP and re-check whether another migration landed on main since this plan was written).
 
-4. Open the hand-written `.sql` file and confirm it contains exactly three `CREATE TABLE` statements (`oauth_clients`, `oauth_authorization_codes`, `oauth_refresh_tokens`) plus their indexes and FK constraints — no `ALTER TYPE`, no data migration, no RLS `DO $$` blocks (per Global Constraints, no RLS on these tables). Nothing beyond additive `CREATE TABLE IF NOT EXISTS`/`CREATE INDEX IF NOT EXISTS`.
+4. Open the generated `.sql` file and confirm it contains exactly three `CREATE TABLE` statements (`oauth_clients`, `oauth_authorization_codes`, `oauth_refresh_tokens`) plus their indexes and FK constraints — no `ALTER TYPE`, no data migration, no RLS `DO $$` blocks (per Global Constraints, no RLS on these tables). If drizzle-kit emitted anything beyond additive `CREATE TABLE`/`CREATE INDEX`, stop and investigate before proceeding.
 
-5. Hand-append the journal entry to `meta/_journal.json`'s `entries` array (per the same coordinator ruling — drizzle-kit is not involved): `{ "idx": 40, "version": "7", "when": <Date.now() at append time>, "tag": "0063_oauth_clients", "breakpoints": true }`. Verify the JSON still parses and the tail reads idx 40 / `0063_oauth_clients`, and that the diff is a pure tail-append (no whole-file reformat).
+5. Confirm `meta/_journal.json` now has a new trailing entry with `"tag": "0063_oauth_clients"` (drizzle-kit does this automatically — just read the file to confirm, don't hand-edit it).
 
 **Verify:**
 ```bash
