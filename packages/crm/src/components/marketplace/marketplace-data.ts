@@ -13,6 +13,7 @@
 import type { MarketplaceIconName } from "./marketplace-icons";
 import type { MarketplaceAgentRow } from "@/lib/marketplace/agent-listings";
 import { storefrontPriceFromRow } from "@/lib/marketplace/pricing-model";
+import type { ListingTrustStats } from "@/db/schema/marketplace";
 
 // ─── design tokens (the live marketing palette — keep these hex values exact) ─
 
@@ -150,6 +151,14 @@ export type StorefrontAgent = {
   reviews: StorefrontReview[];
   /** Whether this entry is real (DB-backed) or seed fallback. */
   isSeed: boolean;
+  /**
+   * Platform-verified eval badge (Task 13, improve-verb + trust rail). `null`
+   * (or omitted) when the listing's template has never been eval-run — the
+   * buyer detail page must render NO badge in that case, never a fabricated
+   * one. Populated by the seller publish/republish copy-through
+   * (seller-actions.ts's copyThroughTrustStats).
+   */
+  trustStats?: ListingTrustStats | null;
 };
 
 // ─── price + number formatting (matches the design's helpers) ────────────────
@@ -245,6 +254,11 @@ export function rowToStorefrontAgent(row: MarketplaceAgentRow): StorefrontAgent 
     outcome: "Handled end to end · logged to your CRM",
     reviews: [],
     isSeed: false,
+    // Defensive: `row.trustStats` may be absent on a MarketplaceAgentRow built
+    // by an older/partial caller, and is null on every row until a seller
+    // publish/republish runs the copy-through — either way this reads as "no
+    // badge" (`?? null`), never a fabricated one.
+    trustStats: row.trustStats ?? null,
   };
 }
 
@@ -311,6 +325,9 @@ export function buildPreviewStorefrontAgent(input: ListingPreviewInput): Storefr
     outcome: "",
     reviews: [],
     isSeed: false,
+    // A live in-progress draft never has real eval history to show — no badge
+    // in the preview, ever (same anti-gaming rule as the live listing).
+    trustStats: null,
   };
 }
 

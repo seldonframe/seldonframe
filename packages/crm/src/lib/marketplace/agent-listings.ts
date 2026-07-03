@@ -12,7 +12,7 @@
 // The two "use server" actions live in actions.ts and are thin org-guard + db
 // wiring over these helpers.
 
-import type { marketplaceListings } from "@/db/schema/marketplace";
+import type { marketplaceListings, ListingTrustStats } from "@/db/schema/marketplace";
 import type { AgentTemplate, NewAgentTemplate } from "@/db/schema/agent-templates";
 import type { AgentTemplateType } from "@/lib/agent-templates/store";
 import type { AgentBlueprint } from "@/db/schema/agents";
@@ -156,6 +156,12 @@ export type MarketplaceAgentRow = {
   reviewCount: number;
   isFeatured: boolean;
   previewImageUrl: string | null;
+  /** Platform-verified eval badge snapshot (Task 13, improve-verb + trust
+   *  rail). Optional/nullable — most existing rows have never had the
+   *  copy-through run (the column can be null on every row today), and the
+   *  curated seed rows never carry it at all. Absent → the storefront
+   *  renders no badge (never fabricated). */
+  trustStats?: ListingTrustStats | null;
 };
 
 export type ListMarketplaceAgentsFilters = {
@@ -244,6 +250,7 @@ function buildDefaultListAgentsDeps(): ListMarketplaceAgentsDeps {
           reviewCount: marketplaceListings.reviewCount,
           isFeatured: marketplaceListings.isFeatured,
           previewImageUrl: marketplaceListings.previewImageUrl,
+          trustStats: marketplaceListings.trustStats,
         })
         .from(marketplaceListings)
         .where(and(eq(marketplaceListings.isPublished, true), eq(marketplaceListings.kind, "agent")));

@@ -8,6 +8,14 @@
 // MARKETPLACE_SEED when the published set is empty or the DB is unavailable, so
 // the surface never renders blank. NOT pure (touches the db dep) — the pure
 // Markdown rendering lives in render-markdown.ts and is fed by this.
+//
+// `StorefrontAgent.trustStats` (Task 13, improve-verb + trust rail) flows
+// through this loader untouched: listMarketplaceAgentsFromDb now selects the
+// listing's `trust_stats` column, and rowToStorefrontAgent maps it
+// defensively (`row.trustStats ?? null`) since the column is null on every
+// row until a seller publish/republish runs the copy-through. No change
+// needed HERE beyond that — this loader was already the single pass-through
+// point the plan wanted the field surfaced at.
 
 import { listMarketplaceAgentsFromDb } from "@/lib/marketplace/agent-listings";
 import { MARKETPLACE_SEED } from "@/components/marketplace/marketplace-seed";
