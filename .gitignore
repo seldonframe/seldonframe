@@ -52,5 +52,8 @@ dist/
 .turbo/
 .vercel/
 
+# MCPB desktop-extension bundles (built artifacts, not source)
+*.mcpb
+
 .vercel
 .env*.local

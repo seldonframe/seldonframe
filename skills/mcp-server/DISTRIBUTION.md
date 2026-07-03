@@ -168,6 +168,54 @@ Listing should appear at:
 
 ---
 
+## 6. MCPB desktop bundle — Claude Desktop / Smithery Local / GitHub release
+
+`skills/mcp-server/manifest.json` packages the server as an `.mcpb`
+(MCP Bundle, formerly DXT) — a self-contained zip that Claude Desktop
+installs as a one-click extension. No terminal, no `npx`, no editing
+a JSON config by hand.
+
+### Build
+
+```powershell
+cd C:\Users\maxim\CascadeProjects\"Seldon Frame"\skills\mcp-server
+npm run build:mcpb
+```
+
+This runs `npm ci --omit=dev` (so `node_modules` is present and
+production-only) then `npx @anthropic-ai/mcpb pack . seldonframe.mcpb`.
+The manifest is validated as part of `pack`; to validate on its own:
+
+```powershell
+npx @anthropic-ai/mcpb validate manifest.json
+```
+
+The `.mcpb` file is a build artifact — it's git-ignored (`*.mcpb` in
+the root `.gitignore`) and should not be committed. Rebuild it fresh
+for each release.
+
+### Where to upload
+
+| Channel | Steps |
+|---|---|
+| **Claude Desktop** | Settings → Extensions → "Install from file..." → pick `seldonframe.mcpb`. This is the fastest way to smoke-test the bundle locally before publishing it anywhere. |
+| **Smithery** | On the server's Smithery page, use the **Local (MCPB bundle)** tab (separate from the hosted `smithery.yaml` deploy in step 5 above) and upload `seldonframe.mcpb` directly. |
+| **GitHub release** | Attach `seldonframe.mcpb` as a release asset on the `seldonframe/seldonframe` release for this version, alongside the npm publish. Users can download and drag it into Claude Desktop without installing Node or npm at all. |
+
+### user_config
+
+The bundle exposes two optional fields (mirrors `SELDONFRAME_API_KEY` /
+`SELDONFRAME_API_URL`, same as `smithery.yaml`'s `seldonframeApiKey` /
+`seldonframeApiUrl`):
+
+- **SeldonFrame API Key** (`api_key`, sensitive, not required) — first
+  workspace is free without it; unlocks additional workspaces, custom
+  domains, and marketplace selling.
+- **SeldonFrame API URL** (`api_url`, not required, defaults to
+  `https://app.seldonframe.com`) — for self-hosted deployments.
+
+---
+
 ## After Phase 1
 
 Once the Registry submission lands and the listings appear on

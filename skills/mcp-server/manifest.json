@@ -1,0 +1,70 @@
+{
+  "manifest_version": "0.3",
+  "name": "seldonframe",
+  "display_name": "SeldonFrame",
+  "version": "1.59.2",
+  "description": "Build, deploy, and sell AI agents for local-service businesses — from your IDE. One command creates a live hosted workspace: website, booking page, intake form, CRM, and an AI receptionist, in about 3 minutes.",
+  "long_description": "SeldonFrame is an open-source GoHighLevel alternative for agencies and builders. 146+ MCP tools let Claude spin up a real, hosted business workspace — website, Cal.diy booking, Formbricks intake, CRM, and pre-wired AI agent archetypes (speed-to-lead, missed-call-text-back, review-requester) — in minutes, on a live `<slug>.app.seldonframe.com` subdomain. No guest mode, no local files, no upfront API key: the first workspace is free forever. An API key is only needed later to unlock a second workspace, custom domains, full Brain v2, or publishing to the agent marketplace. AGPL-3.0.",
+  "author": {
+    "name": "SeldonFrame",
+    "url": "https://seldonframe.com"
+  },
+  "homepage": "https://seldonframe.com",
+  "documentation": "https://github.com/seldonframe/seldonframe/blob/main/skills/mcp-server/README.md",
+  "support": "https://github.com/seldonframe/seldonframe/issues",
+  "server": {
+    "type": "node",
+    "entry_point": "src/index.js",
+    "mcp_config": {
+      "command": "node",
+      "args": [
+        "${__dirname}/src/index.js"
+      ],
+      "env": {
+        "SELDONFRAME_API_KEY": "${user_config.api_key}",
+        "SELDONFRAME_API_URL": "${user_config.api_url}"
+      }
+    }
+  },
+  "user_config": {
+    "api_key": {
+      "type": "string",
+      "title": "SeldonFrame API Key",
+      "description": "Optional. First workspace is free without a key. Unlocks more workspaces, custom domains, and marketplace selling.",
+      "sensitive": true,
+      "required": false
+    },
+    "api_url": {
+      "type": "string",
+      "title": "SeldonFrame API URL",
+      "description": "Optional. Override the SeldonFrame API base URL. Defaults to https://app.seldonframe.com. Set for self-hosted deployments.",
+      "sensitive": false,
+      "required": false,
+      "default": "https://app.seldonframe.com"
+    }
+  },
+  "compatibility": {
+    "runtimes": {
+      "node": ">=18.0.0"
+    }
+  },
+  "keywords": [
+    "mcp",
+    "model-context-protocol",
+    "seldonframe",
+    "ai",
+    "agents",
+    "business-os",
+    "crm",
+    "gohighlevel-alternative",
+    "agency",
+    "whitelabel",
+    "booking",
+    "intake-form",
+    "landing-page",
+    "local-service-business",
+    "ai-receptionist",
+    "ai-chatbot"
+  ],
+  "license": "AGPL-3.0-or-later"
+}

@@ -19,7 +19,8 @@
     "start": "node src/index.js",
     "check:syntax": "node --check --input-type=module < src/index.js && node --check --input-type=module < src/client.js && node --check --input-type=module < src/tools.js && node --check --input-type=module < src/welcome.js && node --check --input-type=module < src/security.js",
     "test": "node --test tests/*.test.mjs",
-    "prepublishOnly": "npm run check:syntax && npm run test"
+    "prepublishOnly": "npm run check:syntax && npm run test",
+    "build:mcpb": "npm ci --omit=dev && npx @anthropic-ai/mcpb pack . seldonframe.mcpb"
   },
   "dependencies": {
     "@modelcontextprotocol/sdk": "^1.0.4"
