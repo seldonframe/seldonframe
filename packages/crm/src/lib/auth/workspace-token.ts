@@ -114,19 +114,34 @@ export async function validateRawWorkspaceToken(
   return { orgId: record.orgId, tokenId: record.id };
 }
 
+/**
+ * Extract a candidate workspace token from an Authorization header value.
+ * Standard form is `Bearer wst_…`, but MCP gateway proxies (Smithery's
+ * run.tools, some directory health-checkers) forward the user-supplied key
+ * as the RAW header value with no scheme prefix. Accept a bare `wst_…`
+ * too; any other scheme (Basic, non-wst bearer) returns null so those
+ * requests fall through exactly as before.
+ */
+export function extractWorkspaceToken(auth: string): string | null {
+  const trimmed = auth.trim();
+  const match = trimmed.match(/^Bearer\s+(\S+)$/i);
+  if (match) return match[1];
+  return trimmed.startsWith(TOKEN_PREFIX) && !/\s/.test(trimmed) ? trimmed : null;
+}
+
 export async function resolveWorkspaceBearer(headers: Headers): Promise<ResolvedWorkspaceBearer | null> {
   const auth = headers.get("authorization") ?? headers.get("Authorization");
   if (!auth) return null;
 
-  const match = auth.match(/^Bearer\s+(\S+)$/i);
-  if (!match) return null;
+  const token = extractWorkspaceToken(auth);
+  if (!token) return null;
 
-  return validateRawWorkspaceToken(match[1]);
+  return validateRawWorkspaceToken(token);
 }
 
 export function isWorkspaceBearerPresent(headers: Headers): boolean {
   const auth = headers.get("authorization") ?? headers.get("Authorization");
   if (!auth) return false;
-  const match = auth.match(/^Bearer\s+(\S+)$/i);
-  return Boolean(match && match[1].startsWith(TOKEN_PREFIX));
+  const token = extractWorkspaceToken(auth);
+  return Boolean(token && token.startsWith(TOKEN_PREFIX));
 }

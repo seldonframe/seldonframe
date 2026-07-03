@@ -66,7 +66,7 @@ export async function guardApiRequest(request: Request) {
   // resolveWorkspaceBearer returned null, so the request landed in Mode 2 and the
   // error blamed a header the bearer caller never needed to send.
   const authorization = request.headers.get("authorization") ?? "";
-  if (/^bearer\s+wst_/i.test(authorization.trim())) {
+  if (/^(bearer\s+)?wst_/i.test(authorization.trim())) {
     return {
       error: NextResponse.json(
         {
