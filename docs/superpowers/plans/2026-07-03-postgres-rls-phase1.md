@@ -1333,6 +1333,7 @@ import assert from "node:assert/strict";
 import { Pool } from "@neondatabase/serverless";
 import { drizzle } from "drizzle-orm/neon-serverless";
 import { sql as rawSql } from "drizzle-orm";
+import type { PgDatabase } from "drizzle-orm/pg-core";
 import ws from "ws";
 import { neonConfig } from "@neondatabase/serverless";
 import * as schema from "../../src/db/schema";
@@ -1362,8 +1363,14 @@ if (!APP_URL || !SERVICE_URL) {
    *  itself) so set_config and fn's queries are guaranteed to run on the
    *  SAME physical connection — drizzle(pool, …) round-robins across
    *  connections per query, which would silently detach the SET LOCAL
-   *  context from fn's queries if we passed the pool-backed instance instead. */
-  async function withAppOrgContext<T>(orgId: string | null, fn: (tx: ReturnType<typeof drizzle>) => Promise<T>): Promise<T> {
+   *  context from fn's queries if we passed the pool-backed instance instead.
+   *
+   *  tx is typed with the same driver-agnostic PgDatabase form as RlsDb in
+   *  src/db/rls.ts: ReturnType<typeof drizzle> resolves the generic at its
+   *  DEFAULTS (schema Record<string, unknown>, $client: Pool), which rejects
+   *  a client-built instance ($client: PoolClient) — the same
+   *  generic-parameterization mismatch class the RlsDb fix addressed. */
+  async function withAppOrgContext<T>(orgId: string | null, fn: (tx: PgDatabase<any, typeof schema>) => Promise<T>): Promise<T> {
     const client = await appPool.connect();
     const tx = drizzle(client, { schema, casing: "snake_case" });
     try {
