@@ -149,7 +149,12 @@ const noPromptInjectionEcho: Validator = {
 // "what email did I give?" is fine — it's their own data.)
 
 const EMAIL_PATTERN = /[\w._%+-]+@[\w.-]+\.[A-Z]{2,}/gi;
-const PHONE_PATTERN = /\+?\d{1,3}?[\s.-]?\(?\d{3}\)?[\s.-]?\d{3}[\s.-]?\d{4}/g;
+// 2026-07-03 — the old pattern (`\+?\d{1,3}?[\s.-]?\(?\d{3}\)?...`) could NOT
+// match a bare US "555-123-4567": its country-code digits had no required
+// separator, so every digit allocation collided with the dashes and the whole
+// match failed — bare 10-digit numbers sailed through the PII check. Same
+// corrected pattern as improve/convo-to-scenario.ts (keep them identical).
+const PHONE_PATTERN = /(?:\+?1[\s.-]?)?\(?\d{3}\)?[\s.-]?\d{3}[\s.-]?\d{4}\b/g;
 
 const noPiiLeak: Validator = {
   name: "no_pii_leak",
