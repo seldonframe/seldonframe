@@ -64,6 +64,23 @@ const CORS_HEADERS = {
   "Access-Control-Max-Age": "86400",
 } as const;
 
+// RFC 9728 §5.1 discovery: when the OAuth rail is enabled, the 401 carries a
+// WWW-Authenticate header pointing an MCP client at the protected-resource
+// metadata document (OAuth plan Task 14). Flag off → no header at all, the
+// 401 stays byte-identical to its pre-OAuth shape. The JSON-RPC error BODY
+// is unchanged in both cases.
+const PROTECTED_RESOURCE_METADATA_URL = "https://mcp.seldonframe.com/.well-known/oauth-protected-resource";
+
+function unauthorizedHeaders(): Record<string, string> {
+  if (process.env.SF_OAUTH_ENABLED !== "true") {
+    return CORS_HEADERS;
+  }
+  return {
+    ...CORS_HEADERS,
+    "WWW-Authenticate": `Bearer resource_metadata="${PROTECTED_RESOURCE_METADATA_URL}"`,
+  };
+}
+
 export async function OPTIONS() {
   return new NextResponse(null, { status: 204, headers: CORS_HEADERS });
 }
@@ -120,14 +137,14 @@ export async function POST(request: Request): Promise<Response> {
     // client (which expects a parseable envelope even on transport failure)
     // doesn't just see a bare, unparseable 401 — while still returning the
     // real HTTP 401 status a bearer-auth client checks.
-    return NextResponse.json(unauthorizedRpcBody(), { status: 401, headers: CORS_HEADERS });
+    return NextResponse.json(unauthorizedRpcBody(), { status: 401, headers: unauthorizedHeaders() });
   }
   // Mirrors the exact double-check every /api/v1/build/* route runs (see
   // discover/inspect/run route.ts): guardApiRequest's success shape doesn't
   // guarantee orgId is present just because `error` is falsy, so check it
   // explicitly rather than asserting.
   if (!guard.orgId) {
-    return NextResponse.json(unauthorizedRpcBody(), { status: 401, headers: CORS_HEADERS });
+    return NextResponse.json(unauthorizedRpcBody(), { status: 401, headers: unauthorizedHeaders() });
   }
   const orgId = guard.orgId;
 

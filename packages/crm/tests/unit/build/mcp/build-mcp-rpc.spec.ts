@@ -194,4 +194,49 @@ describe("unauthorizedRpcBody", () => {
     assert.match(error.message, /wst_/);
     assert.match(error.message, /Bearer/);
   });
+
+  // OAuth plan Task 14 — the 401 gains a WWW-Authenticate header pointing at
+  // the RFC 9728 protected-resource metadata document when SF_OAUTH_ENABLED
+  // is "true", and stays byte-identical to the pre-OAuth shape (no header,
+  // same JSON-RPC body) when the flag is off. Exercised through the REAL
+  // route handler: the no-auth guard path never touches the DB (no bearer →
+  // no lookup; missing x-org-id short-circuits before any query), so POSTing
+  // a headerless Request is safe under node:test.
+  test("route 401 carries WWW-Authenticate resource_metadata when SF_OAUTH_ENABLED=true, with the JSON-RPC body unchanged", async () => {
+    const { POST } = await import("../../../../src/app/api/mcp/v1/route");
+    const previous = process.env.SF_OAUTH_ENABLED;
+    try {
+      process.env.SF_OAUTH_ENABLED = "true";
+      const response = await POST(
+        new Request("http://localhost/api/mcp/v1", { method: "POST", body: "{}" })
+      );
+      assert.equal(response.status, 401);
+      assert.equal(
+        response.headers.get("www-authenticate"),
+        'Bearer resource_metadata="https://mcp.seldonframe.com/.well-known/oauth-protected-resource"'
+      );
+      // The body is the exact canonical envelope — the header is ADDITIVE.
+      assert.deepEqual(await response.json(), unauthorizedRpcBody());
+    } finally {
+      if (previous === undefined) delete process.env.SF_OAUTH_ENABLED;
+      else process.env.SF_OAUTH_ENABLED = previous;
+    }
+  });
+
+  test("route 401 has NO WWW-Authenticate header when the flag is off (pre-OAuth shape, body byte-identical)", async () => {
+    const { POST } = await import("../../../../src/app/api/mcp/v1/route");
+    const previous = process.env.SF_OAUTH_ENABLED;
+    try {
+      delete process.env.SF_OAUTH_ENABLED;
+      const response = await POST(
+        new Request("http://localhost/api/mcp/v1", { method: "POST", body: "{}" })
+      );
+      assert.equal(response.status, 401);
+      assert.equal(response.headers.get("www-authenticate"), null);
+      assert.deepEqual(await response.json(), unauthorizedRpcBody());
+    } finally {
+      if (previous === undefined) delete process.env.SF_OAUTH_ENABLED;
+      else process.env.SF_OAUTH_ENABLED = previous;
+    }
+  });
 });
