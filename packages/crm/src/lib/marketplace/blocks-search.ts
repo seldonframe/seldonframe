@@ -13,6 +13,7 @@
 // discover.ts) so it unit-tests with fakes, no Postgres.
 
 import type { MarketplaceAgentRow } from "@/lib/marketplace/agent-listings";
+import { listingUrl } from "@/lib/marketplace/render-markdown";
 
 // ─── scoreBlockMatch — pure term-overlap scorer ──────────────────────────────
 
