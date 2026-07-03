@@ -202,10 +202,15 @@ function failedCheckNames(score: AgentEvalResult["score"] | undefined): string[]
   return checks.filter((c) => c && c.passed === false).map((c) => c.name);
 }
 
-/** Per-scenario assembly metadata the paired computation needs: was this
- *  scenario derived from a critical-validator-failure conversation, and what
- *  are its own mustNotDo prohibitions (for the check-level criterion). */
-type ScenarioMeta = { critical: boolean; mustNotDo: string[] };
+/** Per-scenario assembly metadata the paired computation (and the
+ *  deterministic-bucket wiring below) needs: was this scenario derived from
+ *  a critical-validator-failure conversation, what are its own mustNotDo
+ *  prohibitions (for the check-level criterion), and — carve-out #2 — the
+ *  SOURCE sample's own `failedValidatorNames` (the ConversationSample field
+ *  T4 already derived from real validator results, not a name parsed back
+ *  out of a scenario's failedChecks) so `bucketByValidator` can fire from
+ *  source-of-truth data. Empty for LLM-converted (non-critical) samples. */
+type ScenarioMeta = { critical: boolean; mustNotDo: string[]; failedValidatorNames: string[] };
 
 function passedById(result: RunAgentEvalsResult): Map<string, boolean> {
   const map = new Map<string, boolean>();
@@ -382,6 +387,11 @@ export async function runImproveForAgent(
     scenarioMeta.set(scenario.id, {
       critical: s?.hadCriticalValidatorFailure === true,
       mustNotDo: Array.isArray(scenario.mustNotDo) ? scenario.mustNotDo : [],
+      // Carve-out #2: carry the SOURCE sample's own validator names forward
+      // (T4's already-derived failedValidatorNames), not just the scenario's
+      // rendered mustNotDo prose — this is what lets clustering key off
+      // source-of-truth data rather than parsing a name back out of a check.
+      failedValidatorNames: Array.isArray(s?.failedValidatorNames) ? s.failedValidatorNames : [],
     });
   }
   if (scenarios.length === 0) return { ok: false, reason: "no_scenarios" };
@@ -427,9 +437,24 @@ export async function runImproveForAgent(
     }))
     .filter((f) => f.scenarioId.length > 0);
 
-  const { bucketed, remainder } = bucketByValidator(
-    failed.map(({ scenarioId, failedChecks }) => ({ scenarioId, failedChecks })),
-  );
+  // Carve-out #2: bucketByValidator's input is the UNION of the derived
+  // check names with the scenario's own SOURCE validator names (assembled
+  // at step 3 from the ConversationSample T4 already produced) — so a
+  // deterministic bucket fires from source-of-truth data (the validator that
+  // actually failed on the real conversation), not solely from parsing a
+  // validator name back out of the eval runner's check-name strings. A
+  // scenario with no assembled source names (e.g. an LLM-converted,
+  // non-critical sample) falls back to the derived-only list, unchanged.
+  const bucketInput = failed.map(({ scenarioId, failedChecks }) => {
+    const sourceNames = scenarioMeta.get(scenarioId)?.failedValidatorNames ?? [];
+    if (sourceNames.length === 0) return { scenarioId, failedChecks };
+    return {
+      scenarioId,
+      failedChecks: Array.from(new Set([...failedChecks, ...sourceNames])),
+    };
+  });
+
+  const { bucketed, remainder } = bucketByValidator(bucketInput);
 
   let llmClusters: FailureCluster[] = [];
   if (remainder.length > 0) {

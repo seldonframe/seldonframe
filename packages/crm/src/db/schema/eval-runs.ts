@@ -9,7 +9,7 @@ import {
   uuid,
 } from "drizzle-orm/pg-core";
 import { organizations } from "./organizations";
-import { agents } from "./agents";
+import { agents, type AgentBlueprint } from "./agents";
 
 // ─── eval_runs ──────────────────────────────────────────────────────────────
 //
@@ -113,7 +113,7 @@ export const agentImproveProposals = pgTable(
       .references(() => agents.id, { onDelete: "cascade" }),
     basedOnVersion: integer("based_on_version").notNull(),
     /** Partial<AgentBlueprint> — a PATCH, never the full blueprint. */
-    patch: jsonb("patch").notNull(),
+    patch: jsonb("patch").notNull().$type<Partial<AgentBlueprint>>(),
     /** { clusters: FailureCluster[] } — derived evidence only. */
     rationale: jsonb("rationale").notNull().$type<ImproveProposalRationale>(),
     baselineRunId: uuid("baseline_run_id").references(() => evalRuns.id),

@@ -468,6 +468,46 @@ describe("runImproveForAgent — clustering inputs are derived, names-only", () 
     assert.equal(res.clusters[0].count, 2);
     assert.deepEqual(res.clusters[0].exampleScenarioIds, ["real-llm-c1", "real-llm-c2"]);
   });
+
+  // Carve-out #2 (T9): deterministic buckets must fire from the SOURCE
+  // sample's own `failedValidatorNames`, unioned with the derived check
+  // names — not solely by parsing a validator name back out of the eval
+  // runner's failedChecks strings.
+  test("a scenario whose eval result's failedChecks do NOT name the validator, but whose SOURCE sample DID record it in failedValidatorNames, still lands in the pricing bucket — the LLM clusterer is never invoked for it", async () => {
+    // c1 is critical (its ConversationSample carries
+    // failedValidatorNames: ["quotes_only_from_soul_pricing"] per the shared
+    // `sample()` fixture), but its toScenario/eval-result failedChecks name
+    // only an opaque custom check — a pure name-parse over failedChecks
+    // alone would send this straight to the LLM remainder.
+    const samples = [sample("c1", true)];
+    const baseline = okRun([
+      {
+        id: "real-c1",
+        passed: false,
+        failedChecks: ["custom: price mentioned incorrectly"],
+      },
+    ]);
+    const { deps, recorded } = makeDeps({
+      samples,
+      runEvalsQueue: [baseline],
+      proposePatch: async () => null, // end the run after clustering
+      clusterFailures: async () => {
+        throw new Error("must never be called for this fully-bucketed case");
+      },
+    });
+
+    const res = await run(deps);
+    assert.equal(res.ok, true);
+    if (!res.ok) throw new Error("unreachable");
+
+    // The LLM clusterer never even saw a remainder (never invoked at all —
+    // bucketByValidator claimed 100% of the one failed scenario).
+    assert.equal(recorded.clusterFailuresArgs.length, 0);
+
+    assert.equal(res.clusters.length, 1);
+    assert.equal(res.clusters[0].mode, "pricing");
+    assert.deepEqual(res.clusters[0].exampleScenarioIds, ["real-c1"]);
+  });
 });
 
 // ─── short-circuit + guard paths ──────────────────────────────────────────
@@ -879,6 +919,48 @@ describe("runImproveForAgent — paired flips and the small-N verdict", () => {
       criticalRegressed: false,
     });
     assert.equal(res.verdict, "worse");
+  });
+
+  // Carve-out #3 (T9): the paired join is keyed by scenario id, and per
+  // computePairedFlips's own `if (after === undefined) continue`, a
+  // scenario present in baseline but MISSING from the candidate result set
+  // contributes to NEITHER improved/regressed/unchanged — it's simply
+  // excluded from the pairing, not silently counted as "unchanged" or any
+  // other bucket. Closes T8's review coverage gap for this branch.
+  test("a scenario id present in baseline but OMITTED from the candidate result set counts as neither improved/regressed/unchanged — paired totals sum to the candidate's count, not the baseline's", async () => {
+    const samples = ["c1", "c2", "c3"].map((id) => sample(id));
+    const ids = samples.map((s) => `real-llm-${s.conversationId}`);
+    const baseline = okRun([
+      { id: ids[0], passed: false, failedChecks: ["custom: x"] }, // dropped by the candidate runner
+      { id: ids[1], passed: false, failedChecks: ["custom: x"] }, // → improved
+      { id: ids[2], passed: true }, // → unchanged
+    ]);
+    // The candidate replay's result set OMITS ids[0] entirely (e.g. a runner
+    // that failed to create/replay that one scenario's throwaway
+    // conversation) — this is NOT the same as ids[0] appearing with a
+    // passed/failed verdict; it is simply absent from `results`.
+    const candidate = okRun([
+      { id: ids[1], passed: true },
+      { id: ids[2], passed: true },
+    ]);
+    const { deps } = makeDeps({ samples, runEvalsQueue: [baseline, candidate] });
+
+    const res = await run(deps);
+    assert.equal(res.ok, true);
+    if (!res.ok) throw new Error("unreachable");
+
+    // 3 scenarios replayed in baseline, but only 2 ids are present in BOTH
+    // runs — the dropped id contributes to NONE of the three buckets, so the
+    // paired totals sum to 2 (the candidate's count), not 3.
+    assert.deepEqual(res.paired, {
+      improved: 1,
+      regressed: 0,
+      unchanged: 1,
+      criticalRegressed: false,
+    });
+    const pairedTotal = res.paired!.improved + res.paired!.regressed + res.paired!.unchanged;
+    assert.equal(pairedTotal, candidate.result.results.length);
+    assert.equal(pairedTotal, 2);
   });
 });
 
