@@ -6,7 +6,7 @@ GitHub-OAuth device flow for the MCP Registry and pasting URLs into
 two web forms.
 
 Pre-flight: `@seldonframe/mcp@1.45.1` is published to npm with the
-`mcpName: "io.github.seldonframe/seldonframe-mcp"` property, this
+`mcpName: "io.github.seldonframe/mcp"` property, this
 directory ships `server.json` + `smithery.yaml`, and the README +
 package metadata are in the agency-buyer voice. Phase 0 is complete.
 
@@ -47,7 +47,7 @@ Expected output:
 ```
 Publishing to https://registry.modelcontextprotocol.io...
 ✓ Successfully published
-✓ Server io.github.seldonframe/seldonframe-mcp version 1.45.1
+✓ Server io.github.seldonframe/mcp version 1.45.1
 ```
 
 ### Verify
@@ -56,13 +56,13 @@ Publishing to https://registry.modelcontextprotocol.io...
 curl "https://registry.modelcontextprotocol.io/v0.1/servers?search=seldonframe"
 ```
 
-The response JSON should include `"name":"io.github.seldonframe/seldonframe-mcp"`.
+The response JSON should include `"name":"io.github.seldonframe/mcp"`.
 
 ### Troubleshoot
 
 | Error | Fix |
 |---|---|
-| `Registry validation failed for package` | The `mcpName` in package.json must equal the `name` in server.json. Both are `io.github.seldonframe/seldonframe-mcp`. The npm-published version must equal the server.json version. |
+| `Registry validation failed for package` | The `mcpName` in package.json must equal the `name` in server.json. Both are `io.github.seldonframe/mcp`. The npm-published version must equal the server.json version. |
 | `You do not have permission to publish this server` | The GitHub account you authenticated with must own the `seldonframe` org (or be a member with publish permissions). |
 | `Invalid or expired Registry JWT token` | Re-run `mcp-publisher login github`. |
 
@@ -115,7 +115,7 @@ in the HTML so I can't quote it here verbatim)*
 
 > Hi PulseMCP team,
 >
-> Submitted `io.github.seldonframe/seldonframe-mcp` to the Official
+> Submitted `io.github.seldonframe/mcp` to the Official
 > MCP Registry on [DATE]. Wanted to surface a few things in case it
 > helps your team curate the entry:
 >
@@ -164,7 +164,7 @@ Two steps:
    - Confirm. Smithery builds the entry from the YAML.
 
 Listing should appear at:
-`https://smithery.ai/server/io.github.seldonframe/seldonframe-mcp`
+`https://smithery.ai/server/io.github.seldonframe/mcp`
 
 ---
 

@@ -1,19 +1,19 @@
 {
   "$schema": "https://static.modelcontextprotocol.io/schemas/2025-12-11/server.schema.json",
-  "name": "io.github.seldonframe/seldonframe-mcp",
+  "name": "io.github.seldonframe/mcp",
   "description": "Open-source GoHighLevel alternative for agencies. White-label CRM, booking, intake, chatbot via MCP.",
   "repository": {
     "url": "https://github.com/seldonframe/seldonframe",
     "source": "github",
     "subfolder": "skills/mcp-server"
   },
-  "version": "1.45.1",
+  "version": "1.59.1",
   "websiteUrl": "https://seldonframe.com",
   "packages": [
     {
       "registryType": "npm",
       "identifier": "@seldonframe/mcp",
-      "version": "1.45.1",
+      "version": "1.59.1",
       "transport": {
         "type": "stdio"
       },

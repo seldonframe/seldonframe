@@ -1,6 +1,6 @@
 # Smithery configuration file: https://smithery.ai/docs/config#smitheryyaml
 #
-# Publishes @seldonframe/mcp to https://smithery.ai/server/io.github.seldonframe/seldonframe-mcp
+# Publishes @seldonframe/mcp to https://smithery.ai/server/io.github.seldonframe/mcp
 # The npm package is the artifact; this YAML describes how Smithery should launch it.
 
 startCommand:
