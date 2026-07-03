@@ -171,3 +171,10 @@ export * from "./eval-runs";
 // (UNIQUE(refereeOrgId)). Credits are wallet_transactions rows only (kind
 // 'referral_credit'), never Stripe. See lib/growth/referrals.ts.
 export * from "./referrals";
+
+// 2026-07-03 — OAuth 2.1 + DCR for mcp.seldonframe.com/v1 (migration 0063).
+// Three additive tables — oauth_clients (public-client DCR registrations),
+// oauth_authorization_codes (single-use, PKCE-bound, hashed at rest),
+// oauth_refresh_tokens (rotating, family-linked for reuse detection). Inert
+// behind SF_OAUTH_ENABLED. See docs/superpowers/specs/2026-07-03-oauth-connector-design.md.
+export * from "./oauth";
