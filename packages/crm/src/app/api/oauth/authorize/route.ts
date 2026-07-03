@@ -12,12 +12,21 @@ import { isRedirectUriAllowed } from "@/lib/oauth/redirect-uri";
 import { buildAuthorizationCodeRecord } from "@/lib/oauth/issue-authorization-code";
 import { listWorkspacesForUser } from "@/lib/oauth/workspace-picker";
 import { checkRateLimit } from "@/lib/utils/rate-limit";
+import { isAllowedAuthorizeFetchSite } from "@/lib/oauth/fetch-metadata-guard";
 
 export const runtime = "nodejs";
 
 export async function POST(request: Request) {
   if (process.env.SF_OAUTH_ENABLED !== "true") {
     return new NextResponse(null, { status: 404 });
+  }
+
+  // Explicit Fetch Metadata check, on top of (not instead of) the NextAuth
+  // SameSite=Lax session cookie. Makes the Lax-cookie CSRF assumption
+  // explicit so a future SameSite policy change can't silently reopen
+  // one-click consent CSRF. See lib/oauth/fetch-metadata-guard.ts.
+  if (!isAllowedAuthorizeFetchSite(request.headers.get("sec-fetch-site"))) {
+    return NextResponse.json({ error: "forbidden_cross_site_request" }, { status: 403 });
   }
 
   const session = await auth();

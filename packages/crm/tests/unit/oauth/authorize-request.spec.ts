@@ -1,6 +1,7 @@
 import { describe, it } from "node:test";
 import assert from "node:assert/strict";
 import { parseAuthorizeRequest } from "@/lib/oauth/authorize-request";
+import { isAllowedAuthorizeFetchSite } from "@/lib/oauth/fetch-metadata-guard";
 
 describe("parseAuthorizeRequest", () => {
   const validParams = new URLSearchParams({
@@ -66,5 +67,31 @@ describe("parseAuthorizeRequest", () => {
     const result = parseAuthorizeRequest(validParams);
     assert.equal(result.ok, true);
     if (result.ok) assert.equal(result.value.state, "xyz");
+  });
+});
+
+// 2026-07-03 — security review finding: the /oauth/authorize consent POST
+// relied only on the implicit SameSite=Lax cookie for CSRF protection. The
+// route now also asserts Sec-Fetch-Site explicitly; this covers the pure
+// decision function that assertion delegates to.
+describe("isAllowedAuthorizeFetchSite", () => {
+  it("rejects a cross-site POST", () => {
+    assert.equal(isAllowedAuthorizeFetchSite("cross-site"), false);
+  });
+
+  it("allows a same-origin POST (the normal consent-approve flow)", () => {
+    assert.equal(isAllowedAuthorizeFetchSite("same-origin"), true);
+  });
+
+  it("allows when the header is absent (older clients, unit tests — preserves prior behavior)", () => {
+    assert.equal(isAllowedAuthorizeFetchSite(null), true);
+  });
+
+  it("allows 'none' (direct address-bar navigation sends none, not same-origin)", () => {
+    assert.equal(isAllowedAuthorizeFetchSite("none"), true);
+  });
+
+  it("rejects 'same-site' (a sibling subdomain is still not this exact origin)", () => {
+    assert.equal(isAllowedAuthorizeFetchSite("same-site"), false);
   });
 });

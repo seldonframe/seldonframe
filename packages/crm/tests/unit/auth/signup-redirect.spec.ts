@@ -302,6 +302,25 @@ describe("isSafeInternalRedirect", () => {
     assert.equal(isSafeInternalRedirect("/build/wallet"), true);
   });
 
+  test("allows the OAuth consent return-path with query preserved (round-trips intact)", () => {
+    // 2026-07-03 — a logged-out user is bounced to /login?callbackUrl=<this>
+    // before landing back on the consent screen. Without /oauth/authorize on
+    // the allowlist this collapses to /clients/new and consent is lost.
+    assert.equal(isSafeInternalRedirect("/oauth/authorize"), true);
+    assert.equal(
+      isSafeInternalRedirect("/oauth/authorize?client_id=abc&redirect_uri=https%3A%2F%2Fclient.example.com%2Fcallback"),
+      true,
+    );
+  });
+
+  test("does not over-match lookalike /oauth-* paths (prefix must be exact)", () => {
+    // A naive startsWith("/oauth") entry would wave these through too —
+    // the allowlist must require the FULL /oauth/authorize segment.
+    assert.equal(isSafeInternalRedirect("/oauth-evil"), false);
+    assert.equal(isSafeInternalRedirect("/oauthx"), false);
+    assert.equal(isSafeInternalRedirect("/oauth-evil/authorize"), false);
+  });
+
   test("allows the existing signup-family + onboarding paths", () => {
     assert.equal(isSafeInternalRedirect("/clients/new"), true);
     assert.equal(isSafeInternalRedirect("/clients/new?url=https%3A%2F%2Fx.com&intent=build"), true);

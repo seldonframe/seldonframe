@@ -231,6 +231,13 @@ const SAFE_REDIRECT_PREFIXES = [
   // the allowlist and collapses to /clients/new (the SMB build flow), stranding
   // the builder. Covers /build, /build/keys, and /build/wallet.
   "/build",
+  // 2026-07-03 — OAuth consent return-path. A logged-out user who lands on
+  // /oauth/authorize?client_id=...&redirect_uri=... (a third-party app
+  // requesting access) is bounced to /login?callbackUrl=%2Foauth%2Fauthorize%3F...
+  // first. Without this entry, toInternalRedirectPath nulls the callback and
+  // post-login dumps them on /dashboard instead of back on the consent screen,
+  // silently breaking every OAuth authorization-code flow for logged-out users.
+  "/oauth/authorize",
 ] as const;
 
 /**

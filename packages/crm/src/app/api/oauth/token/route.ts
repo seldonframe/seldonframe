@@ -3,7 +3,7 @@
 // sends both the initial token exchange and refresh requests with this
 // content type" — design doc §1.2). Do NOT parse this as JSON.
 import { NextResponse } from "next/server";
-import { and, eq, inArray, isNull } from "drizzle-orm";
+import { and, eq, inArray, isNull, isNotNull } from "drizzle-orm";
 import crypto from "node:crypto";
 import { db } from "@/db";
 import { apiKeys, oauthAuthorizationCodes, oauthRefreshTokens } from "@/db/schema";
@@ -32,7 +32,12 @@ export async function POST(request: Request) {
   const clientId = String(form.get("client_id") ?? "");
 
   if (!(await checkRateLimit(`oauth:token:${clientId || "unknown"}`, 60, 60_000))) {
-    return NextResponse.json({ error: "invalid_request" }, { status: 429 });
+    // RFC 6749 doesn't define a rate-limit error code, but "slow_down" is the
+    // established convention (used by RFC 8628 device-flow polling and widely
+    // adopted for token-endpoint throttling) — "invalid_request" incorrectly
+    // implies a malformed request, which would make a well-behaved client
+    // retry with different params instead of simply backing off.
+    return NextResponse.json({ error: "slow_down" }, { status: 429 });
   }
 
   if (grantType === "authorization_code") {
@@ -79,28 +84,42 @@ async function handleRefreshTokenGrant(form: FormData, clientId: string): Promis
   if (decision.outcome === "reuse_detected") {
     // Revoke the ENTIRE family — every refresh token descended from the
     // same original grant — plus the access tokens tied to it. This is the
-    // theft-response the design doc §3.2 and §4 both call for. Collect the
-    // family's api_key ids BEFORE revoking so the CURRENTLY-LIVE access
-    // token (the newest row's key, not just the presented old row's) dies
-    // with the refresh chain — an expired apiKeys row makes
-    // resolveWorkspaceBearer 401 immediately on the next MCP call.
-    const familyRows = await db
-      .select({ apiKeyId: oauthRefreshTokens.apiKeyId })
-      .from(oauthRefreshTokens)
-      .where(eq(oauthRefreshTokens.familyId, decision.familyId));
+    // theft-response the design doc §3.2 and §4 both call for.
+    //
+    // 2026-07-03 — security review finding: SELECT-then-revoke-then-expire
+    // (three statements) left a lost-update window — a concurrent rotation
+    // could insert a NEW refresh-token row (with a new apiKeyId) into this
+    // same family between the family SELECT and the api_keys expiry, and
+    // that new row's access token would stay live for up to
+    // ACCESS_TOKEN_EXPIRY_MINUTES (1h) after theft was detected. Fixed by
+    // making the api_keys expiry a single set-based UPDATE driven by a
+    // subquery over the CURRENT family membership at write time (rather than
+    // a snapshot read beforehand), so any row inserted concurrently is still
+    // covered as long as it lands before this statement executes. The
+    // refresh-token revocation itself is already a single set-based
+    // UPDATE ... WHERE family_id = ... AND revoked_at IS NULL, so it already
+    // covers concurrently-inserted rows in the same family.
     await db
       .update(oauthRefreshTokens)
       .set({ revokedAt: new Date() })
       .where(and(eq(oauthRefreshTokens.familyId, decision.familyId), isNull(oauthRefreshTokens.revokedAt)));
-    const familyApiKeyIds = familyRows
-      .map((row) => row.apiKeyId)
-      .filter((value): value is string => Boolean(value));
-    if (familyApiKeyIds.length > 0) {
-      await db
-        .update(apiKeys)
-        .set({ expiresAt: new Date() })
-        .where(inArray(apiKeys.id, familyApiKeyIds));
-    }
+    await db
+      .update(apiKeys)
+      .set({ expiresAt: new Date() })
+      .where(
+        inArray(
+          apiKeys.id,
+          db
+            .select({ apiKeyId: oauthRefreshTokens.apiKeyId })
+            .from(oauthRefreshTokens)
+            .where(
+              and(
+                eq(oauthRefreshTokens.familyId, decision.familyId),
+                isNotNull(oauthRefreshTokens.apiKeyId),
+              ),
+            ),
+        ),
+      );
     return NextResponse.json({ error: "invalid_grant" }, { status: 400 });
   }
 
