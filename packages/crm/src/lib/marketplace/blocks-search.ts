@@ -97,11 +97,13 @@ export type SearchBlocksDeps = {
   listAgents: () => Promise<BlockSearchRow[]>;
 };
 
-/** The canonical public listing URL for a block (per the virality-pack spec:
- *  the marketing host, not the app host — this is what an end user or a
- *  pasted share link should point at). */
+/** The canonical public listing URL for a block — delegates to the SAME
+ *  helper every other emitted marketplace URL uses (render-markdown's
+ *  listingUrl on MARKETPLACE_BASE_URL). One canonical host, no drift; the
+ *  plan's literal www. host was the drift (both hosts serve 200 today, but
+ *  the codebase canon is the app host). */
 function blockUrl(slug: string): string {
-  return `https://www.seldonframe.com/marketplace/${slug}`;
+  return listingUrl(slug);
 }
 
 function toResult(row: BlockSearchRow): BlockSearchResult {

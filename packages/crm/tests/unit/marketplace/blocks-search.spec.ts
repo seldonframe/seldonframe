@@ -209,7 +209,7 @@ describe("searchBlocks — output shape", () => {
     assert.equal(typeof r.description, "string");
     assert.equal(r.niche, "Receptionist");
     assert.equal(r.kind, "agent");
-    assert.equal(r.url, "https://www.seldonframe.com/marketplace/voice-receptionist");
+    assert.equal(r.url, "https://app.seldonframe.com/marketplace/voice-receptionist");
     assert.equal(r.trust, null, "trust is null when the row carries no trustStats");
   });
 
