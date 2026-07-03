@@ -191,6 +191,18 @@ export function priceBg(priceCents: number): string {
   return priceCents <= 0 ? "rgba(0,137,123,0.10)" : "rgba(34,29,23,0.05)";
 }
 
+/**
+ * Short "Jun 30" date for the platform-verified eval badge's "last run"
+ * clause (Task 13). Takes the ISO `lastRunAt` string straight off
+ * `ListingTrustStats`. No year (the badge is about recency, not archival
+ * record-keeping) and UTC so the server-rendered date never depends on the
+ * host's local timezone.
+ */
+export function trustBadgeDateLabel(isoDate: string): string {
+  const d = new Date(isoDate);
+  return d.toLocaleDateString("en-US", { month: "short", day: "numeric", timeZone: "UTC" });
+}
+
 // ─── DB row → view-model ─────────────────────────────────────────────────────
 
 /**

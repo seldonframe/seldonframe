@@ -39,6 +39,7 @@ import {
   priceColor,
   mcpEndpointFor,
   mcpSnippetFor,
+  trustBadgeDateLabel,
   type StorefrontAgent,
 } from "@/components/marketplace/marketplace-data";
 
@@ -251,6 +252,18 @@ export default async function ListingDetailPage({ params, searchParams }: Listin
                       </span>
                     ) : null}
                   </span>
+                  {agent.trustStats ? (
+                    // Platform-verified eval badge (Task 13, improve-verb + trust
+                    // rail). Renders ONLY when a real eval_runs row backs it
+                    // (trustStats is null otherwise — never a fabricated badge).
+                    <span style={{ display: "inline-flex", alignItems: "center", gap: 6, fontSize: 14, color: "rgba(34,29,23,0.6)", fontFamily: MKT.fontMono, whiteSpace: "nowrap" }}>
+                      <span style={{ color: MKT.green, display: "flex" }}>
+                        <MarketplaceIcon name="checkCircle" size={15} />
+                      </span>
+                      Platform-verified evals · {agent.trustStats.evalPassRate}% across {agent.trustStats.scenarioCount} scenarios · last run{" "}
+                      {trustBadgeDateLabel(agent.trustStats.lastRunAt)}
+                    </span>
+                  ) : null}
                 </div>
               </div>
             </header>
