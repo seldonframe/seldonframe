@@ -1,6 +1,7 @@
 .vercel
 .env*.local
 .next/
+.swc/
 
 # SLICE 4a PR 2 C6 — scaffold bridge smoke-test temp dir (cleaned by the test).
 tests/_scaffold-smoke/
