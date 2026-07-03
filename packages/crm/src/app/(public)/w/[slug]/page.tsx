@@ -217,7 +217,11 @@ export default async function WorkspaceLandingPage({ params }: PageProps) {
   const serviceBaseHref = navServices.length > 0 ? homeHref : undefined;
 
   return (
-    <SiteShell archetype={payload.hero.archetype} mode={payload.theme?.mode ?? "light"}>
+    <SiteShell
+      archetype={payload.hero.archetype}
+      mode={payload.theme?.mode ?? "light"}
+      workspaceId={ctx.orgId}
+    >
       {/* bisect 4/4: all three pieces wired. */}
       <Navbar
         archetype={payload.hero.archetype}

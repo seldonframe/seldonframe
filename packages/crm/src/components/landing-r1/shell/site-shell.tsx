@@ -8,11 +8,21 @@
 //
 // "use client" because archetypeStyle() returns inline CSSProperties and we
 // keep parity with the other landing-r1 components (all client). No JS state.
+//
+// Growth loop #1 (virality pack, Task 1): when `workspaceId` is provided, the
+// shell mounts <PoweredByBadge> once, after children — i.e. below the
+// per-archetype <Footer> the page composes inside us, so it reads as a final
+// credit line rather than part of the operator's own footer content. This is
+// the ONE shell-level mount point for every R1 archetype; per-archetype
+// Footer markup is untouched. `workspaceId` is optional and omitted by the
+// internal fixture/preview surfaces (landing-preview/[archetype],
+// landing-r1/preview.tsx) — those keep rendering exactly as before, no badge.
 
 "use client";
 
 import type { CSSProperties, ReactNode } from "react";
 import { archetypeStyle, type AestheticArchetypeId } from "../archetypes";
+import { PoweredByBadge } from "../powered-by-badge";
 
 export type ShellMode = "light" | "dark";
 
@@ -51,13 +61,20 @@ export function resolveShellStyle(
 export type SiteShellProps = {
   archetype: AestheticArchetypeId;
   mode?: ShellMode;
+  /**
+   * The workspace this site belongs to. When present, mounts the
+   * ref-attributed powered-by badge once at the bottom of the shell. Omit on
+   * internal preview/fixture surfaces that have no real workspace.
+   */
+  workspaceId?: string;
   children: ReactNode;
 };
 
-export function SiteShell({ archetype, mode = "light", children }: SiteShellProps) {
+export function SiteShell({ archetype, mode = "light", workspaceId, children }: SiteShellProps) {
   return (
     <div data-archetype={archetype} data-mode={mode} style={resolveShellStyle(archetype, mode)}>
       {children}
+      {workspaceId && <PoweredByBadge workspaceId={workspaceId} />}
       {/* Belt-and-suspenders: also clip at the html/body level so a child that
           escapes the flow can't add a scrollbar. Scoped global is fine here —
           the shell renders once per page. */}
