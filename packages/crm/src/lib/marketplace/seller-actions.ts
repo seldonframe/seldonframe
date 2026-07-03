@@ -44,6 +44,8 @@ import {
   type PriceModel,
   type OutcomeType,
 } from "@/lib/marketplace/pricing-model";
+import { getLatestEvalRun, listEvalRunsForSubject } from "@/lib/agents/evals/eval-runs-store";
+import { buildTrustStats } from "@/lib/marketplace/trust-stats";
 
 // ─── types returned to the client ────────────────────────────────────────────
 
@@ -173,6 +175,45 @@ function toView(row: typeof marketplaceListings.$inferSelect): SellerListingView
   };
 }
 
+/**
+ * Copy-through the platform-verified eval badge onto a just-published/
+ * refreshed kind:'agent' listing row (Task 13, improve-verb + trust-rail).
+ *
+ * Reads the template's latest eval_runs row (subjectKind:'template',
+ * subjectId: templateId — the SAME subject key `persistTemplateEvalRun`
+ * writes under) + its total run count, builds the pure ListingTrustStats
+ * snapshot (buildTrustStats — null when the template has never been run),
+ * and writes it onto the listing's `trust_stats` column.
+ *
+ * FAIL-SOFT: this must NEVER block a publish/republish. A DB hiccup here
+ * only costs the seller their trust badge for now (a future publish retries
+ * it) — it must not surface as a publish error. Mirrors
+ * persist-template-run.ts's try/catch + structured `[module] event_name`
+ * console.warn convention.
+ */
+async function copyThroughTrustStats(args: { orgId: string; templateId: string; listingId: string }): Promise<void> {
+  const { orgId, templateId, listingId } = args;
+  try {
+    const [latest, runs] = await Promise.all([
+      getLatestEvalRun({ orgId, subjectKind: "template", subjectId: templateId }),
+      listEvalRunsForSubject({ orgId, subjectKind: "template", subjectId: templateId }),
+    ]);
+    const trustStats = buildTrustStats({ latest, runsCount: runs.length });
+
+    await db
+      .update(marketplaceListings)
+      .set({ trustStats, updatedAt: new Date() })
+      .where(and(eq(marketplaceListings.id, listingId), eq(marketplaceListings.creatorOrgId, orgId)));
+  } catch (err) {
+    console.warn("[seller-actions] copy_through_trust_stats_failed", {
+      orgId,
+      templateId,
+      listingId,
+      error: err instanceof Error ? err.message : String(err),
+    });
+  }
+}
+
 // ─── actions ─────────────────────────────────────────────────────────────────
 
 /**
@@ -293,8 +334,10 @@ export async function publishOrUpdateAgentListingAction(input: {
   const existing = await findListingForTemplate(orgId, templateId);
 
   let slug: string;
+  let listingId: string;
   if (existing) {
     slug = existing.slug;
+    listingId = existing.id;
     await db
       .update(marketplaceListings)
       .set({
@@ -317,27 +360,36 @@ export async function publishOrUpdateAgentListingAction(input: {
       .where(and(eq(marketplaceListings.id, existing.id), eq(marketplaceListings.creatorOrgId, orgId)));
   } else {
     slug = await resolveUniqueListingSlug(template.name);
-    await db.insert(marketplaceListings).values({
-      kind: "agent",
-      creatorOrgId: orgId,
-      slug,
-      name: template.name,
-      description,
-      niche,
-      tags,
-      price: pricing.price,
-      priceModel: pricing.priceModel,
-      monthlyPriceCents: pricing.monthlyPriceCents,
-      perCallPriceCents: pricing.perCallPriceCents,
-      perOutcomePriceCents: pricing.perOutcomePriceCents,
-      outcomeType: pricing.outcomeType,
-      agentType: template.type,
-      agentBlueprint: template.blueprint,
-      soulPackage: {},
-      stripeConnectAccountId: isPaid ? accountId : null,
-      isPublished,
-    });
+    const [created] = await db
+      .insert(marketplaceListings)
+      .values({
+        kind: "agent",
+        creatorOrgId: orgId,
+        slug,
+        name: template.name,
+        description,
+        niche,
+        tags,
+        price: pricing.price,
+        priceModel: pricing.priceModel,
+        monthlyPriceCents: pricing.monthlyPriceCents,
+        perCallPriceCents: pricing.perCallPriceCents,
+        perOutcomePriceCents: pricing.perOutcomePriceCents,
+        outcomeType: pricing.outcomeType,
+        agentType: template.type,
+        agentBlueprint: template.blueprint,
+        soulPackage: {},
+        stripeConnectAccountId: isPaid ? accountId : null,
+        isPublished,
+      })
+      .returning({ id: marketplaceListings.id });
+    listingId = created.id;
   }
+
+  // Platform-verified eval badge copy-through (Task 13). Fail-soft by
+  // construction (copyThroughTrustStats swallows its own errors) — a hiccup
+  // here must never block the publish the seller is waiting on.
+  await copyThroughTrustStats({ orgId, templateId, listingId });
 
   revalidatePath("/marketplace");
   revalidatePath(`/marketplace/${slug}`);
@@ -416,6 +468,11 @@ export async function republishAgentListingAction(input: { templateId: string })
       updatedAt: new Date(),
     })
     .where(and(eq(marketplaceListings.id, existing.id), eq(marketplaceListings.creatorOrgId, orgId)));
+
+  // Refresh the platform-verified eval badge on republish too (Task 13) — the
+  // template may have accrued new eval runs while the listing was
+  // unpublished. Fail-soft; never blocks the republish.
+  await copyThroughTrustStats({ orgId, templateId, listingId: existing.id });
 
   revalidatePath("/marketplace");
   revalidatePath(`/marketplace/${existing.slug}`);
