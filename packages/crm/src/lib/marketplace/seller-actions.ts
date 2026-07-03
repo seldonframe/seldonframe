@@ -46,6 +46,7 @@ import {
 } from "@/lib/marketplace/pricing-model";
 import { getLatestEvalRun, listEvalRunsForSubject } from "@/lib/agents/evals/eval-runs-store";
 import { buildTrustStats } from "@/lib/marketplace/trust-stats";
+import { applyTastePreferencesUpdate } from "@/lib/marketplace/taste/apply-taste-preferences";
 
 // ─── types returned to the client ────────────────────────────────────────────
 
@@ -479,4 +480,45 @@ export async function republishAgentListingAction(input: { templateId: string })
   revalidatePath("/studio/earnings");
   revalidatePath(`/studio/agents/${templateId}`);
   return { ok: true, slug: existing.slug };
+}
+
+/**
+ * Taste mode (2026-07-03) — the seller's free-lane budget for their listing.
+ * Creator-org-guarded update to `sellerPreferences`: tasteCallsPerVisitor=0
+ * opts a listing out of taste entirely; absent fields fall back to the
+ * platform defaults (3/visitor, 50/day). Values are always clamped to the
+ * platform hard ceilings (applyTastePreferencesUpdate) — a seller can never
+ * exceed them regardless of what's posted here.
+ */
+export async function updateListingTastePreferencesAction(input: {
+  listingId: string;
+  tasteCallsPerVisitor?: number;
+  tasteDailyCap?: number;
+}): Promise<{ ok: true } | { ok: false; error: "unauthorized" | "not_found" }> {
+  assertWritable();
+
+  const orgId = await getOrgId();
+  if (!orgId) return { ok: false, error: "unauthorized" };
+
+  const listingId = String(input.listingId ?? "").trim();
+  if (!listingId) return { ok: false, error: "not_found" };
+
+  const [listing] = await db
+    .select({ id: marketplaceListings.id, sellerPreferences: marketplaceListings.sellerPreferences })
+    .from(marketplaceListings)
+    .where(and(eq(marketplaceListings.id, listingId), eq(marketplaceListings.creatorOrgId, orgId)))
+    .limit(1);
+  if (!listing) return { ok: false, error: "not_found" };
+
+  const next = applyTastePreferencesUpdate(listing.sellerPreferences ?? null, {
+    tasteCallsPerVisitor: input.tasteCallsPerVisitor,
+    tasteDailyCap: input.tasteDailyCap,
+  });
+
+  await db
+    .update(marketplaceListings)
+    .set({ sellerPreferences: next, updatedAt: new Date() })
+    .where(and(eq(marketplaceListings.id, listingId), eq(marketplaceListings.creatorOrgId, orgId)));
+
+  return { ok: true };
 }
