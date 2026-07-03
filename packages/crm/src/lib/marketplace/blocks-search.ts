@@ -16,10 +16,18 @@ import type { MarketplaceAgentRow } from "@/lib/marketplace/agent-listings";
 
 // ─── scoreBlockMatch — pure term-overlap scorer ──────────────────────────────
 
-/** The subset of a marketplace agent listing row the scorer needs. A plain
- *  structural type (not `MarketplaceAgentRow` itself) so the scorer and its
- *  tests never depend on the full DB row shape — anything with these fields
- *  scores. */
+/** The trust signal the improve build's `trust_stats` column will carry.
+ *  Optional/local — that column does not exist on this branch's schema, so
+ *  it is read defensively (see toResult below) and is simply absent (never
+ *  throws) until the improve build's migration lands. */
+export type BlockTrustStats = { evalPassRate: number; scenarioCount: number };
+
+/** The subset of a marketplace agent listing row the search engine needs. A
+ *  plain structural type (not `MarketplaceAgentRow` itself) so the scorer,
+ *  the ranker, and their tests never depend on the full DB row shape —
+ *  anything with these fields searches/scores/ranks. `trustStats` is
+ *  optional (see BlockTrustStats) so this reads cleanly whether the improve
+ *  build's column exists yet or not. */
 export type BlockSearchRow = {
   slug: string;
   name: string;
@@ -28,6 +36,7 @@ export type BlockSearchRow = {
   agentType: string | null;
   installCount: number;
   isFeatured: boolean;
+  trustStats?: BlockTrustStats | null;
 };
 
 /** Split a string into lowercase, punctuation-stripped word terms. Empty/
@@ -65,12 +74,6 @@ export function scoreBlockMatch(q: string, row: BlockSearchRow): number {
 
 // ─── searchBlocks — rank the real catalog ────────────────────────────────────
 
-/** The trust signal the improve build's `trust_stats` column will carry.
- *  Optional/local — that column does not exist on this branch's schema, so
- *  it is read defensively (see readTrustStats below) and is simply absent
- *  (never throws) until the improve build's migration lands. */
-export type BlockTrustStats = { evalPassRate: number; scenarioCount: number };
-
 /** One ranked search result — the exact public shape the route returns. */
 export type BlockSearchResult = {
   slug: string;
@@ -89,8 +92,9 @@ export type SearchBlocksArgs = {
 
 export type SearchBlocksDeps = {
   /** Load the full published-agent catalog. DI'd so tests never touch
-   *  Postgres; the real binding is listMarketplaceAgentsFromDb. */
-  listAgents: () => Promise<MarketplaceAgentRow[]>;
+   *  Postgres; the real binding is listMarketplaceAgentsFromDb (adapted to
+   *  this shape by searchBlocksFromDb below). */
+  listAgents: () => Promise<BlockSearchRow[]>;
 };
 
 /** The canonical public listing URL for a block (per the virality-pack spec:
@@ -100,20 +104,7 @@ function blockUrl(slug: string): string {
   return `https://www.seldonframe.com/marketplace/${slug}`;
 }
 
-/**
- * Read `trustStats` off a row defensively. The `trust_stats` column is added
- * by ANOTHER branch (the "improve" build) and does not exist in this
- * branch's schema — `MarketplaceAgentRow` has no such field today. Typing it
- * as a local optional field on a widened row type means this reads cleanly
- * whether the column exists (post-merge) or not (today), and NEVER throws
- * either way.
- */
-function readTrustStats(row: MarketplaceAgentRow): BlockTrustStats | null {
-  const widened = row as MarketplaceAgentRow & { trustStats?: BlockTrustStats | null };
-  return widened.trustStats ?? null;
-}
-
-function toResult(row: MarketplaceAgentRow): BlockSearchResult {
+function toResult(row: BlockSearchRow): BlockSearchResult {
   return {
     slug: row.slug,
     name: row.name,
@@ -121,7 +112,7 @@ function toResult(row: MarketplaceAgentRow): BlockSearchResult {
     niche: row.niche,
     kind: "agent",
     url: blockUrl(row.slug),
-    trust: readTrustStats(row),
+    trust: row.trustStats ?? null,
   };
 }
 
@@ -129,7 +120,7 @@ function toResult(row: MarketplaceAgentRow): BlockSearchResult {
  *  descending installCount. Mirrors listMarketplaceAgents' own sort so
  *  find_blocks with no query reads the same "best of the catalog" order the
  *  storefront itself shows. */
-function byFeaturedThenInstalls(a: MarketplaceAgentRow, b: MarketplaceAgentRow): number {
+function byFeaturedThenInstalls(a: BlockSearchRow, b: BlockSearchRow): number {
   if (a.isFeatured !== b.isFeatured) return a.isFeatured ? -1 : 1;
   return (b.installCount ?? 0) - (a.installCount ?? 0);
 }
@@ -156,7 +147,7 @@ export async function searchBlocks(
   const rows = await deps.listAgents();
   const isEmptyQuery = termsOf(args.q).length === 0;
 
-  let ordered: MarketplaceAgentRow[];
+  let ordered: BlockSearchRow[];
   if (isEmptyQuery) {
     ordered = [...rows].sort(byFeaturedThenInstalls);
   } else {
@@ -173,11 +164,38 @@ export async function searchBlocks(
 // ─── default DB-backed dep (lazy — never imported in unit tests) ────────────
 
 /**
+ * Adapt a real `MarketplaceAgentRow` (agent-listings.ts) onto the engine's
+ * minimal `BlockSearchRow`. This is the ONE place that touches the actual DB
+ * row type, and therefore the right place for the defensive `trustStats`
+ * read: the `trust_stats` column is added by ANOTHER branch (the "improve"
+ * build) and does not exist in `MarketplaceAgentRow` on this branch's schema
+ * today. Reading it via a locally-widened optional field means this adapter
+ * works identically before AND after that column lands — it never throws
+ * either way.
+ */
+function fromDbRow(row: MarketplaceAgentRow): BlockSearchRow {
+  const widened = row as MarketplaceAgentRow & { trustStats?: BlockTrustStats | null };
+  return {
+    slug: row.slug,
+    name: row.name,
+    description: row.description,
+    niche: row.niche,
+    agentType: row.agentType,
+    installCount: row.installCount,
+    isFeatured: row.isFeatured,
+    trustStats: widened.trustStats ?? null,
+  };
+}
+
+/**
  * Search the real live catalog. Thin wrapper over searchBlocks with the
- * default listMarketplaceAgentsFromDb dep so the route needn't wire the DI
- * itself. Lazy-imports so unit tests of searchBlocks never touch Postgres.
+ * default listMarketplaceAgentsFromDb dep (adapted via fromDbRow) so the
+ * route needn't wire the DI itself. Lazy-imports so unit tests of
+ * searchBlocks never touch Postgres.
  */
 export async function searchBlocksFromDb(args: SearchBlocksArgs): Promise<BlockSearchResult[]> {
   const { listMarketplaceAgentsFromDb } = await import("@/lib/marketplace/agent-listings");
-  return searchBlocks(args, { listAgents: () => listMarketplaceAgentsFromDb() });
+  return searchBlocks(args, {
+    listAgents: async () => (await listMarketplaceAgentsFromDb()).map(fromDbRow),
+  });
 }
