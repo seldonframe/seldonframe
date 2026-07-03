@@ -1,0 +1,27 @@
+# Dependabot for the pnpm monorepo + the published MCP package.
+# Root "npm" entry reads pnpm-lock.yaml (workspace-aware), so packages/crm
+# and the other workspace packages are covered from "/". skills/mcp-server
+# has its own package-lock.json (published to npm independently), so it
+# gets its own entry. Weekly + grouped minor/patch keeps PR noise low;
+# security updates always open immediately regardless of schedule.
+version: 2
+updates:
+  - package-ecosystem: "npm"
+    directory: "/"
+    schedule:
+      interval: "weekly"
+    open-pull-requests-limit: 5
+    groups:
+      minor-and-patch:
+        update-types:
+          - "minor"
+          - "patch"
+  - package-ecosystem: "npm"
+    directory: "/skills/mcp-server"
+    schedule:
+      interval: "weekly"
+    open-pull-requests-limit: 3
+  - package-ecosystem: "github-actions"
+    directory: "/"
+    schedule:
+      interval: "weekly"
