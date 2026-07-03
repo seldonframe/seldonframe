@@ -188,3 +188,83 @@ describe("taste active (no bearer)", () => {
     assert.equal((out.body as { error: { message: string } }).error.message, "Invalid rental key.");
   });
 });
+
+// ── Security follow-up: the per-listing DAILY cap must only be charged
+// against LLM-bearing calls (ask, ground_on_my_business), never against
+// zero-cost deterministic tools — otherwise an attacker spamming
+// get_quote_range for free burns the seller's whole day's funnel budget and
+// serves `doors` to real visitors all day. ─────────────────────────────────
+describe("taste daily cap — charged only on LLM-bearing calls", () => {
+  /** checkLimit stub that counts calls per key PREFIX (mirrors the real
+   *  rate-limit key shape `taste:daily:<listingId>` / `taste:calls:...`) so
+   *  a spec can assert exactly which counters advance. */
+  function countingCheckLimit() {
+    const counts: Record<string, number> = {};
+    const checkLimit = async (key: string) => {
+      const prefix = key.startsWith("taste:daily:") ? "daily" : key.startsWith("taste:calls:") ? "visitor" : "other";
+      counts[prefix] = (counts[prefix] ?? 0) + 1;
+      return true;
+    };
+    return { checkLimit, counts };
+  }
+
+  it("N deterministic calls do NOT advance the daily counter", async () => {
+    const { checkLimit, counts } = countingCheckLimit();
+    const { taste } = makeTaste({ checkLimit });
+    for (let i = 0; i < 5; i++) {
+      const out = await handleAgentRentalRpc(
+        "hvac", rpc("tools/call", { name: "provide_faq_answer", arguments: { question: "hours?" } }), null,
+        { ...baseDeps(), taste },
+      );
+      assert.equal(out.status, 200);
+    }
+    assert.equal(counts.daily ?? 0, 0, "daily cap must never be checked for deterministic tools");
+    assert.equal(counts.visitor, 5, "per-visitor cap still applies to every call");
+  });
+
+  it("an `ask` call DOES advance the daily counter", async () => {
+    const { checkLimit, counts } = countingCheckLimit();
+    const { taste } = makeTaste({ checkLimit });
+    const out = await handleAgentRentalRpc(
+      "hvac", rpc("tools/call", { name: "ask", arguments: { message: "hi" } }), null,
+      { ...baseDeps(), taste },
+    );
+    assert.equal(out.status, 200);
+    assert.equal(counts.daily, 1, "ask is LLM-bearing and must charge the daily cap");
+  });
+
+  it("a `ground_on_my_business` call DOES advance the daily counter", async () => {
+    const { checkLimit, counts } = countingCheckLimit();
+    const { taste } = makeTaste({ checkLimit });
+    const out = await handleAgentRentalRpc(
+      "hvac", rpc("tools/call", { name: "ground_on_my_business", arguments: { url: "https://visitor.com" } }), null,
+      { ...baseDeps(), taste },
+    );
+    assert.equal(out.status, 200);
+    assert.equal(counts.daily, 1, "ground_on_my_business is LLM-bearing and must charge the daily cap");
+  });
+
+  it("a listing AT its daily cap still serves deterministic taste calls (they were never the cost)", async () => {
+    const { taste } = makeTaste({
+      checkLimit: async (key) => !key.startsWith("taste:daily:"), // daily cap exhausted, everything else open
+    });
+    const out = await handleAgentRentalRpc(
+      "hvac", rpc("tools/call", { name: "provide_faq_answer", arguments: { question: "hours?" } }), null,
+      { ...baseDeps(), taste },
+    );
+    assert.equal(out.status, 200);
+    assert.ok(JSON.stringify(out.body).includes("9-5"), "deterministic tool must still answer despite daily cap exhaustion");
+  });
+
+  it("a listing AT its daily cap refuses `ask` with doors(daily_cap)", async () => {
+    const { taste, events } = makeTaste({
+      checkLimit: async (key) => !key.startsWith("taste:daily:"),
+    });
+    const out = await handleAgentRentalRpc(
+      "hvac", rpc("tools/call", { name: "ask", arguments: { message: "hi" } }), null,
+      { ...baseDeps(), taste },
+    );
+    assert.ok(JSON.stringify((out.body as { result: unknown }).result).includes("DOORS(daily_cap)"));
+    assert.equal(events.some(([e, p]) => e === "taste_limit_hit" && p.reason === "daily_cap"), true);
+  });
+});

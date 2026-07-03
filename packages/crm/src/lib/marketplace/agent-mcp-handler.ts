@@ -577,9 +577,26 @@ async function handleTasteToolCall(args: {
   }
 
   if (!TASTE_TOOL_ALLOWLIST.has(toolName)) return doors("locked_tool");
+  // Per-(ip,listing) per-VISITOR cap — the anti-abuse gate, applies to EVERY
+  // taste tool call regardless of cost (cheap+correct as-is).
   if (!(await taste.checkLimit(`taste:calls:${agent.listingId}:${taste.ipHash}`, visitorLimit, DAY_MS))) {
     return doors("visitor_cap");
   }
+
+  if (isDeterministicTool(toolName)) {
+    // Deterministic tools (get_quote_range, provide_faq_answer, …) never
+    // touch the LLM, so they must NOT charge the per-listing DAILY cap
+    // (security follow-up: charging it here let a zero-cost tool spam burn
+    // the seller's whole day's funnel budget and serve `doors` to real
+    // visitors). The per-visitor cap above already gates abuse.
+    const det = executeDeterministicTool(toolName, toolArgs, agent.blueprint);
+    if (!det.ok) return { status: 200, body: jsonRpcError(id, det.error.code, det.error.message) };
+    return { status: 200, body: jsonRpcResult(id, toolTextResult(JSON.stringify(det.result))) };
+  }
+
+  // Everything past this point is LLM-bearing (ground_on_my_business, ask) —
+  // this is the ONLY place the per-listing DAILY cap is charged, because
+  // it's the only spend that actually costs the seller money.
   if (!(await taste.checkLimit(`taste:daily:${agent.listingId}`, dailyCap, DAY_MS))) {
     return doors("daily_cap");
   }
@@ -601,12 +618,6 @@ async function handleTasteToolCall(args: {
       taste.track("taste_grounded", { slug, listing_id: agent.listingId, has_grounding: true }, agent.creatorOrgId);
     }
     return { status: 200, body: jsonRpcResult(id, toolTextResult(ground.text)) };
-  }
-
-  if (isDeterministicTool(toolName)) {
-    const det = executeDeterministicTool(toolName, toolArgs, agent.blueprint);
-    if (!det.ok) return { status: 200, body: jsonRpcError(id, det.error.code, det.error.message) };
-    return { status: 200, body: jsonRpcResult(id, toolTextResult(JSON.stringify(det.result))) };
   }
 
   // ask — taste variant (seller key + flagship guard live inside runTasteTurn).
