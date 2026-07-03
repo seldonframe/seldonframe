@@ -77,6 +77,7 @@ import {
   type RunDeployDeps,
 } from "@/lib/deployments/deploy-orchestrator";
 import { buildShareCard, type ShareCardKind } from "@/lib/build/share-card";
+import { maybeCreditReferral, buildRealReferralsDeps } from "@/lib/growth/referrals";
 
 /** A well-known, always-serviced NANP area code (Austin, TX) — the zero-
  *  connect Tier-0 fallback's last resort when a deployment has no client
@@ -482,6 +483,35 @@ async function buildShareForLiveDeployment(
   }
 }
 
+// ─── referral credit (virality pack, Task 5 — additive, success-only, MONEY) ─
+//
+// A deploy going live is the credit-worthy event: the deploying org
+// (`orgId` — the bearer-resolved caller, i.e. the REFEREE if they were
+// referred at workspace-creation time) just proved out the referral by
+// shipping something real. maybeCreditReferral itself is inert unless
+// SF_REFERRALS_ENABLED is on AND a 'pending' referrals row exists for this
+// org — every other case (flag off, no referral on file, already credited)
+// is a pure no-op that costs one cheap read.
+//
+// Deliberately NOT threaded through runDeploy/DeployResult — same reasoning
+// as the share-card block above (that type is the CLI/MCP tool's frozen
+// JSON contract). Added ALONGSIDE the share-card block, not inside
+// deploy-orchestrator.ts, per the plan.
+//
+// Fail-soft: a referral-credit bug must NEVER turn a genuine "live" deploy
+// into a failed HTTP response, and must never surface in the response body
+// either (unlike the share card, there is nothing the CLI/MCP caller needs
+// to DO with a credit — it's a silent wallet-ledger side effect). Any
+// error is swallowed after being logged.
+async function maybeCreditReferralForLiveDeployment(orgId: string): Promise<void> {
+  try {
+    await maybeCreditReferral(orgId, buildRealReferralsDeps());
+  } catch {
+    // Swallow — see the fail-soft note above. This path is never allowed
+    // to affect the deploy response.
+  }
+}
+
 // ─── the route ───────────────────────────────────────────────────────────────
 
 /** Wire the REAL seams (this DB, this Twilio, this store) for `runDeploy`. */
@@ -538,6 +568,13 @@ export async function POST(request: Request) {
   // "share card" section above for why this isn't threaded through
   // `runDeploy` itself.
   if (result.ok && result.status === "live") {
+    // Virality pack Task 5 — referral credit, fail-soft, silent (no response
+    // field; see maybeCreditReferralForLiveDeployment's own doc comment).
+    // Fired for EVERY live deploy, not just the first — maybeCreditReferral
+    // is itself idempotent (a no-op once the referral is already credited),
+    // so this never double-credits on repeat deploys of the same org.
+    await maybeCreditReferralForLiveDeployment(orgId);
+
     const share = await buildShareForLiveDeployment(result.deploymentId);
     if (share) {
       return NextResponse.json(
