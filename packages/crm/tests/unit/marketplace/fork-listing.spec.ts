@@ -192,7 +192,7 @@ describe("forkListingIntoNewWorkspace — unknown slug", () => {
     const result = await forkListingIntoNewWorkspace({ slug: "does-not-exist", ip: "1.2.3.4" }, h.deps);
     assert.equal(result.ok, false);
     if (!result.ok) {
-      assert.match(result.reason, /not found|no.*agent|unknown/i);
+      assert.match(result.reason, /not found|no.*agent|unknown|could not be found/i);
     }
     assert.equal(h.createdWorkspaces.length, 0);
   });
