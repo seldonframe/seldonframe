@@ -84,6 +84,12 @@ export type RunStatelessAgentTurnInput = {
   client: Anthropic;
   /** Optional wall-clock override for temporal grounding (tests pin it). */
   now?: Date;
+  /** Taste mode / cost-pinned callers: force THIS model for every iteration —
+   *  bypasses resolveTurnModel entirely (no adaptive/recovery escalation).
+   *  Absent => today's behavior. */
+  modelOverride?: string;
+  /** Replaces the default 1024 output cap when set. */
+  maxTokensOverride?: number;
 };
 
 export type RunStatelessAgentTurnResult =
@@ -165,7 +171,7 @@ export async function runStatelessAgentTurn(
   let finalText = "";
 
   for (let iter = 0; iter < MAX_TURN_ITERATIONS; iter++) {
-    const turnModel = resolveTurnModel({
+    const turnModel = input.modelOverride ?? resolveTurnModel({
       userMessage: lastUserMessage,
       toolNamesAvailable,
       priorToolError,
@@ -176,7 +182,7 @@ export async function runStatelessAgentTurn(
     try {
       response = await input.client.messages.create({
         model: turnModel,
-        max_tokens: MAX_TOKENS,
+        max_tokens: input.maxTokensOverride ?? MAX_TOKENS,
         system: systemPrompt,
         tools: tools.map((t) => ({
           name: t.name,
