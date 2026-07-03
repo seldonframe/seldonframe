@@ -334,6 +334,13 @@ export async function applyImproveProposal(
     return { ok: false, error: updateResult.error };
   }
 
+  // ORDERING TRADE-OFF (deliberate — do not "fix" into the unsafe direction):
+  // updateBlueprint runs BEFORE markApplied. If markApplied throws after a
+  // successful blueprint update, the proposal stays "proposed" and a retry
+  // will double-bump the blueprint version — annoying but harmless (versions
+  // are snapshots). The reverse order would risk a proposal marked "applied"
+  // whose patch never landed: silent non-application. We fail toward
+  // re-applyability.
   await deps.markApplied({ proposalId: args.proposalId, orgId: args.orgId });
 
   const driftNote =
