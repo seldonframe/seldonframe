@@ -2,7 +2,7 @@ import { sql } from "drizzle-orm";
 import { index, pgTable, text, timestamp, uuid } from "drizzle-orm/pg-core";
 import { organizations } from "./organizations";
 
-export type ApiKeyKind = "user" | "workspace";
+export type ApiKeyKind = "user" | "workspace" | "oauth";
 
 export const apiKeys = pgTable(
   "api_keys",

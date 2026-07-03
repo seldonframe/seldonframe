@@ -1,7 +1,7 @@
 import crypto from "node:crypto";
-import { and, eq } from "drizzle-orm";
+import { and, eq, inArray } from "drizzle-orm";
 import { db } from "@/db";
-import { apiKeys } from "@/db/schema";
+import { apiKeys, type ApiKeyKind } from "@/db/schema";
 
 const TOKEN_PREFIX = "wst_";
 const TOKEN_BYTES = 32;
@@ -17,6 +17,18 @@ export interface MintWorkspaceTokenOptions {
   name?: string;
   /** Expiry in days. If omitted, the token never expires (existing behavior). */
   expiresInDays?: number;
+  /**
+   * Expiry in minutes — sibling of expiresInDays for sub-day expiries (the
+   * OAuth token endpoint's ~1h access tokens). Takes precedence over
+   * expiresInDays when both are set.
+   */
+  expiresInMinutes?: number;
+  /**
+   * Row kind. Defaults to "workspace" — every existing call site that omits
+   * it keeps minting kind:"workspace" rows byte-for-byte unchanged. The
+   * OAuth token endpoint passes "oauth".
+   */
+  kind?: ApiKeyKind;
 }
 
 /**
@@ -37,9 +49,11 @@ export async function mintWorkspaceToken(
   const prefix = token.slice(0, 8);
   const hash = crypto.createHash("sha256").update(token).digest("hex");
   const expiresAt =
-    opts?.expiresInDays && opts.expiresInDays > 0
-      ? new Date(Date.now() + opts.expiresInDays * 24 * 60 * 60 * 1000)
-      : null;
+    opts?.expiresInMinutes && opts.expiresInMinutes > 0
+      ? new Date(Date.now() + opts.expiresInMinutes * 60 * 1000)
+      : opts?.expiresInDays && opts.expiresInDays > 0
+        ? new Date(Date.now() + opts.expiresInDays * 24 * 60 * 60 * 1000)
+        : null;
 
   const [row] = await db
     .insert(apiKeys)
@@ -48,7 +62,7 @@ export async function mintWorkspaceToken(
       name: opts?.name ?? "mcp:device",
       keyHash: hash,
       keyPrefix: prefix,
-      kind: "workspace",
+      kind: opts?.kind ?? "workspace",
       expiresAt,
     })
     .returning({ id: apiKeys.id });
@@ -61,25 +75,30 @@ export type ResolvedWorkspaceBearer = {
   tokenId: string;
 };
 
+/** The api_keys row shape validateRawWorkspaceToken needs back from the DB. */
+export type ApiKeyLookupRow = {
+  id: string;
+  orgId: string;
+  expiresAt: Date | null;
+};
+
 /**
- * Validates a raw `wst_…` token against the api_keys table. Returns the
- * resolved orgId + tokenId on hit, or `null` for any failure (unknown
- * token, expired, malformed). Callers must NOT distinguish between
- * "not found" and "expired" in error messages — that's a token-probing
- * vector.
- *
- * Single source of truth for token validation. Both the
- * `Authorization: Bearer …` request path and the cookie-based
- * `/admin/[workspaceId]?token=…` path call into here.
+ * The one DB touchpoint of validateRawWorkspaceToken, extracted as an
+ * injectable seam (Task 2 of the OAuth plan) so the kind-matching logic is
+ * unit-testable without a live Postgres. Production callers never pass
+ * this — the default runs the real drizzle query below.
  */
-export async function validateRawWorkspaceToken(
-  raw: string
-): Promise<ResolvedWorkspaceBearer | null> {
-  if (!raw || !raw.startsWith(TOKEN_PREFIX)) return null;
+export type QueryApiKeyByPrefixAndHash = (params: {
+  kinds: ApiKeyKind[];
+  prefix: string;
+  hash: string;
+}) => Promise<ApiKeyLookupRow | undefined>;
 
-  const prefix = raw.slice(0, 8);
-  const hash = crypto.createHash("sha256").update(raw).digest("hex");
-
+const defaultQueryApiKeyByPrefixAndHash: QueryApiKeyByPrefixAndHash = async ({
+  kinds,
+  prefix,
+  hash,
+}) => {
   const [record] = await db
     .select({
       id: apiKeys.id,
@@ -89,12 +108,44 @@ export async function validateRawWorkspaceToken(
     .from(apiKeys)
     .where(
       and(
-        eq(apiKeys.kind, "workspace"),
+        inArray(apiKeys.kind, kinds),
         eq(apiKeys.keyPrefix, prefix),
         eq(apiKeys.keyHash, hash)
       )
     )
     .limit(1);
+  return record;
+};
+
+/**
+ * Validates a raw `wst_…` token against the api_keys table. Returns the
+ * resolved orgId + tokenId on hit, or `null` for any failure (unknown
+ * token, expired, malformed). Callers must NOT distinguish between
+ * "not found" and "expired" in error messages — that's a token-probing
+ * vector.
+ *
+ * Accepts both kind="workspace" (manually minted / admin-minted) and
+ * kind="oauth" (minted by the OAuth token endpoint) rows — both are
+ * wst_-prefixed workspace bearers, distinguished only by minting ceremony.
+ *
+ * Single source of truth for token validation. Both the
+ * `Authorization: Bearer …` request path and the cookie-based
+ * `/admin/[workspaceId]?token=…` path call into here.
+ */
+export async function validateRawWorkspaceToken(
+  raw: string,
+  queryApiKeyByPrefixAndHash: QueryApiKeyByPrefixAndHash = defaultQueryApiKeyByPrefixAndHash
+): Promise<ResolvedWorkspaceBearer | null> {
+  if (!raw || !raw.startsWith(TOKEN_PREFIX)) return null;
+
+  const prefix = raw.slice(0, 8);
+  const hash = crypto.createHash("sha256").update(raw).digest("hex");
+
+  const record = await queryApiKeyByPrefixAndHash({
+    kinds: ["workspace", "oauth"],
+    prefix,
+    hash,
+  });
 
   if (!record) return null;
   // Reject expired tokens. Tokens minted without an expiry (legacy mcp:device
