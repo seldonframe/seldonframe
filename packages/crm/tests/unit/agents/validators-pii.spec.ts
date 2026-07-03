@@ -11,11 +11,12 @@ import assert from "node:assert/strict";
 
 import { ALL_VALIDATORS } from "../../../src/lib/agents/validators";
 
-const noPiiLeak = ALL_VALIDATORS.find((v) => v.name === "no_pii_leak");
-if (!noPiiLeak) throw new Error("no_pii_leak validator missing from ALL_VALIDATORS");
+const found = ALL_VALIDATORS.find((v) => v.name === "no_pii_leak");
+if (!found) throw new Error("no_pii_leak validator missing from ALL_VALIDATORS");
+const noPiiLeak = found;
 
 function run(args: { response: string; userMessage?: string; conversationContext?: string; soul?: { contact?: { email?: string; phone?: string } } }) {
-  return noPiiLeak!.run({
+  return noPiiLeak.run({
     response: args.response,
     userMessage: args.userMessage ?? "hi",
     conversationContext: args.conversationContext,
