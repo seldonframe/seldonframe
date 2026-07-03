@@ -47,7 +47,10 @@ type ListingPageProps = {
   // Stripe Checkout returns the buyer here with ?purchased=true (the success_url).
   // The post-signup buy-intent return carries ?install=1 (buildListingSignInUrl)
   // so the buy box can show a "Finish checkout →" nudge (no auto-charge).
-  searchParams: Promise<{ purchased?: string; install?: string }>;
+  // fork_error is set by POST /api/marketplace/fork's 303-redirect-back-to-
+  // listing failure path (virality pack, Task 3) — a friendly one-line reason
+  // the "Fork this agent" form couldn't complete.
+  searchParams: Promise<{ purchased?: string; install?: string; fork_error?: string }>;
 };
 
 async function loadAgent(slug: string): Promise<{ agent: StorefrontAgent; others: StorefrontAgent[] } | null> {
@@ -89,7 +92,7 @@ export async function generateMetadata({ params }: ListingPageProps): Promise<Me
 
 export default async function ListingDetailPage({ params, searchParams }: ListingPageProps) {
   const { slug } = await params;
-  const { purchased, install } = await searchParams;
+  const { purchased, install, fork_error: forkError } = await searchParams;
   // Stripe Checkout redirects back to ?purchased=true on success — render the
   // "You're subscribed / installed" confirmation instead of re-showing "Install".
   const justPurchased = purchased === "true";
@@ -466,6 +469,68 @@ export default async function ListingDetailPage({ params, searchParams }: Listin
               installIntent={installIntent}
               buyerSetupUrl={buyerSetupUrl}
             />
+            {/* "Fork this agent" — keyless buyer→builder conversion (virality
+                pack, Task 3). Plain <form>, no client JS: POSTs the slug to
+                /api/marketplace/fork, which either 303s to a brand-new
+                workspace's admin URL or 303s back here with ?fork_error=.
+                FREE, real (non-seed) listings only — a seed listing has no DB
+                row to fork, and a paid listing is refused server-side anyway
+                (forking would bypass purchase), so the CTA is hidden rather
+                than offered and then failing. */}
+            {!agent.isSeed && agent.priceCents <= 0 && !justPurchased ? (
+              <form
+                method="POST"
+                action="/api/marketplace/fork"
+                style={{ marginTop: 14 }}
+              >
+                <input type="hidden" name="slug" value={agent.slug} />
+                {forkError ? (
+                  <p
+                    role="status"
+                    style={{
+                      margin: "0 0 10px",
+                      fontSize: 13,
+                      lineHeight: 1.45,
+                      color: "#B5651D",
+                      background: "rgba(181,101,29,0.08)",
+                      border: "1px solid rgba(181,101,29,0.22)",
+                      borderRadius: 10,
+                      padding: "9px 12px",
+                    }}
+                  >
+                    {forkError}
+                  </p>
+                ) : null}
+                <button
+                  type="submit"
+                  className="sf-btn"
+                  style={{
+                    width: "100%",
+                    border: "1px solid rgba(34,29,23,0.16)",
+                    background: "#fff",
+                    color: MKT.ink,
+                    fontFamily: "inherit",
+                    fontWeight: 650,
+                    fontSize: 15,
+                    padding: 13,
+                    borderRadius: 13,
+                    cursor: "pointer",
+                    display: "flex",
+                    alignItems: "center",
+                    justifyContent: "center",
+                    gap: 9,
+                  }}
+                >
+                  <span style={{ color: "rgba(34,29,23,0.6)", display: "flex" }}>
+                    <MarketplaceIcon name="sparkles" size={17} />
+                  </span>
+                  Fork this agent — make it yours in 60s
+                </button>
+                <p style={{ margin: "8px 0 0", fontSize: 12.5, color: "rgba(34,29,23,0.55)", lineHeight: 1.4, textAlign: "center" }}>
+                  No account needed — get your own live workspace running this agent.
+                </p>
+              </form>
+            ) : null}
           </aside>
         </div>
       </main>
