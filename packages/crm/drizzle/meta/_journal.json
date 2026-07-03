@@ -288,6 +288,13 @@
       "when": 1783100076515,
       "tag": "0063_oauth_clients",
       "breakpoints": true
+    },
+    {
+      "idx": 41,
+      "version": "7",
+      "when": 1783111078235,
+      "tag": "0064_agent_taste_sessions",
+      "breakpoints": true
     }
   ]
 }

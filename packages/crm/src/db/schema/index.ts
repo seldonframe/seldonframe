@@ -178,3 +178,9 @@ export * from "./referrals";
 // oauth_refresh_tokens (rotating, family-linked for reuse detection). Inert
 // behind SF_OAUTH_ENABLED. See docs/superpowers/specs/2026-07-03-oauth-connector-design.md.
 export * from "./oauth";
+
+// 2026-07-03 — Agent Taste Mode (migration 0064): anonymous, flag-gated free
+// lane on the agent MCP rental endpoint. One additive table —
+// agent_taste_sessions (short-TTL grounding rows keyed by session id). Inert
+// behind SF_AGENT_TASTE_MODE. See docs/superpowers/specs/2026-07-03-agent-taste-mode-design.md.
+export * from "./agent-taste-sessions";

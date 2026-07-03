@@ -119,6 +119,11 @@ export type ListingTrustStats = {
   improveAcceptRate: number | null;
 };
 
+export type ListingSellerPreferences = {
+  tasteCallsPerVisitor?: number;
+  tasteDailyCap?: number;
+};
+
 export const marketplaceListings = pgTable(
   "marketplace_listings",
   {
@@ -173,6 +178,10 @@ export const marketplaceListings = pgTable(
     // Cached trust-badge snapshot (eval pass rate + improve accept rate).
     // Nullable — absent means no eval history yet.
     trustStats: jsonb("trust_stats").$type<ListingTrustStats | null>(),
+    /** Seller-controlled taste-mode budget (design: 2026-07-03-agent-taste-mode).
+     *  Absent/null => defaults (3 calls/visitor, 50/day). tasteCallsPerVisitor: 0
+     *  disables taste for this listing. Platform clamps: [0,10] and [0,500]. */
+    sellerPreferences: jsonb("seller_preferences").$type<ListingSellerPreferences | null>(),
     createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
     updatedAt: timestamp("updated_at", { withTimezone: true }).notNull().defaultNow(),
   },
