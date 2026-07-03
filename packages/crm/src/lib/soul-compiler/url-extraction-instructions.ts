@@ -4,7 +4,7 @@
 // The MCP tool `create_workspace_from_url` proxies this payload through to Claude in CC.
 // Claude reads the instructions, runs WebFetch itself, extracts the structured fields
 // matching REQUIRED_FIELDS_SCHEMA, dialogues with the operator for any missing required
-// field, then calls create_workspace_v2. See spec
+// field, then calls create_full_workspace (the atomic R1-multipage path). See spec
 // docs/superpowers/specs/2026-05-14-pull-firecrawl-out-of-backend-design.md.
 
 export const EXTRACTION_INSTRUCTIONS = `You are extracting business facts from a website to create a SeldonFrame workspace.
@@ -54,10 +54,13 @@ Step 4 — Fill the gaps with operator dialog.
   Don't ask for fields you already extracted with high confidence.
 
 Step 5 — Create the workspace.
-  Once every REQUIRED field is non-null, call create_workspace_v2 with the
-  full object. Then follow the v2 flow: for each block in
-  v2.recommended_blocks, call get_block_skill(name), generate props, call
-  persist_block. Then call complete_workspace_v2, then finalize_workspace.
+  Once every REQUIRED field is non-null, call create_full_workspace with the
+  full object. ONE atomic call builds everything: the workspace, the
+  production multi-page website (landing + per-service detail pages — the
+  same engine the SeldonFrame dashboard uses), booking page, intake form,
+  CRM, and a draft chatbot. Then call finalize_workspace({ workspace_id,
+  email }) to mint the admin link and send the welcome email. No block
+  iteration is needed on this flow.
 
 Failure modes:
   - WebFetch returns empty/error: try the next priority page. If all 3 fetches
@@ -72,7 +75,10 @@ Do NOT:
   - Pre-validate URLs (no HEAD requests, no probes — just WebFetch).
   - Fetch more than 3 pages.
   - Fabricate any field. If unsure, ask.
-  - Call create_full_workspace from this flow. Always use create_workspace_v2.
+  - Call create_workspace_v2 / get_block_skill / persist_block from this flow.
+    The atomic create_full_workspace call IS the whole build — it generates
+    the multi-page site server-side; block iteration would only overwrite it
+    with lower-fidelity copy.
 `;
 
 export const REQUIRED_FIELDS_SCHEMA = {

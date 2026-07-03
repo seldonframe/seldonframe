@@ -32,6 +32,9 @@ export async function GET(request: Request) {
       url
     ),
     required_fields_schema: REQUIRED_FIELDS_SCHEMA,
-    next_tool: "create_workspace_v2",
+    // Retargeted 2026-07-02: the atomic create_full_workspace path now runs
+    // the R1 multi-page site engine (same as /clients/new), which beats the
+    // block-iterated v2 flow for URL-extracted builds.
+    next_tool: "create_full_workspace",
   });
 }
