@@ -1931,3 +1931,8 @@ C4 close-out with empirical SLICE 11 data.
 - **Rule:** What you will do (or not do) next time, specifically enough that
   future-you could follow it without re-reading the context.
 ```
+
+## 2026-07-02 — velocity lessons (session-cap night)
+- **One publish per session.** Bump the npm version ONCE, as the last wave, THEN ask Max to publish. Tonight: he published 1.58.0 minutes before the 1.58.1 bump landed → a second 2FA round-trip. Sequence: fold every package change into one bump before involving him.
+- **Commit early beats salvage.** Three subagents died at the session cap holding ALL work uncommitted; recovery cost a full wave of forensics. Implementers now commit at the first coherent unit (rule baked into ~/.claude/agents/implementer.md).
+- **Probe deploys with a free marker, not a paid action.** Rate-limited smoke attempts burned 2/3 slots racing the Vercel build; a changed response field (extract-instructions.next_tool) answered "which deploy is live" for free. Always pick the marker probe first.
