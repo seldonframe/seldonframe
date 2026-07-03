@@ -216,6 +216,100 @@ The bundle exposes two optional fields (mirrors `SELDONFRAME_API_KEY` /
 
 ---
 
+## 7. Per-agent registry entries — individual marketplace agents as their own listings
+
+Everything above publishes ONE server — `io.github.seldonframe/mcp`, the
+builder tool. Separately, each PUBLISHED marketplace agent already has its
+own MCP-over-HTTP endpoint (the "Rent via MCP" rail —
+`packages/crm/src/app/api/v1/agents/[slug]/mcp`). `scripts/gen-agent-server-jsons.mjs`
+(repo root) turns a hand-picked allowlist of those agents into their OWN
+Registry entries — `io.github.seldonframe/<agent-slug>` — so each one is its
+own directory-shelf listing: its own search hit, its own icon, its own
+"Add to Claude" button, pointed straight at that one agent's rental endpoint.
+
+### CURATION RULE — read this before running the script
+
+**Publish a handful of genuinely distinct flagship agents; never bulk-flood
+the registry.** Near-identical entries (five variations on "receptionist bot")
+read as spam and put the whole `io.github.seldonframe` namespace at risk with
+the Registry maintainers. The script enforces this structurally: `--slugs` is
+a REQUIRED, explicit allowlist — there is no "publish everything" flag. Pick
+agents the way you'd pick apps for a curated storefront shelf, not the way
+you'd export a database table.
+
+### What the script does
+
+1. Fetches the published-listings catalog from `GET
+   https://app.seldonframe.com/api/acp/feed` (public, no auth — the same
+   OpenAI/ACP product feed the storefront already serves), or reads a local
+   snapshot via `--listings-json` if the feed isn't reachable from where
+   you're running it.
+2. Filters to the slugs named in `--slugs` (skipping — not erroring on — any
+   requested slug that isn't currently published).
+3. For each matched slug, writes `dist/agent-servers/<slug>/server.json` with:
+   - `name`: `io.github.seldonframe/<slug>`
+   - `description`: the listing's real title/description, truncated to the
+     Registry's 100-character `description` limit on a word boundary
+   - `version`: pinned to the platform version in
+     `skills/mcp-server/package.json` (kept in lockstep with the builder
+     server's own version)
+   - `repository`: `github.com/seldonframe/seldonframe`
+   - `remotes`: `[{ type: "streamable-http", url:
+     "https://app.seldonframe.com/api/v1/agents/<slug>/mcp" }]`
+   - No `packages` array — these are remote-only entries (nothing to `npx`).
+4. Prints the exact `mcp-publisher` commands to submit what it generated.
+
+`dist/agent-servers/` is git-ignored (generated output, not source).
+
+### IMPORTANT — what an anonymous directory visitor gets today
+
+The rental endpoint answers `initialize`/`ping` with no auth, but every real
+action — `tools/list`, `tools/call`, `prompts/list`, `prompts/get` — requires
+`Authorization: Bearer <rk_… rental key>`, a signed key currently mintable
+ONLY by an authenticated, logged-in SeldonFrame org
+(`lib/marketplace/rental.ts`). There is no public/anonymous path to obtain a
+rental key today. A visitor who discovers one of these entries in the
+Registry and adds it to their MCP client gets a working handshake, then a
+"Missing rental key" JSON-RPC error on the first real tool call. Publishing
+these entries is a legitimate discovery/SEO play (the agent shows up in
+Registry search, MCP.Directory, PulseMCP, etc.) but is NOT yet a working
+try-before-you-buy funnel — see the operator run-through below for how to
+frame that honestly, and treat a taste-mode (a small number of free
+anonymous calls before the paywall) as a prerequisite before marketing these
+entries as "try it right now."
+
+### Operator run-through
+
+```powershell
+# 1. Generate entries for a curated set of flagship agents (dry, read-only —
+#    fetches the live feed and writes local files only).
+cd C:\Users\maxim\CascadeProjects\"Seldon Frame"
+node scripts/gen-agent-server-jsons.mjs --slugs 247-phone-receptionist
+
+# 2. Spot-check each generated file (repeat mcp-publisher.exe validate is
+#    optional but recommended — see below).
+Get-Content dist\agent-servers\247-phone-receptionist\server.json
+
+# 3. Log in once per mcp-publisher session.
+mcp-publisher login github
+
+# 4. Publish each generated entry (the script prints these exact commands,
+#    tailored to what it generated).
+Push-Location dist\agent-servers\247-phone-receptionist
+mcp-publisher publish
+Pop-Location
+```
+
+To validate a generated entry against the live Registry schema without
+publishing (safe, read-only):
+
+```powershell
+cd dist\agent-servers\247-phone-receptionist
+mcp-publisher validate
+```
+
+---
+
 ## After Phase 1
 
 Once the Registry submission lands and the listings appear on
