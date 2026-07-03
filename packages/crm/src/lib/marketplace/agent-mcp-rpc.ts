@@ -166,8 +166,10 @@ export function buildAskToolDescriptor(input: {
 }
 
 /** The `initialize` result: protocol + server identity + capabilities. Now
- *  advertises BOTH tools (ask + deterministic) and prompts (the skill prompt). */
-export function buildInitializeResult(input: { agentName: string }): Record<string, unknown> {
+ *  advertises BOTH tools (ask + deterministic) and prompts (the skill prompt).
+ *  `instructions` is additive (taste mode only) — the key is present ONLY when
+ *  the param is passed, so the flag-off envelope is byte-identical to before. */
+export function buildInitializeResult(input: { agentName: string; instructions?: string }): Record<string, unknown> {
   return {
     protocolVersion: MCP_PROTOCOL_VERSION,
     capabilities: { tools: {}, prompts: {} },
@@ -175,6 +177,7 @@ export function buildInitializeResult(input: { agentName: string }): Record<stri
       name: input.agentName,
       version: "1.0.0",
     },
+    ...(input.instructions ? { instructions: input.instructions } : {}),
   };
 }
 
@@ -190,6 +193,60 @@ export function buildToolsListResult(input: {
     tools: [
       ...buildDeterministicToolDescriptors({ agentName: input.agentName }),
       buildAskToolDescriptor(input),
+    ],
+  };
+}
+
+// ─── taste mode (net-new, anonymous free lane) ───────────────────────────────
+//
+// The grounding tool + a taste-flavored tools/list. See
+// docs/superpowers/specs/2026-07-03-agent-taste-mode-design.md D2. These are
+// only ever invoked by the handler's taste lane (bearer === null AND the
+// listing's taste policy is active) — the paid tools/list above is completely
+// untouched.
+
+/** Taste mode — the grounding tool's wire name. */
+export const GROUND_TOOL_NAME = "ground_on_my_business";
+
+/** Taste mode — the grounding tool descriptor. */
+export function buildGroundToolDescriptor(): McpToolDescriptor {
+  return {
+    name: GROUND_TOOL_NAME,
+    description:
+      `FREE TASTE: ground this agent on YOUR business. Pass your website URL; ` +
+      `the agent reads it and demos as if it were deployed for you. Returns a ` +
+      `taste_session value — pass it to later ask calls to stay grounded.`,
+    inputSchema: {
+      type: "object",
+      properties: {
+        url: { type: "string", description: "Your business website (https://…)." },
+      },
+      required: ["url"],
+    },
+  };
+}
+
+/** Taste mode tools/list: the read-only subset + ground. The ask descriptor
+ *  gains an optional taste_session arg in this variant. */
+export function buildTasteToolsListResult(input: {
+  agentName: string;
+  capabilities: string[] | undefined | null;
+  visitorLimit: number;
+}): Record<string, unknown> {
+  const ask = buildAskToolDescriptor(input);
+  const askSchema = ask.inputSchema as { properties: Record<string, unknown> };
+  askSchema.properties.taste_session = {
+    type: "string",
+    description: "Optional. The taste_session from ground_on_my_business — keeps the demo grounded on your business.",
+  };
+  ask.description =
+    `${ask.description} FREE TASTE MODE: you have ${input.visitorLimit} free calls; ` +
+    `run ${GROUND_TOOL_NAME} first for a demo grounded on your own business.`;
+  return {
+    tools: [
+      ...buildDeterministicToolDescriptors({ agentName: input.agentName }),
+      ask,
+      buildGroundToolDescriptor(),
     ],
   };
 }

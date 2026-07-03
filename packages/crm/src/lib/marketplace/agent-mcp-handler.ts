@@ -17,6 +17,7 @@ import {
   parseJsonRpcRequest,
   buildInitializeResult,
   buildToolsListResult,
+  buildTasteToolsListResult,
   buildPromptsListResult,
   buildPromptGetResult,
   parsePromptsGetParams,
@@ -32,6 +33,7 @@ import {
   JSONRPC_INTERNAL_ERROR,
   type JsonRpcId,
 } from "./agent-mcp-rpc";
+import { DAY_MS, TASTE_TOOL_ALLOWLIST, GROUND_TOOL_NAME } from "./taste/taste-policy";
 import { verifyRentalKey } from "./rental-token";
 import type { RentalAgent, RentalTurnResult } from "./agent-rental-run";
 import {
@@ -104,7 +106,50 @@ export type AgentRentalRpcDeps = {
   payTo?: string;
   /** Build the canonical resource URL for the 402 body, given the slug. */
   resourceUrl?: (slug: string) => string;
+
+  /** Taste mode (net-new, anonymous free lane). ABSENT => every code path
+   *  below is identical to today (design D7 / plan Task 8 byte-identical
+   *  proof). Built by the route ONLY when SF_AGENT_TASTE_MODE=1. */
+  taste?: TasteDeps;
 };
+
+/** Taste mode dependency bundle — see
+ *  docs/superpowers/specs/2026-07-03-agent-taste-mode-design.md. All policy
+ *  decisions (budgets, doors copy, key resolution) live behind these seams so
+ *  the handler stays pure + DI'd for node:test. */
+export type TasteDeps = {
+  /** sha256(ip|secret) of the caller's IP — never the raw IP. */
+  ipHash: string;
+  /** Listing-level activation: flag is already on if this object exists; this
+   *  resolves budget + key predicate. */
+  policyFor: (agent: RentalAgent) => Promise<
+    { active: false } | { active: true; visitorLimit: number; dailyCap: number }
+  >;
+  /** checkRateLimit binding. */
+  checkLimit: (key: string, limit: number, windowMs: number) => Promise<boolean>;
+  ground: (args: { agent: RentalAgent; url: string; ipHash: string }) => Promise<
+    { ok: true; text: string } | { ok: false; text: string }
+  >;
+  runTasteTurn: (args: { agent: RentalAgent; message: string; tasteSession: string | null }) => Promise<RentalTurnResult>;
+  doorsText: (args: { agent: RentalAgent; visitorLimit: number; reason: "visitor_cap" | "daily_cap" | "locked_tool" }) => string;
+  instructions: (args: { agent: RentalAgent; visitorLimit: number }) => string;
+  track: (event: "taste_session_started" | "taste_grounded" | "taste_limit_hit", props: Record<string, unknown>, creatorOrgId: string) => void;
+};
+
+/** Resolve the taste policy when the lane could apply. null = lane inactive
+ *  (fall through to today's behavior verbatim). The taste lane engages ONLY
+ *  when bearer === null AND deps.taste is present AND the listing's policy
+ *  resolves active — any other combination falls through unchanged. */
+async function tastePolicyOrNull(
+  bearer: string | null,
+  deps: AgentRentalRpcDeps,
+  agent: RentalAgent,
+): Promise<{ taste: TasteDeps; visitorLimit: number; dailyCap: number } | null> {
+  if (bearer !== null || !deps.taste) return null;
+  const policy = await deps.taste.policyFor(agent);
+  if (!policy.active) return null;
+  return { taste: deps.taste, visitorLimit: policy.visitorLimit, dailyCap: policy.dailyCap };
+}
 
 /** True when the deps carry a complete metering rig (so we should enforce the
  *  three lanes). A partial rig is treated as "not metering" — fail-safe. */
@@ -159,14 +204,40 @@ export async function handleAgentRentalRpc(
   }
 
   switch (method) {
-    case "initialize":
+    case "initialize": {
       // Unauthenticated negotiation/discovery. No agent work happens here.
-      return { status: 200, body: jsonRpcResult(id, buildInitializeResult({ agentName: agent.agentName })) };
+      // Taste mode adds `instructions` ONLY when the lane resolves active —
+      // the key is absent otherwise, so the flag-off envelope is unchanged.
+      const lane = await tastePolicyOrNull(bearer, deps, agent);
+      return {
+        status: 200,
+        body: jsonRpcResult(
+          id,
+          buildInitializeResult({
+            agentName: agent.agentName,
+            ...(lane
+              ? { instructions: lane.taste.instructions({ agent, visitorLimit: lane.visitorLimit }) }
+              : {}),
+          }),
+        ),
+      };
+    }
 
     case "ping":
       return { status: 200, body: jsonRpcResult(id, {}) };
 
     case "tools/list": {
+      const lane = await tastePolicyOrNull(bearer, deps, agent);
+      if (lane) {
+        return {
+          status: 200,
+          body: jsonRpcResult(id, buildTasteToolsListResult({
+            agentName: agent.agentName,
+            capabilities: agent.capabilities,
+            visitorLimit: lane.visitorLimit,
+          })),
+        };
+      }
       const auth = authorize(bearer, slug, id, deps);
       if (!auth.ok) return auth.outcome;
       return {
@@ -213,6 +284,9 @@ export async function handleAgentRentalRpc(
     }
 
     case "tools/call": {
+      const lane = await tastePolicyOrNull(bearer, deps, agent);
+      if (lane) return await handleTasteToolCall({ id, slug, agent, params, lane, deps });
+
       const auth = authorize(bearer, slug, id, deps);
       if (!auth.ok) return auth.outcome;
 
@@ -460,6 +534,89 @@ async function executeAndAccrue(args: {
   console.log(`[agent-rental] ${JSON.stringify(entry)}`);
   accrue();
 
+  const result = toolTextResult(turn.reply);
+  (result as { conversationId?: string }).conversationId = turn.conversationId;
+  return { status: 200, body: jsonRpcResult(id, result) };
+}
+
+// ─── taste mode (net-new, anonymous free lane) ───────────────────────────────
+//
+// Only reachable via tastePolicyOrNull (bearer === null AND deps.taste AND the
+// listing's policy is active). Never calls deps.logUsage — agent_rental_call
+// is a rental accrual; taste calls are not rentals (P1 is tracking-only, see
+// design D10). Doors are ALWAYS a successful jsonRpcResult, never an error —
+// so a renter LLM relays the offer instead of retrying.
+
+async function handleTasteToolCall(args: {
+  id: JsonRpcId;
+  slug: string;
+  agent: RentalAgent;
+  params: Record<string, unknown>;
+  lane: { taste: TasteDeps; visitorLimit: number; dailyCap: number };
+  deps: AgentRentalRpcDeps;
+}): Promise<RpcOutcome> {
+  const { id, slug, agent, params, lane } = args;
+  const { taste, visitorLimit, dailyCap } = lane;
+  const toolName = typeof params.name === "string" ? params.name : "";
+  const toolArgs =
+    typeof params.arguments === "object" && params.arguments !== null
+      ? (params.arguments as Record<string, unknown>)
+      : {};
+
+  const doors = (reason: "visitor_cap" | "daily_cap" | "locked_tool"): RpcOutcome => {
+    taste.track("taste_limit_hit", { slug, listing_id: agent.listingId, reason }, agent.creatorOrgId);
+    return {
+      status: 200,
+      body: jsonRpcResult(id, toolTextResult(taste.doorsText({ agent, visitorLimit, reason }))),
+    };
+  };
+
+  // Funnel start (once per ip+listing+day — deduped by a 1/day rate key).
+  if (await taste.checkLimit(`taste:started:${agent.listingId}:${taste.ipHash}`, 1, DAY_MS)) {
+    taste.track("taste_session_started", { slug, listing_id: agent.listingId }, agent.creatorOrgId);
+  }
+
+  if (!TASTE_TOOL_ALLOWLIST.has(toolName)) return doors("locked_tool");
+  if (!(await taste.checkLimit(`taste:calls:${agent.listingId}:${taste.ipHash}`, visitorLimit, DAY_MS))) {
+    return doors("visitor_cap");
+  }
+  if (!(await taste.checkLimit(`taste:daily:${agent.listingId}`, dailyCap, DAY_MS))) {
+    return doors("daily_cap");
+  }
+
+  if (toolName === GROUND_TOOL_NAME) {
+    const url = typeof toolArgs.url === "string" ? toolArgs.url.trim() : "";
+    if (!url) {
+      return { status: 200, body: jsonRpcError(id, JSONRPC_INVALID_PARAMS, "Invalid params: `url` (non-empty string) is required.") };
+    }
+    // Grounding creation caps (2/visitor+listing/day, 6/ip/day across listings).
+    if (
+      !(await taste.checkLimit(`taste:ground:${agent.listingId}:${taste.ipHash}`, 2, DAY_MS)) ||
+      !(await taste.checkLimit(`taste:ground:ip:${taste.ipHash}`, 6, DAY_MS))
+    ) {
+      return doors("visitor_cap");
+    }
+    const ground = await taste.ground({ agent, url, ipHash: taste.ipHash });
+    if (ground.ok) {
+      taste.track("taste_grounded", { slug, listing_id: agent.listingId, has_grounding: true }, agent.creatorOrgId);
+    }
+    return { status: 200, body: jsonRpcResult(id, toolTextResult(ground.text)) };
+  }
+
+  if (isDeterministicTool(toolName)) {
+    const det = executeDeterministicTool(toolName, toolArgs, agent.blueprint);
+    if (!det.ok) return { status: 200, body: jsonRpcError(id, det.error.code, det.error.message) };
+    return { status: 200, body: jsonRpcResult(id, toolTextResult(JSON.stringify(det.result))) };
+  }
+
+  // ask — taste variant (seller key + flagship guard live inside runTasteTurn).
+  const askArgs = extractAskArgs(params);
+  if (!askArgs.ok) return { status: 200, body: jsonRpcError(id, askArgs.error.code, askArgs.error.message) };
+  const tasteSession = typeof toolArgs.taste_session === "string" && toolArgs.taste_session.length > 0
+    ? toolArgs.taste_session
+    : null;
+  const turn = await taste.runTasteTurn({ agent, message: askArgs.message, tasteSession });
+  if (!turn.ok) return { status: 200, body: jsonRpcResult(id, toolTextResult(turn.message, true)) };
   const result = toolTextResult(turn.reply);
   (result as { conversationId?: string }).conversationId = turn.conversationId;
   return { status: 200, body: jsonRpcResult(id, result) };
