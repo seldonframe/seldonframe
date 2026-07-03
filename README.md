@@ -13,6 +13,7 @@ The open-source platform that gives your coding agent the primitives real produc
 [![GitHub stars](https://img.shields.io/github/stars/seldonframe/seldonframe?color=1FAE85)](https://github.com/seldonframe/seldonframe/stargazers)
 [![Discord](https://img.shields.io/badge/Discord-join-5865F2.svg)](https://discord.gg/sbVUu976NW)
 [![X](https://img.shields.io/badge/follow-%40seldonframe-1d9bf0.svg)](https://x.com/seldonframe)
+[![smithery badge](https://smithery.ai/badge/maximehoule100/seldonframe)](https://smithery.ai/servers/maximehoule100/seldonframe)
 
 [Website](https://seldonframe.com) · [For builders](https://seldonframe.com/build) · [Docs](https://seldonframe.com/docs) · [Live demo](https://phoenix-ac-air-conditioning-heating-inc.app.seldonframe.com) · [Discord](https://discord.gg/sbVUu976NW)
 
