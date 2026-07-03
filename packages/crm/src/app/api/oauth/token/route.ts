@@ -3,11 +3,12 @@
 // sends both the initial token exchange and refresh requests with this
 // content type" — design doc §1.2). Do NOT parse this as JSON.
 import { NextResponse } from "next/server";
-import { and, eq, isNull } from "drizzle-orm";
+import { and, eq, inArray, isNull } from "drizzle-orm";
 import crypto from "node:crypto";
 import { db } from "@/db";
-import { oauthAuthorizationCodes, oauthRefreshTokens } from "@/db/schema";
+import { apiKeys, oauthAuthorizationCodes, oauthRefreshTokens } from "@/db/schema";
 import { validateCodeRedemption } from "@/lib/oauth/redeem-authorization-code";
+import { decideRefreshOutcome } from "@/lib/oauth/rotate-refresh-token";
 import { hashOauthSecret, generateRefreshToken } from "@/lib/oauth/tokens";
 import { mintWorkspaceToken } from "@/lib/auth/workspace-token";
 import { checkRateLimit } from "@/lib/utils/rate-limit";
@@ -38,10 +39,107 @@ export async function POST(request: Request) {
     return handleAuthorizationCodeGrant(form, clientId);
   }
   if (grantType === "refresh_token") {
-    // Implemented in Task 13 — placeholder wiring only in this task.
-    return NextResponse.json({ error: "unsupported_grant_type" }, { status: 400 });
+    return handleRefreshTokenGrant(form, clientId);
   }
   return NextResponse.json({ error: "unsupported_grant_type" }, { status: 400 });
+}
+
+async function handleRefreshTokenGrant(form: FormData, clientId: string): Promise<NextResponse> {
+  const presentedRefreshToken = String(form.get("refresh_token") ?? "");
+  if (!presentedRefreshToken || !clientId) {
+    return NextResponse.json({ error: "invalid_request" }, { status: 400 });
+  }
+
+  const tokenHash = hashOauthSecret(presentedRefreshToken);
+  const [storedToken] = await db
+    .select({
+      id: oauthRefreshTokens.id,
+      familyId: oauthRefreshTokens.familyId,
+      clientId: oauthRefreshTokens.clientId,
+      orgId: oauthRefreshTokens.orgId,
+      userId: oauthRefreshTokens.userId,
+      apiKeyId: oauthRefreshTokens.apiKeyId,
+      revokedAt: oauthRefreshTokens.revokedAt,
+      expiresAt: oauthRefreshTokens.expiresAt,
+    })
+    .from(oauthRefreshTokens)
+    .where(eq(oauthRefreshTokens.tokenHash, tokenHash))
+    .limit(1);
+
+  const decision = decideRefreshOutcome({
+    storedToken: storedToken ?? null,
+    presentedClientId: clientId,
+    now: new Date(),
+  });
+
+  if (decision.outcome === "reject") {
+    return NextResponse.json({ error: "invalid_grant" }, { status: 400 });
+  }
+
+  if (decision.outcome === "reuse_detected") {
+    // Revoke the ENTIRE family — every refresh token descended from the
+    // same original grant — plus the access tokens tied to it. This is the
+    // theft-response the design doc §3.2 and §4 both call for. Collect the
+    // family's api_key ids BEFORE revoking so the CURRENTLY-LIVE access
+    // token (the newest row's key, not just the presented old row's) dies
+    // with the refresh chain — an expired apiKeys row makes
+    // resolveWorkspaceBearer 401 immediately on the next MCP call.
+    const familyRows = await db
+      .select({ apiKeyId: oauthRefreshTokens.apiKeyId })
+      .from(oauthRefreshTokens)
+      .where(eq(oauthRefreshTokens.familyId, decision.familyId));
+    await db
+      .update(oauthRefreshTokens)
+      .set({ revokedAt: new Date() })
+      .where(and(eq(oauthRefreshTokens.familyId, decision.familyId), isNull(oauthRefreshTokens.revokedAt)));
+    const familyApiKeyIds = familyRows
+      .map((row) => row.apiKeyId)
+      .filter((value): value is string => Boolean(value));
+    if (familyApiKeyIds.length > 0) {
+      await db
+        .update(apiKeys)
+        .set({ expiresAt: new Date() })
+        .where(inArray(apiKeys.id, familyApiKeyIds));
+    }
+    return NextResponse.json({ error: "invalid_grant" }, { status: 400 });
+  }
+
+  // decision.outcome === "rotate"
+  if (!storedToken) {
+    // Unreachable given decideRefreshOutcome's contract, but keeps
+    // TypeScript's control-flow narrowing honest without a non-null
+    // assertion.
+    return NextResponse.json({ error: "invalid_grant" }, { status: 400 });
+  }
+
+  await db
+    .update(oauthRefreshTokens)
+    .set({ revokedAt: new Date() })
+    .where(eq(oauthRefreshTokens.id, storedToken.id));
+
+  const minted = await mintWorkspaceToken(storedToken.orgId, {
+    name: `oauth:${clientId}`,
+    kind: "oauth",
+    expiresInMinutes: ACCESS_TOKEN_EXPIRY_MINUTES,
+  });
+
+  const newRefreshTokenRaw = generateRefreshToken();
+  await db.insert(oauthRefreshTokens).values({
+    tokenHash: hashOauthSecret(newRefreshTokenRaw),
+    familyId: storedToken.familyId, // SAME family — this is the rotation chain
+    clientId,
+    orgId: storedToken.orgId,
+    userId: storedToken.userId,
+    apiKeyId: minted.tokenId,
+    expiresAt: new Date(Date.now() + REFRESH_TOKEN_EXPIRY_DAYS * 24 * 60 * 60 * 1000),
+  });
+
+  return NextResponse.json({
+    access_token: minted.token,
+    token_type: "Bearer",
+    expires_in: ACCESS_TOKEN_EXPIRY_MINUTES * 60,
+    refresh_token: newRefreshTokenRaw, // per Anthropic's docs: "return the new refresh token in the same response that invalidates the old one"
+  });
 }
 
 async function handleAuthorizationCodeGrant(form: FormData, clientId: string): Promise<NextResponse> {
