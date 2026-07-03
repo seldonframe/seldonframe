@@ -1,15 +1,61 @@
 {
+  "serverInfo": { "name": "SeldonFrame", "version": "1.59.2" },
   "name": "SeldonFrame",
   "description": "Build, deploy, and sell AI agents for local-service businesses from your IDE. build_workspace creates a live site + booking + CRM + AI receptionist in about 3 minutes; deploy, test, and sell agents through the same server.",
   "url": "https://mcp.seldonframe.com/v1",
   "transport": "streamable-http",
-  "authentication": { "type": "bearer", "instructions": "Use the workspace token (wst_...) returned by workspace creation, or create a free workspace first - no signup required." },
+  "authentication": {
+    "required": true,
+    "schemes": ["bearer"],
+    "type": "bearer",
+    "instructions": "Send `Authorization: Bearer wst_...` (a SeldonFrame workspace key). Create a free workspace at https://seldonframe.com/build - no signup required."
+  },
   "vendor": { "name": "SeldonFrame", "url": "https://www.seldonframe.com" },
   "documentation": "https://www.seldonframe.com/build",
+  "tools": [
+    {
+      "name": "discover",
+      "description": "Search the SeldonFrame catalog of agents and tools with a natural-language query. Returns entries with id, type, name, description, and price. A blank query lists the catalog.",
+      "inputSchema": {
+        "type": "object",
+        "properties": {
+          "query": { "type": "string", "description": "Free-text search (e.g. 'send an email', 'book an appointment'). Optional." },
+          "limit": { "type": "number", "description": "Max results to return." }
+        }
+      }
+    },
+    {
+      "name": "inspect",
+      "description": "Get one catalog entry's full input schema and price before running it.",
+      "inputSchema": {
+        "type": "object",
+        "properties": {
+          "type": { "type": "string", "enum": ["agent", "tool"], "description": "The entry's type, from discover's result." },
+          "id": { "type": "string", "description": "The entry's id (agent slug or tool action slug)." }
+        },
+        "required": ["type", "id"]
+      }
+    },
+    {
+      "name": "run",
+      "description": "Execute a catalog entry (agent or tool) with its input arguments.",
+      "inputSchema": {
+        "type": "object",
+        "properties": {
+          "type": { "type": "string", "enum": ["agent", "tool"], "description": "The entry's type, from discover/inspect." },
+          "id": { "type": "string", "description": "The entry's id (agent slug or tool action slug)." },
+          "input": { "type": "object", "description": "Arguments matching the entry's input schema from inspect." }
+        },
+        "required": ["type", "id"]
+      }
+    }
+  ],
+  "resources": [],
+  "prompts": [],
   "tools_summary": [
-    "discover_tools / inspect_tool / run_tool - the full SeldonFrame build surface over one bridge",
-    "create_full_workspace - website + booking + intake + CRM + AI chatbot from business facts",
-    "deploy_agent - take a built agent live (phone/chat) with readiness checks",
-    "browse/sell - marketplace listing and earnings surfaces"
+    "discover / inspect / run - the full SeldonFrame build surface over one bridge",
+    "create_full_workspace (via run) - website + booking + intake + CRM + AI chatbot from business facts",
+    "deploy_agent (via run) - take a built agent live (phone/chat) with readiness checks",
+    "browse/sell (via run) - marketplace listing and earnings surfaces"
   ]
 }
