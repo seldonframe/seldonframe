@@ -9,6 +9,7 @@ const TABS = [
   { slug: "conversations", label: "Conversations" },
   { slug: "settings", label: "Settings" },
   { slug: "evals", label: "Evals" },
+  { slug: "improve", label: "Improve" },
 ];
 
 export function AgentTabs({ agentId }: { agentId: string }) {
