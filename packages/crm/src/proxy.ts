@@ -144,6 +144,14 @@ function resolveWorkspaceRewritePath(
     return `/s/${slug}/${segments[1] || defaultLandingSlug}`;
   }
 
+  // Smoke FIX-6: R1 multi-page service links. Generated sites emit
+  // root-relative href="/services/<svc>"; the per-service detail renderer
+  // lives at /w/[slug]/services/[service], NOT in the /s catch-all the
+  // generic fallback below rewrites into (which 404s). Route it directly.
+  if (segments[0] === "services" && segments.length === 2) {
+    return `/w/${slug}/services/${segments[1]}`;
+  }
+
   if (!pathname.startsWith("/book/") && !pathname.startsWith("/forms/") && !pathname.startsWith("/api/")) {
     const normalizedPath = pathname.replace(/^\/+/, "");
     return normalizedPath ? `/s/${slug}/${normalizedPath}` : `/s/${slug}/${defaultLandingSlug}`;
