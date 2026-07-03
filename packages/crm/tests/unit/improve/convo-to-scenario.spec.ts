@@ -218,7 +218,7 @@ describe("scenarioFromValidatorFailure", () => {
     assert.ok(Array.isArray(result!.mustDo));
   });
 
-  test("PII in the opening turn passes through opening ONLY — mustNotDo/successCriteria/persona/title contain none of it", () => {
+  test("PII from the opening turn never leaks into mustNotDo/successCriteria/persona/title, AND opening itself is scrubbed (the full scenario is piped through scrubScenarioPii, per the brief's binding detail)", () => {
     const s = sample({
       hadCriticalValidatorFailure: true,
       failedValidatorNames: ["no_pii_leak"],
@@ -231,13 +231,14 @@ describe("scenarioFromValidatorFailure", () => {
     });
     const result = scenarioFromValidatorFailure(s);
     assert.ok(result);
-    // opening carries the raw turn through (pre-scrub, at THIS layer — the
-    // scrub is a separate composed step per the brief's "both branches run
-    // their output through it").
-    assert.match(result!.opening, /jane\.doe@example\.com/);
+    // The scrub applies to EVERY field, opening included — mustNotDo/
+    // successCriteria/persona/title never contained the PII to begin with
+    // (they're derived from validator names, not the transcript), and
+    // opening is scrubbed down to the same "<redacted>" marker.
     for (const field of [
       result!.title,
       result!.persona,
+      result!.opening,
       ...result!.successCriteria,
       ...result!.mustDo,
       ...result!.mustNotDo,
@@ -245,6 +246,7 @@ describe("scenarioFromValidatorFailure", () => {
       assert.doesNotMatch(field, /jane\.doe@example\.com/i);
       assert.doesNotMatch(field, /555-123-4567/);
     }
+    assert.match(result!.opening, /<redacted>/);
   });
 
   test("is pure: calling twice with the same input produces deep-equal output", () => {
