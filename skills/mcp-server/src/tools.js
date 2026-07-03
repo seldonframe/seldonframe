@@ -471,19 +471,19 @@ export const TOOLS = [
       return firstEver ? withFirstCallBanner(payload) : payload;
     },
   },
-  // create_workspace_from_url — atomic crawl + workspace + chatbot.
-  // Thin wrapper around create_full_workspace with include_chatbot=true
-  // and auto_extract_faq=true. The orchestrator at /api/v1/workspace/create
-  // (POST) handles the multi-phase composition; this tool exists for
-  // discoverability — operators reading the MCP tool list see a name
-  // that matches the marketing pitch ("paste a URL → workspace").
+  // create_workspace_from_url — URL → extraction playbook → atomic build.
+  // Returns the server's extraction instructions; Claude WebFetches +
+  // extracts, then calls create_full_workspace (v1.58.1: the atomic path —
+  // it now builds the production multi-page R1 site server-side, the same
+  // engine as the SeldonFrame dashboard's /clients/new, so the old
+  // block-iterated v2 follow-up is no longer the best pipeline here).
   {
     name: "create_workspace_from_url",
     description:
-      "Entry point for URL-based workspace creation. Returns instructions Claude follows: WebFetch the URL, optionally WebFetch up to 2 priority sub-pages (e.g. /about, /services, /contact, /pricing), extract structured business facts, ask the operator for any required field that can't be determined, then call `create_workspace_v2` with the result. " +
-      "THIS TOOL DOES NOT CREATE A WORKSPACE — it returns the playbook. The workspace is created by the follow-up `create_workspace_v2` call (then per-block: get_block_skill + persist_block + complete_workspace_v2 + finalize_workspace). " +
+      "Entry point for URL-based workspace creation. Returns instructions Claude follows: WebFetch the URL, optionally WebFetch up to 2 priority sub-pages (e.g. /about, /services, /contact, /pricing), extract structured business facts, ask the operator for any required field that can't be determined, then call `create_full_workspace` with the result — ONE atomic call that builds the workspace + the production multi-page website (vertical-aware landing + per-service detail pages, the same engine as the SeldonFrame dashboard) + booking page + intake form + CRM + draft chatbot. " +
+      "THIS TOOL DOES NOT CREATE A WORKSPACE — it returns the playbook. The workspace is created by the follow-up `create_full_workspace` call. Do NOT use the block-iterated create_workspace_v2 flow for URL builds. " +
       "When operator provides ANY of: 'http://', 'https://', a domain (.com/.io/.net/.co/.app/.dev/.us etc), or 'create workspace for <URL>' — call this tool. Do NOT manually WebFetch first; the instructions returned by this tool tell you exactly what to fetch and in what order. " +
-      "MANDATORY FOLLOW-UP: After create_workspace_v2 returns 'ready' and all blocks land via persist_block + complete_workspace_v2, ask the operator 'What email should I use for your account?' and call finalize_workspace({ workspace_id, email }).",
+      "MANDATORY FOLLOW-UP: After create_full_workspace returns, ask the operator 'What email should I use for your account?' and call finalize_workspace({ workspace_id, email }).",
     inputSchema: obj(
       {
         url: str("Business website URL the operator provided, e.g. https://quigleyac.com"),

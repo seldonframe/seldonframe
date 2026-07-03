@@ -226,9 +226,13 @@ server-side personality system still runs underneath for everything
 else (CRM, booking, intake, theme, pipeline) — v2 only owns the copy
 surfaces where v1's layer-mismatch bugs hurt most.
 
-If you find yourself reaching for \`create_full_workspace\` instead of
-\`create_workspace_v2\`, stop — that's the legacy path. It still works
-but the output quality is worse on niches outside SF's curated set.
+Flow choice: when the structured business FACTS are already in hand —
+a URL extraction (create_workspace_from_url's playbook), a Google Maps
+paste, or a filled fact sheet — call \`create_full_workspace\` instead.
+Its atomic build now runs the same multi-page R1 site engine as the
+SeldonFrame dashboard (vertical-aware landing + per-service detail
+pages), which beats block-by-block copy generation. Use the v2 flow
+below when the operator wants to craft the copy interactively with you.
 
 1. **Ask for the business details** (same as before — gather conversationally):
    - Business name
@@ -322,17 +326,21 @@ but the output quality is worse on niches outside SF's curated set.
    output. PARAPHRASE that summary verbatim to the operator — that's
    how they see what was configured.
 
-## v1 fallback (legacy — NOT preferred)
+## Atomic vs block-iterated — when to use which
 
-\`create_full_workspace\` still works as the v1 atomic creation path.
-Use it ONLY when:
-- The operator's IDE agent has no LLM (script context, no Anthropic key)
-- A network failure prevents repeated tool calls and you need atomicity
-- You're writing automated tests that don't want to think about block
-  generation
+\`create_full_workspace\` is the atomic creation path and (since v1.58)
+builds the production multi-page website server-side — the same R1
+engine the SeldonFrame dashboard's /clients/new uses: vertical-aware
+landing, per-service detail pages, booking, intake, CRM, and a draft
+chatbot, all from one call. Prefer it whenever the business facts are
+already in hand:
+- create_workspace_from_url extractions (its playbook routes here)
+- Google Maps paste flows
+- scripted/automated creation
 
-In normal interactive operator-facing flows, prefer v2 every time. The
-v2 quality gradient over v1 is meaningful on long-tail niches.
+Prefer \`create_workspace_v2\` when the operator wants to shape the copy
+interactively — you generate hero/services/faq blocks yourself from
+block skills and iterate with them before completing.
 
 After step 4 the operator can customize their workspace through
 further natural-language requests ("change the headline to …",
