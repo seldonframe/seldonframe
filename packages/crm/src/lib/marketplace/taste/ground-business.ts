@@ -9,7 +9,7 @@
 // The flagship platform-key guard applies here exactly as in taste-turn.ts.
 
 import type Anthropic from "@anthropic-ai/sdk";
-import { assertPublicHttpUrl } from "@/lib/security/ssrf-guard";
+import { assertPublicHttpUrl, fetchPublicUrlSafe } from "@/lib/security/ssrf-guard";
 import { htmlToMarkdown } from "@/lib/soul-wiki/ingest";
 import { getAIClient } from "@/lib/ai/client";
 import type { TasteGrounding } from "@/db/schema/agent-taste-sessions";
@@ -34,7 +34,7 @@ export type GroundDeps = {
 export const REAL_GROUND_DEPS: Omit<GroundDeps, "flagshipOrgIds"> = {
   assertUrl: (raw) => assertPublicHttpUrl(raw),
   fetchPage: async (safeUrl) => {
-    const response = await fetch(safeUrl, {
+    const response = await fetchPublicUrlSafe(safeUrl, {
       headers: { "User-Agent": "SeldonFrame/1.0 (Business Analysis)" },
       signal: AbortSignal.timeout(10_000),
     });

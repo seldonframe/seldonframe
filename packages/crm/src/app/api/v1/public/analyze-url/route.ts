@@ -4,7 +4,7 @@ import { NextResponse } from "next/server";
 import { db } from "@/db";
 import { previewSessions } from "@/db/schema";
 import { demoApiBlockedResponse, isDemoReadonly } from "@/lib/demo/server";
-import { assertPublicHttpUrl } from "@/lib/security/ssrf-guard";
+import { fetchPublicUrlSafe, SsrfBlockedError } from "@/lib/security/ssrf-guard";
 import { checkRateLimit } from "@/lib/utils/rate-limit";
 
 type DetectedTool = { name: string; slug: string; icon: string; autoConnect: boolean };
@@ -356,27 +356,35 @@ export async function POST(request: Request) {
     return withCors(NextResponse.json({ error: "URL is required" }, { status: 400 }));
   }
 
-  // SSRF egress guard (security audit 2026-06-28, FIX 1). This is an
-  // UNAUTHENTICATED endpoint that fetches a caller-supplied URL and
-  // reflects its content. Resolve the hostname and reject any URL that
-  // points (by name or DNS) at a loopback/private/link-local/metadata
-  // address before we ever open the socket. On reject we return a flat
-  // 400 without leaking which check failed (don't help an attacker map
-  // the internal network).
+  // SSRF egress guard (security audit 2026-06-28, FIX 1; redirect-follow gap
+  // closed in the follow-up audit). This is an UNAUTHENTICATED endpoint that
+  // fetches a caller-supplied URL and reflects its content. `fetchPublicUrlSafe`
+  // vets the initial URL AND every redirect hop (loopback/private/link-local/
+  // metadata) before opening any socket — a public page that 302's to an
+  // internal address is rejected mid-chain, not just at the first hop. On
+  // reject we return a flat 400 without leaking which check failed (don't
+  // help an attacker map the internal network).
   let safeUrl: string;
+  let response: Response;
   try {
-    const vetted = await assertPublicHttpUrl(cleanUrl);
-    safeUrl = vetted.url.toString();
-  } catch {
-    return withCors(NextResponse.json({ error: "URL not allowed" }, { status: 400 }));
-  }
-
-  try {
-    const response = await fetch(safeUrl, {
+    response = await fetchPublicUrlSafe(cleanUrl, {
       headers: { "User-Agent": "SeldonFrame/1.0 (Business Analysis)" },
       signal: AbortSignal.timeout(10_000),
     });
+    safeUrl = response.url || cleanUrl;
+  } catch (err) {
+    if (err instanceof SsrfBlockedError) {
+      return withCors(NextResponse.json({ error: "URL not allowed" }, { status: 400 }));
+    }
+    return withCors(
+      NextResponse.json(
+        { error: "Could not read that URL. Make sure it's a public website." },
+        { status: 422 }
+      )
+    );
+  }
 
+  try {
     if (!response.ok) {
       return withCors(
         NextResponse.json({ error: `Could not read that URL (status ${response.status}).` }, { status: 422 })

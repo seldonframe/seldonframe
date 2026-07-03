@@ -341,3 +341,63 @@ export async function assertPublicHttpUrl(
 
   return { url, ip: addresses[0]!.address };
 }
+
+// ── Redirect-safe fetch ────────────────────────────────────────────────────────
+//
+// `assertPublicHttpUrl` only vets the URL it's given. `fetch()` follows
+// redirects by default, so a public page that 302's to
+// `http://169.254.169.254/` (or any other internal target) sails straight
+// past the guard on the SECOND hop. Three call sites independently vetted
+// only the initial URL and then did a normal `fetch` — this helper is the
+// one place that closes that gap: it re-runs `assertPublicHttpUrl` on every
+// hop, using `redirect: "manual"` so the runtime never auto-follows a
+// Location header we haven't vetted ourselves. Mirrors the approach in
+// `skills/mcp-server/src/client.js` (`fetchText`), which can't be imported
+// here (separate package).
+
+/** Default cap on redirect hops before we give up (matches the MCP client's
+ *  MAX_REDIRECTS = 3). */
+const DEFAULT_MAX_REDIRECTS = 3;
+
+/**
+ * Fetch `url` from the server, re-vetting EVERY redirect hop through
+ * {@link assertPublicHttpUrl} before following it. Throws
+ * {@link SsrfBlockedError} if the initial URL, any intermediate Location, or
+ * the hop count fails the guard. Returns the first non-redirect Response —
+ * callers keep their own `.text()` / size-cap / content-type handling.
+ *
+ * `init` is passed through to every hop's `fetch` call (headers, signal,
+ * method, …) except `redirect`, which is always forced to `"manual"` so we
+ * can inspect and re-vet each Location ourselves.
+ *
+ * `opts.resolve` is the same DNS-resolver DI seam as {@link AssertOptions} —
+ * threaded through to every hop's `assertPublicHttpUrl` call so tests can
+ * simulate resolution without touching the network.
+ */
+export async function fetchPublicUrlSafe(
+  url: string,
+  init?: RequestInit,
+  opts?: { maxRedirects?: number; resolve?: DnsResolver },
+): Promise<Response> {
+  const maxRedirects = opts?.maxRedirects ?? DEFAULT_MAX_REDIRECTS;
+  const assertOpts: AssertOptions = opts?.resolve ? { resolve: opts.resolve } : {};
+
+  let currentUrl = (await assertPublicHttpUrl(url, assertOpts)).url.toString();
+  for (let hop = 0; ; hop++) {
+    const response = await fetch(currentUrl, { ...init, redirect: "manual" });
+    const isRedirect = response.status >= 300 && response.status < 400;
+    if (!isRedirect) return response;
+
+    if (hop >= maxRedirects) {
+      throw new SsrfBlockedError();
+    }
+    const location = response.headers.get("location");
+    if (!location) {
+      throw new SsrfBlockedError();
+    }
+    // Location may be relative — resolve against the URL that produced it,
+    // then re-vet the RESOLVED absolute URL before ever following it.
+    const nextUrl = new URL(location, currentUrl).toString();
+    currentUrl = (await assertPublicHttpUrl(nextUrl, assertOpts)).url.toString();
+  }
+}

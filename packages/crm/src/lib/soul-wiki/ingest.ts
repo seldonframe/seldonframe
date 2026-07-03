@@ -1,4 +1,4 @@
-import { assertPublicHttpUrl, SsrfBlockedError } from "@/lib/security/ssrf-guard";
+import { assertPublicHttpUrl, fetchPublicUrlSafe, SsrfBlockedError } from "@/lib/security/ssrf-guard";
 
 type IngestInput = {
   type: "url" | "youtube" | "text" | "testimonial";
@@ -18,15 +18,15 @@ export async function ingestSource(
         throw new Error("URL is required");
       }
 
-      // SSRF egress guard (security audit 2026-06-28, FIX 2). The
-      // ingested URL is tenant-controlled and its body is returned in
-      // `rawContent`, so an attacker could read internal endpoints.
-      // Resolve + reject loopback/private/link-local/metadata targets
-      // before opening the socket; throw a generic message (the route
-      // maps a throw to a 400 "URL not allowed").
-      const safe = await assertSafeIngestUrl(url);
-
-      const response = await fetch(safe);
+      // SSRF egress guard (security audit 2026-06-28, FIX 2; redirect-follow
+      // gap closed in the follow-up audit). The ingested URL is
+      // tenant-controlled and its body is returned in `rawContent`, so an
+      // attacker could read internal endpoints — including via a public
+      // page that redirects to one. `fetchPublicUrlSafe` re-vets every
+      // redirect hop, not just the initial URL, before opening any socket;
+      // throw a generic message (the route maps a throw to a 400 "URL not
+      // allowed").
+      const response = await fetchSafeIngestUrl(url);
       if (!response.ok) {
         throw new Error(`Failed to fetch URL (${response.status})`);
       }
@@ -120,6 +120,22 @@ async function assertSafeIngestUrl(url: string): Promise<string> {
   try {
     const vetted = await assertPublicHttpUrl(url);
     return vetted.url.toString();
+  } catch (err) {
+    if (err instanceof SsrfBlockedError) {
+      throw new Error("URL not allowed");
+    }
+    throw err;
+  }
+}
+
+/**
+ * Fetch a tenant-supplied ingest URL through the redirect-safe SSRF guard
+ * (every hop re-vetted, not just the initial URL). Maps a blocked URL to the
+ * same generic "URL not allowed" Error the route expects.
+ */
+async function fetchSafeIngestUrl(url: string): Promise<Response> {
+  try {
+    return await fetchPublicUrlSafe(url);
   } catch (err) {
     if (err instanceof SsrfBlockedError) {
       throw new Error("URL not allowed");
