@@ -242,9 +242,9 @@ export const AGENT_JOBS: AgentJob[] = [
     verticalLede:
       "texts the caller back within seconds of a missed call to ask what they need and keep the lead alive",
     painStat: {
-      text: "78% of customers buy from the first company to respond to their inquiry.",
-      source: "Lead Connect / InsideSales response-time research",
-      url: "https://www.leadconnect.io/blog/sales-statistics/",
+      text: "Reaching a new lead within 5 minutes makes contact roughly 100x more likely than waiting 30 minutes.",
+      source: "MIT / InsideSales.com Lead Response Management study (Oldroyd)",
+      url: "https://www.leadresponsemanagement.org/lrm_study",
     },
     whatItDoes: [
       "Detects a missed or abandoned call the moment it happens.",
