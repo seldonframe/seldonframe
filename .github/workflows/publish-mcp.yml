@@ -1,0 +1,45 @@
+# Publishes @seldonframe/mcp to npm WITH PROVENANCE via OIDC trusted publishing.
+# Every release gets the "Built and signed on GitHub Actions" attestation on
+# its npm page — the supply-chain trust badge (no local npm, no 2FA prompt,
+# no token stored anywhere).
+#
+# ONE-TIME SETUP (repo owner, in the npm UI — no secrets ever enter GitHub):
+#   npmjs.com → package @seldonframe/mcp → Settings → Trusted Publisher →
+#   GitHub Actions → repository: seldonframe/seldonframe,
+#   workflow filename: publish-mcp.yml. Done.
+#
+# RELEASE FLOW after setup: bump the four version fields (package.json,
+# welcome.js VERSION, both server.json files), commit to main, then:
+#   git tag mcp-v<version> && git push origin mcp-v<version>
+# The tag push triggers this workflow. prepublishOnly still runs the
+# syntax check + the security test suite before anything uploads.
+name: publish-mcp
+
+on:
+  push:
+    tags:
+      - "mcp-v*"
+  workflow_dispatch: {}
+
+permissions:
+  contents: read
+  id-token: write # OIDC — required for npm trusted publishing + provenance
+
+jobs:
+  publish:
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: skills/mcp-server
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/setup-node@v6
+        with:
+          node-version: 22
+          registry-url: "https://registry.npmjs.org"
+      # Trusted publishing needs npm >= 11.5; Node 22 ships an older npm.
+      - run: npm install -g npm@latest
+      - run: npm ci
+      - run: npm run check:syntax
+      - run: npm test
+      - run: npm publish --access public
