@@ -8,11 +8,12 @@
 // the moment it's requested.
 
 import { getHeroMetrics, type HeroMetric } from "@/lib/super-admin/metrics";
+import { getActivationFunnel, type FunnelStage } from "@/lib/super-admin/activation";
 
 export const dynamic = "force-dynamic";
 
 export default async function SuperAdminOverviewPage() {
-  const metrics = await getHeroMetrics();
+  const [metrics, activation] = await Promise.all([getHeroMetrics(), getActivationFunnel()]);
 
   return (
     <div className="px-6 py-8 sm:px-10 sm:py-10 max-w-[1200px] mx-auto space-y-10">
@@ -24,7 +25,8 @@ export default async function SuperAdminOverviewPage() {
           Today
         </h1>
         <p className="mt-2 text-sm text-muted-foreground">
-          The four numbers that tell you whether the business is moving. Refreshes every 5 minutes from cache.
+          The four numbers that tell you whether the business is moving, plus the activation funnel
+          showing whether signups are turning into builders. Refreshes every 5 minutes from cache.
         </p>
       </header>
 
@@ -39,6 +41,30 @@ export default async function SuperAdminOverviewPage() {
         <p className="mt-3 text-[11px] font-mono text-muted-foreground/70">
           Computed at {new Date(metrics.computedAt).toLocaleString()} · cache TTL 5m
         </p>
+      </section>
+
+      {/* Activation funnel */}
+      <section className="border-t pt-10">
+        <h2 className="text-base font-semibold text-foreground mb-1">Activation</h2>
+        <p className="text-sm text-muted-foreground mb-5">
+          Where signups turn into usage — and where they leak.
+        </p>
+        <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-4 gap-4">
+          {activation.stages.map((stage, i) => (
+            <FunnelTile key={stage.label} stage={stage} accent={i === 0 ? "primary" : "muted"} />
+          ))}
+        </div>
+        <div className="mt-5 space-y-1.5">
+          <p className="text-xs text-muted-foreground">
+            IDE connections: {formatNumber(activation.connections.used)} of{" "}
+            {formatNumber(activation.connections.minted)} device tokens have ever made a call (
+            {activation.connections.usedPct}%) — the rest connected but never built.
+          </p>
+          <p className="text-xs text-muted-foreground">
+            {formatNumber(activation.signupsTotal)} people signed up · {formatNumber(activation.signupsLast7d)} this
+            week.
+          </p>
+        </div>
       </section>
 
       {/* Drill-down cues */}
@@ -95,6 +121,31 @@ function StatCard({ metric, accent }: { metric: HeroMetric; accent: "primary" | 
       ) : null}
     </div>
   );
+}
+
+function FunnelTile({ stage, accent }: { stage: FunnelStage; accent: "primary" | "muted" }) {
+  const accentClass =
+    accent === "primary"
+      ? "border-[#1FAE85]/30 bg-gradient-to-br from-[#1FAE85]/8 to-transparent"
+      : "border-border bg-card";
+
+  return (
+    <div className={`relative rounded-[14px] border ${accentClass} p-5`}>
+      <p className="text-[11px] uppercase tracking-[0.08em] font-mono text-muted-foreground mb-2">
+        {stage.label}
+      </p>
+      <p className="text-[clamp(28px,3.5vw,40px)] font-bold tracking-tight text-foreground leading-none">
+        {formatNumber(stage.count)}
+      </p>
+      <p className="mt-2 text-xs text-muted-foreground">
+        {stage.ofTotalPct}% · {stage.hint}
+      </p>
+    </div>
+  );
+}
+
+function formatNumber(n: number): string {
+  return new Intl.NumberFormat("en-US").format(n);
 }
 
 function DrillCard({ href, title, body }: { href: string; title: string; body: string }) {
