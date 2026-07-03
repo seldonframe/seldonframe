@@ -160,3 +160,9 @@ export * from "./marketplace-purchases";
 // double-debit (UNIQUE idempotency_key), inert without a Stripe key. See
 // lib/build/wallet-ledger.ts + lib/build/wallet-store.ts.
 export * from "./wallet";
+
+// 2026-07-02 — Virality Pack Task 5: referrals (MONEY, inert behind
+// SF_REFERRALS_ENABLED). One additive table — one row per referee EVER
+// (UNIQUE(refereeOrgId)). Credits are wallet_transactions rows only (kind
+// 'referral_credit'), never Stripe. See lib/growth/referrals.ts.
+export * from "./referrals";

@@ -16,7 +16,7 @@
 //   • the happy path credits BOTH parties with the two EXACT idempotency
 //     keys the plan mandates (`referral:referrer:<refereeOrgId>` and
 //     `referral:referee:<refereeOrgId>`) for SF_REFERRAL_CREDIT_CENTS
-//     (default 500 → 500_000 micros), and reads the wallet mode via
+//     (default 500 cents → 5_000_000 micros = $5.00), and reads the wallet mode via
 //     resolveWalletStripeMode.
 //
 // DI'd over fakes — no DB, no network, no wallet-store import. The fakes
@@ -36,6 +36,7 @@ import {
   refereeIdempotencyKey,
   type ReferralsDeps,
   type ReferralRow,
+  type EnvLike,
 } from "../../../src/lib/growth/referrals";
 
 // ─── fakes ───────────────────────────────────────────────────────────────
@@ -113,7 +114,7 @@ function makeFakeWalletLedger() {
 }
 
 function buildDeps(overrides?: {
-  enabledEnv?: NodeJS.ProcessEnv;
+  enabledEnv?: EnvLike;
   store?: ReturnType<typeof makeFakeReferralsStore>;
   ledger?: ReturnType<typeof makeFakeWalletLedger>;
   creditCents?: string;
@@ -124,7 +125,7 @@ function buildDeps(overrides?: {
 } {
   const store = overrides?.store ?? makeFakeReferralsStore();
   const ledger = overrides?.ledger ?? makeFakeWalletLedger();
-  const env: NodeJS.ProcessEnv = {
+  const env: EnvLike = {
     SF_REFERRALS_ENABLED: "true",
     ...(overrides?.creditCents ? { SF_REFERRAL_CREDIT_CENTS: overrides.creditCents } : {}),
     ...overrides?.enabledEnv,
@@ -292,9 +293,11 @@ describe("maybeCreditReferral — happy path credits BOTH parties", () => {
     assert.equal(referrerCredit?.idempotencyKey, referrerIdempotencyKey(REFEREE));
     assert.equal(refereeCredit?.idempotencyKey, refereeIdempotencyKey(REFEREE));
 
-    // Default amount: SF_REFERRAL_CREDIT_CENTS default 500 cents = 500_000 micros.
-    assert.equal(referrerCredit?.amountMicros, 500_000);
-    assert.equal(refereeCredit?.amountMicros, 500_000);
+    // Default amount: SF_REFERRAL_CREDIT_CENTS default 500 cents. 1 cent =
+    // MICRO_PER_CENT (10_000) micros ($1 = 1_000_000 micros), so 500 cents =
+    // 5_000_000 micros = $5.00.
+    assert.equal(referrerCredit?.amountMicros, 5_000_000);
+    assert.equal(refereeCredit?.amountMicros, 5_000_000);
     assert.equal(REFERRAL_CREDIT_CENTS_DEFAULT, 500);
 
     // Wallet mode came from resolveWalletStripeMode (faked to "test" above).
@@ -306,15 +309,16 @@ describe("maybeCreditReferral — happy path credits BOTH parties", () => {
     assert.ok(store.rows[0]?.creditedAt instanceof Date);
   });
 
-  test("honors SF_REFERRAL_CREDIT_CENTS when set (e.g. 250 cents → 250_000 micros)", async () => {
+  test("honors SF_REFERRAL_CREDIT_CENTS when set (e.g. 250 cents → 2_500_000 micros)", async () => {
     const store = makeFakeReferralsStore();
     await store.insert({ referrerOrgId: REFERRER, refereeOrgId: REFEREE, source: "powered_by" });
     const { deps, ledger } = buildDeps({ store, creditCents: "250" });
 
     const result = await maybeCreditReferral(REFEREE, deps);
     assert.deepEqual(result, { credited: true });
-    assert.equal(ledger.credited[0]?.amountMicros, 250_000);
-    assert.equal(ledger.credited[1]?.amountMicros, 250_000);
+    // 250 cents * MICRO_PER_CENT (10_000) = 2_500_000 micros = $2.50.
+    assert.equal(ledger.credited[0]?.amountMicros, 2_500_000);
+    assert.equal(ledger.credited[1]?.amountMicros, 2_500_000);
   });
 });
 

@@ -41,14 +41,19 @@ import type { MarketplaceStripeMode } from "@/db/schema/marketplace-purchases";
  *  Transfer), which SUBTRACTS from what's withdrawable; `voice_debit` = a voice
  *  call's metered usage draining the wallet (never refused — drains whatever
  *  the balance covers, per-call idempotent); `number_rent` = the monthly phone
- *  number rental drawdown (refusable, unlike voice minutes). */
+ *  number rental drawdown (refusable, unlike voice minutes); `referral_credit`
+ *  = money IN for either side of a completed referral (virality pack Task 5 —
+ *  NEVER Stripe, inert without SF_REFERRALS_ENABLED, idempotent on the keys
+ *  `referral:referrer:<refereeOrgId>` / `referral:referee:<refereeOrgId>` —
+ *  see lib/growth/referrals.ts). */
 export type WalletTransactionKind =
   | "topup"
   | "debit"
   | "earning"
   | "payout"
   | "voice_debit"
-  | "number_rent";
+  | "number_rent"
+  | "referral_credit";
 
 /** One prepaid balance per (org, Stripe mode). A workspace tops this up via
  *  Stripe Checkout; every successful build run draws it down. Never negative. */
