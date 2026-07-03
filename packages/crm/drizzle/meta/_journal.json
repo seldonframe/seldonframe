@@ -260,6 +260,13 @@
       "when": 1782688072296,
       "tag": "0059_build_wallet",
       "breakpoints": true
+    },
+    {
+      "idx": 37,
+      "version": "7",
+      "when": 1782774472296,
+      "tag": "0061_referrals",
+      "breakpoints": true
     }
   ]
 }
