@@ -1,5 +1,6 @@
 import { NextFetchEvent, NextRequest, NextResponse } from "next/server";
 import { eq } from "drizzle-orm";
+import { resolveRefCookieValue, REF_COOKIE_NAME, REF_COOKIE_OPTIONS } from "@/lib/growth/ref-cookie";
 import { auth } from "@/auth";
 import { db } from "@/db";
 import { organizations } from "@/db/schema";
@@ -689,6 +690,29 @@ export async function proxy(request: NextRequest, event: NextFetchEvent) {
   const mcpHandled = handleBuilderMcpHost(request, host);
   if (mcpHandled) return mcpHandled;
 
+  // Referral-attribution capture (virality pack T5). /build is admitted by
+  // the matcher SOLELY for this branch: read ?ref= into the httpOnly sf_ref
+  // cookie (90d) and return immediately. /build had NO proxy behavior before
+  // (it wasn't in the matcher), so returning next() preserves the pre-existing
+  // pipeline-free serving on every host — subdomain /build behavior is
+  // unchanged. Fail-soft: any error → plain next(); a lost attribution is
+  // acceptable, a broken /build page is not. Pure decision logic lives in
+  // lib/growth/ref-cookie.ts (unit-tested with zero Next imports).
+  if (pathname === "/build") {
+    try {
+      const rawRef = request.nextUrl.searchParams.get("ref");
+      const currentCookie = request.cookies.get(REF_COOKIE_NAME)?.value ?? null;
+      const nextValue = resolveRefCookieValue(rawRef, currentCookie);
+      const response = NextResponse.next();
+      if (nextValue) {
+        response.cookies.set(REF_COOKIE_NAME, nextValue, REF_COOKIE_OPTIONS);
+      }
+      return response;
+    } catch {
+      return NextResponse.next();
+    }
+  }
+
   // Agent-Markdown negotiation: ONLY the marketplace HTML pages, ONLY on the
   // app/preview host (where /marketplace actually lives — custom workspace hosts
   // rewrite into /s/<slug>/… below and have no marketplace). Owns the request
@@ -819,6 +843,10 @@ export const config = {
     "/login",
     "/signup",
     "/pricing",
+    // Referral-attribution capture ONLY — the early /build branch in proxy()
+    // owns this path entirely and returns next() (+ the sf_ref cookie when
+    // ?ref= is present) before any other pipeline stage can touch it.
+    "/build",
     "/l/:path*",
     "/book/:path*",
     "/forms/:path*",
