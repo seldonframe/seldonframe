@@ -59,7 +59,7 @@
 
 **Interfaces (Produces):**
 ```ts
-export type RlsDb = NeonDatabase<typeof schema>; // the tx-bound drizzle instance handed to fn
+export type RlsDb = PgDatabase<any, typeof schema>; // the tx-bound drizzle instance handed to fn (driver-agnostic)
 
 export class InvalidOrgIdError extends Error {
   readonly code = "INVALID_ORG_ID";
@@ -209,11 +209,12 @@ Expected output: a module-resolution error, e.g. `Cannot find module '../../../s
 // — this file never creates a role or a credential.
 
 import { Pool, neonConfig } from "@neondatabase/serverless";
-import { drizzle, type NeonDatabase } from "drizzle-orm/neon-serverless";
+import { drizzle } from "drizzle-orm/neon-serverless";
 import { sql } from "drizzle-orm";
+import type { PgDatabase } from "drizzle-orm/pg-core";
 import ws from "ws";
 import * as schema from "./schema";
-import { db as passthroughDb, type DbClient } from "./index";
+import { db as passthroughDb } from "./index";
 
 // The Neon serverless Pool needs a WebSocket implementation on Node runtimes
 // that don't expose a global WebSocket (pre-22). `ws` is already a repo
@@ -221,11 +222,12 @@ import { db as passthroughDb, type DbClient } from "./index";
 // this works regardless of the exact Node minor version Vercel runs.
 neonConfig.webSocketConstructor = ws;
 
-/** The tx-bound drizzle instance handed to fn — either a real
- *  neon-serverless transaction (enforced path) or the passthrough neon-http
- *  `db` (inert path). Callers must treat this as read/write-capable in both
- *  cases; they must NOT branch on which path they're in. */
-export type RlsDb = NeonDatabase<typeof schema> | DbClient;
+// Driver-agnostic handle. The neon-http default `db` and the
+// neon-serverless transaction client parameterize PgDatabase with
+// DIFFERENT query-result HKTs; a union of the two collapses drizzle's
+// fielded .returning() overload to the zero-arg form (TS2554). Erasing
+// the HKT slot keeps full schema-aware query building on both drivers.
+export type RlsDb = PgDatabase<any, typeof schema>;
 
 /** Thrown when orgId is not a well-formed UUID. Thrown BEFORE any connection
  *  is opened or any SQL is built — an invalid orgId must never reach a query. */
