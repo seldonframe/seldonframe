@@ -2,6 +2,7 @@ import { and, isNull, lt } from "drizzle-orm";
 import { NextResponse } from "next/server";
 import { db } from "@/db";
 import { organizations } from "@/db/schema";
+import { deleteExpiredTasteSessions } from "@/lib/marketplace/taste/taste-session-store";
 
 export const runtime = "nodejs";
 
@@ -72,6 +73,19 @@ async function run() {
       cutoff: cutoff.toISOString(),
     })
   );
+
+  // Taste mode hygiene sweep (design D9) — piggybacked on this existing
+  // TTL-cleanup cron rather than a new schedule. Correctness never depends on
+  // this: getTasteSession independently checks expires_at on every read, so a
+  // sweep failure only delays row deletion, never causes a stale grounding to
+  // be served past its TTL.
+  try {
+    await deleteExpiredTasteSessions(new Date());
+  } catch (err) {
+    console.error(
+      `[cron/orphan-workspace-ttl] taste_session_sweep_error: ${err instanceof Error ? err.message : String(err)}`
+    );
+  }
 
   return {
     ok: true,

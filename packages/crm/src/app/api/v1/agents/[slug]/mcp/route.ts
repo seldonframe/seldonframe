@@ -42,6 +42,7 @@ import {
   buildUsageReportDeps,
   resolveRenterMeteredSubscriptionItemId,
 } from "@/lib/marketplace/billing/real-deps";
+import { buildTasteDeps } from "@/lib/marketplace/taste/taste-real-deps";
 
 /**
  * #139 P3 — fire-and-forget metered usage report for a RENTED agent call. Behind
@@ -168,7 +169,16 @@ export async function POST(
   // Lower-cased headers the handler's metering gate reads (the x402 retry).
   const headers = { "x-payment": request.headers.get("x-payment") ?? "" };
 
-  const outcome = await handleAgentRentalRpc(slug, rawBody, bearer, REAL_DEPS, headers);
+  // Taste mode (net-new, anonymous free lane) — built PER REQUEST because it
+  // needs the caller's IP. Returns undefined whenever SF_AGENT_TASTE_MODE != 1
+  // (the global inertness switch, design D7) — every other request field is
+  // still the identical REAL_DEPS object used today.
+  const deps: AgentRentalRpcDeps = {
+    ...REAL_DEPS,
+    taste: buildTasteDeps({ request, env: process.env }),
+  };
+
+  const outcome = await handleAgentRentalRpc(slug, rawBody, bearer, deps, headers);
 
   if (outcome.body === null) {
     // Notification ack — 202, no body (matches what our MCP client expects).

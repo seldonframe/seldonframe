@@ -33,6 +33,7 @@ import { db } from "@/db";
 import { marketplaceListings, organizations } from "@/db/schema";
 import { seldonframeEvents } from "@/db/schema/seldonframe-events";
 import type { AgentBlueprint } from "@/db/schema/agents";
+import type { ListingSellerPreferences } from "@/db/schema/marketplace";
 import type { OrgSoul } from "@/lib/soul/types";
 import { getAIClient } from "@/lib/ai/client";
 import { runStatelessAgentTurn } from "@/lib/agents/stateless-turn";
@@ -61,6 +62,8 @@ export type RentalAgent = {
   perCallPriceCents?: number | null;
   perOutcomePriceCents?: number | null;
   outcomeType?: OutcomeType | null;
+  /** Taste-mode budget (marketplace_listings.seller_preferences). */
+  sellerPreferences?: ListingSellerPreferences | null;
 };
 
 /**
@@ -83,6 +86,7 @@ export async function resolveRentalAgent(slug: string): Promise<RentalAgent | nu
       perCallPriceCents: marketplaceListings.perCallPriceCents,
       perOutcomePriceCents: marketplaceListings.perOutcomePriceCents,
       outcomeType: marketplaceListings.outcomeType,
+      sellerPreferences: marketplaceListings.sellerPreferences,
       orgName: organizations.name,
       orgSlug: organizations.slug,
       soul: organizations.soul,
@@ -113,6 +117,7 @@ export async function resolveRentalAgent(slug: string): Promise<RentalAgent | nu
     perCallPriceCents: row.perCallPriceCents,
     perOutcomePriceCents: row.perOutcomePriceCents,
     outcomeType: isOutcomeType(row.outcomeType) ? row.outcomeType : null,
+    sellerPreferences: row.sellerPreferences ?? null,
   };
 }
 
