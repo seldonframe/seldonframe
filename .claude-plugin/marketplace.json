@@ -1,0 +1,17 @@
+{
+  "$schema": "https://claude.ai/schemas/marketplace.json",
+  "name": "seldonframe",
+  "owner": { "name": "SeldonFrame", "url": "https://www.seldonframe.com" },
+  "plugins": [
+    {
+      "name": "seldonframe",
+      "source": "./",
+      "description": "Build, deploy, and sell AI agents for local-service businesses — from your IDE. One command creates a live hosted workspace: website, booking page, intake form, CRM, and an AI receptionist, in about 3 minutes. First workspace free, no key required.",
+      "author": { "name": "SeldonFrame", "url": "https://www.seldonframe.com" },
+      "homepage": "https://seldonframe.com",
+      "repository": "https://github.com/seldonframe/seldonframe",
+      "license": "MIT",
+      "keywords": ["mcp", "ai-agents", "crm", "website-builder", "booking", "small-business"]
+    }
+  ]
+}
