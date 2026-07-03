@@ -274,6 +274,13 @@
       "when": 1782774472296,
       "tag": "0061_referrals",
       "breakpoints": true
+    },
+    {
+      "idx": 39,
+      "version": "7",
+      "when": 1783097600935,
+      "tag": "0062_wallet_rls",
+      "breakpoints": true
     }
   ]
 }
