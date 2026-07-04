@@ -13,7 +13,7 @@
 
 "use server";
 
-import { and, eq } from "drizzle-orm";
+import { and, eq, ne } from "drizzle-orm";
 import { db } from "@/db";
 import {
   agents,
@@ -137,7 +137,8 @@ export async function createAgent(input: CreateAgentInput): Promise<CreateAgentR
   const [existingFirstAgent] = await db
     .select({ id: agents.id })
     .from(agents)
-    .where(eq(agents.orgId, input.orgId))
+    // copilot rows must not consume the "default" slug (embed-URL contract)
+    .where(and(eq(agents.orgId, input.orgId), ne(agents.archetype, "workspace_copilot")))
     .limit(1);
   if (!existingFirstAgent) {
     slug = "default";

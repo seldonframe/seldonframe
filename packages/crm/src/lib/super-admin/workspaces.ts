@@ -6,7 +6,7 @@
 // getWorkspaceDetail  — full workspace profile + agents + activity
 //                       windows + lifetime token/cost rollups.
 
-import { sql, and, eq, desc, asc, ilike, lt, count, countDistinct } from "drizzle-orm";
+import { sql, and, eq, ne, desc, asc, ilike, lt, count, countDistinct } from "drizzle-orm";
 import { unstable_cache } from "next/cache";
 import { db } from "@/db";
 import {
@@ -280,7 +280,8 @@ export async function getWorkspaceDetail(workspaceId: string): Promise<Workspace
       createdAt: agents.createdAt,
     })
     .from(agents)
-    .where(eq(agents.orgId, workspaceId))
+    // copilot rows are plumbing, not user agents (win-ladder plan T2)
+    .where(and(eq(agents.orgId, workspaceId), ne(agents.archetype, "workspace_copilot")))
     .orderBy(desc(agents.createdAt));
 
   // Activity buckets

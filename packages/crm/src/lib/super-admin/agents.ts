@@ -13,7 +13,7 @@
 //  5. Conversation     — total conversations 24h / 7d / 30d, with
 //     volume             a "completed without escalation" share
 
-import { sql, eq, count, desc, and } from "drizzle-orm";
+import { sql, eq, ne, count, desc, and } from "drizzle-orm";
 import { unstable_cache } from "next/cache";
 import { db } from "@/db";
 import { agents, agentEvals, agentConversations } from "@/db/schema";
@@ -65,6 +65,8 @@ const getFleetStatus = unstable_cache(
     const rows = await db
       .select({ status: agents.status, c: count(agents.id) })
       .from(agents)
+      // copilot rows are plumbing, not user agents (win-ladder plan T2)
+      .where(ne(agents.archetype, "workspace_copilot"))
       .groupBy(agents.status);
 
     const fleet: AgentFleetStatus = { total: 0, live: 0, draft: 0, test: 0, paused: 0 };
@@ -92,6 +94,8 @@ const getArchetypeBreakdown = unstable_cache(
         c: count(agents.id),
       })
       .from(agents)
+      // copilot rows are plumbing, not user agents (win-ladder plan T2)
+      .where(ne(agents.archetype, "workspace_copilot"))
       .groupBy(agents.archetype, agents.status);
 
     const map = new Map<string, { total: number; live: number }>();
