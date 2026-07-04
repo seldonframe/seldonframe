@@ -26,6 +26,7 @@ import { useRouter } from "next/navigation";
 import { ArrowRight, FileText, Globe } from "lucide-react";
 
 import { MarketingDemoMarquee } from "@/components/landing/marketing-demo-marquee";
+import { HeroBuildProof } from "@/components/landing/hero-build-proof";
 import { heroSubmitTarget } from "@/components/landing/hero-submit-target";
 
 // Re-exported for callers that only need the pure routing decision (e.g.
@@ -188,6 +189,11 @@ export function MarketingHero({
       aria-label="SeldonFrame hero"
       className="relative flex flex-col items-center justify-center overflow-hidden px-5 pb-24 pt-[100px] text-center md:px-8 md:pb-32 md:pt-[120px] lg:px-12"
     >
+      {/* Desktop: headline/CTA/form stack (~55%) + build-proof panel (~45%),
+          vertically centered. Below lg: single column, panel renders after
+          the form (see the lg:hidden instance below). */}
+      <div className="flex w-full max-w-[1180px] flex-col items-center lg:flex-row lg:items-center lg:justify-center lg:gap-12 lg:text-left">
+      <div className="flex w-full flex-col items-center text-center lg:basis-[55%] lg:items-start lg:text-left">
       {/* Eyebrow — leads SMB, keeps the dual build-or-sell hint */}
       <p className="inline-flex items-center gap-2.5 font-sans text-[12.5px] tracking-[0.04em] text-[#6E665A]">
         <span className="inline-block h-px w-4 bg-[#9A9183]" aria-hidden />
@@ -204,7 +210,7 @@ export function MarketingHero({
       </h1>
 
       {/* Subhead */}
-      <p className="mx-auto mt-4 max-w-[62ch] text-pretty text-[clamp(15.5px,1.6vw,17.5px)] leading-[1.55] text-[#6E665A]">
+      <p className="mx-auto mt-4 max-w-[62ch] text-pretty text-[clamp(15.5px,1.6vw,17.5px)] leading-[1.55] text-[#6E665A] lg:mx-0">
         Paste your URL and watch it build — a multi-page{" "}
         <strong className="font-[500] text-[#221D17]">website, booking page, intake form, and CRM</strong>, wired
         together and ready for customers. Then add no-code AI agents — start from a template or build your own — to{" "}
@@ -213,7 +219,7 @@ export function MarketingHero({
       </p>
 
       {/* Two CTAs */}
-      <div className="mt-7 flex flex-wrap items-center justify-center gap-3">
+      <div className="mt-7 flex flex-wrap items-center justify-center gap-3 lg:justify-start">
         <a
           href="/signup"
           className="inline-flex items-center gap-2.5 rounded-full bg-[#1F2B24] px-6 py-3.5 text-[15px] font-[500] text-[#F6F2EA] shadow-[0_1px_2px_rgba(34,29,23,.10),0_6px_16px_rgba(34,29,23,.10),0_18px_40px_rgba(34,29,23,.06),inset_0_1.5px_0_rgba(255,255,255,.12)] transition-all hover:-translate-y-[1.5px] hover:shadow-[0_2px_4px_rgba(34,29,23,.12),0_12px_26px_rgba(34,29,23,.14),inset_0_1.5px_0_rgba(255,255,255,.14)] active:translate-y-px"
@@ -330,6 +336,20 @@ export function MarketingHero({
           </button>
         </div>
       </form>
+
+      {/* Build-proof panel — mobile/tablet position: after the form, before
+          the checklist. Hidden at lg (the two-column instance takes over). */}
+      <div className="mt-8 w-full lg:hidden">
+        <HeroBuildProof ungatedBuildEnabled={ungatedBuildEnabled} />
+      </div>
+      </div>
+
+      {/* Build-proof panel — desktop position: right column, vertically
+          centered against the left stack. */}
+      <div className="hidden lg:flex lg:basis-[45%] lg:items-center lg:justify-center">
+        <HeroBuildProof ungatedBuildEnabled={ungatedBuildEnabled} />
+      </div>
+      </div>
 
       {/* Proof checklist */}
       <ul className="mt-6 flex flex-wrap items-center justify-center gap-x-5 gap-y-2">
