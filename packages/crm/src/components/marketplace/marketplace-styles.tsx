@@ -46,16 +46,41 @@ const CSS = `
     /* shared chrome ---------------------------------------------------------- */
     .sf-mkt-nav{padding:0 16px !important;gap:14px !important}
     .sf-mkt-navword{display:none !important}
-    .sf-mkt-navlinks{margin-left:0 !important;gap:2px !important;overflow-x:auto;-webkit-overflow-scrolling:touch;flex:1 1 auto}
-    /* Nav pills (Browse/By industry/Studio/Sell) have no white-space rule in
-       the desktop inline style, so once the flex row above shrinks them
-       below their own text width, "By industry" wraps to two lines,
-       pushing the row taller and visually colliding with the logo above
-       and the SF avatar to the right. nowrap + horizontal scroll (from
-       .sf-mkt-navlinks's overflow-x:auto) is the fix: the row stays a
-       single line and scrolls sideways instead of wrapping vertically. */
-    .sf-mkt-navlinks a{white-space:nowrap !important}
+    /* Root cause of the glyph-overlap ("BrowseBy induStudS"): the pills
+       (<a> tags) are flex children with no flex-basis/shrink override, so
+       the global '.sf-mkt *{min-width:0}' rule (line 17, needed elsewhere
+       to stop grid/flex tracks from pushing the page wide) also strips
+       THEIR implicit min-content floor. A previous fix added
+       'white-space:nowrap' to stop "By industry" from line-wrapping onto
+       a second line — but nowrap text in a box with no min-width floor
+       just keeps shrinking with its container (flex-shrink:1 by default)
+       and, since nothing clips it (no overflow:hidden on the pill), the
+       nowrap text overflows its own shrunk box sideways and draws on top
+       of the next pill. 'overflow-x:auto' on the row didn't help because
+       it only takes effect once the container's content is wider than the
+       container — but here the container itself was also shrinking
+       ('flex:1 1 auto'), so both container and children kept collapsing
+       together and scrolling was never triggered.
+       Fix, in two parts: (1) pin every pill to 'flex:none' so its box can
+       never be smaller than its own nowrap text — nothing left to
+       overflow. (2) give the row 'flex:1 1 0' + 'min-width:0' so the ROW
+       (not its children) is what shrinks to fit the remaining header
+       space; its children's combined width now legitimately exceeds the
+       row's box, which is exactly what 'overflow-x:auto' is for — the
+       row scrolls horizontally at full, undistorted pill width instead
+       of squeezing text into overlap. */
+    .sf-mkt-navlinks{margin-left:0 !important;gap:6px !important;flex:1 1 0 !important;min-width:0 !important;overflow-x:auto;-webkit-overflow-scrolling:touch}
+    .sf-mkt-navlinks a{flex:none !important;white-space:nowrap !important}
     .sf-mkt-navsearch{display:none !important}
+    /* The spacer between navlinks and the SF avatar ('.sf-mkt-navspacer' in
+       marketplace-chrome.tsx) has the same flex-grow:1 as .sf-mkt-navlinks
+       above — on desktop that's correct (it pushes the avatar right once the
+       nav row has already reached its natural width), but on a mobile row
+       where .sf-mkt-navlinks is now the one flexible box doing the shrinking,
+       an equal-grow empty spacer would steal half the remaining row width for
+       nothing. Zero it out here so 100% of the leftover space (after the
+       fixed-width logo and avatar) goes to the actual nav content. */
+    .sf-mkt-navspacer{flex:none !important;width:0 !important}
     .sf-foot-grid{grid-template-columns:1fr 1fr !important;gap:26px !important;padding:40px 20px 32px !important}
     .sf-foot-bottom{padding:16px 20px !important}
 

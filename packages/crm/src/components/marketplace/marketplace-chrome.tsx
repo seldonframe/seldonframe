@@ -145,7 +145,7 @@ export function MarketplaceNav({
           </Link>
         </nav>
 
-        <div style={{ flex: 1 }} />
+        <div className="sf-mkt-navspacer" style={{ flex: 1 }} />
 
         {/* Plain GET search — works without JS; the browse island enhances it.
             Hidden on phones (the hero/nav search would overflow); the browse hero

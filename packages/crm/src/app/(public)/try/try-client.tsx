@@ -171,6 +171,74 @@ export function TryClient({ initialUrl }: { initialUrl: string }) {
     setBuildInput(null);
   }
 
+  // 2026-07-04 — Full-viewport takeover for the "building" phase, mirroring
+  // /clients/new's own full-bleed host (clients-new-form.tsx + page.tsx):
+  // BuildAnimation (build-stage-v2.tsx's .sb-stage) is designed to receive a
+  // real viewport-height box from its parent and do its OWN internal fitting
+  // (flex:1 canvas, 2-col grid only ≥1100px of ITS container, mobile-specific
+  // padding/min-heights) — it was never meant to be dropped into a bounded
+  // card with a hardcoded min-height. The previous `min-h-[1000px]` approach
+  // fought the component's own responsive contract: it "fit" by making the
+  // PAGE taller instead of making the STAGE fit the screen, so the operator
+  // had to scroll past the fold to see the build. Root fix: give the stage
+  // section `h-[100svh]` (svh, not vh, for mobile URL-bar correctness) when
+  // building, unmount/hide the hero + paste box instead of stacking above
+  // it, and scroll to top on submit so the stage IS the screen — exactly
+  // /clients/new's contract, reused instead of re-invented.
+  const stageHostRef = useRef<HTMLElement | null>(null);
+  const isBuilding = phase === "building";
+
+  function submitAndTakeOver(targetUrl: string) {
+    startBuild(targetUrl);
+    // Smooth-scroll the takeover section to the top of the viewport so the
+    // stage fills the screen instead of sitting mid-page under the hero.
+    // rAF-deferred so the "building" section has mounted first.
+    requestAnimationFrame(() => {
+      stageHostRef.current?.scrollIntoView({ behavior: "smooth", block: "start" });
+    });
+  }
+
+  if (isBuilding) {
+    // Full-viewport takeover — no hero, no paste box, no page scroll. The
+    // stage manages its own internal layout/overflow (see build-stage-v2.tsx);
+    // this host just hands it `100svh` (svh corrects for the mobile browser
+    // URL bar so the box doesn't undershoot/overshoot like `100vh` would).
+    //
+    // 100svh on an iPhone SE is ~667px. Below build-stage-v2's own 1100px
+    // breakpoint, `.sb-canvas` stacks `.sb-mock` (min-height 520px) directly
+    // above `.sb-side` (the narration panel — no min-height, but its ticker
+    // rows + biz header run ~350-450px of real content) — combined comfortably
+    // over 900px, taller than a small phone's viewport. `.sb-stage` itself is
+    // `overflow: hidden`, which on /clients/new's finite-height host means
+    // that overflow is silently clipped. Page scroll is explicitly
+    // disallowed here (this section IS the screen), so the fix is scoped
+    // internal scroll: `.sf-try-stage` overrides `.sb-canvas` to
+    // `overflow-y: auto` below 1100px, letting the operator scroll the
+    // narration/mock content INSIDE the stage on tiny screens without the
+    // page itself ever scrolling. Scoped to this class (not touching
+    // build-stage-v2.tsx's own rules) so /clients/new's byte-identical
+    // clipping behavior is unaffected.
+    return (
+      <main
+        ref={stageHostRef}
+        className="sf-try-stage h-[100svh] w-full overflow-hidden bg-[#111814] text-[#221D17]"
+      >
+        <BuildAnimation active={isBuilding} input={buildInput} eventSource={eventSource} />
+        <style jsx global>{`
+          @media (max-width: 1099px) {
+            .sf-try-stage .sb-stage {
+              overflow: hidden;
+            }
+            .sf-try-stage .sb-canvas {
+              overflow-y: auto;
+              -webkit-overflow-scrolling: touch;
+            }
+          }
+        `}</style>
+      </main>
+    );
+  }
+
   return (
     <main className="min-h-screen bg-[#F6F2EA] px-5 py-10 text-[#221D17] md:px-8 md:py-16">
       <div className="mx-auto w-full max-w-[880px]">
@@ -220,7 +288,7 @@ export function TryClient({ initialUrl }: { initialUrl: string }) {
               <form
                 onSubmit={(e) => {
                   e.preventDefault();
-                  startBuild(url);
+                  submitAndTakeOver(url);
                 }}
                 className="sf-prompt relative mt-8 w-full max-w-[640px] overflow-hidden rounded-[18px] border border-[rgba(34,29,23,.14)] bg-[#FFFDFA] shadow-[0_1px_2px_rgba(34,29,23,.06),0_10px_30px_rgba(34,29,23,.08)]"
               >
@@ -232,7 +300,7 @@ export function TryClient({ initialUrl }: { initialUrl: string }) {
                     onKeyDown={(e) => {
                       if (e.key === "Enter" && url.trim()) {
                         e.preventDefault();
-                        startBuild(url);
+                        submitAndTakeOver(url);
                       }
                     }}
                     autoComplete="off"
@@ -266,38 +334,6 @@ export function TryClient({ initialUrl }: { initialUrl: string }) {
                   </a>{" "}
                   to build from a description.
                 </p>
-              </div>
-            ) : null}
-
-            {/* BuildAnimation's stage (build-stage-v2.tsx's .sb-stage) is
-                `height: 100%; overflow: hidden` on its own root — it clips
-                rather than scrolls, so this wrapper must be tall enough to
-                fit the stage's actual rendered content, not just whatever
-                viewport slice we hand it. The stage only switches to a
-                side-by-side two-column layout (.sb-canvas) above 1100px of
-                its OWN container width; this box is capped at
-                `max-w-[720px]` at every Tailwind breakpoint (sm/md/lg/xl),
-                so it never reaches that threshold — the mock panel and the
-                phase-narration side panel always stack into one column
-                here, on both mobile and desktop. That stacked total is:
-                the mock's own 520px min-height, plus the narration panel
-                (biz header ~80px + 6 ticker rows ~330px + footer ~30px)
-                ~440px more — roughly 960px. `min-h-[1000px]` covers that
-                with margin so nothing clips, at every breakpoint (no
-                `lg:` split, since the layout doesn't change with width
-                here).
-                Full-bleed (edge-to-edge, no rounded corners) below `sm`
-                mirrors /clients/new's full-bleed canvas so the mock's own
-                internal padding is the only inset; `sm:` restores the
-                card treatment (border-radius, margins) once there's room.
-                The outer <main> is `min-h-screen` (not viewport-locked
-                like /clients/new's dashboard shell), so this fixed
-                min-height just makes the page taller on short viewports —
-                the reveal state and any error/retry UI below it stay
-                reachable via normal page scroll. */}
-            {phase === "building" ? (
-              <div className="relative -mx-5 mt-8 min-h-[1000px] w-[calc(100%+2.5rem)] overflow-hidden border border-[rgba(34,29,23,.14)] bg-[#111814] sm:mx-0 sm:w-full sm:max-w-[720px] sm:rounded-[18px]">
-                <BuildAnimation active={phase === "building"} input={buildInput} eventSource={eventSource} />
               </div>
             ) : null}
           </div>
