@@ -31,3 +31,9 @@ export function resolveWebBuildRateLimit(env: {
   }
   return parsed;
 }
+
+/** Win-ladder + SeldonChat dock flag (2026-07-04). Same strict-"1" contract as
+ *  isWebUngatedBuildOn: anything else keeps the surfaces dark. */
+export function isWinLadderOn(env: { SF_WIN_LADDER?: string | undefined }): boolean {
+  return env.SF_WIN_LADDER?.trim() === "1";
+}

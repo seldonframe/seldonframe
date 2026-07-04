@@ -31,6 +31,7 @@ import {
   resolveBookingPolicy,
   slotFitsFreeWindows,
 } from "@/lib/agents/booking/booking-policy";
+import { COPILOT_CAPABILITY } from "@/lib/agents/copilot/tools";
 
 export type ToolExecuteContext = {
   orgId: string;
@@ -1940,7 +1941,18 @@ export async function getToolsForCapabilities(
   capabilities: string[] | undefined,
   opts?: GetToolsOptions,
 ): Promise<AgentTool[]> {
-  const native = nativeToolsForCapabilities(capabilities);
+  let native = nativeToolsForCapabilities(capabilities);
+
+  // SeldonChat operator copilot (win-ladder P0): its 8 admin tools aren't in
+  // ALL_TOOLS (they're not caller-facing voice/chat tools), so the capability
+  // filter above never surfaces them. Append explicitly when requested. Spread
+  // into a NEW array — `native` may be the literal ALL_TOOLS reference when
+  // capabilities is empty/undefined, and mutating that shared array would leak
+  // copilot tools into every other caller.
+  if (capabilities?.includes(COPILOT_CAPABILITY)) {
+    const { buildCopilotTools } = await import("./copilot/tools");
+    native = [...native, ...buildCopilotTools()];
+  }
 
   const connectors = opts?.connectors;
   if (!connectors || connectors.length === 0) {
