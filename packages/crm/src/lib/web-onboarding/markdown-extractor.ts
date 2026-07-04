@@ -148,7 +148,13 @@ export async function extractBusinessFactsFromUrl(params: {
     response = await client.messages.create({
       model: modelInUse,
       max_tokens: MAX_TOKENS,
-      system: SYSTEM_PROMPT,
+      // Static across every call for this deployment (same SYSTEM_PROMPT
+      // string every time) — hoisted into a cached `system` array entry
+      // per the enhance-blocks.ts:722-748 pattern. Only the per-request
+      // Markdown + URL stay in the uncached user message.
+      system: [
+        { type: "text", text: SYSTEM_PROMPT, cache_control: { type: "ephemeral" } },
+      ],
       messages: [
         {
           role: "user",

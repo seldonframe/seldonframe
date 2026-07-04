@@ -6,6 +6,7 @@ import { previewSessions } from "@/db/schema";
 import { demoApiBlockedResponse, isDemoReadonly } from "@/lib/demo/server";
 import { fetchPublicUrlSafe, SsrfBlockedError } from "@/lib/security/ssrf-guard";
 import { checkRateLimit } from "@/lib/utils/rate-limit";
+import { withUrlExtractionCache } from "@/lib/web-build/cached-extraction";
 
 type DetectedTool = { name: string; slug: string; icon: string; autoConnect: boolean };
 
@@ -302,6 +303,13 @@ function normalizeBusinessData(value: unknown, markdown: string): ExtractedBusin
   };
 }
 
+// Static instruction + JSON schema — identical across every call, so it's
+// hoisted into the cached `system` block (see enhance-blocks.ts:722-748 for
+// the reference pattern). Only the markdown + url vary per request, and
+// those stay in the uncached user message.
+const EXTRACTION_SYSTEM_STATIC =
+  "You extract structured business data from website content. Return ONLY valid JSON, no markdown fences. If a field cannot be determined, use null. Extract the business's own words when possible.\n\nReturn JSON:\n{\n  \"businessName\": \"string\",\n  \"industry\": \"string\",\n  \"tagline\": \"string\",\n  \"description\": \"string\",\n  \"services\": [{ \"name\": \"string\", \"description\": \"string\", \"price\": \"string or null\", \"duration\": \"string or null\" }],\n  \"testimonials\": [{ \"quote\": \"string\", \"author\": \"string\", \"role\": \"string or null\" }],\n  \"contactInfo\": { \"email\": \"string or null\", \"phone\": \"string or null\", \"address\": \"string or null\" },\n  \"voiceTone\": \"string\",\n  \"idealClient\": \"string or null\",\n  \"suggestedFramework\": \"coaching | agency | saas | ecommerce | services | other\"\n}";
+
 async function extractBusinessData(markdown: string, url: string): Promise<ExtractedBusinessData> {
   const anthropic = getAnthropicClient();
   if (!anthropic) {
@@ -312,12 +320,13 @@ async function extractBusinessData(markdown: string, url: string): Promise<Extra
     const response = await anthropic.messages.create({
       model: "claude-sonnet-4-20250514",
       max_tokens: 2048,
-      system:
-        "You extract structured business data from website content. Return ONLY valid JSON, no markdown fences. If a field cannot be determined, use null. Extract the business's own words when possible.",
+      system: [
+        { type: "text", text: EXTRACTION_SYSTEM_STATIC, cache_control: { type: "ephemeral" } },
+      ],
       messages: [
         {
           role: "user",
-          content: `Extract business data from this website (${url}):\n\n${markdown.slice(0, MAX_MODEL_INPUT_CHARS)}\n\nReturn JSON:\n{\n  \"businessName\": \"string\",\n  \"industry\": \"string\",\n  \"tagline\": \"string\",\n  \"description\": \"string\",\n  \"services\": [{ \"name\": \"string\", \"description\": \"string\", \"price\": \"string or null\", \"duration\": \"string or null\" }],\n  \"testimonials\": [{ \"quote\": \"string\", \"author\": \"string\", \"role\": \"string or null\" }],\n  \"contactInfo\": { \"email\": \"string or null\", \"phone\": \"string or null\", \"address\": \"string or null\" },\n  \"voiceTone\": \"string\",\n  \"idealClient\": \"string or null\",\n  \"suggestedFramework\": \"coaching | agency | saas | ecommerce | services | other\"\n}`,
+          content: `Extract business data from this website (${url}):\n\n${markdown.slice(0, MAX_MODEL_INPUT_CHARS)}`,
         },
       ],
     });
@@ -395,7 +404,11 @@ export async function POST(request: Request) {
     const markdown = htmlToMarkdown(html).slice(0, MAX_MARKDOWN_CHARS);
     const detectedTools = detectTools(html);
     const themeColor = extractPrimaryColor(html);
-    const businessData = await extractBusinessData(markdown, safeUrl);
+    const { value: businessData } = await withUrlExtractionCache(
+      "analyze_url",
+      safeUrl,
+      () => extractBusinessData(markdown, safeUrl)
+    );
 
     const claimToken = randomUUID();
 
