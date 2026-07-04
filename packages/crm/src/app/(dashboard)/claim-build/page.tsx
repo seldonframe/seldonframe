@@ -25,14 +25,17 @@ export default function ClaimBuildPage() {
   const token = useMemo(() => searchParams.get("token"), [searchParams]);
 
   useEffect(() => {
-    if (!ws || !token) {
+    // ws is path-interpolated: strict UUID shape + encode prevents same-origin path traversal (review finding 2026-07-03)
+    const WS_ID_RE = /^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$/;
+    if (!ws || !token || !WS_ID_RE.test(ws)) {
       router.replace("/dashboard");
       return;
     }
 
     let cancelled = false;
 
-    void fetch(`/api/v1/workspace/${ws}/link-owner`, {
+    // link-owner is idempotent server-side (conditional isNull(ownerId) update), safe on double-invoke
+    void fetch(`/api/v1/workspace/${encodeURIComponent(ws)}/link-owner`, {
       method: "POST",
       headers: { Authorization: `Bearer ${token}` },
     })
