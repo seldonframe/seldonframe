@@ -383,6 +383,15 @@ describe("isSafeInternalRedirect", () => {
     assert.equal(isSafeInternalRedirect("/marketplace/..//evil.com"), false);
     assert.equal(isSafeInternalRedirect("/marketplace\\@evil.com"), false);
   });
+
+  test("allows the /claim-build invisible-claim return path with query intact", () => {
+    // 2026-07-03 — web-activation invisible claim return. The /try reveal
+    // sends users to /signup?callbackUrl=<encoded /claim-build?ws=...&token=...>;
+    // after auth, signup redirects to that callbackUrl. Without /claim-build on
+    // the allowlist this collapses to /clients/new and the claim token is lost.
+    const target = "/claim-build?ws=abc&token=wst_x";
+    assert.equal(isSafeInternalRedirect(target), true);
+  });
 });
 
 describe("toInternalRedirectPath", () => {

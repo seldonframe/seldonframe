@@ -238,6 +238,8 @@ const SAFE_REDIRECT_PREFIXES = [
   // post-login dumps them on /dashboard instead of back on the consent screen,
   // silently breaking every OAuth authorization-code flow for logged-out users.
   "/oauth/authorize",
+  // 2026-07-03 — web-activation invisible claim return (docs/superpowers/specs/2026-07-03-web-activation-design.md)
+  "/claim-build",
 ] as const;
 
 /**
