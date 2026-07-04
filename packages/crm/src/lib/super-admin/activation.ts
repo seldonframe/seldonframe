@@ -4,13 +4,22 @@
 // Answers "I have signups but I don't know if they're building or
 // using anything." Earlier versions were workspace-unit and mixed
 // paying/connections into the funnel body; this version is the
-// literal customer journey, in ACCOUNT/WORKSPACE units per stage:
+// literal customer journey, in a single PERSON unit per stage
+// (distinct organizations.ownerId) — not workspaces — because
+// multi-workspace owners (unlimited workspaces on $29) would otherwise
+// make a later, workspace-counted stage exceed an earlier,
+// person-counted one:
 //
 //   Signups              count(users) — funnel top.
-//   Created a workspace  Distinct users who own >=1 organization.
-//   Built an agent       Distinct orgs (owned) with >=1 agent.
-//   Tested an agent      Distinct orgs (owned) with >=1 agent
-//                        conversation OR >=1 agent eval run.
+//   Created a workspace  Distinct owners of >=1 organization.
+//   Built an agent       Distinct owners of >=1 organization that
+//                        has >=1 agent.
+//   Tested an agent      Distinct owners of >=1 organization with
+//                        >=1 agent conversation OR >=1 agent eval run.
+//
+// Every stage shares the same join spine (organizations.ownerId) with
+// additive conditions, so Tested-owners ⊆ Built-owners ⊆
+// Workspace-owners holds structurally — the funnel can't invert.
 //
 // Every stage's % is "of Signups" (ofTotalPct), not of the previous
 // stage — this keeps the funnel readable as a single scan.
@@ -144,46 +153,46 @@ const getCreatedWorkspaceCount = (includeInternal: boolean) =>
     { revalidate: 300, tags: ["super-admin:activation"] },
   )();
 
-/** Distinct owned, non-internal orgs with >=1 agent. */
-const getBuiltAgentOrgCount = (includeInternal: boolean) =>
+/** Distinct owners (person unit) of >=1 non-internal organization that has >=1 agent. */
+const getBuiltAgentOwnerCount = (includeInternal: boolean) =>
   unstable_cache(
     async () => {
       const ids = getInternalIds();
       const internalPredicate = includeInternal ? sql`false` : internalOrgPredicateSql(ids);
       const result = await db.execute(sql`
-        SELECT count(DISTINCT agents.org_id)::int AS c
-        FROM agents
-        JOIN organizations ON organizations.id = agents.org_id
+        SELECT count(DISTINCT organizations.owner_id)::int AS c
+        FROM organizations
+        JOIN agents ON agents.org_id = organizations.id
         WHERE organizations.owner_id IS NOT NULL
           AND NOT (${internalPredicate})
       `);
       return Number((result.rows?.[0] as { c: number } | undefined)?.c ?? 0);
     },
-    [`super-admin:built-agent-orgs:${cacheSuffix(includeInternal)}`],
+    [`super-admin:built-agent-owners:${cacheSuffix(includeInternal)}`],
     { revalidate: 300, tags: ["super-admin:activation"] },
   )();
 
-/** Distinct owned, non-internal orgs with >=1 conversation OR >=1 eval run. */
-const getTestedAgentOrgCount = (includeInternal: boolean) =>
+/** Distinct owners (person unit) of >=1 non-internal organization with >=1 conversation OR >=1 eval run. */
+const getTestedAgentOwnerCount = (includeInternal: boolean) =>
   unstable_cache(
     async () => {
       const ids = getInternalIds();
       const internalPredicate = includeInternal ? sql`false` : internalOrgPredicateSql(ids);
       const result = await db.execute(sql`
-        SELECT count(DISTINCT t.org_id)::int AS c
-        FROM (
+        SELECT count(DISTINCT organizations.owner_id)::int AS c
+        FROM organizations
+        JOIN (
           SELECT org_id FROM agent_conversations
           UNION
           SELECT agents.org_id FROM agent_evals
           JOIN agents ON agents.id = agent_evals.agent_id
-        ) t
-        JOIN organizations ON organizations.id = t.org_id
+        ) t ON t.org_id = organizations.id
         WHERE organizations.owner_id IS NOT NULL
           AND NOT (${internalPredicate})
       `);
       return Number((result.rows?.[0] as { c: number } | undefined)?.c ?? 0);
     },
-    [`super-admin:tested-agent-orgs:${cacheSuffix(includeInternal)}`],
+    [`super-admin:tested-agent-owners:${cacheSuffix(includeInternal)}`],
     { revalidate: 300, tags: ["super-admin:activation"] },
   )();
 
@@ -245,8 +254,8 @@ export async function getActivationFunnel(opts?: { includeInternal?: boolean }):
     signupsTotal,
     signupsLast7d,
     createdWorkspace,
-    builtAgentOrgs,
-    testedAgentOrgs,
+    builtAgentOwners,
+    testedAgentOwners,
     internalOrgCount,
     payingAccounts,
     connections,
@@ -254,8 +263,8 @@ export async function getActivationFunnel(opts?: { includeInternal?: boolean }):
     getSignupsTotal(includeInternal).catch(() => 0),
     getSignupsLast7d(includeInternal).catch(() => 0),
     getCreatedWorkspaceCount(includeInternal).catch(() => 0),
-    getBuiltAgentOrgCount(includeInternal).catch(() => 0),
-    getTestedAgentOrgCount(includeInternal).catch(() => 0),
+    getBuiltAgentOwnerCount(includeInternal).catch(() => 0),
+    getTestedAgentOwnerCount(includeInternal).catch(() => 0),
     getInternalOrgCount().catch(() => 0),
     getPayingAccounts().catch(() => 0),
     getConnectionsHealth().catch(() => ({ minted: 0, used: 0 })),
@@ -272,19 +281,19 @@ export async function getActivationFunnel(opts?: { includeInternal?: boolean }):
       label: "Created a workspace",
       count: createdWorkspace,
       ofTotalPct: pct(createdWorkspace, signupsTotal),
-      hint: "owns >= 1 organization",
+      hint: "owners of >= 1 organization",
     },
     {
       label: "Built an agent",
-      count: builtAgentOrgs,
-      ofTotalPct: pct(builtAgentOrgs, signupsTotal),
-      hint: "owned workspace with >= 1 agent",
+      count: builtAgentOwners,
+      ofTotalPct: pct(builtAgentOwners, signupsTotal),
+      hint: "owners of a workspace with >= 1 agent",
     },
     {
       label: "Tested an agent",
-      count: testedAgentOrgs,
-      ofTotalPct: pct(testedAgentOrgs, signupsTotal),
-      hint: "owned workspace with >= 1 conversation or eval run",
+      count: testedAgentOwners,
+      ofTotalPct: pct(testedAgentOwners, signupsTotal),
+      hint: "owners of a workspace with >= 1 conversation or eval run",
     },
   ];
 
