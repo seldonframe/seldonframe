@@ -73,6 +73,16 @@ describe("resolveLadderInputs", () => {
     const inputs = await resolveLadderInputs("org_4", deps({ landingVersionCount: async () => 1 }));
     assert.equal(inputs.landingVersionCount, 1);
   });
+
+  test("extraAgentCount reflects the templates dep (Task 10 starter agents write agentTemplates, not `agents`)", async () => {
+    // The reviewer's CRITICAL fix: defaultExtraAgentCount now also counts the
+    // org's agentTemplates rows with an event trigger, since enableStarterAgentAction
+    // (agent-picks-actions.ts) creates ONLY agent_templates rows. This spec
+    // asserts resolveLadderInputs faithfully passes that combined count through —
+    // a DI case standing in for "the templates dep returns 1".
+    const inputs = await resolveLadderInputs("org_5", deps({ extraAgentCount: async () => 1 }));
+    assert.equal(inputs.extraAgentCount, 1);
+  });
 });
 
 describe("stampLadderEvent", () => {

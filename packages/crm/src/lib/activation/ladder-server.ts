@@ -23,11 +23,17 @@
 //                            archetype (auto-create-website-chatbot.ts) AND
 //                            workspace_copilot (ensure-agent.ts), so neither
 //                            the default chatbot nor copilot use alone can
-//                            ever satisfy hire_agent.
+//                            ever satisfy hire_agent, PLUS the org's
+//                            agentTemplates rows whose blueprint carries an
+//                            event trigger — Task 10's one-click starter
+//                            agents (agent-picks-actions.ts) write ONLY
+//                            agent_templates, never `agents`, so without this
+//                            second count hire_agent could never flip.
 
 import { and, eq, ne, notInArray, sql } from "drizzle-orm";
 import { db } from "@/db";
 import { agentConversations, agentTurns, agents, bookings, organizations } from "@/db/schema";
+import { agentTemplates } from "@/db/schema/agent-templates";
 import { listLandingVersions } from "@/lib/landing/r1-customize";
 import { listConnections } from "@/lib/integrations/composio/client";
 import { COPILOT_ARCHETYPE } from "@/lib/agents/copilot/ensure-agent";
@@ -47,6 +53,13 @@ export type LadderServerDeps = {
   calendarConnected: (orgId: string) => Promise<boolean>;
   copilotEverUsed: (orgId: string) => Promise<boolean>;
   readActivationSettings: (orgId: string) => Promise<{ domainAttached: boolean; shareUsed: boolean }>;
+  /** Count now includes BOTH (a) `agents` rows excluding the default
+   *  website-chatbot + workspace_copilot archetypes AND (b) the org's
+   *  agentTemplates rows whose blueprint carries an event trigger (Task 10's
+   *  one-click starters write ONLY agent_templates — see
+   *  agent-picks-actions.ts's idempotency probe, whose trigger-presence check
+   *  this mirrors). Without (b), enabling a starter agent could never flip
+   *  hire_agent. */
   extraAgentCount: (orgId: string) => Promise<number>;
 };
 
@@ -118,17 +131,41 @@ async function defaultReadActivationSettings(
   };
 }
 
+/** True when a template row's blueprint carries an event trigger — mirrors
+ *  agent-picks-actions.ts's own idempotency probe (the in-memory
+ *  `blueprint.trigger.kind === "event"` check) so the two call sites never
+ *  drift on what counts as "this template is a live event-triggered agent". */
+function hasEventTrigger(blueprint: unknown): boolean {
+  const trigger = (blueprint as { trigger?: unknown } | null)?.trigger as
+    | { kind?: string }
+    | undefined;
+  return trigger?.kind === "event";
+}
+
 async function defaultExtraAgentCount(orgId: string): Promise<number> {
-  const rows = await db
-    .select({ id: agents.id })
-    .from(agents)
-    .where(
-      and(
-        eq(agents.orgId, orgId),
-        notInArray(agents.archetype, [DEFAULT_WEBSITE_CHATBOT_ARCHETYPE, COPILOT_ARCHETYPE]),
+  const [agentRows, templateRows] = await Promise.all([
+    db
+      .select({ id: agents.id })
+      .from(agents)
+      .where(
+        and(
+          eq(agents.orgId, orgId),
+          notInArray(agents.archetype, [DEFAULT_WEBSITE_CHATBOT_ARCHETYPE, COPILOT_ARCHETYPE]),
+        ),
       ),
-    );
-  return rows.length;
+    // The hire_agent-relevant slice of agent_templates: Task 10's one-click
+    // starters (review-requester / speed-to-lead) write ONLY this table, never
+    // `agents` — see enableStarterAgentAction — so without this second count
+    // enabling a starter could never flip hire_agent.
+    db
+      .select({ blueprint: agentTemplates.blueprint })
+      .from(agentTemplates)
+      .where(eq(agentTemplates.builderOrgId, orgId)),
+  ]);
+
+  const eventTemplateCount = templateRows.filter((row) => hasEventTrigger(row.blueprint)).length;
+
+  return agentRows.length + eventTemplateCount;
 }
 
 export const defaultDeps: LadderServerDeps = {

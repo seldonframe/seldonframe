@@ -21,7 +21,6 @@ import { db } from "@/db";
 import { agentTemplates } from "@/db/schema/agent-templates";
 import { getOrgId } from "@/lib/auth/helpers";
 import { createAgentTemplate, updateAgentTemplate } from "@/lib/agent-templates/store";
-import { stampLadderEvent } from "@/lib/activation/ladder-server";
 import type { AgentPickId } from "@/lib/activation/suggest-agents";
 import type { AgentTrigger } from "@/lib/agents/triggers/agent-trigger";
 
@@ -51,8 +50,12 @@ export type EnableStarterAgentResult =
  * One-click-create the workspace's event-triggered agent for `pickId`.
  * Idempotent: if an agent_template with this skill's event trigger already
  * exists for the org, it's a no-op success (alreadyEnabled:true) rather than
- * creating a duplicate. Fire-and-forgets stampLadderEvent(orgId,"hire_agent")
- * so a failed/slow stamp never blocks the UI's success feedback.
+ * creating a duplicate. Does NOT stamp the hire_agent ladder event directly —
+ * revalidatePath("/dashboard") below is enough: the dashboard render loop's
+ * own stampLadderEvent call fires the funnel event once computeLadderState
+ * actually sees extraAgentCount flip the step to done (same philosophy as the
+ * T9 fix — the render loop is the single place a step's completion event
+ * fires, never the action that merely causes it).
  */
 export async function enableStarterAgentAction(
   pickId: string,
@@ -101,11 +104,21 @@ export async function enableStarterAgentAction(
     });
 
     if (!saved.ok) {
+      // createAgentTemplate's row has no trigger yet — the idempotency probe
+      // above only matches trigger-bearing rows, so leaving it in place would
+      // orphan a trigger-less template that a retry can never find, and the
+      // NEXT click would insert a duplicate on top of it. Best-effort cleanup:
+      // if this delete also fails, we still report the original error (the
+      // orphan is a rare, non-money-safety-relevant leftover row, not worth
+      // masking the real failure over).
+      await db
+        .delete(agentTemplates)
+        .where(eq(agentTemplates.id, created.id))
+        .catch(() => {});
       return { ok: false, error: saved.error };
     }
   }
 
-  void stampLadderEvent(orgId, "hire_agent").catch(() => {});
   revalidatePath("/dashboard");
 
   return { ok: true, alreadyEnabled };

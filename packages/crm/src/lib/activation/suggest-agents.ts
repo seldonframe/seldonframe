@@ -74,8 +74,17 @@ export function suggestAgentsForIndustry(industry: string | null | undefined): A
     return [SPEED_TO_LEAD, REVIEW_REQUESTER];
   }
 
-  // Health/beauty match OR the unknown/blank fallback both lead with
-  // review-requester — kept as two branches (rather than collapsing the
-  // condition) so the fallback's intent stays explicit at the call site.
+  // Health/beauty gets its OWN explicit branch even though it currently
+  // produces the same order as the unknown/blank fallback below. This is
+  // deliberate, not dead code: it PROTECTS health/beauty ordering against
+  // future changes to the default (e.g. if the fallback order ever flips to
+  // lead with speed-to-lead, health/beauty must NOT silently follow it).
+  if (normalized && matchesAny(normalized, HEALTH_BEAUTY_KEYWORDS)) {
+    return [REVIEW_REQUESTER, SPEED_TO_LEAD];
+  }
+
+  // The unknown/blank fallback — kept as its own branch (rather than merging
+  // into the health/beauty check above) so its intent stays explicit at the
+  // call site.
   return [REVIEW_REQUESTER, SPEED_TO_LEAD];
 }
