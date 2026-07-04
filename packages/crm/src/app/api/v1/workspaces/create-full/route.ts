@@ -25,6 +25,11 @@ import { buildTierUpsell } from "@/lib/workspace/tier-upsell";
 // gets the real multi-page site, not the legacy soul-seeded single page.
 import { applyLandingTemplateForWorkspace } from "@/lib/landing/apply-landing-template";
 import { runR1LandingStep } from "@/lib/landing/r1-landing-step";
+// Onboarding fix — seed the auto-created chatbot from the SAME landing
+// FAQ/services the R1 step just generated, instead of an empty scaffold.
+import { mapLandingContentToChatbot } from "@/lib/landing/map-landing-to-chatbot";
+import { publishAgent } from "@/lib/agents/store";
+import type { R1LandingPayload } from "@/lib/landing/r1-payload-prompt";
 
 // The atomic create already makes several sequential LLM calls; the R1 parity
 // step adds two more (payload + ONE batched service-pages call). Same guard
@@ -264,6 +269,10 @@ export async function POST(request: Request) {
   // in place and NEVER blocks workspace creation.
   let landingEngine: "r1" | "soul_seed" = "soul_seed";
   let landingArchetype: string | null = null;
+  // Captured only on a successful R1 run — feeds the chatbot auto-seed
+  // below. Left null on any skip/failure so the seed step falls back to
+  // today's empty-draft scaffold exactly.
+  let landingPayloadForChatbot: R1LandingPayload | null = null;
   try {
     await applyLandingTemplateForWorkspace(workspaceId, {
       businessName: input.business_name,
@@ -289,6 +298,7 @@ export async function POST(request: Request) {
     if (r1.ok) {
       landingEngine = "r1";
       landingArchetype = r1.archetype;
+      landingPayloadForChatbot = r1.payload;
     } else {
       logEvent(
         "r1_landing_step_failed",
@@ -304,28 +314,67 @@ export async function POST(request: Request) {
     );
   }
 
-  // v1.51 — auto-create a draft chatbot scaffold so every workspace
-  // ships with the AI chatbot ready to publish. Operator can refine
-  // FAQ + publish to live via update_website_chatbot + publish_agent.
-  // Failure here does NOT block workspace creation — the workspace
-  // is already persisted; chatbot is a follow-up.
+  // Onboarding fix — auto-create the chatbot SEEDED from the same landing
+  // FAQ/services the R1 step just generated (was previously an empty
+  // faq:[] scaffold with a generic greeting — an "AI receptionist" that
+  // knew nothing and never answered). When the landing step was
+  // skipped/failed, landingPayloadForChatbot is null and
+  // mapLandingContentToChatbot falls back to today's empty scaffold
+  // exactly, so nothing regresses on that path.
+  //
+  // Then attempt to publish straight to 'live' (eval-gated inside
+  // publishAgent). All of this is best-effort: any failure anywhere in
+  // this block leaves the (now-populated) chatbot in draft/test and
+  // NEVER blocks workspace creation — the workspace is already persisted.
   let chatbotEmbedSnippet: string | null = null;
   let chatbotAgentId: string | null = null;
+  let chatbotStatus: "draft" | "test" | "live" = "draft";
   try {
+    const mapped = mapLandingContentToChatbot(
+      landingPayloadForChatbot,
+      input.business_name,
+    );
     const agentResult = await createAgent({
       orgId: workspaceId,
       archetype: "website-chatbot",
       channel: "web_chat",
       name: `${input.business_name} Chatbot`,
-      // Empty FAQ scaffold — operator fills via update_website_chatbot.
-      // Soul-derived FAQ population could happen here in a future
-      // iteration; for now, the chatbot exists as a deployable scaffold
-      // the operator can customize before publishing.
-      faq: [],
+      faq: mapped.faq,
+      pricingFacts: mapped.pricingFacts,
+      greeting: mapped.greeting,
     });
     if (agentResult.ok) {
       chatbotAgentId = agentResult.agent.id;
       chatbotEmbedSnippet = `<script src="${agentResult.embedUrl}" async></script>`;
+
+      // Only worth attempting a live publish when we actually seeded real
+      // content — an empty-FAQ chatbot would just fail the eval gate (or
+      // worse, pass and go live with nothing to say). Fail-soft: any
+      // throw or a failed eval gate leaves the chatbot in draft.
+      if (mapped.faq.length > 0) {
+        try {
+          const publishResult = await publishAgent({
+            agentId: agentResult.agent.id,
+            orgId: workspaceId,
+            status: "live",
+          });
+          if (publishResult.ok) {
+            chatbotStatus = "live";
+          } else {
+            logEvent(
+              "auto_chatbot_publish_gated",
+              { workspace_id: workspaceId, agent_id: agentResult.agent.id, error: publishResult.error },
+              { request, status: 200, severity: "warn" }
+            );
+          }
+        } catch (err) {
+          logEvent(
+            "auto_chatbot_publish_failed",
+            { workspace_id: workspaceId, agent_id: agentResult.agent.id, error: err instanceof Error ? err.message : String(err) },
+            { request, status: 200, severity: "warn" }
+          );
+        }
+      }
     }
   } catch (err) {
     logEvent(
@@ -344,8 +393,11 @@ export async function POST(request: Request) {
     {
       ...result,
       chatbot_embed_snippet: chatbotEmbedSnippet,
+      chatbot_status: chatbotEmbedSnippet ? chatbotStatus : null,
       chatbot_instructions: chatbotEmbedSnippet
-        ? "Paste this <script> onto the client's existing website (anywhere before </body>). The chatbot is in TEST mode by default — call publish_agent({ agent_id, status: 'live' }) once you've reviewed/edited the FAQ via update_website_chatbot."
+        ? chatbotStatus === "live"
+          ? "Your AI receptionist is live and answering on your site. Paste this <script> onto the client's existing website (anywhere before </body>) to embed it elsewhere too. Refine its FAQ anytime via update_website_chatbot."
+          : "Paste this <script> onto the client's existing website (anywhere before </body>). The chatbot is in DRAFT/TEST mode — review/edit its FAQ via update_website_chatbot, then call publish_agent({ agent_id, status: 'live' }) to go live."
         : null,
       chatbot_agent_id: chatbotAgentId,
       // FIX-4 observability: which landing engine actually rendered. "r1"

@@ -70,7 +70,16 @@ export function withDefaultLeadForm(
 }
 
 export type R1LandingStepResult =
-  | { ok: true; archetype: AestheticArchetypeId }
+  | {
+      ok: true;
+      archetype: AestheticArchetypeId;
+      /** The in-memory payload just generated + persisted. Exposed so
+       *  callers (e.g. create-full's chatbot auto-seed) can derive
+       *  content from it without a second DB read. Additive field —
+       *  existing consumers that only destructure {ok, archetype}
+       *  are unaffected. */
+      payload: R1LandingPayload;
+    }
   | { ok: false; reason: string };
 
 /**
@@ -175,7 +184,7 @@ export async function runR1LandingStep(args: {
     // Step 6: Persist.
     await saveLandingPayload(workspaceId, payload, archetype);
 
-    return { ok: true, archetype };
+    return { ok: true, archetype, payload };
   } catch (err: unknown) {
     // Log the FULL error server-side for debugging — this never leaves
     // the server. The user-facing reason is intentionally short.
