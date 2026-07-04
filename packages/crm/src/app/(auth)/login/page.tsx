@@ -2,6 +2,7 @@ import { LoginForm } from "./login-form";
 import Link from "next/link";
 import { toInternalRedirectPath } from "@/lib/auth/signup-redirect";
 import { isGoogleAuthEnabled } from "@/lib/auth/google-enabled";
+import { isDemoReadonly } from "@/lib/demo/server";
 
 export default async function LoginPage({
   searchParams,
@@ -30,10 +31,13 @@ export default async function LoginPage({
         </div>
         <LoginForm
           redirectTo={redirectTo}
-          googleEnabled={isGoogleAuthEnabled({
-            GOOGLE_CLIENT_ID: process.env.GOOGLE_CLIENT_ID,
-            GOOGLE_CLIENT_SECRET: process.env.GOOGLE_CLIENT_SECRET,
-          })}
+          googleEnabled={
+            isGoogleAuthEnabled({
+              GOOGLE_CLIENT_ID: process.env.GOOGLE_CLIENT_ID,
+              GOOGLE_CLIENT_SECRET: process.env.GOOGLE_CLIENT_SECRET,
+            }) && !isDemoReadonly()
+          }
+          // demo-readonly: hide Google — assertWritable would reject the action with a raw error boundary (review 2026-07-04)
         />
       </div>
 
