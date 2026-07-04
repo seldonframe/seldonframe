@@ -165,6 +165,8 @@ const getBuiltAgentOwnerCount = (includeInternal: boolean) =>
         JOIN agents ON agents.org_id = organizations.id
         WHERE organizations.owner_id IS NOT NULL
           AND NOT (${internalPredicate})
+          -- copilot rows are plumbing, not user agents (win-ladder plan T2)
+          AND agents.archetype != 'workspace_copilot'
       `);
       return Number((result.rows?.[0] as { c: number } | undefined)?.c ?? 0);
     },

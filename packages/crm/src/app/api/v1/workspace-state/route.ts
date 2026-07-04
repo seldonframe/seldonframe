@@ -16,7 +16,7 @@
 // remains available — this is sugar for the "what's in this workspace?"
 // case which is overwhelmingly the most common question.
 
-import { and, count, desc, eq, gte, inArray, sql } from "drizzle-orm";
+import { and, count, desc, eq, gte, inArray, ne, sql } from "drizzle-orm";
 import { NextResponse } from "next/server";
 import { db } from "@/db";
 import {
@@ -115,7 +115,8 @@ export async function GET(request: Request) {
       updatedAt: agents.updatedAt,
     })
     .from(agents)
-    .where(eq(agents.orgId, orgId))
+    // copilot rows are plumbing, not user agents (win-ladder plan T2)
+    .where(and(eq(agents.orgId, orgId), ne(agents.archetype, "workspace_copilot")))
     .orderBy(desc(agents.createdAt));
 
   // Per-agent stats: 24h conversations + validator pass rate + latest

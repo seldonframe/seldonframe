@@ -18,10 +18,23 @@ import { ensureWorkspaceCopilotAgent } from "../../../src/lib/agents/copilot/ens
 
 describe("ensureWorkspaceCopilotAgent", () => {
   test("creates the copilot agent when absent", async () => {
-    const createAgent = mock.fn(async () => ({ id: "agent-1" }));
-    const findAgent = mock.fn(async () => undefined);
-    const findConversation = mock.fn(async () => undefined);
-    const createConversation = mock.fn(async () => ({ id: "conv-1" }));
+    const createAgent = mock.fn(
+      async (_input: {
+        orgId: string;
+        name: string;
+        archetype: string;
+        blueprint: { capabilities?: string[] };
+      }) => ({ id: "agent-1" }),
+    );
+    const findAgent = mock.fn(async (_orgId: string) => undefined);
+    const findConversation = mock.fn(
+      async (_input: { agentId: string; externalKey: string }) => undefined,
+    );
+    const createConversation = mock.fn(
+      async (_input: { agentId: string; orgId: string; externalKey: string }) => ({
+        id: "conv-1",
+      }),
+    );
 
     const result = await ensureWorkspaceCopilotAgent("org-1", {
       findAgent,
@@ -32,12 +45,7 @@ describe("ensureWorkspaceCopilotAgent", () => {
 
     assert.equal(result.agentId, "agent-1");
     assert.equal(createAgent.mock.callCount(), 1);
-    const createArgs = createAgent.mock.calls[0]!.arguments[0] as {
-      orgId: string;
-      name: string;
-      archetype: string;
-      blueprint: { capabilities: string[] };
-    };
+    const createArgs = createAgent.mock.calls[0]!.arguments[0];
     assert.equal(createArgs.orgId, "org-1");
     assert.equal(createArgs.name, "SeldonChat");
     assert.equal(createArgs.archetype, "workspace_copilot");
@@ -80,10 +88,7 @@ describe("ensureWorkspaceCopilotAgent", () => {
 
     assert.equal(conversationId, "conv-for-copilot:user-42");
     assert.equal(createConversation.mock.callCount(), 1);
-    const createConvArgs = createConversation.mock.calls[0]!.arguments[0] as {
-      agentId: string;
-      externalKey: string;
-    };
+    const createConvArgs = createConversation.mock.calls[0]!.arguments[0];
     assert.equal(createConvArgs.agentId, "agent-1");
     assert.equal(createConvArgs.externalKey, "copilot:user-42");
   });

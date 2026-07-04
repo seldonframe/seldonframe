@@ -8,7 +8,7 @@
 // design that surfaced only 2 CTAs and zero stats.
 
 import Link from "next/link";
-import { and, desc, eq, gte, sql } from "drizzle-orm";
+import { and, desc, eq, gte, ne, sql } from "drizzle-orm";
 import { db } from "@/db";
 import {
   agents,
@@ -55,7 +55,8 @@ export default async function AdminAgentsPage() {
       createdAt: agents.createdAt,
     })
     .from(agents)
-    .where(eq(agents.orgId, orgId))
+    // copilot rows are plumbing, not user agents (win-ladder plan T2)
+    .where(and(eq(agents.orgId, orgId), ne(agents.archetype, "workspace_copilot")))
     .orderBy(desc(agents.createdAt));
 
   const sinceTs = new Date(Date.now() - 24 * 3600 * 1000);

@@ -16,7 +16,7 @@
 // Auth: workspace bearer (same pattern as /api/v1/partner-agencies).
 // Caller's bearer resolves to a workspace orgId; agents are scoped to it.
 
-import { and, asc, desc, eq, gte, sql } from "drizzle-orm";
+import { and, asc, desc, eq, gte, ne, sql } from "drizzle-orm";
 import { NextResponse } from "next/server";
 import { db } from "@/db";
 import {
@@ -848,7 +848,8 @@ export async function POST(request: Request) {
       createdAt: agents.createdAt,
     })
     .from(agents)
-    .where(eq(agents.orgId, guard.orgId));
+    // copilot rows are plumbing, not user agents (win-ladder plan T2)
+    .where(and(eq(agents.orgId, guard.orgId), ne(agents.archetype, "workspace_copilot")));
 
   return NextResponse.json({ ok: true, agents: rows });
 }
