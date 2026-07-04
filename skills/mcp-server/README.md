@@ -111,3 +111,17 @@ Soul compilation runs in **your** Claude Code session, not on Seldon's servers:
 **`Seldon API 402`** — You tried a Pro capability without a key. Set `SELDONFRAME_API_KEY` and restart.
 
 **Want to reset device state?** Delete `~/.seldonframe/device.json`. Your hosted workspaces stay live at `app.seldonframe.com`; only the local tokens are cleared.
+
+## Privacy Policy
+
+Full policy: **<https://www.seldonframe.com/privacy>**
+
+- **Data collection.** The connector runs locally and sends only what you ask it to send: the structured tool commands and business content (workspace names, URLs you point it at, contact and booking details you create) go to `app.seldonframe.com` over HTTPS. The only thing it stores on your machine is a workspace bearer token in `~/.seldonframe/device.json`.
+- **Usage and storage.** Data you submit is stored in your hosted SeldonFrame workspace and used to run it (website, CRM, booking, agents). It is not used to train AI models.
+- **Third-party sharing.** We don't sell your data. Workspace features rely on infrastructure subprocessors (hosting, database, email/SMS delivery when you configure them) as described in the policy above.
+- **Retention.** Workspace data is retained while your workspace is active and deleted on account deletion or on request. The local device token can be removed at any time by deleting `~/.seldonframe/device.json`.
+- **Contact.** <hello@seldonframe.com>
+
+## License
+
+This package (`skills/mcp-server`, the SeldonFrame MCP connector) is [MIT-licensed](./LICENSE). The SeldonFrame platform in the rest of the repository remains AGPL-3.0 — see the repository root `LICENSE`.
