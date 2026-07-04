@@ -16,10 +16,11 @@ export function SignupForm({
 }) {
   const { showDemoToast } = useDemoToast();
   const [state, action, pending] = useActionState(sendMagicLinkAction, {});
-  // 2026-05-22 — redirectTo is computed server-side in page.tsx from the
-  // ?url= / ?biz= / ?intent= query params (or /claim?token=... for
-  // claim flows). The default path lands the visitor on /signup/billing
-  // for the card-collection step, then on to /clients/new with prefill.
+  // 2026-07-04 — redirectTo is computed server-side in page.tsx from the
+  // ?url= / ?biz= / ?intent= query params (or /claim?token=... for claim
+  // flows). The default path lands the visitor on /clients/new with url/biz
+  // prefill. /signup/billing is reached only from upgrade gates (workspace
+  // limit, custom-domain upsell) and is not part of the cold-flow path.
   const callbackUrl = redirectTo;
 
   useEffect(() => {

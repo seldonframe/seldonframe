@@ -86,7 +86,7 @@ export default async function SignupPage({
         <div className="text-center">
           <h1 className="text-section-title text-foreground">Welcome to SeldonFrame</h1>
           <p className="mt-1 text-label text-[hsl(var(--color-text-secondary))]">
-            One Soul powering every block in your business.
+            Your website, booking, CRM, and AI receptionist — live in minutes.
           </p>
         </div>
         <SignupForm
