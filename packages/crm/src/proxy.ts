@@ -572,6 +572,13 @@ const authProxy = auth(async (request) => {
   const isSoulCompleted = hasNextAuth ? Boolean(user?.soulCompleted) : true;
   let isWelcomeShown = hasNextAuth ? Boolean(user?.welcomeShown) : true;
 
+  // NOTE (2026-07-04): on the marketing host this block is DEAD CODE — proxy()
+  // returns NextResponse.next() when !appHost before authProxy ever runs, so it
+  // never fires for www/apex. The redirect that actually pins /signup + /login
+  // to the app host lives in the PAGES themselves (redirectToAppHostIfNeeded in
+  // (auth)/signup/page.tsx + (auth)/login/page.tsx — the cross-host OAuth pkce
+  // fix). Do not delete the page guards as "redundant" with this block, and if
+  // this block is ever made reachable, keep both (double-redirect is harmless).
   if (!appHost && isMarketingHost && (isProtectedPath(pathname) || isAuthPath(pathname))) {
     const redirectUrl = request.nextUrl.clone();
     redirectUrl.host = appHostFallback;
