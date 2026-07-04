@@ -17,6 +17,9 @@ import { syncContactToNewsletter } from "@/lib/integrations/newsletter-sync";
 import { dispatchOutboundMessagesForEvent } from "@/lib/messaging/dispatch";
 // 2026-06-21 — ICS-push: emit an .ics calendar invite on booking.created.
 import { sendBookingCalendarInvite } from "@/lib/calendar/booking-invite";
+// Task 8 — push new bookings into the org's OWN connected Google/Outlook
+// calendar (Composio, org-level connection). Fail-soft; fire-and-forget.
+import { pushBookingToConnectedCalendar } from "@/lib/integrations/calendar-push";
 // 2026-05-18 — Slice 6: cancel pending scheduled sends (e.g. 24h
 // reminders) when their target booking is cancelled.
 import { cancelScheduledSendsForBooking } from "@/lib/messaging/schedule";
@@ -420,6 +423,21 @@ export function registerCrmEventListeners() {
           err,
         );
       }
+
+      // Task 8 — fire-and-forget push into the org's own connected Google/
+      // Outlook calendar (Composio, org-level). pushBookingToConnectedCalendar
+      // is already fail-soft internally (never throws); this void/.catch is
+      // belt-and-suspenders so a bug there can NEVER block or fail this
+      // handler. Non-blocking: we do not await it.
+      void pushBookingToConnectedCalendar({
+        orgId: bookingOrgId,
+        bookingId,
+      }).catch((err) => {
+        console.warn(
+          `[listeners] pushBookingToConnectedCalendar booking.created failed:`,
+          err,
+        );
+      });
     }
   });
 
