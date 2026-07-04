@@ -211,6 +211,135 @@ describe("renderWelcomeEmailText", () => {
   });
 });
 
+describe("chatbot card — HTML", () => {
+  const CHATBOT_LIVE = {
+    url: "https://acme.app.seldonframe.com/chat",
+    embed_snippet: '<script src="https://acme.app.seldonframe.com/embed.js" async></script>',
+    status: "live" as const,
+  };
+  const CHATBOT_TEST = { ...CHATBOT_LIVE, status: "test" as const };
+
+  test("renders the AI Chatbot card when chatbot is provided (live)", () => {
+    const html = renderWelcomeEmailHtml({
+      ...VALID_BODY,
+      workspace: { ...VALID_BODY.workspace, chatbot: CHATBOT_LIVE },
+    });
+    assert.match(html, /AI Chatbot/);
+    assert.ok(html.includes(CHATBOT_LIVE.url));
+    assert.match(html, /It&#39;s live and answering now\.|It's live and answering now\./);
+    assert.doesNotMatch(html, /test mode/);
+  });
+
+  test("renders the AI Chatbot card when chatbot is provided (test)", () => {
+    const html = renderWelcomeEmailHtml({
+      ...VALID_BODY,
+      workspace: { ...VALID_BODY.workspace, chatbot: CHATBOT_TEST },
+    });
+    assert.match(html, /AI Chatbot/);
+    assert.match(html, /test mode/);
+    assert.match(html, /publish_agent/);
+  });
+
+  test("escapes the embed snippet", () => {
+    const html = renderWelcomeEmailHtml({
+      ...VALID_BODY,
+      workspace: { ...VALID_BODY.workspace, chatbot: CHATBOT_LIVE },
+    });
+    assert.doesNotMatch(html, /<script src="https:\/\/acme\.app\.seldonframe\.com\/embed\.js" async><\/script>/);
+    assert.match(html, /&lt;script/);
+  });
+
+  test("card fully absent when chatbot is omitted", () => {
+    const html = renderWelcomeEmailHtml(VALID_BODY);
+    assert.doesNotMatch(html, /AI Chatbot/);
+  });
+});
+
+describe("chatbot card — text", () => {
+  const CHATBOT_LIVE = {
+    url: "https://acme.app.seldonframe.com/chat",
+    embed_snippet: '<script src="https://acme.app.seldonframe.com/embed.js" async></script>',
+    status: "live" as const,
+  };
+
+  test("includes chatbot url + snippet + live status note", () => {
+    const text = renderWelcomeEmailText({
+      ...VALID_BODY,
+      workspace: { ...VALID_BODY.workspace, chatbot: CHATBOT_LIVE },
+    });
+    assert.ok(text.includes(CHATBOT_LIVE.url));
+    assert.ok(text.includes(CHATBOT_LIVE.embed_snippet));
+    assert.match(text, /live and answering now/);
+  });
+
+  test("fully absent when chatbot is omitted", () => {
+    const text = renderWelcomeEmailText(VALID_BODY);
+    assert.doesNotMatch(text, /AI Chatbot/);
+  });
+});
+
+describe("validateWelcomeRequest — chatbot", () => {
+  test("valid chatbot passes through", () => {
+    const result = validateWelcomeRequest({
+      ...VALID_BODY,
+      workspace: {
+        ...VALID_BODY.workspace,
+        chatbot: {
+          url: "https://acme.app.seldonframe.com/chat",
+          embed_snippet: "<script>...</script>",
+          status: "test",
+        },
+      },
+    });
+    assert.equal(result.ok, true);
+    if (result.ok) {
+      assert.deepEqual(result.data.workspace.chatbot, {
+        url: "https://acme.app.seldonframe.com/chat",
+        embed_snippet: "<script>...</script>",
+        status: "test",
+      });
+    }
+  });
+
+  test("omitted chatbot is fine (backward-compatible)", () => {
+    const result = validateWelcomeRequest(VALID_BODY);
+    assert.equal(result.ok, true);
+    if (result.ok) assert.equal(result.data.workspace.chatbot, undefined);
+  });
+
+  test("malformed chatbot (missing embed_snippet) → 400", () => {
+    const result = validateWelcomeRequest({
+      ...VALID_BODY,
+      workspace: {
+        ...VALID_BODY.workspace,
+        chatbot: { url: "https://x.com", status: "live" },
+      },
+    });
+    assert.equal(result.ok, false);
+    if (!result.ok) assert.match(result.error, /embed_snippet/i);
+  });
+
+  test("malformed chatbot (bad status) → 400", () => {
+    const result = validateWelcomeRequest({
+      ...VALID_BODY,
+      workspace: {
+        ...VALID_BODY.workspace,
+        chatbot: { url: "https://x.com", embed_snippet: "<script></script>", status: "draft" },
+      },
+    });
+    assert.equal(result.ok, false);
+    if (!result.ok) assert.match(result.error, /status/i);
+  });
+
+  test("malformed chatbot (not an object) → 400", () => {
+    const result = validateWelcomeRequest({
+      ...VALID_BODY,
+      workspace: { ...VALID_BODY.workspace, chatbot: "nope" },
+    });
+    assert.equal(result.ok, false);
+  });
+});
+
 describe("sendWelcomeEmail", () => {
   test("posts to api.resend.com with bearer auth and returns ok on 200", async () => {
     type Captured = { url: string; init: RequestInit | undefined };

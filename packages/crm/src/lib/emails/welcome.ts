@@ -23,11 +23,23 @@ const DISCORD_INVITE = "https://discord.gg/sbVUu976NW";
 const DEFAULT_FROM = "SeldonFrame <welcome@seldonframe.com>";
 const SANDBOX_FROM_PATTERN = /@resend\.dev>?$/i;
 
+export type WelcomeChatbot = {
+  url: string;
+  embed_snippet: string;
+  status: "live" | "test";
+};
+
 export type WelcomeWorkspace = {
   landing_url: string;
   booking_url: string;
   intake_url: string;
   admin_url: string;
+  /** Optional — every workspace ships with an AI chatbot, but the
+   *  welcome-email caller may not always have the embed details on
+   *  hand (e.g. legacy callers, or a workspace created before the
+   *  auto-chatbot scaffold existed). Omitting it just skips the card;
+   *  it never fails validation or breaks existing 4-URL callers. */
+  chatbot?: WelcomeChatbot;
 };
 
 export type WelcomeEmailRequest = {
@@ -94,6 +106,34 @@ export function validateWelcomeRequest(body: unknown): ValidateResult {
       ? (rawTier as "free" | "growth" | "scale")
       : undefined;
 
+  // Optional chatbot card — only validated when present so every
+  // existing 4-URL caller (no chatbot field at all) keeps working.
+  let chatbot: WelcomeChatbot | undefined;
+  if (w.chatbot !== undefined && w.chatbot !== null) {
+    if (typeof w.chatbot !== "object") {
+      return {
+        ok: false,
+        status: 400,
+        error: "workspace.chatbot must be an object with url, embed_snippet, and status.",
+      };
+    }
+    const c = w.chatbot as Record<string, unknown>;
+    if (!isNonEmptyString(c.url)) {
+      return { ok: false, status: 400, error: "workspace.chatbot.url is required." };
+    }
+    if (!isNonEmptyString(c.embed_snippet)) {
+      return { ok: false, status: 400, error: "workspace.chatbot.embed_snippet is required." };
+    }
+    if (c.status !== "live" && c.status !== "test") {
+      return { ok: false, status: 400, error: "workspace.chatbot.status must be \"live\" or \"test\"." };
+    }
+    chatbot = {
+      url: c.url.trim(),
+      embed_snippet: c.embed_snippet.trim(),
+      status: c.status,
+    };
+  }
+
   return {
     ok: true,
     data: {
@@ -104,6 +144,7 @@ export function validateWelcomeRequest(body: unknown): ValidateResult {
         booking_url: (w.booking_url as string).trim(),
         intake_url: (w.intake_url as string).trim(),
         admin_url: (w.admin_url as string).trim(),
+        ...(chatbot ? { chatbot } : {}),
       },
       tier,
     },
@@ -191,6 +232,33 @@ function renderUpgradeBlock(req: WelcomeEmailRequest): string {
   </td></tr>`;
 }
 
+/**
+ * AI Chatbot card — rendered only when `workspace.chatbot` is present.
+ * Mirrors the existing URL-card table style (same border/padding/label
+ * typography) with an added embed-snippet <pre> block and a
+ * status-conditional one-liner.
+ */
+function renderChatbotCard(chatbot: WelcomeChatbot): string {
+  const safeUrl = escapeHtml(chatbot.url);
+  const safeSnippet = escapeHtml(chatbot.embed_snippet);
+  const statusNote =
+    chatbot.status === "live"
+      ? `<div style="font-size:13px;color:#047857;margin-top:8px;">It's live and answering now.</div>`
+      : `<div style="font-size:13px;color:#9aa0a6;margin-top:8px;">It's in test mode — publish it live from your IDE with publish_agent, or ask Claude.</div>`;
+
+  return `<tr><td style="padding:8px 32px 0 32px;">
+          <table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="border:1px solid #e5e7eb;border-radius:10px;">
+            <tr><td style="padding:14px 18px;">
+              <div style="font-size:12px;color:#6b7280;text-transform:uppercase;letter-spacing:0.06em;margin-bottom:4px;">AI Chatbot</div>
+              <a href="${safeUrl}" style="color:#1a73e8;text-decoration:none;font-size:15px;word-break:break-all;">${safeUrl}</a>
+              <div style="font-size:13px;color:#4b5563;margin-top:10px;margin-bottom:6px;">Paste this before &lt;/body&gt; on your real website to put the chatbot live there.</div>
+              <pre style="background:#f5f5f7;border-radius:6px;padding:10px 12px;font-size:12px;line-height:1.5;color:#1a1a1f;overflow-x:auto;white-space:pre-wrap;word-break:break-all;margin:0;"><code>${safeSnippet}</code></pre>
+              ${statusNote}
+            </td></tr>
+          </table>
+        </td></tr>`;
+}
+
 export function renderWelcomeEmailHtml(req: WelcomeEmailRequest): string {
   const greeting = req.name ? `Hi ${escapeHtml(req.name)},` : "Welcome aboard,";
   const w = req.workspace;
@@ -246,6 +314,8 @@ export function renderWelcomeEmailHtml(req: WelcomeEmailRequest): string {
           </table>
         </td></tr>
 
+        ${w.chatbot ? renderChatbotCard(w.chatbot) : ""}
+
         <tr><td style="padding:24px 32px 8px 32px;font-size:15px;line-height:1.55;color:#1a1a1f;">
           <div style="font-weight:600;margin-bottom:8px;">Next steps</div>
           <ol style="padding-left:20px;margin:0 0 16px 0;">
@@ -279,6 +349,21 @@ export function renderWelcomeEmailHtml(req: WelcomeEmailRequest): string {
 </html>`;
 }
 
+function renderChatbotCardText(chatbot: WelcomeChatbot): string {
+  const statusNote =
+    chatbot.status === "live"
+      ? "It's live and answering now."
+      : "It's in test mode — publish it live from your IDE with publish_agent, or ask Claude.";
+  return `
+AI Chatbot:  ${chatbot.url}
+  Paste this before </body> on your real website to put the chatbot live there.
+
+  ${chatbot.embed_snippet}
+
+  ${statusNote}
+`;
+}
+
 export function renderWelcomeEmailText(req: WelcomeEmailRequest): string {
   const greeting = req.name ? `Hi ${req.name},` : "Welcome aboard,";
   const w = req.workspace;
@@ -290,7 +375,7 @@ Your SeldonFrame workspace is live. Bookmark these four URLs:
   Booking:  ${w.booking_url}
   Intake:   ${w.intake_url}
   Admin:    ${w.admin_url}
-
+${w.chatbot ? renderChatbotCardText(w.chatbot) : ""}
 Next steps:
   1. Open the admin dashboard to see the CRM, deals pipeline, and automations already running.
   2. Customize your landing, booking page, and intake form by talking to Claude — every change is one MCP call away.

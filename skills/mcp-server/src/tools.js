@@ -633,12 +633,17 @@ export const TOOLS = [
   {
     name: "send_welcome_email",
     description:
-      "Email the active workspace's four key URLs (landing, booking, intake, admin dashboard) to a user. Use this AFTER create_workspace, only when the user has explicitly given their email — never auto-send. The admin URL is bearer-token-scoped and expires in 7 days. Example: send_welcome_email({ email: 'alice@example.com', name: 'Alice' }).",
+      "Email the active workspace's four key URLs (landing, booking, intake, admin dashboard) to a user. Use this AFTER create_workspace, only when the user has explicitly given their email — never auto-send. The admin URL is bearer-token-scoped and expires in 7 days. " +
+      "If the workspace has an AI chatbot (create_full_workspace's response includes chatbot_embed_snippet + chatbot_agent_id), pass chatbot_url + chatbot_embed_snippet + chatbot_status so the welcome email also shows the chatbot card with its embed snippet — operators otherwise never learn the workspace shipped with a chatbot. All three are optional; omit them to send the classic 4-URL email. " +
+      "Example: send_welcome_email({ email: 'alice@example.com', name: 'Alice', chatbot_url: 'https://acme.app.seldonframe.com/chat', chatbot_embed_snippet: '<script src=\"...\" async></script>', chatbot_status: 'test' }).",
     inputSchema: obj(
       {
         email: str("Recipient email address."),
         name: str("Optional recipient name (used in the greeting)."),
         workspace_id: str("Optional workspace override. Defaults to active workspace."),
+        chatbot_url: str("Optional. Public chatbot URL — include when the workspace has an AI chatbot (see chatbot_embed_snippet + chatbot_agent_id from create_full_workspace's response)."),
+        chatbot_embed_snippet: str("Optional. The <script> embed snippet for the chatbot (from create_full_workspace's chatbot_embed_snippet). Required alongside chatbot_url/chatbot_status to render the chatbot card."),
+        chatbot_status: str("Optional. \"live\" or \"test\" — reflects the chatbot's current publish status. Defaults the card copy accordingly."),
       },
       ["email"],
     ),
@@ -673,6 +678,18 @@ export const TOOLS = [
       const appHost = API_INFO.base.replace(/\/api\/v1\/?$/, "");
       const adminUrl = `${appHost}/admin/${encodeURIComponent(workspaceId)}?token=${encodeURIComponent(bearer)}`;
 
+      // Optional chatbot passthrough — only include the card when the
+      // caller supplied enough to render it (url + embed_snippet).
+      // Omitted entirely otherwise so this stays backward-compatible.
+      const chatbot =
+        a.chatbot_url && a.chatbot_embed_snippet
+          ? {
+              url: a.chatbot_url,
+              embed_snippet: a.chatbot_embed_snippet,
+              status: a.chatbot_status === "live" ? "live" : "test",
+            }
+          : undefined;
+
       await api("POST", "/email/send-welcome", {
         body: {
           email: a.email,
@@ -682,6 +699,7 @@ export const TOOLS = [
             booking_url: publicUrls.book,
             intake_url: publicUrls.intake,
             admin_url: adminUrl,
+            ...(chatbot ? { chatbot } : {}),
           },
         },
         workspace_id: workspaceId,
