@@ -430,126 +430,6 @@ export default async function DashboardPage({
       user?.name?.split(" ").filter(Boolean)[0]?.trim() || "there";
     const greeting = `Good ${timeOfDay()}, ${firstName}`;
 
-    // 2026-07-04 — claimed-/try-workspace hero.
-    //
-    // Why this branches on `landingPageRows`: `isFirstTimeAgency` fires for
-    // ANY org with zero CRM contacts — that includes a brand-new agency
-    // account (genuinely nothing built yet) AND a freshly CLAIMED /try
-    // workspace (a live site/booking/intake/chatbot already exist, just no
-    // contacts yet). The agency hero below funnels straight to
-    // /clients/new, which is the wrong next step for a claimed workspace —
-    // the owner already has something built and wants to SEE it, not
-    // rebuild it. `listLandingPages()` (already fetched above for the
-    // populated-dashboard render path) is the cheapest signal we have for
-    // "this org has a built site": createFullWorkspace/finalize seed a
-    // landing page for every real build, so `landingPageRows.length > 0`
-    // reliably distinguishes "claimed workspace" from "bare agency org."
-    // The bare-agency case (`landingPageRows.length === 0`) falls through
-    // unchanged to the existing hero below.
-    const activeWorkspace = workspaceRows.find((row) => row.id === orgId);
-    if (activeWorkspace && landingPageRows.length > 0) {
-      const urls = buildWorkspaceUrls(activeWorkspace.slug, WORKSPACE_BASE_DOMAIN, activeWorkspace.id);
-      const bookingSlug = appointmentTypeRows[0]?.bookingSlug;
-      const activeIntakeForm =
-        intakeFormRows.find((row) => row.isActive) ?? intakeFormRows[0] ?? null;
-      const APP_BASE = `https://${WORKSPACE_BASE_DOMAIN}`;
-      // Public deep links use the canonical /book/<org>/<slug> +
-      // /forms/<org>/<slug> patterns on the app host, same as
-      // /clients/[slug]/ready — proxy.ts's rewrite for those paths keys off
-      // the org slug in the PATH, not the subdomain host, so the
-      // `urls.book`/`urls.intake` subdomain shortcuts 404 here.
-      const publicBookingUrl = bookingSlug
-        ? `${APP_BASE}/book/${activeWorkspace.slug}/${bookingSlug}`
-        : null;
-      const publicIntakeUrl = activeIntakeForm
-        ? `${APP_BASE}/forms/${activeWorkspace.slug}/${activeIntakeForm.slug}`
-        : null;
-
-      return (
-        <main className="animate-page-enter flex-1 overflow-auto w-full p-4 sm:p-6 md:p-8">
-          <div className="mx-auto max-w-2xl py-10 sm:py-16">
-            <div className="space-y-6 sm:space-y-8">
-              <p className="text-sm text-muted-foreground">{greeting} 👋</p>
-
-              <h1 className="text-3xl font-semibold leading-[1.1] tracking-tight sm:text-4xl lg:text-[2.75rem]">
-                <span className="text-foreground">{activeWorkspace.name}</span>{" "}
-                <span className="text-primary">is live.</span>
-              </h1>
-
-              <p className="text-base text-muted-foreground sm:text-lg">
-                Your website, booking page, intake form, and AI chatbot are
-                already built and published at{" "}
-                <span className="font-medium text-foreground">
-                  {activeWorkspace.slug}.{WORKSPACE_BASE_DOMAIN}
-                </span>
-                .
-              </p>
-
-              <div className="flex flex-wrap items-center gap-3 pt-2">
-                <a
-                  href={urls.home}
-                  target="_blank"
-                  rel="noreferrer noopener"
-                  className="inline-flex h-11 items-center justify-center rounded-xl bg-primary px-5 text-sm font-semibold text-primary-foreground shadow-(--shadow-sm) transition-colors hover:bg-primary/90"
-                >
-                  View your website →
-                </a>
-              </div>
-
-              <div className="mt-8 grid gap-3 sm:grid-cols-3">
-                <a
-                  href={publicBookingUrl ?? urls.home}
-                  target="_blank"
-                  rel="noreferrer noopener"
-                  className="rounded-2xl border border-border/70 bg-card/40 p-4 transition-colors hover:bg-card/70"
-                >
-                  <p className="text-sm font-medium text-foreground">Booking page</p>
-                  <p className="mt-1 text-xs text-muted-foreground">
-                    See how customers schedule with you.
-                  </p>
-                </a>
-                <a
-                  href={publicIntakeUrl ?? urls.home}
-                  target="_blank"
-                  rel="noreferrer noopener"
-                  className="rounded-2xl border border-border/70 bg-card/40 p-4 transition-colors hover:bg-card/70"
-                >
-                  <p className="text-sm font-medium text-foreground">Intake form</p>
-                  <p className="mt-1 text-xs text-muted-foreground">
-                    See how leads submit their details.
-                  </p>
-                </a>
-                <a
-                  href={urls.home}
-                  target="_blank"
-                  rel="noreferrer noopener"
-                  className="rounded-2xl border border-border/70 bg-card/40 p-4 transition-colors hover:bg-card/70"
-                >
-                  <p className="text-sm font-medium text-foreground">Try your AI receptionist</p>
-                  <p className="mt-1 text-xs text-muted-foreground">
-                    Chat with the bubble on your live site.
-                  </p>
-                </a>
-              </div>
-
-              {/* Tertiary link — keeps the agency-builder path discoverable
-                  for owners who also want to build workspaces for others. */}
-              <div className="border-t border-border/60 pt-6">
-                <p className="text-xs text-muted-foreground">
-                  <Link
-                    href="/clients/new"
-                    className="font-medium text-primary underline underline-offset-4 hover:text-primary/80"
-                  >
-                    Add another client workspace →
-                  </Link>
-                </p>
-              </div>
-            </div>
-          </div>
-        </main>
-      );
-    }
-
     return (
       <main className="animate-page-enter flex-1 overflow-auto w-full p-4 sm:p-6 md:p-8">
         <div className="mx-auto max-w-2xl py-10 sm:py-16">
@@ -643,6 +523,135 @@ export default async function DashboardPage({
                   read the docs
                 </Link>
                 .
+              </p>
+            </div>
+          </div>
+        </div>
+      </main>
+    );
+  }
+
+  // 2026-07-04 — claimed-/try-workspace hero.
+  //
+  // Why this branch exists here (after isFirstTimeAgency, not inside it):
+  // isFirstTimeAgency only fires when workspaceRows.length === 0. A user who
+  // claimed a /try-built workspace (link-owner sets organizations.ownerId +
+  // parentUserId + an orgMembers row) matches this page's directWorkspaceRows
+  // query, so workspaceRows.length === 1 and isFirstTimeAgency is FALSE for
+  // them — the claimed-workspace scenario never enters that block. This
+  // branch is the actual gate for it: fires for a built-but-unused workspace
+  // (has a live site via landingPageRows, but zero CRM activity — no
+  // contacts, deals, or bookings yet). Any CRM activity means the workspace
+  // is no longer "fresh," so the real populated dashboard renders instead.
+  // All four row arrays (workspaceRows, landingPageRows, contactRows,
+  // dealRows, bookingRows) are already resolved by the top-level Promise.all
+  // — no new queries added.
+  const activeWorkspace = workspaceRows.find((row) => row.id === orgId);
+  const isFreshClaimedWorkspace =
+    !isOperatorSession &&
+    Boolean(activeWorkspace) &&
+    landingPageRows.length > 0 &&
+    contactRows.length === 0 &&
+    dealRows.length === 0 &&
+    bookingRows.length === 0;
+  if (isFreshClaimedWorkspace && activeWorkspace) {
+    const firstName =
+      user?.name?.split(" ").filter(Boolean)[0]?.trim() || "there";
+    const greeting = `Good ${timeOfDay()}, ${firstName}`;
+    const urls = buildWorkspaceUrls(activeWorkspace.slug, WORKSPACE_BASE_DOMAIN, activeWorkspace.id);
+    const bookingSlug = appointmentTypeRows[0]?.bookingSlug;
+    const activeIntakeForm =
+      intakeFormRows.find((row) => row.isActive) ?? intakeFormRows[0] ?? null;
+    const APP_BASE = `https://${WORKSPACE_BASE_DOMAIN}`;
+    // Public deep links use the canonical /book/<org>/<slug> +
+    // /forms/<org>/<slug> patterns on the app host, same as
+    // /clients/[slug]/ready — proxy.ts's rewrite for those paths keys off
+    // the org slug in the PATH, not the subdomain host, so the
+    // `urls.book`/`urls.intake` subdomain shortcuts 404 here.
+    const publicBookingUrl = bookingSlug
+      ? `${APP_BASE}/book/${activeWorkspace.slug}/${bookingSlug}`
+      : null;
+    const publicIntakeUrl = activeIntakeForm
+      ? `${APP_BASE}/forms/${activeWorkspace.slug}/${activeIntakeForm.slug}`
+      : null;
+
+    return (
+      <main className="animate-page-enter flex-1 overflow-auto w-full p-4 sm:p-6 md:p-8">
+        <div className="mx-auto max-w-2xl py-10 sm:py-16">
+          <div className="space-y-6 sm:space-y-8">
+            <p className="text-sm text-muted-foreground">{greeting} 👋</p>
+
+            <h1 className="text-3xl font-semibold leading-[1.1] tracking-tight sm:text-4xl lg:text-[2.75rem]">
+              <span className="text-foreground">{activeWorkspace.name}</span>{" "}
+              <span className="text-primary">is live.</span>
+            </h1>
+
+            <p className="text-base text-muted-foreground sm:text-lg">
+              Your website, booking page, intake form, and AI chatbot are
+              already built and published at{" "}
+              <span className="font-medium text-foreground">
+                {activeWorkspace.slug}.{WORKSPACE_BASE_DOMAIN}
+              </span>
+              .
+            </p>
+
+            <div className="flex flex-wrap items-center gap-3 pt-2">
+              <a
+                href={urls.home}
+                target="_blank"
+                rel="noreferrer noopener"
+                className="inline-flex h-11 items-center justify-center rounded-xl bg-primary px-5 text-sm font-semibold text-primary-foreground shadow-(--shadow-sm) transition-colors hover:bg-primary/90"
+              >
+                View your website →
+              </a>
+            </div>
+
+            <div className="mt-8 grid gap-3 sm:grid-cols-3">
+              <a
+                href={publicBookingUrl ?? urls.home}
+                target="_blank"
+                rel="noreferrer noopener"
+                className="rounded-2xl border border-border/70 bg-card/40 p-4 transition-colors hover:bg-card/70"
+              >
+                <p className="text-sm font-medium text-foreground">Booking page</p>
+                <p className="mt-1 text-xs text-muted-foreground">
+                  See how customers schedule with you.
+                </p>
+              </a>
+              <a
+                href={publicIntakeUrl ?? urls.home}
+                target="_blank"
+                rel="noreferrer noopener"
+                className="rounded-2xl border border-border/70 bg-card/40 p-4 transition-colors hover:bg-card/70"
+              >
+                <p className="text-sm font-medium text-foreground">Intake form</p>
+                <p className="mt-1 text-xs text-muted-foreground">
+                  See how leads submit their details.
+                </p>
+              </a>
+              <a
+                href={urls.home}
+                target="_blank"
+                rel="noreferrer noopener"
+                className="rounded-2xl border border-border/70 bg-card/40 p-4 transition-colors hover:bg-card/70"
+              >
+                <p className="text-sm font-medium text-foreground">Try your AI receptionist</p>
+                <p className="mt-1 text-xs text-muted-foreground">
+                  Chat with the bubble on your live site.
+                </p>
+              </a>
+            </div>
+
+            {/* Tertiary link — keeps the agency-builder path discoverable
+                for owners who also want to build workspaces for others. */}
+            <div className="border-t border-border/60 pt-6">
+              <p className="text-xs text-muted-foreground">
+                <Link
+                  href="/clients/new"
+                  className="font-medium text-primary underline underline-offset-4 hover:text-primary/80"
+                >
+                  Add another client workspace →
+                </Link>
               </p>
             </div>
           </div>
