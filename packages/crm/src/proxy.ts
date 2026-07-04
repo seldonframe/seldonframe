@@ -18,6 +18,7 @@ import {
   type MarkdownSurface,
   type MarkdownFetchMode,
 } from "@/lib/marketplace/md-analytics";
+import { toInternalRedirectPath } from "@/lib/auth/signup-redirect";
 
 const protectedPrefixes = ["/hub", "/dashboard", "/welcome", "/orgs", "/contacts", "/deals", "/activities", "/forms", "/settings", "/api/v1"];
 const publicPrefixes = ["/api/v1", "/api/auth"];
@@ -613,6 +614,19 @@ const authProxy = auth(async (request) => {
   }
 
   if ((pathname === "/login" || pathname === "/signup") && isAuthenticated) {
+    // 2026-07-04 — honor a SAFE callbackUrl before falling through to the
+    // onboarding-state defaults below. An already-authenticated user who
+    // hits /login or /signup with ?callbackUrl=/claim-build?... (the
+    // invisible-claim loop's second-device / already-signed-in path) must
+    // land on that callback, not get bounced to /dashboard and lose the
+    // claim. toInternalRedirectPath is pure string/URL validation (no DB,
+    // no node APIs) so it's safe to call from this edge middleware.
+    const callbackUrl = request.nextUrl.searchParams.get("callbackUrl");
+    const safeCallback = toInternalRedirectPath(callbackUrl);
+    if (safeCallback) {
+      return NextResponse.redirect(new URL(safeCallback, request.url));
+    }
+
     if (!isSoulCompleted) {
       return NextResponse.redirect(new URL("/clients/new", request.url));
     }
@@ -627,11 +641,37 @@ const authProxy = auth(async (request) => {
     return NextResponse.redirect(new URL("/login", request.url));
   }
 
-  if (isAuthenticated && !isSoulCompleted && pathname !== "/clients/new" && !isPublicPath(pathname)) {
+  // 2026-07-04 — the invisible-claim loop (claim-build → switch-workspace →
+  // /dashboard) must not be intercepted by the onboarding gates for fresh
+  // accounts. A brand-new Google-signup claimer has soulCompleted=false and
+  // welcomeShown=false at the moment they land on /claim-build; without this
+  // exception both /claim-build itself and the subsequent /switch-workspace
+  // hop get swallowed and hard-redirected to /clients/new, so the claim never
+  // lands on /dashboard. The claim itself completes onboarding (it stamps
+  // soulCompletedAt + welcomeShown via markOperatorOnboarded — see
+  // link-owner/route.ts), so this is a narrow, self-closing exception: both
+  // routes remain fully auth-gated by their own logic, they are just exempt
+  // from the ONBOARDING redirect (not from auth).
+  if (
+    isAuthenticated &&
+    !isSoulCompleted &&
+    pathname !== "/clients/new" &&
+    pathname !== "/claim-build" &&
+    pathname !== "/switch-workspace" &&
+    !isPublicPath(pathname)
+  ) {
     return NextResponse.redirect(new URL("/clients/new", request.url));
   }
 
-  if (isAuthenticated && isSoulCompleted && !isWelcomeShown && pathname !== "/welcome" && !isPublicPath(pathname)) {
+  if (
+    isAuthenticated &&
+    isSoulCompleted &&
+    !isWelcomeShown &&
+    pathname !== "/welcome" &&
+    pathname !== "/claim-build" &&
+    pathname !== "/switch-workspace" &&
+    !isPublicPath(pathname)
+  ) {
     return NextResponse.redirect(new URL("/welcome", request.url));
   }
 

@@ -18,12 +18,46 @@
 
 import { redirect } from "next/navigation";
 
-import { getOrgId } from "@/lib/auth/helpers";
+import { getCurrentUser, getOrgId } from "@/lib/auth/helpers";
 import { resolveBuilderAgency } from "@/lib/deployments/store";
 import {
   isBuyerOnlyOrg,
   shouldRedirectToBuyerAgent,
 } from "@/lib/marketplace/buyer/buyer-surface-guard";
+
+/** Does this user own/belong to ANY org OTHER than `orgId`? Pure DB, no
+ *  redirect logic — the escape hatch for the buyer-only classification (Bug
+ *  3: a user must never be imprisoned in the buyer shell just because their
+ *  currently-ACTIVE org happens to be buyer-only, when they own/belong to an
+ *  agency or a claimed workspace elsewhere). Fail-open on error: returns
+ *  `false` (i.e. "no known other orgs") so a DB hiccup here can only ever
+ *  ADD the (already fail-open) buyer-only redirect, never remove it — the
+ *  outer guard functions' own catch blocks are the actual fail-open net. */
+async function resolveUserHasOtherOrgs(userId: string, orgId: string): Promise<boolean> {
+  try {
+    const { db } = await import("@/db");
+    const { orgMembers, organizations } = await import("@/db/schema");
+    const { and, eq, ne } = await import("drizzle-orm");
+
+    const [ownedElsewhere] = await db
+      .select({ id: organizations.id })
+      .from(organizations)
+      .where(and(eq(organizations.ownerId, userId), ne(organizations.id, orgId)))
+      .limit(1);
+    if (ownedElsewhere?.id) return true;
+
+    const [memberElsewhere] = await db
+      .select({ orgId: orgMembers.orgId })
+      .from(orgMembers)
+      .where(and(eq(orgMembers.userId, userId), ne(orgMembers.orgId, orgId)))
+      .limit(1);
+    if (memberElsewhere?.orgId) return true;
+
+    return false;
+  } catch {
+    return false;
+  }
+}
 
 /** Resolve the caller org's FIRST buyer deployment id (a deployment whose cloned
  *  template is stamped `sourceListingId`), or null. Buyer-only orgs typically own
@@ -68,17 +102,22 @@ export async function enforceBuyerSurfaceGuard(pathname: string): Promise<void> 
     const orgId = await getOrgId();
     if (!orgId) return; // unauthenticated → the page's own auth gate handles it.
 
-    // Resolve the two signals. A buyer deployment id doubles as the
+    const user = await getCurrentUser();
+    const userId = user?.id ?? null;
+
+    // Resolve the signals. A buyer deployment id doubles as the
     // hasBuyerDeployment signal AND the redirect target.
-    const [agencyId, buyerDeploymentId] = await Promise.all([
+    const [agencyId, buyerDeploymentId, userHasOtherOrgs] = await Promise.all([
       resolveBuilderAgency(orgId).catch(() => null),
       findFirstBuyerDeploymentId(orgId),
+      userId ? resolveUserHasOtherOrgs(userId, orgId) : Promise.resolve(false),
     ]);
 
     const decision = shouldRedirectToBuyerAgent({
       pathname,
       isAgencyOperator: Boolean(agencyId),
       hasBuyerDeployment: Boolean(buyerDeploymentId),
+      userHasOtherOrgs,
       buyerDeploymentId,
     });
     if (decision.redirect) to = decision.to;
@@ -109,14 +148,19 @@ export async function enforceBuyerAgencyShellGuard(): Promise<void> {
     const orgId = await getOrgId();
     if (!orgId) return; // unauthenticated → the layout's own auth gate handles it.
 
-    const [agencyId, buyerDeploymentId] = await Promise.all([
+    const user = await getCurrentUser();
+    const userId = user?.id ?? null;
+
+    const [agencyId, buyerDeploymentId, userHasOtherOrgs] = await Promise.all([
       resolveBuilderAgency(orgId).catch(() => null),
       findFirstBuyerDeploymentId(orgId),
+      userId ? resolveUserHasOtherOrgs(userId, orgId) : Promise.resolve(false),
     ]);
 
     const buyerOnly = isBuyerOnlyOrg({
       isAgencyOperator: Boolean(agencyId),
       hasBuyerDeployment: Boolean(buyerDeploymentId),
+      userHasOtherOrgs,
     });
     // Only redirect when we have a concrete target (never emit a broken /agent/).
     if (buyerOnly && buyerDeploymentId) to = `/agent/${buyerDeploymentId}`;

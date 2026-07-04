@@ -8,13 +8,24 @@
 // so the predicate is deliberately CONSERVATIVE — it fires ONLY for an org that:
 //   1. owns at least one BUYER deployment (a deployment whose template was cloned
 //      from a marketplace listing — stamped `sourceListingId`), AND
-//   2. is NOT an agency operator (owns no partner_agencies row).
+//   2. is NOT an agency operator (owns no partner_agencies row), AND
+//   3. the USER does not own/belong to ANY other org.
 // An agency that ALSO bought an agent has `isAgencyOperator: true`, so it is
 // never treated as buyer-only. A brand-new user who hasn't bought anything has no
 // buyer deployment, so they pass through untouched.
 //
-// Pure: no DB, no request object — the caller resolves the two booleans (+ the
-// target deployment id) and the path. Nothing throws.
+// 2026-07-04 — Bug 3 (buyer prison): a user who owns/belongs to ANY other org
+// (an agency, a claimed workspace, anything) must never be imprisoned in the
+// buyer shell — the shell is for single-purchase buyers only. A fresh login
+// defaults the active org to the user's primary org; if that org happens to be
+// buyer-only-classified, this guard used to bounce EVERY (dashboard) route to
+// `/agent/<deploymentId>` even when the same user owns other workspaces they
+// need to reach (e.g. one they just claimed). `userHasOtherOrgs` is the escape
+// hatch: any org membership/ownership elsewhere means "this person is not
+// trapped here — let them navigate the full app."
+//
+// Pure: no DB, no request object — the caller resolves the three booleans (+
+// the target deployment id) and the path. Nothing throws.
 
 /** The agency surfaces a buyer-only org is redirected AWAY from — every root in
  *  the agency left-nav (see components/layout/nav-config.ts) plus the agency-only
@@ -60,8 +71,10 @@ export function isBuyerOnlyOrg(input: {
   isAgencyOperator: boolean;
   /** Owns at least one BUYER deployment (template stamped `sourceListingId`). */
   hasBuyerDeployment: boolean;
+  /** The user owns/belongs to ANY other org (agency, claimed workspace, etc). */
+  userHasOtherOrgs: boolean;
 }): boolean {
-  return input.hasBuyerDeployment && !input.isAgencyOperator;
+  return input.hasBuyerDeployment && !input.isAgencyOperator && !input.userHasOtherOrgs;
 }
 
 /** Is `pathname` one of the agency surfaces a buyer should be redirected off? */
@@ -76,6 +89,8 @@ export type ShouldRedirectInput = {
   pathname: string;
   isAgencyOperator: boolean;
   hasBuyerDeployment: boolean;
+  /** The user owns/belongs to ANY other org (agency, claimed workspace, etc). */
+  userHasOtherOrgs: boolean;
   /** The buyer's deployment id to send them to, if known. */
   buyerDeploymentId: string | null;
 };

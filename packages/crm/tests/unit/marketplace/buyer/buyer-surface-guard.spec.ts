@@ -15,16 +15,42 @@ import {
 } from "../../../../src/lib/marketplace/buyer/buyer-surface-guard";
 
 test("isBuyerOnlyOrg: a buyer (owns a buyer deployment, not an agency) is buyer-only", () => {
-  assert.equal(isBuyerOnlyOrg({ isAgencyOperator: false, hasBuyerDeployment: true }), true);
+  assert.equal(
+    isBuyerOnlyOrg({ isAgencyOperator: false, hasBuyerDeployment: true, userHasOtherOrgs: false }),
+    true,
+  );
 });
 
 test("isBuyerOnlyOrg: an agency operator is NEVER buyer-only (even if they also bought an agent)", () => {
-  assert.equal(isBuyerOnlyOrg({ isAgencyOperator: true, hasBuyerDeployment: true }), false);
-  assert.equal(isBuyerOnlyOrg({ isAgencyOperator: true, hasBuyerDeployment: false }), false);
+  assert.equal(
+    isBuyerOnlyOrg({ isAgencyOperator: true, hasBuyerDeployment: true, userHasOtherOrgs: false }),
+    false,
+  );
+  assert.equal(
+    isBuyerOnlyOrg({ isAgencyOperator: true, hasBuyerDeployment: false, userHasOtherOrgs: false }),
+    false,
+  );
 });
 
 test("isBuyerOnlyOrg: a plain user with no buyer deployment is NOT buyer-only", () => {
-  assert.equal(isBuyerOnlyOrg({ isAgencyOperator: false, hasBuyerDeployment: false }), false);
+  assert.equal(
+    isBuyerOnlyOrg({ isAgencyOperator: false, hasBuyerDeployment: false, userHasOtherOrgs: false }),
+    false,
+  );
+});
+
+test("isBuyerOnlyOrg: a user who owns/belongs to ANY other org is NEVER buyer-only (multi-org escape)", () => {
+  // A user who just claimed a workspace, or belongs to an agency under a
+  // different org, must never be imprisoned in the buyer shell — the shell
+  // is for single-purchase buyers only.
+  assert.equal(
+    isBuyerOnlyOrg({ isAgencyOperator: false, hasBuyerDeployment: true, userHasOtherOrgs: true }),
+    false,
+  );
+  assert.equal(
+    isBuyerOnlyOrg({ isAgencyOperator: true, hasBuyerDeployment: true, userHasOtherOrgs: true }),
+    false,
+  );
 });
 
 test("isAgencySurfacePath: matches /clients/new, /clients, /orgs (and their subpaths + query)", () => {
@@ -76,6 +102,7 @@ test("shouldRedirectToBuyerAgent: a buyer on /studio is redirected to their agen
     pathname: "/studio/agents",
     isAgencyOperator: false,
     hasBuyerDeployment: true,
+    userHasOtherOrgs: false,
     buyerDeploymentId: "dep-7",
   });
   assert.deepEqual(r, { redirect: true, to: "/agent/dep-7" });
@@ -86,6 +113,7 @@ test("shouldRedirectToBuyerAgent: a buyer on /clients/new is redirected to their
     pathname: "/clients/new",
     isAgencyOperator: false,
     hasBuyerDeployment: true,
+    userHasOtherOrgs: false,
     buyerDeploymentId: "dep-9",
   });
   assert.deepEqual(r, { redirect: true, to: "/agent/dep-9" });
@@ -96,6 +124,7 @@ test("shouldRedirectToBuyerAgent: an agency operator on /clients/new is NOT redi
     pathname: "/clients/new",
     isAgencyOperator: true,
     hasBuyerDeployment: true,
+    userHasOtherOrgs: false,
     buyerDeploymentId: "dep-9",
   });
   assert.deepEqual(r, { redirect: false });
@@ -106,6 +135,7 @@ test("shouldRedirectToBuyerAgent: a buyer NOT on an agency surface is NOT redire
     pathname: "/agent/dep-9",
     isAgencyOperator: false,
     hasBuyerDeployment: true,
+    userHasOtherOrgs: false,
     buyerDeploymentId: "dep-9",
   });
   assert.deepEqual(r, { redirect: false });
@@ -116,7 +146,19 @@ test("shouldRedirectToBuyerAgent: never redirect to a broken URL when no deploym
     pathname: "/clients/new",
     isAgencyOperator: false,
     hasBuyerDeployment: true,
+    userHasOtherOrgs: false,
     buyerDeploymentId: null,
+  });
+  assert.deepEqual(r, { redirect: false });
+});
+
+test("shouldRedirectToBuyerAgent: a buyer who owns/belongs to another org is NEVER redirected to the buyer shell (multi-org escape)", () => {
+  const r = shouldRedirectToBuyerAgent({
+    pathname: "/clients/new",
+    isAgencyOperator: false,
+    hasBuyerDeployment: true,
+    userHasOtherOrgs: true,
+    buyerDeploymentId: "dep-9",
   });
   assert.deepEqual(r, { redirect: false });
 });

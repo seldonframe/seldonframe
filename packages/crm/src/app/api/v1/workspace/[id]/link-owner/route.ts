@@ -9,6 +9,7 @@ import { resolveWorkspaceBearer } from "@/lib/auth/workspace-token";
 import { buildWorkspaceUrls } from "@/lib/billing/anonymous-workspace";
 import { assertWritable, demoApiBlockedResponse, isDemoReadonly } from "@/lib/demo/server";
 import { logEvent } from "@/lib/observability/log";
+import { markOperatorOnboarded } from "@/lib/web-onboarding/mark-operator-onboarded";
 
 const WORKSPACE_BASE_DOMAIN =
   process.env.WORKSPACE_BASE_DOMAIN?.trim() || "app.seldonframe.com";
@@ -79,13 +80,36 @@ export async function POST(request: Request, { params }: { params: Promise<{ id:
   if (!claim.ok) return claim.response;
 
   const [userRow] = await db
-    .select({ id: users.id, email: users.email })
+    .select({ id: users.id, email: users.email, orgId: users.orgId })
     .from(users)
     .where(eq(users.id, claim.userId))
     .limit(1);
   if (!userRow) {
     return NextResponse.json({ error: "Claiming user not found." }, { status: 404 });
   }
+
+  // 2026-07-04 — stamp the CLAIMING user as onboarded (soulCompletedAt +
+  // welcomeShown on their own primary org), mirroring what the authed
+  // create-from-url/paste orchestrators do at the end of a successful build
+  // (see run-create-from-url.ts). Without this, a brand-new Google-signup
+  // claimer has soulCompleted=false, so proxy.ts's onboarding gate keeps
+  // bouncing them to /clients/new on every page after the claim completes —
+  // the token only flips on the NEXT request once soulCompletedAt is set.
+  // Runs for BOTH the fresh-claim success path and the already_linked
+  // idempotent re-claim path (both return below this point). Best-effort:
+  // never fail the claim response over an onboarding-stamp error.
+  const stampClaimingUserOnboarded = async () => {
+    if (!userRow.orgId) return;
+    try {
+      await markOperatorOnboarded(userRow.orgId, userRow.id);
+    } catch (error) {
+      logEvent(
+        "mark_operator_onboarded_failed_on_claim",
+        { error: error instanceof Error ? error.message : String(error) },
+        { request, orgId: workspaceId, severity: "warn" }
+      );
+    }
+  };
 
   const [org] = await db
     .select({
@@ -129,6 +153,7 @@ export async function POST(request: Request, { params }: { params: Promise<{ id:
         { via: claim.via },
         { request, orgId: workspaceId, status: 200 }
       );
+      await stampClaimingUserOnboarded();
       return NextResponse.json({
         ok: true,
         already_linked: true,
@@ -210,6 +235,8 @@ export async function POST(request: Request, { params }: { params: Promise<{ id:
     },
     { request, orgId: workspaceId, status: 200 }
   );
+
+  await stampClaimingUserOnboarded();
 
   const nextSteps = claimMagicLink
     ? [
