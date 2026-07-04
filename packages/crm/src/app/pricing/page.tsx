@@ -4,14 +4,20 @@
 //
 //   1. Reads the auth session (Server-only API).
 //   2. Renders <PricingShell> (full interactive 2-column layout owns
-//      hero + trust signals + picker + sticky CTA) and the static FAQ
-//      accordion below it.
+//      hero + trust signals + single plan card + sticky CTA) and the
+//      static FAQ accordion below it.
 //
-// 2026-06-18 pricing migration (Phase 3): the ladder is Builder $19 /
-// Workspace $49 / Agency $297 — all paid. There is no free tier, so the
-// page no longer provisions a Stripe SetupIntent for a "save a card on
-// Free" form; every tier flows through Stripe-hosted Checkout from the
-// shell.
+// 2026-07-04 /pricing truth pass (Task 11): the platform sells exactly
+// ONE plan — $29/mo flat, unlimited workspaces, 14-day free trial. The
+// old Builder $19 / Workspace $49 / Agency $297 ladder in pricing-shell
+// is gone. There is no free tier, so the page still doesn't provision a
+// Stripe SetupIntent for a "save a card on Free" form — checkout flows
+// through Stripe-hosted Checkout from the shell.
+//
+// NOTE: the FAQS array below still describes the old 3-tier ladder
+// (Builder/Workspace/Agency, per-workspace overage, etc.) — out of scope
+// for this pass (Task 11 touches pricing-shell.tsx + this header comment
+// only); flagged separately for a follow-up truth pass on the FAQ copy.
 //
 // All interactive UI lives in pricing-shell.tsx.
 

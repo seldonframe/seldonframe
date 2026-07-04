@@ -1,22 +1,29 @@
 // packages/crm/src/app/pricing/pricing-shell.tsx
 //
 // Interactive /pricing layout: hero + trust signals on the LEFT, plan
-// picker + features panel on the RIGHT, sticky CTA at the BOTTOM.
+// panel on the RIGHT, sticky CTA at the BOTTOM.
 //
-// 2026-06-18 pricing migration (Phase 3): the ladder is Builder $19 /
-// Workspace $49 / Agency $297 — three flat, paid tiers. There is NO free
-// tier anymore, so every tier goes through Stripe-hosted Checkout (no
-// embedded SetupIntent "save a card on Free" form). Each card POSTs
-// `{ tier }` to /api/stripe/checkout and redirects to the returned URL.
+// 2026-07-04 /pricing truth pass (Task 11): the platform sells exactly
+// ONE plan — $29/mo flat, unlimited workspaces, 14-day free trial. The
+// old Builder $19 / Workspace $49 / Agency $297 ladder never shipped to
+// checkout truthfully and is gone. The single card POSTs
+// `{ tier: "workspace" }` to /api/stripe/checkout — that's the
+// allowlisted server-side path that resolves to GROWTH_BASE_PRICE_ID
+// (see route.ts) and gets the 14-day trial (trial_period_days: 14).
+// No price id lives in the client. Included-features copy is pulled
+// verbatim from components/landing/marketing-pricing-section.tsx so the
+// authed page and the marketing page never drift.
+//
+// Buyer-facing copy rule: never mention GMV / marketplace fees here —
+// that's backend economics, not a buyer-facing plan detail.
 
 "use client";
 
 import { useState } from "react";
 import Link from "next/link";
 import { Check } from "lucide-react";
-import { AnimatePresence, motion, useReducedMotion } from "motion/react";
 
-type TierId = "builder" | "workspace" | "agency";
+type TierId = "workspace";
 
 type Tier = {
   id: TierId;
@@ -24,76 +31,46 @@ type Tier = {
   price: string;
   cadence: string;
   tagline: string;
-  featured?: boolean;
   features: string[];
 };
 
-const TIERS: Tier[] = [
-  {
-    id: "builder",
-    name: "Builder",
-    price: "$19",
-    cadence: "/ mo",
-    tagline: "Launch landing pages on your own domain.",
-    features: [
-      "Up to 10 landing pages",
-      "Your own custom domain",
-      "No SeldonFrame branding",
-      "Managed AI page generation",
-      "Email support",
-    ],
-  },
-  {
-    id: "workspace",
-    name: "Workspace",
-    price: "$49",
-    cadence: "/ mo",
-    tagline: "One complete business OS, fully wired.",
-    featured: true,
-    features: [
-      "1 full client workspace",
-      "Website, booking, intake & CRM",
-      "AI chatbot included",
-      "Custom domain · client portal",
-      "Email support",
-    ],
-  },
-  {
-    id: "agency",
-    name: "Agency",
-    price: "$297",
-    cadence: "/ mo",
-    tagline: "White-label the platform for your clients.",
-    features: [
-      "10 client workspaces included",
-      "+$10/mo per workspace beyond 10",
-      "Full white-label platform",
-      "Marketplace access",
-      "Priority support",
-    ],
-  },
-];
+// Verbatim from marketing-pricing-section.tsx's INCLUDED list — keep in
+// sync if that copy changes.
+const PLAN: Tier = {
+  id: "workspace",
+  name: "SeldonFrame",
+  price: "$29",
+  cadence: "/ mo",
+  tagline: "The whole platform — build it for your business, or sell it to your clients.",
+  features: [
+    "Website + landing pages on your own domain",
+    "Booking page (Cal.diy) tied to live availability",
+    "CRM — contacts, deals, tasks, notes",
+    "Intake forms wired to the CRM",
+    "24/7 AI agent across voice, SMS, web chat & email",
+    "Build ANY agent in the Studio — connect external tools",
+    "Whitelabel + resell each workspace to clients",
+    "Own + export everything (AGPL — no lock-in)",
+  ],
+};
 
 type PricingShellProps = {
   isAuthed: boolean;
 };
 
 export function PricingShell({ isAuthed }: PricingShellProps) {
-  // Default to Workspace — it's the conversion goal (the full business OS).
-  const [selectedId, setSelectedId] = useState<TierId>("workspace");
+  // There's exactly one plan — no selector state needed.
+  const selected = PLAN;
   // Errors from /api/stripe/checkout. Inline error surface lives in the
   // sticky bar so it doesn't shove the page down.
   const [paidError, setPaidError] = useState<string | null>(null);
   // True while the sticky CTA is fetching the Checkout Session url.
   const [paidStarting, setPaidStarting] = useState(false);
-  const reduceMotion = useReducedMotion();
-
-  const selected = TIERS.find((t) => t.id === selectedId) ?? TIERS[0];
 
   const trustSignals = [
     "One flat monthly price — no metered bills",
+    "14-day free trial, then $29/mo",
     "Cancel anytime in Settings",
-    "Roughly 5× cheaper than GoHighLevel",
   ];
 
   async function startPaidCheckout(tierId: TierId) {
@@ -171,101 +148,43 @@ export function PricingShell({ isAuthed }: PricingShellProps) {
 
         {/* ============= RIGHT COLUMN ============= */}
         <div className="space-y-6">
-          <div className="flex items-center justify-between">
-            <h2 className="text-xl font-semibold tracking-tight">Choose a plan</h2>
-            <div
-              role="tablist"
-              aria-label="Billing cadence"
-              className="inline-flex items-center gap-1 rounded-full border border-border bg-card/60 p-1"
-            >
-              <span
-                role="tab"
-                aria-selected="true"
-                className="rounded-full bg-foreground px-3 py-1 text-xs font-medium text-background"
-              >
-                Monthly
+          <h2 className="text-xl font-semibold tracking-tight">The plan</h2>
+
+          {/* Single plan card — name + price, no selector (there's only one plan). */}
+          <div className="relative flex flex-col gap-3 rounded-2xl border border-primary bg-card/60 p-5 shadow-[0_0_0_1px_var(--primary)]">
+            <div className="flex items-center justify-between gap-2">
+              <span className="text-[11px] font-semibold uppercase tracking-[0.12em] text-muted-foreground">
+                {PLAN.name}
               </span>
-              <span
-                role="tab"
-                aria-selected="false"
-                className="cursor-not-allowed rounded-full px-3 py-1 text-xs font-medium text-muted-foreground/80"
-                title="Yearly billing coming soon"
-              >
-                Yearly · 20% off
+              <span className="rounded-full bg-primary/15 px-2 py-0.5 text-[10px] font-semibold uppercase tracking-[0.08em] text-primary">
+                14-day free trial
               </span>
             </div>
+            <p className="flex items-baseline gap-1.5">
+              <span className="text-3xl font-semibold tracking-tight text-foreground">
+                {PLAN.price}
+              </span>
+              <span className="text-sm text-muted-foreground">{PLAN.cadence} flat</span>
+            </p>
+            <p className="text-sm text-muted-foreground">
+              Unlimited workspaces · cancel anytime
+            </p>
           </div>
 
-          {/* Plan cards — name + price + check badge only. Click selects. */}
-          <div role="radiogroup" aria-label="Plan tier" className="grid gap-3 sm:grid-cols-3">
-            {TIERS.map((tier) => {
-              const isSelected = tier.id === selectedId;
-              return (
-                <button
-                  key={tier.id}
-                  type="button"
-                  role="radio"
-                  aria-checked={isSelected}
-                  onClick={() => setSelectedId(tier.id)}
-                  className={`group relative flex flex-col gap-3 rounded-2xl border bg-card/60 p-5 text-left transition-all focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring ${
-                    isSelected
-                      ? "border-primary shadow-[0_0_0_1px_var(--primary)]"
-                      : "border-border/70 hover:border-border hover:bg-card/80"
-                  }`}
-                >
-                  <div className="flex items-center justify-between gap-2">
-                    <span className="text-[11px] font-semibold uppercase tracking-[0.12em] text-muted-foreground">
-                      {tier.name}
-                    </span>
-                    {tier.featured ? (
-                      <span className="rounded-full bg-primary/15 px-2 py-0.5 text-[10px] font-semibold uppercase tracking-[0.08em] text-primary">
-                        Popular
-                      </span>
-                    ) : null}
-                  </div>
-                  <p className="flex items-baseline gap-1.5">
-                    <span className="text-3xl font-semibold tracking-tight text-foreground">
-                      {tier.price}
-                    </span>
-                    <span className="text-sm text-muted-foreground">{tier.cadence}</span>
-                  </p>
-                  <span
-                    aria-hidden="true"
-                    className={`mt-1 inline-flex size-4 items-center justify-center rounded-full transition-all ${
-                      isSelected ? "bg-primary text-primary-foreground" : "bg-muted text-transparent"
-                    }`}
-                  >
-                    <Check className="size-2.5" />
-                  </span>
-                </button>
-              );
-            })}
-          </div>
-
-          {/* Features panel — swaps content on tier change with a 160ms fade. */}
+          {/* Features panel. */}
           <div className="rounded-2xl border border-border/70 bg-card/40 p-5 sm:p-6">
-            <AnimatePresence mode="wait" initial={false}>
-              <motion.div
-                key={selected.id}
-                initial={reduceMotion ? false : { opacity: 0, y: 4 }}
-                animate={{ opacity: 1, y: 0 }}
-                exit={reduceMotion ? undefined : { opacity: 0, y: -4 }}
-                transition={{ duration: 0.16, ease: "easeOut" }}
-              >
-                <p className="text-xs font-semibold uppercase tracking-[0.16em] text-muted-foreground">
-                  What you get on {selected.name}
-                </p>
-                <p className="mt-1 text-sm text-foreground">{selected.tagline}</p>
-                <ul className="mt-4 grid gap-2.5 text-sm sm:grid-cols-2">
-                  {selected.features.map((f) => (
-                    <li key={f} className="flex items-start gap-2">
-                      <Check className="mt-0.5 size-4 shrink-0 text-primary/80" aria-hidden="true" />
-                      <span className="text-foreground">{f}</span>
-                    </li>
-                  ))}
-                </ul>
-              </motion.div>
-            </AnimatePresence>
+            <p className="text-xs font-semibold uppercase tracking-[0.16em] text-muted-foreground">
+              Everything included
+            </p>
+            <p className="mt-1 text-sm text-foreground">{PLAN.tagline}</p>
+            <ul className="mt-4 grid gap-2.5 text-sm sm:grid-cols-2">
+              {PLAN.features.map((f) => (
+                <li key={f} className="flex items-start gap-2">
+                  <Check className="mt-0.5 size-4 shrink-0 text-primary/80" aria-hidden="true" />
+                  <span className="text-foreground">{f}</span>
+                </li>
+              ))}
+            </ul>
           </div>
         </div>
       </div>
@@ -299,12 +218,9 @@ function PricingStickyBar({
   paidStarting,
   paidError,
 }: StickyBarProps) {
-  const detail = `${selected.price}${selected.cadence} · cancel anytime from Settings`;
+  const detail = `14-day free trial, then ${selected.price}${selected.cadence} · cancel anytime from Settings`;
 
-  const ctaLabel = (() => {
-    if (paidStarting) return "Redirecting to Stripe…";
-    return isAuthed ? `Subscribe to ${selected.name} →` : `Start ${selected.name} →`;
-  })();
+  const ctaLabel = paidStarting ? "Redirecting to Stripe…" : "Start your 14-day free trial →";
 
   async function handlePaidClick() {
     if (paidStarting) return;
