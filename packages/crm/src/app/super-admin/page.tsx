@@ -7,13 +7,24 @@
 // 5 minutes via unstable_cache. The page renders with cached data
 // the moment it's requested.
 
+import Link from "next/link";
 import { getHeroMetrics, type HeroMetric } from "@/lib/super-admin/metrics";
 import { getActivationFunnel, type FunnelStage } from "@/lib/super-admin/activation";
 
 export const dynamic = "force-dynamic";
 
-export default async function SuperAdminOverviewPage() {
-  const [metrics, activation] = await Promise.all([getHeroMetrics(), getActivationFunnel()]);
+export default async function SuperAdminOverviewPage({
+  searchParams,
+}: {
+  searchParams: Promise<{ include_internal?: string }>;
+}) {
+  const { include_internal } = await searchParams;
+  const includeInternal = include_internal === "1";
+
+  const [metrics, activation] = await Promise.all([
+    getHeroMetrics(),
+    getActivationFunnel({ includeInternal }),
+  ]);
 
   return (
     <div className="px-6 py-8 sm:px-10 sm:py-10 max-w-[1200px] mx-auto space-y-10">
@@ -58,11 +69,29 @@ export default async function SuperAdminOverviewPage() {
           <p className="text-xs text-muted-foreground">
             IDE connections: {formatNumber(activation.connections.used)} of{" "}
             {formatNumber(activation.connections.minted)} device tokens have ever made a call (
-            {activation.connections.usedPct}%) — the rest connected but never built.
+            {activation.connections.usedPct}%) — the rest connected but never built.{" "}
+            {formatNumber(activation.paying)} paying accounts.
           </p>
           <p className="text-xs text-muted-foreground">
             {formatNumber(activation.signupsTotal)} people signed up · {formatNumber(activation.signupsLast7d)} this
             week.
+          </p>
+          <p className="text-xs text-muted-foreground/70">
+            {activation.excludedInternal ? (
+              <>
+                Excluding {formatNumber(activation.internalOrgCount)} internal workspaces —{" "}
+                <Link href="?include_internal=1" className="underline hover:text-[#1FAE85] transition-colors">
+                  include
+                </Link>
+              </>
+            ) : (
+              <>
+                Including internal workspaces —{" "}
+                <Link href="/super-admin" className="underline hover:text-[#1FAE85] transition-colors">
+                  exclude
+                </Link>
+              </>
+            )}
           </p>
         </div>
       </section>
