@@ -14,8 +14,9 @@ import { DemoBanner } from "@/components/layout/demo-banner";
 import { TestModeBanner } from "@/components/layout/test-mode-banner";
 import { DashboardTopbar } from "@/components/layout/dashboard-topbar";
 import { HelpButton } from "@/components/layout/help-button";
-// 2026-05-18 — SeldonChat removed; see comment near the dock placement
-// below. Power users now go through Claude Code + the SF MCP server.
+import { SeldonChat } from "@/components/seldon-chat";
+import { isWinLadderOn } from "@/lib/web-build/policy";
+import { buildWorkspaceUrls } from "@/lib/billing/anonymous-workspace";
 import { registerCrmEventListeners } from "@/lib/events/listeners";
 import { getAllBlocksForOrg } from "@/lib/blocks/registry";
 import { canSeldonIt, resolvePlanFromPlanId } from "@/lib/billing/entitlements";
@@ -33,6 +34,11 @@ import { db } from "@/db";
 import { activities, contacts, deals, landingPages, organizations, users } from "@/db/schema";
 import { desc, eq, sql } from "drizzle-orm";
 import Link from "next/link";
+
+// Mirrors dashboard/page.tsx's WORKSPACE_BASE_DOMAIN — the public workspace
+// host used to build the SeldonChat live-preview iframe URL.
+const WORKSPACE_BASE_DOMAIN =
+  process.env.WORKSPACE_BASE_DOMAIN?.trim() || "app.seldonframe.com";
 
 /*
   Square UI class reference (source of truth):
@@ -112,7 +118,7 @@ export default async function DashboardLayout({
 
   const [activeOrg, orgMemberCount, effectiveBranding] = orgId
     ? await Promise.all([
-        db.select({ id: organizations.id, name: organizations.name, testMode: organizations.testMode }).from(organizations).where(eq(organizations.id, orgId)).limit(1).then((rows) => rows[0] ?? null),
+        db.select({ id: organizations.id, name: organizations.name, testMode: organizations.testMode, slug: organizations.slug }).from(organizations).where(eq(organizations.id, orgId)).limit(1).then((rows) => rows[0] ?? null),
         db
           .select({ count: sql<number>`count(*)` })
           .from(users)
@@ -126,6 +132,16 @@ export default async function DashboardLayout({
     : [null, 0, null];
 
   const isSwitchedOrg = Boolean(orgId && user?.orgId && orgId !== user.orgId);
+
+  // Win-ladder + SeldonChat dock (2026-07-04): flag-gated front-door copilot.
+  // Preview URL reuses the same buildWorkspaceUrls().home the dashboard hero
+  // shows the operator — falls back to null (chat-only, no preview pane)
+  // when the workspace has no slug yet.
+  const winLadderOn = isWinLadderOn({ SF_WIN_LADDER: process.env.SF_WIN_LADDER });
+  const copilotPreviewUrl =
+    activeOrg?.slug
+      ? buildWorkspaceUrls(activeOrg.slug, WORKSPACE_BASE_DOMAIN, activeOrg.id).home
+      : null;
 
   const [contactHits, dealHits, pageHits, activityHits] = orgId
     ? await Promise.all([
@@ -302,12 +318,12 @@ export default async function DashboardLayout({
               </div>
             </div>
           </div>
-          {/* 2026-05-18 — SeldonChat floating dock removed.
-              Power users configure workspaces via Claude Code + the
-              SeldonFrame MCP server directly. Non-tech operators
-              didn't engage with the in-dashboard chat (it competed
-              with the HelpButton + Docs link without adding signal).
-              Less floating UI = cleaner view. */}
+          {/* SeldonChat reborn (win-ladder plan, 2026-07-04): the FRONT-DOOR copilot
+              dock. Unlike the 2026-05-18 removal (a talking helper), this one ACTS via
+              the workspace_copilot toolset with live preview — flag-gated SF_WIN_LADDER. */}
+          {winLadderOn && !isOperatorSession && orgId ? (
+            <SeldonChat enabled previewUrl={copilotPreviewUrl} />
+          ) : null}
           <CommandPalette items={paletteItems} />
           {/* May 1, 2026 — persistent help escape hatch on every
               admin page. Floating bottom-right button opens a popover
