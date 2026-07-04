@@ -49,9 +49,7 @@
 // MCP caller and never change tools/call response behavior.
 
 import crypto from "node:crypto";
-import { PostHog } from "posthog-node";
-
-const POSTHOG_HOST = "https://us.i.posthog.com";
+import { getPosthogClient } from "@/lib/analytics/capture";
 
 // PostHog's own MCP-analytics taxonomy (@posthog/mcp/src/extensions/constants.ts).
 const MCP_TOOL_CALL_EVENT = "$mcp_tool_call";
@@ -62,30 +60,6 @@ const PROP_ERROR_TYPE = "$mcp_error_type";
 const PROP_SERVER_NAME = "$mcp_server_name";
 const PROP_SOURCE = "$mcp_source";
 const MCP_ANALYTICS_SOURCE = "posthog_mcp_analytics";
-
-let client: PostHog | null | undefined;
-
-/** Lazy-init the module-singleton posthog-node client. Returns null (and
- *  caches the null) when no key is configured, so every subsequent call is a
- *  cheap no-op check rather than repeating the env read. */
-function getClient(): PostHog | null {
-  if (client !== undefined) return client;
-
-  const key = process.env.NEXT_PUBLIC_POSTHOG_KEY;
-  if (!key) {
-    client = null;
-    return client;
-  }
-
-  try {
-    client = new PostHog(key, { host: POSTHOG_HOST });
-  } catch {
-    // Constructing the client itself must never throw into a caller's request
-    // path — treat any construction failure as "capture disabled".
-    client = null;
-  }
-  return client;
-}
 
 /** sha256 a bearer/rental token so it never leaves this process in the
  *  clear — used only as a LAST-RESORT distinct id when no org id is
@@ -134,7 +108,7 @@ export interface CaptureMcpToolCallInput {
  */
 export function captureMcpToolCall(input: CaptureMcpToolCallInput): void {
   try {
-    const ph = getClient();
+    const ph = getPosthogClient();
     if (!ph) return;
 
     const properties: Record<string, unknown> = {
