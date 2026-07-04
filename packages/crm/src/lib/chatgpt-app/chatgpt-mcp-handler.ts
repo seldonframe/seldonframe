@@ -44,6 +44,7 @@ import {
   type BuildWorkspaceArgs,
 } from "./chatgpt-mcp-rpc";
 import type { MarketplaceAgentRow } from "@/lib/marketplace/agent-listings";
+import { captureMcpToolCall } from "@/lib/analytics/mcp-capture";
 
 /** MCP server `instructions` (returned on initialize). ChatGPT + Codex read this
  *  alongside the tool metadata to understand the cross-tool flow. Kept concise +
@@ -156,7 +157,7 @@ async function handleToolsCall(
       if (!parsed.ok) {
         return { status: 200, body: jsonRpcError(id, JSONRPC_INVALID_PARAMS, `Invalid params: ${parsed.error}`) };
       }
-      return runTool(id, deps, async () => {
+      return runTool(id, toolName, args, deps, async () => {
         const result = await deps.buildWorkspace(parsed.value);
         return toolResult(formatBuildResult(result), { ...result });
       });
@@ -167,7 +168,7 @@ async function handleToolsCall(
       if (!parsed.ok) {
         return { status: 200, body: jsonRpcError(id, JSONRPC_INVALID_PARAMS, `Invalid params: ${parsed.error}`) };
       }
-      return runTool(id, deps, async () => {
+      return runTool(id, toolName, args, deps, async () => {
         const rows = await deps.browse(parsed.value);
         // structuredContent mirrors the DECLARED output schema exactly — the
         // raw MarketplaceAgentRow carries extra columns (price, rating, …)
@@ -187,7 +188,7 @@ async function handleToolsCall(
       if (!parsed.ok) {
         return { status: 200, body: jsonRpcError(id, JSONRPC_INVALID_PARAMS, `Invalid params: ${parsed.error}`) };
       }
-      return runTool(id, deps, async () => {
+      return runTool(id, toolName, args, deps, async () => {
         const result = await deps.deploy({ workspaceToken: parsed.value.workspace_token, slug: parsed.value.agent_slug });
         if (!result.ok) {
           // A handled failure (e.g. expired token, unknown slug) → tool-level
@@ -221,15 +222,38 @@ async function handleToolsCall(
  */
 async function runTool(
   id: JsonRpcId,
+  toolName: string,
+  args: Record<string, unknown>,
   deps: ChatGptMcpDeps,
   body: () => Promise<Record<string, unknown>>,
 ): Promise<RpcOutcome> {
+  const startedAt = Date.now();
+  // PostHog MCP-analytics ($mcp_tool_call) — fire-and-silent, no-op without a
+  // configured key, never blocks/throws into this response path. This server
+  // is public/keyless (no bearer, no resolvable org at call time — see the
+  // file header), so distinctId/orgId fall back to "anonymous" per the
+  // helper's documented contract.
+  const capture = (success: boolean, errorCode?: string) =>
+    captureMcpToolCall({
+      surface: "chatgpt",
+      tool: toolName,
+      distinctId: "anonymous",
+      orgId: null,
+      success,
+      durationMs: Date.now() - startedAt,
+      errorCode: errorCode ?? null,
+      argKeys: Object.keys(args),
+    });
+
   try {
     const result = await body();
+    const isToolError = (result as { isError?: boolean }).isError === true;
+    capture(!isToolError, isToolError ? "tool_error" : undefined);
     return { status: 200, body: jsonRpcResult(id, result) };
   } catch (err) {
     const message = err instanceof Error ? err.message : String(err);
     console.error(`[chatgpt-mcp] tool_error ts=${deps.now().toISOString()} err=${message}`);
+    capture(false, "exception");
     return { status: 200, body: jsonRpcResult(id, toolTextResult(message, true)) };
   }
 }

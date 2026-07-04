@@ -46,6 +46,7 @@ import {
   parseXPaymentHeader,
   type SettlementVerifier,
 } from "./x402";
+import { captureMcpToolCall } from "@/lib/analytics/mcp-capture";
 
 /** JSON-RPC "auth failure" — no reserved code exists, so use the
  *  implementation-defined server range (-32000) per the JSON-RPC 2.0 spec. */
@@ -472,6 +473,24 @@ async function executeAndAccrue(args: {
   deps: AgentRentalRpcDeps;
 }): Promise<RpcOutcome> {
   const { id, slug, agent, charge, isDeterministic, params, toolName, askMessage, askConversationId, renterOrgId, txRef, deps } = args;
+  const startedAt = Date.now();
+
+  // PostHog MCP-analytics ($mcp_tool_call) — fire-and-silent, no-op without a
+  // configured key, never blocks/throws into this response path.
+  const capture = (success: boolean, errorCode?: string) =>
+    captureMcpToolCall({
+      surface: "agent_rental",
+      tool: toolName,
+      distinctId: renterOrgId,
+      orgId: renterOrgId,
+      success,
+      durationMs: Date.now() - startedAt,
+      errorCode: errorCode ?? null,
+      argKeys:
+        typeof params.arguments === "object" && params.arguments !== null
+          ? Object.keys(params.arguments as Record<string, unknown>)
+          : [],
+    });
 
   const accrue = () =>
     deps.logUsage({
@@ -493,6 +512,7 @@ async function executeAndAccrue(args: {
     const det = executeDeterministicTool(toolName, toolArgs, agent.blueprint);
     if (!det.ok) {
       // Bad args → an error, and NO accrual (we delivered nothing of value).
+      capture(false, "invalid_params");
       return { status: 200, body: jsonRpcError(id, det.error.code, det.error.message) };
     }
     // Accrue only when this call belongs to a METERED lane (sf_free counts toward
@@ -500,6 +520,7 @@ async function executeAndAccrue(args: {
     // deterministic call (unpriced agent, or metering off) logs nothing — exactly
     // as before x402, since it carries zero owner compute and nothing to bill.
     if (charge.lane !== "free") accrue();
+    capture(true);
     return { status: 200, body: jsonRpcResult(id, toolTextResult(JSON.stringify(det.result))) };
   }
 
@@ -510,6 +531,7 @@ async function executeAndAccrue(args: {
   } catch (err) {
     const detail = err instanceof Error ? err.message : String(err);
     console.error(`[agent-rental] turn_error slug=${slug} renter=${renterOrgId} err=${detail}`);
+    capture(false, "turn_exception");
     return {
       status: 200,
       body: jsonRpcError(id, JSONRPC_INTERNAL_ERROR, "The agent failed to respond. Please try again."),
@@ -517,6 +539,7 @@ async function executeAndAccrue(args: {
   }
   if (!turn.ok) {
     // Degraded agent → MCP tool error result. No accrual (nothing delivered).
+    capture(false, "turn_degraded");
     return { status: 200, body: jsonRpcResult(id, toolTextResult(turn.message, true)) };
   }
 
@@ -533,6 +556,7 @@ async function executeAndAccrue(args: {
   };
   console.log(`[agent-rental] ${JSON.stringify(entry)}`);
   accrue();
+  capture(true);
 
   const result = toolTextResult(turn.reply);
   (result as { conversationId?: string }).conversationId = turn.conversationId;

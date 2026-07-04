@@ -45,6 +45,7 @@ import {
   RUN_TOOL,
   type BuildToolName,
 } from "./build-mcp-rpc";
+import { captureMcpToolCall } from "@/lib/analytics/mcp-capture";
 
 export type RpcOutcome = {
   status: number;
@@ -197,19 +198,37 @@ async function runBridged(
   tool: BuildToolName,
   body: Record<string, unknown>,
 ): Promise<RpcOutcome> {
+  const startedAt = Date.now();
+  // PostHog MCP-analytics ($mcp_tool_call) — fire-and-silent, no-op without a
+  // configured key, never blocks/throws into this response path.
+  const capture = (success: boolean, errorCode?: string) =>
+    captureMcpToolCall({
+      surface: "builder",
+      tool,
+      distinctId: deps.orgId,
+      orgId: deps.orgId,
+      success,
+      durationMs: Date.now() - startedAt,
+      errorCode: errorCode ?? null,
+      argKeys: Object.keys(body),
+    });
+
   try {
     const result = await deps.bridge(tool, body);
     if (result.status >= 200 && result.status < 300) {
+      capture(true);
       return { status: 200, body: jsonRpcResult(id, bridgeToolResult(result.json)) };
     }
     // A handled failure from the bridged route (400/404/402/etc.) → tool-level
     // isError carrying the route's own error message, NOT a transport error.
     const message =
       typeof result.json.error === "string" ? result.json.error : `Request failed with status ${result.status}.`;
+    capture(false, `http_${result.status}`);
     return { status: 200, body: jsonRpcResult(id, { ...toolTextResult(message, true), structuredContent: result.json }) };
   } catch (err) {
     const message = err instanceof Error ? err.message : String(err);
     console.error(`[build-mcp] bridge_error ts=${deps.now().toISOString()} tool=${tool} err=${message}`);
+    capture(false, "bridge_exception");
     return { status: 200, body: jsonRpcResult(id, toolTextResult(message, true)) };
   }
 }
