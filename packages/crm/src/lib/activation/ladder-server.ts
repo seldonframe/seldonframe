@@ -216,6 +216,63 @@ export const defaultStampLadderEventDeps: StampLadderEventDeps = {
   captureEvent: captureServerEvent,
 };
 
+export type MarkShareUsedDeps = {
+  /** True when `settings.activation.shareUsedAt` is already set for this org. */
+  wasShareUsedStamped: (orgId: string) => Promise<boolean>;
+  /** COALESCE-merge `settings.activation.shareUsedAt = ISO now` into settings
+   *  without clobbering any other keys — same merge idiom as defaultStampStep. */
+  stampShareUsed: (orgId: string, stampedAtIso: string) => Promise<void>;
+};
+
+const SHARE_USED_KEY = "shareUsedAt";
+
+async function defaultWasShareUsedStamped(orgId: string): Promise<boolean> {
+  const [org] = await db
+    .select({ settings: organizations.settings })
+    .from(organizations)
+    .where(eq(organizations.id, orgId))
+    .limit(1);
+
+  const settings = (org?.settings ?? {}) as { activation?: Record<string, unknown> };
+  return Boolean(settings.activation?.[SHARE_USED_KEY]);
+}
+
+async function defaultStampShareUsed(orgId: string, stampedAtIso: string): Promise<void> {
+  // Mirrors mark-operator-onboarded.ts:80's COALESCE || idiom (same as
+  // defaultStampStep above): merge a single activation.shareUsedAt key into
+  // settings without clobbering any other keys, safe even when settings/
+  // activation is still absent on a fresh org.
+  await db
+    .update(organizations)
+    .set({
+      settings: sql`COALESCE(${organizations.settings}, '{}'::jsonb) || jsonb_build_object('activation',
+        COALESCE(${organizations.settings}->'activation', '{}'::jsonb) || jsonb_build_object(${SHARE_USED_KEY}, ${stampedAtIso}::text))`,
+      updatedAt: new Date(),
+    })
+    .where(eq(organizations.id, orgId));
+}
+
+export const defaultMarkShareUsedDeps: MarkShareUsedDeps = {
+  wasShareUsedStamped: defaultWasShareUsedStamped,
+  stampShareUsed: defaultStampShareUsed,
+};
+
+/**
+ * Guarded write of `settings.activation.shareUsedAt` — the SAME key
+ * defaultReadActivationSettings resolves `shareUsed` from (line 117) — set
+ * ONLY if absent, with NO capture call. The go_live funnel event still fires
+ * exactly once, but from the dashboard render loop's stampLadderEvent once
+ * computeLadderState sees the step actually flip to done — the same
+ * once-only path every other step uses, so share doesn't get a second,
+ * earlier, phantom firing of its own.
+ */
+export async function markShareUsed(orgId: string, deps: MarkShareUsedDeps = defaultMarkShareUsedDeps): Promise<void> {
+  const alreadyStamped = await deps.wasShareUsedStamped(orgId);
+  if (alreadyStamped) return;
+
+  await deps.stampShareUsed(orgId, new Date().toISOString());
+}
+
 /**
  * Stamp `settings.activation.<step>At` for `orgId` ONLY if it isn't already
  * set, and — ONLY when it was previously absent — fire the

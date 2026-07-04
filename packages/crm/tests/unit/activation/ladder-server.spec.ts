@@ -5,7 +5,7 @@
 import { describe, test } from "node:test";
 import assert from "node:assert/strict";
 
-import { resolveLadderInputs, stampLadderEvent, type LadderServerDeps } from "../../../src/lib/activation/ladder-server";
+import { resolveLadderInputs, stampLadderEvent, markShareUsed, type LadderServerDeps } from "../../../src/lib/activation/ladder-server";
 
 function deps(overrides: Partial<LadderServerDeps> = {}): LadderServerDeps {
   return {
@@ -115,5 +115,29 @@ describe("stampLadderEvent", () => {
 
     assert.equal(stampCalls, 0);
     assert.equal(captureCalls, 0);
+  });
+});
+
+describe("markShareUsed", () => {
+  test("writes settings.activation.shareUsedAt only when absent, and never captures", async () => {
+    let stampCalls = 0;
+    let stamped = false;
+
+    await markShareUsed("org_7", {
+      wasShareUsedStamped: async () => stamped,
+      stampShareUsed: async () => {
+        stampCalls += 1;
+        stamped = true;
+      },
+    });
+    assert.equal(stampCalls, 1);
+
+    await markShareUsed("org_7", {
+      wasShareUsedStamped: async () => stamped,
+      stampShareUsed: async () => {
+        stampCalls += 1;
+      },
+    });
+    assert.equal(stampCalls, 1);
   });
 });

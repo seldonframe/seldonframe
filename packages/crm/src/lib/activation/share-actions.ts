@@ -7,16 +7,16 @@
 // avoids ever having to think about it again as share.ts grows.
 
 import { getOrgId } from "@/lib/auth/helpers";
-import { stampLadderEvent } from "@/lib/activation/ladder-server";
+import { markShareUsed } from "@/lib/activation/ladder-server";
 
 /**
  * Fired by the share row on first copy/download of the site link or QR
- * code. Stamps `settings.activation.go_liveAt` for the current org (via
- * Task 6's stampLadderEvent, which is itself once-only / idempotent) so the
+ * code. Stamps `settings.activation.shareUsedAt` for the current org (via
+ * Task 6's markShareUsed, which is itself once-only / idempotent) so the
  * win-ladder's go_live step can mark itself done from share activity alone.
  */
 export async function markShareUsedAction(): Promise<void> {
   const orgId = await getOrgId();
   if (!orgId) return;
-  await stampLadderEvent(orgId, "go_live");
+  await markShareUsed(orgId);
 }

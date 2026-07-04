@@ -5,7 +5,7 @@
 // copy-link button + downloadable QR code, both derived from Task 9's
 // buildShareAssets. First copy or download fires markShareUsedAction
 // (fire-and-forget — a slow/failed stamp must never block the UI feedback),
-// which stamps settings.activation.go_liveAt via Task 6's stampLadderEvent.
+// which stamps settings.activation.shareUsedAt via Task 6's markShareUsed.
 
 import { useState } from "react";
 import { Copy, Check, Download } from "lucide-react";
