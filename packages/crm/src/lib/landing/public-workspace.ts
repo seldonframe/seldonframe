@@ -28,12 +28,20 @@ export async function getWorkspaceTemplateContext(slug: string): Promise<{
   orgId: string;
   soul: unknown;
   theme: { landingTemplate?: string; aestheticArchetype?: string } | null;
+  /** Task 8 (noindex unclaimed anonymous builds): null until a user claims
+   *  the workspace via signup. */
+  ownerId: string | null;
+  /** Task 8: carries organizations.settings.origin — WEB_UNGATED_ORIGIN marks
+   *  workspaces created anonymously via the web paste-box flow. */
+  settings: Record<string, unknown>;
 } | null> {
   const [row] = await db
     .select({
       id: organizations.id,
       soul: organizations.soul,
       theme: organizations.theme,
+      ownerId: organizations.ownerId,
+      settings: organizations.settings,
     })
     .from(organizations)
     .where(eq(organizations.slug, slug))
@@ -54,5 +62,5 @@ export async function getWorkspaceTemplateContext(slug: string): Promise<{
       }
     : null;
 
-  return { orgId: row.id, soul: row.soul, theme };
+  return { orgId: row.id, soul: row.soul, theme, ownerId: row.ownerId, settings: row.settings };
 }

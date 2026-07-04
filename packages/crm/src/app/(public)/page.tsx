@@ -36,6 +36,7 @@
 import type { Metadata } from "next";
 import { redirect } from "next/navigation";
 import { auth } from "@/auth";
+import { isWebUngatedBuildOn } from "@/lib/web-build/policy";
 
 import { MarketingNav } from "@/components/landing/marketing-nav";
 import { MarketingHero } from "@/components/landing/marketing-hero";
@@ -89,7 +90,11 @@ export default async function PublicHomePage() {
             pricing / proof / FAQ / close. The "Why not just…" comparison
             (MarketingReplace) is demoted off the homepage to keep the
             ladder to one idea per rung; the component still ships. */}
-        <MarketingHero />
+        <MarketingHero
+          ungatedBuildEnabled={isWebUngatedBuildOn({
+            SF_WEB_UNGATED_BUILD: process.env.SF_WEB_UNGATED_BUILD,
+          })}
+        />
         <MarketingBuildSteps />
         <MarketingIdeStrip />
         <MarketingModules />

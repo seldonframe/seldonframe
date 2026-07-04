@@ -106,6 +106,12 @@ export async function loadLandingPayload(workspaceSlug: string): Promise<{
    *  Additive — existing callers ignore it and the landing-r1 path is unchanged. */
   landingTemplate: string | undefined;
   seo: { title: string; description: string; ogImage: string | null };
+  /** Task 8 (noindex unclaimed anonymous builds): null until a user claims
+   *  the workspace via signup. */
+  ownerId: string | null;
+  /** Task 8: carries organizations.settings.origin — WEB_UNGATED_ORIGIN marks
+   *  workspaces created anonymously via the web paste-box flow. */
+  settings: Record<string, unknown>;
 } | null> {
   // Join landing_pages → organizations to resolve workspace slug → orgId.
   // We can't query landing_pages by workspace slug directly (it doesn't
@@ -113,7 +119,12 @@ export async function loadLandingPayload(workspaceSlug: string): Promise<{
   const { organizations } = await import("@/db/schema");
 
   const [orgRow] = await db
-    .select({ id: organizations.id, theme: organizations.theme })
+    .select({
+      id: organizations.id,
+      theme: organizations.theme,
+      ownerId: organizations.ownerId,
+      settings: organizations.settings,
+    })
     .from(organizations)
     .where(eq(organizations.slug, workspaceSlug))
     .limit(1);
@@ -157,6 +168,8 @@ export async function loadLandingPayload(workspaceSlug: string): Promise<{
     archetype,
     orgId: orgRow.id,
     landingTemplate,
+    ownerId: orgRow.ownerId,
+    settings: orgRow.settings,
     seo: {
       title: (seoRaw["title"] as string | undefined) ?? payload.footer.businessName,
       description:

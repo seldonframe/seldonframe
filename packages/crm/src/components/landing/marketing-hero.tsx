@@ -26,6 +26,11 @@ import { useRouter } from "next/navigation";
 import { ArrowRight, FileText, Globe } from "lucide-react";
 
 import { MarketingDemoMarquee } from "@/components/landing/marketing-demo-marquee";
+import { heroSubmitTarget } from "@/components/landing/hero-submit-target";
+
+// Re-exported for callers that only need the pure routing decision (e.g.
+// tests) without pulling in this "use client" component.
+export { heroSubmitTarget };
 
 const URL_EXAMPLES = [
   "https://your-clients-hvac-company.com",
@@ -112,7 +117,14 @@ function useTypewriterPlaceholder(
   }, [enabled, examples, ref]);
 }
 
-export function MarketingHero() {
+export function MarketingHero({
+  ungatedBuildEnabled = false,
+}: {
+  /** Task 8: when the web-ungated-build flag is on, route paste-and-go to
+   *  /try instead of /signup. Computed server-side (env is not readable
+   *  from this client component) and passed down by the page. */
+  ungatedBuildEnabled?: boolean;
+} = {}) {
   const router = useRouter();
   const [tab, setTab] = useState<TabKind>("url");
   const [urlValue, setUrlValue] = useState("");
@@ -149,12 +161,10 @@ export function MarketingHero() {
       // non-fatal — URL mode still passes ?url=
     }
     setSubmitting(true);
-    const params = new URLSearchParams({ intent: "build" });
-    if (tab === "url") params.set("url", value);
     setTimeout(() => {
-      router.push(`/signup?${params.toString()}`);
+      router.push(heroSubmitTarget(tab, value, ungatedBuildEnabled));
     }, 380);
-  }, [tab, urlValue, bizValue, router]);
+  }, [tab, urlValue, bizValue, router, ungatedBuildEnabled]);
 
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {

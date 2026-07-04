@@ -48,10 +48,19 @@ import {
   buildTemplateCtas,
 } from "@/lib/landing/template-adapters";
 import { ARCHETYPES, type AestheticArchetypeId } from "@/lib/workspace/aesthetic-archetypes";
+import { WEB_UNGATED_ORIGIN } from "@/lib/web-build/policy";
 
 type PageProps = {
   params: Promise<{ slug: string }>;
 };
+
+// Task 8: unclaimed anonymous web-build workspaces (created via the /try
+// paste-box flow, no owner attached yet) stay out of the search index until
+// claimed via signup. Claimed workspaces and every non-web-build workspace
+// keep the existing indexable behavior.
+function shouldIndexWorkspace(ownerId: string | null, settings: Record<string, unknown>): boolean {
+  return !(ownerId === null && settings["origin"] === WEB_UNGATED_ORIGIN);
+}
 
 export async function generateMetadata({ params }: PageProps): Promise<Metadata> {
   const { slug } = await params;
@@ -67,6 +76,8 @@ export async function generateMetadata({ params }: PageProps): Promise<Metadata>
       return { title: "Page not found" };
     }
     const description = soul.soul_description ?? soul.tagline;
+    // ctx is non-null here (soul came from it above).
+    const indexable = shouldIndexWorkspace(ctx!.ownerId, ctx!.settings);
     return {
       title: soul.business_name,
       ...(description ? { description } : {}),
@@ -75,7 +86,7 @@ export async function generateMetadata({ params }: PageProps): Promise<Metadata>
         ...(description ? { description } : {}),
         type: "website",
       },
-      robots: { index: true, follow: true },
+      robots: { index: indexable, follow: indexable },
       alternates: { canonical: `/w/${slug}` },
     };
   }
@@ -91,10 +102,12 @@ export async function generateMetadata({ params }: PageProps): Promise<Metadata>
       ...(seo.ogImage ? { images: [{ url: seo.ogImage }] } : {}),
       type: "website",
     },
-    // These pages should be indexed.
+    // Indexed by default — except unclaimed anonymous web-build workspaces
+    // (created via /try with no owner yet), which stay out of the index
+    // until claimed via signup (Task 8).
     robots: {
-      index: true,
-      follow: true,
+      index: shouldIndexWorkspace(data.ownerId, data.settings),
+      follow: shouldIndexWorkspace(data.ownerId, data.settings),
     },
     // Canonical URL points to this /w/[slug] path.
     alternates: {
