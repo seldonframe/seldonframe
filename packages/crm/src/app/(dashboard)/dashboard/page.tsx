@@ -31,6 +31,14 @@ import { getOwnedWorkspaceCount } from "@/lib/web-onboarding/owned-workspace-cou
 // CTA. Same builder the ready page + create_workspace API responses use, so
 // the subdomain URL construction can't drift between surfaces.
 import { buildWorkspaceUrls } from "@/lib/billing/anonymous-workspace";
+// 2026-07-04 — Task 7 of the win-ladder + SeldonChat plan: renders the
+// 4-step activation ladder in both the fresh-claimed hero and the populated
+// single-workspace view. isWinLadderOn keeps this entire surface flag-dark
+// (zero DB work, byte-identical render) until SF_WIN_LADDER=1.
+import { isWinLadderOn } from "@/lib/web-build/policy";
+import { resolveLadderInputs, stampLadderEvent } from "@/lib/activation/ladder-server";
+import { computeLadderState } from "@/lib/activation/ladder";
+import { WinLadder } from "@/components/activation/win-ladder";
 
 /*
   Square UI class reference (source of truth):
@@ -54,6 +62,22 @@ import { buildWorkspaceUrls } from "@/lib/billing/anonymous-workspace";
 // every environment (prod vs preview).
 const WORKSPACE_BASE_DOMAIN =
   process.env.WORKSPACE_BASE_DOMAIN?.trim() || "app.seldonframe.com";
+
+// 2026-07-04 — Task 7. Same /book/<org>/<slug> pattern the fresh-claimed
+// hero already builds inline (see the comment at its own publicBookingUrl
+// local) — proxy.ts's rewrite for that path keys off the org slug in the
+// PATH, not the subdomain host, so buildWorkspaceUrls().book would 404
+// here. Shared so the populated-dashboard win-ladder card can reuse it
+// without re-deriving the same string.
+function buildPublicBookingUrl(
+  workspace: { slug: string; id: string },
+  bookingSlug: string | undefined,
+): string {
+  if (!bookingSlug) {
+    return buildWorkspaceUrls(workspace.slug, WORKSPACE_BASE_DOMAIN, workspace.id).home;
+  }
+  return `https://${WORKSPACE_BASE_DOMAIN}/book/${workspace.slug}/${bookingSlug}`;
+}
 
 function toUtcDate(value: string | Date) {
   if (value instanceof Date) {
@@ -554,6 +578,35 @@ export default async function DashboardPage({
     contactRows.length === 0 &&
     dealRows.length === 0 &&
     bookingRows.length === 0;
+
+  // 2026-07-04 — Task 7. Computed ONCE and shared by both render sites (the
+  // fresh-claimed hero below + the populated single-workspace view further
+  // down) so the ladder state is never derived twice per request. Flag-off
+  // (or operator session, or no active workspace) short-circuits to null
+  // before any DB call — zero added query cost in the common case.
+  const winLadderOn = isWinLadderOn({ SF_WIN_LADDER: process.env.SF_WIN_LADDER });
+  const ladderState =
+    winLadderOn && !isOperatorSession && activeWorkspace
+      ? await (async () => {
+          const inputs = await resolveLadderInputs(activeWorkspace.id);
+          const computed = computeLadderState(inputs);
+          for (const step of computed.steps) {
+            if (step.done) {
+              // Fire-and-forget: stampLadderEvent is internally once-only
+              // (a no-op write + no capture once already stamped), so
+              // calling it for every done step on every render is safe.
+              void stampLadderEvent(activeWorkspace.id, step.id);
+            }
+          }
+          return computed;
+        })()
+      : null;
+  const ladderHrefs = {
+    integrationsUrl: "/integrations",
+    domainUrl: "/settings/domain",
+    agentsUrl: "/agents",
+  };
+
   if (isFreshClaimedWorkspace && activeWorkspace) {
     const firstName =
       user?.name?.split(" ").filter(Boolean)[0]?.trim() || "there";
@@ -654,6 +707,19 @@ export default async function DashboardPage({
                 </Link>
               </p>
             </div>
+
+            {/* 2026-07-04 — Task 7 win-ladder card. Only rendered when
+                SF_WIN_LADDER is on; ladderState is null flag-off so this
+                whole block is a no-op then. */}
+            {ladderState ? (
+              <WinLadder
+                state={ladderState}
+                hrefs={{
+                  bookingUrl: publicBookingUrl ?? urls.home,
+                  ...ladderHrefs,
+                }}
+              />
+            ) : null}
           </div>
         </div>
       </main>
@@ -1373,6 +1439,21 @@ export default async function DashboardPage({
           </div>
         ) : null}
       </header>
+
+      {/* 2026-07-04 — Task 7 win-ladder card. Renders in the populated
+          single-workspace view too (not just the fresh-claimed hero) while
+          state.completedCount < 4, so the ladder doesn't vanish the moment
+          the first contact/deal/booking arrives. Shares the one ladderState
+          computed above the branch split — no extra query here. */}
+      {ladderState && ladderState.completedCount < 4 && activeWorkspace ? (
+        <WinLadder
+          state={ladderState}
+          hrefs={{
+            bookingUrl: buildPublicBookingUrl(activeWorkspace, appointmentTypeRows[0]?.bookingSlug),
+            ...ladderHrefs,
+          }}
+        />
+      ) : null}
 
       {/* v1.25.4 — operator "Today" snapshot widget. Replaces the v1.25.3
           gap (where SF "Newly installed blocks" used to live for agency
