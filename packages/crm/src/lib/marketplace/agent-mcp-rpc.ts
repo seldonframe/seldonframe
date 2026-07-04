@@ -162,6 +162,19 @@ export function buildAskToolDescriptor(input: {
       },
       required: ["message"],
     },
+    // `ask` runs the LIVE agent loop on the owner's compute + workspace, which
+    // WRITES conversation rows under the seller org (see runStatelessAgentTurn)
+    // — not read-only. It stays non-destructive because the workspace-stateful
+    // tools it could reach (book_appointment, CRM writes, etc.) are additive/
+    // scheduling actions, not deletions, and it hits the owner's own LLM +
+    // workspace rather than an arbitrary external system, so it's closed-world.
+    annotations: {
+      title: "Ask the Agent",
+      readOnlyHint: false,
+      destructiveHint: false,
+      idempotentHint: false,
+      openWorldHint: false,
+    },
   };
 }
 
@@ -222,6 +235,17 @@ export function buildGroundToolDescriptor(): McpToolDescriptor {
         url: { type: "string", description: "Your business website (https://…)." },
       },
       required: ["url"],
+    },
+    // Fetches the visitor's OWN provided website URL to ground a demo — reads
+    // an external page (open-world) and stores a session marker, but performs
+    // no destructive action and isn't safely repeatable-with-no-effect (a
+    // fresh grounding read each time), so it's not idempotent.
+    annotations: {
+      title: "Ground on My Business",
+      readOnlyHint: true,
+      destructiveHint: false,
+      idempotentHint: false,
+      openWorldHint: true,
     },
   };
 }
@@ -410,6 +434,15 @@ export function buildDeterministicToolDescriptors(input: { agentName: string }):
         },
         required: ["service"],
       },
+      // Pure lookup over the listing's own blueprint.quoteRanges — no LLM, no
+      // I/O, no workspace write. Same inputs always yield the same output.
+      annotations: {
+        title: "Get Quote Range",
+        readOnlyHint: true,
+        destructiveHint: false,
+        idempotentHint: true,
+        openWorldHint: false,
+      },
     },
     {
       name: PROVIDE_FAQ_ANSWER_TOOL_NAME,
@@ -426,6 +459,15 @@ export function buildDeterministicToolDescriptors(input: { agentName: string }):
           },
         },
         required: ["question"],
+      },
+      // Pure keyword match over the listing's own blueprint.faq — no LLM, no
+      // I/O, no workspace write. Same inputs always yield the same output.
+      annotations: {
+        title: "Provide FAQ Answer",
+        readOnlyHint: true,
+        destructiveHint: false,
+        idempotentHint: true,
+        openWorldHint: false,
       },
     },
   ];

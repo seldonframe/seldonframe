@@ -26,6 +26,8 @@ import {
   buildAskToolDescriptor,
   buildInitializeResult,
   buildToolsListResult,
+  buildTasteToolsListResult,
+  GROUND_TOOL_NAME,
   extractAskArgs,
   jsonRpcResult,
   jsonRpcError,
@@ -423,5 +425,49 @@ describe("buildAskToolDescriptor — relabelled as the owner's-compute path", ()
   test("description makes clear it delegates to the live agent on the owner's compute", () => {
     const tool = buildAskToolDescriptor({ agentName: "Sunset Receptionist", capabilities: ["book_appointment"] });
     assert.match(tool.description.toLowerCase(), /owner|compute|live/);
+  });
+});
+
+describe("MCP tool annotations — claude.ai connector-directory prereq", () => {
+  test("every tool in the paid tools/list carries annotations", () => {
+    const result = buildToolsListResult({
+      agentName: "Sunset Receptionist",
+      capabilities: RENTAL_BLUEPRINT.capabilities,
+    }) as { tools: Array<{ name: string; annotations?: Record<string, unknown> }> };
+    for (const tool of result.tools) {
+      assert.ok(tool.annotations, `${tool.name} has annotations`);
+      assert.equal(typeof tool.annotations!.readOnlyHint, "boolean", `${tool.name}.readOnlyHint is boolean`);
+      assert.equal(typeof tool.annotations!.destructiveHint, "boolean", `${tool.name}.destructiveHint is boolean`);
+      assert.equal(typeof tool.annotations!.idempotentHint, "boolean", `${tool.name}.idempotentHint is boolean`);
+      assert.equal(typeof tool.annotations!.openWorldHint, "boolean", `${tool.name}.openWorldHint is boolean`);
+      assert.ok(tool.annotations!.title, `${tool.name} has a title`);
+    }
+  });
+
+  test("every tool in the taste tools/list carries annotations (incl. ground_on_my_business)", () => {
+    const result = buildTasteToolsListResult({
+      agentName: "Sunset Receptionist",
+      capabilities: RENTAL_BLUEPRINT.capabilities,
+      visitorLimit: 5,
+    }) as { tools: Array<{ name: string; annotations?: Record<string, unknown> }> };
+    assert.ok(result.tools.some((t) => t.name === GROUND_TOOL_NAME));
+    for (const tool of result.tools) {
+      assert.ok(tool.annotations, `${tool.name} has annotations`);
+    }
+  });
+
+  test("get_quote_range and provide_faq_answer are read-only + idempotent (pure blueprint lookups)", () => {
+    const tools = buildDeterministicToolDescriptors({ agentName: "Sunset Receptionist" });
+    for (const tool of tools) {
+      assert.equal(tool.annotations?.readOnlyHint, true, `${tool.name}.readOnlyHint`);
+      assert.equal(tool.annotations?.idempotentHint, true, `${tool.name}.idempotentHint`);
+      assert.equal(tool.annotations?.destructiveHint, false, `${tool.name}.destructiveHint`);
+    }
+  });
+
+  test("ask is not read-only (it writes conversation rows) but is non-destructive", () => {
+    const tool = buildAskToolDescriptor({ agentName: "Sunset Receptionist", capabilities: ["book_appointment"] });
+    assert.equal(tool.annotations?.readOnlyHint, false);
+    assert.equal(tool.annotations?.destructiveHint, false);
   });
 });

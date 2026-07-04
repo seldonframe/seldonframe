@@ -103,6 +103,15 @@ export function buildBuildToolsList(): { tools: McpToolDescriptor[] } {
             },
           },
         },
+        // Pure catalog search over our own closed marketplace index — never
+        // mutates anything, safe to re-run, no external/open-world fetch.
+        annotations: {
+          title: "Search Builder Catalog",
+          readOnlyHint: true,
+          destructiveHint: false,
+          idempotentHint: true,
+          openWorldHint: false,
+        },
       },
       {
         name: INSPECT_TOOL,
@@ -117,6 +126,15 @@ export function buildBuildToolsList(): { tools: McpToolDescriptor[] } {
             id: { type: "string", description: "The entry's id (agent slug or tool action slug), from discover's result." },
           },
           required: ["type", "id"],
+        },
+        // A metadata lookup by id against our own catalog — read-only,
+        // repeatable, closed-world (same reasoning as discover).
+        annotations: {
+          title: "Inspect Catalog Entry",
+          readOnlyHint: true,
+          destructiveHint: false,
+          idempotentHint: true,
+          openWorldHint: false,
         },
       },
       {
@@ -138,6 +156,21 @@ export function buildBuildToolsList(): { tools: McpToolDescriptor[] } {
             },
           },
           required: ["type", "id"],
+        },
+        // `run` EXECUTES an arbitrary catalog entry — a published agent (which
+        // may itself write CRM records, send messages, etc.) or a Composio
+        // tool action (which may reach an arbitrary third-party API — open
+        // world). We cannot prove no reachable entry deletes/mutates data, so
+        // we do NOT claim readOnlyHint/idempotentHint here; destructiveHint is
+        // true because a runnable entry can perform destructive third-party
+        // actions (e.g. a Composio "delete" action) that this transport has no
+        // way to distinguish from a benign one at tools/list time.
+        annotations: {
+          title: "Run Catalog Entry",
+          readOnlyHint: false,
+          destructiveHint: true,
+          idempotentHint: false,
+          openWorldHint: true,
         },
       },
     ],

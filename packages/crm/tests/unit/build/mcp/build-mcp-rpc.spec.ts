@@ -55,6 +55,27 @@ describe("buildBuildToolsList", () => {
     }
   });
 
+  test("every tool carries MCP annotations (claude.ai connector-directory prereq)", () => {
+    const { tools } = buildBuildToolsList();
+    for (const tool of tools) {
+      assert.ok(tool.annotations, `${tool.name} has annotations`);
+      assert.equal(typeof tool.annotations!.readOnlyHint, "boolean", `${tool.name}.annotations.readOnlyHint is boolean`);
+      assert.equal(typeof tool.annotations!.destructiveHint, "boolean", `${tool.name}.annotations.destructiveHint is boolean`);
+      assert.equal(typeof tool.annotations!.idempotentHint, "boolean", `${tool.name}.annotations.idempotentHint is boolean`);
+      assert.equal(typeof tool.annotations!.openWorldHint, "boolean", `${tool.name}.annotations.openWorldHint is boolean`);
+      assert.ok(tool.annotations!.title && tool.annotations!.title.length > 0, `${tool.name} has a title`);
+    }
+  });
+
+  test("discover + inspect are read-only; run is not (it can execute destructive entries)", () => {
+    const { tools } = buildBuildToolsList();
+    const byName = Object.fromEntries(tools.map((t) => [t.name, t.annotations!]));
+    assert.equal(byName[DISCOVER_TOOL].readOnlyHint, true);
+    assert.equal(byName[INSPECT_TOOL].readOnlyHint, true);
+    assert.equal(byName[RUN_TOOL].readOnlyHint, false);
+    assert.equal(byName[RUN_TOOL].destructiveHint, true);
+  });
+
   test("discover takes optional query + limit (no required fields)", () => {
     const tool = buildBuildToolsList().tools.find((t) => t.name === DISCOVER_TOOL)!;
     const schema = tool.inputSchema as { properties: Record<string, unknown>; required?: string[] };

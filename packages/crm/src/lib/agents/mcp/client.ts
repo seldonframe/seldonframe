@@ -32,10 +32,34 @@ const DEFAULT_TIMEOUT_MS = 20_000;
 // We advertise a recent protocol version; servers negotiate down if needed.
 const PROTOCOL_VERSION = "2025-06-18";
 
+/** MCP tool annotations (2025-06-18 spec, §Tool). All fields are hints, not
+ *  guarantees — clients (e.g. claude.ai's connector directory) use them to
+ *  gate confirmation UI. Additive JSON: unknown fields are ignored by
+ *  clients that don't read them, so adding this is backward compatible with
+ *  every existing consumer of McpToolDescriptor. */
+export type McpToolAnnotations = {
+  /** Human-readable label for the tool (e.g. claude.ai's UI). */
+  title?: string;
+  /** True if the tool only reads/queries — never mutates state. */
+  readOnlyHint?: boolean;
+  /** True if the tool may perform destructive updates (only meaningful when
+   *  readOnlyHint is false/absent). */
+  destructiveHint?: boolean;
+  /** True if calling the tool repeatedly with the same arguments has no
+   *  additional effect beyond the first call. */
+  idempotentHint?: boolean;
+  /** True if the tool interacts with an "open world" of external entities
+   *  (the public internet, arbitrary third-party systems) rather than a
+   *  closed, well-known set the server fully controls. */
+  openWorldHint?: boolean;
+};
+
 export type McpToolDescriptor = {
   name: string;
   description: string;
   inputSchema: Record<string, unknown>;
+  /** Optional MCP tool annotations (readOnlyHint/destructiveHint/etc.). */
+  annotations?: McpToolAnnotations;
 };
 
 export type McpClient = {
