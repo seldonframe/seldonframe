@@ -189,8 +189,8 @@ export function PricingShell({ isAuthed }: PricingShellProps) {
         </div>
       </div>
 
-      {/* Sticky bottom CTA — copy + button reflect the selected tier. All
-          tiers are paid: POST /api/stripe/checkout + redirect to the
+      {/* Sticky bottom CTA — there's exactly one plan, so copy + button
+          are static: POST /api/stripe/checkout + redirect to the
           Stripe-hosted page (authed), or bounce to /signup?plan= first. */}
       <PricingStickyBar
         selected={selected}

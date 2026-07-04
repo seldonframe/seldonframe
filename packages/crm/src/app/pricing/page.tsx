@@ -14,10 +14,12 @@
 // Stripe SetupIntent for a "save a card on Free" form — checkout flows
 // through Stripe-hosted Checkout from the shell.
 //
-// NOTE: the FAQS array below still describes the old 3-tier ladder
-// (Builder/Workspace/Agency, per-workspace overage, etc.) — out of scope
-// for this pass (Task 11 touches pricing-shell.tsx + this header comment
-// only); flagged separately for a follow-up truth pass on the FAQ copy.
+// 2026-07-04 Task 11b: the FAQS array below has been rewritten to match
+// the single-plan reality (it used to describe the old Builder/Workspace/
+// Agency ladder). Every FAQ claim here is a strict subset of what
+// pricing-shell.tsx's card + sticky bar already state, or is backed by
+// /api/stripe/checkout (trial_period_days: 14) or the Settings → Billing
+// "Manage subscription" button (Stripe's standard billing portal).
 //
 // All interactive UI lives in pricing-shell.tsx.
 
@@ -33,23 +35,19 @@ import { PricingShell } from "./pricing-shell";
 const FAQS: Array<{ q: string; a: string }> = [
   {
     q: "How many client workspaces can I run?",
-    a: "Builder is landing pages only (up to 10, no full workspace). Workspace includes one full workspace. Agency includes 10 client workspaces, then $10/mo for each one beyond that. Features like custom domains, white-label, and AI agents stack on top per tier.",
+    a: "As many as you want. SeldonFrame is one flat $29/mo plan with unlimited workspaces — no per-workspace charge, no tier to upgrade into for more.",
   },
   {
     q: "Can I white-label SeldonFrame for my clients?",
-    a: "Yes, on Agency. Agency white-labels the entire platform under your brand — every surface your client sees carries your agency's identity, and you resell at your own markup.",
+    a: "Yes. Whitelabel and resell each workspace to clients is included in the plan.",
   },
   {
-    q: "Do I need a credit card to get started?",
-    a: "Yes — every plan is paid and you check out securely on Stripe. There's no free tier. Pick Builder, Workspace, or Agency and you're billed one flat monthly price. Cancel anytime from Settings → Billing.",
-  },
-  {
-    q: "Whose Claude / OpenAI key gets used?",
-    a: "On paid plans, AI generation is managed for you. If you self-host, you bring your own key — every LLM call is billed against your own account, and you see every invocation in the admin dashboard.",
+    q: "How does the 14-day trial work?",
+    a: "Start your trial from this page — you'll check out through Stripe, but you won't be charged until the trial ends 14 days later. After that it's $29/mo flat. Cancel anytime from Settings → Billing before or after the trial and you won't be billed again.",
   },
   {
     q: "What about self-hosting?",
-    a: "Fully supported. The full source is MIT-licensed on GitHub. Self-host runs everything with no per-workspace charge — you only pay your own infra and your own LLM bill.",
+    a: "Fully supported. The full source is AGPL-licensed on GitHub — self-host and own + export everything with no per-workspace charge.",
   },
 ];
 
