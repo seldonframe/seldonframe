@@ -115,9 +115,11 @@ function scaledDurations(totalS: number): readonly number[] {
 // the brief calls for a short, specific chip — not a sentence.
 function formatTotalLabel(totalS: number): string {
   if (totalS < 90) return `${Math.round(totalS)}s`;
+  // floor/ceil of the exact minute value (no padding window) — matches the
+  // brief's stated example verbatim: totalS=165 -> 2.75min -> "2-3 min".
   const minutes = totalS / 60;
-  const lo = Math.max(1, Math.floor(minutes - 0.5));
-  const hi = Math.ceil(minutes + 0.5);
+  const lo = Math.max(1, Math.floor(minutes));
+  const hi = Math.max(lo + 1, Math.ceil(minutes));
   return `${lo}–${hi} min`;
 }
 
