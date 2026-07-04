@@ -31,7 +31,7 @@ import { agentConversations, agentTurns, agents, bookings, organizations } from 
 import { listLandingVersions } from "@/lib/landing/r1-customize";
 import { listConnections } from "@/lib/integrations/composio/client";
 import { COPILOT_ARCHETYPE } from "@/lib/agents/copilot/ensure-agent";
-import { captureServerEvent } from "@/lib/analytics/capture";
+import { captureServerEvent, type CaptureServerEventInput } from "@/lib/analytics/capture";
 import type { LadderInputs, LadderStepId } from "@/lib/activation/ladder";
 
 /** The default website-chatbot agent's archetype — pinned here from
@@ -176,7 +176,7 @@ export type StampLadderEventDeps = {
   /** COALESCE-merge `settings.activation.<step>At = ISO now` — caller only
    *  invokes this when wasStepStamped resolved false. */
   stampStep: (orgId: string, step: LadderStepId, stampedAtIso: string) => Promise<void>;
-  captureEvent: (input: { event: string; distinctId: string; properties: Record<string, string> }) => void;
+  captureEvent: (input: CaptureServerEventInput) => void;
 };
 
 function activationSettingsKey(step: LadderStepId): string {
@@ -222,6 +222,13 @@ export const defaultStampLadderEventDeps: StampLadderEventDeps = {
  * "activation_step_completed" funnel event exactly once. Safe to call
  * fire-and-forget on every step that just became done; a step that was
  * already stamped is a complete no-op (no write, no capture).
+ *
+ * KNOWN RACE: The check-then-write pattern (lines 231–234) has a race window:
+ * two concurrent renders can both see the step unstamped and double-fire the
+ * activation_step_completed capture. This is accepted for v1 — funnel
+ * dashboards tolerate rare dupes. Revisit with a jsonb-path conditional update
+ * (e.g. `UPDATE ... SET settings = ... WHERE settings->'activation'->... IS NULL`)
+ * if duplicate events ever matter.
  */
 export async function stampLadderEvent(
   orgId: string,
