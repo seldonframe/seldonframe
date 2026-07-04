@@ -3,10 +3,17 @@
 import Link from "next/link";
 import { useActionState, useEffect } from "react";
 import { sendMagicLinkAction } from "./actions";
+import { googleSignInAction } from "../oauth-actions";
 import { DEMO_BLOCK_MESSAGE } from "@/lib/demo/constants";
 import { useDemoToast } from "@/components/shared/demo-toast-provider";
 
-export function SignupForm({ redirectTo }: { redirectTo: string }) {
+export function SignupForm({
+  redirectTo,
+  googleEnabled = false,
+}: {
+  redirectTo: string;
+  googleEnabled?: boolean;
+}) {
   const { showDemoToast } = useDemoToast();
   const [state, action, pending] = useActionState(sendMagicLinkAction, {});
   // 2026-05-22 — redirectTo is computed server-side in page.tsx from the
@@ -23,6 +30,22 @@ export function SignupForm({ redirectTo }: { redirectTo: string }) {
 
   return (
     <div className="space-y-5 text-foreground">
+      {googleEnabled ? (
+        <>
+          <form action={googleSignInAction}>
+            <input type="hidden" name="redirectTo" value={callbackUrl} />
+            <button type="submit" className="crm-button-primary h-10 w-full px-4">
+              Continue with Google
+            </button>
+          </form>
+          <div className="flex items-center gap-3 text-xs text-[hsl(var(--color-text-secondary))]">
+            <span className="h-px flex-1 bg-border" />
+            or
+            <span className="h-px flex-1 bg-border" />
+          </div>
+        </>
+      ) : null}
+
       <form action={action} className="space-y-3">
         <input type="hidden" name="redirectTo" value={callbackUrl} />
         <div className="space-y-1">
@@ -40,7 +63,11 @@ export function SignupForm({ redirectTo }: { redirectTo: string }) {
           />
         </div>
 
-        <button type="submit" disabled={pending} className="crm-button-primary h-10 w-full px-4">
+        <button
+          type="submit"
+          disabled={pending}
+          className={googleEnabled ? "crm-button-secondary h-10 w-full px-4" : "crm-button-primary h-10 w-full px-4"}
+        >
           {pending ? "Sending magic link..." : "Continue with email link"}
         </button>
       </form>

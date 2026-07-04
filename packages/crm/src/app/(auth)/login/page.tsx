@@ -1,6 +1,7 @@
 import { LoginForm } from "./login-form";
 import Link from "next/link";
 import { toInternalRedirectPath } from "@/lib/auth/signup-redirect";
+import { isGoogleAuthEnabled } from "@/lib/auth/google-enabled";
 
 export default async function LoginPage({
   searchParams,
@@ -27,7 +28,13 @@ export default async function LoginPage({
             The operating system for your business.
           </p>
         </div>
-        <LoginForm redirectTo={redirectTo} />
+        <LoginForm
+          redirectTo={redirectTo}
+          googleEnabled={isGoogleAuthEnabled({
+            GOOGLE_CLIENT_ID: process.env.GOOGLE_CLIENT_ID,
+            GOOGLE_CLIENT_SECRET: process.env.GOOGLE_CLIENT_SECRET,
+          })}
+        />
       </div>
 
       <footer className="border-t border-border pt-4 text-xs text-[hsl(var(--color-text-secondary))]">
