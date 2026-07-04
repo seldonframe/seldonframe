@@ -29,6 +29,21 @@ const nextConfig: NextConfig = {
       { protocol: "https", hostname: "*.app.seldonframe.com" },
     ],
   },
+  // PostHog client-side analytics (web analytics, session replay, error
+  // tracking) — instrumentation-client.ts posts events to same-origin
+  // "/ingest" so ad-blockers don't eat them; these rewrites forward that
+  // traffic to PostHog Cloud US. Deliberately NOT setting
+  // `skipTrailingSlashRedirect: true` (PostHog's docs suggest it): that flag
+  // is a GLOBAL behavior change for the whole app. Next's default
+  // trailing-slash 308 redirect preserves the request method (POST), so
+  // event captures still survive — they just take one extra redirect hop
+  // before this rewrite matches.
+  async rewrites() {
+    return [
+      { source: "/ingest/static/:path*", destination: "https://us-assets.i.posthog.com/static/:path*" },
+      { source: "/ingest/:path*", destination: "https://us.i.posthog.com/:path*" },
+    ];
+  },
 };
 
 // v1.28.4 — Vercel Workflow DevKit integration. withWorkflow() wraps the

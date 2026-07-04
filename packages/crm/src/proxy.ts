@@ -734,6 +734,20 @@ const authProxy = auth(async (request) => {
 
 export async function proxy(request: NextRequest, event: NextFetchEvent) {
   const pathname = request.nextUrl.pathname;
+
+  // PostHog ingestion passthrough. /ingest/* is hit on EVERY host — www
+  // marketing, app.seldonframe.com, and every <slug>.app.seldonframe.com
+  // workspace subdomain (whose branch below rewrites unknown paths to
+  // /w/[slug]/..., which would break analytics capture). Analytics
+  // ingestion must pass untouched on all hosts so the next.config.ts
+  // rewrite can forward it to PostHog Cloud. Belt-and-suspenders: the
+  // `config.matcher` below is a whitelist that does not include "/ingest",
+  // so these requests never reach this function today — this early return
+  // just guarantees correct behavior if that matcher ever changes.
+  if (pathname.startsWith("/ingest")) {
+    return NextResponse.next();
+  }
+
   const host = getRequestHost(request);
   const appHost = isAppHost(host);
   const hostWorkspaceSlug = resolveWorkspaceSlugFromHost(host);
