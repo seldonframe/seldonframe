@@ -78,6 +78,14 @@ export type BuildStageV2Props = {
    *  sets them on `done`, then can optionally auto-redirect on a
    *  timer so the operator sees the celebratory moment first. */
   revealLinks?: { open: string; share?: string | null } | null;
+  /** 2026-07-04 — Optional total duration (seconds) the phase clock counts
+   *  toward, scaling `PHASE_DURATIONS_S` proportionally. Defaults to 60,
+   *  which reduces to the original fixed durations exactly (scale factor
+   *  1) — every existing call site (e.g. /clients/new) omits this prop and
+   *  renders byte-identically. /try passes 165 (~2-3 min) for honest
+   *  timing on the public funnel, where real builds run longer than the
+   *  original 60s demo clock. */
+  totalS?: number;
 };
 
 // ─── Phase timeline ──────────────────────────────────────────────────────
@@ -86,7 +94,32 @@ export type BuildStageV2Props = {
 // side panel.
 
 const PHASE_DURATIONS_S = [8, 10, 9, 12, 11, 10] as const;
-const TOTAL_S = PHASE_DURATIONS_S.reduce((a, b) => a + b, 0);
+const BASE_TOTAL_S = PHASE_DURATIONS_S.reduce((a, b) => a + b, 0);
+
+// 2026-07-04 — `totalS` prop scales phase pacing proportionally rather than
+// hand-editing each duration (per the honest-timing brief). scale = 1 when
+// totalS === BASE_TOTAL_S (the default), so every existing call site that
+// omits the prop gets EXACTLY the original durations back — no rounding
+// drift, since PHASE_DURATIONS_S itself is untouched and only multiplied.
+function scaledDurations(totalS: number): readonly number[] {
+  const scale = totalS / BASE_TOTAL_S;
+  if (scale === 1) return PHASE_DURATIONS_S;
+  return PHASE_DURATIONS_S.map((d) => d * scale);
+}
+
+// Footer label formatting — short stat-chip text, not a sentence. Below
+// 90s keeps the original "Ns total" style; at/above 90s renders an honest
+// minute range instead of a misleading small "≈Ns" (real /try builds run
+// 2-3 minutes, not seconds). The range is fixed prose for the two known
+// callers (60 and 165) rather than a generic minute-math formatter, since
+// the brief calls for a short, specific chip — not a sentence.
+function formatTotalLabel(totalS: number): string {
+  if (totalS < 90) return `${Math.round(totalS)}s`;
+  const minutes = totalS / 60;
+  const lo = Math.max(1, Math.floor(minutes - 0.5));
+  const hi = Math.ceil(minutes + 0.5);
+  return `${lo}–${hi} min`;
+}
 
 type PhaseIndex = 0 | 1 | 2 | 3 | 4 | 5;
 
@@ -200,12 +233,25 @@ function parseSoulPayload(raw: unknown): SoulBuiltPayload | null {
 
 // ─── Component ───────────────────────────────────────────────────────────
 
-export function BuildStageV2({ active, input, eventSource, revealLinks }: BuildStageV2Props) {
+export function BuildStageV2({
+  active,
+  input,
+  eventSource,
+  revealLinks,
+  totalS = BASE_TOTAL_S,
+}: BuildStageV2Props) {
   // Theme is read straight off the host via CSS vars (--background,
   // --foreground, --card, --border, --muted-foreground, etc.). The
   // dashboard chrome already owns theme switching — we just inherit. No
   // useTheme(), no data-theme attribute, no internal theme state. See
   // file header comment for why this changed in 2026-05-22.
+
+  // Phase pacing scaled by the (optional) totalS prop — see scaledDurations
+  // header comment. Default totalS === BASE_TOTAL_S so `durations` is
+  // reference-stable to PHASE_DURATIONS_S and TOTAL_S === BASE_TOTAL_S for
+  // every existing call site.
+  const durations = useMemo(() => scaledDurations(totalS), [totalS]);
+  const TOTAL_S = totalS;
 
   // Stage A — synchronous, derived from `input` at mount. Pure detection.
   const stageA: DetectVerticalResult | null = useMemo(
@@ -283,7 +329,7 @@ export function BuildStageV2({ active, input, eventSource, revealLinks }: BuildS
       // Pin to IDENTITY (phase index 1) — README requires this for the
       // reduced-motion state so the user still sees the archetype-correct
       // business name + brand color. No clock; no rAF; just freeze.
-      setElapsedS(PHASE_DURATIONS_S[0] + PHASE_DURATIONS_S[1] * 0.6);
+      setElapsedS(durations[0]! + durations[1]! * 0.6);
       return;
     }
     startedAtRef.current = null;
@@ -301,7 +347,7 @@ export function BuildStageV2({ active, input, eventSource, revealLinks }: BuildS
       if (rafRef.current !== null) cancelAnimationFrame(rafRef.current);
       rafRef.current = null;
     };
-  }, [active, reduced]);
+  }, [active, reduced, durations, TOTAL_S]);
 
   // ─── SSE wiring ────────────────────────────────────────────────────────
   // Attach listeners once per EventSource. The parent owns the lifecycle
@@ -349,8 +395,8 @@ export function BuildStageV2({ active, input, eventSource, revealLinks }: BuildS
   // ─── Derived phase index + per-tick fill ───────────────────────────────
   const { clockPhase, phaseFraction } = useMemo(() => {
     let acc = 0;
-    for (let i = 0; i < PHASE_DURATIONS_S.length; i++) {
-      const d = PHASE_DURATIONS_S[i]!;
+    for (let i = 0; i < durations.length; i++) {
+      const d = durations[i]!;
       if (elapsedS < acc + d) {
         return {
           clockPhase: i as PhaseIndex,
@@ -360,10 +406,10 @@ export function BuildStageV2({ active, input, eventSource, revealLinks }: BuildS
       acc += d;
     }
     return {
-      clockPhase: (PHASE_DURATIONS_S.length - 1) as PhaseIndex,
+      clockPhase: (durations.length - 1) as PhaseIndex,
       phaseFraction: 1,
     };
-  }, [elapsedS]);
+  }, [elapsedS, durations]);
 
   const phaseIndex = Math.max(clockPhase, sseMinPhase) as PhaseIndex;
 
@@ -390,7 +436,7 @@ export function BuildStageV2({ active, input, eventSource, revealLinks }: BuildS
   const archetypeLabel = ARCHETYPE_LABELS[activeArchetype];
   const publishDomain = inferPublishSubdomain(input ?? { kind: "url", value: "" });
   const elapsedFmt = formatTime(elapsedS);
-  const totalFmt = `${TOTAL_S}s`;
+  const totalFmt = formatTotalLabel(TOTAL_S);
   // 2026-06-03 — The rAF narrative clock can reach the REVEAL phase before
   // the orchestrator's `done` event fires (real builds occasionally run
   // past the 60s clock). `isReady` is the single source of truth for "the

@@ -221,9 +221,14 @@ export function TryClient({ initialUrl }: { initialUrl: string }) {
     return (
       <main
         ref={stageHostRef}
-        className="sf-try-stage h-[100svh] w-full overflow-hidden bg-[#111814] text-[#221D17]"
+        className="sf-try-stage h-[100svh] w-full overflow-hidden bg-[#F6F2EA] text-[#221D17]"
       >
-        <BuildAnimation active={isBuilding} input={buildInput} eventSource={eventSource} />
+        <BuildAnimation
+          active={isBuilding}
+          input={buildInput}
+          eventSource={eventSource}
+          totalS={165}
+        />
         <style jsx global>{`
           @media (max-width: 1099px) {
             .sf-try-stage .sb-stage {
@@ -233,6 +238,50 @@ export function TryClient({ initialUrl }: { initialUrl: string }) {
               overflow-y: auto;
               -webkit-overflow-scrolling: touch;
             }
+          }
+
+          /* 2026-07-04 — Light SF branding for the /try stage, scoped to
+             this class only. Root cause of the dark render: the dashboard's
+             ThemeProvider sets defaultTheme="dark" app-wide (see
+             components/shared/theme-provider.tsx), so the html element
+             carries the .dark class on every route including this public
+             one, and build-stage-v2.tsx's .sb-stage reads its --sb-*
+             tokens straight off the host's --background/--foreground/
+             --card/etc custom properties (by design — see that file's
+             2026-05-22 header comment; it deliberately owns no theme
+             state and is not touched here). Custom properties inherit
+             down the DOM, so re-declaring the same host var NAMES at this
+             narrower .sf-try-stage scope shadows the .dark values for
+             every descendant .sb-* selector without touching the global
+             .dark class itself — /clients/new keeps inheriting the real
+             (dark) host values untouched. Values match the /try idle hero
+             + reveal screen's existing light palette (marketing-hero.tsx
+             tokens noted at the top of this file): #F6F2EA paper,
+             #221D17 ink, #00897B teal accent — not invented hexes. */
+          .sf-try-stage {
+            --background: #f6f2ea;
+            --foreground: #221d17;
+            --card: #fffdfa;
+            --border: #e0d9cc;
+            --muted: #efe9dd;
+            --muted-foreground: #6e665a;
+            --primary: #00897b;
+          }
+          /* The archetype brand-preview cards (e.g. the red "Bold urgency"
+             hero card) stay brand-colored by design — only two archetypes
+             (technical-restrained, brutalist) have a dark-mode .sb-stage
+             contrast override baked into build-stage-v2.tsx for dark
+             CHROME. Since the html element is still .dark here
+             (unchanged), those rules would still match and wash their
+             accent out against our light chrome. Re-assert the
+             light-chrome accent values at one extra class of specificity
+             so they win regardless of stylesheet order, without editing
+             build-stage-v2.tsx's own rules. */
+          :is(.dark) .sf-try-stage .sb-stage[data-archetype="technical-restrained"] {
+            --sb-accent: #3f3f46;
+          }
+          :is(.dark) .sf-try-stage .sb-stage[data-archetype="brutalist"] {
+            --sb-accent: #0a0a0a;
           }
         `}</style>
       </main>
@@ -255,7 +304,7 @@ export function TryClient({ initialUrl }: { initialUrl: string }) {
               Paste a URL. Watch your business build itself.
             </h1>
             <p className="mx-auto mt-3 max-w-[58ch] text-pretty text-[15px] leading-[1.55] text-[#6E665A]">
-              We build a real hosted website, CRM, and a working AI chatbot in about a minute —
+              We build a real hosted website, CRM, and a working AI chatbot in a few minutes —
               free to try, nothing to sign up for yet.
             </p>
 
@@ -391,13 +440,27 @@ function RevealPanel({ done, onStartOver }: { done: DoneData; onStartOver: () =>
         <span className="inline-block size-1.5 rounded-full bg-[#00897B]" aria-hidden />
         It&apos;s live
       </p>
-      <h1 className="mt-3 max-w-[24ch] text-balance font-sans text-[clamp(26px,3.6vw,40px)] font-[500] leading-[1.08] tracking-[-0.02em] text-[#221D17]">
+      {/* 2026-07-04 — Headline compressed one size down (was
+          clamp(26px,3.6vw,40px)) to make room for the primary Save CTA in
+          this header cluster, above the two panels below — at a
+          1512x812-ish desktop viewport the panels alone pushed the CTA
+          below the fold, so the operator saw the build finish with no
+          visible next step without scrolling. */}
+      <h1 className="mt-3 max-w-[24ch] text-balance font-sans text-[clamp(22px,2.8vw,32px)] font-[500] leading-[1.08] tracking-[-0.02em] text-[#221D17]">
         {done.slug}.app.seldonframe.com is live
       </h1>
       <p className="mx-auto mt-3 max-w-[58ch] text-pretty text-[15px] leading-[1.55] text-[#6E665A]">
         Your website and CRM are hosted and real. Try the chatbot below — it already knows your
         business.
       </p>
+
+      <a
+        href={saveHref}
+        className="mt-5 inline-flex items-center gap-2.5 rounded-full bg-[#1F2B24] px-6 py-3.5 text-[15px] font-[500] text-[#F6F2EA] shadow-[0_1px_2px_rgba(34,29,23,.10),0_6px_16px_rgba(34,29,23,.10)] transition-all hover:-translate-y-[1.5px]"
+      >
+        <span className="size-[7px] rounded-full bg-[#00897B]" aria-hidden />
+        Save your workspace — it&apos;s free
+      </a>
 
       <div className="mt-8 flex w-full flex-col gap-5 lg:flex-row">
         <div className="flex flex-1 flex-col gap-2 lg:w-[60%]">

@@ -34,15 +34,20 @@ export type BuildAnimationProps = {
    *  Null until `done` arrives — the buttons render in a disabled-looking
    *  state until then so the visual moment still lands. */
   revealLinks?: { open: string; share?: string | null } | null;
+  /** Optional total build duration (seconds) the phase clock + footer stat
+   *  scale to. Passed straight through to BuildStageV2 — omitting it (every
+   *  call site except /try) preserves the original 60s pacing. */
+  totalS?: number;
 };
 
-export function BuildAnimation({ active, input, eventSource, revealLinks }: BuildAnimationProps) {
+export function BuildAnimation({ active, input, eventSource, revealLinks, totalS }: BuildAnimationProps) {
   return (
     <BuildStageV2
       active={active}
       input={input}
       eventSource={eventSource ?? null}
       revealLinks={revealLinks ?? null}
+      totalS={totalS}
     />
   );
 }
