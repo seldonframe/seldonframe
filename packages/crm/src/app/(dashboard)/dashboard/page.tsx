@@ -595,7 +595,7 @@ export default async function DashboardPage({
               // Fire-and-forget: stampLadderEvent is internally once-only
               // (a no-op write + no capture once already stamped), so
               // calling it for every done step on every render is safe.
-              void stampLadderEvent(activeWorkspace.id, step.id);
+              void stampLadderEvent(activeWorkspace.id, step.id).catch(() => {});
             }
           }
           return computed;
