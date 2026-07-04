@@ -30,6 +30,14 @@ export type BuyerShellProps = {
   /** The muted second word after the wordmark ("Setup" in the wizard, none on the
    *  home). Hidden on mobile to keep the header tight. */
   wordmarkSuffix?: string;
+  /**
+   * 2026-07-04 — quiet account affordances (sign-out + "My workspaces").
+   * Only the "My Agent" home page passes this (the wizard has no use for
+   * it — a buyer mid-setup isn't switching accounts). Rendered as a slot so
+   * the sign-out form (a server action) stays server-composed rather than
+   * threading it through this component's own imports.
+   */
+  accountLinksSlot?: ReactNode;
 };
 
 /**
@@ -42,6 +50,7 @@ export function BuyerShell({
   children,
   finishLaterHref,
   wordmarkSuffix,
+  accountLinksSlot,
 }: BuyerShellProps) {
   return (
     <div
@@ -115,6 +124,8 @@ export function BuyerShell({
             Finish later
           </Link>
         ) : null}
+
+        {accountLinksSlot}
       </header>
 
       <main>{children}</main>
