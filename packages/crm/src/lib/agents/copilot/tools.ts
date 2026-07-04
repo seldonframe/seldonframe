@@ -14,7 +14,9 @@ import { landingPages, organizations } from "@/db/schema";
 import type { AgentTool, ToolExecuteContext } from "@/lib/agents/tools";
 import { loadBlueprintOrFallback, renderBlueprint } from "@/lib/blueprint/persist";
 import { mutateSectionField } from "@/lib/blueprint/mutate";
+import { VALID_SECTION_TYPES } from "@/lib/blueprint/section-types";
 import type { LandingSection } from "@/lib/blueprint/types";
+import { logEvent } from "@/lib/observability/log";
 import {
   getLandingStructureForWorkspace,
   moveSectionForWorkspace,
@@ -30,19 +32,6 @@ import {
 export const COPILOT_CAPABILITY = "workspace_copilot";
 
 const LANDING_SLUG = "home";
-
-const VALID_SECTION_TYPES: LandingSection["type"][] = [
-  "emergency-strip",
-  "hero",
-  "trust-strip",
-  "services-grid",
-  "about",
-  "mid-cta",
-  "testimonials",
-  "service-area",
-  "faq",
-  "footer",
-];
 
 /** Wrap an execute body so a tool NEVER throws — the copilot's turn always
  *  gets a structured result, never an unhandled rejection. */
@@ -172,6 +161,12 @@ async function updateSectionFieldForWorkspace(
       updatedAt: new Date(),
     })
     .where(eq(landingPages.id, existing.id));
+
+  logEvent(
+    "landing_section_update",
+    { section: sectionType, field, value_type: typeof value, via: "copilot" },
+    { orgId: workspaceId },
+  );
 
   return {
     ok: true as const,

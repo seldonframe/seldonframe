@@ -13,6 +13,7 @@ import {
   renderBlueprint,
 } from "@/lib/blueprint/persist";
 import { mutateSectionField } from "@/lib/blueprint/mutate";
+import { VALID_SECTION_TYPES } from "@/lib/blueprint/section-types";
 import type { Blueprint, LandingSection } from "@/lib/blueprint/types";
 
 /**
@@ -35,19 +36,6 @@ import type { Blueprint, LandingSection } from "@/lib/blueprint/types";
  */
 
 const LANDING_SLUG = "home";
-
-const VALID_SECTION_TYPES: LandingSection["type"][] = [
-  "emergency-strip",
-  "hero",
-  "trust-strip",
-  "services-grid",
-  "about",
-  "mid-cta",
-  "testimonials",
-  "service-area",
-  "faq",
-  "footer",
-];
 
 type UpdateBody = {
   workspace_id?: unknown;
