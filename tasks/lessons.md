@@ -1937,3 +1937,7 @@ C4 close-out with empirical SLICE 11 data.
 - **Commit early beats salvage.** Three subagents died at the session cap holding ALL work uncommitted; recovery cost a full wave of forensics. Implementers now commit at the first coherent unit (rule baked into ~/.claude/agents/implementer.md).
 - **Probe deploys with a free marker, not a paid action.** Rate-limited smoke attempts burned 2/3 slots racing the Vercel build; a changed response field (extract-instructions.next_tool) answered "which deploy is live" for free. Always pick the marker probe first.
 - **Never chain `test | grep && commit`.** The grep exits 0 regardless of test failures — a red commit shipped tonight exactly this way. Gate = run tests, READ the counts, then commit as a separate action. And patch source with the Edit tool, not sed/python string heuristics (a missed `import type` cost 10 red tests).
+
+## 2026-07-04 — subagent commits sweep tracked build artifacts
+- Pattern: an implementer subagent committed 474 tracked .next/ churn files alongside 3 source files (git add -A style) after a prior task's pnpm build regenerated them.
+- Rule: every dispatch that ends in a commit must name the exact files to git add; the controller verifies `git show --stat` file count BEFORE generating the review package; restore packages/crm/.next to HEAD after any build gate so the churn can't be swept.
