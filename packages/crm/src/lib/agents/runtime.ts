@@ -49,6 +49,7 @@ import { resolveTurnModel } from "./runtime/turn-model";
 import type { CalendarBinding } from "@/lib/agents/booking/calendar-backend";
 import type { BookingPolicy } from "@/lib/agents/booking/booking-policy";
 import { bindingToCtxBooking } from "@/lib/agents/booking/binding-ctx";
+import { captureLlmGeneration } from "@/lib/analytics/llm-capture";
 
 const MODEL = process.env.ANTHROPIC_AGENT_MODEL?.trim() || "claude-sonnet-4-5-20250929";
 const MAX_TURN_ITERATIONS = 6; // tool-call cap per single turn (catches loops)
@@ -325,6 +326,7 @@ export async function executeTurn(input: {
     });
     lastModelUsed = turnModel;
     let response: Anthropic.Messages.Message;
+    const llmCallStartedAt = Date.now();
     try {
       response = await anthropic.messages.create({
         model: turnModel,
@@ -353,6 +355,26 @@ export async function executeTurn(input: {
             ? `[runtime error: ${errClass.reason}] ${errClass.operatorHint}`
             : "I'm having a hiccup. Can I have someone follow up with you? What's your email?",
       };
+    }
+
+    // Task 12 — $ai_generation span for this call. ONLY on the success path
+    // (the catch block above already returned before reaching here on
+    // error) and wrapped in its own try/catch so a capture bug can never
+    // affect the turn loop's control flow, model selection, or error
+    // handling — matches captureLlmGeneration's own fail-silent contract.
+    try {
+      captureLlmGeneration({
+        distinctId: agent.orgId,
+        orgId: agent.orgId,
+        model: turnModel,
+        inputTokens: response.usage?.input_tokens ?? 0,
+        outputTokens: response.usage?.output_tokens ?? 0,
+        latencyMs: Date.now() - llmCallStartedAt,
+        traceId: conv.id,
+        surface: agent.archetype === "workspace_copilot" ? "copilot" : "agent",
+      });
+    } catch {
+      // Never let analytics affect the agent runtime loop.
     }
 
     totalTokensIn += response.usage?.input_tokens ?? 0;
