@@ -1,16 +1,8 @@
 "use client";
 
-// 2026-07-03 — web-activation invisible claim return
-// (docs/superpowers/specs/2026-07-03-web-activation-design.md).
-//
-// The /try reveal (Task 5) sends anonymous builders to
-// /signup?callbackUrl=<encoded /claim-build?ws=<orgId>&token=<wst_...>>.
-// After auth, signup redirects to that callbackUrl. This page finishes the
-// loop invisibly: it POSTs the workspace bearer token to link-owner so the
-// now-authenticated session becomes the workspace's owner, then bounces to
-// /dashboard. There is no UI to build here beyond a brief spinner — the
-// claim itself is the whole point, modeled directly on the existing
-// /claim page's fetch pattern ((dashboard)/claim/page.tsx:37-41).
+// Client half of the invisible claim return — see page.tsx in this
+// directory for why this page lives outside (dashboard) and why success
+// routes through /switch-workspace.
 //
 // The claim token (`wst_...`) must never be logged or rendered — it is a
 // bearer credential for the workspace.
@@ -18,7 +10,7 @@
 import { useEffect, useMemo } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
 
-export default function ClaimBuildPage() {
+export function ClaimBuildClient() {
   const router = useRouter();
   const searchParams = useSearchParams();
   const ws = useMemo(() => searchParams.get("ws"), [searchParams]);
@@ -39,9 +31,23 @@ export default function ClaimBuildPage() {
       method: "POST",
       headers: { Authorization: `Bearer ${token}` },
     })
-      .then((res) => {
+      .then(async (res) => {
         if (cancelled) return;
-        router.replace(res.ok ? "/dashboard?claimed=1" : "/dashboard?claim=failed");
+        if (!res.ok) {
+          router.replace("/dashboard?claim=failed");
+          return;
+        }
+        // link-owner returns { ok: true, already_linked?: true } on 200 in
+        // both the fresh-claim and idempotent-relink cases — either way the
+        // orgMembers owner row now exists (committed before this response
+        // resolved), so the switch below is authorized. link-owner does NOT
+        // switch the caller's active org itself, so without this hop the
+        // buyer org stays active and the (dashboard) guard bounces again on
+        // the very next request. /switch-workspace sets sf_active_org_id and
+        // is outside (dashboard) — no guard to fight.
+        const to = encodeURIComponent(ws);
+        const next = encodeURIComponent("/dashboard?claimed=1");
+        router.replace(`/switch-workspace?to=${to}&next=${next}`);
       })
       .catch(() => {
         if (cancelled) return;
