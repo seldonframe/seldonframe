@@ -1,8 +1,10 @@
-import { and, isNull, lt } from "drizzle-orm";
+import { and, isNull, lt, sql } from "drizzle-orm";
 import { NextResponse } from "next/server";
 import { db } from "@/db";
 import { organizations } from "@/db/schema";
 import { deleteExpiredTasteSessions } from "@/lib/marketplace/taste/taste-session-store";
+import { webUngatedGcCutoff } from "@/lib/web-build/gc-cutoffs";
+import { WEB_UNGATED_ORIGIN } from "@/lib/web-build/policy";
 
 export const runtime = "nodejs";
 
@@ -65,12 +67,48 @@ async function run() {
     );
   }
 
+  // Second pass: tighter 7-day GC for unclaimed web_ungated workspaces.
+  // These are more ephemeral (anonymous one-click builds) and should not
+  // accumulate as long as general orphans.
+  const webUngatedCutoff = webUngatedGcCutoff(new Date());
+  const webUngatedDeleted = await db
+    .delete(organizations)
+    .where(
+      and(
+        isNull(organizations.ownerId),
+        lt(organizations.createdAt, webUngatedCutoff),
+        sql`${organizations.settings} ->> 'origin' = ${WEB_UNGATED_ORIGIN}`
+      )
+    )
+    .returning({
+      id: organizations.id,
+      slug: organizations.slug,
+      name: organizations.name,
+      createdAt: organizations.createdAt,
+    });
+
+  for (const row of webUngatedDeleted) {
+    console.info(
+      JSON.stringify({
+        event: "web_ungated_workspace_gc",
+        at: new Date().toISOString(),
+        org_id: row.id,
+        slug: row.slug,
+        name: row.name,
+        created_at: row.createdAt.toISOString(),
+        cutoff: webUngatedCutoff.toISOString(),
+      })
+    );
+  }
+
   console.info(
     JSON.stringify({
       event: "orphan_workspace_ttl_completed",
       at: new Date().toISOString(),
       deleted_count: deleted.length,
+      web_ungated_deleted_count: webUngatedDeleted.length,
       cutoff: cutoff.toISOString(),
+      web_ungated_cutoff: webUngatedCutoff.toISOString(),
     })
   );
 
@@ -90,8 +128,11 @@ async function run() {
   return {
     ok: true,
     deleted_count: deleted.length,
+    web_ungated_deleted_count: webUngatedDeleted.length,
     cutoff: cutoff.toISOString(),
+    web_ungated_cutoff: webUngatedCutoff.toISOString(),
     deleted_ids: deleted.map((d) => d.id),
+    web_ungated_deleted_ids: webUngatedDeleted.map((d) => d.id),
   };
 }
 
