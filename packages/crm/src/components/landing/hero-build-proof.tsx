@@ -15,15 +15,14 @@
 // (~1.49:1), a little squarer than the video's 1.6:1 box, so it's rendered
 // with object-cover to fill the frame without distortion.
 //
-// prefers-reduced-motion: reduce → we never autoplay. Render the poster as a
-// static <img> with a visible play button; clicking swaps in the real
-// <video> (a user-initiated play, which is allowed even under the
-// reduced-motion media query — the guidance is against motion the user did
-// not ask for, not against motion on request).
+// Click-to-play chosen because the video asset is 62.6 MB — autoloading would
+// wreck LCP and bandwidth on every homepage visit. All visitors see the poster
+// + play button; click swaps in the <video> for user-initiated playback.
+// (Perf review 2026-07-04)
 
 "use client";
 
-import { useEffect, useState } from "react";
+import { useState } from "react";
 import { Play } from "lucide-react";
 
 const VIDEO_SRC = "/marketing/walkthrough/spin-up-60-seconds.mp4";
@@ -34,33 +33,21 @@ export function HeroBuildProof({
 }: {
   ungatedBuildEnabled?: boolean;
 }) {
-  const [reduceMotion, setReduceMotion] = useState(false);
   const [playing, setPlaying] = useState(false);
-
-  useEffect(() => {
-    if (typeof window === "undefined") return;
-    const mql = window.matchMedia("(prefers-reduced-motion: reduce)");
-    setReduceMotion(mql.matches);
-    const onChange = (e: MediaQueryListEvent) => setReduceMotion(e.matches);
-    mql.addEventListener("change", onChange);
-    return () => mql.removeEventListener("change", onChange);
-  }, []);
-
-  const showVideo = !reduceMotion || playing;
 
   return (
     <div className="flex w-full flex-col items-center gap-3 lg:items-start">
       <div className="relative aspect-[8/5] w-full max-w-[520px] overflow-hidden rounded-[18px] border border-[rgba(34,29,23,.14)] bg-[#FFFDFA] shadow-[0_1px_2px_rgba(34,29,23,.06),0_10px_30px_rgba(34,29,23,.08)]">
-        {showVideo ? (
+        {playing ? (
           <video
             src={VIDEO_SRC}
             muted
             autoPlay
             loop
             playsInline
-            preload="none"
+            preload="auto"
             poster={POSTER_SRC}
-            controls={reduceMotion}
+            controls
             className="size-full object-cover"
           />
         ) : (
@@ -76,8 +63,11 @@ export function HeroBuildProof({
               aria-label="Play the 60-second build video"
               className="absolute inset-0 flex items-center justify-center bg-[#221D17]/25 transition-colors hover:bg-[#221D17]/35"
             >
-              <span className="flex size-14 items-center justify-center rounded-full bg-[#FFFDFA] text-[#221D17] shadow-[0_6px_20px_rgba(34,29,23,.28)] transition-transform hover:scale-105">
-                <Play size={22} fill="currentColor" aria-hidden />
+              <span className="flex flex-col items-center justify-center gap-1">
+                <span className="flex size-14 items-center justify-center rounded-full bg-[#FFFDFA] text-[#221D17] shadow-[0_6px_20px_rgba(34,29,23,.28)] transition-transform hover:scale-105">
+                  <Play size={22} fill="currentColor" aria-hidden />
+                </span>
+                <span className="text-[11px] font-[500] text-[#FFFDFA]">60s</span>
               </span>
             </button>
           </>
