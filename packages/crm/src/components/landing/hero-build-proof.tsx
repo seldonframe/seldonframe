@@ -8,7 +8,7 @@
 // Asset: public/marketing/walkthrough/spin-up-60-seconds.mp4, real encoded
 // size 1728x1080 (read from the file's tkhd atom — no ffprobe on this box),
 // i.e. an 8:5 (1.6:1) aspect ratio. The box below reserves that ratio so
-// there's zero layout shift while the video is still `preload="none"`.
+// there's zero layout shift between the poster state and the mounted video.
 //
 // Poster: public/shots/rapid-rooter-plumbing-828a.jpg — the first slug in
 // LIVE_DEMOS (marketing-demo-marquee.tsx). Its native size is 1200x806
