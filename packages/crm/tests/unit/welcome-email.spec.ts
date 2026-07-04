@@ -255,6 +255,91 @@ describe("chatbot card — HTML", () => {
   });
 });
 
+describe("renderUpgradeBlock — $29 Growth only, no $99 Scale", () => {
+  test("free tier: does NOT mention $99 or Scale anywhere in the HTML email", () => {
+    const html = renderWelcomeEmailHtml(VALID_BODY);
+    assert.doesNotMatch(html, /\$99/);
+    assert.doesNotMatch(html, /Scale/);
+  });
+
+  test("free tier: mentions $29 and Growth", () => {
+    const html = renderWelcomeEmailHtml(VALID_BODY);
+    assert.match(html, /\$29/);
+    assert.match(html, /Growth/);
+  });
+
+  test("free tier: sells the three concrete Growth benefits", () => {
+    const html = renderWelcomeEmailHtml(VALID_BODY);
+    assert.match(html, /own domain/i);
+    assert.match(html, /joescuts\.com/);
+    assert.match(html, /unlimited workspaces/i);
+    assert.match(html, /marketplace/i);
+    assert.match(html, /95%/);
+  });
+
+  test("free tier: single upgrade CTA linking to billing", () => {
+    const html = renderWelcomeEmailHtml(VALID_BODY);
+    assert.match(html, /Upgrade to Growth — \$29\/mo/);
+    assert.match(html, /settings\/billing/);
+  });
+
+  test("paid tier: does NOT mention $99 or Scale", () => {
+    const html = renderWelcomeEmailHtml({ ...VALID_BODY, tier: "growth" });
+    assert.doesNotMatch(html, /\$99/);
+    assert.doesNotMatch(html, /Scale/);
+    assert.match(html, /add_custom_domain/);
+  });
+});
+
+describe("sell-your-agent block", () => {
+  test("HTML includes the sell-what-you-built pitch with 95% and a marketplace link", () => {
+    const html = renderWelcomeEmailHtml(VALID_BODY);
+    assert.match(html, /Sell what you just built/i);
+    assert.match(html, /95%/);
+    assert.match(html, /seldonframe\.com\/marketplace/);
+  });
+
+  test("text includes the sell-what-you-built pitch with 95% and a marketplace link", () => {
+    const text = renderWelcomeEmailText(VALID_BODY);
+    assert.match(text, /Sell what you just built/i);
+    assert.match(text, /95%/);
+    assert.match(text, /seldonframe\.com\/marketplace/);
+  });
+});
+
+describe("activation-first next steps + primary CTA", () => {
+  test("next steps drive first value moment: test receptionist, embed, first lead", () => {
+    const html = renderWelcomeEmailHtml(VALID_BODY);
+    assert.match(html, /Test your AI receptionist/i);
+    assert.match(html, /paste the one-line embed/i);
+    assert.match(html, /first lead land in the CRM/i);
+  });
+
+  test("primary CTA links to the chatbot test url when chatbot is present", () => {
+    const html = renderWelcomeEmailHtml({
+      ...VALID_BODY,
+      workspace: {
+        ...VALID_BODY.workspace,
+        chatbot: {
+          url: "https://acme.app.seldonframe.com/chat",
+          embed_snippet: "<script></script>",
+          status: "live" as const,
+        },
+      },
+    });
+    assert.match(html, /Test your AI receptionist →/);
+  });
+
+  test("text mirrors the $29/no-$99, sell, and activation messaging", () => {
+    const text = renderWelcomeEmailText(VALID_BODY);
+    assert.doesNotMatch(text, /\$99/);
+    assert.doesNotMatch(text, /Scale/);
+    assert.match(text, /\$29/);
+    assert.match(text, /Growth/);
+    assert.match(text, /Test your AI receptionist/i);
+  });
+});
+
 describe("chatbot card — text", () => {
   const CHATBOT_LIVE = {
     url: "https://acme.app.seldonframe.com/chat",

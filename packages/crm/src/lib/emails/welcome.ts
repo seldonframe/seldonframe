@@ -188,10 +188,12 @@ function escapeHtml(value: string): string {
 }
 
 /**
- * v1.8.0 — render the tier-conditional block between Next-Steps and
+ * v1.9.0 — render the tier-conditional block between Next-Steps and
  * the Discord CTA.
  *
- *   Free tier  → upgrade pitch (custom domains require Growth/Scale).
+ *   Free tier  → the $29/mo Growth pitch (own domain, unlimited
+ *                workspaces, sell on the marketplace at 95%). There is
+ *                only one paid tier now — no Scale, no $99.
  *   Paid tier  → "your custom domain is ready to add" + MCP command.
  *
  * Always returns a <tr><td>...</td></tr> shape so the surrounding
@@ -207,26 +209,49 @@ function renderUpgradeBlock(req: WelcomeEmailRequest): string {
     return `<tr><td style="padding:8px 32px 8px 32px;">
       <table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="background:#fffbea;border:1px solid #fde68a;border-radius:10px;">
         <tr><td style="padding:16px 18px;">
-          <div style="font-size:13px;color:#92400e;letter-spacing:0.04em;text-transform:uppercase;font-weight:600;margin-bottom:6px;">Want your own domain?</div>
-          <div style="font-size:14px;color:#78350f;line-height:1.55;margin-bottom:10px;">
-            Your workspace is on a SeldonFrame subdomain right now. Upgrade to <strong>Growth ($29/mo)</strong> or <strong>Scale ($99/mo)</strong> to route your own hostname (joescuts.com → your workspace) with auto-SSL.
-          </div>
-          <a href="${billingUrl}" style="display:inline-block;background:#92400e;color:#fffbea;text-decoration:none;font-size:13px;font-weight:600;padding:9px 18px;border-radius:7px;">View pricing →</a>
+          <div style="font-size:13px;color:#92400e;letter-spacing:0.04em;text-transform:uppercase;font-weight:600;margin-bottom:6px;">Go pro for $29/mo</div>
+          <ul style="margin:0 0 12px 0;padding-left:18px;font-size:14px;color:#78350f;line-height:1.6;">
+            <li><strong>Your own domain</strong> — joescuts.com → your workspace, auto-SSL, no more *.seldonframe.com in front of customers.</li>
+            <li><strong>Unlimited workspaces</strong> — spin up a new one for every client or business, all on one flat price.</li>
+            <li><strong>List &amp; sell your agents on the marketplace</strong> — you keep 95%.</li>
+          </ul>
+          <a href="${billingUrl}" style="display:inline-block;background:#92400e;color:#fffbea;text-decoration:none;font-size:13px;font-weight:600;padding:9px 18px;border-radius:7px;">Upgrade to Growth — $29/mo →</a>
         </td></tr>
       </table>
     </td></tr>`;
   }
 
-  // Paid tier: usable hint about adding a custom domain.
+  // Paid tier: usable hint about adding a custom domain. No Scale
+  // mention — Growth ($29/mo) is the only paid tier.
   return `<tr><td style="padding:8px 32px 8px 32px;">
     <table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="background:#ecfdf5;border:1px solid #a7f3d0;border-radius:10px;">
       <tr><td style="padding:16px 18px;">
         <div style="font-size:13px;color:#065f46;letter-spacing:0.04em;text-transform:uppercase;font-weight:600;margin-bottom:6px;">Custom domain ready</div>
         <div style="font-size:14px;color:#064e3b;line-height:1.55;margin-bottom:6px;">
-          Your plan includes custom domains with auto-SSL. From your IDE, ask Claude:
+          You're on a paid plan — custom domains with auto-SSL are included. From your IDE, ask Claude:
           <code style="background:#d1fae5;padding:2px 6px;border-radius:4px;font-size:13px;">add_custom_domain hostname:&quot;yoursite.com&quot;</code>
         </div>
         <div style="font-size:13px;color:#047857;">You'll get a CNAME record to paste into your DNS, then run <code>verify_domain</code> once it propagates.</div>
+      </td></tr>
+    </table>
+  </td></tr>`;
+}
+
+/**
+ * v1.9.0 — "Sell what you just built" block. Plants the seller
+ * flywheel on day one: the operator didn't just get a workspace, they
+ * built an agent, and that agent is listable on the marketplace.
+ * Always rendered (not tier-gated) — every workspace ships an agent.
+ */
+function renderSellBlock(): string {
+  return `<tr><td style="padding:8px 32px 8px 32px;">
+    <table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="border:1px solid #e5e7eb;border-radius:10px;">
+      <tr><td style="padding:16px 18px;">
+        <div style="font-size:13px;color:#111;letter-spacing:0.04em;text-transform:uppercase;font-weight:600;margin-bottom:6px;">Sell what you just built</div>
+        <div style="font-size:14px;color:#374151;line-height:1.55;margin-bottom:8px;">
+          You didn't just get a workspace — you built an AI agent. List it on the SeldonFrame marketplace and earn on every install or rental. You keep 95%; we take a sliver only when it sells.
+        </div>
+        <a href="https://seldonframe.com/marketplace" style="color:#1a73e8;text-decoration:none;font-size:13px;font-weight:600;">Browse the marketplace →</a>
       </td></tr>
     </table>
   </td></tr>`;
@@ -266,6 +291,10 @@ export function renderWelcomeEmailHtml(req: WelcomeEmailRequest): string {
   const safeBooking = escapeHtml(w.booking_url);
   const safeIntake = escapeHtml(w.intake_url);
   const safeAdmin = escapeHtml(w.admin_url);
+  // Primary CTA — test the live receptionist if the chatbot exists,
+  // otherwise fall back to the landing page.
+  const primaryUrl = w.chatbot ? escapeHtml(w.chatbot.url) : safeLanding;
+  const primaryLabel = w.chatbot ? "Test your AI receptionist →" : "Open your workspace →";
 
   return `<!DOCTYPE html>
 <html lang="en">
@@ -287,9 +316,10 @@ export function renderWelcomeEmailHtml(req: WelcomeEmailRequest): string {
 
         <tr><td style="padding:28px 32px 8px 32px;font-size:15px;line-height:1.55;color:#1a1a1f;">
           <p style="margin:0 0 16px 0;">${greeting}</p>
-          <p style="margin:0 0 16px 0;">
+          <p style="margin:0 0 20px 0;">
             Thanks for spinning up a workspace on SeldonFrame. Bookmark these four URLs — they're your business OS in production.
           </p>
+          <a href="${primaryUrl}" style="display:inline-block;background:#0b0b10;color:#ffffff;text-decoration:none;font-size:15px;font-weight:600;padding:13px 26px;border-radius:8px;">${primaryLabel}</a>
         </td></tr>
 
         <tr><td style="padding:8px 32px 0 32px;">
@@ -319,11 +349,13 @@ export function renderWelcomeEmailHtml(req: WelcomeEmailRequest): string {
         <tr><td style="padding:24px 32px 8px 32px;font-size:15px;line-height:1.55;color:#1a1a1f;">
           <div style="font-weight:600;margin-bottom:8px;">Next steps</div>
           <ol style="padding-left:20px;margin:0 0 16px 0;">
-            <li style="margin-bottom:6px;">Open the admin dashboard to see the CRM, deals pipeline, and automations already running.</li>
-            <li style="margin-bottom:6px;">Customize your landing, booking page, and intake form by talking to Claude — every change is one MCP call away.</li>
-            <li style="margin-bottom:6px;">Take your first booking or intake submission. Each one feeds the workspace's brain so the next change Claude makes is sharper.</li>
+            <li style="margin-bottom:6px;">Test your AI receptionist — it's live and already knows your business.</li>
+            <li style="margin-bottom:6px;">Put it on your real website — paste the one-line embed (above) before &lt;/body&gt;.</li>
+            <li style="margin-bottom:6px;">Watch your first lead land in the CRM — every intake + chat feeds the workspace's brain.</li>
           </ol>
         </td></tr>
+
+        ${renderSellBlock()}
 
         ${renderUpgradeBlock(req)}
 
@@ -364,9 +396,34 @@ AI Chatbot:  ${chatbot.url}
 `;
 }
 
+function renderUpgradeBlockText(req: WelcomeEmailRequest): string {
+  const tier = req.tier ?? "free";
+  const adminUrl = req.workspace.admin_url;
+  const billingUrl = adminUrl.replace(/\/admin\b.*$/, "/settings/billing");
+
+  if (tier === "free") {
+    return `
+Go pro for $29/mo:
+  - Your own domain — joescuts.com -> your workspace, auto-SSL, no more *.seldonframe.com in front of customers.
+  - Unlimited workspaces — spin up a new one for every client or business, all on one flat price.
+  - List & sell your agents on the marketplace — you keep 95%.
+
+  Upgrade to Growth — $29/mo: ${billingUrl}
+`;
+  }
+
+  return `
+Custom domain ready: you're on a paid plan — custom domains with auto-SSL are included.
+  From your IDE, ask Claude: add_custom_domain hostname:"yoursite.com"
+  You'll get a CNAME record to paste into your DNS, then run verify_domain once it propagates.
+`;
+}
+
 export function renderWelcomeEmailText(req: WelcomeEmailRequest): string {
   const greeting = req.name ? `Hi ${req.name},` : "Welcome aboard,";
   const w = req.workspace;
+  const primaryUrl = w.chatbot ? w.chatbot.url : w.landing_url;
+  const primaryLabel = w.chatbot ? "Test your AI receptionist" : "Open your workspace";
   return `${greeting}
 
 Your SeldonFrame workspace is live. Bookmark these four URLs:
@@ -376,11 +433,18 @@ Your SeldonFrame workspace is live. Bookmark these four URLs:
   Intake:   ${w.intake_url}
   Admin:    ${w.admin_url}
 ${w.chatbot ? renderChatbotCardText(w.chatbot) : ""}
-Next steps:
-  1. Open the admin dashboard to see the CRM, deals pipeline, and automations already running.
-  2. Customize your landing, booking page, and intake form by talking to Claude — every change is one MCP call away.
-  3. Connect a custom domain when you're ready to ship publicly.
+${primaryLabel}: ${primaryUrl}
 
+Next steps:
+  1. Test your AI receptionist — it's live and already knows your business.
+  2. Put it on your real website — paste the one-line embed (above) before </body>.
+  3. Watch your first lead land in the CRM — every intake + chat feeds the workspace's brain.
+
+Sell what you just built:
+  You didn't just get a workspace — you built an AI agent. List it on the SeldonFrame
+  marketplace and earn on every install or rental. You keep 95%; we take a sliver only
+  when it sells. https://seldonframe.com/marketplace
+${renderUpgradeBlockText(req)}
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 Join the SeldonFrame builder community on Discord:
 
