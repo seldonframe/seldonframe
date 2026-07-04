@@ -27,6 +27,10 @@ type WinLadderProps = {
    *  Optional so callers that haven't wired share assets yet (or render
    *  this before T9 landed) are unaffected. */
   shareSlot?: React.ReactNode;
+  /** T10's contextual agent-picker cards — rendered inside the hire_agent row
+   *  alongside the existing "Browse agents" link when the caller supplies it.
+   *  Optional so callers that haven't wired agent picks yet are unaffected. */
+  agentPicksSlot?: React.ReactNode;
 };
 
 type StepCopy = {
@@ -57,7 +61,7 @@ function openSeldonChat() {
   window.dispatchEvent(new CustomEvent("seldonchat:open"));
 }
 
-export function WinLadder({ state, hrefs, shareSlot }: WinLadderProps) {
+export function WinLadder({ state, hrefs, shareSlot, agentPicksSlot }: WinLadderProps) {
   return (
     <section className="rounded-2xl border border-border/70 bg-card/40 p-5 space-y-4">
       <div className="space-y-1">
@@ -160,12 +164,24 @@ export function WinLadder({ state, hrefs, shareSlot }: WinLadderProps) {
                     ) : null}
 
                     {step.id === "hire_agent" ? (
-                      <Link
-                        href={hrefs.agentsUrl}
-                        className="text-xs font-medium text-primary underline underline-offset-4 hover:text-primary/80"
-                      >
-                        Browse agents →
-                      </Link>
+                      agentPicksSlot ? (
+                        <div className="w-full space-y-2">
+                          {agentPicksSlot}
+                          <Link
+                            href={hrefs.agentsUrl}
+                            className="text-xs font-medium text-primary underline underline-offset-4 hover:text-primary/80"
+                          >
+                            Browse all agents →
+                          </Link>
+                        </div>
+                      ) : (
+                        <Link
+                          href={hrefs.agentsUrl}
+                          className="text-xs font-medium text-primary underline underline-offset-4 hover:text-primary/80"
+                        >
+                          Browse agents →
+                        </Link>
+                      )
                     ) : null}
                   </div>
                 ) : null}

@@ -43,6 +43,11 @@ import { WinLadder } from "@/components/activation/win-ladder";
 // the win-ladder's go_live row via WinLadder's shareSlot prop.
 import { buildShareAssets } from "@/lib/activation/share";
 import { ShareRow } from "@/components/activation/share-row";
+// 2026-07-04 — Task 10: step-4 contextual agent picker, slotted into the
+// win-ladder's hire_agent row via WinLadder's agentPicksSlot prop.
+import { suggestAgentsForIndustry } from "@/lib/activation/suggest-agents";
+import { AgentPicks } from "@/components/activation/agent-picks";
+import { agentTemplates } from "@/db/schema/agent-templates";
 
 /*
   Square UI class reference (source of truth):
@@ -622,6 +627,34 @@ export default async function DashboardPage({
       : null;
   const shareSlot = shareAssets ? <ShareRow siteUrl={shareAssets.siteUrl} qrDataUrl={shareAssets.qrDataUrl} /> : undefined;
 
+  // 2026-07-04 — Task 10. Same flag/session/workspace guard as Task 7/9 above,
+  // so a flag-off render does zero added query cost. Industry comes from the
+  // soul already loaded above (getSoul()); enabledIds is a cheap one-shot
+  // read of this org's agent_templates rows (mirrors ladder-server.ts's
+  // defaultExtraAgentCount pattern — a single scoped select, not a new
+  // abstraction), checked against each starter's event trigger.
+  const agentPicksSlot =
+    winLadderOn && !isOperatorSession && activeWorkspace
+      ? await (async () => {
+          const picks = suggestAgentsForIndustry(soul?.industry ?? null);
+          const templateRows = await db
+            .select({ blueprint: agentTemplates.blueprint })
+            .from(agentTemplates)
+            .where(eq(agentTemplates.builderOrgId, activeWorkspace.id));
+          const enabledIds = picks
+            .filter((pick) =>
+              templateRows.some((row) => {
+                const blueprint = (row.blueprint ?? {}) as { trigger?: unknown };
+                const trigger = blueprint.trigger as { kind?: string; event?: string } | undefined;
+                const wantEvent = pick.id === "review-requester" ? "booking.completed" : "lead.created";
+                return trigger?.kind === "event" && trigger?.event === wantEvent;
+              }),
+            )
+            .map((pick) => pick.id);
+          return <AgentPicks picks={picks} enabledIds={enabledIds} />;
+        })()
+      : undefined;
+
   if (isFreshClaimedWorkspace && activeWorkspace) {
     const firstName =
       user?.name?.split(" ").filter(Boolean)[0]?.trim() || "there";
@@ -734,6 +767,7 @@ export default async function DashboardPage({
                   ...ladderHrefs,
                 }}
                 shareSlot={shareSlot}
+                agentPicksSlot={agentPicksSlot}
               />
             ) : null}
           </div>
@@ -1469,6 +1503,7 @@ export default async function DashboardPage({
             ...ladderHrefs,
           }}
           shareSlot={shareSlot}
+          agentPicksSlot={agentPicksSlot}
         />
       ) : null}
 
