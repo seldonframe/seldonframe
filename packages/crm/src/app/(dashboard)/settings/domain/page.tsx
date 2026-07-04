@@ -26,12 +26,11 @@
 // arc-shaped (full surface, not a modal over a blurred form).
 
 import { auth } from "@/auth";
-import { ArrowRight } from "lucide-react";
-import Link from "next/link";
 
 import { getCustomDomainSettings, saveCustomDomainAction } from "@/lib/domains/actions";
 import { getOrgId } from "@/lib/auth/helpers";
 import { resolveDomainGate } from "@/lib/billing/domain-gate";
+import { DomainUpgradeButton } from "@/components/billing/domain-upgrade-button";
 
 export default async function DomainSettingsPage({
   searchParams,
@@ -238,10 +237,10 @@ function UpsellCard({
 }: {
   onboardingWorkspaceSlug: string;
 }) {
-  // Encode the slug into the next-path so /signup/billing knows where
-  // to bounce back to AFTER the card save, and so /settings/domain
-  // sees the slug on its second visit and embeds it in the form.
-  const next = onboardingWorkspaceSlug
+  // Encode the slug into the success path so a successful checkout bounces
+  // back here with the onboarding context intact, same round-trip contract
+  // the old /signup/billing?next=... flow honored.
+  const successPath = onboardingWorkspaceSlug
     ? `/settings/domain?onboardingWorkspaceSlug=${encodeURIComponent(onboardingWorkspaceSlug)}`
     : "/settings/domain";
   return (
@@ -258,18 +257,7 @@ function UpsellCard({
         </p>
       </div>
 
-      <div className="flex flex-wrap items-center gap-3 pt-1">
-        <Link
-          href={`/signup/billing?next=${encodeURIComponent(next)}`}
-          className="crm-button-primary inline-flex h-10 items-center gap-1.5 px-4 text-sm font-semibold"
-        >
-          Add a card to unlock
-          <ArrowRight className="size-4" aria-hidden="true" />
-        </Link>
-        <p className="text-xs text-muted-foreground">
-          After you add a card, you&apos;ll come right back here.
-        </p>
-      </div>
+      <DomainUpgradeButton successPath={successPath} />
     </article>
   );
 }

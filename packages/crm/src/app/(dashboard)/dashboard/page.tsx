@@ -39,6 +39,10 @@ import { isWinLadderOn } from "@/lib/web-build/policy";
 import { resolveLadderInputs, stampLadderEvent } from "@/lib/activation/ladder-server";
 import { computeLadderState } from "@/lib/activation/ladder";
 import { WinLadder } from "@/components/activation/win-ladder";
+// 2026-07-04 — Task 9: step-3 share assets (copy link + QR) slotted into
+// the win-ladder's go_live row via WinLadder's shareSlot prop.
+import { buildShareAssets } from "@/lib/activation/share";
+import { ShareRow } from "@/components/activation/share-row";
 
 /*
   Square UI class reference (source of truth):
@@ -607,6 +611,17 @@ export default async function DashboardPage({
     agentsUrl: "/agents",
   };
 
+  // 2026-07-04 — Task 9. Computed once alongside ladderState (same
+  // flag/session/workspace guard) and shared by both render sites below.
+  // qrcode encoding is deterministic and cheap; no extra DB call.
+  const shareAssets =
+    winLadderOn && !isOperatorSession && activeWorkspace
+      ? await buildShareAssets({
+          siteUrl: buildWorkspaceUrls(activeWorkspace.slug, WORKSPACE_BASE_DOMAIN, activeWorkspace.id).home,
+        })
+      : null;
+  const shareSlot = shareAssets ? <ShareRow siteUrl={shareAssets.siteUrl} qrDataUrl={shareAssets.qrDataUrl} /> : undefined;
+
   if (isFreshClaimedWorkspace && activeWorkspace) {
     const firstName =
       user?.name?.split(" ").filter(Boolean)[0]?.trim() || "there";
@@ -718,6 +733,7 @@ export default async function DashboardPage({
                   bookingUrl: publicBookingUrl ?? urls.home,
                   ...ladderHrefs,
                 }}
+                shareSlot={shareSlot}
               />
             ) : null}
           </div>
@@ -1452,6 +1468,7 @@ export default async function DashboardPage({
             bookingUrl: buildPublicBookingUrl(activeWorkspace, appointmentTypeRows[0]?.bookingSlug),
             ...ladderHrefs,
           }}
+          shareSlot={shareSlot}
         />
       ) : null}
 

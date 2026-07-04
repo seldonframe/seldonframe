@@ -22,6 +22,11 @@ export type WinLadderHrefs = {
 type WinLadderProps = {
   state: LadderState;
   hrefs: WinLadderHrefs;
+  /** T9's share-row (copy link + QR) — rendered inside the go_live row
+   *  alongside the existing domain link when the caller supplies it.
+   *  Optional so callers that haven't wired share assets yet (or render
+   *  this before T9 landed) are unaffected. */
+  shareSlot?: React.ReactNode;
 };
 
 type StepCopy = {
@@ -52,7 +57,7 @@ function openSeldonChat() {
   window.dispatchEvent(new CustomEvent("seldonchat:open"));
 }
 
-export function WinLadder({ state, hrefs }: WinLadderProps) {
+export function WinLadder({ state, hrefs, shareSlot }: WinLadderProps) {
   return (
     <section className="rounded-2xl border border-border/70 bg-card/40 p-5 space-y-4">
       <div className="space-y-1">
@@ -134,12 +139,24 @@ export function WinLadder({ state, hrefs }: WinLadderProps) {
                     ) : null}
 
                     {step.id === "go_live" ? (
-                      <Link
-                        href={hrefs.domainUrl}
-                        className="text-xs font-medium text-primary underline underline-offset-4 hover:text-primary/80"
-                      >
-                        Share your site + connect your domain →
-                      </Link>
+                      shareSlot ? (
+                        <div className="w-full space-y-2">
+                          {shareSlot}
+                          <Link
+                            href={hrefs.domainUrl}
+                            className="text-xs font-medium text-primary underline underline-offset-4 hover:text-primary/80"
+                          >
+                            Connect your domain →
+                          </Link>
+                        </div>
+                      ) : (
+                        <Link
+                          href={hrefs.domainUrl}
+                          className="text-xs font-medium text-primary underline underline-offset-4 hover:text-primary/80"
+                        >
+                          Share your site + connect your domain →
+                        </Link>
+                      )
                     ) : null}
 
                     {step.id === "hire_agent" ? (
