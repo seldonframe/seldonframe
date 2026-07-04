@@ -42,3 +42,13 @@ test("cache key: sha256 hex, stable, null for invalid", () => {
   assert.equal(a, b);
   assert.equal(urlExtractionCacheKey("%%"), null);
 });
+
+test("resolveWebBuildRateLimit: env override with strict fallback", async () => {
+  const { resolveWebBuildRateLimit, WEB_BUILD_RATE_LIMIT } = await import("@/lib/web-build/policy");
+  assert.equal(resolveWebBuildRateLimit({}), WEB_BUILD_RATE_LIMIT);
+  assert.equal(resolveWebBuildRateLimit({ SF_WEB_BUILD_RATE_LIMIT: "25" }), 25);
+  assert.equal(resolveWebBuildRateLimit({ SF_WEB_BUILD_RATE_LIMIT: "0" }), WEB_BUILD_RATE_LIMIT);
+  assert.equal(resolveWebBuildRateLimit({ SF_WEB_BUILD_RATE_LIMIT: "-5" }), WEB_BUILD_RATE_LIMIT);
+  assert.equal(resolveWebBuildRateLimit({ SF_WEB_BUILD_RATE_LIMIT: "abc" }), WEB_BUILD_RATE_LIMIT);
+  assert.equal(resolveWebBuildRateLimit({ SF_WEB_BUILD_RATE_LIMIT: "1e9" }), WEB_BUILD_RATE_LIMIT);
+});

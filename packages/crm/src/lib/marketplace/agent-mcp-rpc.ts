@@ -164,16 +164,21 @@ export function buildAskToolDescriptor(input: {
     },
     // `ask` runs the LIVE agent loop on the owner's compute + workspace, which
     // WRITES conversation rows under the seller org (see runStatelessAgentTurn)
-    // — not read-only. It stays non-destructive because the workspace-stateful
-    // tools it could reach (book_appointment, CRM writes, etc.) are additive/
-    // scheduling actions, not deletions, and it hits the owner's own LLM +
-    // workspace rather than an arbitrary external system, so it's closed-world.
+    // — not read-only. destructiveHint is TRUE (2026-07-04 annotation review):
+    // the reachable tool surface is blueprint-driven — a published agent whose
+    // capabilities include cancel_appointment can flip bookings.status to
+    // 'cancelled', and blueprint.connectors flow into the SAME
+    // getToolsForCapabilities call (Composio send/delete-capable actions —
+    // the surface `run` honestly marks destructive). The in-band read-back/
+    // confirmed gate is LLM courtesy, not a server-side barrier. openWorldHint
+    // is likewise TRUE via connector-bound external actions. Truthful worst
+    // case beats favorable — same posture as `run`.
     annotations: {
       title: "Ask the Agent",
       readOnlyHint: false,
-      destructiveHint: false,
+      destructiveHint: true,
       idempotentHint: false,
-      openWorldHint: false,
+      openWorldHint: true,
     },
   };
 }
@@ -237,12 +242,14 @@ export function buildGroundToolDescriptor(): McpToolDescriptor {
       required: ["url"],
     },
     // Fetches the visitor's OWN provided website URL to ground a demo — reads
-    // an external page (open-world) and stores a session marker, but performs
-    // no destructive action and isn't safely repeatable-with-no-effect (a
-    // fresh grounding read each time), so it's not idempotent.
+    // an external page (open-world) AND stores a taste-session marker that
+    // later `ask` calls read back. Storing that state is a write, so
+    // readOnlyHint is FALSE (2026-07-04 annotation review — the earlier `true`
+    // contradicted this very comment). No destructive action; not idempotent
+    // (a fresh grounding read + new session each call).
     annotations: {
       title: "Ground on My Business",
-      readOnlyHint: true,
+      readOnlyHint: false,
       destructiveHint: false,
       idempotentHint: false,
       openWorldHint: true,

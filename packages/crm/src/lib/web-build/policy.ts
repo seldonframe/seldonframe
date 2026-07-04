@@ -12,3 +12,22 @@ export function isWebUngatedBuildOn(env: {
 }): boolean {
   return env.SF_WEB_UNGATED_BUILD?.trim() === "1";
 }
+
+/**
+ * Per-IP daily build cap, env-overridable (2026-07-04): `SF_WEB_BUILD_RATE_LIMIT`
+ * lets ops raise/lower the cap (e.g. founder testing bursts) without a code
+ * change — a redeploy picks up the new value. Falls back to the compiled
+ * WEB_BUILD_RATE_LIMIT (3) on absent/invalid/non-positive values, so a typo'd
+ * env can never open an unlimited lane.
+ */
+export function resolveWebBuildRateLimit(env: {
+  SF_WEB_BUILD_RATE_LIMIT?: string | undefined;
+}): number {
+  const raw = env.SF_WEB_BUILD_RATE_LIMIT?.trim();
+  if (!raw) return WEB_BUILD_RATE_LIMIT;
+  const parsed = Number.parseInt(raw, 10);
+  if (!Number.isFinite(parsed) || parsed <= 0 || String(parsed) !== raw) {
+    return WEB_BUILD_RATE_LIMIT;
+  }
+  return parsed;
+}

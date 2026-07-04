@@ -24,6 +24,7 @@ import assert from "node:assert/strict";
 import {
   parseJsonRpcRequest,
   buildAskToolDescriptor,
+  buildGroundToolDescriptor,
   buildInitializeResult,
   buildToolsListResult,
   buildTasteToolsListResult,
@@ -465,9 +466,20 @@ describe("MCP tool annotations — claude.ai connector-directory prereq", () => 
     }
   });
 
-  test("ask is not read-only (it writes conversation rows) but is non-destructive", () => {
+  test("ask is not read-only AND is honestly marked destructive (blueprint can reach cancel_appointment + connector actions)", () => {
     const tool = buildAskToolDescriptor({ agentName: "Sunset Receptionist", capabilities: ["book_appointment"] });
     assert.equal(tool.annotations?.readOnlyHint, false);
+    // 2026-07-04 annotation review: the reachable tool surface is blueprint-
+    // driven (cancel_appointment flips bookings.status; connectors reach
+    // Composio actions) — same worst-case posture as the /v1 `run` tool.
+    assert.equal(tool.annotations?.destructiveHint, true);
+    assert.equal(tool.annotations?.openWorldHint, true);
+  });
+
+  test("ground_on_my_business is NOT read-only (it stores the taste-session marker)", () => {
+    const tool = buildGroundToolDescriptor();
+    assert.equal(tool.annotations?.readOnlyHint, false);
     assert.equal(tool.annotations?.destructiveHint, false);
+    assert.equal(tool.annotations?.openWorldHint, true);
   });
 });

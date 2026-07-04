@@ -54,7 +54,7 @@ import { autoCreateWebsiteChatbot } from "@/lib/agents/auto-create-website-chatb
 import { withUrlExtractionCache } from "@/lib/web-build/cached-extraction";
 import {
   isWebUngatedBuildOn,
-  WEB_BUILD_RATE_LIMIT,
+  resolveWebBuildRateLimit,
   WEB_BUILD_RATE_WINDOW_MS,
   WEB_UNGATED_ORIGIN,
 } from "@/lib/web-build/policy";
@@ -196,7 +196,11 @@ export async function GET(request: Request): Promise<Response> {
   const ip = getClientIp(request);
 
   const gate = await resolveWebBuildGate({ SF_WEB_UNGATED_BUILD: process.env.SF_WEB_UNGATED_BUILD }, ip, () =>
-    checkRateLimit(`web-build:${ip}`, WEB_BUILD_RATE_LIMIT, WEB_BUILD_RATE_WINDOW_MS),
+    checkRateLimit(
+      `web-build:${ip}`,
+      resolveWebBuildRateLimit({ SF_WEB_BUILD_RATE_LIMIT: process.env.SF_WEB_BUILD_RATE_LIMIT }),
+      WEB_BUILD_RATE_WINDOW_MS,
+    ),
   );
 
   if (gate.kind === "not_found") {
@@ -218,6 +222,13 @@ export async function GET(request: Request): Promise<Response> {
   // Firecrawl's hosted infra, so this is defense-in-depth, not a live hole.
   // Normalize schemeless pastes ("acme.com") the same way url-cache-key does,
   // and keep the rejection message generic (SsrfBlockedError contract).
+  //
+  // 2026-07-04 prod bug: the normalized `candidate` was used ONLY for the SSRF
+  // check while the RAW schemeless string went to the orchestrator, which
+  // rejects it (generic "Something broke" for any schemeless direct paste on
+  // /try — the hero always passed full https URLs, masking it). The build must
+  // receive the SAME normalized URL we vetted.
+  let buildUrl = url;
   if (url) {
     const trimmed = url.trim();
     const candidate = /^[a-z][a-z0-9+.-]*:\/\//i.test(trimmed) ? trimmed : `https://${trimmed}`;
@@ -232,7 +243,8 @@ export async function GET(request: Request): Promise<Response> {
       sse.close();
       return new Response(sse.stream, { headers: SSE_RESPONSE_HEADERS });
     }
+    buildUrl = candidate;
   }
 
-  return runAnonymousBuild(url);
+  return runAnonymousBuild(buildUrl);
 }
