@@ -269,8 +269,34 @@ export function TryClient({ initialUrl }: { initialUrl: string }) {
               </div>
             ) : null}
 
+            {/* BuildAnimation's stage (build-stage-v2.tsx's .sb-stage) is
+                `height: 100%; overflow: hidden` on its own root — it clips
+                rather than scrolls, so this wrapper must be tall enough to
+                fit the stage's actual rendered content, not just whatever
+                viewport slice we hand it. The stage only switches to a
+                side-by-side two-column layout (.sb-canvas) above 1100px of
+                its OWN container width; this box is capped at
+                `max-w-[720px]` at every Tailwind breakpoint (sm/md/lg/xl),
+                so it never reaches that threshold — the mock panel and the
+                phase-narration side panel always stack into one column
+                here, on both mobile and desktop. That stacked total is:
+                the mock's own 520px min-height, plus the narration panel
+                (biz header ~80px + 6 ticker rows ~330px + footer ~30px)
+                ~440px more — roughly 960px. `min-h-[1000px]` covers that
+                with margin so nothing clips, at every breakpoint (no
+                `lg:` split, since the layout doesn't change with width
+                here).
+                Full-bleed (edge-to-edge, no rounded corners) below `sm`
+                mirrors /clients/new's full-bleed canvas so the mock's own
+                internal padding is the only inset; `sm:` restores the
+                card treatment (border-radius, margins) once there's room.
+                The outer <main> is `min-h-screen` (not viewport-locked
+                like /clients/new's dashboard shell), so this fixed
+                min-height just makes the page taller on short viewports —
+                the reveal state and any error/retry UI below it stay
+                reachable via normal page scroll. */}
             {phase === "building" ? (
-              <div className="relative mt-8 h-[560px] w-full max-w-[720px] overflow-hidden rounded-[18px] border border-[rgba(34,29,23,.14)] bg-[#111814]">
+              <div className="relative -mx-5 mt-8 min-h-[1000px] w-[calc(100%+2.5rem)] overflow-hidden border border-[rgba(34,29,23,.14)] bg-[#111814] sm:mx-0 sm:w-full sm:max-w-[720px] sm:rounded-[18px]">
                 <BuildAnimation active={phase === "building"} input={buildInput} eventSource={eventSource} />
               </div>
             ) : null}

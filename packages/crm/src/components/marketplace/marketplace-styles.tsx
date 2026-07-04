@@ -47,6 +47,14 @@ const CSS = `
     .sf-mkt-nav{padding:0 16px !important;gap:14px !important}
     .sf-mkt-navword{display:none !important}
     .sf-mkt-navlinks{margin-left:0 !important;gap:2px !important;overflow-x:auto;-webkit-overflow-scrolling:touch;flex:1 1 auto}
+    /* Nav pills (Browse/By industry/Studio/Sell) have no white-space rule in
+       the desktop inline style, so once the flex row above shrinks them
+       below their own text width, "By industry" wraps to two lines,
+       pushing the row taller and visually colliding with the logo above
+       and the SF avatar to the right. nowrap + horizontal scroll (from
+       .sf-mkt-navlinks's overflow-x:auto) is the fix: the row stays a
+       single line and scrolls sideways instead of wrapping vertically. */
+    .sf-mkt-navlinks a{white-space:nowrap !important}
     .sf-mkt-navsearch{display:none !important}
     .sf-foot-grid{grid-template-columns:1fr 1fr !important;gap:26px !important;padding:40px 20px 32px !important}
     .sf-foot-bottom{padding:16px 20px !important}
