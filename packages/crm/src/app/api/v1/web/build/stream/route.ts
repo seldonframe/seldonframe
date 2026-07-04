@@ -59,9 +59,13 @@ import {
   WEB_UNGATED_ORIGIN,
 } from "@/lib/web-build/policy";
 import { checkRateLimit } from "@/lib/utils/rate-limit";
+import { assertPublicHttpUrl } from "@/lib/security/ssrf-guard";
 import { createSseStream, SSE_RESPONSE_HEADERS } from "@/lib/web-onboarding/sse";
 
 export const dynamic = "force-dynamic";
+// Pin Node.js runtime (drizzle + node:crypto + SDKs) — matches the authed
+// sibling route; guards against an accidental Edge default (final review 2026-07-04).
+export const runtime = "nodejs";
 
 export type WebBuildGateResult =
   | { kind: "not_found" }
@@ -207,6 +211,27 @@ export async function GET(request: Request): Promise<Response> {
     });
     sse.close();
     return new Response(sse.stream, { headers: SSE_RESPONSE_HEADERS });
+  }
+
+  // SSRF hardening on the now-public path (final review 2026-07-04): resolve +
+  // vet the pasted URL before any pipeline work. The actual scrape runs on
+  // Firecrawl's hosted infra, so this is defense-in-depth, not a live hole.
+  // Normalize schemeless pastes ("acme.com") the same way url-cache-key does,
+  // and keep the rejection message generic (SsrfBlockedError contract).
+  if (url) {
+    const trimmed = url.trim();
+    const candidate = /^[a-z][a-z0-9+.-]*:\/\//i.test(trimmed) ? trimmed : `https://${trimmed}`;
+    try {
+      await assertPublicHttpUrl(candidate);
+    } catch {
+      const sse = createSseStream();
+      sse.emit("error", {
+        code: "invalid_url",
+        message: "That URL can't be reached — double-check it and try again.",
+      });
+      sse.close();
+      return new Response(sse.stream, { headers: SSE_RESPONSE_HEADERS });
+    }
   }
 
   return runAnonymousBuild(url);
