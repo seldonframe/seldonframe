@@ -83,7 +83,10 @@ export type RunDeps = {
    * (status:'test' so it responds immediately). Non-fatal — see
    * runCreateFromUrl impl for the try/catch.
    */
-  createWebsiteChatbot: (args: { workspaceId: string; workspaceSlug: string }) => Promise<unknown>;
+  createWebsiteChatbot: (args: {
+    workspaceId: string;
+    workspaceSlug: string;
+  }) => Promise<{ ok: boolean; embedUrl?: string } | unknown>;
   /**
    * 2026-05-17 — auto-seed a contact row in the AGENCY's own CRM
    * representing the new client SMB (Rain Pros, Seattle Heating, etc.).
@@ -149,6 +152,18 @@ export type RunInput = {
     canonicalAgent?: string;
   };
   sessionUser: { id: string; primaryOrgId: string | null } | null;
+  /**
+   * 2026-07-03 — set ONLY by the public/anonymous web-build route
+   * (api/v1/web/build/stream). When true, the `done` SSE event carries
+   * an additional one-time claim grant: { ws_id, slug, public_home_url,
+   * chatbot_embed_url, claim_token }. claim_token is the workspace's
+   * internal MCP bearer token (createFullWorkspace's `_bearer_token`) —
+   * safe to hand to the anonymous builder ONCE here because they have no
+   * other way to authenticate against the workspace they just built
+   * (there is no session). The authed route NEVER sets this flag, so its
+   * `done` event shape is byte-identical to before this change.
+   */
+  includeClaimGrant?: boolean;
 };
 
 export type RunResult = {
@@ -162,8 +177,13 @@ export async function runCreateFromUrl(input: RunInput): Promise<RunResult> {
   // Drive in the background so the response can return immediately.
   (async () => {
     try {
-      // 1. Auth gate
-      if (!input.sessionUser) {
+      // 1. Auth gate. The ONLY caller allowed to pass sessionUser: null is
+      //    the public/anonymous web-build route (api/v1/web/build/stream),
+      //    and it must ALSO set includeClaimGrant: true — that's how this
+      //    orchestrator tells "legitimately anonymous" apart from "the
+      //    authed route forgot to resolve a session". Any other null
+      //    sessionUser still 401s exactly as before.
+      if (!input.sessionUser && !input.includeClaimGrant) {
         sse.error(401, { reason: "unauthorized" });
         sse.close();
         return;
@@ -177,23 +197,29 @@ export async function runCreateFromUrl(input: RunInput): Promise<RunResult> {
         return;
       }
 
-      // 3. Workspace limit (uses REAL enforceWorkspaceLimit from lib/billing/limits.ts)
-      const ownedCount = await input.deps.getOwnedWorkspaceCount(input.sessionUser.id);
-      const decision = await input.deps.enforceWorkspaceLimit({
-        primaryOrgId: input.sessionUser.primaryOrgId,
-        ownedWorkspaceCount: ownedCount,
-      });
-      if (!decision.allowed) {
-        sse.error(402, {
-          reason: decision.reason,
-          message: decision.message,
-          upgradeUrl: decision.upgradeUrl,
-          used: decision.used,
-          limit: decision.limit,
-          tier: decision.tier,
+      // 3. Workspace limit (uses REAL enforceWorkspaceLimit from
+      //    lib/billing/limits.ts). Anonymous builds (no sessionUser) have
+      //    no user to count owned workspaces against — the public route's
+      //    own per-IP rate limit (resolveWebBuildGate) is the guardrail
+      //    for that path instead, so this whole step is skipped.
+      if (input.sessionUser) {
+        const ownedCount = await input.deps.getOwnedWorkspaceCount(input.sessionUser.id);
+        const decision = await input.deps.enforceWorkspaceLimit({
+          primaryOrgId: input.sessionUser.primaryOrgId,
+          ownedWorkspaceCount: ownedCount,
         });
-        sse.close();
-        return;
+        if (!decision.allowed) {
+          sse.error(402, {
+            reason: decision.reason,
+            message: decision.message,
+            upgradeUrl: decision.upgradeUrl,
+            used: decision.used,
+            limit: decision.limit,
+            tier: decision.tier,
+          });
+          sse.close();
+          return;
+        }
       }
 
       // 4. Resolve the extraction key — MANAGED AI for all paid tiers.
@@ -202,7 +228,7 @@ export async function runCreateFromUrl(input: RunInput): Promise<RunResult> {
       //    absence of any key (managed AI unconfigured on this
       //    deployment) blocks the flow, and it surfaces as a non-BYOK
       //    `extraction_unavailable` error.
-      const extraction = await input.deps.resolveExtractionKey(input.sessionUser.primaryOrgId);
+      const extraction = await input.deps.resolveExtractionKey(input.sessionUser?.primaryOrgId ?? null);
       if (!extraction) {
         sse.error(503, {
           reason: "extraction_unavailable",
@@ -239,6 +265,10 @@ export async function runCreateFromUrl(input: RunInput): Promise<RunResult> {
         return;
       }
 
+      // Captured only for the claim-grant done payload (see includeClaimGrant
+      // above) — the authed route's done event never reads this.
+      let chatbotEmbedUrl: string | undefined;
+
       // 7. Link the new workspace to the operator. createAnonymousWorkspace
       //    inserts the org with ownerId=null + no org_members row, which
       //    made sense in the MCP claim flow but breaks the web-onboarding
@@ -254,17 +284,23 @@ export async function runCreateFromUrl(input: RunInput): Promise<RunResult> {
       // the success variant. Guard explicitly so TS is happy and so a
       // malformed `ready` response (no id) doesn't crash the SSE thread.
       if (result.workspace_id) {
-        try {
-          await input.deps.linkWorkspaceToOperator(result.workspace_id, input.sessionUser.id);
-        } catch (err) {
-          console.warn(
-            JSON.stringify({
-              event: "link_workspace_to_operator_failed",
-              user_id: input.sessionUser.id,
-              workspace_id: result.workspace_id,
-              detail: err instanceof Error ? err.message : String(err),
-            }),
-          );
+        // Anonymous builds have no operator user to link as owner yet —
+        // ownership is granted later via the claim flow (claim_token in
+        // the done event below), so this step only runs for authed
+        // sessions.
+        if (input.sessionUser) {
+          try {
+            await input.deps.linkWorkspaceToOperator(result.workspace_id, input.sessionUser.id);
+          } catch (err) {
+            console.warn(
+              JSON.stringify({
+                event: "link_workspace_to_operator_failed",
+                user_id: input.sessionUser.id,
+                workspace_id: result.workspace_id,
+                detail: err instanceof Error ? err.message : String(err),
+              }),
+            );
+          }
         }
 
         // 7b. Auto-create the website-chatbot agent for the new workspace.
@@ -277,12 +313,23 @@ export async function runCreateFromUrl(input: RunInput): Promise<RunResult> {
         //
         //     Non-fatal: a failure here just means the Ready hub renders
         //     the "Create chatbot" CTA fallback instead of the test link;
-        //     the workspace is still usable.
+        //     the workspace is still usable. The embedUrl is captured (when
+        //     present) purely so the public web-build route's claim-grant
+        //     done payload can surface chatbot_embed_url — the authed route
+        //     never reads chatbotEmbedUrl.
         try {
-          await input.deps.createWebsiteChatbot({
+          const chatbotResult = await input.deps.createWebsiteChatbot({
             workspaceId: result.workspace_id,
             workspaceSlug: result.slug ?? result.workspace_id,
           });
+          if (
+            chatbotResult &&
+            typeof chatbotResult === "object" &&
+            "embedUrl" in chatbotResult &&
+            typeof (chatbotResult as { embedUrl?: unknown }).embedUrl === "string"
+          ) {
+            chatbotEmbedUrl = (chatbotResult as { embedUrl: string }).embedUrl;
+          }
         } catch (err) {
           console.warn(
             JSON.stringify({
@@ -380,7 +427,7 @@ export async function runCreateFromUrl(input: RunInput): Promise<RunResult> {
         //     log activities, etc. — SeldonFrame becomes a real business
         //     OS for the agency, not just a tool for managing client
         //     workspaces in isolation. Idempotent + non-fatal.
-        if (input.sessionUser.primaryOrgId) {
+        if (input.sessionUser?.primaryOrgId) {
           try {
             await input.deps.seedClientContactInAgencyCrm({
               agencyOrgId: input.sessionUser.primaryOrgId,
@@ -478,7 +525,7 @@ export async function runCreateFromUrl(input: RunInput): Promise<RunResult> {
       //    Idempotent — safe to call every time. Wrapped in try/catch
       //    because a failure here must not block the user from reaching
       //    their freshly-created workspace; we just log + continue.
-      if (input.sessionUser.primaryOrgId) {
+      if (input.sessionUser?.primaryOrgId) {
         try {
           await input.deps.markOperatorOnboarded(
             input.sessionUser.primaryOrgId,
@@ -502,11 +549,28 @@ export async function runCreateFromUrl(input: RunInput): Promise<RunResult> {
       //    with correct slug-scoped links + next-step guidance, instead
       //    of dumping the operator into the empty agency dashboard. See
       //    app/(dashboard)/clients/[slug]/ready/page.tsx.
+      //
+      // includeClaimGrant (public web-build route ONLY — see the RunInput
+      // doc comment): extend the done payload with the one-time claim
+      // grant the anonymous builder needs to claim the workspace later.
+      // ws_id/slug/public_home_url/chatbot_embed_url/claim_token are
+      // ADDITIONAL fields alongside the existing workspaceId/slug/
+      // dashboardUrl/publicHomeUrl — the authed route's shape is
+      // untouched because it never sets includeClaimGrant.
       sse.emit("done", {
         workspaceId: result.workspace_id,
         slug: result.slug,
         dashboardUrl: `/clients/${result.slug}/ready`,
         publicHomeUrl: result.public_urls?.home,
+        ...(input.includeClaimGrant
+          ? {
+              ws_id: result.workspace_id,
+              slug: result.slug,
+              public_home_url: result.public_urls?.home,
+              chatbot_embed_url: chatbotEmbedUrl,
+              claim_token: result._bearer_token,
+            }
+          : {}),
       });
       sse.close();
     } catch (err: unknown) {
