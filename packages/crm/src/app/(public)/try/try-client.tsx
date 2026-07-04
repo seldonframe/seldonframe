@@ -286,6 +286,43 @@ function RevealPanel({ done, onStartOver }: { done: DoneData; onStartOver: () =>
     "/signup?callbackUrl=" +
     encodeURIComponent(`/claim-build?ws=${done.ws_id}&token=${done.claim_token}`);
 
+  // `chatbot_embed_url` points at .../embed.js (see
+  // packages/crm/src/app/api/v1/public/agent/[slug]/embed.js/route.ts) —
+  // a Content-Type: application/javascript response, NOT an HTML page.
+  // There is no standalone public HTML chat surface today (confirmed:
+  // workspace/v2/complete's `chatbot.preview_url` is just the workspace
+  // home page URL, which the same embed.js bubble is injected onto — see
+  // packages/crm/src/lib/agents/store.ts's embedUrl construction and
+  // complete/route.ts). Iframing embed.js renders raw script text, so
+  // instead of an iframe we inject the script directly into this page's
+  // DOM on reveal, exactly like an operator would on their own site.
+  useEffect(() => {
+    const script = document.createElement("script");
+    script.src = done.chatbot_embed_url;
+    script.async = true;
+    script.setAttribute("data-sf-try-reveal-embed", "1");
+    document.body.appendChild(script);
+
+    return () => {
+      // Mirror embed.js's own DOM footprint (route.ts's renderEmbedScript):
+      // a <style>, an optional Google Fonts <link data-sf-agent-fonts="1">,
+      // a `.sf-agent-bubble` button, and a `.sf-agent-panel` div — all
+      // appended directly to document.body/head with no wrapper element.
+      // Clean up all of it plus the load guard so "Start over" (which
+      // remounts this component on the next reveal) can re-inject a fresh
+      // widget instead of no-op'ing on window.__sf_agent_loaded__.
+      script.remove();
+      document.querySelectorAll(".sf-agent-bubble, .sf-agent-panel").forEach((el) => el.remove());
+      document.querySelectorAll('link[data-sf-agent-fonts="1"]').forEach((el) => el.remove());
+      document
+        .querySelectorAll("style")
+        .forEach((el) => {
+          if (el.textContent?.includes(".sf-agent-bubble")) el.remove();
+        });
+      delete (window as unknown as { __sf_agent_loaded__?: boolean }).__sf_agent_loaded__;
+    };
+  }, [done.chatbot_embed_url]);
+
   return (
     <div className="flex flex-col items-center text-center">
       <p className="inline-flex items-center gap-2.5 font-sans text-[12.5px] tracking-[0.04em] text-[#6E665A]">
@@ -313,13 +350,17 @@ function RevealPanel({ done, onStartOver }: { done: DoneData; onStartOver: () =>
         </div>
         <div className="flex flex-1 flex-col gap-2">
           <span className="text-left text-[12px] font-[600] uppercase tracking-[0.06em] text-[#6E665A]">
-            Talk to your new AI receptionist — ask it anything about your business
+            Talk to your new AI receptionist
           </span>
-          <iframe
-            src={done.chatbot_embed_url}
-            title="Talk to your new AI receptionist — ask it anything about your business"
-            className="h-[480px] w-full rounded-[14px] border border-[rgba(34,29,23,.14)] bg-white"
-          />
+          <div className="flex h-[480px] w-full flex-col items-center justify-center gap-3 rounded-[14px] border border-[rgba(34,29,23,.14)] bg-white p-8 text-center">
+            <span className="inline-flex size-11 items-center justify-center rounded-full bg-[#1F2B24] text-[#F6F2EA]" aria-hidden>
+              <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M8 9h8" /><path d="M8 13h6" /><path d="M9 18h-3a3 3 0 0 1 -3 -3v-8a3 3 0 0 1 3 -3h12a3 3 0 0 1 3 3v8a3 3 0 0 1 -3 3h-3l-3 3l-3 -3z" /></svg>
+            </span>
+            <p className="max-w-[36ch] text-[15px] leading-[1.5] text-[#221D17]">
+              Your AI receptionist is live — click the chat bubble in the corner and ask it
+              anything about your business.
+            </p>
+          </div>
         </div>
       </div>
 
