@@ -1,36 +1,47 @@
 // v1.35.x — Super-admin activation funnel.
+// Task 10 rewrite — signup → workspace → built → tested (P3).
 //
 // Answers "I have signups but I don't know if they're building or
-// using anything." The funnel is in WORKSPACE (organization) units so
-// it's monotonic — each stage is a distinct-org count, top-of-funnel
-// is total organizations, and every stage's % is "of all workspaces":
+// using anything." Earlier versions were workspace-unit and mixed
+// paying/connections into the funnel body; this version is the
+// literal customer journey, in ACCOUNT/WORKSPACE units per stage:
 //
-//   Workspaces          count(organizations) — funnel top.
-//   Built an agent       Distinct orgs with >=1 agent OR >=1 agent
-//                        template (a builder org counts too).
-//   Active · 30d         Distinct orgs with >=1 agent conversation
-//                        started in the last 30 days.
-//   Paying               Users on a paid plan (PAID_PLAN_IDS, reused
-//                        from metrics.ts). This is accounts, not
-//                        orgs — the funnel's terminal money stage.
+//   Signups              count(users) — funnel top.
+//   Created a workspace  Distinct users who own >=1 organization.
+//   Built an agent       Distinct orgs (owned) with >=1 agent.
+//   Tested an agent      Distinct orgs (owned) with >=1 agent
+//                        conversation OR >=1 agent eval run.
 //
-// Alongside the funnel: IDE-connection health (api_keys minted vs.
-// ever used) — the "connected but never built" activation gap.
+// Every stage's % is "of Signups" (ofTotalPct), not of the previous
+// stage — this keeps the funnel readable as a single scan.
+//
+// SeldonFrame's own team + agency workspaces (demo/QA/preview-pitch
+// orgs) are excluded by default via internal-exclusion.ts so the
+// funnel reflects real customer activation, not internal noise.
+// Pass { includeInternal: true } to see the unfiltered picture.
+//
+// Alongside the funnel: `paying` (top-level, not a stage — it's
+// accounts on a paid plan, not part of the workspace journey) and
+// `connections` — IDE-connection health (api_keys minted vs. ever
+// used), the "connected but never built" activation gap.
 //
 // Same pattern as metrics.ts: single-SELECT queries, unstable_cache
 // TTL 300s, every getter .catch-guarded to a zero default so one bad
-// query never 500s the page.
+// query never 500s the page. Cache keys are suffixed `:ext` (excluding
+// internal, the default) / `:all` (includeInternal: true) so the two
+// modes never collide in the cache.
 
-import { sql, gte, count, countDistinct } from "drizzle-orm";
+import { sql, count } from "drizzle-orm";
 import { unstable_cache } from "next/cache";
 import { db } from "@/db";
-import { users, organizations, agentConversations } from "@/db/schema";
+import { users } from "@/db/schema";
 import { PLANS } from "@/lib/billing/plans";
+import { parseInternalIds, internalOrgPredicateSql, type InternalIds } from "./internal-exclusion";
 
 export type FunnelStage = {
   label: string;
   count: number;
-  /** Percent of total workspaces this stage represents (0-100, rounded). */
+  /** Percent of total signups this stage represents (0-100, rounded). */
   ofTotalPct: number;
   /** One-line explanation of what qualifies for this stage. */
   hint: string;
@@ -40,74 +51,154 @@ export type ActivationSummary = {
   signupsTotal: number;
   signupsLast7d: number;
   stages: FunnelStage[];
+  /** Accounts on a paid plan. Not part of the workspace journey funnel. */
+  paying: number;
   connections: {
     minted: number;
     used: number;
     usedPct: number;
   };
+  /** Whether internal (SeldonFrame team/agency/preview) orgs were excluded. */
+  excludedInternal: boolean;
+  /** Count of orgs matching the internal predicate, for context either way. */
+  internalOrgCount: number;
   /** When the data was computed (server time). */
   computedAt: string;
 };
 
 const PAID_PLAN_IDS = PLANS.filter((p) => p.type === "paid").map((p) => p.id);
 
-const getSignupsTotal = unstable_cache(
-  async () => {
-    const [row] = await db.select({ value: count(users.id) }).from(users);
-    return row?.value ?? 0;
-  },
-  ["super-admin:signups-total"],
-  { revalidate: 300, tags: ["super-admin:activation"] }
-);
+function getInternalIds(): InternalIds {
+  return parseInternalIds({
+    SF_INTERNAL_USER_IDS: process.env.SF_INTERNAL_USER_IDS,
+    SF_INTERNAL_AGENCY_ID: process.env.SF_INTERNAL_AGENCY_ID,
+  });
+}
 
-const getSignupsLast7d = unstable_cache(
-  async () => {
-    const sevenDaysAgo = new Date(Date.now() - 7 * 24 * 60 * 60 * 1000);
-    const [row] = await db
-      .select({ value: count(users.id) })
-      .from(users)
-      .where(gte(users.createdAt, sevenDaysAgo));
-    return row?.value ?? 0;
-  },
-  ["super-admin:signups-7d"],
-  { revalidate: 300, tags: ["super-admin:activation"] }
-);
+function cacheSuffix(includeInternal: boolean): "ext" | "all" {
+  return includeInternal ? "all" : "ext";
+}
 
-const getTotalWorkspaces = unstable_cache(
-  async () => {
-    const [row] = await db.select({ value: count(organizations.id) }).from(organizations);
-    return row?.value ?? 0;
-  },
-  ["super-admin:activation-total-workspaces"],
-  { revalidate: 300, tags: ["super-admin:activation"] }
-);
+const getSignupsTotal = (includeInternal: boolean) =>
+  unstable_cache(
+    async () => {
+      const ids = getInternalIds();
+      if (includeInternal || ids.userIds.length === 0) {
+        const [row] = await db.select({ value: count(users.id) }).from(users);
+        return row?.value ?? 0;
+      }
+      const result = await db.execute(sql`
+        SELECT count(*)::int AS c FROM users
+        WHERE NOT (id = ANY(ARRAY[${sql.join(
+          ids.userIds.map((id) => sql`${id}`),
+          sql`, `,
+        )}]::uuid[]))
+      `);
+      return Number((result.rows?.[0] as { c: number } | undefined)?.c ?? 0);
+    },
+    [`super-admin:signups-total:${cacheSuffix(includeInternal)}`],
+    { revalidate: 300, tags: ["super-admin:activation"] },
+  )();
 
-const getBuiltOrgsCount = unstable_cache(
+const getSignupsLast7d = (includeInternal: boolean) =>
+  unstable_cache(
+    async () => {
+      const ids = getInternalIds();
+      const sevenDaysAgo = new Date(Date.now() - 7 * 24 * 60 * 60 * 1000);
+      if (includeInternal || ids.userIds.length === 0) {
+        const [row] = await db
+          .select({ value: count(users.id) })
+          .from(users)
+          .where(sql`${users.createdAt} >= ${sevenDaysAgo}`);
+        return row?.value ?? 0;
+      }
+      const result = await db.execute(sql`
+        SELECT count(*)::int AS c FROM users
+        WHERE created_at >= ${sevenDaysAgo}
+          AND NOT (id = ANY(ARRAY[${sql.join(
+            ids.userIds.map((id) => sql`${id}`),
+            sql`, `,
+          )}]::uuid[]))
+      `);
+      return Number((result.rows?.[0] as { c: number } | undefined)?.c ?? 0);
+    },
+    [`super-admin:signups-7d:${cacheSuffix(includeInternal)}`],
+    { revalidate: 300, tags: ["super-admin:activation"] },
+  )();
+
+/** Distinct users who own >=1 organization (an owned org not internal, when excluding). */
+const getCreatedWorkspaceCount = (includeInternal: boolean) =>
+  unstable_cache(
+    async () => {
+      const ids = getInternalIds();
+      const internalPredicate = includeInternal ? sql`false` : internalOrgPredicateSql(ids);
+      const result = await db.execute(sql`
+        SELECT count(DISTINCT owner_id)::int AS c
+        FROM organizations
+        WHERE owner_id IS NOT NULL
+          AND NOT (${internalPredicate})
+      `);
+      return Number((result.rows?.[0] as { c: number } | undefined)?.c ?? 0);
+    },
+    [`super-admin:created-workspace:${cacheSuffix(includeInternal)}`],
+    { revalidate: 300, tags: ["super-admin:activation"] },
+  )();
+
+/** Distinct owned, non-internal orgs with >=1 agent. */
+const getBuiltAgentOrgCount = (includeInternal: boolean) =>
+  unstable_cache(
+    async () => {
+      const ids = getInternalIds();
+      const internalPredicate = includeInternal ? sql`false` : internalOrgPredicateSql(ids);
+      const result = await db.execute(sql`
+        SELECT count(DISTINCT agents.org_id)::int AS c
+        FROM agents
+        JOIN organizations ON organizations.id = agents.org_id
+        WHERE organizations.owner_id IS NOT NULL
+          AND NOT (${internalPredicate})
+      `);
+      return Number((result.rows?.[0] as { c: number } | undefined)?.c ?? 0);
+    },
+    [`super-admin:built-agent-orgs:${cacheSuffix(includeInternal)}`],
+    { revalidate: 300, tags: ["super-admin:activation"] },
+  )();
+
+/** Distinct owned, non-internal orgs with >=1 conversation OR >=1 eval run. */
+const getTestedAgentOrgCount = (includeInternal: boolean) =>
+  unstable_cache(
+    async () => {
+      const ids = getInternalIds();
+      const internalPredicate = includeInternal ? sql`false` : internalOrgPredicateSql(ids);
+      const result = await db.execute(sql`
+        SELECT count(DISTINCT t.org_id)::int AS c
+        FROM (
+          SELECT org_id FROM agent_conversations
+          UNION
+          SELECT agents.org_id FROM agent_evals
+          JOIN agents ON agents.id = agent_evals.agent_id
+        ) t
+        JOIN organizations ON organizations.id = t.org_id
+        WHERE organizations.owner_id IS NOT NULL
+          AND NOT (${internalPredicate})
+      `);
+      return Number((result.rows?.[0] as { c: number } | undefined)?.c ?? 0);
+    },
+    [`super-admin:tested-agent-orgs:${cacheSuffix(includeInternal)}`],
+    { revalidate: 300, tags: ["super-admin:activation"] },
+  )();
+
+/** Count of orgs matching the internal predicate (context stat, always computed). */
+const getInternalOrgCount = unstable_cache(
   async () => {
+    const ids = getInternalIds();
+    const internalPredicate = internalOrgPredicateSql(ids);
     const result = await db.execute(sql`
-      SELECT count(*)::int AS c FROM (
-        SELECT org_id FROM agents
-        UNION
-        SELECT builder_org_id AS org_id FROM agent_templates
-      ) t
+      SELECT count(*)::int AS c FROM organizations WHERE (${internalPredicate})
     `);
     return Number((result.rows?.[0] as { c: number } | undefined)?.c ?? 0);
   },
-  ["super-admin:built-orgs"],
-  { revalidate: 300, tags: ["super-admin:activation"] }
-);
-
-const getActiveOrgsLast30d = unstable_cache(
-  async () => {
-    const thirtyDaysAgo = new Date(Date.now() - 30 * 24 * 60 * 60 * 1000);
-    const [row] = await db
-      .select({ value: countDistinct(agentConversations.orgId) })
-      .from(agentConversations)
-      .where(gte(agentConversations.startedAt, thirtyDaysAgo));
-    return row?.value ?? 0;
-  },
-  ["super-admin:active-orgs-30d"],
-  { revalidate: 300, tags: ["super-admin:activation"] }
+  ["super-admin:internal-org-count"],
+  { revalidate: 300, tags: ["super-admin:activation"] },
 );
 
 const getPayingAccounts = unstable_cache(
@@ -120,7 +211,7 @@ const getPayingAccounts = unstable_cache(
     return row?.value ?? 0;
   },
   ["super-admin:paying-accounts"],
-  { revalidate: 300, tags: ["super-admin:activation"] }
+  { revalidate: 300, tags: ["super-admin:activation"] },
 );
 
 const getConnectionsHealth = unstable_cache(
@@ -147,49 +238,53 @@ function pct(part: number, whole: number): number {
   return Math.round((part / whole) * 100);
 }
 
-export async function getActivationFunnel(): Promise<ActivationSummary> {
+export async function getActivationFunnel(opts?: { includeInternal?: boolean }): Promise<ActivationSummary> {
+  const includeInternal = opts?.includeInternal ?? false;
+
   const [
     signupsTotal,
     signupsLast7d,
-    totalWorkspaces,
-    builtOrgs,
-    activeOrgs30d,
+    createdWorkspace,
+    builtAgentOrgs,
+    testedAgentOrgs,
+    internalOrgCount,
     payingAccounts,
     connections,
   ] = await Promise.all([
-    getSignupsTotal().catch(() => 0),
-    getSignupsLast7d().catch(() => 0),
-    getTotalWorkspaces().catch(() => 0),
-    getBuiltOrgsCount().catch(() => 0),
-    getActiveOrgsLast30d().catch(() => 0),
+    getSignupsTotal(includeInternal).catch(() => 0),
+    getSignupsLast7d(includeInternal).catch(() => 0),
+    getCreatedWorkspaceCount(includeInternal).catch(() => 0),
+    getBuiltAgentOrgCount(includeInternal).catch(() => 0),
+    getTestedAgentOrgCount(includeInternal).catch(() => 0),
+    getInternalOrgCount().catch(() => 0),
     getPayingAccounts().catch(() => 0),
     getConnectionsHealth().catch(() => ({ minted: 0, used: 0 })),
   ]);
 
   const stages: FunnelStage[] = [
     {
-      label: "Workspaces",
-      count: totalWorkspaces,
+      label: "Signups",
+      count: signupsTotal,
       ofTotalPct: 100,
-      hint: "total organizations",
+      hint: "total signed-up users",
+    },
+    {
+      label: "Created a workspace",
+      count: createdWorkspace,
+      ofTotalPct: pct(createdWorkspace, signupsTotal),
+      hint: "owns >= 1 organization",
     },
     {
       label: "Built an agent",
-      count: builtOrgs,
-      ofTotalPct: pct(builtOrgs, totalWorkspaces),
-      hint: "created ≥ 1 agent or template",
+      count: builtAgentOrgs,
+      ofTotalPct: pct(builtAgentOrgs, signupsTotal),
+      hint: "owned workspace with >= 1 agent",
     },
     {
-      label: "Active · 30d",
-      count: activeOrgs30d,
-      ofTotalPct: pct(activeOrgs30d, totalWorkspaces),
-      hint: "had a real conversation in 30d",
-    },
-    {
-      label: "Paying",
-      count: payingAccounts,
-      ofTotalPct: pct(payingAccounts, totalWorkspaces),
-      hint: "paying accounts — on a paid plan",
+      label: "Tested an agent",
+      count: testedAgentOrgs,
+      ofTotalPct: pct(testedAgentOrgs, signupsTotal),
+      hint: "owned workspace with >= 1 conversation or eval run",
     },
   ];
 
@@ -197,11 +292,14 @@ export async function getActivationFunnel(): Promise<ActivationSummary> {
     signupsTotal,
     signupsLast7d,
     stages,
+    paying: payingAccounts,
     connections: {
       minted: connections.minted,
       used: connections.used,
       usedPct: pct(connections.used, connections.minted),
     },
+    excludedInternal: !includeInternal,
+    internalOrgCount,
     computedAt: new Date().toISOString(),
   };
 }
