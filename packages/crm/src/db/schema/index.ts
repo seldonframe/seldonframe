@@ -184,3 +184,9 @@ export * from "./oauth";
 // agent_taste_sessions (short-TTL grounding rows keyed by session id). Inert
 // behind SF_AGENT_TASTE_MODE. See docs/superpowers/specs/2026-07-03-agent-taste-mode-design.md.
 export * from "./agent-taste-sessions";
+
+// 2026-07-03 — Web Activation P1: url_extraction_cache (migration 0065).
+// Additive table for caching extraction results keyed by URL hash + kind.
+// Repeat pastes of the same URL skip scrape + LLM entirely (~$0). See
+// lib/web-build/extraction-cache-store.ts.
+export * from "./url-extraction-cache";
