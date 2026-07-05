@@ -85,4 +85,8 @@ describe("isSimpleHomeOn", () => {
   test("false for undefined", () => {
     assert.equal(isSimpleHomeOn({ SF_SIMPLE_HOME: undefined }), false);
   });
+
+  test("true for '1' with surrounding whitespace (env-var paste safety)", () => {
+    assert.equal(isSimpleHomeOn({ SF_SIMPLE_HOME: " 1\n" }), true);
+  });
 });

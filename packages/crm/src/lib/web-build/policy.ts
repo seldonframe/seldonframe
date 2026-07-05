@@ -41,5 +41,5 @@ export function isWinLadderOn(env: { SF_WIN_LADDER?: string | undefined }): bool
 /** Simple-home module registry flag (2026-07-05). Same strict-"1" contract as
  *  isWinLadderOn: anything else keeps the simplified surface dark. */
 export function isSimpleHomeOn(env: { SF_SIMPLE_HOME?: string | undefined }): boolean {
-  return env.SF_SIMPLE_HOME === "1";
+  return env.SF_SIMPLE_HOME?.trim() === "1";
 }
