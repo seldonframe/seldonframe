@@ -310,7 +310,20 @@ export default async function DashboardLayout({
               primaryOrgId={user?.orgId ?? null}
               enabledModules={enabledModules}
             />
-            <div className="min-h-screen min-w-0 flex-1 overflow-y-auto px-4 py-4 sm:px-6 sm:py-6 lg:px-8 lg:py-8">
+            {/* overflow-x-clip (not overflow-x-hidden): overflow-y-auto here
+                also computes overflow-x to `auto` per CSS's overflow
+                shorthand rules, making this column independently
+                horizontally-scrollable and defeating the body-level
+                `overflow-x: hidden` guard in globals.css whenever any
+                descendant is even slightly wider than the viewport (e.g.
+                the dashboard's mini-funnel row on narrow phones). `clip`
+                (unlike `hidden`) doesn't turn this into a new scroll
+                container and doesn't affect painting of the topbar's
+                absolutely-positioned popovers, which stay within this
+                column's own box. Desktop is unaffected — the column
+                already fits there, so this is a no-op above the mobile
+                breakpoint. */}
+            <div className="min-h-screen min-w-0 flex-1 overflow-y-auto overflow-x-clip px-4 py-4 sm:px-6 sm:py-6 lg:px-8 lg:py-8">
               <DemoBanner />
               <TestModeBanner testMode={activeOrg?.testMode ?? false} />
               {isSwitchedOrg && activeOrg ? (
