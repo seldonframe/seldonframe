@@ -146,6 +146,135 @@ describe("resolveExternalMedia — image kind", () => {
   });
 });
 
+describe("resolveExternalMedia — redirect handling (SSRF-via-redirect)", () => {
+  test("302 to a private/metadata host is blocked WITHOUT fetching the private target", async () => {
+    // Initial URL passes the guard; the guard is asked again for the
+    // redirect target and must reject it — and the fetch for that private
+    // target must never happen.
+    const PRIVATE_TARGET = "http://169.254.169.254/latest/meta-data/iam/security-credentials/";
+    let assertCalls = 0;
+    const assertPublicHttpUrl = async (rawUrl: string) => {
+      assertCalls++;
+      if (rawUrl === PRIVATE_TARGET) {
+        throw new SsrfBlockedError();
+      }
+      return { url: new URL(rawUrl), ip: "93.184.216.34" };
+    };
+
+    const fetchCalls: string[] = [];
+    const fetchImpl: typeof fetch = async (input) => {
+      const target = String(input);
+      fetchCalls.push(target);
+      if (target === PRIVATE_TARGET) {
+        // Should never be reached — but if the bug regresses, prove it by
+        // returning a "successful" fetch so the test would otherwise pass
+        // straight through the vulnerable path.
+        return {
+          ok: true,
+          status: 200,
+          headers: new Headers({ "content-type": "image/jpeg", "content-length": "1024" }),
+          arrayBuffer: async () => new Uint8Array([1, 2, 3]).buffer,
+        } as unknown as Response;
+      }
+      return {
+        ok: false,
+        status: 302,
+        headers: new Headers({ location: PRIVATE_TARGET }),
+        arrayBuffer: async () => new Uint8Array().buffer,
+      } as unknown as Response;
+    };
+
+    const result = await resolveExternalMedia("https://example.com/redirector", "image", {
+      assertPublicHttpUrl,
+      fetch: fetchImpl,
+    });
+
+    assert.deepEqual(result, { ok: false, error: "unsafe_url" });
+    // The initial URL was vetted, the redirect target was vetted (and
+    // rejected) — but the private target was NEVER fetched.
+    assert.equal(assertCalls, 2);
+    assert.equal(fetchCalls.includes(PRIVATE_TARGET), false);
+    assert.deepEqual(fetchCalls, ["https://example.com/redirector"]);
+  });
+
+  test("302 to a VALID public image URL is followed, re-validated, and re-hosted", async () => {
+    const FINAL_URL = "https://cdn.example.com/photo-final.jpg";
+    const assertedUrls: string[] = [];
+    const assertPublicHttpUrl = async (rawUrl: string) => {
+      assertedUrls.push(rawUrl);
+      return { url: new URL(rawUrl), ip: "93.184.216.34" };
+    };
+
+    const fetchCalls: string[] = [];
+    const fetchImpl: typeof fetch = async (input) => {
+      const target = String(input);
+      fetchCalls.push(target);
+      if (target === "https://example.com/redirector") {
+        return {
+          ok: false,
+          status: 302,
+          headers: new Headers({ location: FINAL_URL }),
+          arrayBuffer: async () => new Uint8Array().buffer,
+        } as unknown as Response;
+      }
+      return {
+        ok: true,
+        status: 200,
+        headers: new Headers({ "content-type": "image/jpeg", "content-length": "1024" }),
+        arrayBuffer: async () => new Uint8Array([1, 2, 3]).buffer,
+      } as unknown as Response;
+    };
+
+    let putCalled = false;
+    const putImpl = async () => {
+      putCalled = true;
+      return { url: "https://blob.vercel-storage.com/rehosted-final.jpg" };
+    };
+
+    const result = await resolveExternalMedia("https://example.com/redirector", "image", {
+      assertPublicHttpUrl,
+      fetch: fetchImpl,
+      put: putImpl as unknown as (typeof import("@vercel/blob"))["put"],
+    });
+
+    assert.equal(putCalled, true);
+    assert.deepEqual(assertedUrls, ["https://example.com/redirector", FINAL_URL]);
+    assert.deepEqual(fetchCalls, ["https://example.com/redirector", FINAL_URL]);
+    assert.deepEqual(result, {
+      ok: true,
+      url: "https://blob.vercel-storage.com/rehosted-final.jpg",
+      contentType: "image/jpeg",
+    });
+  });
+
+  test("redirect chain longer than MAX_REDIRECTS is rejected as too_many_redirects", async () => {
+    const assertPublicHttpUrl = async (rawUrl: string) => ({ url: new URL(rawUrl), ip: "93.184.216.34" });
+
+    const fetchCalls: string[] = [];
+    const fetchImpl: typeof fetch = async (input) => {
+      const target = String(input);
+      fetchCalls.push(target);
+      // Always redirect to the next hop, forever.
+      const n = Number(target.match(/hop(\d+)/)?.[1] ?? "0");
+      return {
+        ok: false,
+        status: 302,
+        headers: new Headers({ location: `https://example.com/hop${n + 1}` }),
+        arrayBuffer: async () => new Uint8Array().buffer,
+      } as unknown as Response;
+    };
+
+    const result = await resolveExternalMedia("https://example.com/hop0", "image", {
+      assertPublicHttpUrl,
+      fetch: fetchImpl,
+    });
+
+    assert.deepEqual(result, { ok: false, error: "too_many_redirects" });
+    // Never re-hosts, never loops unboundedly.
+    assert.ok(fetchCalls.length <= 5);
+  });
+});
+
 describe("resolveExternalMedia — video kind", () => {
   test("valid video URL is returned as-is (NOT re-hosted)", async () => {
     const assertGuard = fakeAssertPublicHttpUrl("allow");

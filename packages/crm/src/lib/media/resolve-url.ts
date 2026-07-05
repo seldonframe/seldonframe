@@ -7,10 +7,14 @@
 // source, and if so, where does the bytes-of-record live?"
 //
 // SECURITY INVARIANT: the SSRF guard (`assertPublicHttpUrl`) runs FIRST,
-// before any fetch of the candidate URL. A URL that fails the guard is
-// rejected immediately — the guard's own DNS/IP checks handle localhost,
-// RFC1918 private ranges, link-local/metadata addresses, and non-http(s)
-// schemes; we don't re-implement any of that here.
+// before any fetch of the candidate URL — AND on every redirect hop. A URL
+// that fails the guard is rejected immediately — the guard's own DNS/IP
+// checks handle localhost, RFC1918 private ranges, link-local/metadata
+// addresses, and non-http(s) schemes; we don't re-implement any of that
+// here. Fetches use `redirect: "manual"` so a 3xx Location header is never
+// auto-followed by the runtime before we've re-vetted the resolved target —
+// otherwise a URL that passes the guard could 3xx to a private host and the
+// guard would never see the real destination (bounded to MAX_REDIRECTS hops).
 //
 // After the guard passes:
 //   - kind="image": content-type must be in the image allow-list (reused
@@ -25,10 +29,7 @@
 
 import { put } from "@vercel/blob";
 import { randomUUID } from "node:crypto";
-import {
-  assertPublicHttpUrl as defaultAssertPublicHttpUrl,
-  SsrfBlockedError,
-} from "@/lib/security/ssrf-guard";
+import { assertPublicHttpUrl as defaultAssertPublicHttpUrl } from "@/lib/security/ssrf-guard";
 import { ALLOWED_IMAGE_CONTENT_TYPES, IMAGE_MAX_BYTES } from "@/lib/page-blocks/images";
 
 export type MediaKind = "image" | "video";
@@ -50,6 +51,10 @@ export interface ResolveExternalMediaDeps {
   put?: typeof put;
   assertPublicHttpUrl?: typeof defaultAssertPublicHttpUrl;
 }
+
+/** Max redirect hops we'll follow before giving up (matches the shared
+ *  `fetchPublicUrlSafe` helper's default in lib/security/ssrf-guard.ts). */
+const MAX_REDIRECTS = 3;
 
 function contentTypeAllowed(kind: MediaKind, contentType: string): boolean {
   if (kind === "image") {
@@ -80,26 +85,57 @@ export async function resolveExternalMedia(
   try {
     const asserted = await assertPublicHttpUrl(url);
     validatedUrl = asserted.url;
-  } catch (err) {
-    if (err instanceof SsrfBlockedError) {
-      return { ok: false, error: "unsafe_url" };
-    }
+  } catch {
     return { ok: false, error: "unsafe_url" };
   }
 
+  // Fetch with the redirect target re-validated on EVERY hop. `redirect:
+  // "manual"` stops the runtime from auto-following a Location header we
+  // haven't vetted ourselves — assertPublicHttpUrl only vetted the URL we
+  // were handed, and a 3xx response can point anywhere, including cloud
+  // metadata / loopback / RFC1918 hosts. See lib/security/ssrf-guard.ts
+  // (fetchPublicUrlSafe) for the shared version of this same pattern; this
+  // module hand-rolls it locally so it can return the distinct
+  // `too_many_redirects` result the media-resolve API surfaces.
+  let currentUrl = validatedUrl.toString();
   let response: Response;
-  try {
-    response = await fetchImpl(validatedUrl.toString(), {
-      method: "GET",
-      redirect: "follow",
-    });
-  } catch {
-    return { ok: false, error: "fetch_failed" };
+  for (let hop = 0; ; hop++) {
+    try {
+      response = await fetchImpl(currentUrl, {
+        method: "GET",
+        redirect: "manual",
+      });
+    } catch {
+      return { ok: false, error: "fetch_failed" };
+    }
+
+    const isRedirect = response.status >= 300 && response.status < 400;
+    if (!isRedirect) break;
+
+    const location = response.headers.get("location");
+    if (!location) {
+      // 3xx with no Location to follow — treat like any other non-2xx.
+      break;
+    }
+
+    if (hop >= MAX_REDIRECTS) {
+      return { ok: false, error: "too_many_redirects" };
+    }
+
+    const nextUrl = new URL(location, currentUrl);
+    try {
+      const asserted = await assertPublicHttpUrl(nextUrl.toString());
+      currentUrl = asserted.url.toString();
+    } catch {
+      return { ok: false, error: "unsafe_url" };
+    }
   }
 
   if (!response.ok) {
     return { ok: false, error: "fetch_http_error" };
   }
+
+  validatedUrl = new URL(currentUrl);
 
   const contentType = response.headers.get("content-type")?.split(";")[0]?.trim() ?? "";
   if (!contentType || !contentTypeAllowed(kind, contentType)) {
