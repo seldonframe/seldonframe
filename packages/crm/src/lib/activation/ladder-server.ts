@@ -231,17 +231,31 @@ async function defaultWasStepStamped(orgId: string, step: LadderStepId): Promise
   return Boolean(settings.activation?.[activationSettingsKey(step)]);
 }
 
-async function defaultStampStep(orgId: string, step: LadderStepId, stampedAtIso: string): Promise<void> {
+/**
+ * Build the `settings` SQL fragment for stamping `activation.<step>At`.
+ *
+ * The Neon HTTP driver can't infer a parameter's type when it's used as the
+ * KEY of `jsonb_build_object(...)` (no ::cast on that position) — that's
+ * NeonDbError 42P18 ("could not determine data type of parameter $1"), which
+ * broke this exact write in prod (silently, since the caller is
+ * fire-and-forget + catch-swallowed). Fixed by building the nested patch
+ * object in JS and passing ONE parameter cast ::jsonb — same COALESCE ||
+ * merge idiom as mark-operator-onboarded.ts:80, just with a dynamic (not
+ * static) patch literal. Exported so the spec can assert the SQL shape
+ * directly without touching a real DB.
+ */
+export function buildStampStepPatch(step: LadderStepId, stampedAtIso: string) {
   const key = activationSettingsKey(step);
-  // Mirrors mark-operator-onboarded.ts:80's COALESCE || idiom: merge a single
-  // activation.<step>At key into settings without clobbering any other keys
-  // (including sibling activation.* stamps), safe even when settings/
-  // activation is still absent on a fresh org.
+  const patch = JSON.stringify({ [key]: stampedAtIso });
+  return sql`COALESCE(${organizations.settings}, '{}'::jsonb) || jsonb_build_object('activation',
+        COALESCE(${organizations.settings}->'activation', '{}'::jsonb) || ${patch}::jsonb)`;
+}
+
+async function defaultStampStep(orgId: string, step: LadderStepId, stampedAtIso: string): Promise<void> {
   await db
     .update(organizations)
     .set({
-      settings: sql`COALESCE(${organizations.settings}, '{}'::jsonb) || jsonb_build_object('activation',
-        COALESCE(${organizations.settings}->'activation', '{}'::jsonb) || jsonb_build_object(${key}, ${stampedAtIso}::text))`,
+      settings: buildStampStepPatch(step, stampedAtIso),
       updatedAt: new Date(),
     })
     .where(eq(organizations.id, orgId));
@@ -274,6 +288,17 @@ async function defaultWasShareUsedStamped(orgId: string): Promise<boolean> {
   return Boolean(settings.activation?.[SHARE_USED_KEY]);
 }
 
+/**
+ * Same fix + same reasoning as buildStampStepPatch above, for the
+ * activation.shareUsedAt writer specifically. Exported for direct spec
+ * assertion.
+ */
+export function buildStampShareUsedPatch(stampedAtIso: string) {
+  const patch = JSON.stringify({ [SHARE_USED_KEY]: stampedAtIso });
+  return sql`COALESCE(${organizations.settings}, '{}'::jsonb) || jsonb_build_object('activation',
+        COALESCE(${organizations.settings}->'activation', '{}'::jsonb) || ${patch}::jsonb)`;
+}
+
 async function defaultStampShareUsed(orgId: string, stampedAtIso: string): Promise<void> {
   // Mirrors mark-operator-onboarded.ts:80's COALESCE || idiom (same as
   // defaultStampStep above): merge a single activation.shareUsedAt key into
@@ -282,8 +307,7 @@ async function defaultStampShareUsed(orgId: string, stampedAtIso: string): Promi
   await db
     .update(organizations)
     .set({
-      settings: sql`COALESCE(${organizations.settings}, '{}'::jsonb) || jsonb_build_object('activation',
-        COALESCE(${organizations.settings}->'activation', '{}'::jsonb) || jsonb_build_object(${SHARE_USED_KEY}, ${stampedAtIso}::text))`,
+      settings: buildStampShareUsedPatch(stampedAtIso),
       updatedAt: new Date(),
     })
     .where(eq(organizations.id, orgId));
