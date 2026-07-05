@@ -56,6 +56,21 @@ import {
   setArchetypeForOrg as setArchetypeForOrgDefault,
   type SetExplicitArchetypeResult,
 } from "@/lib/workspace/apply-archetype-theme";
+import {
+  searchStockPhotos as searchStockPhotosDefault,
+  type StockPhoto,
+} from "@/lib/media/stock-search";
+import {
+  resolveExternalMedia as resolveExternalMediaDefault,
+  type MediaKind,
+  type ResolveMediaResult,
+} from "@/lib/media/resolve-url";
+import {
+  setR1Media as setR1MediaDefault,
+  clearR1Media as clearR1MediaDefault,
+  type SetR1MediaInput,
+  type SetR1MediaResult,
+} from "@/lib/landing/set-r1-media";
 
 export const COPILOT_CAPABILITY = "workspace_copilot";
 
@@ -1006,6 +1021,241 @@ const pinCard: AgentTool<z.infer<typeof pinCardInput>> & {
     }),
 };
 
+// ─── search_media / update_media / delete_media ─────────────────────────────
+//
+// Media-editing T3 (SeldonChat media tools). Wires the T1 write seam
+// (setR1Media/clearR1Media) and T2 media sources (searchStockPhotos,
+// resolveExternalMedia) into the copilot toolset — parallels the
+// list_designs/update_design chip-picker pattern above: search_media never
+// writes, its candidates are surfaced by the route as tappable thumbnails
+// (mediaOptions) instead of a verbalized list; tapping one sends a
+// deterministic apply payload that resolves to update_media.
+//
+// Slot vocabulary (shared across all three tools, matches R1MediaSlot in
+// set-r1-media.ts):
+//   - hero_background        — the main background image behind the hero.
+//     DEFAULT for "add/change the background".
+//   - hero_background_video  — background video (kind:"video" on update_media).
+//   - hero_image             — the foreground hero photo (a distinct panel
+//     image, not the background).
+//   - service_photo:<index>  — a specific service card photo (0-based).
+//
+// SECURITY: update_media/delete_media's zod schemas carry NO orgId-shaped
+// field at all — ctx.orgId (from the runtime, never the model) is the only
+// source of which org's payload gets written. Any external/user/stock URL
+// applied via update_media is routed through resolveExternalMedia FIRST,
+// which runs the SSRF guard (assertPublicHttpUrl) on the URL and every
+// redirect hop before anything is fetched — this protects even a
+// client-supplied URL that arrived via a tapped thumbnail, since the tap
+// still goes through this same tool.
+
+/** Injectable seam for search_media/update_media/delete_media's execute
+ *  (mirrors UpdateThemeDeps/ModuleToolsDeps/DesignToolsDeps above). Defaults
+ *  to the real T1/T2 seams so production callers are unaffected. */
+export type MediaToolsDeps = {
+  searchStockPhotos: (query: string) => Promise<StockPhoto[]>;
+  resolveExternalMedia: (url: string, kind: MediaKind) => Promise<ResolveMediaResult>;
+  setR1Media: (orgId: string, input: SetR1MediaInput) => Promise<SetR1MediaResult>;
+  clearR1Media: (orgId: string, slot: string) => Promise<SetR1MediaResult>;
+};
+
+const defaultMediaToolsDeps: MediaToolsDeps = {
+  searchStockPhotos: searchStockPhotosDefault,
+  resolveExternalMedia: resolveExternalMediaDefault,
+  setR1Media: setR1MediaDefault,
+  clearR1Media: clearR1MediaDefault,
+};
+
+const MEDIA_SLOT_DESCRIPTION =
+  "Media slot id: 'hero_background' (the main background image behind the hero — the DEFAULT for \"add/change the background\"), 'hero_background_video' (background video), 'hero_image' (the foreground hero photo, a separate panel image), or 'service_photo:<index>' (a specific service card photo, 0-based, e.g. 'service_photo:0').";
+
+const searchMediaInput = z.object({
+  query: z.string().min(1, "query is required"),
+  target_slot: z.string().optional(),
+});
+
+const searchMedia: AgentTool<z.infer<typeof searchMediaInput>> & {
+  execute: (
+    input: z.infer<typeof searchMediaInput>,
+    ctx: ToolExecuteContext,
+    deps?: MediaToolsDeps,
+  ) => ReturnType<AgentTool<z.infer<typeof searchMediaInput>>["execute"]>;
+} = {
+  name: "search_media",
+  description:
+    "Search stock photos (Unsplash + Pexels) for an image matching a description, e.g. 'a friendly plumber at work' or 'cozy modern cafe interior'. Does NOT write anything — the results are shown to the operator as tappable thumbnails; they pick one to apply. Use target_slot to hint which slot a pick should apply to (defaults to hero_background — the main site background). Call this when the operator describes an image they want rather than giving you a URL.",
+  inputSchema: searchMediaInput,
+  jsonSchema: {
+    type: "object",
+    properties: {
+      query: { type: "string", description: "Plain-English description of the image to find." },
+      target_slot: {
+        type: "string",
+        description: `${MEDIA_SLOT_DESCRIPTION} Hint for where a picked photo should apply; defaults to 'hero_background'.`,
+      },
+    },
+    required: ["query"],
+  },
+  execute: (
+    input,
+    _ctx: ToolExecuteContext,
+    deps: MediaToolsDeps = defaultMediaToolsDeps,
+  ) =>
+    safe(async () => {
+      const photos = await deps.searchStockPhotos(input.query);
+      const targetSlot = input.target_slot ?? "hero_background";
+
+      logEvent(
+        "media_search",
+        { query: input.query, target_slot: targetSlot, result_count: photos.length },
+        {},
+      );
+
+      return {
+        ok: true as const,
+        target_slot: targetSlot,
+        photos,
+        message:
+          photos.length > 0
+            ? "Found some options — tap one below to use it."
+            : "No stock photos found for that search — try a different description, or give me a direct image URL.",
+      };
+    }),
+};
+
+const updateMediaInput = z.object({
+  slot: z.string().min(1, "slot is required"),
+  url: z.string().min(1, "url is required"),
+  kind: z.enum(["image", "video"]).optional(),
+  alt: z.string().optional(),
+});
+
+const updateMedia: AgentTool<z.infer<typeof updateMediaInput>> & {
+  execute: (
+    input: z.infer<typeof updateMediaInput>,
+    ctx: ToolExecuteContext,
+    deps?: MediaToolsDeps,
+  ) => ReturnType<AgentTool<z.infer<typeof updateMediaInput>>["execute"]>;
+} = {
+  name: "update_media",
+  description:
+    "Set an image or background video on the site from a URL (a stock-photo URL from search_media's results, or any image/video URL the operator gives you). Validates the URL is safe and re-hosts images before applying. Pass kind:'video' (and slot:'hero_background_video') for a background video; otherwise defaults to image. Use the slot vocabulary: hero_background (main background image, the default for \"add/change the background\"), hero_background_video, hero_image (foreground hero photo), service_photo:<index>.",
+  inputSchema: updateMediaInput,
+  jsonSchema: {
+    type: "object",
+    properties: {
+      slot: { type: "string", description: MEDIA_SLOT_DESCRIPTION },
+      url: { type: "string", description: "The image or video URL to apply." },
+      kind: {
+        type: "string",
+        enum: ["image", "video"],
+        description: "Media kind — defaults to 'image'. Use 'video' for a background video URL.",
+      },
+      alt: { type: "string", description: "Alt text describing the image (skip for video)." },
+    },
+    required: ["slot", "url"],
+  },
+  // ctx.orgId is the ONLY source of the org to write — input is a zod-parsed
+  // model-args object with no orgId-shaped field in its schema at all, so
+  // even a malicious/hallucinated arg object can't redirect the write.
+  execute: (
+    input,
+    ctx: ToolExecuteContext,
+    deps: MediaToolsDeps = defaultMediaToolsDeps,
+  ) =>
+    safe(async () => {
+      const kind: MediaKind = input.kind ?? "image";
+      const resolved = await deps.resolveExternalMedia(input.url, kind);
+      if (!resolved.ok) {
+        return {
+          ok: false as const,
+          error: resolved.error,
+          message: `Couldn't use that URL (${resolved.error}) — try a different image/video URL, or search_media for a stock photo instead.`,
+        };
+      }
+
+      const setResult = await deps.setR1Media(ctx.orgId, {
+        slot: input.slot,
+        src: resolved.url,
+        alt: input.alt,
+      });
+
+      logEvent(
+        "media_update",
+        { slot: input.slot, kind, ok: setResult.ok, via: "copilot" },
+        { orgId: ctx.orgId },
+      );
+
+      if (!setResult.ok) {
+        return {
+          ok: false as const,
+          error: setResult.error,
+          message: `Couldn't apply that to ${input.slot} (${setResult.error}).`,
+        };
+      }
+
+      return {
+        ok: true as const,
+        slot: setResult.slot,
+        message: `Updated ${setResult.slot} with the new ${kind}.`,
+      };
+    }),
+};
+
+const deleteMediaInput = z.object({
+  slot: z.string().min(1, "slot is required"),
+});
+
+const deleteMedia: AgentTool<z.infer<typeof deleteMediaInput>> & {
+  execute: (
+    input: z.infer<typeof deleteMediaInput>,
+    ctx: ToolExecuteContext,
+    deps?: MediaToolsDeps,
+  ) => ReturnType<AgentTool<z.infer<typeof deleteMediaInput>>["execute"]>;
+} = {
+  name: "delete_media",
+  description:
+    "Remove an image or background video from the site (clears the field — never deletes the section/service itself). Use the slot vocabulary: hero_background, hero_background_video, hero_image, service_photo:<index>.",
+  inputSchema: deleteMediaInput,
+  jsonSchema: {
+    type: "object",
+    properties: {
+      slot: { type: "string", description: MEDIA_SLOT_DESCRIPTION },
+    },
+    required: ["slot"],
+  },
+  // ctx.orgId is the ONLY source of the org to write — same rule as
+  // update_media above.
+  execute: (
+    input,
+    ctx: ToolExecuteContext,
+    deps: MediaToolsDeps = defaultMediaToolsDeps,
+  ) =>
+    safe(async () => {
+      const result = await deps.clearR1Media(ctx.orgId, input.slot);
+
+      logEvent(
+        "media_delete",
+        { slot: input.slot, ok: result.ok, via: "copilot" },
+        { orgId: ctx.orgId },
+      );
+
+      if (!result.ok) {
+        return {
+          ok: false as const,
+          error: result.error,
+          message: `Couldn't remove ${input.slot} (${result.error}).`,
+        };
+      }
+
+      return {
+        ok: true as const,
+        slot: result.slot,
+        message: `Removed the media from ${result.slot}.`,
+      };
+    }),
+};
+
 export function buildCopilotTools(): AgentTool[] {
   return [
     getSiteStructure as AgentTool,
@@ -1022,5 +1272,8 @@ export function buildCopilotTools(): AgentTool[] {
     enableModule as AgentTool,
     disableModule as AgentTool,
     pinCard as AgentTool,
+    searchMedia as AgentTool,
+    updateMedia as AgentTool,
+    deleteMedia as AgentTool,
   ];
 }

@@ -72,6 +72,9 @@ const EXPECTED_TOOL_NAMES = [
   "enable_module",
   "disable_module",
   "pin_card",
+  "search_media",
+  "update_media",
+  "delete_media",
 ];
 
 describe("COPILOT_CAPABILITY", () => {
@@ -81,7 +84,7 @@ describe("COPILOT_CAPABILITY", () => {
 });
 
 describe("buildCopilotTools", () => {
-  test("returns exactly the 14 expected tool names", () => {
+  test("returns exactly the 17 expected tool names", () => {
     const tools = buildCopilotTools();
     const names = tools.map((t) => t.name).sort();
     assert.deepEqual(names, [...EXPECTED_TOOL_NAMES].sort());
