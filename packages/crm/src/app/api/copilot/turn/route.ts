@@ -171,12 +171,17 @@ export async function POST(request: NextRequest) {
 
       if (org?.slug) {
         const publicUrl = buildWorkspaceUrls(org.slug, WORKSPACE_BASE_DOMAIN, orgId).home;
-        visionCheck = await Promise.race([
-          visionVerifyPage(publicUrl, message, SITE_RUBRIC),
-          new Promise<VisionCheckResult>((resolve) =>
-            setTimeout(() => resolve({ pass: true, gaps: [], skipped: "timeout" }), VISION_VERIFY_TIMEOUT_MS),
-          ),
-        ]);
+        let timer: ReturnType<typeof setTimeout> | undefined;
+        try {
+          visionCheck = await Promise.race([
+            visionVerifyPage(publicUrl, message, SITE_RUBRIC),
+            new Promise<VisionCheckResult>((resolve) => {
+              timer = setTimeout(() => resolve({ pass: true, gaps: [], skipped: "timeout" }), VISION_VERIFY_TIMEOUT_MS);
+            }),
+          ]);
+        } finally {
+          clearTimeout(timer);
+        }
       }
     }
   } catch {

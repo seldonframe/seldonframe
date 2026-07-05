@@ -195,6 +195,9 @@ export async function renderScreenshot(url: string, deps: RenderDeps = {}): Prom
     }
 
     const imageResponse = await fetchImpl(shotUrl, { signal: controller.signal });
+    if (!imageResponse.ok) {
+      return { ok: false, error: `screenshot fetch failed: status=${imageResponse.status}` };
+    }
     const buffer = await imageResponse.arrayBuffer();
     const base64 = Buffer.from(buffer).toString("base64");
     const mediaType = shotUrl.endsWith(".jpg") || shotUrl.endsWith(".jpeg") ? "image/jpeg" : "image/png";
