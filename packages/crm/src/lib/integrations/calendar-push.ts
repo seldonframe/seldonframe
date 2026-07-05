@@ -101,21 +101,69 @@ export type CalendarPushDeps = {
   logEvent: (event: string, data?: Record<string, unknown>) => void;
 };
 
+// M2 latency fix (2026-07-05) — most orgs have never connected a calendar,
+// so every single booking.created was paying a full Composio
+// listConnections() round-trip (network call) just to learn "no
+// connection" — the common case. This module-level, per-instance memo
+// short-circuits that round-trip: once we've resolved "no connection" (or
+// resolved a connection) for an org, we reuse the answer for TTL_MS before
+// asking Composio again.
+//
+// Deliberately simple (v1): in-memory, per-lambda-instance only — it does
+// NOT survive across serverless instances/cold starts, and a fresh instance
+// always does one real lookup. That's fine: the goal is cutting the common
+// "N bookings in a row, same org, no connection" cost, not a perfect cache.
+// A stale `false` for up to TTL_MS right after an org's FIRST-EVER connect
+// is acceptable — the next booking after the memo expires (or the next
+// cold start) will see the real connection and push then.
+const CONNECTION_MEMO_TTL_MS = 5 * 60 * 1000; // 5 minutes
+const connectionMemo = new Map<string, { connection: CalendarConnection | null; at: number }>();
+
+/** Test-only escape hatch — clears the module-level memo between specs. */
+export function __resetCalendarPushMemoForTests(): void {
+  connectionMemo.clear();
+}
+
+/**
+ * TTL-memoized wrapper around a (possibly expensive/network-bound) per-org
+ * connection resolver. Extracted as its own function (rather than inlined
+ * in `defaultGetConnection`) so it's directly unit-testable with a fake
+ * `resolve` — no DB/Composio required — while production wires the real
+ * `composioForOrg` + `listConnections` lookup through it unchanged.
+ */
+export async function memoizedGetConnection(
+  orgId: string,
+  resolve: (orgId: string) => Promise<CalendarConnection | null>,
+): Promise<CalendarConnection | null> {
+  const cached = connectionMemo.get(orgId);
+  if (cached && Date.now() - cached.at < CONNECTION_MEMO_TTL_MS) {
+    return cached.connection;
+  }
+
+  const resolved = await resolve(orgId);
+  connectionMemo.set(orgId, { connection: resolved, at: Date.now() });
+  return resolved;
+}
+
 /** Default connection resolver: reads the org's live Composio connections via
  *  the same listConnections used by the /integrations dashboard, preferring
- *  googlecalendar over outlook when both happen to be connected. */
+ *  googlecalendar over outlook when both happen to be connected. Memoized
+ *  per-org for CONNECTION_MEMO_TTL_MS to avoid a Composio round-trip on
+ *  every booking for orgs with no (or an already-known) connection. */
 async function defaultGetConnection(orgId: string): Promise<CalendarConnection | null> {
-  const composio = await composioForOrg(orgId);
-  if (!composio) return null;
-  const connections = await listConnections(orgId, { client: composio });
-  const byPreference: CalendarProvider[] = ["googlecalendar", "outlook"];
-  for (const provider of byPreference) {
-    const match = connections.find((c) => c.slug === provider && c.connected && c.connectedAccountId);
-    if (match?.connectedAccountId) {
-      return { provider, connectedAccountId: match.connectedAccountId };
+  return memoizedGetConnection(orgId, async (id) => {
+    const composio = await composioForOrg(id);
+    if (!composio) return null;
+    const connections = await listConnections(id, { client: composio });
+    const byPreference: CalendarProvider[] = ["googlecalendar", "outlook"];
+    for (const provider of byPreference) {
+      const match = connections.find((c) => c.slug === provider && c.connected && c.connectedAccountId);
+      if (match?.connectedAccountId) {
+        return { provider, connectedAccountId: match.connectedAccountId };
+      }
     }
-  }
-  return null;
+    return null;
+  });
 }
 
 /** Default create-event executor: direct Composio SDK `tools.execute`, the

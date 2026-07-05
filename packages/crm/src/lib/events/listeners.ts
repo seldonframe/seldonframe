@@ -370,57 +370,62 @@ export function registerCrmEventListeners() {
       typeof data.appointmentTypeId === "string" ? data.appointmentTypeId : null;
     const bookingOrgId = await resolveOrgIdForBookingId(bookingId).catch(() => null);
     if (bookingOrgId) {
-      try {
-        await dispatchEventToDeployedAgents({
-          orgId: bookingOrgId,
-          triggerEventType: "booking.created",
-          triggerEventId: null,
-          triggerPayload: data,
-          matcherPlaceholder: "$appointmentTypeId",
-          matcherValue: apptTypeId,
-        });
-      } catch (err) {
+      // M2 latency fix (2026-07-05) — these three used to run serially
+      // (awaited one after another), each doing its own DB reads + an
+      // outbound network call (agent dispatch / LLM-composed email /
+      // Resend .ics sends). None of them depends on another's OUTPUT:
+      //   - dispatchEventToDeployedAgents reads static agentConfigs off
+      //     `organizations.settings` and (if matched) sends via its own
+      //     seam — it does not read/write outbound_message_sends.
+      //   - dispatchOutboundMessagesForEvent reads outbound_message_triggers
+      //     + composes/sends its own confirmation email/SMS — independent
+      //     of the agent dispatch and of the .ics invite.
+      //   - sendBookingCalendarInvite loads the booking/org/owner rows
+      //     itself and sends two DEDICATED .ics emails — independent of
+      //     both of the above (by design, per its own file header: "leaves
+      //     the existing confirmation/SMS path byte-for-byte untouched").
+      // All three already catch-and-warn independently (failure isolation
+      // was already per-step); running them concurrently via
+      // Promise.allSettled preserves that isolation while turning ~3x
+      // serial network-bound awaits into 1x wall-clock cost.
+      const [agentDispatchResult, outboundDispatchResult, calendarInviteResult] =
+        await Promise.allSettled([
+          dispatchEventToDeployedAgents({
+            orgId: bookingOrgId,
+            triggerEventType: "booking.created",
+            triggerEventId: null,
+            triggerPayload: data,
+            matcherPlaceholder: "$appointmentTypeId",
+            matcherValue: apptTypeId,
+          }),
+          dispatchOutboundMessagesForEvent({
+            orgId: bookingOrgId,
+            eventType: "booking.created",
+            payload: data,
+          }),
+          sendBookingCalendarInvite({
+            orgId: bookingOrgId,
+            bookingId,
+          }),
+        ]);
+
+      if (agentDispatchResult.status === "rejected") {
         console.warn(
           `[listeners] dispatchEventToDeployedAgents booking.created failed:`,
-          err,
+          agentDispatchResult.reason,
         );
       }
-
-      // 2026-05-18 — outbound messaging dispatch (plan v2, slice 2).
-      // Fire the matching outbound_message_triggers (default seeded
-      // when the workspace was created: email booking-confirmation).
-      // Non-fatal — dispatcher logs to outbound_message_sends rather
-      // than throwing.
-      try {
-        await dispatchOutboundMessagesForEvent({
-          orgId: bookingOrgId,
-          eventType: "booking.created",
-          payload: data,
-        });
-      } catch (err) {
+      if (outboundDispatchResult.status === "rejected") {
         console.warn(
           `[listeners] dispatchOutboundMessagesForEvent booking.created failed:`,
-          err,
+          outboundDispatchResult.reason,
         );
       }
-
-      // 2026-06-21 — ICS-push: email an RFC-5545 calendar invite (.ics) so
-      // the appointment lands in the workspace owner's real calendar (the
-      // core "it's in my calendar" win) and the customer's. Additive +
-      // soft-failing: sendBookingCalendarInvite never throws, so a build/
-      // send failure here can NEVER break the booking or the existing
-      // confirmation email/SMS dispatched above. Runs after the existing
-      // confirmation logic and does not alter it.
-      try {
-        await sendBookingCalendarInvite({
-          orgId: bookingOrgId,
-          bookingId,
-        });
-      } catch (err) {
+      if (calendarInviteResult.status === "rejected") {
         // Belt-and-suspenders — the function is already soft-fail internally.
         console.warn(
           `[listeners] sendBookingCalendarInvite booking.created failed:`,
-          err,
+          calendarInviteResult.reason,
         );
       }
 

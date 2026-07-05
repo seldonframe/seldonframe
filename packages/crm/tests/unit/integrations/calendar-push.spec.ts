@@ -8,7 +8,11 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
 
-import { pushBookingToConnectedCalendar } from "@/lib/integrations/calendar-push";
+import {
+  pushBookingToConnectedCalendar,
+  memoizedGetConnection,
+  __resetCalendarPushMemoForTests,
+} from "@/lib/integrations/calendar-push";
 
 const ORG_ID = "org-123";
 const BOOKING_ID = "booking-456";
@@ -127,6 +131,84 @@ test("payload never includes customer phone/email in the event description", () 
     assert.doesNotMatch(capturedArgs.description, /\+15551234567/);
     assert.doesNotMatch(capturedArgs.summary, /jane@example\.com/);
     assert.doesNotMatch(capturedArgs.summary, /\+15551234567/);
+  })();
+});
+
+// M2 latency fix (2026-07-05) — memoizedGetConnection wraps the (network-
+// bound) connection resolver with a per-org TTL memo so repeat bookings for
+// the same org don't each pay a fresh Composio listConnections() round-trip.
+test("memoizedGetConnection: second call within TTL does not invoke resolve again", () => {
+  return (async () => {
+    __resetCalendarPushMemoForTests();
+    let calls = 0;
+    const resolve = async (_orgId: string) => {
+      calls += 1;
+      return null;
+    };
+
+    const first = await memoizedGetConnection(ORG_ID, resolve);
+    const second = await memoizedGetConnection(ORG_ID, resolve);
+
+    assert.equal(first, null);
+    assert.equal(second, null);
+    assert.equal(calls, 1, "resolve should only be invoked once within the TTL window");
+  })();
+});
+
+test("memoizedGetConnection: memoizes a found connection too (not just no_connection)", () => {
+  return (async () => {
+    __resetCalendarPushMemoForTests();
+    let calls = 0;
+    const connection = { provider: "googlecalendar" as const, connectedAccountId: "acct_1" };
+    const resolve = async (_orgId: string) => {
+      calls += 1;
+      return connection;
+    };
+
+    const first = await memoizedGetConnection(ORG_ID, resolve);
+    const second = await memoizedGetConnection(ORG_ID, resolve);
+
+    assert.deepEqual(first, connection);
+    assert.deepEqual(second, connection);
+    assert.equal(calls, 1);
+  })();
+});
+
+test("memoizedGetConnection: different orgs are memoized independently", () => {
+  return (async () => {
+    __resetCalendarPushMemoForTests();
+    const calls: string[] = [];
+    const resolve = async (orgId: string) => {
+      calls.push(orgId);
+      return null;
+    };
+
+    await memoizedGetConnection(ORG_ID, resolve);
+    await memoizedGetConnection("org-999", resolve);
+    await memoizedGetConnection(ORG_ID, resolve);
+
+    assert.deepEqual(calls, [ORG_ID, "org-999"]);
+  })();
+});
+
+test("memoizedGetConnection: re-resolves once the TTL has expired", () => {
+  return (async () => {
+    __resetCalendarPushMemoForTests();
+    let calls = 0;
+    const resolve = async (_orgId: string) => {
+      calls += 1;
+      return null;
+    };
+
+    await memoizedGetConnection(ORG_ID, resolve);
+
+    // Simulate TTL expiry by clearing the memo directly (the TTL constant
+    // itself is internal/unexported — this exercises the same "cache miss"
+    // path a real expiry would hit without needing a 5-minute-long test).
+    __resetCalendarPushMemoForTests();
+    await memoizedGetConnection(ORG_ID, resolve);
+
+    assert.equal(calls, 2);
   })();
 });
 
