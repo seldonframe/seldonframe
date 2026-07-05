@@ -15,6 +15,11 @@
 // "Enable trigger" control surfaces so inbound app events (e.g. new Gmail) can
 // drive event-triggered archetype agents.
 //
+// Hotfix H4a (2026-07-04): when the win-ladder's "connect calendar" link lands
+// here with ?connect=calendar, show only the calendar toolkits + a "Show all
+// integrations" escape hatch, and route those Connect clicks back to the
+// dashboard (returnTo: "dashboard") instead of /integrations.
+//
 // SECURITY: no secret ever lives in this component. The BYO key is submitted and
 // immediately cleared from state; it is never rendered back.
 
@@ -56,7 +61,13 @@ type Props = {
   returnedToolkit: string | null;
   /** Optional ?status= value Composio appends to the callback. */
   returnedStatus: string | null;
+  /** ?connect=<value> — when "calendar", filter the grid to the calendar
+   *  toolkits only (win-ladder deep link). Any other value is ignored. */
+  connectFilter: string | null;
 };
+
+/** Catalog slugs treated as "calendar" for the ?connect=calendar filter. */
+const CALENDAR_TOOLKIT_SLUGS = new Set(["googlecalendar", "outlook"]);
 
 type Toast = { kind: "success" | "error"; message: string } | null;
 
@@ -71,6 +82,17 @@ export function IntegrationsClient(props: Props) {
   const [toast, setToast] = useState<Toast>(null);
   const [pendingSlug, setPendingSlug] = useState<string | null>(null);
   const [, startTransition] = useTransition();
+
+  // Hotfix H4a — the win-ladder deep link (?connect=calendar) narrows the
+  // grid to calendar toolkits. "Show all integrations" clears it locally
+  // (no full page reload needed).
+  const isCalendarFilter = props.connectFilter === "calendar";
+  const [showAll, setShowAll] = useState(false);
+  const filteredCatalog = useMemo(() => {
+    if (!isCalendarFilter || showAll) return props.catalog;
+    return props.catalog.filter((tk) => CALENDAR_TOOLKIT_SLUGS.has(tk.slug));
+  }, [props.catalog, isCalendarFilter, showAll]);
+  const isFiltered = isCalendarFilter && !showAll;
 
   const connBySlug = useMemo(() => {
     const m = new Map<string, ToolkitConnectionView>();
@@ -117,11 +139,11 @@ export function IntegrationsClient(props: Props) {
     }
   }
 
-  function handleConnect(slug: string) {
+  function handleConnect(slug: string, returnTo?: "dashboard") {
     setToast(null);
     setPendingSlug(slug);
     startTransition(async () => {
-      const res = await connectComposioToolkitAction(slug);
+      const res = await connectComposioToolkitAction(slug, returnTo ? { returnTo } : undefined);
       if (!res.ok) {
         setPendingSlug(null);
         setToast({ kind: "error", message: friendly(res.error) });
@@ -182,8 +204,21 @@ export function IntegrationsClient(props: Props) {
 
       {!hasKey && <ByoKeyPanel onSaved={() => setHasKey(true)} />}
 
+      {isFiltered && (
+        <div className="flex items-center justify-between rounded-md border border-dashed bg-muted/30 px-3 py-2 text-sm">
+          <span className="text-muted-foreground">Showing calendar apps only.</span>
+          <button
+            type="button"
+            onClick={() => setShowAll(true)}
+            className="font-medium text-primary underline underline-offset-4"
+          >
+            Show all integrations
+          </button>
+        </div>
+      )}
+
       <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-3">
-        {props.catalog.map((tk) => {
+        {filteredCatalog.map((tk) => {
           const conn = connBySlug.get(tk.slug);
           const connected = conn?.connected ?? false;
           const busy = pendingSlug === tk.slug;
@@ -232,7 +267,9 @@ export function IntegrationsClient(props: Props) {
                 ) : (
                   <button
                     type="button"
-                    onClick={() => handleConnect(tk.slug)}
+                    onClick={() =>
+                      handleConnect(tk.slug, isFiltered ? "dashboard" : undefined)
+                    }
                     disabled={busy || !hasKey}
                     title={
                       !hasKey

@@ -46,7 +46,7 @@ export const BUILDER_PRICE_ID = readEnv(
   "price_PLACEHOLDER_builder_19"
 );
 
-/** Workspace $49/mo flat. Env: STRIPE_WORKSPACE_PRICE_ID. */
+/** Workspace — $29/mo flat, SeldonFrame single plan. Env: STRIPE_WORKSPACE_PRICE_ID. */
 export const WORKSPACE_PRICE_ID = readEnv(
   "STRIPE_WORKSPACE_PRICE_ID",
   "price_PLACEHOLDER_workspace_49"
@@ -159,6 +159,14 @@ const ALLOWED_PRICE_IDS = new Set<string>([
 
 export function isAllowedCheckoutPriceId(priceId: string): boolean {
   return ALLOWED_PRICE_IDS.has(priceId);
+}
+
+/** Hotfix H4b — true when a resolved price id is one of the unconfigured
+ *  "price_PLACEHOLDER_*" fallbacks above. The checkout route uses this to
+ *  fail soft (503 + friendly message) instead of letting Stripe reject the
+ *  placeholder with a raw "No such price" 500. */
+export function isPlaceholderPriceId(priceId: string | null | undefined): boolean {
+  return typeof priceId === "string" && priceId.startsWith("price_PLACEHOLDER");
 }
 
 /** Marks the price IDs that activate the self-service workspace path.

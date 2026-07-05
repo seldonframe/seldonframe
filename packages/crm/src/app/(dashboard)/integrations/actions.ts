@@ -32,6 +32,12 @@ import { getComposioToolkit } from "@/lib/integrations/composio/catalog";
 /** Where Composio sends the operator back after the hosted consent screen. */
 const INTEGRATIONS_BASE_URL = "https://app.seldonframe.com/integrations";
 
+/** Alternate return target for the win-ladder "connect calendar" deep link
+ *  (hotfix H4a). Only reachable via the literal opts.returnTo === "dashboard"
+ *  allowlist check below — never built from an arbitrary caller-supplied
+ *  string. */
+const DASHBOARD_BASE_URL = "https://app.seldonframe.com/dashboard";
+
 export type ListComposioConnectionsResult =
   | { ok: true; connections: ToolkitConnection[] }
   | { ok: false; error: string };
@@ -64,10 +70,13 @@ export type ConnectComposioToolkitResult =
  * Begin a managed-OAuth Connect flow for a catalog toolkit. Returns the hosted
  * consent URL the client redirects to. The callback returns the operator to
  * /integrations?connected=<toolkit> so the page can show a success toast +
- * refetch.
+ * refetch — unless `opts.returnTo` is the literal "dashboard", in which case
+ * the callback instead lands on /dashboard?connected=<toolkit> (the
+ * win-ladder "connect calendar" flow, hotfix H4a).
  */
 export async function connectComposioToolkitAction(
   toolkit: string,
+  opts?: { returnTo?: "dashboard" },
 ): Promise<ConnectComposioToolkitResult> {
   assertWritable();
   const orgId = await getOrgId();
@@ -80,7 +89,10 @@ export async function connectComposioToolkitAction(
   }
 
   const user = await getCurrentUser();
-  const callbackUrl = `${INTEGRATIONS_BASE_URL}?connected=${encodeURIComponent(toolkit)}`;
+  // STRICT allowlist: only the literal "dashboard" maps to a fixed base URL.
+  // Never interpolate an arbitrary caller-supplied string into callbackUrl.
+  const base = opts?.returnTo === "dashboard" ? DASHBOARD_BASE_URL : INTEGRATIONS_BASE_URL;
+  const callbackUrl = `${base}?connected=${encodeURIComponent(toolkit)}`;
   try {
     const { redirectUrl } = await createConnectLink(orgId, toolkit, callbackUrl, {
       actorUserId: user?.id ?? null,

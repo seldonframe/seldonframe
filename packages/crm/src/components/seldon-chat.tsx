@@ -37,6 +37,16 @@ const EXAMPLE_PROMPTS = [
   "Add a question to my intake form",
 ];
 
+/** Rotating status phrases shown while a turn is pending (hotfix H3). Cycled
+ *  every ~2.5s so a slow turn doesn't read as stuck. */
+const PENDING_PHRASES = [
+  "Reading your workspace…",
+  "Planning the change…",
+  "Applying it…",
+  "Double-checking…",
+  "Almost there…",
+];
+
 /** True when any tool call in this turn plausibly changed the workspace,
  *  so the live preview iframe should reload. Read-only tools (get_*, list_*)
  *  never match; the mutating verb prefixes cover every write tool the
@@ -55,6 +65,7 @@ export function SeldonChat({ enabled, previewUrl }: SeldonChatProps) {
   const [error, setError] = useState<string | null>(null);
   const [capped, setCapped] = useState<{ used: number; limit: number; upgrade: string } | null>(null);
   const [previewNonce, setPreviewNonce] = useState(0);
+  const [pendingPhraseIndex, setPendingPhraseIndex] = useState(0);
   const containerRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
@@ -89,6 +100,19 @@ export function SeldonChat({ enabled, previewUrl }: SeldonChatProps) {
       window.removeEventListener("seldonchat:open", handleOpen);
     };
   }, [enabled]);
+
+  // Hotfix H3 — cycle the pending status phrase every ~2.5s while a turn is
+  // in flight; stop and reset to the first phrase as soon as it resolves.
+  useEffect(() => {
+    if (!pending) {
+      setPendingPhraseIndex(0);
+      return;
+    }
+    const interval = setInterval(() => {
+      setPendingPhraseIndex((current) => (current + 1) % PENDING_PHRASES.length);
+    }, 2500);
+    return () => clearInterval(interval);
+  }, [pending]);
 
   async function sendMessage(text: string) {
     const trimmed = text.trim();
@@ -210,7 +234,9 @@ export function SeldonChat({ enabled, previewUrl }: SeldonChatProps) {
               ))}
 
               {pending ? (
-                <div className="text-xs text-muted-foreground">SeldonChat is working…</div>
+                <div aria-live="polite" className="text-xs text-muted-foreground">
+                  {PENDING_PHRASES[pendingPhraseIndex]}
+                </div>
               ) : null}
 
               {error ? (

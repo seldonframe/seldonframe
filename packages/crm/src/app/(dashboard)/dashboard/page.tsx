@@ -611,7 +611,10 @@ export default async function DashboardPage({
         })()
       : null;
   const ladderHrefs = {
-    integrationsUrl: "/integrations",
+    // Hotfix H4a — deep-link into the calendar-only filtered view so the
+    // ladder's "connect your calendar" step doesn't dump the operator into
+    // the full 8-toolkit grid.
+    integrationsUrl: "/integrations?connect=calendar",
     domainUrl: "/settings/domain",
     agentsUrl: "/agents",
   };

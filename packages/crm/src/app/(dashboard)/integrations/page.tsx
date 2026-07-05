@@ -26,7 +26,9 @@ export const dynamic = "force-dynamic";
 export default async function IntegrationsPage({
   searchParams,
 }: {
-  searchParams: Promise<{ connected?: string; status?: string }>;
+  // `connect` — hotfix H4a — the win-ladder "connect calendar" deep link
+  // (?connect=calendar) narrows the grid to calendar toolkits.
+  searchParams: Promise<{ connected?: string; status?: string; connect?: string }>;
 }) {
   const orgId = await getOrgId();
   if (!orgId) redirect("/signin");
@@ -89,6 +91,7 @@ export default async function IntegrationsPage({
         hasKey={hasKey}
         returnedToolkit={params.connected ?? null}
         returnedStatus={params.status ?? null}
+        connectFilter={params.connect ?? null}
       />
     </section>
   );

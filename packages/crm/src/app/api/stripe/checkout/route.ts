@@ -14,6 +14,7 @@ import {
   SCALE_BASE_PRICE_ID,
   isAllowedCheckoutPriceId,
   isSelfServiceCheckoutPriceId,
+  isPlaceholderPriceId,
 } from "@/lib/billing/price-ids";
 import {
   buildCheckoutSessionParams,
@@ -222,6 +223,20 @@ export async function POST(req: NextRequest) {
       );
     }
 
+    // Hotfix H4b — fail soft when the resolved base price is still the
+    // unconfigured placeholder (Stripe would otherwise reject it with a raw
+    // "No such price" 500). Never call Stripe with a placeholder id.
+    const unconfiguredPrice = params.line_items.find((item) => isPlaceholderPriceId(item.price));
+    if (unconfiguredPrice) {
+      console.error(
+        "[stripe/checkout] STRIPE_WORKSPACE_PRICE_ID is not set — checkout blocked on placeholder price id."
+      );
+      return NextResponse.json(
+        { error: "Checkout isn't configured yet. Please try again soon." },
+        { status: 503 }
+      );
+    }
+
     const checkoutSession = await stripe.checkout.sessions.create({
       ...params,
       payment_method_types: ["card"],
@@ -257,6 +272,19 @@ export async function POST(req: NextRequest) {
   // legacy `quantity` body field (still range-validated above) is
   // collapsed to 1 here. Operators on a legacy add-on can adjust quantity
   // via the Stripe Billing portal.
+  // Hotfix H4b — same placeholder guard as the tier path above; the legacy
+  // fallback can also resolve to an unconfigured "price_PLACEHOLDER_*" id
+  // when no explicit priceId was requested.
+  if (isPlaceholderPriceId(resolvedPriceId)) {
+    console.error(
+      "[stripe/checkout] STRIPE_WORKSPACE_PRICE_ID is not set — checkout blocked on placeholder price id."
+    );
+    return NextResponse.json(
+      { error: "Checkout isn't configured yet. Please try again soon." },
+      { status: 503 }
+    );
+  }
+
   const lineItems = [{ price: resolvedPriceId, quantity: 1 as const }];
 
   const checkoutSession = await stripe.checkout.sessions.create({
