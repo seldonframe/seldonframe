@@ -6,7 +6,7 @@
 import { describe, test } from "node:test";
 import assert from "node:assert/strict";
 
-import { shouldBustPreview } from "../../../src/components/seldon-chat";
+import { shouldBustPreview, shouldAcceptDrop } from "../../../src/components/seldon-chat";
 
 describe("shouldBustPreview", () => {
   test("true when a tool name starts with edit_", () => {
@@ -46,5 +46,27 @@ describe("shouldBustPreview", () => {
       shouldBustPreview([{ name: "get_site_structure" }, { name: "edit_site" }]),
       true,
     );
+  });
+});
+
+// T4 media-upload follow-up — the drop-zone must not accept a second file
+// while the first is still uploading. The attach BUTTON is disabled during
+// upload, but the drag-drop zone was not, so dropping a 2nd file fired a
+// concurrent handleFile() (last-resolving wins pendingAttachment; the other's
+// error could clobber it). shouldAcceptDrop is the pure guard both onDrop and
+// the onDragOver affordance are gated on. (Component rendering is flaky under
+// jsdom in this repo, so — like shouldBustPreview — only the pure predicate
+// is exercised here.)
+describe("shouldAcceptDrop", () => {
+  test("accepts a drop when idle", () => {
+    assert.equal(shouldAcceptDrop("idle"), true);
+  });
+
+  test("accepts a drop after a failed upload (error) so the operator can retry", () => {
+    assert.equal(shouldAcceptDrop("error"), true);
+  });
+
+  test("rejects a drop while an upload is in flight (blocks the double-upload race)", () => {
+    assert.equal(shouldAcceptDrop("uploading"), false);
   });
 });

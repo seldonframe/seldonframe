@@ -107,6 +107,15 @@ export function shouldBustPreview(toolEvents: { name: string }[]): boolean {
   );
 }
 
+/** T4 — whether the drag-drop zone should accept a dropped file right now.
+ *  False while an upload is already in flight, so a second drop can't fire a
+ *  concurrent handleFile() and clobber the first's pendingAttachment (the
+ *  attach button is disabled the same way). Gates both the onDrop handler and
+ *  the onDragOver drop affordance. */
+export function shouldAcceptDrop(attachStatus: AttachState["status"]): boolean {
+  return attachStatus !== "uploading";
+}
+
 export function SeldonChat({ enabled, previewUrl, hideLauncher }: SeldonChatProps) {
   const [open, setOpen] = useState(false);
   const [messages, setMessages] = useState<ChatMessage[]>([]);
@@ -317,7 +326,8 @@ export function SeldonChat({ enabled, previewUrl, hideLauncher }: SeldonChatProp
             className={`relative flex min-w-0 flex-col ${showTwoPane ? "w-full lg:w-[420px] lg:border-r lg:border-border" : "w-full"}`}
             onDragOver={(event) => {
               event.preventDefault();
-              setDraggingFile(true);
+              // Don't invite a drop while one is already uploading.
+              if (shouldAcceptDrop(attachState.status)) setDraggingFile(true);
             }}
             onDragLeave={(event) => {
               event.preventDefault();
@@ -326,6 +336,9 @@ export function SeldonChat({ enabled, previewUrl, hideLauncher }: SeldonChatProp
             onDrop={(event) => {
               event.preventDefault();
               setDraggingFile(false);
+              // Ignore a 2nd drop mid-upload — otherwise two concurrent
+              // handleFile() calls race and one clobbers the other's result.
+              if (!shouldAcceptDrop(attachState.status)) return;
               const file = event.dataTransfer.files?.[0];
               if (file) void handleFile(file);
             }}

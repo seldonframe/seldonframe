@@ -17,6 +17,8 @@ import { describe, test } from "node:test";
 import assert from "node:assert/strict";
 
 import { decideMediaUploadGrant } from "../../../src/lib/media/upload-token";
+import { IMAGE_MAX_BYTES } from "../../../src/lib/page-blocks/images";
+import { VIDEO_MAX_BYTES } from "../../../src/lib/media/resolve-url";
 
 describe("decideMediaUploadGrant", () => {
   test("rejects when there is no session (orgId null)", () => {
@@ -42,7 +44,7 @@ describe("decideMediaUploadGrant", () => {
     assert.equal(result.ok, true);
     if (result.ok) {
       assert.equal(result.kind, "image");
-      assert.ok(result.maximumSizeInBytes > 0);
+      assert.equal(result.maximumSizeInBytes, IMAGE_MAX_BYTES);
     }
   });
 
@@ -54,20 +56,22 @@ describe("decideMediaUploadGrant", () => {
     assert.equal(result.ok, true);
     if (result.ok) {
       assert.equal(result.kind, "video");
+      assert.equal(result.maximumSizeInBytes, VIDEO_MAX_BYTES);
     }
   });
 
-  test("the granted cap is the larger of the two caps (video), shared across both", () => {
+  test("grants a PER-KIND cap: the small image cap for images, the larger video cap for videos", () => {
     const imageGrant = decideMediaUploadGrant({ orgId: "org_1", contentType: "image/png" });
     const videoGrant = decideMediaUploadGrant({ orgId: "org_1", contentType: "video/mp4" });
     assert.equal(imageGrant.ok, true);
     assert.equal(videoGrant.ok, true);
     if (imageGrant.ok && videoGrant.ok) {
-      // The token route sets ONE maximumSizeInBytes on the grant (Blob's
-      // allowedContentTypes covers the type-narrowing); it must be at
-      // least the video cap so a legitimate video upload is never capped
-      // by the smaller image limit.
-      assert.ok(imageGrant.maximumSizeInBytes >= videoGrant.maximumSizeInBytes);
+      // The grant must be scoped to the DECLARED kind, not a shared max.
+      // Regression guard: a client claiming `image/png` previously received
+      // the 50 MB video allowance, wasting Blob storage on oversized images.
+      assert.equal(imageGrant.maximumSizeInBytes, IMAGE_MAX_BYTES);
+      assert.equal(videoGrant.maximumSizeInBytes, VIDEO_MAX_BYTES);
+      assert.ok(imageGrant.maximumSizeInBytes < videoGrant.maximumSizeInBytes);
     }
   });
 

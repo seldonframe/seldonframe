@@ -9,10 +9,10 @@
 //     the caller — this function never trusts a body-supplied orgId,
 //     it only checks that one was resolved);
 //   - content-type must be in the image OR video allow-list;
-//   - size cap is the larger (video) cap, shared across both — Blob's
-//     allowedContentTypes already narrows which types are accepted, so a
-//     single maximumSizeInBytes is fine (it never loosens the image
-//     allow-list, only how large a permitted file may be).
+//   - size cap is PER-KIND: the 5 MB image cap for an image content type,
+//     the 50 MB video cap for a video one — so a client declaring an image
+//     never receives the (10× larger) video Blob allowance. Blob still
+//     enforces the granted cap server-side against the upload's real bytes.
 
 import {
   ALLOWED_IMAGE_CONTENT_TYPES,
@@ -48,11 +48,6 @@ export const MEDIA_UPLOAD_ALLOWED_CONTENT_TYPES: readonly string[] = [
   ...ALLOWED_VIDEO_CONTENT_TYPES,
 ];
 
-/** One shared cap for the token grant — the larger of the two so a
- *  legitimate video upload is never capped by the smaller image limit.
- *  (Vercel Blob enforces this server-side regardless of content type.) */
-export const MEDIA_UPLOAD_MAX_BYTES = Math.max(IMAGE_MAX_BYTES, VIDEO_MAX_BYTES);
-
 export function decideMediaUploadGrant(
   input: MediaUploadGrantInput,
 ): MediaUploadGrantResult {
@@ -72,6 +67,9 @@ export function decideMediaUploadGrant(
     ok: true,
     kind: isVideo ? "video" : "image",
     allowedContentTypes: [...MEDIA_UPLOAD_ALLOWED_CONTENT_TYPES],
-    maximumSizeInBytes: MEDIA_UPLOAD_MAX_BYTES,
+    // Per-kind cap: an image grant gets the small image limit, a video
+    // grant the larger video one — never a shared max (Blob re-checks the
+    // upload's real bytes against whichever we return here).
+    maximumSizeInBytes: isVideo ? VIDEO_MAX_BYTES : IMAGE_MAX_BYTES,
   };
 }
