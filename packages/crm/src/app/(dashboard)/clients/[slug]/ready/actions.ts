@@ -24,7 +24,6 @@
 "use server";
 
 import { redirect } from "next/navigation";
-import { revalidatePath } from "next/cache";
 import { and, eq } from "drizzle-orm";
 
 import { auth } from "@/auth";
@@ -33,9 +32,7 @@ import { organizations, orgMembers } from "@/db/schema";
 import { assertWritable } from "@/lib/demo/server";
 import { markOnboardingComplete } from "@/lib/onboarding/state";
 import { sendOnboardingCompletionWelcomeEmail } from "@/lib/onboarding/welcome-email";
-import { isLandingTemplateId } from "@/components/landing-templates/registry";
-import { resolveHealthTemplate } from "@/lib/landing/template-selection";
-import { DEFAULT_ORG_THEME, type OrgTheme } from "@/lib/theme/types";
+import { setLandingTemplateForOrg } from "@/lib/landing/set-landing-template-for-org";
 
 /**
  * "Maybe later" — the soft-skip path from the step-3 surface. Marks
@@ -149,8 +146,6 @@ export async function setLandingTemplateAction(
       id: organizations.id,
       ownerId: organizations.ownerId,
       parentUserId: organizations.parentUserId,
-      soul: organizations.soul,
-      theme: organizations.theme,
     })
     .from(organizations)
     .where(eq(organizations.slug, slug))
@@ -169,27 +164,8 @@ export async function setLandingTemplateAction(
     if (!member) return;
   }
 
-  const vertical = ((ws.soul as unknown as { industry?: string } | null)?.industry ?? "").toString();
-
-  let landingTemplate: string;
-  let landingTemplateChoice: string;
-  if (choice === "auto") {
-    landingTemplate = resolveHealthTemplate(vertical);
-    landingTemplateChoice = "auto";
-  } else if (isLandingTemplateId(choice)) {
-    landingTemplate = choice;
-    landingTemplateChoice = choice;
-  } else {
-    return; // unknown id — ignore rather than corrupt the theme
-  }
-
-  const prevTheme: OrgTheme = ws.theme ?? DEFAULT_ORG_THEME;
-  await db
-    .update(organizations)
-    .set({ theme: { ...prevTheme, landingTemplate, landingTemplateChoice } })
-    .where(eq(organizations.id, ws.id));
-
-  // The public landing renders /w/[slug] dynamically, but revalidate anyway in
-  // case ISR is added later, and to bust any RSC cache.
-  revalidatePath(`/w/${slug}`);
+  // Shared org-id-scoped write core (also used by the copilot's update_design
+  // tool) — resolves "auto" via the workspace's vertical, writes
+  // theme.landingTemplate/.landingTemplateChoice, and revalidates /w/[slug].
+  await setLandingTemplateForOrg(ws.id, choice);
 }

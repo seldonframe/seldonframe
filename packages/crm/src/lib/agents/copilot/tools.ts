@@ -36,6 +36,26 @@ import {
   setModuleEnabled as setModuleEnabledDefault,
   setPinned as setPinnedDefault,
 } from "@/lib/workspace/surface";
+import {
+  LANDING_TEMPLATES,
+  isLandingTemplateId,
+  type LandingTemplateId,
+} from "@/components/landing-templates/registry";
+import { DESIGNS as DESIGN_PICKER_ENTRIES } from "@/components/clients/design-picker/data";
+import { isHealthVertical } from "@/lib/landing/template-selection";
+import {
+  setLandingTemplateForOrg as setLandingTemplateForOrgDefault,
+  type SetLandingTemplateResult,
+} from "@/lib/landing/set-landing-template-for-org";
+import {
+  ARCHETYPES,
+  classifyArchetype,
+  type AestheticArchetypeId,
+} from "@/lib/workspace/aesthetic-archetypes";
+import {
+  setArchetypeForOrg as setArchetypeForOrgDefault,
+  type SetExplicitArchetypeResult,
+} from "@/lib/workspace/apply-archetype-theme";
 
 export const COPILOT_CAPABILITY = "workspace_copilot";
 
@@ -514,6 +534,278 @@ const updateTheme: AgentTool<z.infer<typeof updateThemeInput>> & {
     }),
 };
 
+// ─── list_designs / update_design ───────────────────────────────────────────
+//
+// Universal design-switch tool (win-ladder follow-on). update_theme (above)
+// covers COLORS/FONTS/MODE/RADIUS — this covers the whole-site DESIGN SKIN:
+//   1. Premium named landing templates (health/wellness only) — the 5
+//      Claude-Design full-page templates in
+//      components/landing-templates/registry.ts, switched today via
+//      setLandingTemplateAction (ready/actions.ts:138). Factored the
+//      org-id-scoped write into lib/landing/set-landing-template-for-org.ts
+//      (setLandingTemplateForOrg) so both that server action AND this tool
+//      call the same core.
+//   2. Aesthetic archetypes (all verticals, 8 skins) — lib/workspace/
+//      aesthetic-archetypes.ts's ARCHETYPES. classifyArchetype already
+//      picks one from soul at creation time; setArchetypeForOrg
+//      (lib/workspace/apply-archetype-theme.ts, added alongside this tool)
+//      is the new explicit-choice write core an operator's natural-language
+//      request drives.
+//
+// Both writes are content-safe theme swaps — no regeneration, no LLM call,
+// no touching landing-page content/blueprints. Health/wellness orgs get
+// premium template ids + "auto" + all 8 archetype keys; every other
+// vertical gets the 8 archetype keys only (+"auto" meaning best-fit
+// archetype, resolved via classifyArchetype from soul). Asking a
+// non-health org for a premium named template is never a silent no-op —
+// list_designs/update_design both say plainly that premium templates are
+// health/wellness-only today and offer the archetype options that DO fit.
+
+const ARCHETYPE_IDS = Object.keys(ARCHETYPES) as AestheticArchetypeId[];
+
+function archetypeLabel(id: AestheticArchetypeId): string {
+  return ARCHETYPES[id]?.label ?? id;
+}
+
+function templateLabel(id: LandingTemplateId): string {
+  return DESIGN_PICKER_ENTRIES.find((d) => d.id === id)?.name ?? id;
+}
+
+/** Injectable seam for list_designs/update_design's execute (mirrors
+ *  UpdateThemeDeps/ModuleToolsDeps above) — DI over module mocking per this
+ *  repo's convention. Defaults to the real write cores so production
+ *  callers are unaffected. */
+export type DesignToolsDeps = {
+  setLandingTemplateForOrg: (orgId: string, choice: string) => Promise<SetLandingTemplateResult>;
+  setArchetypeForOrg: (
+    orgId: string,
+    archetypeId: AestheticArchetypeId,
+  ) => Promise<SetExplicitArchetypeResult>;
+  /** Resolve the org's vertical string (soul.industry / personality_vertical /
+   *  settings.crmPersonality.vertical, most-specific first) — used to decide
+   *  whether premium named templates are offered. Injectable so this tool's
+   *  option-computation is unit-testable without a DB (this repo's DI
+   *  convention — see UpdateThemeDeps/ModuleToolsDeps above). */
+  resolveOrgVertical: (orgId: string) => Promise<string>;
+};
+
+/** Real DB-backed vertical resolver — same soul.industry / settings.
+ *  crmPersonality.vertical fallback pattern applyArchetypeThemeToOrg uses. */
+async function resolveOrgVerticalFromDb(orgId: string): Promise<string> {
+  const [org] = await db
+    .select({ soul: organizations.soul, settings: organizations.settings })
+    .from(organizations)
+    .where(eq(organizations.id, orgId))
+    .limit(1);
+  if (!org) return "";
+
+  const soulRecord = (org.soul as unknown as Record<string, unknown> | null) ?? null;
+  const settingsRecord = (org.settings ?? null) as Record<string, unknown> | null;
+  const crmPersonality = settingsRecord?.crmPersonality as { vertical?: string } | undefined;
+
+  // soul.industry is the field setLandingTemplateAction reads; soul's
+  // snake_case personality_vertical / settings.crmPersonality.vertical are
+  // the fallbacks apply-archetype-theme.ts reads for the archetype
+  // classifier. Try all three, most-specific first.
+  return (
+    (soulRecord?.industry as string | undefined) ??
+    (soulRecord?.personality_vertical as string | undefined) ??
+    crmPersonality?.vertical ??
+    ""
+  ).toString();
+}
+
+const defaultDesignToolsDeps: DesignToolsDeps = {
+  setLandingTemplateForOrg: setLandingTemplateForOrgDefault,
+  setArchetypeForOrg: setArchetypeForOrgDefault,
+  resolveOrgVertical: resolveOrgVerticalFromDb,
+};
+
+/** The full set of design ids valid for this org, split by kind, plus a
+ *  flag for whether premium named templates are offered at all. */
+async function computeDesignOptions(
+  orgId: string,
+  resolveOrgVertical: DesignToolsDeps["resolveOrgVertical"],
+): Promise<{
+  isHealth: boolean;
+  vertical: string;
+  templateIds: LandingTemplateId[];
+  archetypeIds: AestheticArchetypeId[];
+}> {
+  const vertical = await resolveOrgVertical(orgId);
+  const isHealth = isHealthVertical(vertical);
+  return {
+    isHealth,
+    vertical,
+    templateIds: isHealth ? (Object.keys(LANDING_TEMPLATES) as LandingTemplateId[]) : [],
+    archetypeIds: ARCHETYPE_IDS,
+  };
+}
+
+const listDesignsInput = z.object({});
+
+const listDesigns: AgentTool<z.infer<typeof listDesignsInput>> & {
+  execute: (
+    input: z.infer<typeof listDesignsInput>,
+    ctx: ToolExecuteContext,
+    deps?: DesignToolsDeps,
+  ) => ReturnType<AgentTool<z.infer<typeof listDesignsInput>>["execute"]>;
+} = {
+  name: "list_designs",
+  description:
+    "List the design options valid for THIS workspace, so you can name them correctly before calling update_design. Health/wellness workspaces get premium named templates (e.g. 'Clinical Luxe') plus the 8 general archetype looks; every other workspace gets just the 8 archetype looks. Always call this before update_design if you're not sure what's available.",
+  inputSchema: listDesignsInput,
+  jsonSchema: { type: "object", properties: {}, required: [] },
+  execute: (
+    _input,
+    ctx: ToolExecuteContext,
+    deps: DesignToolsDeps = defaultDesignToolsDeps,
+  ) =>
+    safe(async () => {
+      const { isHealth, vertical, templateIds, archetypeIds } = await computeDesignOptions(
+        ctx.orgId,
+        deps.resolveOrgVertical,
+      );
+      return {
+        ok: true as const,
+        isHealthWorkspace: isHealth,
+        vertical: vertical || null,
+        premiumTemplates: templateIds.map((id) => ({ id, name: templateLabel(id) })),
+        archetypes: archetypeIds.map((id) => ({ id, name: archetypeLabel(id) })),
+        note: isHealth
+          ? "This workspace can use either a premium named template or an archetype look. 'auto' picks the best fit automatically."
+          : "Premium named templates are health/wellness only today — this workspace uses the archetype looks. 'auto' picks the best-fit archetype automatically.",
+      };
+    }),
+};
+
+const updateDesignInput = z.object({
+  design: z.string().min(1, "design is required"),
+});
+
+const updateDesign: AgentTool<z.infer<typeof updateDesignInput>> & {
+  execute: (
+    input: z.infer<typeof updateDesignInput>,
+    ctx: ToolExecuteContext,
+    deps?: DesignToolsDeps,
+  ) => ReturnType<AgentTool<z.infer<typeof updateDesignInput>>["execute"]>;
+} = {
+  name: "update_design",
+  description:
+    "Switch the workspace's whole public-site DESIGN/TEMPLATE/LOOK by name — a content-safe re-skin, never a regeneration (existing copy, sections, and edits are untouched). Use THIS tool when the user asks to change the overall design, template, or aesthetic/vibe of their site (e.g. 'switch to the bold-urgency look', 'use the Clinical Luxe template', 'make my site feel more premium'). Use update_theme instead for just colors/fonts/mode/radius, and edit_site for content/copy/section changes. Pass design='auto' to let the system pick the best fit. Call list_designs first if you don't already know which design names are valid for this workspace.",
+  inputSchema: updateDesignInput,
+  jsonSchema: {
+    type: "object",
+    properties: {
+      design: {
+        type: "string",
+        description:
+          "The design to switch to: a premium template id/name (health/wellness workspaces only), an archetype id (e.g. 'bold-urgency', 'clinical-trust'), or 'auto' for best-fit.",
+      },
+    },
+    required: ["design"],
+  },
+  execute: (
+    input,
+    ctx: ToolExecuteContext,
+    deps: DesignToolsDeps = defaultDesignToolsDeps,
+  ) =>
+    safe(async () => {
+      const requested = input.design.trim();
+      const requestedLower = requested.toLowerCase();
+      const { isHealth, templateIds, archetypeIds } = await computeDesignOptions(
+        ctx.orgId,
+        deps.resolveOrgVertical,
+      );
+
+      // 1. "auto" — health orgs resolve to the best-fit premium template
+      //    (setLandingTemplateForOrg's own "auto" handling); non-health orgs
+      //    resolve to the best-fit archetype via classifyArchetype, invoked
+      //    inside applyArchetypeThemeToOrg's sibling write path — but since
+      //    THIS tool is an explicit operator request, we still want an
+      //    honest, deterministic pick rather than silently no-op-ing, so we
+      //    reuse setArchetypeForOrg with the archetype the org would
+      //    classify to. isHealthVertical already told us which track we're
+      //    on; for non-health "auto" we classify from resolved vertical.
+      if (requestedLower === "auto") {
+        if (isHealth) {
+          const result = await deps.setLandingTemplateForOrg(ctx.orgId, "auto");
+          logEvent("design_update", { design: "auto", kind: "template", via: "copilot" }, { orgId: ctx.orgId });
+          if (!result.ok) return { ok: false as const, error: result.error };
+          return {
+            ok: true as const,
+            kind: "template" as const,
+            applied: result.landingTemplate,
+            message: `Your site now uses the ${templateLabel(result.landingTemplate as LandingTemplateId)} design (auto-picked for your business).`,
+          };
+        }
+        // Non-health auto → best-fit archetype. classifyArchetype needs the
+        // soul shape, which resolveOrgVertical already partially reads; reuse
+        // the same vertical string as a conservative classifier input.
+        const vertical = await deps.resolveOrgVertical(ctx.orgId);
+        const archetypeId = classifyArchetype({ vertical });
+        const result = await deps.setArchetypeForOrg(ctx.orgId, archetypeId);
+        logEvent("design_update", { design: archetypeId, kind: "archetype", via: "copilot" }, { orgId: ctx.orgId });
+        if (!result.ok) return { ok: false as const, error: result.reason ?? "archetype_apply_failed" };
+        return {
+          ok: true as const,
+          kind: "archetype" as const,
+          applied: archetypeId,
+          message: `Your site now uses the ${archetypeLabel(archetypeId)} look (auto-picked for your business).`,
+        };
+      }
+
+      // 2. Premium named template match (health orgs only).
+      const templateMatch = templateIds.find((id) => id === requestedLower || id === requested);
+      if (templateMatch || isLandingTemplateId(requestedLower)) {
+        if (!isHealth) {
+          // Never-lies: don't silently no-op. Say plainly that premium
+          // templates aren't available for this workspace and offer what
+          // IS available.
+          return {
+            ok: false as const,
+            error: "premium_template_not_available_for_vertical",
+            message: `Premium named templates like that are health/wellness only today — this workspace isn't on that track. You can still switch to one of the archetype looks: ${archetypeIds.map(archetypeLabel).join(", ")}.`,
+          };
+        }
+        const id = (templateMatch ?? requestedLower) as LandingTemplateId;
+        const result = await deps.setLandingTemplateForOrg(ctx.orgId, id);
+        logEvent("design_update", { design: id, kind: "template", via: "copilot" }, { orgId: ctx.orgId });
+        if (!result.ok) return { ok: false as const, error: result.error };
+        return {
+          ok: true as const,
+          kind: "template" as const,
+          applied: result.landingTemplate,
+          message: `Your site now uses the ${templateLabel(id)} design.`,
+        };
+      }
+
+      // 3. Archetype key match (every vertical).
+      const archetypeMatch = archetypeIds.find((id) => id === requestedLower);
+      if (archetypeMatch) {
+        const result = await deps.setArchetypeForOrg(ctx.orgId, archetypeMatch);
+        logEvent("design_update", { design: archetypeMatch, kind: "archetype", via: "copilot" }, { orgId: ctx.orgId });
+        if (!result.ok) return { ok: false as const, error: result.reason ?? "archetype_apply_failed" };
+        return {
+          ok: true as const,
+          kind: "archetype" as const,
+          applied: archetypeMatch,
+          message: `Your site now uses the ${archetypeLabel(archetypeMatch)} look.`,
+        };
+      }
+
+      // 4. Nothing matched — honest rejection naming what DOES fit.
+      const validOptions = isHealth
+        ? [...templateIds, ...archetypeIds, "auto"]
+        : [...archetypeIds, "auto"];
+      return {
+        ok: false as const,
+        error: "unknown_design",
+        message: `"${requested}" isn't a design this workspace can use. Valid options: ${validOptions.join(", ")}.`,
+      };
+    }),
+};
+
 // ─── enable_module / disable_module / pin_card ──────────────────────────────
 //
 // Simple-home wave (Task 8). Feature on/off and pinning go through the same
@@ -725,6 +1017,8 @@ export function buildCopilotTools(): AgentTool[] {
     listVersions as AgentTool,
     undoLastChange as AgentTool,
     updateTheme as AgentTool,
+    listDesigns as AgentTool,
+    updateDesign as AgentTool,
     enableModule as AgentTool,
     disableModule as AgentTool,
     pinCard as AgentTool,

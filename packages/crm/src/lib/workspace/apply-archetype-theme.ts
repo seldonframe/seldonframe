@@ -242,3 +242,74 @@ export async function applyArchetypeThemeToOrg(
     return { ok: false, archetype: null, wrote: false, overwroteLegacyDefaults: false, reason };
   }
 }
+
+export interface SetExplicitArchetypeResult {
+  ok: boolean;
+  archetype: AestheticArchetypeId | null;
+  reason?: string;
+}
+
+/**
+ * Write an EXPLICIT, operator/copilot-chosen archetype id onto the org's
+ * theme — as opposed to applyArchetypeThemeToOrg above, which classifies
+ * the archetype FROM soul and only writes when none is set yet.
+ *
+ * Used by the SeldonChat copilot's update_design tool ("switch to the
+ * bold-urgency look"): unlike applyArchetypeThemeToOrg, this ALWAYS
+ * overwrites palette/font/mode with the chosen archetype's tokens — an
+ * explicit request to switch designs is exactly the "operator customized
+ * it" signal, so there's no legacy-default gate here.
+ *
+ * Content-safe: only ever writes palette/font/mode/aestheticArchetype
+ * fields. Carries landingTemplate/landingTemplateChoice forward untouched
+ * (same rationale as the block comment above — don't let an archetype
+ * switch silently wipe a chosen premium health template) and leaves
+ * borderRadius/logoUrl/motionPreset as the operator already set them.
+ * Soft-fail — never throws.
+ */
+export async function setArchetypeForOrg(
+  orgId: string,
+  archetypeId: AestheticArchetypeId,
+): Promise<SetExplicitArchetypeResult> {
+  try {
+    const archetype = ARCHETYPES[archetypeId];
+    if (!archetype) {
+      return { ok: false, archetype: null, reason: `unknown_archetype: ${archetypeId}` };
+    }
+
+    const [org] = await db
+      .select({ id: organizations.id, theme: organizations.theme })
+      .from(organizations)
+      .where(eq(organizations.id, orgId))
+      .limit(1);
+    if (!org) {
+      return { ok: false, archetype: null, reason: "org_not_found" };
+    }
+
+    const currentTheme = (org.theme ?? DEFAULT_ORG_THEME) as OrgTheme;
+
+    const newTheme: OrgTheme = {
+      ...currentTheme,
+      primaryColor: archetype.palette.primary,
+      accentColor: archetype.palette.secondary,
+      fontFamily: archetype.fonts.headline as OrgTheme["fontFamily"],
+      mode: archetype.defaultThemeMode,
+      aestheticArchetype: archetypeId,
+      // Preserve any premium health template — an archetype switch is a
+      // different axis and must not silently clear it (same rationale as
+      // applyArchetypeThemeToOrg's legacy-overwrite branch above).
+      landingTemplate: currentTheme.landingTemplate,
+      landingTemplateChoice: currentTheme.landingTemplateChoice,
+    };
+
+    await db
+      .update(organizations)
+      .set({ theme: newTheme, updatedAt: new Date() })
+      .where(eq(organizations.id, orgId));
+
+    return { ok: true, archetype: archetypeId };
+  } catch (err) {
+    const reason = err instanceof Error ? err.message : String(err);
+    return { ok: false, archetype: null, reason };
+  }
+}

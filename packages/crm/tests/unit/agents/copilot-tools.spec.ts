@@ -22,11 +22,17 @@ import {
   COPILOT_CAPABILITY,
   buildCopilotTools,
 } from "../../../src/lib/agents/copilot/tools";
-import type { UpdateThemeDeps, ModuleToolsDeps } from "../../../src/lib/agents/copilot/tools";
+import type {
+  UpdateThemeDeps,
+  ModuleToolsDeps,
+  DesignToolsDeps,
+} from "../../../src/lib/agents/copilot/tools";
 import type { ToolExecuteContext } from "../../../src/lib/agents/tools";
 import type { OrgTheme } from "../../../src/lib/theme/types";
 import type { ModuleId } from "../../../src/lib/workspace/modules";
 import { isWinLadderOn } from "../../../src/lib/web-build/policy";
+import type { SetLandingTemplateResult } from "../../../src/lib/landing/set-landing-template-for-org";
+import type { SetExplicitArchetypeResult } from "../../../src/lib/workspace/apply-archetype-theme";
 
 function fakeCtx(overrides: Partial<ToolExecuteContext> = {}): ToolExecuteContext {
   return {
@@ -61,6 +67,8 @@ const EXPECTED_TOOL_NAMES = [
   "list_versions",
   "undo_last_change",
   "update_theme",
+  "list_designs",
+  "update_design",
   "enable_module",
   "disable_module",
   "pin_card",
@@ -73,7 +81,7 @@ describe("COPILOT_CAPABILITY", () => {
 });
 
 describe("buildCopilotTools", () => {
-  test("returns exactly the 12 expected tool names", () => {
+  test("returns exactly the 14 expected tool names", () => {
     const tools = buildCopilotTools();
     const names = tools.map((t) => t.name).sort();
     assert.deepEqual(names, [...EXPECTED_TOOL_NAMES].sort());
@@ -218,6 +226,186 @@ describe("buildCopilotTools", () => {
     assert.equal(saveThemeForOrg.mock.callCount(), 1);
     const [, calledPatch] = saveThemeForOrg.mock.calls[0]!.arguments;
     assert.deepEqual(calledPatch, { accentColor: "#abcdef" });
+  });
+});
+
+describe("update_design / list_designs", () => {
+  function designDeps(overrides: Partial<DesignToolsDeps> = {}): DesignToolsDeps {
+    return {
+      setLandingTemplateForOrg: mock.fn(
+        async (_orgId: string, choice: string): Promise<SetLandingTemplateResult> => ({
+          ok: true,
+          landingTemplate: choice === "auto" ? "earthy-modern-clinical" : choice,
+          landingTemplateChoice: choice,
+        }),
+      ),
+      setArchetypeForOrg: mock.fn(
+        async (_orgId: string, archetypeId): Promise<SetExplicitArchetypeResult> => ({
+          ok: true,
+          archetype: archetypeId,
+        }),
+      ),
+      // Default: non-health vertical, so tests must opt in to a health
+      // vertical explicitly — matches the "no matching row" real-world
+      // default (isHealthVertical("") is false).
+      resolveOrgVertical: mock.fn(async (_orgId: string) => ""),
+      ...overrides,
+    };
+  }
+
+  test("update_design zod schema requires a non-empty design string", () => {
+    const tools = buildCopilotTools();
+    const updateDesign = tools.find((t) => t.name === "update_design");
+    assert.ok(updateDesign, "update_design tool must exist");
+
+    assert.equal(updateDesign!.inputSchema.safeParse({}).success, false);
+    assert.equal(updateDesign!.inputSchema.safeParse({ design: "" }).success, false);
+    assert.equal(updateDesign!.inputSchema.safeParse({ design: "bold-urgency" }).success, true);
+  });
+
+  test("update_design rejects an id not valid for the org's vertical (unknown design)", async () => {
+    const tools = buildCopilotTools();
+    const updateDesign = tools.find((t) => t.name === "update_design");
+    assert.ok(updateDesign, "update_design tool must exist");
+
+    const deps = designDeps();
+    const ctx = fakeCtx();
+
+    const result = (await (
+      updateDesign!.execute as unknown as (
+        input: unknown,
+        ctx: ToolExecuteContext,
+        deps: DesignToolsDeps,
+      ) => Promise<unknown>
+    )({ design: "not-a-real-design" }, ctx, deps)) as { ok: boolean; message: string };
+
+    assert.equal(result.ok, false);
+    assert.match(result.message, /isn't a design/i);
+    assert.equal((deps.setLandingTemplateForOrg as unknown as ReturnType<typeof mock.fn>).mock.callCount(), 0);
+    assert.equal((deps.setArchetypeForOrg as unknown as ReturnType<typeof mock.fn>).mock.callCount(), 0);
+  });
+
+  test("archetype key calls the archetype-apply core, using ctx.orgId (malicious args orgId ignored)", async () => {
+    const tools = buildCopilotTools();
+    const updateDesign = tools.find((t) => t.name === "update_design");
+    assert.ok(updateDesign, "update_design tool must exist");
+
+    const deps = designDeps();
+    const ctx = fakeCtx({ orgId: "org-real-123" });
+    const maliciousArgs = { design: "bold-urgency", orgId: "attacker-org", workspaceId: "attacker-org-2" };
+
+    const result = (await (
+      updateDesign!.execute as unknown as (
+        input: unknown,
+        ctx: ToolExecuteContext,
+        deps: DesignToolsDeps,
+      ) => Promise<unknown>
+    )(maliciousArgs, ctx, deps)) as { ok: boolean; kind: string; applied: string };
+
+    const setArchetypeForOrg = deps.setArchetypeForOrg as unknown as ReturnType<typeof mock.fn>;
+    assert.equal(setArchetypeForOrg.mock.callCount(), 1);
+    const [calledOrgId, calledArchetype] = setArchetypeForOrg.mock.calls[0]!.arguments;
+    assert.equal(calledOrgId, "org-real-123");
+    assert.notEqual(calledOrgId, "attacker-org");
+    assert.notEqual(calledOrgId, "attacker-org-2");
+    assert.equal(calledArchetype, "bold-urgency");
+    assert.equal(result.ok, true);
+    assert.equal(result.kind, "archetype");
+    assert.equal(result.applied, "bold-urgency");
+  });
+
+  test("list_designs reports isHealthWorkspace:false and premiumTemplates:[] for a non-health workspace", async () => {
+    const tools = buildCopilotTools();
+    const listDesigns = tools.find((t) => t.name === "list_designs");
+    assert.ok(listDesigns, "list_designs tool must exist");
+
+    const deps = designDeps(); // default resolveOrgVertical → "" → non-health
+    const ctx = fakeCtx();
+    const result = (await (
+      listDesigns!.execute as unknown as (
+        input: unknown,
+        ctx: ToolExecuteContext,
+        deps: DesignToolsDeps,
+      ) => Promise<unknown>
+    )({}, ctx, deps)) as {
+      ok: boolean;
+      isHealthWorkspace: boolean;
+      premiumTemplates: unknown[];
+      archetypes: { id: string }[];
+    };
+
+    assert.equal(result.ok, true);
+    assert.equal(result.isHealthWorkspace, false);
+    assert.deepEqual(result.premiumTemplates, []);
+    assert.equal(result.archetypes.length, 8);
+  });
+
+  test("list_designs reports isHealthWorkspace:true and non-empty premiumTemplates for a health workspace", async () => {
+    const tools = buildCopilotTools();
+    const listDesigns = tools.find((t) => t.name === "list_designs");
+    assert.ok(listDesigns, "list_designs tool must exist");
+
+    const deps = designDeps({ resolveOrgVertical: mock.fn(async () => "chiropractic") });
+    const ctx = fakeCtx();
+    const result = (await (
+      listDesigns!.execute as unknown as (
+        input: unknown,
+        ctx: ToolExecuteContext,
+        deps: DesignToolsDeps,
+      ) => Promise<unknown>
+    )({}, ctx, deps)) as { ok: boolean; isHealthWorkspace: boolean; premiumTemplates: { id: string }[] };
+
+    assert.equal(result.ok, true);
+    assert.equal(result.isHealthWorkspace, true);
+    assert.ok(result.premiumTemplates.length >= 5, "health workspaces should see all 5 premium templates");
+  });
+
+  test("a health org accepts a premium template id and calls the template-apply core with ctx.orgId", async () => {
+    const tools = buildCopilotTools();
+    const updateDesign = tools.find((t) => t.name === "update_design");
+    assert.ok(updateDesign, "update_design tool must exist");
+
+    const deps = designDeps({ resolveOrgVertical: mock.fn(async () => "chiropractic") });
+    const ctx = fakeCtx({ orgId: "org-real-123" });
+
+    const result = (await (
+      updateDesign!.execute as unknown as (
+        input: unknown,
+        ctx: ToolExecuteContext,
+        deps: DesignToolsDeps,
+      ) => Promise<unknown>
+    )({ design: "clinical-luxe" }, ctx, deps)) as { ok: boolean; kind: string; applied: string };
+
+    const setLandingTemplateForOrg = deps.setLandingTemplateForOrg as unknown as ReturnType<typeof mock.fn>;
+    assert.equal(setLandingTemplateForOrg.mock.callCount(), 1);
+    const [calledOrgId, calledChoice] = setLandingTemplateForOrg.mock.calls[0]!.arguments;
+    assert.equal(calledOrgId, "org-real-123");
+    assert.equal(calledChoice, "clinical-luxe");
+    assert.equal(result.ok, true);
+    assert.equal(result.kind, "template");
+    assert.equal(result.applied, "clinical-luxe");
+  });
+
+  test("a non-health org asking for a premium template gets the honest archetype-fallback, not a silent no-op", async () => {
+    const tools = buildCopilotTools();
+    const updateDesign = tools.find((t) => t.name === "update_design");
+    assert.ok(updateDesign, "update_design tool must exist");
+
+    const deps = designDeps(); // default resolveOrgVertical → "" → non-health
+    const ctx = fakeCtx();
+
+    const result = (await (
+      updateDesign!.execute as unknown as (
+        input: unknown,
+        ctx: ToolExecuteContext,
+        deps: DesignToolsDeps,
+      ) => Promise<unknown>
+    )({ design: "clinical-luxe" }, ctx, deps)) as { ok: boolean; message: string };
+
+    assert.equal(result.ok, false);
+    assert.match(result.message, /health\/wellness only/i);
+    assert.match(result.message, /archetype/i);
+    assert.equal((deps.setLandingTemplateForOrg as unknown as ReturnType<typeof mock.fn>).mock.callCount(), 0);
   });
 });
 
