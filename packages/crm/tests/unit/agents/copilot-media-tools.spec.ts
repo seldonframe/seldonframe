@@ -272,6 +272,52 @@ describe("update_media", () => {
     assert.match(result.error ?? "", /no_landing_exists/);
   });
 
+  test("rejects kind:video on a non-video slot (kind_slot_mismatch), never calling resolveExternalMedia/setR1Media", async () => {
+    const tool = getTool("update_media");
+    const deps = makeDeps();
+    const ctx = fakeCtx();
+
+    const result = (await (
+      tool.execute as unknown as (
+        input: unknown,
+        ctx: ToolExecuteContext,
+        deps: MediaToolsDeps,
+      ) => Promise<unknown>
+    )(
+      { slot: "hero_background", url: "https://example.com/clip.mp4", kind: "video" },
+      ctx,
+      deps,
+    )) as { ok: boolean; error?: string };
+
+    assert.equal(result.ok, false);
+    assert.equal(result.error, "kind_slot_mismatch");
+    assert.equal((deps.resolveExternalMedia as unknown as ReturnType<typeof mock.fn>).mock.callCount(), 0);
+    assert.equal((deps.setR1Media as unknown as ReturnType<typeof mock.fn>).mock.callCount(), 0);
+  });
+
+  test("rejects kind:image (or default) on the video slot (kind_slot_mismatch), never calling resolveExternalMedia/setR1Media", async () => {
+    const tool = getTool("update_media");
+    const deps = makeDeps();
+    const ctx = fakeCtx();
+
+    const result = (await (
+      tool.execute as unknown as (
+        input: unknown,
+        ctx: ToolExecuteContext,
+        deps: MediaToolsDeps,
+      ) => Promise<unknown>
+    )(
+      { slot: "hero_background_video", url: "https://example.com/photo.jpg", kind: "image" },
+      ctx,
+      deps,
+    )) as { ok: boolean; error?: string };
+
+    assert.equal(result.ok, false);
+    assert.equal(result.error, "kind_slot_mismatch");
+    assert.equal((deps.resolveExternalMedia as unknown as ReturnType<typeof mock.fn>).mock.callCount(), 0);
+    assert.equal((deps.setR1Media as unknown as ReturnType<typeof mock.fn>).mock.callCount(), 0);
+  });
+
   test("slot and url are required by zod; no orgId-shaped field exists on the schema", () => {
     const tool = getTool("update_media");
     const missingUrl = tool.inputSchema.safeParse({ slot: "hero_background" });

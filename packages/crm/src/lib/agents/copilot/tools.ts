@@ -1165,6 +1165,29 @@ const updateMedia: AgentTool<z.infer<typeof updateMediaInput>> & {
   ) =>
     safe(async () => {
       const kind: MediaKind = input.kind ?? "image";
+
+      // Guard: kind and slot must agree BEFORE any resolve/write happens.
+      // setR1Media dispatches purely on `slot`, so a mismatched kind/slot
+      // pair (e.g. slot:"hero_background", kind:"video") would validate
+      // here and then write a wrong-shaped media value into the slot,
+      // breaking the hero render on a live customer site.
+      if (kind === "video" && input.slot !== "hero_background_video") {
+        return {
+          ok: false as const,
+          error: "kind_slot_mismatch",
+          message:
+            'A video can only go in the background-video slot (hero_background_video). For an image, drop kind or use kind:"image".',
+        };
+      }
+      if (kind !== "video" && input.slot === "hero_background_video") {
+        return {
+          ok: false as const,
+          error: "kind_slot_mismatch",
+          message:
+            'The background-video slot needs kind:"video". For an image, pick hero_background / hero_image / service_photo:<i>.',
+        };
+      }
+
       const resolved = await deps.resolveExternalMedia(input.url, kind);
       if (!resolved.ok) {
         return {

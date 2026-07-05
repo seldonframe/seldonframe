@@ -209,10 +209,15 @@ export function SeldonChat({ enabled, previewUrl, hideLauncher }: SeldonChatProp
 
       // Media picker thumbnails: show a fresh set when search_media ran this
       // turn, clear it once a pick actually applied (a successful
-      // update_media), otherwise leave whatever's showing.
+      // update_media) or the media was removed (a successful delete_media),
+      // otherwise leave whatever's showing.
       if (data.mediaOptions?.photos?.length) {
         setMediaOptions(data.mediaOptions);
-      } else if (data.toolEvents.some((event) => event.name === "update_media" && event.ok)) {
+      } else if (
+        data.toolEvents.some(
+          (event) => (event.name === "update_media" || event.name === "delete_media") && event.ok,
+        )
+      ) {
         setMediaOptions(null);
       }
 
@@ -378,7 +383,7 @@ export function SeldonChat({ enabled, previewUrl, hideLauncher }: SeldonChatProp
                         title={`${photo.source}${photo.credit ? ` — ${photo.credit}` : ""}`}
                         onClick={() =>
                           void sendMessage(
-                            `Set the ${mediaOptions.slot} to this image: ${photo.url}`,
+                            `Set the ${mediaOptions.slot} to this image: ${photo.url} (alt text: "${photo.alt}")`,
                             "Applying photo…",
                           )
                         }
