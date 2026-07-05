@@ -172,3 +172,72 @@ export async function setR1Media(
   deps.revalidate(orgId);
   return { ok: true, slot };
 }
+
+/**
+ * Clear (remove) a single media field from the org's r1 landing payload.
+ * Same slot vocabulary + validation as setR1Media — rejects any slot outside
+ * the known set (no write, no save), bounds-checks service_photo:<index>.
+ * Content-safe: removes ONLY the targeted media field, nothing else.
+ */
+export async function clearR1Media(
+  orgId: string,
+  slot: string,
+  deps: SetR1MediaDeps = DEFAULT_DEPS,
+): Promise<SetR1MediaResult> {
+  const serviceMatch = SERVICE_PHOTO_RE.exec(slot);
+  const isKnownSlot =
+    slot === "hero_image" ||
+    slot === "hero_background" ||
+    slot === "hero_background_video" ||
+    serviceMatch !== null;
+
+  if (!isKnownSlot) {
+    return { ok: false, error: "unknown_slot" };
+  }
+
+  const loaded = await deps.load(orgId);
+  if (!loaded) {
+    return { ok: false, error: "no_landing_exists" };
+  }
+  const { payload, archetype } = loaded;
+
+  if (serviceMatch) {
+    const index = Number(serviceMatch[1]);
+    const services = payload.services?.services ?? [];
+    if (!Number.isInteger(index) || index < 0 || index >= services.length) {
+      return { ok: false, error: "service_index_out_of_range" };
+    }
+
+    const nextServices = services.map((svc, i) => {
+      if (i !== index) return svc;
+      const { photo: _photo, ...rest } = svc;
+      return rest;
+    });
+    const nextPayload: R1LandingPayload = {
+      ...payload,
+      services: { ...payload.services, services: nextServices },
+    };
+
+    await deps.save(orgId, nextPayload, archetype);
+    deps.revalidate(orgId);
+    return { ok: true, slot };
+  }
+
+  let nextHero = payload.hero;
+  if (slot === "hero_image") {
+    const { heroImage: _heroImage, ...rest } = payload.hero;
+    nextHero = rest;
+  } else if (slot === "hero_background") {
+    const { backgroundImage: _backgroundImage, ...rest } = payload.hero;
+    nextHero = rest;
+  } else if (slot === "hero_background_video") {
+    const { backgroundVideo: _backgroundVideo, ...rest } = payload.hero;
+    nextHero = rest;
+  }
+
+  const nextPayload: R1LandingPayload = { ...payload, hero: nextHero };
+
+  await deps.save(orgId, nextPayload, archetype);
+  deps.revalidate(orgId);
+  return { ok: true, slot };
+}

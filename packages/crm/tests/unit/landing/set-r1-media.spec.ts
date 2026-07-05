@@ -1,6 +1,6 @@
 import { describe, test } from "node:test";
 import assert from "node:assert/strict";
-import { setR1Media } from "../../../src/lib/landing/set-r1-media";
+import { setR1Media, clearR1Media } from "../../../src/lib/landing/set-r1-media";
 import type { R1LandingPayload } from "../../../src/lib/landing/r1-payload-prompt";
 
 function basePayload(): R1LandingPayload {
@@ -205,6 +205,97 @@ describe("setR1Media", () => {
       { slot: "hero_image", src: "https://example.com/x.jpg" },
       deps,
     );
+
+    assert.deepEqual(result, { ok: false, error: "no_landing_exists" });
+    assert.equal(saved.payload, undefined);
+  });
+});
+
+describe("clearR1Media", () => {
+  test("hero_image slot clears payload.hero.heroImage and nothing else", async () => {
+    const payload = basePayload();
+    const { deps, saved } = makeDeps(payload);
+
+    const result = await clearR1Media("org-1", "hero_image", deps);
+
+    assert.deepEqual(result, { ok: true, slot: "hero_image" });
+    assert.equal(saved.payload?.hero.heroImage, undefined);
+    assert.equal(saved.payload?.hero.tagline, payload.hero.tagline);
+    assert.equal(saved.payload?.hero.businessName, payload.hero.businessName);
+    assert.deepEqual(saved.payload?.services, payload.services);
+  });
+
+  test("hero_background slot clears payload.hero.backgroundImage and nothing else", async () => {
+    const payload = basePayload();
+    payload.hero.backgroundImage = { src: "https://example.com/bg.jpg", alt: "bg" };
+    const { deps, saved } = makeDeps(payload);
+
+    const result = await clearR1Media("org-1", "hero_background", deps);
+
+    assert.deepEqual(result, { ok: true, slot: "hero_background" });
+    assert.equal(saved.payload?.hero.backgroundImage, undefined);
+    // heroImage (foreground) untouched.
+    assert.deepEqual(saved.payload?.hero.heroImage, payload.hero.heroImage);
+  });
+
+  test("hero_background_video slot clears payload.hero.backgroundVideo and nothing else", async () => {
+    const payload = basePayload();
+    payload.hero.backgroundVideo = { src: "https://example.com/bg.mp4", poster: undefined };
+    const { deps, saved } = makeDeps(payload);
+
+    const result = await clearR1Media("org-1", "hero_background_video", deps);
+
+    assert.deepEqual(result, { ok: true, slot: "hero_background_video" });
+    assert.equal(saved.payload?.hero.backgroundVideo, undefined);
+    assert.deepEqual(saved.payload?.hero.heroImage, payload.hero.heroImage);
+  });
+
+  test("service_photo:<index> slot clears payload.services.services[index].photo and nothing else", async () => {
+    const payload = basePayload();
+    payload.services.services[1] = {
+      ...payload.services.services[1],
+      photo: { src: "https://example.com/svc2.jpg", alt: "svc2 photo" },
+    };
+    const { deps, saved } = makeDeps(payload);
+
+    const result = await clearR1Media("org-1", "service_photo:1", deps);
+
+    assert.deepEqual(result, { ok: true, slot: "service_photo:1" });
+    assert.equal(saved.payload?.services.services[1].photo, undefined);
+    assert.equal(saved.payload?.services.services[0].photo, undefined);
+    assert.equal(saved.payload?.services.services[0].name, "Drain cleaning");
+    assert.deepEqual(saved.payload?.hero, payload.hero);
+  });
+
+  test("service_photo:<out-of-range> is rejected with no save", async () => {
+    const payload = basePayload();
+    const { deps, saved } = makeDeps(payload);
+
+    const result = await clearR1Media("org-1", "service_photo:99", deps);
+
+    assert.deepEqual(result, { ok: false, error: "service_index_out_of_range" });
+    assert.equal(saved.payload, undefined);
+  });
+
+  test("unknown slot is rejected with no save", async () => {
+    const payload = basePayload();
+    const { deps, saved } = makeDeps(payload);
+
+    const result = await clearR1Media("org-1", "footer_logo", deps);
+
+    assert.deepEqual(result, { ok: false, error: "unknown_slot" });
+    assert.equal(saved.payload, undefined);
+  });
+
+  test("no r1 landing found returns an error with no save", async () => {
+    const { saved } = makeDeps(basePayload());
+    const deps = {
+      load: async (_orgId: string) => null,
+      save: async () => { throw new Error("save should not be called"); },
+      revalidate: (_path: string) => {},
+    };
+
+    const result = await clearR1Media("org-1", "hero_image", deps);
 
     assert.deepEqual(result, { ok: false, error: "no_landing_exists" });
     assert.equal(saved.payload, undefined);
