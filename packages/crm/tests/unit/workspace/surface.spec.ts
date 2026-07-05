@@ -13,9 +13,11 @@ import {
   canDisableModule,
   setModuleEnabled,
   markChatIntroSeen,
+  setPinned,
   type CanDisableModuleDeps,
   type SetModuleEnabledDeps,
   type MarkChatIntroSeenDeps,
+  type SetPinnedDeps,
 } from "../../../src/lib/workspace/surface";
 import { MODULE_IDS } from "../../../src/lib/workspace/modules";
 
@@ -58,6 +60,14 @@ function setModuleDeps(overrides: Partial<SetModuleEnabledDeps> = {}): SetModule
 }
 
 function markChatIntroSeenDeps(overrides: Partial<MarkChatIntroSeenDeps> = {}): MarkChatIntroSeenDeps {
+  return {
+    readSettings: async () => null,
+    writeSurface: async () => {},
+    ...overrides,
+  };
+}
+
+function setPinnedDeps(overrides: Partial<SetPinnedDeps> = {}): SetPinnedDeps {
   return {
     readSettings: async () => null,
     writeSurface: async () => {},
@@ -417,5 +427,68 @@ describe("markChatIntroSeen", () => {
     );
     assert.ok(writtenSurface);
     assert.equal((writtenSurface as unknown as { chatIntroSeen: boolean }).chatIntroSeen, true);
+  });
+});
+
+describe("setPinned", () => {
+  test("writes the given pinned array while preserving the modules array", async () => {
+    let writtenSurface: Record<string, unknown> | null = null;
+    await setPinned(
+      "org_1",
+      ["money", "leads"],
+      setPinnedDeps({
+        readSettings: async () => ({
+          surface: { modules: ["home", "website", "bookings"], version: 1 },
+        }),
+        writeSurface: async (_orgId, surface) => {
+          writtenSurface = surface;
+        },
+      }),
+    );
+    assert.ok(writtenSurface);
+    const surface = writtenSurface as unknown as { modules: string[]; pinned: string[] };
+    assert.deepEqual(surface.modules, ["home", "website", "bookings"]);
+    assert.deepEqual(surface.pinned, ["money", "leads"]);
+  });
+
+  test("preserves other sibling surface keys untouched (e.g. chatIntroSeen)", async () => {
+    let writtenSurface: Record<string, unknown> | null = null;
+    await setPinned(
+      "org_1",
+      ["home"],
+      setPinnedDeps({
+        readSettings: async () => ({
+          surface: { modules: ["home"], version: 1, chatIntroSeen: true },
+        }),
+        writeSurface: async (_orgId, surface) => {
+          writtenSurface = surface;
+        },
+      }),
+    );
+    assert.ok(writtenSurface);
+    const surface = writtenSurface as unknown as {
+      version: number;
+      chatIntroSeen: boolean;
+      pinned: string[];
+    };
+    assert.equal(surface.version, 1);
+    assert.equal(surface.chatIntroSeen, true);
+    assert.deepEqual(surface.pinned, ["home"]);
+  });
+
+  test("handles a null/absent surface (starts fresh with only pinned)", async () => {
+    let writtenSurface: Record<string, unknown> | null = null;
+    await setPinned(
+      "org_1",
+      ["website"],
+      setPinnedDeps({
+        readSettings: async () => null,
+        writeSurface: async (_orgId, surface) => {
+          writtenSurface = surface;
+        },
+      }),
+    );
+    assert.ok(writtenSurface);
+    assert.deepEqual((writtenSurface as unknown as { pinned: string[] }).pinned, ["website"]);
   });
 });

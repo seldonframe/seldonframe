@@ -31,6 +31,11 @@ import {
 import { saveThemeForOrg } from "@/lib/theme/save-theme";
 import { isHexColor } from "@/lib/theme/normalize-theme";
 import type { OrgTheme } from "@/lib/theme/types";
+import { MODULE_IDS, MODULE_REGISTRY, type ModuleId } from "@/lib/workspace/modules";
+import {
+  setModuleEnabled as setModuleEnabledDefault,
+  setPinned as setPinnedDefault,
+} from "@/lib/workspace/surface";
 
 export const COPILOT_CAPABILITY = "workspace_copilot";
 
@@ -501,6 +506,206 @@ const updateTheme: AgentTool<z.infer<typeof updateThemeInput>> & {
     }),
 };
 
+// ─── enable_module / disable_module / pin_card ──────────────────────────────
+//
+// Simple-home wave (Task 8). Feature on/off and pinning go through the same
+// surface helpers the /settings/features page uses
+// (lib/workspace/surface.ts's setModuleEnabled/setPinned) — no new business
+// logic here, just thin zod-validated tool wrappers with a plain-language
+// read-back composed from MODULE_REGISTRY (never-lies: on a guard rejection,
+// the reason returned by setModuleEnabled is surfaced verbatim, never
+// reworded or softened).
+
+/** Injectable seam for enable_module/disable_module/pin_card's execute
+ *  (mirrors UpdateThemeDeps above): this repo prefers DI over node:test
+ *  mock.module / vi.mock because tsx's CJS interop makes module mocking
+ *  unreliable. Defaults to the real surface.ts helpers so production
+ *  callers are unaffected. */
+export type ModuleToolsDeps = {
+  setModuleEnabled: typeof setModuleEnabledDefault;
+  setPinned: typeof setPinnedDefault;
+};
+
+const defaultModuleToolsDeps: ModuleToolsDeps = {
+  setModuleEnabled: setModuleEnabledDefault,
+  setPinned: setPinnedDefault,
+};
+
+function moduleLabel(moduleId: ModuleId): string {
+  return MODULE_REGISTRY.find((m) => m.id === moduleId)?.label ?? moduleId;
+}
+
+function moduleDescription(moduleId: ModuleId): string {
+  return MODULE_REGISTRY.find((m) => m.id === moduleId)?.description ?? "";
+}
+
+const moduleIdEnum = z.enum(MODULE_IDS as [ModuleId, ...ModuleId[]]);
+
+const enableModuleInput = z.object({
+  module: moduleIdEnum,
+});
+
+const enableModule: AgentTool<z.infer<typeof enableModuleInput>> & {
+  execute: (
+    input: z.infer<typeof enableModuleInput>,
+    ctx: ToolExecuteContext,
+    deps?: ModuleToolsDeps,
+  ) => ReturnType<AgentTool<z.infer<typeof enableModuleInput>>["execute"]>;
+} = {
+  name: "enable_module",
+  description:
+    "Turn a feature on and add it back to the workspace's sidebar. Use when the user asks to turn a feature on, add invoicing, start texting customers, or otherwise show something in the menu that's currently hidden.",
+  inputSchema: enableModuleInput,
+  jsonSchema: {
+    type: "object",
+    properties: {
+      module: {
+        type: "string",
+        enum: MODULE_IDS as unknown as string[],
+        description: "The module id to enable (e.g. 'money', 'messaging', 'agents').",
+      },
+    },
+    required: ["module"],
+  },
+  execute: (
+    input,
+    ctx: ToolExecuteContext,
+    deps: ModuleToolsDeps = defaultModuleToolsDeps,
+  ) =>
+    safe(async () => {
+      // ctx.orgId is the ONLY source of the org to write — input is a
+      // zod-parsed model-args object with no orgId-shaped field in its
+      // schema at all, so even a malicious/hallucinated arg object can't
+      // redirect the write.
+      const result = await deps.setModuleEnabled(ctx.orgId, input.module, true);
+
+      logEvent(
+        "module_enable",
+        { module: input.module, ok: result.ok, via: "copilot" },
+        { orgId: ctx.orgId },
+      );
+
+      if (!result.ok) {
+        return { ok: false as const, message: result.reason };
+      }
+
+      return {
+        ok: true as const,
+        modules: result.modules,
+        message: `${moduleLabel(input.module)} is now in your sidebar — ${moduleDescription(input.module).toLowerCase()}.`,
+      };
+    }),
+};
+
+// ─── disable_module ──────────────────────────────────────────────────────────
+
+const disableModuleInput = z.object({
+  module: moduleIdEnum,
+});
+
+const disableModule: AgentTool<z.infer<typeof disableModuleInput>> & {
+  execute: (
+    input: z.infer<typeof disableModuleInput>,
+    ctx: ToolExecuteContext,
+    deps?: ModuleToolsDeps,
+  ) => ReturnType<AgentTool<z.infer<typeof disableModuleInput>>["execute"]>;
+} = {
+  name: "disable_module",
+  description:
+    "Turn a feature off and hide it from the workspace's sidebar. Nothing is deleted — it can be turned back on any time. Use when the user asks to turn a feature off, hide something from the menu, or simplify their sidebar. Some features (Money with an active subscription, AI staff with a deployed agent, Home) cannot be hidden — the tool will say why.",
+  inputSchema: disableModuleInput,
+  jsonSchema: {
+    type: "object",
+    properties: {
+      module: {
+        type: "string",
+        enum: MODULE_IDS as unknown as string[],
+        description: "The module id to disable (e.g. 'money', 'messaging', 'agents').",
+      },
+    },
+    required: ["module"],
+  },
+  execute: (
+    input,
+    ctx: ToolExecuteContext,
+    deps: ModuleToolsDeps = defaultModuleToolsDeps,
+  ) =>
+    safe(async () => {
+      const result = await deps.setModuleEnabled(ctx.orgId, input.module, false);
+
+      logEvent(
+        "module_disable",
+        { module: input.module, ok: result.ok, via: "copilot" },
+        { orgId: ctx.orgId },
+      );
+
+      if (!result.ok) {
+        // Never-lies: surface the guard's reason verbatim, never reworded.
+        return { ok: false as const, message: result.reason };
+      }
+
+      return {
+        ok: true as const,
+        modules: result.modules,
+        message: `${moduleLabel(input.module)} is now hidden from your sidebar. Nothing was deleted — turn it back on any time.`,
+      };
+    }),
+};
+
+// ─── pin_card ────────────────────────────────────────────────────────────────
+
+const pinCardInput = z.object({
+  modules: z.array(moduleIdEnum).min(1).max(4),
+});
+
+const pinCard: AgentTool<z.infer<typeof pinCardInput>> & {
+  execute: (
+    input: z.infer<typeof pinCardInput>,
+    ctx: ToolExecuteContext,
+    deps?: ModuleToolsDeps,
+  ) => ReturnType<AgentTool<z.infer<typeof pinCardInput>>["execute"]>;
+} = {
+  name: "pin_card",
+  description:
+    "Set which features (up to 4) should lead the workspace's Home page, in order. Use when the user expresses an ordering preference for their Home page, e.g. 'put Bookings first' or 'I want Money and Customers at the top'.",
+  inputSchema: pinCardInput,
+  jsonSchema: {
+    type: "object",
+    properties: {
+      modules: {
+        type: "array",
+        items: { type: "string", enum: MODULE_IDS as unknown as string[] },
+        minItems: 1,
+        maxItems: 4,
+        description: "Module ids in the order they should lead Home, e.g. ['bookings','money'].",
+      },
+    },
+    required: ["modules"],
+  },
+  execute: (
+    input,
+    ctx: ToolExecuteContext,
+    deps: ModuleToolsDeps = defaultModuleToolsDeps,
+  ) =>
+    safe(async () => {
+      // ctx.orgId is the ONLY source of the org to write — same rule as
+      // enable_module/disable_module above.
+      await deps.setPinned(ctx.orgId, input.modules);
+
+      logEvent(
+        "module_pin",
+        { modules: input.modules, via: "copilot" },
+        { orgId: ctx.orgId },
+      );
+
+      return {
+        ok: true as const,
+        pinned: input.modules,
+        message: "Saved — pinned sections will lead your Home page.",
+      };
+    }),
+};
+
 export function buildCopilotTools(): AgentTool[] {
   return [
     getSiteStructure as AgentTool,
@@ -512,5 +717,8 @@ export function buildCopilotTools(): AgentTool[] {
     listVersions as AgentTool,
     undoLastChange as AgentTool,
     updateTheme as AgentTool,
+    enableModule as AgentTool,
+    disableModule as AgentTool,
+    pinCard as AgentTool,
   ];
 }

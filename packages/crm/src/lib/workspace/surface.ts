@@ -291,3 +291,41 @@ export async function markChatIntroSeen(
 
   await deps.writeSurface(orgId, nextSurface);
 }
+
+export type SetPinnedDeps = {
+  /** Reads the org's current `settings` jsonb (used to derive the current surface). */
+  readSettings: (orgId: string) => Promise<unknown>;
+  /** Writes the whole `surface` object via the 42P18-safe merge idiom. */
+  writeSurface: (orgId: string, surface: SurfaceSettings) => Promise<void>;
+};
+
+export const defaultSetPinnedDeps: SetPinnedDeps = {
+  readSettings: defaultReadSettings,
+  writeSurface: defaultWriteSurface,
+};
+
+/**
+ * Read-modify-write flag: sets `surface.pinned` to the given module id
+ * ordering. Home consumption of this ordering is a later wave (v1 only
+ * stores it); preserves `modules` and every other sibling surface key (same
+ * read-merge-write shape as setModuleEnabled/markChatIntroSeen) via the same
+ * 42P18-safe `COALESCE(settings,'{}'::jsonb) || <patch>::jsonb` merge idiom.
+ */
+export async function setPinned(
+  orgId: string,
+  pinned: ModuleId[],
+  deps: SetPinnedDeps = defaultSetPinnedDeps,
+): Promise<void> {
+  const settings = await deps.readSettings(orgId);
+  const currentSettings = (settings ?? {}) as OrgSettings;
+  const currentSurface = currentSettings.surface;
+  const currentSurfaceObj: SurfaceSettings =
+    currentSurface && typeof currentSurface === "object" ? currentSurface : {};
+
+  const nextSurface: SurfaceSettings = {
+    ...currentSurfaceObj,
+    pinned,
+  };
+
+  await deps.writeSurface(orgId, nextSurface);
+}

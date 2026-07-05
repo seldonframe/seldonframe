@@ -22,9 +22,10 @@ import {
   COPILOT_CAPABILITY,
   buildCopilotTools,
 } from "../../../src/lib/agents/copilot/tools";
-import type { UpdateThemeDeps } from "../../../src/lib/agents/copilot/tools";
+import type { UpdateThemeDeps, ModuleToolsDeps } from "../../../src/lib/agents/copilot/tools";
 import type { ToolExecuteContext } from "../../../src/lib/agents/tools";
 import type { OrgTheme } from "../../../src/lib/theme/types";
+import type { ModuleId } from "../../../src/lib/workspace/modules";
 import { isWinLadderOn } from "../../../src/lib/web-build/policy";
 
 function fakeCtx(overrides: Partial<ToolExecuteContext> = {}): ToolExecuteContext {
@@ -60,6 +61,9 @@ const EXPECTED_TOOL_NAMES = [
   "list_versions",
   "undo_last_change",
   "update_theme",
+  "enable_module",
+  "disable_module",
+  "pin_card",
 ];
 
 describe("COPILOT_CAPABILITY", () => {
@@ -69,7 +73,7 @@ describe("COPILOT_CAPABILITY", () => {
 });
 
 describe("buildCopilotTools", () => {
-  test("returns exactly the 9 expected tool names", () => {
+  test("returns exactly the 12 expected tool names", () => {
     const tools = buildCopilotTools();
     const names = tools.map((t) => t.name).sort();
     assert.deepEqual(names, [...EXPECTED_TOOL_NAMES].sort());
@@ -214,6 +218,132 @@ describe("buildCopilotTools", () => {
     assert.equal(saveThemeForOrg.mock.callCount(), 1);
     const [, calledPatch] = saveThemeForOrg.mock.calls[0]!.arguments;
     assert.deepEqual(calledPatch, { accentColor: "#abcdef" });
+  });
+});
+
+describe("enable_module / disable_module / pin_card (Task 8)", () => {
+  test("enable_module.execute calls setModuleEnabled(ctx.orgId, module, true), ignoring any orgId-shaped model arg", async () => {
+    const tools = buildCopilotTools();
+    const enableModule = tools.find((t) => t.name === "enable_module");
+    assert.ok(enableModule, "enable_module tool must exist");
+
+    const setModuleEnabled = mock.fn(
+      async (_orgId: string, _moduleId: ModuleId, _enabled: boolean) =>
+        ({ ok: true as const, modules: ["home", "website", "money"] as ModuleId[] }),
+    );
+    const deps: ModuleToolsDeps = { setModuleEnabled, setPinned: mock.fn(async () => {}) };
+
+    const ctx = fakeCtx({ orgId: "org-real-123" });
+    const maliciousArgs = { module: "money", orgId: "attacker-org", workspaceId: "attacker-org-2" };
+
+    const result = await (
+      enableModule!.execute as unknown as (
+        input: unknown,
+        ctx: ToolExecuteContext,
+        deps: ModuleToolsDeps,
+      ) => Promise<unknown>
+    )(maliciousArgs, ctx, deps);
+
+    assert.equal(setModuleEnabled.mock.callCount(), 1);
+    const [calledOrgId, calledModule, calledEnabled] = setModuleEnabled.mock.calls[0]!.arguments;
+    assert.equal(calledOrgId, "org-real-123");
+    assert.notEqual(calledOrgId, "attacker-org");
+    assert.notEqual(calledOrgId, "attacker-org-2");
+    assert.equal(calledModule, "money");
+    assert.equal(calledEnabled, true);
+    assert.equal((result as { ok: boolean }).ok, true);
+    assert.match((result as { message: string }).message, /money/i);
+  });
+
+  test("disable_module surfaces the guard's reason verbatim when blocked", async () => {
+    const tools = buildCopilotTools();
+    const disableModule = tools.find((t) => t.name === "disable_module");
+    assert.ok(disableModule, "disable_module tool must exist");
+
+    const setModuleEnabled = mock.fn(
+      async (_orgId: string, _moduleId: ModuleId, _enabled: boolean) =>
+        ({ ok: false as const, reason: "active_subscription" }),
+    );
+    const deps: ModuleToolsDeps = { setModuleEnabled, setPinned: mock.fn(async () => {}) };
+
+    const ctx = fakeCtx();
+    const result = await (
+      disableModule!.execute as unknown as (
+        input: unknown,
+        ctx: ToolExecuteContext,
+        deps: ModuleToolsDeps,
+      ) => Promise<unknown>
+    )({ module: "money" }, ctx, deps);
+
+    assert.equal((result as { ok: boolean }).ok, false);
+    assert.equal((result as { message: string }).message, "active_subscription");
+  });
+
+  test("enable_module/disable_module zod schema rejects an unknown module id", () => {
+    const tools = buildCopilotTools();
+    const enableModule = tools.find((t) => t.name === "enable_module");
+    const disableModule = tools.find((t) => t.name === "disable_module");
+    assert.ok(enableModule && disableModule);
+
+    assert.equal(enableModule!.inputSchema.safeParse({ module: "not_a_real_module" }).success, false);
+    assert.equal(disableModule!.inputSchema.safeParse({ module: "not_a_real_module" }).success, false);
+    assert.equal(enableModule!.inputSchema.safeParse({ module: "money" }).success, true);
+  });
+
+  test("pin_card zod schema rejects more than 4 modules and unknown ids", () => {
+    const tools = buildCopilotTools();
+    const pinCard = tools.find((t) => t.name === "pin_card");
+    assert.ok(pinCard, "pin_card tool must exist");
+
+    assert.equal(
+      pinCard!.inputSchema.safeParse({ modules: ["home", "website", "bookings", "customers", "money"] })
+        .success,
+      false,
+      "more than 4 modules must be rejected",
+    );
+    assert.equal(
+      pinCard!.inputSchema.safeParse({ modules: [] }).success,
+      false,
+      "empty array must be rejected",
+    );
+    assert.equal(
+      pinCard!.inputSchema.safeParse({ modules: ["not_a_real_module"] }).success,
+      false,
+      "unknown module ids must be rejected",
+    );
+    assert.equal(
+      pinCard!.inputSchema.safeParse({ modules: ["home", "money"] }).success,
+      true,
+    );
+  });
+
+  test("pin_card.execute calls setPinned with exactly the given array, using ctx.orgId", async () => {
+    const tools = buildCopilotTools();
+    const pinCard = tools.find((t) => t.name === "pin_card");
+    assert.ok(pinCard, "pin_card tool must exist");
+
+    const setPinned = mock.fn(async (_orgId: string, _pinned: ModuleId[]) => {});
+    const deps: ModuleToolsDeps = {
+      setModuleEnabled: mock.fn(async () => ({ ok: true as const, modules: [] as ModuleId[] })),
+      setPinned,
+    };
+
+    const ctx = fakeCtx({ orgId: "org-real-123" });
+    const maliciousArgs = { modules: ["home", "money"], orgId: "attacker-org" };
+
+    const result = await (
+      pinCard!.execute as unknown as (
+        input: unknown,
+        ctx: ToolExecuteContext,
+        deps: ModuleToolsDeps,
+      ) => Promise<unknown>
+    )(maliciousArgs, ctx, deps);
+
+    assert.equal(setPinned.mock.callCount(), 1);
+    const [calledOrgId, calledPinned] = setPinned.mock.calls[0]!.arguments;
+    assert.equal(calledOrgId, "org-real-123");
+    assert.deepEqual(calledPinned, ["home", "money"]);
+    assert.equal((result as { ok: boolean }).ok, true);
   });
 });
 
