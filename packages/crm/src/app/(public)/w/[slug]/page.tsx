@@ -234,6 +234,7 @@ export default async function WorkspaceLandingPage({ params }: PageProps) {
       archetype={payload.hero.archetype}
       mode={payload.theme?.mode ?? "light"}
       workspaceId={ctx.orgId}
+      orgTheme={r1.theme}
     >
       {/* bisect 4/4: all three pieces wired. */}
       <Navbar

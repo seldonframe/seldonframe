@@ -21,6 +21,27 @@ import { DEFAULT_ORG_THEME, type OrgTheme } from "@/lib/theme/types";
 
 const REVALIDATE_PATHS = ["/settings", "/settings/theme", "/l", "/book", "/forms"] as const;
 
+/** Pure merge step, extracted so the "customizedAt gets stamped and survives
+ *  a subsequent partial merge" decision is unit-testable without touching the
+ *  database (this repo's DI convention — see voice-r1-tools.spec.ts's PATTERN
+ *  NOTE — prefers extracting the pure core over mocking `db`).
+ *
+ *  Stamps `customizedAt` to "now" on every call: any explicit save (settings
+ *  form OR the copilot's update_theme tool) means the operator customized the
+ *  theme, so from this point on public renderers should stop applying the
+ *  archetype's curated default palette in favor of the org's own colors. */
+export function mergeThemePatch(
+  currentTheme: OrgTheme,
+  patch: Partial<OrgTheme>,
+  now: () => Date = () => new Date(),
+): OrgTheme {
+  return normalizeTheme({
+    ...currentTheme,
+    ...patch,
+    customizedAt: now().toISOString(),
+  });
+}
+
 /** Read the org's current theme (normalized over defaults), merge `patch`
  *  on top, re-validate the merged result through normalizeTheme (so a
  *  partial/bad patch can never write invalid data), persist it, and
@@ -37,23 +58,28 @@ export async function saveThemeForOrg(
   // environment). On failure, fall back to DEFAULT_ORG_THEME as the merge base —
   // the write below still proceeds, it just merges `patch` over defaults instead
   // of over an unreadable current theme.
-  let org: { theme: unknown } | undefined;
+  //
+  // SH2-F1 — additive `slug` select alongside `theme` (no new query): the R1
+  // public landing route (/w/[slug], subdomain-mirrored at /s/[orgSlug]/...)
+  // needs its exact slug-scoped path revalidated the same way
+  // clients/[slug]/ready/actions.ts already does for landingTemplate writes —
+  // that route renders dynamically per-request (no generateStaticParams /
+  // revalidate export), so this is belt-and-suspenders against any RSC cache,
+  // matching that file's own comment.
+  let org: { theme: unknown; slug: string | null } | undefined;
   try {
     [org] = await db
-      .select({ theme: organizations.theme })
+      .select({ theme: organizations.theme, slug: organizations.slug })
       .from(organizations)
       .where(eq(organizations.id, orgId))
       .limit(1);
   } catch {
-    org = { theme: DEFAULT_ORG_THEME };
+    org = { theme: DEFAULT_ORG_THEME, slug: null };
   }
 
   const currentTheme = normalizeTheme(org?.theme);
 
-  const nextTheme = normalizeTheme({
-    ...currentTheme,
-    ...patch,
-  });
+  const nextTheme = mergeThemePatch(currentTheme, patch);
 
   await db
     .update(organizations)
@@ -65,6 +91,12 @@ export async function saveThemeForOrg(
 
   for (const path of REVALIDATE_PATHS) {
     revalidatePath(path);
+  }
+  if (org?.slug) {
+    revalidatePath(`/w/${org.slug}`);
+    // The subdomain catch-all's home branch (proxy-rewritten root → this
+    // path — see app/(public)/s/[orgSlug]/[...slug]/page.tsx's isHomePage).
+    revalidatePath(`/s/${org.slug}/home`);
   }
 
   return nextTheme;

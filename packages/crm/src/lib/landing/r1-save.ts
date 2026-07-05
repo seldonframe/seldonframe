@@ -22,6 +22,8 @@ import { landingPages } from "@/db/schema";
 import { and, eq } from "drizzle-orm";
 import type { AestheticArchetypeId } from "@/lib/workspace/aesthetic-archetypes";
 import type { R1LandingPayload } from "./r1-payload-prompt";
+import { normalizeTheme } from "@/lib/theme/normalize-theme";
+import type { OrgTheme } from "@/lib/theme/types";
 
 const R1_SLUG = "r1";
 const R1_STATUS = "published"; // public immediately, no gate
@@ -105,6 +107,12 @@ export async function loadLandingPayload(workspaceSlug: string): Promise<{
    *  (undefined for every workspace that hasn't opted into a premium template).
    *  Additive — existing callers ignore it and the landing-r1 path is unchanged. */
   landingTemplate: string | undefined;
+  /** SH2-F1 — the org's full normalized theme (org row's `theme` column was
+   *  already selected below for `landingTemplate`; this is purely additive,
+   *  no new query). Callers pass it to SiteShell so a user-customized
+   *  accentColor/primaryColor (gated on theme.customizedAt) actually renders
+   *  on the public site. */
+  theme: OrgTheme;
   seo: { title: string; description: string; ogImage: string | null };
   /** Task 8 (noindex unclaimed anonymous builds): null until a user claims
    *  the workspace via signup. */
@@ -136,6 +144,7 @@ export async function loadLandingPayload(workspaceSlug: string): Promise<{
     typeof orgRow.theme?.landingTemplate === "string"
       ? orgRow.theme.landingTemplate
       : undefined;
+  const theme = normalizeTheme(orgRow.theme);
 
   const [row] = await db
     .select({
@@ -168,6 +177,7 @@ export async function loadLandingPayload(workspaceSlug: string): Promise<{
     archetype,
     orgId: orgRow.id,
     landingTemplate,
+    theme,
     ownerId: orgRow.ownerId,
     settings: orgRow.settings,
     seo: {

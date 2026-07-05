@@ -33,6 +33,12 @@ export function normalizeTheme(raw: unknown): OrgTheme {
       ? (value.borderRadius as OrgTheme["borderRadius"])
       : DEFAULT_ORG_THEME.borderRadius;
   const logoUrl = typeof value.logoUrl === "string" && value.logoUrl.trim() ? value.logoUrl.trim() : null;
+  // SH2-F1 — pass through customizedAt untouched: it is stamped exclusively by
+  // saveThemeForOrg (never by normalizeTheme itself), so this function must not
+  // invent, validate, or strip it — only carry forward whatever the caller's
+  // merge produced. Absent/non-string input omits the field entirely (matches
+  // every other optional OrgTheme field's "absent → not customized" default).
+  const customizedAt = typeof value.customizedAt === "string" ? value.customizedAt : undefined;
 
   return {
     primaryColor,
@@ -41,5 +47,6 @@ export function normalizeTheme(raw: unknown): OrgTheme {
     mode,
     borderRadius,
     logoUrl,
+    ...(customizedAt !== undefined ? { customizedAt } : {}),
   };
 }

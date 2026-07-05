@@ -402,6 +402,14 @@ const undoLastChange: AgentTool<z.infer<typeof undoLastChangeInput>> = {
 // (lib/theme/normalize-theme.ts) — anything else is silently coerced back to
 // the current/default value by normalizeTheme, so the tool input must not
 // promise a wider surface than that.
+//
+// SH2-F1 — until this fix, saveThemeForOrg's write was real but invisible:
+// the R1 public site (SiteShell) never read organizations.theme at all, so a
+// successful write here (and the LLM's resulting "Done!" read-back) was true
+// about the DB and false about what the visitor actually saw. SiteShell now
+// applies theme.accentColor/primaryColor once theme.customizedAt is stamped
+// (which saveThemeForOrg does on every write, including this tool's), so the
+// read-back is no longer a claim to soften — it's simply accurate.
 
 const HEX_COLOR_DESCRIPTION =
   "Hex color, e.g. '#7fb3d5'. Convert color names (like 'powder blue') to hex yourself before calling this tool.";

@@ -66,6 +66,13 @@ export interface OrgTheme {
    *  "Chosen by you" display. `landingTemplate` holds the resolved id; this
    *  remembers whether it was auto or hand-picked. */
   landingTemplateChoice?: string;
+  /** SH2-F1 — ISO timestamp stamped by saveThemeForOrg on every write (settings
+   *  form + the copilot's update_theme tool both flow through it). Absent means
+   *  the org's theme has never been explicitly saved by the operator — it's
+   *  still the build-time archetype default. Public renderers (SiteShell) use
+   *  its presence as the "user customized this" gate: only orgs with
+   *  customizedAt override the archetype's curated accent/primary palette. */
+  customizedAt?: string;
 }
 
 // v1.38.5 — flipped default mode from "dark" to "light".

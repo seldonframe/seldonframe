@@ -86,7 +86,12 @@ export default async function WorkspaceServicePage({ params }: PageProps) {
   const navServices = getServicePages(payload).map((p) => ({ slug: p.slug, name: p.name }));
 
   return (
-    <SiteShell archetype={payload.hero.archetype} mode={payload.theme?.mode ?? "light"} workspaceId={r1.orgId}>
+    <SiteShell
+      archetype={payload.hero.archetype}
+      mode={payload.theme?.mode ?? "light"}
+      workspaceId={r1.orgId}
+      orgTheme={r1.theme}
+    >
       <Navbar
         archetype={payload.hero.archetype}
         businessName={payload.hero.businessName}

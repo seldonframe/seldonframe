@@ -23,8 +23,56 @@
 import type { CSSProperties, ReactNode } from "react";
 import { archetypeStyle, type AestheticArchetypeId } from "../archetypes";
 import { PoweredByBadge } from "../powered-by-badge";
+import type { OrgTheme } from "@/lib/theme/types";
 
 export type ShellMode = "light" | "dark";
+
+/**
+ * SH2-F1 — the slice of OrgTheme resolveSitePalette/resolveShellStyle/SiteShell
+ * need. All three fields optional (unlike OrgTheme itself, where
+ * accentColor/primaryColor are required) because test fixtures and partial
+ * callers construct these ad hoc — only `customizedAt`'s presence/absence
+ * actually gates any behavior; missing accentColor/primaryColor simply means
+ * "don't override that token."
+ */
+export type SitePaletteThemeInput = Partial<Pick<OrgTheme, "customizedAt" | "accentColor" | "primaryColor">>;
+
+/**
+ * SH2-F1 — the user-customized palette override.
+ *
+ * Every R1 archetype ships a curated palette (archetypeStyle's --primary /
+ * --secondary). That curated look is the default for every workspace and
+ * must NOT be disturbed by an org that has never touched its theme settings.
+ * But once an operator (or the copilot's update_theme tool) explicitly saves
+ * a color, the public site must actually reflect it — before this fix,
+ * SiteShell only ever read the archetype, never `organizations.theme`, so a
+ * saved accentColor/primaryColor silently had no visible effect.
+ *
+ * `saveThemeForOrg` (lib/theme/save-theme.ts) stamps `theme.customizedAt` on
+ * every explicit write. Its presence is the gate: absent → archetype palette
+ * wins unchanged (build defaults, never customized). Present → the org's own
+ * accentColor becomes --primary and (when set) primaryColor becomes
+ * --secondary, so the operator's choice actually shows up on every R1 page
+ * (this is the shared shell — the one mount point for all of them).
+ *
+ * Pure + exported for unit testing (no DOM, no archetype/theme fetching).
+ */
+export function resolveSitePalette(
+  archetypePalette: CSSProperties,
+  orgTheme: SitePaletteThemeInput | null | undefined,
+): CSSProperties {
+  if (!orgTheme?.customizedAt) {
+    return archetypePalette;
+  }
+  const overridden: Record<string, string> = { ...(archetypePalette as Record<string, string>) };
+  if (orgTheme.accentColor) {
+    overridden["--primary"] = orgTheme.accentColor;
+  }
+  if (orgTheme.primaryColor) {
+    overridden["--secondary"] = orgTheme.primaryColor;
+  }
+  return overridden as CSSProperties;
+}
 
 /**
  * Dark-mode token overrides. We keep the archetype's --primary (brand accent)
@@ -43,16 +91,20 @@ const DARK_OVERRIDES: Record<string, string> = {
 
 /**
  * Pure: resolve the inline style for the shell root. Starts from the archetype
- * palette, applies dark overrides when mode === "dark", and always adds the
+ * palette, applies dark overrides when mode === "dark", then layers the
+ * user-customized palette override (SH2-F1 — resolveSitePalette, only takes
+ * effect when orgTheme.customizedAt is set), and always adds the
  * no-horizontal-scroll guard + full-height. Exported for unit testing.
  */
 export function resolveShellStyle(
   archetype: AestheticArchetypeId,
   mode: ShellMode = "light",
+  orgTheme?: SitePaletteThemeInput | null,
 ): CSSProperties {
   const base = archetypeStyle(archetype) as Record<string, string>;
-  const merged: Record<string, string> =
+  const withMode: Record<string, string> =
     mode === "dark" ? { ...base, ...DARK_OVERRIDES } : { ...base };
+  const merged = resolveSitePalette(withMode as CSSProperties, orgTheme) as Record<string, string>;
   merged["overflowX"] = "clip";
   merged["minHeight"] = "100dvh";
   return merged as CSSProperties;
@@ -67,12 +119,23 @@ export type SiteShellProps = {
    * internal preview/fixture surfaces that have no real workspace.
    */
   workspaceId?: string;
+  /**
+   * SH2-F1 — the org's saved theme (accentColor/primaryColor/customizedAt).
+   * Optional: internal preview/fixture surfaces that pass no real org theme
+   * keep rendering the archetype's curated palette unchanged, same as
+   * `workspaceId` above.
+   */
+  orgTheme?: SitePaletteThemeInput | null;
   children: ReactNode;
 };
 
-export function SiteShell({ archetype, mode = "light", workspaceId, children }: SiteShellProps) {
+export function SiteShell({ archetype, mode = "light", workspaceId, orgTheme, children }: SiteShellProps) {
   return (
-    <div data-archetype={archetype} data-mode={mode} style={resolveShellStyle(archetype, mode)}>
+    <div
+      data-archetype={archetype}
+      data-mode={mode}
+      style={resolveShellStyle(archetype, mode, orgTheme)}
+    >
       {children}
       {workspaceId && <PoweredByBadge workspaceId={workspaceId} />}
       {/* Belt-and-suspenders: also clip at the html/body level so a child that
