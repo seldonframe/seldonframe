@@ -43,3 +43,12 @@ export function isWinLadderOn(env: { SF_WIN_LADDER?: string | undefined }): bool
 export function isSimpleHomeOn(env: { SF_SIMPLE_HOME?: string | undefined }): boolean {
   return env.SF_SIMPLE_HOME?.trim() === "1";
 }
+
+/** Vision-verify product feature flag (Track B P1, 2026-07-05): after a
+ *  SeldonChat edit that changes the public site, screenshot the preview +
+ *  grade it with an independent vision pass before the copilot says "done".
+ *  Same strict-"1" contract as the flags above — inert until flipped, and
+ *  fail-soft even when on (see lib/vision/verify-page.ts). */
+export function isVisionVerifyOn(env: { SF_VISION_VERIFY?: string | undefined }): boolean {
+  return env.SF_VISION_VERIFY?.trim() === "1";
+}

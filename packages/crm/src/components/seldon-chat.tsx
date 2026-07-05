@@ -34,6 +34,10 @@ type ChatMessage = {
   id: string;
   role: "user" | "assistant";
   content: string;
+  /** Track B P1 — the independent vision-grader's verdict for this turn's
+   *  reply, if the check ran (see VisionCheck above). Rendered as a small,
+   *  non-blocking note directly under the assistant message. */
+  visionCheck?: VisionCheck;
 };
 
 type ToolEvent = { name: string; ok: boolean };
@@ -71,6 +75,13 @@ type AttachState =
 
 const ATTACH_ACCEPT = "image/*,video/mp4,video/webm";
 
+/** Track B P1 (vision-verify, 2026-07-05) — the independent vision-grader's
+ *  verdict on the live preview after a public-site-changing edit. Absent
+ *  entirely when the flag is off, the turn was read-only, or the check
+ *  failed/timed out anywhere along the way (fail-soft — see
+ *  lib/vision/verify-page.ts). Never blocks or delays the reply. */
+type VisionCheck = { pass: boolean; gaps: string[] };
+
 type TurnResponse =
   | {
       kind: "reply";
@@ -78,6 +89,7 @@ type TurnResponse =
       toolEvents: ToolEvent[];
       designOptions?: DesignOptions;
       mediaOptions?: MediaOptions;
+      visionCheck?: VisionCheck;
     }
   | { kind: "capped"; used: number; limit: number; upgrade: string };
 
@@ -263,7 +275,12 @@ export function SeldonChat({ enabled, previewUrl, hideLauncher }: SeldonChatProp
 
       setMessages((current) => [
         ...current,
-        { id: `assistant-${Date.now()}`, role: "assistant", content: data.text },
+        {
+          id: `assistant-${Date.now()}`,
+          role: "assistant",
+          content: data.text,
+          visionCheck: data.visionCheck,
+        },
       ]);
 
       // Design picker chips: show a fresh set when list_designs ran this
@@ -412,19 +429,31 @@ export function SeldonChat({ enabled, previewUrl, hideLauncher }: SeldonChatProp
               ) : null}
 
               {messages.map((message) => (
-                <div
-                  key={message.id}
-                  className={`max-w-[90%] rounded-lg px-3 py-2 text-sm ${
-                    message.role === "user"
-                      ? "ml-auto bg-primary text-primary-foreground"
-                      : "bg-muted text-foreground"
-                  }`}
-                >
-                  {message.role === "assistant" ? (
-                    <ChatMarkdown content={message.content} />
-                  ) : (
-                    message.content
-                  )}
+                <div key={message.id}>
+                  <div
+                    className={`max-w-[90%] rounded-lg px-3 py-2 text-sm ${
+                      message.role === "user"
+                        ? "ml-auto bg-primary text-primary-foreground"
+                        : "bg-muted text-foreground"
+                    }`}
+                  >
+                    {message.role === "assistant" ? (
+                      <ChatMarkdown content={message.content} />
+                    ) : (
+                      message.content
+                    )}
+                  </div>
+                  {message.visionCheck ? (
+                    <div className="mt-1 max-w-[90%] text-xs text-muted-foreground">
+                      {message.visionCheck.pass && message.visionCheck.gaps.length === 0 ? (
+                        <span>✓ Looks good on the preview</span>
+                      ) : (
+                        <span>
+                          Heads up — the visual check noticed: {message.visionCheck.gaps.join("; ")}
+                        </span>
+                      )}
+                    </div>
+                  ) : null}
                 </div>
               ))}
 
