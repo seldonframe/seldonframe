@@ -25,6 +25,10 @@ import { DealsCrmSurface } from "@/components/crm/deals-crm-surface";
 import { getCrmSurfaceConfig } from "@/lib/crm/view-config";
 import { mapDealRowToCrmRecord } from "@/lib/crm/view-models";
 import { CreateClientCta } from "@/components/dashboard/create-client-cta";
+// SH2-F4 — reused for the simplified-Home inline "Add client workspace"
+// button (skips CreateClientCta's usage pill without touching that
+// shared component, which is outside this task's touched-files list).
+import { buttonVariants } from "@/components/ui/button";
 import { enforceWorkspaceLimit } from "@/lib/billing/limits";
 import { getOwnedWorkspaceCount } from "@/lib/web-onboarding/owned-workspace-count";
 // 2026-07-04 — reused for the claimed-workspace hero's "View your website"
@@ -1516,11 +1520,27 @@ export default async function DashboardPage({
             + opens UpgradeModal when the operator is at their limit. */}
         {!isOperatorSession && agencyWorkspaceLimit ? (
           <div className="ml-auto">
-            <CreateClientCta
-              tier={agencyWorkspaceLimit.tier}
-              used={agencyWorkspaceLimit.used}
-              limit={agencyWorkspaceLimit.limit}
-            />
+            {simplified ? (
+              // SH2-F4 — simplified Home hides the "N / M workspaces"
+              // usage pill (setup-sprawl chrome) but keeps the Add client
+              // workspace button. CreateClientCta itself is out of this
+              // task's touched-files list, so rather than reach into its
+              // internal DOM with a CSS hack, the under-limit case is
+              // rendered inline here with the same href/label/variant
+              // CreateClientCta already uses for that case. The at-limit
+              // upgrade-modal branch isn't reachable in the common
+              // single-workspace-simplified case; non-simplified keeps
+              // the full tier-aware component unchanged.
+              <Link href="/clients/new" className={buttonVariants({ variant: "default" })}>
+                Add client workspace
+              </Link>
+            ) : (
+              <CreateClientCta
+                tier={agencyWorkspaceLimit.tier}
+                used={agencyWorkspaceLimit.used}
+                limit={agencyWorkspaceLimit.limit}
+              />
+            )}
           </div>
         ) : null}
       </header>
@@ -1690,10 +1710,14 @@ export default async function DashboardPage({
         </section>
       )}
 
+      {/* SH2-F4 — the kanban embed never renders on Home when simplified:
+          it's a full widget duplicate of the Customers module's own
+          pipeline view, one click away via nav. Flag-off/non-simplified
+          keeps the original `!simplified` fallback (byte-identical). */}
       {showPipelineEmbed &&
       dealsSurface &&
       kanbanPipelineView &&
-      (!simplified || ((surfaceModules?.includes("customers") ?? false) && opportunityRows.length > 0)) ? (
+      !simplified ? (
         <section className="crm-card space-y-4">
           <div className="flex items-start justify-between gap-3">
             <div className="space-y-1">
@@ -1851,7 +1875,10 @@ export default async function DashboardPage({
             <Link href="/dashboard" className="crm-button-ghost h-9 px-3 text-xs sm:text-sm">Skip — I don&apos;t have clients yet</Link>
           </div>
         </section>
-      ) : !hasConnectedIntegrations ? (
+      ) : !hasConnectedIntegrations && !simplified ? (
+        // SH2-F4 — "Connect your existing tools" is setup sprawl on a
+        // simplified Home; Stripe connect belongs to the Money module
+        // journey instead. Flag-off/non-simplified is unchanged.
         <section className="crm-card space-y-5">
           <div>
             <h2 className="text-base sm:text-lg font-semibold">Connect your existing tools</h2>
@@ -2016,7 +2043,22 @@ export default async function DashboardPage({
         ) : null}
       </div>
 
-      {!simplified || opportunityRows.length > 0 ? (
+      {/* SH2-F4 — when simplified AND deals exist, the full table is
+          replaced by a one-line summary linking into the Customers module
+          (same "one fact, one place" principle as the kanban embed above).
+          Flag-off/non-simplified renders the original table unchanged. */}
+      {simplified ? (
+        opportunityRows.length > 0 ? (
+          <article className="crm-card flex items-center justify-between gap-3 px-4 py-3.5 sm:px-6">
+            <span className="text-sm text-foreground">
+              {opportunityRows.length} active deal{opportunityRows.length === 1 ? "" : "s"}
+            </span>
+            <Link href="/deals" className="text-sm text-muted-foreground hover:text-foreground hover:underline">
+              View all →
+            </Link>
+          </article>
+        ) : null
+      ) : (
       <article className="crm-card overflow-hidden p-0">
         <div className="flex flex-col gap-3 p-4 sm:flex-row sm:items-center sm:gap-4 sm:px-6 sm:py-4">
           <div className="flex items-center gap-2 sm:gap-2.5 flex-1">
@@ -2095,11 +2137,21 @@ export default async function DashboardPage({
           </table>
         </div>
       </article>
-      ) : null}
+      )}
 
       {upcomingSessionRows.length > 0 ? (
         <article className="crm-card">
-          <p className="mb-3 text-xs font-medium uppercase tracking-widest text-muted-foreground">Upcoming Sessions</p>
+          <div className="mb-3 flex items-center justify-between gap-3">
+            {/* SH2-F4 — "Upcoming bookings" is owner language (flag-
+                independent copy fix; renders in both simplified and
+                non-simplified modes). */}
+            <p className="text-xs font-medium uppercase tracking-widest text-muted-foreground">Upcoming bookings</p>
+            {simplified ? (
+              <Link href="/bookings" className="text-xs text-muted-foreground hover:text-foreground hover:underline">
+                See all →
+              </Link>
+            ) : null}
+          </div>
           <ul className="space-y-2">
             {upcomingSessionRows.slice(0, 3).map((booking) => {
               const linkedContact = booking.contactId ? contactById.get(booking.contactId) : null;

@@ -46,7 +46,9 @@ export function LadderAutoRefresh() {
   useEffect(() => {
     // (a) OAuth-return query param — refresh once, then strip it so a
     // subsequent manual reload doesn't re-trigger.
-    if (window.location.search.includes("connected=")) {
+    // Reviewer tightening (SH2-F4): a real URLSearchParams presence check
+    // instead of a raw substring match on the query string.
+    if (new URLSearchParams(window.location.search).has("connected")) {
       lastRefreshRef.current = Date.now();
       router.refresh();
 
