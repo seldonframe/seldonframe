@@ -9,7 +9,9 @@ import { resolveWorkspaceBearer } from "@/lib/auth/workspace-token";
 import { buildWorkspaceUrls } from "@/lib/billing/anonymous-workspace";
 import { assertWritable, demoApiBlockedResponse, isDemoReadonly } from "@/lib/demo/server";
 import { logEvent } from "@/lib/observability/log";
+import { isSimpleHomeOn } from "@/lib/web-build/policy";
 import { markOperatorOnboarded } from "@/lib/web-onboarding/mark-operator-onboarded";
+import { writeMinimalSurface } from "@/lib/workspace/surface";
 
 const WORKSPACE_BASE_DOMAIN =
   process.env.WORKSPACE_BASE_DOMAIN?.trim() || "app.seldonframe.com";
@@ -102,6 +104,9 @@ export async function POST(request: Request, { params }: { params: Promise<{ id:
     if (!userRow.orgId) return;
     try {
       await markOperatorOnboarded(userRow.orgId, userRow.id);
+      if (isSimpleHomeOn({ SF_SIMPLE_HOME: process.env.SF_SIMPLE_HOME })) {
+        await writeMinimalSurface(userRow.orgId).catch(() => {}); // fail-soft: claim must never break on surface write
+      }
     } catch (error) {
       logEvent(
         "mark_operator_onboarded_failed_on_claim",
