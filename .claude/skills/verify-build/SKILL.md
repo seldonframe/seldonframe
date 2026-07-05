@@ -34,3 +34,15 @@ The single objective gate every branch passes before merge. It exists to kill th
 
 ## Why this is the keystone
 This is the one block that turns repetition into progress. Without it a loop bills you in silence (the "Ralph Wiggum" early-exit — an agent declares done on a half-finished job). With it, the maker can be fast + cheap because the gate is strict + independent. Prove it manually a few times, then it becomes the verifier inside `/ship-feature` and the heartbeat of a scheduled green-main guardian.
+
+## Framing the loop this gate closes (the goal contract)
+
+This gate is only the *stop condition* of a loop. A loop converges when its **goal** is written as a contract the runner can check itself against — five parts, stated up front before any code:
+
+1. **Objective** — one sentence, the observable end state ("SeldonChat can set a hero background and the result renders legibly"), not a task list.
+2. **Constraints** — the invariants that must hold: files/systems to leave alone, the house rules (add named files only, money-safe, org-scope every query, SSRF-guard user URLs), flag-gating, "no new deps."
+3. **Validation command** — the exact runnable check that decides done. For a merge, that command *is* `/verify-build` (the five checks above) — plus `vision-verify` for anything with a visual surface. Name it explicitly so the loop runs it, not guesses.
+4. **Stop condition** — when to stop: "validation green AND an independent reviewer approved," or a hard iteration cap. Never "when it looks done."
+5. **Docs / context** — the 2-3 files, specs, or seams to read first, so the runner starts with the map, not a blank slate.
+
+**The one rule that protects the whole loop: never weaken the validation to make it pass.** Do not delete or loosen a failing assertion, lower a threshold, `skip` a test, or narrow a rubric to get green. A test that no longer asserts the behavior is worse than a red one — it launders "broken" into "done." If a check is genuinely wrong, fix the check *and say so*; don't quietly file it down. This is what keeps `maker ≠ checker` honest: the gate only means something if the maker can't move it.
