@@ -35,7 +35,7 @@ export function generateSoulFallback(input: SoulWizardInput): OrgSoul {
         singular: frameworkConfig.entities.pipeline.singular,
         plural: frameworkConfig.entities.pipeline.plural,
       },
-      intakeForm: template.entityLabels?.intakeForm ?? { singular: "Intake Form", plural: "Intake Forms" },
+      intakeForm: template.entityLabels?.intakeForm ?? { singular: "Lead Form", plural: "Lead Forms" },
     },
     pipeline: {
       name: template.pipeline?.name ?? frameworkConfig.defaultPipeline.name,

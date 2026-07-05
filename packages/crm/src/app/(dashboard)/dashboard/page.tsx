@@ -35,7 +35,13 @@ import { buildWorkspaceUrls } from "@/lib/billing/anonymous-workspace";
 // 4-step activation ladder in both the fresh-claimed hero and the populated
 // single-workspace view. isWinLadderOn keeps this entire surface flag-dark
 // (zero DB work, byte-identical render) until SF_WIN_LADDER=1.
-import { isWinLadderOn } from "@/lib/web-build/policy";
+import { isWinLadderOn, isSimpleHomeOn } from "@/lib/web-build/policy";
+// Task 6 (simple-home) — surfaceModules gates the KPI/donut/revenue/deals/
+// kanban/blocks sections behind the org's chosen module set when
+// SF_SIMPLE_HOME is on. Flag-off (or a null/grandfathered read) keeps every
+// section rendering exactly as before — see the `!simplified || …` gates
+// below.
+import { readEnabledModules } from "@/lib/workspace/surface";
 import { resolveLadderInputs, stampLadderEvent } from "@/lib/activation/ladder-server";
 import { computeLadderState } from "@/lib/activation/ladder";
 import { WinLadder } from "@/components/activation/win-ladder";
@@ -580,6 +586,14 @@ export default async function DashboardPage({
   // dealRows, bookingRows) are already resolved by the top-level Promise.all
   // — no new queries added.
   const activeWorkspace = workspaceRows.find((row) => row.id === orgId);
+  // Task 6 (simple-home) — the MCP/Claude-Code banner is developer-tooling
+  // guidance meant for SF builders, not the claimed-workspace owner who just
+  // wants their business running. `ownerId` is already selected on the
+  // directWorkspaceRows/membershipWorkspaceRows queries above, so this is a
+  // zero-cost derivation, not a new query.
+  const isClaimedOwner = Boolean(
+    activeWorkspace?.ownerId && user?.id && activeWorkspace.ownerId === user.id
+  );
   const isFreshClaimedWorkspace =
     !isOperatorSession &&
     Boolean(activeWorkspace) &&
@@ -1008,6 +1022,15 @@ export default async function DashboardPage({
   const integrations = ((orgRow?.integrations ?? {}) as OrganizationIntegrations) || {};
   const settings = ((orgRow?.settings ?? {}) as Record<string, unknown>) || {};
   const enabledAutomations = Array.isArray(settings.enabledAutomations) ? settings.enabledAutomations.filter((item): item is string => typeof item === "string") : [];
+  // Task 6 (simple-home) — section-gating derivation. Flag-off:
+  // simpleHomeOn is false, surfaceModules stays null, simplified stays
+  // false, and every `!simplified || …` gate below short-circuits to true
+  // (identical to pre-Task-6 render). Flag-on with a grandfathered
+  // (null) module read behaves the same way — only an org with an
+  // explicit settings.surface.modules array gets `simplified === true`.
+  const simpleHomeOn = isSimpleHomeOn({ SF_SIMPLE_HOME: process.env.SF_SIMPLE_HOME });
+  const surfaceModules = simpleHomeOn ? readEnabledModules(orgRow?.settings ?? null) : null;
+  const simplified = simpleHomeOn && surfaceModules !== null;
   const newsletterConnected = Boolean(integrations.newsletter?.connected || integrations.kit?.connected);
   // May 1, 2026 — Google Calendar integration removed; Cal.diy is the calendar.
   const twilioConnected = Boolean(integrations.twilio?.connected);
@@ -1291,7 +1314,7 @@ export default async function DashboardPage({
           Phase K — wrapped in a card frame with a Terminal icon.
           Phase N — suppressed for the all-workspaces view, which now has
           its own MCP one-liner inline in the agency KPI rollup header. */}
-      {!isOperatorSession && activeDashboardView !== "all" ? (
+      {!isOperatorSession && !isClaimedOwner && activeDashboardView !== "all" ? (
         <div className="flex items-start gap-3 rounded-2xl border border-border/70 bg-card/40 px-4 py-3.5">
           <Terminal className="mt-0.5 size-4 shrink-0 text-muted-foreground" />
           <div className="min-w-0 flex-1">
@@ -1334,13 +1357,15 @@ export default async function DashboardPage({
           </header>
 
           {/* ── MCP one-liner ────────────────────────────────────────────── */}
-          <p className="text-xs text-muted-foreground">
-            <Terminal className="inline size-3 mr-1" />
-            For the best experience, use Seldon directly from Claude Code with our MCP + Skill.{" "}
-            <Link href="https://docs.seldonframe.com/mcp" className="underline" target="_blank">
-              Learn more
-            </Link>
-          </p>
+          {!isOperatorSession && !isClaimedOwner ? (
+            <p className="text-xs text-muted-foreground">
+              <Terminal className="inline size-3 mr-1" />
+              For the best experience, use Seldon directly from Claude Code with our MCP + Skill.{" "}
+              <Link href="https://docs.seldonframe.com/mcp" className="underline" target="_blank">
+                Learn more
+              </Link>
+            </p>
+          ) : null}
 
           {/* ── Hero KPI tiles ────────────────────────────────────────────── */}
           <section className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
@@ -1523,16 +1548,16 @@ export default async function DashboardPage({
           workspace. The HVAC owner doesn't have a build-time —
           their workspace was already configured before they got
           access. Hide for operator sessions. */}
-      {!isOperatorSession && (bookingTemplateRow || defaultIntakeForm || pipelineStages.length > 0) && (
+      {!isOperatorSession && !simplified && (bookingTemplateRow || defaultIntakeForm || pipelineStages.length > 0) && (
         <section className="crm-card space-y-5">
           <div className="flex items-start justify-between gap-3">
             <div className="space-y-1">
               <div className="flex items-center gap-2">
                 <Sparkles className="size-4 text-foreground" />
-                <h2 className="text-base sm:text-lg font-semibold">Newly installed blocks</h2>
+                <h2 className="text-base sm:text-lg font-semibold">Just added to your workspace</h2>
               </div>
               <p className="text-sm text-muted-foreground">
-                Live previews of what just shipped into this workspace. Share the public links or jump into the admin to customize.
+                Share these pages or open them to make changes.
               </p>
             </div>
           </div>
@@ -1655,7 +1680,10 @@ export default async function DashboardPage({
         </section>
       )}
 
-      {showPipelineEmbed && dealsSurface && kanbanPipelineView ? (
+      {showPipelineEmbed &&
+      dealsSurface &&
+      kanbanPipelineView &&
+      (!simplified || ((surfaceModules?.includes("customers") ?? false) && opportunityRows.length > 0)) ? (
         <section className="crm-card space-y-4">
           <div className="flex items-start justify-between gap-3">
             <div className="space-y-1">
@@ -1669,7 +1697,7 @@ export default async function DashboardPage({
                     pipeline schema. */}
                 {isOperatorSession
                   ? "Drag deals between stages to update their status."
-                  : "Live kanban from BLOCK.md view metadata — stage colors, WIP limits, and lane totals all come from the pipeline schema."}
+                  : "Drag deals between stages — totals update as you go."}
               </p>
             </div>
             <Link
@@ -1696,9 +1724,10 @@ export default async function DashboardPage({
         </section>
       ) : null}
 
+      {!simplified ? (
       <section className="crm-card space-y-5">
         <div className="flex items-center justify-between gap-3">
-          <h2 className="text-base sm:text-lg font-semibold">Your Blocks</h2>
+          <h2 className="text-base sm:text-lg font-semibold">Your features</h2>
         </div>
         {(() => {
           const allBlocks = [
@@ -1782,7 +1811,7 @@ export default async function DashboardPage({
               </div>
               {hiddenBlockItems.length > 0 ? (
                 <div className="space-y-2 pt-2">
-                  <p className="text-xs font-medium text-muted-foreground">Hidden blocks</p>
+                  <p className="text-xs font-medium text-muted-foreground">Hidden features</p>
                   <div className="flex flex-wrap gap-2">
                     {hiddenBlockItems.map((block) => (
                       <div key={block.slug} className="inline-flex items-center gap-1.5 rounded-xl border border-dashed border-border/80 bg-background/30 px-2.5 py-1.5 text-xs text-muted-foreground">
@@ -1797,6 +1826,7 @@ export default async function DashboardPage({
           );
         })()}
       </section>
+      ) : null}
 
       {contactRows.length === 0 ? (
         <section className="crm-card space-y-5">
@@ -1838,6 +1868,7 @@ export default async function DashboardPage({
 
       <UrgencyStrip items={urgencyIndicators} />
 
+      {!simplified || activeEngagements > 0 || monthlyRevenue > 0 || hasRevenueHistory ? (
       <div className="crm-card grid grid-cols-1 gap-4 p-4 sm:grid-cols-2 sm:gap-5 sm:p-5 xl:grid-cols-4 xl:gap-6 xl:p-6">
         {stats.map((stat, index) => (
           <div key={stat.label} className="flex items-start">
@@ -1854,8 +1885,10 @@ export default async function DashboardPage({
           </div>
         ))}
       </div>
+      ) : null}
 
       <div className="flex flex-col xl:flex-row gap-4 sm:gap-6">
+        {!simplified || totalLeadSources > 0 ? (
         <article className="crm-card flex w-full flex-col gap-4 xl:w-[410px]">
           <div className="flex items-center justify-between">
             <div className="flex items-center gap-2 sm:gap-2.5">
@@ -1897,7 +1930,9 @@ export default async function DashboardPage({
             <span>Last 30 days</span>
           </div>
         </article>
+        ) : null}
 
+        {!simplified || hasRevenueHistory ? (
         <article className="crm-card min-w-0 flex-1 flex-col gap-4 sm:gap-6">
           <div className="flex items-center justify-between">
             <div className="flex items-center gap-2 sm:gap-2.5">
@@ -1968,8 +2003,10 @@ export default async function DashboardPage({
             </div>
           </div>
         </article>
+        ) : null}
       </div>
 
+      {!simplified || opportunityRows.length > 0 ? (
       <article className="crm-card overflow-hidden p-0">
         <div className="flex flex-col gap-3 p-4 sm:flex-row sm:items-center sm:gap-4 sm:px-6 sm:py-4">
           <div className="flex items-center gap-2 sm:gap-2.5 flex-1">
@@ -2048,6 +2085,7 @@ export default async function DashboardPage({
           </table>
         </div>
       </article>
+      ) : null}
 
       {upcomingSessionRows.length > 0 ? (
         <article className="crm-card">

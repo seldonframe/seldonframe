@@ -6,7 +6,7 @@ export const defaultSoulTemplate: Partial<OrgSoul> = {
     deal: { singular: "Deal", plural: "Deals" },
     activity: { singular: "Activity", plural: "Activities" },
     pipeline: { singular: "Pipeline", plural: "Pipelines" },
-    intakeForm: { singular: "Intake Form", plural: "Intake Forms" },
+    intakeForm: { singular: "Lead Form", plural: "Lead Forms" },
   },
   pipeline: {
     name: "Sales Pipeline",
