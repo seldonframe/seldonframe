@@ -99,7 +99,7 @@ export async function ensureSession(
   // that cached id belongs to the org's user_id, not this entity. Always create
   // fresh under the entity id (no read, no write of the org session secret).
   if (opts?.entityUserId) {
-    const created = await composio.create(opts.entityUserId, { toolkits: requested });
+    const created = await composio.create(opts.entityUserId, { toolkits: requested, mcp: true });
     return toSessionInfo(created);
   }
 
@@ -112,14 +112,14 @@ export async function ensureSession(
 
   if (cachedId) {
     try {
-      const reused = await composio.use(cachedId);
+      const reused = await composio.use(cachedId, { mcp: true });
       return toSessionInfo(reused);
     } catch {
       // expired / 404 / toolkits drift — fall through to (re)create below.
     }
   }
 
-  const created = await composio.create(orgId, { toolkits: requested });
+  const created = await composio.create(orgId, { toolkits: requested, mcp: true });
   await persistSessionId(orgId, created.sessionId, opts?.actorUserId);
   return toSessionInfo(created);
 }
