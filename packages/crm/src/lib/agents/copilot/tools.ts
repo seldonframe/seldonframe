@@ -28,6 +28,9 @@ import {
   listLandingVersions,
   revertLandingR1,
 } from "@/lib/landing/r1-customize";
+import { saveThemeForOrg } from "@/lib/theme/save-theme";
+import { isHexColor } from "@/lib/theme/normalize-theme";
+import type { OrgTheme } from "@/lib/theme/types";
 
 export const COPILOT_CAPABILITY = "workspace_copilot";
 
@@ -379,13 +382,101 @@ const undoLastChange: AgentTool<z.infer<typeof undoLastChangeInput>> = {
     }),
 };
 
-// ─── update_theme (referenced by later tasks; kept for parity with the admin
-//     action layer's field set — mirrors saveThemeSettingsAction, lib/theme/actions.ts:100)
+// ─── update_theme ────────────────────────────────────────────────────────────
+//
+// Deterministic theme tool (hotfix H2). Colors/fonts/dark-mode/radius asks
+// ("change accent color to powder blue") were previously routed through
+// edit_site's freeform LLM section editor, which replies in prose for
+// theme-shaped requests and trips r1-customize's invalid_payload path. This
+// tool gives the copilot a structured, always-succeeds-or-tells-you-why path
+// straight to the same write core the settings page uses
+// (saveThemeForOrg, lib/theme/save-theme.ts — extracted from
+// saveThemeSettingsAction, lib/theme/actions.ts:100).
+//
+// Only offers the exact enum values normalizeTheme() actually accepts
+// (lib/theme/normalize-theme.ts) — anything else is silently coerced back to
+// the current/default value by normalizeTheme, so the tool input must not
+// promise a wider surface than that.
 
-// Note: update_theme is intentionally NOT part of the 8-tool copilot surface
-// per the Task 1 brief (get_site_structure, edit_site, update_section_field,
-// move_section, delete_section, add_intake_field, list_versions,
-// undo_last_change). Left undeclared here; a later task may add it.
+const HEX_COLOR_DESCRIPTION =
+  "Hex color, e.g. '#7fb3d5'. Convert color names (like 'powder blue') to hex yourself before calling this tool.";
+
+const themeFontFamilyEnum = z.enum(["Inter", "DM Sans", "Playfair Display", "Space Grotesk", "Lora", "Outfit"]);
+const themeModeEnum = z.enum(["light", "dark"]);
+const themeBorderRadiusEnum = z.enum(["sharp", "rounded", "pill"]);
+
+const updateThemeInput = z
+  .object({
+    accentColor: z
+      .string()
+      .regex(/^#[0-9a-fA-F]{6}$/, "must be a hex color like #7fb3d5")
+      .optional()
+      .describe(HEX_COLOR_DESCRIPTION),
+    primaryColor: z
+      .string()
+      .regex(/^#[0-9a-fA-F]{6}$/, "must be a hex color like #7fb3d5")
+      .optional()
+      .describe(HEX_COLOR_DESCRIPTION),
+    fontFamily: themeFontFamilyEnum.optional(),
+    mode: themeModeEnum.optional(),
+    borderRadius: themeBorderRadiusEnum.optional(),
+  })
+  .refine(
+    (value) =>
+      value.accentColor !== undefined ||
+      value.primaryColor !== undefined ||
+      value.fontFamily !== undefined ||
+      value.mode !== undefined ||
+      value.borderRadius !== undefined,
+    { message: "At least one theme field must be provided." },
+  );
+
+const updateTheme: AgentTool<z.infer<typeof updateThemeInput>> = {
+  name: "update_theme",
+  description:
+    "Set the workspace's brand theme: primary/accent color (hex), font family, light/dark mode, or border radius. Use THIS tool for any visual-style ask (colors, fonts, dark mode, corner roundness) — use edit_site only for content, copy, or section layout changes.",
+  inputSchema: updateThemeInput,
+  jsonSchema: {
+    type: "object",
+    properties: {
+      accentColor: { type: "string", pattern: "^#[0-9a-fA-F]{6}$", description: HEX_COLOR_DESCRIPTION },
+      primaryColor: { type: "string", pattern: "^#[0-9a-fA-F]{6}$", description: HEX_COLOR_DESCRIPTION },
+      fontFamily: { type: "string", enum: themeFontFamilyEnum.options, description: "Brand font family." },
+      mode: { type: "string", enum: themeModeEnum.options, description: "Light or dark mode for public pages." },
+      borderRadius: {
+        type: "string",
+        enum: themeBorderRadiusEnum.options,
+        description: "Corner roundness for buttons/cards.",
+      },
+    },
+    required: [],
+  },
+  execute: (input, ctx: ToolExecuteContext) =>
+    safe(async () => {
+      const patch: Partial<OrgTheme> = {};
+      if (input.accentColor !== undefined) {
+        if (!isHexColor(input.accentColor)) {
+          return { ok: false as const, error: "accentColor must be a hex color like #7fb3d5" };
+        }
+        patch.accentColor = input.accentColor;
+      }
+      if (input.primaryColor !== undefined) {
+        if (!isHexColor(input.primaryColor)) {
+          return { ok: false as const, error: "primaryColor must be a hex color like #7fb3d5" };
+        }
+        patch.primaryColor = input.primaryColor;
+      }
+      if (input.fontFamily !== undefined) patch.fontFamily = input.fontFamily;
+      if (input.mode !== undefined) patch.mode = input.mode;
+      if (input.borderRadius !== undefined) patch.borderRadius = input.borderRadius;
+
+      const theme = await saveThemeForOrg(ctx.orgId, patch);
+
+      logEvent("theme_update", { fields: Object.keys(patch), via: "copilot" }, { orgId: ctx.orgId });
+
+      return { ok: true as const, theme };
+    }),
+};
 
 export function buildCopilotTools(): AgentTool[] {
   return [
@@ -397,5 +488,6 @@ export function buildCopilotTools(): AgentTool[] {
     addIntakeField as AgentTool,
     listVersions as AgentTool,
     undoLastChange as AgentTool,
+    updateTheme as AgentTool,
   ];
 }

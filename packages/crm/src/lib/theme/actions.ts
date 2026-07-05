@@ -1,7 +1,6 @@
 "use server";
 
 import { eq } from "drizzle-orm";
-import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
 import { db } from "@/db";
 import { organizations } from "@/db/schema";
@@ -9,6 +8,7 @@ import { getOrgId } from "@/lib/auth/helpers";
 import { assertWritable } from "@/lib/demo/server";
 import type { OrgTheme } from "@/lib/theme/types";
 import { normalizeTheme } from "@/lib/theme/normalize-theme";
+import { saveThemeForOrg } from "@/lib/theme/save-theme";
 
 export async function getThemeSettings() {
   const orgId = await getOrgId();
@@ -113,28 +113,14 @@ export async function saveThemeSettingsAction(formData: FormData) {
   const borderRadius = String(formData.get("borderRadius") ?? "").trim();
   const logoUrlInput = String(formData.get("logoUrl") ?? "").trim();
 
-  const nextTheme = normalizeTheme({
+  await saveThemeForOrg(orgId, {
     primaryColor,
     accentColor,
-    fontFamily,
-    mode,
-    borderRadius,
+    fontFamily: fontFamily as OrgTheme["fontFamily"],
+    mode: mode as OrgTheme["mode"],
+    borderRadius: borderRadius as OrgTheme["borderRadius"],
     logoUrl: logoUrlInput || null,
   });
-
-  await db
-    .update(organizations)
-    .set({
-      theme: nextTheme,
-      updatedAt: new Date(),
-    })
-    .where(eq(organizations.id, orgId));
-
-  revalidatePath("/settings");
-  revalidatePath("/settings/theme");
-  revalidatePath("/l");
-  revalidatePath("/book");
-  revalidatePath("/forms");
 
   redirect("/settings/theme?saved=1");
 }

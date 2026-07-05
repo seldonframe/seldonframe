@@ -54,6 +54,48 @@ function stripFences(text: string): string {
   return trimmed;
 }
 
+/** Fallback for prose-wrapped JSON (e.g. "Sure, here's the update: {...}
+ *  Let me know if you want changes."). Scans for the first balanced
+ *  {...} object in the raw text and returns its substring, or null if
+ *  no balanced object is found. String literals are tracked so braces
+ *  inside quoted strings don't throw off the balance count. */
+export function extractFirstJsonObject(text: string): string | null {
+  const start = text.indexOf("{");
+  if (start === -1) return null;
+
+  let depth = 0;
+  let inString = false;
+  let escaped = false;
+
+  for (let i = start; i < text.length; i++) {
+    const ch = text[i];
+
+    if (inString) {
+      if (escaped) {
+        escaped = false;
+      } else if (ch === "\\") {
+        escaped = true;
+      } else if (ch === '"') {
+        inString = false;
+      }
+      continue;
+    }
+
+    if (ch === '"') {
+      inString = true;
+    } else if (ch === "{") {
+      depth++;
+    } else if (ch === "}") {
+      depth--;
+      if (depth === 0) {
+        return text.slice(start, i + 1);
+      }
+    }
+  }
+
+  return null;
+}
+
 function pickText(content: Array<{ type: string; text?: string }>): string {
   return content
     .map((part) => (part.type === "text" ? part.text ?? "" : ""))
@@ -207,11 +249,23 @@ export async function customizeLandingR1(args: {
   try {
     parsed = JSON.parse(cleaned);
   } catch {
-    return {
-      ok: false,
-      reason: "invalid_payload",
-      detail: `JSON parse failed. Preview: ${cleaned.slice(0, 200)}`,
-    };
+    const extracted = extractFirstJsonObject(cleaned);
+    if (extracted === null) {
+      return {
+        ok: false,
+        reason: "invalid_payload",
+        detail: `JSON parse failed. Preview: ${cleaned.slice(0, 200)}`,
+      };
+    }
+    try {
+      parsed = JSON.parse(extracted);
+    } catch {
+      return {
+        ok: false,
+        reason: "invalid_payload",
+        detail: `JSON parse failed. Preview: ${cleaned.slice(0, 200)}`,
+      };
+    }
   }
 
   if (!parsed || typeof parsed !== "object") {
