@@ -59,7 +59,7 @@ function getTitle(pathname: string, labels: ReturnType<typeof useLabels>) {
   }
 
   if (pathname === "/forms") {
-    return "Intake Forms";
+    return labels.intakeForm.plural;
   }
 
   if (pathname === "/activities") {
@@ -115,7 +115,7 @@ function getTitle(pathname: string, labels: ReturnType<typeof useLabels>) {
   }
 
   if (pathname.startsWith("/forms/")) {
-    return "Intake Forms";
+    return labels.intakeForm.plural;
   }
 
   if (pathname.startsWith("/landing/")) {

@@ -8,7 +8,7 @@ const hardcodedDefaults = {
     deal: { singular: "Deal", plural: "Deals" },
     activity: { singular: "Activity", plural: "Activities" },
     pipeline: { singular: "Pipeline", plural: "Pipelines" },
-    intakeForm: { singular: "Intake Form", plural: "Intake Forms" },
+    intakeForm: { singular: "Lead Form", plural: "Lead Forms" },
   },
 };
 
