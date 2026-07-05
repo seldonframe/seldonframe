@@ -48,6 +48,16 @@ export type R1HeroSection = {
   /** P2: when true (and payload.leadForm.enabled), the hero renders the intake
    *  form in its right column (desktop) / below the text (mobile). */
   leadFormInHero?: boolean;
+  /** Media-editing T1: optional full-bleed background image, rendered BEHIND
+   *  the existing foreground content (distinct from `heroImage`, which is the
+   *  foreground photo panel in HeroSplit/HeroLeftAsymmetric). Optional — grandfathered
+   *  payloads without it render byte-identical to today. Video takes precedence
+   *  over this when both are set. */
+  backgroundImage?: { src: string; alt: string };
+  /** Media-editing T1: optional full-bleed background video, rendered BEHIND
+   *  the existing foreground content. Takes precedence over `backgroundImage`
+   *  when both are set. Autoplays muted/looped — decorative, no audio. */
+  backgroundVideo?: { src: string; poster?: string };
 };
 
 export type R1Service = {

@@ -37,6 +37,7 @@ import { loadBlueprintOrFallback } from "@/lib/blueprint/persist";
 import { renderGeneralServiceV1 } from "@/lib/blueprint/renderers/general-service-v1";
 import type { Blueprint, LandingSection } from "@/lib/blueprint/types";
 import type { OrgTheme } from "@/lib/theme/types";
+import { setR1Media } from "@/lib/landing/set-r1-media";
 
 // ─── public types + constants ───────────────────────────────────────────────
 
@@ -505,6 +506,22 @@ async function applyHeroBackground(
   workspaceId: string,
   imageUrl: string,
 ): Promise<string | null> {
+  // v1.10.2 fix — this function historically only looked up the legacy
+  // slug='home' landing_pages row (the old single-hero blueprint builder).
+  // r1 workspaces (slug='r1', see r1-save.ts) never match that lookup, so
+  // `upload_workspace_image` with slot=hero_background silently no-op'd for
+  // every r1 workspace. Try the r1 path FIRST via the canonical setR1Media
+  // write seam; fall back to the legacy 'home' lookup below so any
+  // remaining legacy (non-r1) workspace keeps working unchanged.
+  const r1Result = await setR1Media(workspaceId, {
+    slot: "hero_background",
+    src: imageUrl,
+    alt: "",
+  });
+  if (r1Result.ok) {
+    return "r1.hero.backgroundImage";
+  }
+
   const [landing] = await db
     .select({
       id: landingPages.id,

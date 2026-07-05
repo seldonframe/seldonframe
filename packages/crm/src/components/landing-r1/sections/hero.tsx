@@ -49,6 +49,13 @@ export type HeroProps = {
   leadForm?: R1LeadFormSection;
   /** P2: workspace slug, needed by LeadFormCard to submit the form. */
   orgSlug?: string;
+  /** Media-editing T1: optional full-bleed background image behind the
+   *  existing foreground content (HeroSplit/HeroLeftAsymmetric only —
+   *  HeroCinematic already renders heroImage full-bleed). */
+  backgroundImage?: { src: string; alt: string };
+  /** Media-editing T1: optional full-bleed background video behind the
+   *  existing foreground content. Takes precedence over backgroundImage. */
+  backgroundVideo?: { src: string; poster?: string };
 };
 
 export function Hero(props: HeroProps) {
@@ -76,7 +83,7 @@ export function Hero(props: HeroProps) {
 function HeroSplit(props: HeroProps & { showHeroForm: boolean }) {
   const { businessName, tagline, subhead, primaryCTA, secondaryCTA, trustBadges,
           reviewRating, reviewCount, emergencyService, heroImage, heroOverlay,
-          orgSlug, leadForm, showHeroForm } = props;
+          orgSlug, leadForm, showHeroForm, backgroundImage, backgroundVideo } = props;
 
   // Bold-urgency tagline pattern: split on the first sentence terminator and
   // render the back half as the accent line. If the LLM doesn't follow that
@@ -84,7 +91,8 @@ function HeroSplit(props: HeroProps & { showHeroForm: boolean }) {
   const taglineParts = splitTagline(tagline);
 
   return (
-    <div className="hero-split container">
+    <div className="hero-split container hero-has-bg-wrap">
+      <HeroBackgroundLayer backgroundImage={backgroundImage} backgroundVideo={backgroundVideo} />
       <div className="hero-text">
         {emergencyService && (
           <Reveal>
@@ -195,11 +203,12 @@ function HeroSplit(props: HeroProps & { showHeroForm: boolean }) {
 function HeroLeftAsymmetric(props: HeroProps & { showHeroForm: boolean }) {
   const { businessName, tagline, subhead, primaryCTA, secondaryCTA, trustBadges,
           reviewRating, reviewCount, heroImage, heroOverlay,
-          orgSlug, leadForm, showHeroForm } = props;
+          orgSlug, leadForm, showHeroForm, backgroundImage, backgroundVideo } = props;
   const arch = ARCHETYPES[props.archetype];
 
   return (
-    <div className="hero-left container">
+    <div className="hero-left container hero-has-bg-wrap">
+      <HeroBackgroundLayer backgroundImage={backgroundImage} backgroundVideo={backgroundVideo} />
       <div className="hero-left-grid">
         {/* Text column — anchored top-left, asymmetric (NOT centered). */}
         <div className="hero-left-text">
@@ -297,6 +306,49 @@ function HeroLeftAsymmetric(props: HeroProps & { showHeroForm: boolean }) {
           </>
         )}
       </div>
+    </div>
+  );
+}
+
+// ── background layer (HeroSplit / HeroLeftAsymmetric only) ────────────────
+// Media-editing T1: renders a full-bleed background image/video BEHIND the
+// existing foreground content, with the SAME veil treatment HeroCinematic
+// uses (.hero-cinematic-bg / .hero-cinematic-veil classes, reused verbatim —
+// see HeroCinematic below) so foreground text stays legible. Video takes
+// precedence over image. Renders nothing when neither is set — in that case
+// the wrapper's extra "hero-has-bg-wrap" class has no visual effect (no
+// background children means no visible change), so existing payloads without
+// backgroundImage/backgroundVideo render byte-identical to before this change.
+function HeroBackgroundLayer(props: {
+  backgroundImage?: { src: string; alt: string };
+  backgroundVideo?: { src: string; poster?: string };
+}) {
+  const { backgroundImage, backgroundVideo } = props;
+  if (!backgroundVideo?.src && !backgroundImage?.src) return null;
+
+  return (
+    <div className="hero-cinematic-bg hero-bg-layer" aria-hidden>
+      {backgroundVideo?.src ? (
+        <video
+          src={backgroundVideo.src}
+          poster={backgroundVideo.poster}
+          autoPlay
+          muted
+          loop
+          playsInline
+          preload="metadata"
+          className="hero-bg-media"
+          aria-hidden
+        />
+      ) : (
+        <img
+          src={backgroundImage!.src}
+          alt=""
+          className="hero-bg-media"
+          fetchPriority="high"
+        />
+      )}
+      <div className="hero-cinematic-veil" />
     </div>
   );
 }
@@ -564,6 +616,21 @@ function HeroStyles() {
         :global(.btn-pulse::after) { display: none; }
         .photo-badge-live :global(.dot),
         .badge-emergency :global(.dot) { animation: none; }
+      }
+
+      /* ───────── hero-has-bg-wrap (media-editing T1) ─────────
+         Applied to the HeroSplit/HeroLeftAsymmetric outer wrapper alongside
+         .hero-split/.hero-left. Only takes effect when a background
+         image/video child is actually rendered (HeroBackgroundLayer returns
+         null otherwise) — position:relative + isolation don't change layout
+         when there's no absolutely-positioned child, so payloads without
+         backgroundImage/backgroundVideo are visually unchanged. */
+      .hero-has-bg-wrap { position: relative; isolation: isolate; }
+      .hero-has-bg-wrap .hero-bg-layer { z-index: -1; }
+      .hero-has-bg-wrap > *:not(.hero-bg-layer) { position: relative; z-index: 1; }
+      .hero-bg-media {
+        position: absolute; inset: 0; width: 100%; height: 100%;
+        object-fit: cover;
       }
 
       /* ───────── left-aligned-asymmetric ───────── */
