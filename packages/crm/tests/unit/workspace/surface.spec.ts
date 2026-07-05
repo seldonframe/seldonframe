@@ -45,6 +45,7 @@ function canDisableDeps(overrides: Partial<CanDisableModuleDeps> = {}): CanDisab
   return {
     hasActiveSubscription: async () => false,
     hasActiveDeployment: async () => false,
+    hasSmsLive: async () => false,
     ...overrides,
   };
 }
@@ -53,6 +54,7 @@ function setModuleDeps(overrides: Partial<SetModuleEnabledDeps> = {}): SetModule
   return {
     hasActiveSubscription: async () => false,
     hasActiveDeployment: async () => false,
+    hasSmsLive: async () => false,
     readSettings: async () => null,
     writeSurface: async () => {},
     ...overrides,
@@ -250,6 +252,21 @@ describe("canDisableModule", () => {
       "website",
       canDisableDeps({ hasActiveSubscription: async () => true, hasActiveDeployment: async () => true }),
     );
+    assert.deepEqual(result, { ok: true });
+  });
+
+  test("blocks 'inbox' when SMS is live for the org", async () => {
+    const result = await canDisableModule(
+      "org_1",
+      "inbox",
+      canDisableDeps({ hasSmsLive: async () => true }),
+    );
+    assert.equal(result.ok, false);
+    assert.equal(result.reason, "sms_live");
+  });
+
+  test("allows 'inbox' when SMS is not live for the org", async () => {
+    const result = await canDisableModule("org_1", "inbox", canDisableDeps());
     assert.deepEqual(result, { ok: true });
   });
 });

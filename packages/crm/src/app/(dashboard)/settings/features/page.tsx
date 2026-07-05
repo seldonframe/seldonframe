@@ -21,6 +21,7 @@ const BLOCKED_REASON_COPY: Record<string, string> = {
   home_always_on: "Home is always on.",
   active_subscription: "You have an active paid subscription — turn that off first.",
   active_deployment: "You have a live AI agent running — turn that off first.",
+  sms_live: "Shown while SMS is live.",
   blocked: "This can't be turned off right now.",
 };
 
@@ -71,6 +72,15 @@ export default async function FeaturesSettingsPage({
     : [];
   const disableDecisions = new Map<ModuleId, { ok: boolean; reason?: string }>(disableChecks);
 
+  // Inbox SMS-gate (2026-07-05): while SMS is live for the org,
+  // canDisableModule("inbox") returns { ok: false, reason: "sms_live" } —
+  // mirror money/agents by also treating the module as locked ON in this
+  // view, even if it was never explicitly enabled via the toggle (default
+  // off). Without this, an org that never toggled "inbox" on would see
+  // "Off" in this list while the nav (smsLive-driven) already shows
+  // Conversations — same OR-conflict resolution as the nav gate.
+  const inboxLockedOn = disableDecisions.get("inbox")?.reason === "sms_live";
+
   return (
     <section className="animate-page-enter space-y-4 sm:space-y-6">
       <div>
@@ -98,7 +108,11 @@ export default async function FeaturesSettingsPage({
 
       <div className="rounded-xl border bg-card divide-y divide-border">
         {MODULE_REGISTRY.map((mod) => {
-          const isOn = mod.alwaysOn || isGrandfathered || enabledSet.has(mod.id);
+          const isOn =
+            mod.alwaysOn ||
+            isGrandfathered ||
+            enabledSet.has(mod.id) ||
+            (mod.id === "inbox" && inboxLockedOn);
           const decision = disableDecisions.get(mod.id) ?? { ok: true };
           const showToggle = !mod.alwaysOn;
           // Only disabling is ever blocked (turning something ON is always

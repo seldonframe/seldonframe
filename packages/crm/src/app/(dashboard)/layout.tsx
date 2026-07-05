@@ -18,6 +18,7 @@ import { SeldonChat } from "@/components/seldon-chat";
 import { CommandBar } from "@/components/command-bar";
 import { isWinLadderOn, isSimpleHomeOn } from "@/lib/web-build/policy";
 import { readEnabledModules } from "@/lib/workspace/surface";
+import { pickTelephonyFromIntegrations } from "@/lib/telephony/config";
 import { buildWorkspaceUrls } from "@/lib/billing/anonymous-workspace";
 import { registerCrmEventListeners } from "@/lib/events/listeners";
 import { getAllBlocksForOrg } from "@/lib/blocks/registry";
@@ -120,7 +121,7 @@ export default async function DashboardLayout({
 
   const [activeOrg, orgMemberCount, effectiveBranding] = orgId
     ? await Promise.all([
-        db.select({ id: organizations.id, name: organizations.name, testMode: organizations.testMode, slug: organizations.slug, settings: organizations.settings }).from(organizations).where(eq(organizations.id, orgId)).limit(1).then((rows) => rows[0] ?? null),
+        db.select({ id: organizations.id, name: organizations.name, testMode: organizations.testMode, slug: organizations.slug, settings: organizations.settings, integrations: organizations.integrations }).from(organizations).where(eq(organizations.id, orgId)).limit(1).then((rows) => rows[0] ?? null),
         db
           .select({ count: sql<number>`count(*)` })
           .from(users)
@@ -152,6 +153,18 @@ export default async function DashboardLayout({
   // module set AND the flag is on.
   const simpleHomeOn = isSimpleHomeOn({ SF_SIMPLE_HOME: process.env.SF_SIMPLE_HOME });
   const enabledModules = simpleHomeOn ? readEnabledModules(activeOrg?.settings) : null;
+
+  // Inbox SMS-gate (2026-07-05): /conversations shows whenever the ACTIVE
+  // org (the one whose nav we're building — respects switched-into-client
+  // workspaces via activeOrg, not the operator's primary org) has a usable
+  // Twilio number, regardless of the module toggle. Pure predicate — reuses
+  // the same accountSid+authToken check resolveBuilderTelephony wraps, no
+  // extra DB round trip (activeOrg.integrations is already selected above).
+  // Note: authTokenRaw is the still-encrypted "v1."-prefixed value here (no
+  // decryption needed just to test presence — resolveBuilderTelephony does
+  // the real decrypt when telephony is actually used).
+  const telephonyPick = pickTelephonyFromIntegrations(activeOrg?.integrations);
+  const smsLive = telephonyPick.accountSid !== null && telephonyPick.authTokenRaw !== null;
 
   // Command bar (Task 7): auto-open-once fires only the FIRST time a
   // simple-home org with a materialized module set (not grandfathered) has
@@ -309,6 +322,7 @@ export default async function DashboardLayout({
               isInsideClientWorkspace={isSwitchedOrg}
               primaryOrgId={user?.orgId ?? null}
               enabledModules={enabledModules}
+              smsLive={smsLive}
             />
             {/* overflow-x-clip (not overflow-x-hidden): overflow-y-auto here
                 also computes overflow-x to `auto` per CSS's overflow

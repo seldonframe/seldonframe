@@ -10,6 +10,7 @@ import { sql } from "drizzle-orm";
 import { db } from "@/db";
 import { deployments, organizations } from "@/db/schema";
 import { workspaceHasPaidTier } from "@/lib/billing/tier-resolver";
+import { resolveBuilderTelephony } from "@/lib/telephony/config";
 import { MODULE_IDS, DEFAULT_FRESH_MODULES, type ModuleId } from "./modules";
 
 const MODULE_ID_SET = new Set<string>(MODULE_IDS as readonly string[]);
@@ -98,6 +99,10 @@ export type CanDisableModuleDeps = {
   hasActiveSubscription: (orgId: string) => Promise<boolean>;
   /** True when the org has at least one active deployment (blocks disabling "agents"). */
   hasActiveDeployment: (orgId: string) => Promise<boolean>;
+  /** True when the org has a usable (accountSid + authToken) Twilio number
+   *  configured (blocks disabling "inbox" — SMS being live makes the inbox
+   *  load-bearing). */
+  hasSmsLive: (orgId: string) => Promise<boolean>;
 };
 
 async function defaultHasActiveSubscription(orgId: string): Promise<boolean> {
@@ -113,9 +118,15 @@ async function defaultHasActiveDeployment(orgId: string): Promise<boolean> {
   return Boolean(row);
 }
 
+async function defaultHasSmsLive(orgId: string): Promise<boolean> {
+  const result = await resolveBuilderTelephony(orgId);
+  return result.ok;
+}
+
 export const defaultCanDisableModuleDeps: CanDisableModuleDeps = {
   hasActiveSubscription: defaultHasActiveSubscription,
   hasActiveDeployment: defaultHasActiveDeployment,
+  hasSmsLive: defaultHasSmsLive,
 };
 
 /**
@@ -123,7 +134,9 @@ export const defaultCanDisableModuleDeps: CanDisableModuleDeps = {
  * be disabled. "money" is blocked while the org has an active paid
  * subscription (avoid hiding the surface that manages it). "agents" is
  * blocked while the org has an active deployment (avoid hiding the surface
- * that runs a live client-facing agent). Everything else is allowed.
+ * that runs a live client-facing agent). "inbox" is blocked while the org
+ * has a usable (live) Twilio number (avoid hiding the surface that shows
+ * incoming SMS). Everything else is allowed.
  */
 export async function canDisableModule(
   orgId: string,
@@ -142,6 +155,11 @@ export async function canDisableModule(
   if (moduleId === "agents") {
     const active = await deps.hasActiveDeployment(orgId);
     if (active) return { ok: false, reason: "active_deployment" };
+  }
+
+  if (moduleId === "inbox") {
+    const live = await deps.hasSmsLive(orgId);
+    if (live) return { ok: false, reason: "sms_live" };
   }
 
   return { ok: true };

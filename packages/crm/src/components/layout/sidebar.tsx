@@ -81,6 +81,12 @@ export function Sidebar(props: {
    *  BuildNavInput.enabledModules doc. Only affects the inside-client-
    *  workspace nav; other session types ignore it. */
   enabledModules?: ModuleId[] | null;
+  /** Inbox SMS-gate (2026-07-05) — true when the active workspace has a
+   *  usable (accountSid + authToken) Twilio number, per
+   *  pickTelephonyFromIntegrations. Forces /conversations to show even
+   *  when "inbox" isn't in enabledModules. See nav-config.ts's
+   *  BuildNavInput.smsLive doc. */
+  smsLive?: boolean;
 }) {
   const {
     hiddenBlocks = [],
@@ -99,6 +105,7 @@ export function Sidebar(props: {
     isInsideClientWorkspace = false,
     primaryOrgId = null,
     enabledModules = null,
+    smsLive = false,
   } = props;
   const labels = useLabels();
   const pathname = usePathname();
@@ -134,6 +141,7 @@ export function Sidebar(props: {
       intakeForm: labels.intakeForm,
     },
     enabledModules,
+    smsLive,
   });
 
   const [mobileOpen, setMobileOpen] = useState(false);

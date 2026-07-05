@@ -72,6 +72,14 @@ export type BuildNavInput = {
    *  audience); other session types ignore it. When set, a "Turn on more
    *  features" item is appended to the last group. */
   enabledModules?: ModuleId[] | null;
+  /** Inbox SMS-gate (2026-07-05) — true when the workspace has a usable
+   *  (accountSid + authToken) Twilio number, per
+   *  pickTelephonyFromIntegrations. When true, `/conversations` shows
+   *  even if "inbox" isn't in enabledModules — SMS being live makes the
+   *  inbox load-bearing regardless of the operator's module toggle.
+   *  Ignored when enabledModules is null/undefined (grandfathered / flag
+   *  off — nothing is filtered either way). */
+  smsLive?: boolean;
 };
 
 // Block-slug → href map for visibility filtering. Lifted verbatim from
@@ -120,7 +128,11 @@ const TURN_ON_MORE_FEATURES_ITEM: NavItem = {
  * group headers that end up with zero items. No-op (returns groups
  * unchanged) when `enabledModules` is null/undefined.
  */
-function applyModuleFilter(groups: NavGroup[], enabledModules: ModuleId[] | null | undefined): NavGroup[] {
+function applyModuleFilter(
+  groups: NavGroup[],
+  enabledModules: ModuleId[] | null | undefined,
+  smsLive: boolean = false,
+): NavGroup[] {
   if (enabledModules == null) return groups;
 
   const enabledHrefs = new Set<string>();
@@ -136,7 +148,12 @@ function applyModuleFilter(groups: NavGroup[], enabledModules: ModuleId[] | null
   const filtered = groups
     .map((group) => ({
       ...group,
-      items: group.items.filter((item) => !gatedHrefs.has(item.href) || enabledHrefs.has(item.href)),
+      items: group.items.filter(
+        (item) =>
+          !gatedHrefs.has(item.href) ||
+          enabledHrefs.has(item.href) ||
+          (item.href === "/conversations" && smsLive),
+      ),
     }))
     .filter((group) => group.items.length > 0);
 
@@ -154,7 +171,8 @@ function applyModuleFilter(groups: NavGroup[], enabledModules: ModuleId[] | null
  * so the six-noun contract is unit-testable.
  */
 export function buildNavGroups(input: BuildNavInput): NavGroup[] {
-  const { sessionType, workspaceCount, hiddenBlocks, isSuperAdmin, primaryOrgId, labels, enabledModules } = input;
+  const { sessionType, workspaceCount, hiddenBlocks, isSuperAdmin, primaryOrgId, labels, enabledModules, smsLive } =
+    input;
 
   const hiddenHrefs = new Set(hiddenBlocks.map((slug) => hiddenSlugToHref[slug]).filter(Boolean));
 
@@ -247,7 +265,7 @@ export function buildNavGroups(input: BuildNavInput): NavGroup[] {
       },
     ].filter((group) => group.items.length > 0);
 
-    return applyModuleFilter(groups, enabledModules);
+    return applyModuleFilter(groups, enabledModules, smsLive);
   }
 
   // -------------------------------------------------------------------

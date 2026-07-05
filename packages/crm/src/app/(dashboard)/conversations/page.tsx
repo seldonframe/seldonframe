@@ -23,6 +23,7 @@ import { db } from "@/db";
 import { contacts, smsMessages } from "@/db/schema";
 import { getOrgId } from "@/lib/auth/helpers";
 import { getLabels } from "@/lib/soul/labels";
+import { resolveBuilderTelephony } from "@/lib/telephony/config";
 
 type ThreadRow = {
   contactId: string;
@@ -60,6 +61,14 @@ export default async function ConversationsPage() {
   }
 
   const labels = await getLabels();
+
+  // Inbox SMS-gate (2026-07-05): the empty state differs depending on
+  // whether a phone is connected at all. No phone ⇒ an actionable CTA to
+  // /settings/integrations (the Twilio-connect route) instead of the
+  // generic "no messages yet" copy, which would be confusing/dead-end for
+  // an operator who hasn't set up texting yet.
+  const telephony = await resolveBuilderTelephony(orgId);
+  const phoneConnected = telephony.ok;
 
   // Load all sms_messages for this workspace that are tied to a
   // contact. Ordered by created_at desc so the threads display
@@ -180,14 +189,34 @@ export default async function ConversationsPage() {
       {threads.length === 0 ? (
         <article className="crm-card mx-auto max-w-[480px] p-10 text-center">
           <MessageCircle className="mx-auto mb-4 size-10 text-muted-foreground" />
-          <h3 className="text-base font-semibold tracking-tight">
-            No inbound messages yet
-          </h3>
-          <p className="mt-2 text-sm text-muted-foreground">
-            When a customer texts your Twilio number, their thread will
-            show up here. Outbound-only sends (booking confirmations,
-            reminders) aren&apos;t listed until a customer replies.
-          </p>
+          {phoneConnected ? (
+            <>
+              <h3 className="text-base font-semibold tracking-tight">
+                No inbound messages yet
+              </h3>
+              <p className="mt-2 text-sm text-muted-foreground">
+                When a customer texts your Twilio number, their thread will
+                show up here. Outbound-only sends (booking confirmations,
+                reminders) aren&apos;t listed until a customer replies.
+              </p>
+            </>
+          ) : (
+            <>
+              <h3 className="text-base font-semibold tracking-tight">
+                No phone number connected yet
+              </h3>
+              <p className="mt-2 text-sm text-muted-foreground">
+                Connect a phone number to start texting with{" "}
+                {labels.contact.plural.toLowerCase()}.
+              </p>
+              <Link
+                href="/settings/integrations"
+                className="crm-button-primary mt-4 inline-flex h-9 items-center px-4 text-xs"
+              >
+                Connect a phone number to start texting with customers →
+              </Link>
+            </>
+          )}
         </article>
       ) : (
         <ul className="crm-card divide-y divide-border overflow-hidden p-0">

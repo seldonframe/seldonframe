@@ -485,3 +485,54 @@ describe("buildNavGroups — enabledModules (simple-home nav filter)", () => {
     assert.deepEqual(portalGroups, portalBaseline);
   });
 });
+
+// ---------------------------------------------------------------------
+// Inbox SMS-gate (2026-07-05) — smsLive
+// ---------------------------------------------------------------------
+
+describe("buildNavGroups — smsLive (inbox SMS-gate)", () => {
+  test("shows /conversations when inbox is NOT in enabledModules but smsLive is true", () => {
+    const groups = buildNavGroups(
+      baseInput({
+        sessionType: "inside-client-workspace",
+        enabledModules: ["home", "website", "bookings", "customers"],
+        smsLive: true,
+      }),
+    );
+    assert.equal(hasHref(groups, "/conversations"), true, "SMS live must force /conversations to show");
+  });
+
+  test("hides /conversations when smsLive is false and inbox is not enabled", () => {
+    const groups = buildNavGroups(
+      baseInput({
+        sessionType: "inside-client-workspace",
+        enabledModules: ["home", "website", "bookings", "customers"],
+        smsLive: false,
+      }),
+    );
+    assert.equal(hasHref(groups, "/conversations"), false);
+  });
+
+  test("shows /conversations when inbox is explicitly enabled regardless of smsLive", () => {
+    const groups = buildNavGroups(
+      baseInput({
+        sessionType: "inside-client-workspace",
+        enabledModules: ["home", "inbox"],
+        smsLive: false,
+      }),
+    );
+    assert.equal(hasHref(groups, "/conversations"), true);
+  });
+
+  test("grandfathered (enabledModules: null) is unaffected by smsLive", () => {
+    const baseline = buildNavGroups(baseInput({ sessionType: "inside-client-workspace" }));
+    const withSms = buildNavGroups(
+      baseInput({ sessionType: "inside-client-workspace", enabledModules: null, smsLive: true }),
+    );
+    const withoutSms = buildNavGroups(
+      baseInput({ sessionType: "inside-client-workspace", enabledModules: null, smsLive: false }),
+    );
+    assert.deepEqual(withSms, baseline);
+    assert.deepEqual(withoutSms, baseline);
+  });
+});
