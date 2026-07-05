@@ -28,7 +28,6 @@ import { CreateClientCta } from "@/components/dashboard/create-client-cta";
 // SH2-F4 — reused for the simplified-Home inline "Add client workspace"
 // button (skips CreateClientCta's usage pill without touching that
 // shared component, which is outside this task's touched-files list).
-import { buttonVariants } from "@/components/ui/button";
 import { enforceWorkspaceLimit } from "@/lib/billing/limits";
 import { getOwnedWorkspaceCount } from "@/lib/web-onboarding/owned-workspace-count";
 // 2026-07-04 — reused for the claimed-workspace hero's "View your website"
@@ -1531,7 +1530,7 @@ export default async function DashboardPage({
               // upgrade-modal branch isn't reachable in the common
               // single-workspace-simplified case; non-simplified keeps
               // the full tier-aware component unchanged.
-              <Link href="/clients/new" className={buttonVariants({ variant: "default" })}>
+              <Link href="/clients/new" className="crm-button-primary h-9 px-4 text-xs sm:text-sm">
                 Add client workspace
               </Link>
             ) : (
