@@ -73,12 +73,12 @@ describe("resolveStockKeys", () => {
     const keys = resolveStockKeys({
       UNSPLASH_ACCESS_KEY: "unsplash-secret",
       PEXELS_API_KEY: "pexels-secret",
-    } as NodeJS.ProcessEnv);
+    } as unknown as NodeJS.ProcessEnv);
     assert.deepEqual(keys, { unsplash: "unsplash-secret", pexels: "pexels-secret" });
   });
 
   test("returns undefined entries when env vars are absent", () => {
-    const keys = resolveStockKeys({} as NodeJS.ProcessEnv);
+    const keys = resolveStockKeys({} as unknown as NodeJS.ProcessEnv);
     assert.equal(keys.unsplash, undefined);
     assert.equal(keys.pexels, undefined);
   });
