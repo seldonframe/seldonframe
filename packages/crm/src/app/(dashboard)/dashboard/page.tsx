@@ -1903,7 +1903,7 @@ export default async function DashboardPage({
         </section>
       ) : null}
 
-      <UrgencyStrip items={urgencyIndicators} />
+      {!simplified ? <UrgencyStrip items={urgencyIndicators} /> : null}
 
       {!simplified || activeEngagements > 0 || monthlyRevenue > 0 || hasRevenueHistory ? (
       <div className="crm-card grid grid-cols-1 gap-4 p-4 sm:grid-cols-2 sm:gap-5 sm:p-5 xl:grid-cols-4 xl:gap-6 xl:p-6">
