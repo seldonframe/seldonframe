@@ -237,19 +237,13 @@ export async function POST(req: NextRequest) {
       );
     }
 
+    // 2026-07-05 — trial removed (founder decision): the free ungated
+    // build→claim→use experience already IS the trial, so the $29
+    // domain-moment charges immediately. "Cancel anytime" stays true via
+    // the standard Stripe billing portal (createBillingPortalSessionAction).
     const checkoutSession = await stripe.checkout.sessions.create({
       ...params,
       payment_method_types: ["card"],
-      // 14-day free trial on the PLATFORM subscription (SF billing the
-      // customer their own $29). Merge — don't clobber the metadata that
-      // buildCheckoutSessionParams stamped on subscription_data (the
-      // Phase 2 webhook contract). NOTE: this is SF's own platform
-      // subscription, NOT a connected account — it carries NO GMV
-      // application fee.
-      subscription_data: {
-        ...params.subscription_data,
-        trial_period_days: 14,
-      },
     });
 
     return NextResponse.json({ url: checkoutSession.url, tier: targetTier });

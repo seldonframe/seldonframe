@@ -153,7 +153,7 @@ function renderAgentBody(job: AgentJob, vertical: Vertical | undefined, baseUrl:
   if (vertical) {
     lines.push(`- **Industry:** ${vertical.plural}`);
   }
-  lines.push("- **Pricing:** $29/mo flat, unlimited workspaces, 14-day free trial (your AI key billed at cost by the provider).");
+  lines.push("- **Pricing:** $29/mo flat, unlimited workspaces, cancel anytime (your AI key billed at cost by the provider).");
   lines.push("");
 
   // FAQ — the SAME array the HTML FAQPage JSON-LD is built from (job FAQ +

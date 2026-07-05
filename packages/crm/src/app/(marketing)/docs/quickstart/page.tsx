@@ -219,7 +219,7 @@ export default function QuickstartPage() {
           <Section
             number={3}
             title="Watch Claude build it"
-            body="Claude Code chains the right tool calls automatically: creates the workspace, installs an industry-matched vertical pack, configures booking availability, seeds your Soul from your website (if provided), and customizes the intake form. Returns live URLs you can share immediately. Your first workspace builds during your 14-day free trial, then it's $29/mo flat for unlimited workspaces."
+            body="Claude Code chains the right tool calls automatically: creates the workspace, installs an industry-matched vertical pack, configures booking availability, seeds your Soul from your website (if provided), and customizes the intake form. Returns live URLs you can share immediately. Your first workspace builds free — it's $29/mo flat for unlimited workspaces when you're ready to go live, and you can cancel anytime."
             code={`https://your-business.app.seldonframe.com           ← public home
 https://your-business.app.seldonframe.com/book      ← booking
 https://your-business.app.seldonframe.com/intake    ← intake form

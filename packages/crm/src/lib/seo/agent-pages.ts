@@ -664,9 +664,12 @@ export const AGENT_JOBS: AgentJob[] = [
 // the template builds from that same array (GEO-friendly: clear, citable Q/A).
 //
 // These state the REAL, current pricing facts (the value-frame spec asserts the
-// $29/mo + 14-day-trial + 60-seconds claims are present), so the page never
-// drifts from the product. Data-driven + reused across all pages — no per-page
-// duplication.
+// $29/mo + 60-seconds claims are present), so the page never drifts from the
+// product. Data-driven + reused across all pages — no per-page duplication.
+// 2026-07-05: the 14-day trial was removed (founder decision) — the free
+// ungated build→claim→use experience already IS the trial, so checkout
+// charges immediately; the "no card to start" claim below stays true because
+// building the workspace itself never requires a card.
 export const VALUE_FRAME_FAQ: FaqItem[] = [
   {
     q: "How does it actually work?",
@@ -678,7 +681,7 @@ export const VALUE_FRAME_FAQ: FaqItem[] = [
   },
   {
     q: "How much does it cost?",
-    a: "$29/mo flat, with unlimited workspaces and a 14-day free trial — no card to start. Your AI key is billed by the provider directly at cost (usually pennies a day); we never mark it up or add a usage tax on top.",
+    a: "$29/mo flat, with unlimited workspaces and cancel anytime — no card to start building. Your AI key is billed by the provider directly at cost (usually pennies a day); we never mark it up or add a usage tax on top.",
   },
   {
     q: "How much can it save me?",

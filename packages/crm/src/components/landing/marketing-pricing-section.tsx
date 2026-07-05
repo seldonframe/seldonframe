@@ -3,8 +3,10 @@
 // Rewrite 2026-06-22 — flat $29/mo model (replaces the old 3-tier table).
 // Warm light aesthetic: paper/card surfaces, SeldonFrame green accent.
 //
-// The model (finalized 2026-06-21; copy corrected 2026-06-22):
-//   $29/mo flat · unlimited workspaces · 14-day free trial.
+// The model (finalized 2026-06-21; copy corrected 2026-06-22; trial removed
+// 2026-07-05 — the free ungated build→claim→use experience already IS the
+// trial, so checkout charges immediately, cancel anytime):
+//   $29/mo flat · unlimited workspaces · cancel anytime.
 //   Everything included — website, booking, CRM, intake, web chat, AND the
 //   voice + SMS + email AI agents (the voice receptionist is included, not a
 //   paid add-on).
@@ -58,8 +60,8 @@ export function LandingMarketingPricingSection() {
           </h2>
           <p className="mx-auto mt-4 max-w-[56ch] text-[16px] leading-[1.55] text-[#6E665A]">
             $29 a month flat — less than a part-time hire, and a single booked job pays for
-            the year. No metered bills, no per-seat tax, no surprise invoices. Start with a
-            14-day free trial.
+            the year. No metered bills, no per-seat tax, no surprise invoices. Build it free,
+            cancel anytime.
           </p>
         </div>
 
@@ -72,7 +74,7 @@ export function LandingMarketingPricingSection() {
             className="relative flex flex-col rounded-[20px] border border-[rgba(0,137,123,.35)] bg-[#FFFDFA] p-7 shadow-[0_24px_60px_rgba(34,29,23,.12)] md:p-8"
           >
             <span className="absolute -top-3 right-6 rounded-full border border-[rgba(0,137,123,.25)] bg-[rgba(0,137,123,.12)] px-3 py-1 text-[10.5px] font-[600] uppercase tracking-wider text-[#00897B] ring-2 ring-[#F6F2EA]">
-              14-day free trial
+              Cancel anytime
             </span>
 
             <h3 id="pricing-plan-name" className="text-[17px] font-[600] text-[#221D17]">
@@ -89,7 +91,7 @@ export function LandingMarketingPricingSection() {
               <span className="text-[14px] text-[#9A9183]">/month flat</span>
             </div>
             <p className="mt-2 text-[13px] leading-[1.5] text-[#6E665A]">
-              Unlimited workspaces · 14-day free trial · cancel anytime
+              Unlimited workspaces · cancel anytime
             </p>
 
             <Link
@@ -98,7 +100,7 @@ export function LandingMarketingPricingSection() {
               className="mt-6 inline-flex items-center justify-center gap-2.5 rounded-full bg-[#1F2B24] px-6 py-3.5 text-[14px] font-[500] text-[#F6F2EA] shadow-[0_1px_2px_rgba(34,29,23,.10),0_6px_16px_rgba(34,29,23,.10),inset_0_1.5px_0_rgba(255,255,255,.12)] transition-all hover:-translate-y-px focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[#00897B]"
             >
               <span className="size-[7px] rounded-full bg-[#00897B] shadow-[0_0_0_3px_rgba(0,137,123,.22)]" aria-hidden />
-              Start your 14-day free trial →
+              Build it free →
             </Link>
 
             {/* Everything included */}

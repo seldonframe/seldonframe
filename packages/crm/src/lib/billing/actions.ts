@@ -70,7 +70,7 @@ async function createStripeCheckoutSession(params: {
       "line_items[0][quantity]": "1",
       "metadata[seldonframe_user_id]": params.userId,
       "metadata[seldonframe_plan_id]": params.planId,
-      "subscription_data[trial_period_days]": "14",
+      // 2026-07-05 — trial removed (founder decision): charges immediately.
       "subscription_data[metadata][seldonframe_user_id]": params.userId,
       "subscription_data[metadata][seldonframe_plan_id]": params.planId,
       success_url: `${appBaseUrl}/clients/new?plan=${encodeURIComponent(params.planId)}&billing=${params.billingPeriod}`,

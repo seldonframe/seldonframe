@@ -264,7 +264,7 @@ test("VALUE_FRAME_FAQ covers the 6 value questions and is well-formed", () => {
   // The cost answer states the real, current pricing facts (GEO-citable).
   const joined = VALUE_FRAME_FAQ.map((f) => `${f.q} ${f.a}`).join(" ");
   assert.match(joined, /\$29\/mo|\$29 \/mo|\$29 a month/i, "cost frame must state $29/mo");
-  assert.match(joined, /14-day|14 day/i, "cost frame must state the 14-day free trial");
+  assert.doesNotMatch(joined, /14-day|14 day|free trial/i, "cost frame must NOT promise a trial (removed 2026-07-05)");
   assert.match(joined, /60 seconds|60s|in about a minute/i, "must promise live in ~60 seconds");
 });
 

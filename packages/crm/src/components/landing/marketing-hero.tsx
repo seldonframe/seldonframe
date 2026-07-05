@@ -4,7 +4,8 @@
 // Positioning v2 (2026-06-22): one promise, one CTA. Leads the service-business
 // owner (SMB); the builder/agency is the top rung of the same ladder, lower on
 // the page. Two CTAs:
-//   Primary: "Start your 14-day free trial →" → /signup (SMB self-serve)
+//   Primary: "Build it free →" → /signup (SMB self-serve; free ungated build,
+//   no trial countdown — the $29/mo charge only happens at the domain moment)
 //   Secondary: "For agencies →" → #agencies (white-label reseller pitch)
 //
 // Design tokens used:
@@ -225,7 +226,7 @@ export function MarketingHero({
           className="inline-flex items-center gap-2.5 rounded-full bg-[#1F2B24] px-6 py-3.5 text-[15px] font-[500] text-[#F6F2EA] shadow-[0_1px_2px_rgba(34,29,23,.10),0_6px_16px_rgba(34,29,23,.10),0_18px_40px_rgba(34,29,23,.06),inset_0_1.5px_0_rgba(255,255,255,.12)] transition-all hover:-translate-y-[1.5px] hover:shadow-[0_2px_4px_rgba(34,29,23,.12),0_12px_26px_rgba(34,29,23,.14),inset_0_1.5px_0_rgba(255,255,255,.14)] active:translate-y-px"
         >
           <span className="size-[7px] rounded-full bg-[#00897B] shadow-[0_0_0_4px_rgba(0,137,123,.22)]" aria-hidden />
-          Start your 14-day free trial →
+          Build it free →
         </a>
         <a
           href="#agencies"
@@ -353,7 +354,7 @@ export function MarketingHero({
 
       {/* Proof checklist */}
       <ul className="mt-6 flex flex-wrap items-center justify-center gap-x-5 gap-y-2">
-        {["14-day free trial", "Live in 60 seconds", "$29/mo flat after", "Cancel anytime"].map((item) => (
+        {["Build it free", "Live in 60 seconds", "$29/mo flat", "Cancel anytime"].map((item) => (
           <li key={item} className="flex items-center gap-2 text-[13.5px] text-[#6E665A]">
             <span className="flex size-[17px] items-center justify-center rounded-full bg-[rgba(0,137,123,.12)] text-[10px] font-[700] text-[#00897B]" aria-hidden>✓</span>
             {item}

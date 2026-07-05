@@ -81,9 +81,9 @@ const INCLUDES: ReadonlyArray<{ name: string; body: string }> = [
 ];
 
 const PROOF: ReadonlyArray<string> = [
-  "14-day free trial",
+  "Build it free",
   "Live in about 60 seconds",
-  "$29/mo flat after the trial",
+  "$29/mo flat",
   "Unlimited workspaces",
   "Bring your own AI key (ChatGPT, Claude, or Gemini) — we show you how",
   "Cancel anytime",
@@ -126,7 +126,7 @@ export function renderHomeMarkdown(baseUrl: string = HOME_BASE_URL): string {
   lines.push("## Pricing");
   lines.push("");
   lines.push(
-    "Start with a 14-day free trial, then **$29/mo flat** for unlimited workspaces. Bring your own AI key (ChatGPT, Claude, or Gemini); SeldonFrame shows you how to connect it in about 30 seconds. Cancel anytime.",
+    "Build it free, then **$29/mo flat** for unlimited workspaces. Bring your own AI key (ChatGPT, Claude, or Gemini); SeldonFrame shows you how to connect it in about 30 seconds. Cancel anytime.",
   );
   lines.push("");
   for (const item of PROOF) {

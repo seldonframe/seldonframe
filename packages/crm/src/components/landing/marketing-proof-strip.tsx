@@ -6,9 +6,9 @@
 // Server component — no client hooks needed.
 
 const CHIPS = [
-  "14-day free trial",
+  "Build it free",
   "Live in 60 seconds",
-  "$29/mo flat after",
+  "$29/mo flat",
   "No code",
   "Cancel anytime",
 ] as const;

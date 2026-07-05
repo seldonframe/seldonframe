@@ -8,7 +8,7 @@
 //      static FAQ accordion below it.
 //
 // 2026-07-04 /pricing truth pass (Task 11): the platform sells exactly
-// ONE plan — $29/mo flat, unlimited workspaces, 14-day free trial. The
+// ONE plan — $29/mo flat, unlimited workspaces, cancel anytime. The
 // old Builder $19 / Workspace $49 / Agency $297 ladder in pricing-shell
 // is gone. There is no free tier, so the page still doesn't provision a
 // Stripe SetupIntent for a "save a card on Free" form — checkout flows
@@ -18,8 +18,14 @@
 // the single-plan reality (it used to describe the old Builder/Workspace/
 // Agency ladder). Every FAQ claim here is a strict subset of what
 // pricing-shell.tsx's card + sticky bar already state, or is backed by
-// /api/stripe/checkout (trial_period_days: 14) or the Settings → Billing
-// "Manage subscription" button (Stripe's standard billing portal).
+// /api/stripe/checkout or the Settings → Billing "Manage subscription"
+// button (Stripe's standard billing portal).
+//
+// 2026-07-05 — trial removed (founder decision): the free ungated
+// build→claim→use experience already IS the trial, so checkout charges
+// immediately. No money-back guarantee; "cancel anytime" is the only
+// safety line (a standard Stripe subscription, cancelable from the
+// billing portal).
 //
 // All interactive UI lives in pricing-shell.tsx.
 
@@ -42,8 +48,8 @@ const FAQS: Array<{ q: string; a: string }> = [
     a: "Yes. Whitelabel and resell each workspace to clients is included in the plan.",
   },
   {
-    q: "How does the 14-day trial work?",
-    a: "Start your trial from this page — you'll check out through Stripe, but you won't be charged until the trial ends 14 days later. After that it's $29/mo flat. Cancel anytime from Settings → Billing before or after the trial and you won't be billed again.",
+    q: "Is there a free trial?",
+    a: "You're charged $29/mo flat when you connect through Stripe from this page — there's no separate trial period. You can cancel anytime from Settings → Billing and you won't be billed again.",
   },
   {
     q: "What about self-hosting?",

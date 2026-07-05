@@ -4,12 +4,14 @@
 // panel on the RIGHT, sticky CTA at the BOTTOM.
 //
 // 2026-07-04 /pricing truth pass (Task 11): the platform sells exactly
-// ONE plan — $29/mo flat, unlimited workspaces, 14-day free trial. The
+// ONE plan — $29/mo flat, unlimited workspaces, cancel anytime. The
 // old Builder $19 / Workspace $49 / Agency $297 ladder never shipped to
 // checkout truthfully and is gone. The single card POSTs
 // `{ tier: "workspace" }` to /api/stripe/checkout — that's the
 // allowlisted server-side path that resolves to GROWTH_BASE_PRICE_ID
-// (see route.ts) and gets the 14-day trial (trial_period_days: 14).
+// (see route.ts). 2026-07-05: the free ungated build→claim→use
+// experience already IS the trial, so this checkout charges
+// immediately (no trial_period_days) — cancel anytime from Settings.
 // No price id lives in the client. Included-features copy is pulled
 // verbatim from components/landing/marketing-pricing-section.tsx so the
 // authed page and the marketing page never drift.
@@ -69,8 +71,8 @@ export function PricingShell({ isAuthed }: PricingShellProps) {
 
   const trustSignals = [
     "One flat monthly price — no metered bills",
-    "14-day free trial, then $29/mo",
-    "Cancel anytime in Settings",
+    "$29/mo · cancel anytime",
+    "Manage or cancel anytime in Settings",
   ];
 
   async function startPaidCheckout(tierId: TierId) {
@@ -157,7 +159,7 @@ export function PricingShell({ isAuthed }: PricingShellProps) {
                 {PLAN.name}
               </span>
               <span className="rounded-full bg-primary/15 px-2 py-0.5 text-[10px] font-semibold uppercase tracking-[0.08em] text-primary">
-                14-day free trial
+                Cancel anytime
               </span>
             </div>
             <p className="flex items-baseline gap-1.5">
@@ -218,9 +220,9 @@ function PricingStickyBar({
   paidStarting,
   paidError,
 }: StickyBarProps) {
-  const detail = `14-day free trial, then ${selected.price}${selected.cadence} · cancel anytime from Settings`;
+  const detail = `${selected.price}${selected.cadence} · cancel anytime from Settings`;
 
-  const ctaLabel = paidStarting ? "Redirecting to Stripe…" : "Start your 14-day free trial →";
+  const ctaLabel = paidStarting ? "Redirecting to Stripe…" : "Get started →";
 
   async function handlePaidClick() {
     if (paidStarting) return;

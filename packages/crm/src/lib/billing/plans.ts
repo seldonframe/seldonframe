@@ -1,14 +1,16 @@
 // 2026-06-22 pricing reconciliation. The catalog now offers ONE public
 // plan — the "agency" tier, repurposed to **$29/mo flat · unlimited
-// workspaces · 14-day free trial** — matching the marketing site. The
+// workspaces · cancel anytime** — matching the marketing site. The
 // builder/workspace tiers remain in the catalog (no longer offered) only
 // so legacy subscriptions + stored planIds keep resolving in the webhook.
 //
 //   SeldonFrame ($29/mo, id "agency") — the single offered plan:
 //                        UNLIMITED full workspaces (no per-workspace
 //                        overage), white-label, marketplace, all
-//                        modules. 14-day trial set on the platform
-//                        checkout routes.
+//                        modules. 2026-07-05: the free ungated
+//                        build→claim→use experience IS the trial, so
+//                        the platform checkout routes charge immediately
+//                        (no trial_period_days).
 //
 // (Earlier 2026-06-18 model — Builder $19 / Workspace $49 / Agency $297
 // with a $10/workspace overage — is superseded. Those tier objects stay
@@ -168,7 +170,7 @@ export const PLANS: Plan[] = [
     // resolving; a future cleanup can rename it to "flat".)
     id: "agency",
     name: "SeldonFrame",
-    tagline: "$29/mo · unlimited workspaces · 14-day free trial",
+    tagline: "$29/mo · unlimited workspaces · cancel anytime",
     type: "paid",
     price: 29,
     yearlyPrice: 0,
