@@ -8,6 +8,7 @@ import { Check, ChevronsUpDown, Plus, Settings2 } from "lucide-react";
 import type { BlockManifest } from "@seldonframe/core/blocks";
 import { SidebarNav } from "@/components/layout/sidebar-nav";
 import { buildNavGroups, type NavSessionType } from "@/components/layout/nav-config";
+import type { ModuleId } from "@/lib/workspace/modules";
 import { Sheet, SheetContent } from "@/components/ui/sheet";
 import { useLabels } from "@/lib/hooks/use-labels";
 
@@ -75,6 +76,11 @@ export function Sidebar(props: {
    *   be able to add their logo... so their clients dont see
    *   seldonframe logo top left of dashboard". */
   agencyLogoUrl?: string | null;
+  /** 2026-07-05 — simple-home module filter (Task 3's readEnabledModules()
+   *  output). undefined/null both mean "no filtering" — see nav-config.ts's
+   *  BuildNavInput.enabledModules doc. Only affects the inside-client-
+   *  workspace nav; other session types ignore it. */
+  enabledModules?: ModuleId[] | null;
 }) {
   const {
     hiddenBlocks = [],
@@ -92,6 +98,7 @@ export function Sidebar(props: {
     isSuperAdmin = false,
     isInsideClientWorkspace = false,
     primaryOrgId = null,
+    enabledModules = null,
   } = props;
   const labels = useLabels();
   const pathname = usePathname();
@@ -126,6 +133,7 @@ export function Sidebar(props: {
       deal: labels.deal,
       intakeForm: labels.intakeForm,
     },
+    enabledModules,
   });
 
   const [mobileOpen, setMobileOpen] = useState(false);

@@ -15,7 +15,8 @@ import { TestModeBanner } from "@/components/layout/test-mode-banner";
 import { DashboardTopbar } from "@/components/layout/dashboard-topbar";
 import { HelpButton } from "@/components/layout/help-button";
 import { SeldonChat } from "@/components/seldon-chat";
-import { isWinLadderOn } from "@/lib/web-build/policy";
+import { isWinLadderOn, isSimpleHomeOn } from "@/lib/web-build/policy";
+import { readEnabledModules } from "@/lib/workspace/surface";
 import { buildWorkspaceUrls } from "@/lib/billing/anonymous-workspace";
 import { registerCrmEventListeners } from "@/lib/events/listeners";
 import { getAllBlocksForOrg } from "@/lib/blocks/registry";
@@ -118,7 +119,7 @@ export default async function DashboardLayout({
 
   const [activeOrg, orgMemberCount, effectiveBranding] = orgId
     ? await Promise.all([
-        db.select({ id: organizations.id, name: organizations.name, testMode: organizations.testMode, slug: organizations.slug }).from(organizations).where(eq(organizations.id, orgId)).limit(1).then((rows) => rows[0] ?? null),
+        db.select({ id: organizations.id, name: organizations.name, testMode: organizations.testMode, slug: organizations.slug, settings: organizations.settings }).from(organizations).where(eq(organizations.id, orgId)).limit(1).then((rows) => rows[0] ?? null),
         db
           .select({ count: sql<number>`count(*)` })
           .from(users)
@@ -142,6 +143,15 @@ export default async function DashboardLayout({
     activeOrg?.slug
       ? buildWorkspaceUrls(activeOrg.slug, WORKSPACE_BASE_DOMAIN, activeOrg.id).home
       : null;
+
+  // Simple-home (2026-07-05): nav module filter, inside-client-workspace
+  // only. Flag off or grandfathered (no settings.surface.modules yet) both
+  // resolve to null — buildNavGroups treats null as "no filtering", so the
+  // nav is byte-for-byte identical to today until an org actually has a
+  // module set AND the flag is on.
+  const enabledModules = isSimpleHomeOn({ SF_SIMPLE_HOME: process.env.SF_SIMPLE_HOME })
+    ? readEnabledModules(activeOrg?.settings)
+    : null;
 
   const [contactHits, dealHits, pageHits, activityHits] = orgId
     ? await Promise.all([
@@ -282,6 +292,7 @@ export default async function DashboardLayout({
               isSuperAdmin={isSuperAdmin}
               isInsideClientWorkspace={isSwitchedOrg}
               primaryOrgId={user?.orgId ?? null}
+              enabledModules={enabledModules}
             />
             <div className="min-h-screen min-w-0 flex-1 overflow-y-auto px-4 py-4 sm:px-6 sm:py-6 lg:px-8 lg:py-8">
               <DemoBanner />

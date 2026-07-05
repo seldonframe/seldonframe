@@ -26,6 +26,7 @@
 // soul-driven labels via useLabels() and threads them in as `labels`.
 
 import type { NavGroup, NavItem } from "@/components/layout/sidebar-nav";
+import type { ModuleId } from "@/lib/workspace/modules";
 
 /** Which surface the active session is looking at. Mirrors the three
  *  branches the sidebar used to hardcode inline. */
@@ -64,6 +65,13 @@ export type BuildNavInput = {
    *  "← Back to agency" switch link inside a client workspace. */
   primaryOrgId: string | null;
   labels: NavLabels;
+  /** Simple-home module filter (2026-07-05) — Task 3's readEnabledModules().
+   *  `undefined`/`null` BOTH mean "no filtering": grandfathered orgs and
+   *  flag-off flow through IDENTICALLY to today's unfiltered nav. Only
+   *  applies to the inside-client-workspace branch (the simplified-home
+   *  audience); other session types ignore it. When set, a "Turn on more
+   *  features" item is appended to the last group. */
+  enabledModules?: ModuleId[] | null;
 };
 
 // Block-slug → href map for visibility filtering. Lifted verbatim from
@@ -81,13 +89,72 @@ const hiddenSlugToHref: Record<string, string> = {
   seldon: "/seldon",
 };
 
+// Simple-home (2026-07-05) — module id → the hrefs it gates in the
+// inside-client-workspace branch. Only items in this map are filterable
+// by enabledModules; Settings and "← Back to agency" are NEVER in it (the
+// brief: never filtered). "website" has no dedicated nav item in this
+// branch today — it's reachable from Home — so it maps to no href.
+const MODULE_TO_HREFS: Partial<Record<ModuleId, string[]>> = {
+  home: ["/dashboard"],
+  customers: ["/contacts"],
+  bookings: ["/bookings"],
+  leads: ["/forms"],
+  inbox: ["/conversations"],
+  messaging: ["/emails"],
+  money: ["/deals"],
+  agents: ["/automations"],
+  integrations: ["/integrations"],
+};
+
+const TURN_ON_MORE_FEATURES_ITEM: NavItem = {
+  href: "/settings/features",
+  label: "Turn on more features",
+  icon: "Sparkles",
+};
+
+/**
+ * Filters `groups` down to only the items whose href is gated by an
+ * enabled module (plus any href with no module mapping, e.g. the
+ * always-present Settings/Back-to-agency items), then appends the
+ * "Turn on more features" item to the last surviving group. Drops
+ * group headers that end up with zero items. No-op (returns groups
+ * unchanged) when `enabledModules` is null/undefined.
+ */
+function applyModuleFilter(groups: NavGroup[], enabledModules: ModuleId[] | null | undefined): NavGroup[] {
+  if (enabledModules == null) return groups;
+
+  const enabledHrefs = new Set<string>();
+  for (const moduleId of enabledModules) {
+    for (const href of MODULE_TO_HREFS[moduleId] ?? []) {
+      enabledHrefs.add(href);
+    }
+  }
+  // Any href NOT present in MODULE_TO_HREFS at all (Settings, Back to
+  // agency, SF Admin) is never gated by a module and always stays.
+  const gatedHrefs = new Set(Object.values(MODULE_TO_HREFS).flat());
+
+  const filtered = groups
+    .map((group) => ({
+      ...group,
+      items: group.items.filter((item) => !gatedHrefs.has(item.href) || enabledHrefs.has(item.href)),
+    }))
+    .filter((group) => group.items.length > 0);
+
+  if (filtered.length === 0) return filtered;
+
+  const lastIndex = filtered.length - 1;
+  return filtered.map((group, index) =>
+    index === lastIndex ? { ...group, items: [...group.items, TURN_ON_MORE_FEATURES_ITEM] } : group,
+  );
+}
+
 /**
  * Pure nav builder. Returns the NavGroup[] the sidebar renders for a
  * given session. No React, no hooks, no I/O — every input is explicit
  * so the six-noun contract is unit-testable.
  */
 export function buildNavGroups(input: BuildNavInput): NavGroup[] {
-  const { sessionType, workspaceCount, hiddenBlocks, isSuperAdmin, primaryOrgId, labels } = input;
+  const { sessionType, workspaceCount, hiddenBlocks, isSuperAdmin, primaryOrgId, labels, enabledModules } = input;
 
   const hiddenHrefs = new Set(hiddenBlocks.map((slug) => hiddenSlugToHref[slug]).filter(Boolean));
 
@@ -140,7 +207,7 @@ export function buildNavGroups(input: BuildNavInput): NavGroup[] {
         // them to /clients which at least lists their workspaces.
         { href: "/clients", label: "← Back to agency", icon: "ChevronLeft" };
 
-    return [
+    const groups: NavGroup[] = [
       {
         title: "OVERVIEW",
         items: filterHidden([{ href: "/dashboard", label: "Home", icon: "Home" }, backToAgency]),
@@ -179,6 +246,8 @@ export function buildNavGroups(input: BuildNavInput): NavGroup[] {
         ]),
       },
     ].filter((group) => group.items.length > 0);
+
+    return applyModuleFilter(groups, enabledModules);
   }
 
   // -------------------------------------------------------------------

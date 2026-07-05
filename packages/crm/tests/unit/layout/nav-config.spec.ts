@@ -321,3 +321,101 @@ describe("buildNavGroups — inside-client-workspace session", () => {
     assert.equal(hasHref(groups, "/super-admin"), true);
   });
 });
+
+// ---------------------------------------------------------------------
+// Simple-home module filter (2026-07-05) — enabledModules
+// ---------------------------------------------------------------------
+
+describe("buildNavGroups — enabledModules (simple-home nav filter)", () => {
+  // (a) Zero-change guarantee: capture today's inside-client-workspace
+  // output as the baseline BEFORE any enabledModules filtering, then
+  // assert both null and undefined reproduce it exactly.
+  const baselineGroups = buildNavGroups(baseInput({ sessionType: "inside-client-workspace" }));
+
+  test("enabledModules: null reproduces the unfiltered baseline exactly (grandfathered)", () => {
+    const groups = buildNavGroups(baseInput({ sessionType: "inside-client-workspace", enabledModules: null }));
+    assert.deepEqual(groups, baselineGroups);
+  });
+
+  test("enabledModules: undefined reproduces the unfiltered baseline exactly (flag off)", () => {
+    const groups = buildNavGroups(baseInput({ sessionType: "inside-client-workspace", enabledModules: undefined }));
+    assert.deepEqual(groups, baselineGroups);
+  });
+
+  test("omitting enabledModules entirely also reproduces the unfiltered baseline", () => {
+    const { enabledModules: _unused, ...rest } = baseInput({ sessionType: "inside-client-workspace" });
+    const groups = buildNavGroups(rest as BuildNavInput);
+    assert.deepEqual(groups, baselineGroups);
+  });
+
+  // (b) A narrow module set filters down to just those modules' items,
+  // plus Settings/Back-to-agency (never filtered) + the new CTA.
+  test("a narrow enabledModules set shows only the mapped items + Settings + the CTA", () => {
+    const groups = buildNavGroups(
+      baseInput({
+        sessionType: "inside-client-workspace",
+        enabledModules: ["home", "website", "bookings", "customers"],
+      }),
+    );
+
+    for (const href of ["/dashboard", "/bookings", "/contacts", "/settings"]) {
+      assert.equal(hasHref(groups, href), true, `${href} should remain`);
+    }
+    // Never-filtered items always survive regardless of module set.
+    const backItem = groups.flatMap((g) => g.items).find((i) => i.label.includes("Back to agency"));
+    assert.ok(backItem, "Back to agency must never be filtered");
+
+    for (const href of ["/deals", "/automations", "/integrations", "/emails", "/conversations", "/forms"]) {
+      assert.equal(hasHref(groups, href), false, `${href} should be filtered out`);
+    }
+
+    assert.equal(hasHref(groups, "/settings/features"), true, "Turn on more features CTA should appear");
+    const cta = findItem(groups, "/settings/features");
+    assert.equal(cta?.label, "Turn on more features");
+
+    for (const g of groups) {
+      assert.ok(g.items.length > 0, `group ${g.title ?? "(untitled)"} should not be an empty shell`);
+    }
+  });
+
+  test("the CTA is appended to the LAST group only, once", () => {
+    const groups = buildNavGroups(
+      baseInput({
+        sessionType: "inside-client-workspace",
+        enabledModules: ["home", "website", "bookings", "customers"],
+      }),
+    );
+    assert.equal(countHref(groups, "/settings/features"), 1);
+    const lastGroup = groups[groups.length - 1];
+    assert.ok(
+      lastGroup.items.some((i) => i.href === "/settings/features"),
+      "the CTA must live in the last group",
+    );
+  });
+
+  // (c) "website" has no dedicated nav item in the inside-client-workspace
+  // branch today (MODULE_TO_HREFS maps it to nothing) — it's reachable
+  // from Home. Document that rather than inventing a new nav item.
+  test("website module maps to no nav item (reachable from Home instead)", () => {
+    const withWebsite = buildNavGroups(
+      baseInput({ sessionType: "inside-client-workspace", enabledModules: ["home", "website"] }),
+    );
+    const withoutWebsite = buildNavGroups(
+      baseInput({ sessionType: "inside-client-workspace", enabledModules: ["home"] }),
+    );
+    // Same hrefs whether or not "website" is included — it gates nothing
+    // in this branch, so both produce the identical filtered set (minus
+    // the CTA item's presence in both, which is identical either way).
+    assert.deepEqual(allHrefs(withWebsite), allHrefs(withoutWebsite));
+  });
+
+  test("enabledModules only affects inside-client-workspace; agency/operator-portal sessions ignore it", () => {
+    const agencyGroups = buildNavGroups(baseInput({ sessionType: "agency", enabledModules: ["home"] }));
+    const agencyBaseline = buildNavGroups(baseInput({ sessionType: "agency" }));
+    assert.deepEqual(agencyGroups, agencyBaseline);
+
+    const portalGroups = buildNavGroups(baseInput({ sessionType: "operator-portal", enabledModules: ["home"] }));
+    const portalBaseline = buildNavGroups(baseInput({ sessionType: "operator-portal" }));
+    assert.deepEqual(portalGroups, portalBaseline);
+  });
+});
