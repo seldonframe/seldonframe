@@ -94,9 +94,9 @@ never GMV/fees.
   client a 3-module workspace; the settings key already supports it, only the UI is deferred).
 - Migrating existing orgs to minimal (their call, via SeldonChat, later).
 
-## Open items for the plan
-1. Exact fresh-claim module set — proposed Home/Website/Bookings/Customers; Max may adjust.
-2. Command bar placement: top (under the workspace header) vs bottom-center — decide with a
-   quick visual in the plan; recommend top (always visible, no mobile-keyboard collision).
-3. Where the "Turn on more features" list lives: nav bottom (recommended) vs Settings page.
-4. The kanban's new home when Customers module is on (default collapsed section vs own page).
+## Open items — RESOLVED (Max, 2026-07-05)
+1. Fresh-claim module set: **Home/Website/Bookings/Customers** (confirmed).
+2. Command bar placement: **top** — sticky under the workspace header.
+3. "Turn on more features": **nav bottom** item → /settings/features page.
+4. Kanban: stays on Home gated under the Customers module + real deals (>0); caption
+   rewritten in owner language (plan Task 6).
