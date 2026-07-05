@@ -91,7 +91,7 @@ function HeroSplit(props: HeroProps & { showHeroForm: boolean }) {
   const taglineParts = splitTagline(tagline);
 
   return (
-    <div className="hero-split container hero-has-bg-wrap">
+    <div className={`hero-split container${backgroundImage?.src || backgroundVideo?.src ? " hero-has-bg-wrap" : ""}`}>
       <HeroBackgroundLayer backgroundImage={backgroundImage} backgroundVideo={backgroundVideo} />
       <div className="hero-text">
         {emergencyService && (
@@ -207,7 +207,7 @@ function HeroLeftAsymmetric(props: HeroProps & { showHeroForm: boolean }) {
   const arch = ARCHETYPES[props.archetype];
 
   return (
-    <div className="hero-left container hero-has-bg-wrap">
+    <div className={`hero-left container${backgroundImage?.src || backgroundVideo?.src ? " hero-has-bg-wrap" : ""}`}>
       <HeroBackgroundLayer backgroundImage={backgroundImage} backgroundVideo={backgroundVideo} />
       <div className="hero-left-grid">
         {/* Text column — anchored top-left, asymmetric (NOT centered). */}
