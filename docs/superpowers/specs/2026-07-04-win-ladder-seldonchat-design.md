@@ -72,11 +72,23 @@ that IS the front door to the workspace, not a helper beside it.
   landing version history · add_custom_domain + upgrade gate · starter agents ·
   $29 checkout · PostHog capture helpers.
 
+## Also in this train (founder-added 2026-07-04)
+- **LLM analytics (server spans on agent runs):** instrument the agent runtime's LLM call
+  sites with PostHog's `$ai_generation` taxonomy — model, input/output tokens (from the
+  provider response usage), latency, org/agent/conversation trace ids. Taxonomy
+  scratch-verified against PostHog's LLM-analytics docs/SDK exactly like the MCP wave.
+  Fail-silent, non-blocking, NO prompt/completion bodies ever (privacy posture consistent
+  with mcp-capture). Reuses NEXT_PUBLIC_POSTHOG_KEY.
+- Ops items handled OUTSIDE this plan (not app code): PostHog's MCP added to Claude Code
+  (done — remote OAuth server, user scope); the PostHog↔Neon warehouse link (Max creates a
+  read-only Neon role + pastes its connection string into PostHog's Postgres source; Claude
+  preps the GRANTs — credentials never transit Claude).
+
 ## Out of scope (v1)
 - Email-connect as its own ladder step (Composio Gmail/Outlook connect may ride along with
   step 1's calendar OAuth where the toolkit grants both; a dedicated "send as you" email
   step is a fast-follow).
-- Copilot over billing/danger surfaces; LLM analytics; multi-workspace ladder.
+- Copilot over billing/danger surfaces; multi-workspace ladder.
 
 ## Open items for the plan
 1. Ladder-state detection queries per step (prefer derived state; only add a settings
