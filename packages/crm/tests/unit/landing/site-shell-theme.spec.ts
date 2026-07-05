@@ -4,10 +4,11 @@
 // SH2-F1 adds resolveSitePalette — the pure "user-customized" override
 // decision (see site-shell.tsx's doc comment): archetype palette wins
 // unchanged when the org's theme has no customizedAt (never explicitly
-// saved); once customizedAt is set, the org's own accentColor/primaryColor
-// override --primary/--secondary so the copilot's update_theme tool (and the
-// settings-form path, both flowing through saveThemeForOrg) actually changes
-// what the public site renders.
+// saved); once customizedAt is set, the org's own primaryColor/accentColor
+// override --primary/--secondary (house convention: primaryColor = dominant
+// brand token, accentColor = secondary/accent slot) so the copilot's
+// update_theme tool (and the settings-form path, both flowing through
+// saveThemeForOrg) actually changes what the public site renders.
 
 import { describe, test } from "node:test";
 import assert from "node:assert/strict";
@@ -49,21 +50,21 @@ describe("resolveShellStyle", () => {
     assert.equal(style["--primary"], "#9c2b1d"); // archetype's own primary, untouched
   });
 
-  test("a customized org theme overrides --primary with the org's accentColor", () => {
+  test("a customized org theme overrides --primary with the org's primaryColor", () => {
     const style = resolveShellStyle("editorial-warm", "light", {
       customizedAt: "2026-07-05T00:00:00.000Z",
-      accentColor: "#B0E0E6",
+      primaryColor: "#B0E0E6",
     }) as Record<string, string>;
     assert.equal(style["--primary"], "#B0E0E6");
-    // secondary untouched — no primaryColor provided in this patch.
+    // secondary untouched — no accentColor provided in this patch.
     assert.equal(style["--secondary"], "#3a3530");
   });
 
   test("a customized org theme with both colors overrides --primary and --secondary", () => {
     const style = resolveShellStyle("editorial-warm", "light", {
       customizedAt: "2026-07-05T00:00:00.000Z",
-      accentColor: "#B0E0E6",
-      primaryColor: "#111111",
+      primaryColor: "#B0E0E6",
+      accentColor: "#111111",
     }) as Record<string, string>;
     assert.equal(style["--primary"], "#B0E0E6");
     assert.equal(style["--secondary"], "#111111");
@@ -72,7 +73,7 @@ describe("resolveShellStyle", () => {
   test("dark mode + customized theme: override still wins over the dark palette's preserved --primary", () => {
     const style = resolveShellStyle("editorial-warm", "dark", {
       customizedAt: "2026-07-05T00:00:00.000Z",
-      accentColor: "#B0E0E6",
+      primaryColor: "#B0E0E6",
     }) as Record<string, string>;
     assert.equal(style["--primary"], "#B0E0E6");
     assert.equal(style["--bg"], "#0d0d0f"); // dark override still applies to bg
@@ -88,24 +89,24 @@ describe("resolveSitePalette", () => {
   });
 
   test("returns the archetype palette unchanged when customizedAt is absent (build default)", () => {
-    const result = resolveSitePalette(archetypePalette, { accentColor: "#B0E0E6" }) as Record<string, string>;
+    const result = resolveSitePalette(archetypePalette, { primaryColor: "#B0E0E6" }) as Record<string, string>;
     assert.equal(result["--primary"], "#cc2d2d");
   });
 
-  test("overrides --primary with accentColor once customizedAt is set", () => {
+  test("overrides --primary with primaryColor once customizedAt is set", () => {
     const result = resolveSitePalette(archetypePalette, {
       customizedAt: "2026-07-05T00:00:00.000Z",
-      accentColor: "#B0E0E6",
+      primaryColor: "#B0E0E6",
     }) as Record<string, string>;
     assert.equal(result["--primary"], "#B0E0E6");
-    assert.equal(result["--secondary"], "#1a1a1a", "unspecified primaryColor leaves --secondary untouched");
+    assert.equal(result["--secondary"], "#1a1a1a", "unspecified accentColor leaves --secondary untouched");
   });
 
-  test("overrides --secondary with primaryColor when both are provided", () => {
+  test("overrides --secondary with accentColor when both are provided", () => {
     const result = resolveSitePalette(archetypePalette, {
       customizedAt: "2026-07-05T00:00:00.000Z",
-      accentColor: "#B0E0E6",
-      primaryColor: "#222222",
+      primaryColor: "#B0E0E6",
+      accentColor: "#222222",
     }) as Record<string, string>;
     assert.equal(result["--primary"], "#B0E0E6");
     assert.equal(result["--secondary"], "#222222");
@@ -113,7 +114,7 @@ describe("resolveSitePalette", () => {
 
   test("does not mutate the input palette object", () => {
     const input = { "--primary": "#cc2d2d" } as Record<string, string>;
-    resolveSitePalette(input, { customizedAt: "now", accentColor: "#fff" });
+    resolveSitePalette(input, { customizedAt: "now", primaryColor: "#fff" });
     assert.equal(input["--primary"], "#cc2d2d");
   });
 });

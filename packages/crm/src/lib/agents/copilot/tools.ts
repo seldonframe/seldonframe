@@ -463,7 +463,7 @@ const updateTheme: AgentTool<z.infer<typeof updateThemeInput>> & {
 } = {
   name: "update_theme",
   description:
-    "Set the workspace's brand theme: primary/accent color (hex), font family, light/dark mode, or border radius. Use THIS tool for any visual-style ask (colors, fonts, dark mode, corner roundness) — use edit_site only for content, copy, or section layout changes.",
+    "Set the workspace's brand theme: primary/accent color (hex), font family, light/dark mode, or border radius. The site's main/dominant brand color is primaryColor; highlight/secondary accents are accentColor — when the user says 'the main color' or names the dominant site color, use primaryColor. Use THIS tool for any visual-style ask (colors, fonts, dark mode, corner roundness) — use edit_site only for content, copy, or section layout changes.",
   inputSchema: updateThemeInput,
   jsonSchema: {
     type: "object",

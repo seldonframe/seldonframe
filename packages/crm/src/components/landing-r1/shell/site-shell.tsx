@@ -51,9 +51,13 @@ export type SitePaletteThemeInput = Partial<Pick<OrgTheme, "customizedAt" | "acc
  * `saveThemeForOrg` (lib/theme/save-theme.ts) stamps `theme.customizedAt` on
  * every explicit write. Its presence is the gate: absent → archetype palette
  * wins unchanged (build defaults, never customized). Present → the org's own
- * accentColor becomes --primary and (when set) primaryColor becomes
+ * primaryColor becomes --primary and (when set) accentColor becomes
  * --secondary, so the operator's choice actually shows up on every R1 page
- * (this is the shared shell — the one mount point for all of them).
+ * (this is the shared shell — the one mount point for all of them). This
+ * mirrors the house convention: primaryColor is the dominant brand token
+ * (--primary / --ring elsewhere, see lib/theme/apply-theme.ts), accentColor
+ * is the secondary/accent slot (--accent elsewhere; --secondary here, since
+ * the R1 archetype palette's accent slot is named --secondary not --accent).
  *
  * Pure + exported for unit testing (no DOM, no archetype/theme fetching).
  */
@@ -65,11 +69,11 @@ export function resolveSitePalette(
     return archetypePalette;
   }
   const overridden: Record<string, string> = { ...(archetypePalette as Record<string, string>) };
-  if (orgTheme.accentColor) {
-    overridden["--primary"] = orgTheme.accentColor;
-  }
   if (orgTheme.primaryColor) {
-    overridden["--secondary"] = orgTheme.primaryColor;
+    overridden["--primary"] = orgTheme.primaryColor;
+  }
+  if (orgTheme.accentColor) {
+    overridden["--secondary"] = orgTheme.accentColor;
   }
   return overridden as CSSProperties;
 }
