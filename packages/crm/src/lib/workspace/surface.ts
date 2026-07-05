@@ -9,7 +9,7 @@ import { and, eq } from "drizzle-orm";
 import { sql } from "drizzle-orm";
 import { db } from "@/db";
 import { deployments, organizations } from "@/db/schema";
-import { resolveTierForWorkspace } from "@/lib/billing/tier-resolver";
+import { workspaceHasPaidTier } from "@/lib/billing/tier-resolver";
 import { MODULE_IDS, DEFAULT_FRESH_MODULES, type ModuleId } from "./modules";
 
 const MODULE_ID_SET = new Set<string>(MODULE_IDS as readonly string[]);
@@ -68,6 +68,16 @@ export function buildMinimalSurfacePatch() {
 }
 
 /**
+ * Build the only-if-absent WHERE guard for the minimal-surface seed write:
+ * matches the org AND requires settings->'surface' to be NULL (never
+ * clobbers an operator's own module choices). Exported so the spec can
+ * assert the guard SQL shape directly without touching a real DB.
+ */
+export function buildSurfaceAbsentWhere(orgId: string) {
+  return and(eq(organizations.id, orgId), sql`${organizations.settings}->'surface' IS NULL`);
+}
+
+/**
  * Only-if-absent seed write: gives a fresh org an explicit
  * settings.surface.modules (DEFAULT_FRESH_MODULES) so future reads stop
  * being "grandfathered" (null). No-ops when settings->'surface' already
@@ -80,7 +90,7 @@ export async function writeMinimalSurface(orgId: string): Promise<void> {
       settings: buildMinimalSurfacePatch(),
       updatedAt: new Date(),
     })
-    .where(and(eq(organizations.id, orgId), sql`${organizations.settings}->'surface' IS NULL`));
+    .where(buildSurfaceAbsentWhere(orgId));
 }
 
 export type CanDisableModuleDeps = {
@@ -91,8 +101,7 @@ export type CanDisableModuleDeps = {
 };
 
 async function defaultHasActiveSubscription(orgId: string): Promise<boolean> {
-  const tier = await resolveTierForWorkspace(orgId);
-  return tier !== "inactive";
+  return workspaceHasPaidTier(orgId);
 }
 
 async function defaultHasActiveDeployment(orgId: string): Promise<boolean> {

@@ -9,6 +9,7 @@ import {
   readEnabledModules,
   buildMinimalSurfacePatch,
   buildSetSurfacePatch,
+  buildSurfaceAbsentWhere,
   canDisableModule,
   setModuleEnabled,
   type CanDisableModuleDeps,
@@ -145,6 +146,45 @@ describe("buildSetSurfacePatch (42P18 regression guard)", () => {
     const sqlText = flattenSqlChunks(query).join("");
     assert.match(sqlText, /::jsonb/);
     assert.doesNotMatch(sqlText, /jsonb_build_object\(\$/);
+  });
+});
+
+/**
+ * Recursive variant of flattenSqlChunks: drizzle's `and(...)` combinator
+ * nests each condition as its own SQL object inside queryChunks rather
+ * than a flat StringChunk/array, so a single-level flatten misses the
+ * inner conditions entirely. Walks into nested `{ queryChunks }` objects.
+ */
+function flattenSqlChunksDeep(query: { queryChunks: unknown[] }): string[] {
+  return query.queryChunks.flatMap((chunk) => {
+    if (Array.isArray(chunk)) return chunk.map(String);
+    if (typeof chunk === "string") return [chunk];
+    if (chunk && typeof chunk === "object" && "queryChunks" in (chunk as Record<string, unknown>)) {
+      return flattenSqlChunksDeep(chunk as { queryChunks: unknown[] });
+    }
+    if (chunk && typeof chunk === "object" && "value" in (chunk as Record<string, unknown>)) {
+      const value = (chunk as { value: unknown }).value;
+      return Array.isArray(value) ? value.map(String) : [String(value)];
+    }
+    return [];
+  });
+}
+
+describe("buildSurfaceAbsentWhere (only-if-absent WHERE guard)", () => {
+  test("requires settings->'surface' IS NULL alongside the org-id match", () => {
+    const query = buildSurfaceAbsentWhere("org_1");
+    assert.ok(query, "expected a SQL fragment");
+    const pieces = flattenSqlChunksDeep(query as unknown as { queryChunks: unknown[] });
+    const sqlText = pieces.join("");
+    assert.match(
+      sqlText,
+      /->'surface' IS NULL/,
+      "the guard must require settings->'surface' IS NULL — dropping this would clobber an operator's own module choices",
+    );
+    assert.ok(
+      pieces.includes("org_1"),
+      "the guard must bind the target org id",
+    );
   });
 });
 
