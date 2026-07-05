@@ -51,6 +51,25 @@ export function buildServiceNavLinks(
     .map((p) => ({ label: p.name, href: `${base}/services/${p.slug.trim()}` }));
 }
 
+/**
+ * Pure: the section anchors to render alongside the Services DROPDOWN. When
+ * the dropdown is present (the workspace has service pages), the plain
+ * "Services" anchor is redundant with it — drop it so the nav never shows
+ * "Services" twice. When there's no dropdown, sections pass through unchanged
+ * (the "Services" anchor is the only way to reach the section). Matches by
+ * href OR label so a custom `sections` prop is handled too. Exported for
+ * unit testing.
+ */
+export function sectionsForNav(
+  sections: { label: string; href: string }[],
+  hasServiceDropdown: boolean,
+): { label: string; href: string }[] {
+  if (!hasServiceDropdown) return sections;
+  return sections.filter(
+    (s) => s.href !== "#services" && s.label.trim().toLowerCase() !== "services",
+  );
+}
+
 export type NavbarProps = {
   archetype: AestheticArchetypeId;
   businessName: string;
@@ -85,6 +104,10 @@ export function Navbar({
 
   const arch = ARCHETYPES[archetype];
   const serviceLinks = buildServiceNavLinks(homeHref, servicePages ?? []);
+  // When the Services dropdown is shown, the plain "Services" anchor in
+  // `sections` duplicates it — drop it so the nav never shows "Services"
+  // twice (bug caught by vision-verify on a live r1 site, 2026-07-05).
+  const anchorSections = sectionsForNav(sections, serviceLinks.length > 0);
   const areaLine = serviceAreas && serviceAreas.length > 0
     ? serviceAreas.slice(0, 4).join(" · ")
     : null;
@@ -129,7 +152,7 @@ export function Navbar({
               </div>
             </div>
           )}
-          {sections.map((s) => (
+          {anchorSections.map((s) => (
             <a key={s.href} className="sf-navbar-link" href={s.href}>
               {s.label}
             </a>

@@ -4,7 +4,7 @@
 import { describe, test } from "node:test";
 import assert from "node:assert/strict";
 
-import { buildServiceNavLinks } from "../../../src/components/landing-r1/chrome/navbar";
+import { buildServiceNavLinks, sectionsForNav } from "../../../src/components/landing-r1/chrome/navbar";
 
 describe("buildServiceNavLinks", () => {
   test("builds /<homeHref>/services/<slug> for each page", () => {
@@ -43,5 +43,50 @@ describe("buildServiceNavLinks", () => {
     assert.deepEqual(buildServiceNavLinks("/w/x", []), []);
     // @ts-expect-error — defensive against jsonb junk.
     assert.deepEqual(buildServiceNavLinks("/w/x", undefined), []);
+  });
+});
+
+describe("sectionsForNav", () => {
+  const DEFAULT = [
+    { label: "Services", href: "#services" },
+    { label: "Reviews", href: "#reviews" },
+    { label: "FAQ", href: "#faq" },
+    { label: "Contact", href: "#contact" },
+  ];
+
+  test("drops the redundant 'Services' anchor when the dropdown is present", () => {
+    // The bug caught by vision-verify: a site with service pages showed
+    // "Services ▾" (dropdown) AND "Services" (#services anchor).
+    assert.deepEqual(sectionsForNav(DEFAULT, true), [
+      { label: "Reviews", href: "#reviews" },
+      { label: "FAQ", href: "#faq" },
+      { label: "Contact", href: "#contact" },
+    ]);
+  });
+
+  test("keeps all sections (incl. Services) when there is no dropdown", () => {
+    assert.deepEqual(sectionsForNav(DEFAULT, false), DEFAULT);
+  });
+
+  test("matches a custom Services anchor by href", () => {
+    const out = sectionsForNav(
+      [{ label: "Our Services", href: "#services" }, { label: "FAQ", href: "#faq" }],
+      true,
+    );
+    assert.deepEqual(out, [{ label: "FAQ", href: "#faq" }]);
+  });
+
+  test("matches a custom Services anchor by label (case-insensitive)", () => {
+    const out = sectionsForNav(
+      [{ label: "services", href: "#our-work" }, { label: "FAQ", href: "#faq" }],
+      true,
+    );
+    assert.deepEqual(out, [{ label: "FAQ", href: "#faq" }]);
+  });
+
+  test("never drops a non-Services section", () => {
+    assert.deepEqual(sectionsForNav([{ label: "Reviews", href: "#reviews" }], true), [
+      { label: "Reviews", href: "#reviews" },
+    ]);
   });
 });
