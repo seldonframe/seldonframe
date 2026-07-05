@@ -327,10 +327,76 @@ describe("buildNavGroups — inside-client-workspace session", () => {
 // ---------------------------------------------------------------------
 
 describe("buildNavGroups — enabledModules (simple-home nav filter)", () => {
-  // (a) Zero-change guarantee: capture today's inside-client-workspace
-  // output as the baseline BEFORE any enabledModules filtering, then
-  // assert both null and undefined reproduce it exactly.
-  const baselineGroups = buildNavGroups(baseInput({ sessionType: "inside-client-workspace" }));
+  // (a) Zero-change guarantee: a REAL pinned baseline, not a call to the
+  // current (post-change) builder — asserting against `buildNavGroups`'s
+  // own output would be tautological, since every compared path runs
+  // through the same `applyModuleFilter` early-return for null/undefined.
+  //
+  // This literal is the exact inside-client-workspace NavGroup[] shape
+  // for `baseInput({ sessionType: "inside-client-workspace" })`
+  // (workspaceCount: 1, hiddenBlocks: [], isSuperAdmin: false,
+  // primaryOrgId: "org-primary", labels: LABELS). It was derived by
+  // reading nav-config.ts's inside-client-workspace branch at commit
+  // 679ca638 (the last commit BEFORE 093ebf2f introduced enabledModules
+  // / applyModuleFilter) — verified by eye against `git show
+  // 679ca638:packages/crm/src/components/layout/nav-config.ts` to
+  // confirm it is byte-for-byte identical to the post-change branch
+  // minus the `applyModuleFilter` call (which is a documented no-op for
+  // null/undefined). Do NOT regenerate this literal from the current
+  // builder — it must stay independent so the test can catch a real
+  // regression in the null/undefined no-op path.
+  const baselineGroups: NavGroup[] = [
+    {
+      title: "OVERVIEW",
+      items: [
+        { href: "/dashboard", label: "Home", icon: "Home" },
+        {
+          href: "/switch-workspace?to=org-primary&next=%2Fdashboard",
+          label: "← Back to agency",
+          icon: "ChevronLeft",
+        },
+      ],
+    },
+    {
+      title: "CUSTOMERS",
+      items: [
+        { href: "/contacts", label: "Customers", icon: "Users" },
+        { href: "/bookings", label: "Bookings", icon: "Calendar", indent: true },
+        { href: "/forms", label: "Intake Forms", icon: "FileText", indent: true },
+      ],
+    },
+    {
+      title: "INBOX",
+      items: [
+        { href: "/conversations", label: "Inbox", icon: "Inbox" },
+        { href: "/emails", label: "Messaging", icon: "Mail", indent: true },
+      ],
+    },
+    {
+      title: "MONEY",
+      items: [{ href: "/deals", label: "Money", icon: "DollarSign" }],
+    },
+    {
+      title: "AGENTS",
+      items: [{ href: "/automations", label: "Agents", icon: "Bot" }],
+    },
+    {
+      title: "SYSTEM",
+      items: [
+        { href: "/integrations", label: "Integrations", icon: "Puzzle" },
+        { href: "/settings", label: "Settings", icon: "Settings" },
+      ],
+    },
+  ];
+
+  test("the pinned baseline literal matches today's actual builder output (sanity check)", () => {
+    // Not the zero-change-guarantee itself (that's the null/undefined
+    // tests below) — just a sanity check that the hand-derived literal
+    // above hasn't drifted from what the current unfiltered builder
+    // actually produces for this input.
+    const actual = buildNavGroups(baseInput({ sessionType: "inside-client-workspace" }));
+    assert.deepEqual(actual, baselineGroups);
+  });
 
   test("enabledModules: null reproduces the unfiltered baseline exactly (grandfathered)", () => {
     const groups = buildNavGroups(baseInput({ sessionType: "inside-client-workspace", enabledModules: null }));
