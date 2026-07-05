@@ -628,6 +628,15 @@ function HeroStyles() {
       .hero-has-bg-wrap { position: relative; isolation: isolate; }
       .hero-has-bg-wrap .hero-bg-layer { z-index: -1; }
       .hero-has-bg-wrap > *:not(.hero-bg-layer) { position: relative; z-index: 1; }
+      /* A user-added background (media editing) sits behind foreground text that
+         HeroSplit / HeroLeftAsymmetric styled for a LIGHT ground — so the
+         non-accent headline, lede, and kicker wash out dark-on-dark. Borrow
+         HeroCinematic's -light treatment (verbatim values) for on-background
+         legibility; the .accent span keeps its own --primary color. Caught by
+         vision-verify: eyebrow + body were illegible on a set background. */
+      .hero-has-bg-wrap .hero-headline { color: #fff; }
+      .hero-has-bg-wrap .hero-lede { color: rgba(255, 255, 255, 0.78); }
+      .hero-has-bg-wrap .kicker { color: rgba(255, 255, 255, 0.78); }
       .hero-bg-media {
         position: absolute; inset: 0; width: 100%; height: 100%;
         object-fit: cover;
