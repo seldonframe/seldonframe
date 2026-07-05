@@ -707,7 +707,7 @@ export default async function WorkspaceReadyPage({ params, searchParams }: Ready
               ) : (
                 <p className="text-sm text-muted-foreground">
                   Point your client&apos;s existing domain at this site so it
-                  lives at <span className="font-medium text-foreground">roofs-by-shiloh.com</span>{" "}
+                  lives at <span className="font-medium text-foreground">{workspace.slug}.com</span>{" "}
                   instead of{" "}
                   <code className="rounded bg-muted/50 px-1.5 py-0.5 text-xs font-mono text-foreground">
                     {workspace.slug}.{WORKSPACE_BASE_DOMAIN}
