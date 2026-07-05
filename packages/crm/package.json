@@ -56,6 +56,7 @@
     "grapesjs-plugin-forms": "^2.0.6",
     "grapesjs-preset-webpage": "^1.0.3",
     "lucide-react": "^1.7.0",
+    "markdown-to-jsx": "^9.8.2",
     "motion": "^12.38.0",
     "next": "16.2.1",
     "next-auth": "5.0.0-beta.30",

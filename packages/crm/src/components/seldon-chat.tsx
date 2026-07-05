@@ -13,6 +13,7 @@ import { useEffect, useRef, useState } from "react";
 import { MessageCircle, Send, Sparkles, X } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Textarea } from "@/components/ui/textarea";
+import { ChatMarkdown } from "@/components/chat-markdown";
 
 type SeldonChatProps = {
   enabled: boolean;
@@ -36,8 +37,21 @@ type ChatMessage = {
 
 type ToolEvent = { name: string; ok: boolean };
 
+/** A clickable design chip surfaced from a `list_designs` tool call this
+ *  turn (see design-chips.ts). Rendered as a tap-to-apply button instead
+ *  of letting the model verbalize the raw tool result as a markdown table. */
+type DesignChip = {
+  id: string;
+  label: string;
+  swatch: string | null;
+  applyText: string;
+  applyPayload: string;
+};
+
+type DesignOptions = { isHealth: boolean; chips: DesignChip[] };
+
 type TurnResponse =
-  | { kind: "reply"; text: string; toolEvents: ToolEvent[] }
+  | { kind: "reply"; text: string; toolEvents: ToolEvent[]; designOptions?: DesignOptions }
   | { kind: "capped"; used: number; limit: number; upgrade: string };
 
 const EXAMPLE_PROMPTS = [
@@ -76,6 +90,7 @@ export function SeldonChat({ enabled, previewUrl, hideLauncher }: SeldonChatProp
   const [previewNonce, setPreviewNonce] = useState(0);
   const [pendingPhraseIndex, setPendingPhraseIndex] = useState(0);
   const [chips, setChips] = useState<string[]>([]);
+  const [designOptions, setDesignOptions] = useState<DesignChip[]>([]);
   const containerRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
@@ -133,12 +148,15 @@ export function SeldonChat({ enabled, previewUrl, hideLauncher }: SeldonChatProp
     return () => clearInterval(interval);
   }, [pending]);
 
-  async function sendMessage(text: string) {
-    const trimmed = text.trim();
+  async function sendMessage(payload: string, displayText?: string) {
+    const trimmed = payload.trim();
     if (!trimmed || pending) return;
 
     setError(null);
-    setMessages((current) => [...current, { id: `user-${Date.now()}`, role: "user", content: trimmed }]);
+    setMessages((current) => [
+      ...current,
+      { id: `user-${Date.now()}`, role: "user", content: (displayText ?? payload).trim() || trimmed },
+    ]);
     setInput("");
     setPending(true);
 
@@ -165,6 +183,15 @@ export function SeldonChat({ enabled, previewUrl, hideLauncher }: SeldonChatProp
         ...current,
         { id: `assistant-${Date.now()}`, role: "assistant", content: data.text },
       ]);
+
+      // Design picker chips: show a fresh set when list_designs ran this
+      // turn, clear it once the operator's pick actually applied (a
+      // successful update_design), otherwise leave whatever's showing.
+      if (data.designOptions?.chips?.length) {
+        setDesignOptions(data.designOptions.chips);
+      } else if (data.toolEvents.some((event) => event.name === "update_design" && event.ok)) {
+        setDesignOptions([]);
+      }
 
       if (previewUrl && shouldBustPreview(data.toolEvents)) {
         setPreviewNonce(Date.now());
@@ -272,13 +299,45 @@ export function SeldonChat({ enabled, previewUrl, hideLauncher }: SeldonChatProp
                       : "bg-muted text-foreground"
                   }`}
                 >
-                  {message.content}
+                  {message.role === "assistant" ? (
+                    <ChatMarkdown content={message.content} />
+                  ) : (
+                    message.content
+                  )}
                 </div>
               ))}
 
               {pending ? (
                 <div aria-live="polite" className="text-xs text-muted-foreground">
                   {PENDING_PHRASES[pendingPhraseIndex]}
+                </div>
+              ) : null}
+
+              {designOptions.length > 0 ? (
+                <div className="space-y-2">
+                  <p className="text-xs font-medium text-muted-foreground">
+                    Pick a look — tap to preview it live
+                  </p>
+                  <div className="flex flex-wrap gap-2">
+                    {designOptions.map((chip) => (
+                      <button
+                        key={chip.id}
+                        type="button"
+                        disabled={pending}
+                        onClick={() => void sendMessage(chip.applyPayload, chip.applyText)}
+                        className="flex items-center gap-1.5 rounded-full border border-border bg-muted/40 px-3 py-1.5 text-xs text-foreground transition-colors hover:bg-muted disabled:cursor-not-allowed disabled:opacity-50"
+                      >
+                        {chip.swatch ? (
+                          <span
+                            aria-hidden="true"
+                            className="size-2.5 shrink-0 rounded-full"
+                            style={{ backgroundColor: chip.swatch }}
+                          />
+                        ) : null}
+                        {chip.label}
+                      </button>
+                    ))}
+                  </div>
                 </div>
               ) : null}
 

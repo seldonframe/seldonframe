@@ -24,6 +24,7 @@ import { COPILOT_CAPABILITY } from "@/lib/agents/copilot/tools";
 import { executeTurn } from "@/lib/agents/runtime";
 import type { AgentBlueprint } from "@/db/schema";
 import { capResponse, COPILOT_PERSONA } from "@/lib/agents/copilot/cap";
+import { buildDesignChips, type DesignChipsResult } from "@/lib/agents/copilot/design-chips";
 
 export const runtime = "nodejs";
 
@@ -95,9 +96,26 @@ export async function POST(request: NextRequest) {
     return { name: call.name, ok: toolResult?.ok ?? false };
   });
 
+  // Render list_designs' result as clickable chips instead of letting the
+  // model verbalize the raw tool JSON as a markdown table (see
+  // design-chips.ts). Omitted entirely when no list_designs call happened
+  // this turn, or when its result wasn't a successful list.
+  let designOptions: DesignChipsResult | undefined;
+  const listDesignsCall = result.toolCalls.find((call) => call.name === "list_designs");
+  if (listDesignsCall) {
+    const toolResult = result.toolResults.find((r) => r.toolCallId === listDesignsCall.id);
+    if (toolResult?.ok) {
+      const chips = buildDesignChips(toolResult.output);
+      if (chips.chips.length > 0) {
+        designOptions = chips;
+      }
+    }
+  }
+
   return NextResponse.json({
     kind: "reply",
     text: result.assistantMessage,
     toolEvents,
+    ...(designOptions ? { designOptions } : {}),
   });
 }
