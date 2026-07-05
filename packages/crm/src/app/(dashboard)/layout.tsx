@@ -15,6 +15,7 @@ import { TestModeBanner } from "@/components/layout/test-mode-banner";
 import { DashboardTopbar } from "@/components/layout/dashboard-topbar";
 import { HelpButton } from "@/components/layout/help-button";
 import { SeldonChat } from "@/components/seldon-chat";
+import { CommandBar } from "@/components/command-bar";
 import { isWinLadderOn, isSimpleHomeOn } from "@/lib/web-build/policy";
 import { readEnabledModules } from "@/lib/workspace/surface";
 import { buildWorkspaceUrls } from "@/lib/billing/anonymous-workspace";
@@ -149,9 +150,24 @@ export default async function DashboardLayout({
   // resolve to null — buildNavGroups treats null as "no filtering", so the
   // nav is byte-for-byte identical to today until an org actually has a
   // module set AND the flag is on.
-  const enabledModules = isSimpleHomeOn({ SF_SIMPLE_HOME: process.env.SF_SIMPLE_HOME })
-    ? readEnabledModules(activeOrg?.settings)
-    : null;
+  const simpleHomeOn = isSimpleHomeOn({ SF_SIMPLE_HOME: process.env.SF_SIMPLE_HOME });
+  const enabledModules = simpleHomeOn ? readEnabledModules(activeOrg?.settings) : null;
+
+  // Command bar (Task 7): auto-open-once fires only the FIRST time a
+  // simple-home org with a materialized module set (not grandfathered) has
+  // never seen the chat intro. chatIntroSeen lives alongside `modules` under
+  // settings.surface — read straight from activeOrg?.settings (same object
+  // readEnabledModules already parses) rather than adding another DB call.
+  const chatIntroSeen = Boolean(
+    (activeOrg?.settings as { surface?: { chatIntroSeen?: boolean } } | undefined)?.surface
+      ?.chatIntroSeen,
+  );
+  const autoOpenOnce = simpleHomeOn && enabledModules !== null && !chatIntroSeen;
+  const commandBarChips = [
+    "Change my colors",
+    "Update my business hours",
+    "Book a test appointment",
+  ];
 
   const [contactHits, dealHits, pageHits, activityHits] = orgId
     ? await Promise.all([
@@ -325,15 +341,24 @@ export default async function DashboardLayout({
                   notifications={notifications}
                   primaryOrgId={user?.orgId ?? null}
                 />
+                {/* Simple-home command bar (Task 7): the front door becomes page
+                    chrome. Sticky, mounted only for simple-home orgs inside their
+                    own workspace — flag off ⇒ unmounted, layout byte-identical. */}
+                {simpleHomeOn && !isOperatorSession && orgId ? (
+                  <CommandBar enabled autoOpenOnce={autoOpenOnce} chips={commandBarChips} />
+                ) : null}
                 {children}
               </div>
             </div>
           </div>
           {/* SeldonChat reborn (win-ladder plan, 2026-07-04): the FRONT-DOOR copilot
               dock. Unlike the 2026-05-18 removal (a talking helper), this one ACTS via
-              the workspace_copilot toolset with live preview — flag-gated SF_WIN_LADDER. */}
+              the workspace_copilot toolset with live preview — flag-gated SF_WIN_LADDER.
+              hideLauncher (simple-home, Task 7): when the command bar replaces the
+              bubble as the front door, don't also render the floating launcher —
+              flag off ⇒ hideLauncher=false ⇒ bubble unchanged. */}
           {winLadderOn && !isOperatorSession && orgId ? (
-            <SeldonChat enabled previewUrl={copilotPreviewUrl} />
+            <SeldonChat enabled previewUrl={copilotPreviewUrl} hideLauncher={simpleHomeOn} />
           ) : null}
           <CommandPalette items={paletteItems} />
           {/* May 1, 2026 — persistent help escape hatch on every

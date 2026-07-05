@@ -17,6 +17,15 @@ import { Textarea } from "@/components/ui/textarea";
 type SeldonChatProps = {
   enabled: boolean;
   previewUrl: string | null;
+  /** Simple-home (Task 7): when true, don't render the floating launcher
+   *  bubble — the command bar opens the panel instead via the
+   *  "seldonchat:open" event. Flag off ⇒ always false ⇒ bubble unchanged. */
+  hideLauncher?: boolean;
+};
+
+type SeldonChatOpenDetail = {
+  prefill?: string;
+  chips?: string[];
 };
 
 type ChatMessage = {
@@ -57,7 +66,7 @@ export function shouldBustPreview(toolEvents: { name: string }[]): boolean {
   );
 }
 
-export function SeldonChat({ enabled, previewUrl }: SeldonChatProps) {
+export function SeldonChat({ enabled, previewUrl, hideLauncher }: SeldonChatProps) {
   const [open, setOpen] = useState(false);
   const [messages, setMessages] = useState<ChatMessage[]>([]);
   const [input, setInput] = useState("");
@@ -66,6 +75,7 @@ export function SeldonChat({ enabled, previewUrl }: SeldonChatProps) {
   const [capped, setCapped] = useState<{ used: number; limit: number; upgrade: string } | null>(null);
   const [previewNonce, setPreviewNonce] = useState(0);
   const [pendingPhraseIndex, setPendingPhraseIndex] = useState(0);
+  const [chips, setChips] = useState<string[]>([]);
   const containerRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
@@ -91,8 +101,17 @@ export function SeldonChat({ enabled, previewUrl }: SeldonChatProps) {
   useEffect(() => {
     if (!enabled) return;
 
-    function handleOpen() {
+    function handleOpen(event: Event) {
       setOpen(true);
+      const detail = (event as CustomEvent<SeldonChatOpenDetail | undefined>).detail;
+      if (detail?.prefill) {
+        // Prefill only — never auto-send. The operator reviews/edits before
+        // hitting send, same as clicking one of the EXAMPLE_PROMPTS chips.
+        setInput(detail.prefill);
+      }
+      if (detail?.chips) {
+        setChips(detail.chips);
+      }
     }
 
     window.addEventListener("seldonchat:open", handleOpen);
@@ -205,18 +224,33 @@ export function SeldonChat({ enabled, previewUrl }: SeldonChatProps) {
                   <div className="rounded-lg border border-border bg-muted/30 p-3 text-sm text-muted-foreground">
                     Tell SeldonChat what to change on your site, form, or CRM.
                   </div>
-                  <div className="flex flex-wrap gap-2">
-                    {EXAMPLE_PROMPTS.map((prompt) => (
-                      <button
-                        key={prompt}
-                        type="button"
-                        onClick={() => setInput(prompt)}
-                        className="rounded-full border border-border bg-muted/40 px-3 py-1.5 text-xs text-foreground transition-colors hover:bg-muted"
-                      >
-                        {prompt}
-                      </button>
-                    ))}
-                  </div>
+                  {chips.length > 0 ? (
+                    <div className="flex flex-wrap gap-2">
+                      {chips.map((chip) => (
+                        <button
+                          key={chip}
+                          type="button"
+                          onClick={() => void sendMessage(chip)}
+                          className="rounded-full border border-border bg-muted/40 px-3 py-1.5 text-xs text-foreground transition-colors hover:bg-muted"
+                        >
+                          {chip}
+                        </button>
+                      ))}
+                    </div>
+                  ) : (
+                    <div className="flex flex-wrap gap-2">
+                      {EXAMPLE_PROMPTS.map((prompt) => (
+                        <button
+                          key={prompt}
+                          type="button"
+                          onClick={() => setInput(prompt)}
+                          className="rounded-full border border-border bg-muted/40 px-3 py-1.5 text-xs text-foreground transition-colors hover:bg-muted"
+                        >
+                          {prompt}
+                        </button>
+                      ))}
+                    </div>
+                  )}
                 </div>
               ) : null}
 
@@ -317,15 +351,17 @@ export function SeldonChat({ enabled, previewUrl }: SeldonChatProps) {
         </div>
       ) : null}
 
-      <button
-        type="button"
-        onClick={() => setOpen((prev) => !prev)}
-        aria-label={open ? "Close SeldonChat" : "Open SeldonChat"}
-        aria-expanded={open}
-        className="flex size-12 items-center justify-center rounded-full bg-primary text-primary-foreground shadow-lg ring-1 ring-black/5 transition-transform hover:scale-105 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2"
-      >
-        <MessageCircle className="size-5" />
-      </button>
+      {hideLauncher ? null : (
+        <button
+          type="button"
+          onClick={() => setOpen((prev) => !prev)}
+          aria-label={open ? "Close SeldonChat" : "Open SeldonChat"}
+          aria-expanded={open}
+          className="flex size-12 items-center justify-center rounded-full bg-primary text-primary-foreground shadow-lg ring-1 ring-black/5 transition-transform hover:scale-105 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2"
+        >
+          <MessageCircle className="size-5" />
+        </button>
+      )}
     </div>
   );
 }

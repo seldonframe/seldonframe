@@ -12,8 +12,10 @@ import {
   buildSurfaceAbsentWhere,
   canDisableModule,
   setModuleEnabled,
+  markChatIntroSeen,
   type CanDisableModuleDeps,
   type SetModuleEnabledDeps,
+  type MarkChatIntroSeenDeps,
 } from "../../../src/lib/workspace/surface";
 import { MODULE_IDS } from "../../../src/lib/workspace/modules";
 
@@ -49,6 +51,14 @@ function setModuleDeps(overrides: Partial<SetModuleEnabledDeps> = {}): SetModule
   return {
     hasActiveSubscription: async () => false,
     hasActiveDeployment: async () => false,
+    readSettings: async () => null,
+    writeSurface: async () => {},
+    ...overrides,
+  };
+}
+
+function markChatIntroSeenDeps(overrides: Partial<MarkChatIntroSeenDeps> = {}): MarkChatIntroSeenDeps {
+  return {
     readSettings: async () => null,
     writeSurface: async () => {},
     ...overrides,
@@ -345,6 +355,66 @@ describe("setModuleEnabled", () => {
       }),
     );
     assert.equal(result.ok, true);
+    assert.ok(writtenSurface);
+    assert.equal((writtenSurface as unknown as { chatIntroSeen: boolean }).chatIntroSeen, true);
+  });
+});
+
+describe("markChatIntroSeen", () => {
+  test("sets chatIntroSeen: true while preserving the modules array", async () => {
+    let writtenSurface: Record<string, unknown> | null = null;
+    await markChatIntroSeen(
+      "org_1",
+      markChatIntroSeenDeps({
+        readSettings: async () => ({
+          surface: { modules: ["home", "website", "bookings"], version: 1 },
+        }),
+        writeSurface: async (_orgId, surface) => {
+          writtenSurface = surface;
+        },
+      }),
+    );
+    assert.ok(writtenSurface);
+    const surface = writtenSurface as unknown as { modules: string[]; chatIntroSeen: boolean };
+    assert.deepEqual(surface.modules, ["home", "website", "bookings"]);
+    assert.equal(surface.chatIntroSeen, true);
+  });
+
+  test("preserves other sibling surface keys untouched", async () => {
+    let writtenSurface: Record<string, unknown> | null = null;
+    await markChatIntroSeen(
+      "org_1",
+      markChatIntroSeenDeps({
+        readSettings: async () => ({
+          surface: { modules: ["home"], version: 1, pinned: ["home", "money"] },
+        }),
+        writeSurface: async (_orgId, surface) => {
+          writtenSurface = surface;
+        },
+      }),
+    );
+    assert.ok(writtenSurface);
+    const surface = writtenSurface as unknown as {
+      version: number;
+      pinned: string[];
+      chatIntroSeen: boolean;
+    };
+    assert.equal(surface.version, 1);
+    assert.deepEqual(surface.pinned, ["home", "money"]);
+    assert.equal(surface.chatIntroSeen, true);
+  });
+
+  test("handles a null/absent surface (starts fresh with only chatIntroSeen)", async () => {
+    let writtenSurface: Record<string, unknown> | null = null;
+    await markChatIntroSeen(
+      "org_1",
+      markChatIntroSeenDeps({
+        readSettings: async () => null,
+        writeSurface: async (_orgId, surface) => {
+          writtenSurface = surface;
+        },
+      }),
+    );
     assert.ok(writtenSurface);
     assert.equal((writtenSurface as unknown as { chatIntroSeen: boolean }).chatIntroSeen, true);
   });

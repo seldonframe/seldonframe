@@ -254,3 +254,40 @@ export async function setModuleEnabled(
 
   return { ok: true, modules: nextModules };
 }
+
+export type MarkChatIntroSeenDeps = {
+  /** Reads the org's current `settings` jsonb (used to derive the current surface). */
+  readSettings: (orgId: string) => Promise<unknown>;
+  /** Writes the whole `surface` object via the 42P18-safe merge idiom. */
+  writeSurface: (orgId: string, surface: SurfaceSettings) => Promise<void>;
+};
+
+export const defaultMarkChatIntroSeenDeps: MarkChatIntroSeenDeps = {
+  readSettings: defaultReadSettings,
+  writeSurface: defaultWriteSurface,
+};
+
+/**
+ * Read-modify-write flag: sets `surface.chatIntroSeen = true` so the
+ * command-bar auto-open-once never re-fires for this org. Preserves the
+ * `modules` array and every other sibling surface key (same read-merge-write
+ * shape as setModuleEnabled) via the same 42P18-safe
+ * `COALESCE(settings,'{}'::jsonb) || <patch>::jsonb` merge idiom.
+ */
+export async function markChatIntroSeen(
+  orgId: string,
+  deps: MarkChatIntroSeenDeps = defaultMarkChatIntroSeenDeps,
+): Promise<void> {
+  const settings = await deps.readSettings(orgId);
+  const currentSettings = (settings ?? {}) as OrgSettings;
+  const currentSurface = currentSettings.surface;
+  const currentSurfaceObj: SurfaceSettings =
+    currentSurface && typeof currentSurface === "object" ? currentSurface : {};
+
+  const nextSurface: SurfaceSettings = {
+    ...currentSurfaceObj,
+    chatIntroSeen: true,
+  };
+
+  await deps.writeSurface(orgId, nextSurface);
+}
