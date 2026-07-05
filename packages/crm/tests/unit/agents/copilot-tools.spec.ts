@@ -1,25 +1,54 @@
 // Workspace copilot toolset — pure surface test (TDD, win-ladder P0/Task 1;
-// update_theme added in hotfix H2).
+// update_theme added in hotfix H2; execute()-level regression tests added
+// in hotfix H2b).
 //
 // buildCopilotTools() wraps the already-shipped admin action layer (landing
 // structure, intake structure, R1 customize/versions, section mutate, theme)
-// as thin AgentTool zod wrappers. This spec asserts ONLY the surface: tool
-// names, jsonSchema shape, delete_section's confirm requirement, and
-// update_theme's zod-level input validation (bad hex / at-least-one-field).
-// It does NOT call execute() for DB-backed tools — same scope as the
-// original Task 1 spec (see file history); update_theme's execute() path
-// (saveThemeForOrg call + orgId sourcing) is covered by save-theme.spec.ts's
-// integration-shaped test at the save-theme layer instead. Mocks nothing:
-// no DB, no network.
+// as thin AgentTool zod wrappers. This spec asserts the surface (tool names,
+// jsonSchema shape, delete_section's confirm requirement, update_theme's
+// zod-level input validation) PLUS update_theme's execute() path via
+// dependency injection (UpdateThemeDeps, lib/agents/copilot/tools.ts) — this
+// repo prefers DI over node:test mock.module / vi.mock because tsx's CJS
+// interop makes module mocking unreliable (see
+// agents/voice/realtime-tools.spec.ts's PATTERN NOTE and
+// deployments/set-booking-policy.spec.ts). It does NOT call execute() for the
+// other DB-backed tools — same scope as the original Task 1 spec (see file
+// history). Mocks nothing via module interception: no DB, no network.
 
-import { describe, test } from "node:test";
+import { describe, test, mock } from "node:test";
 import assert from "node:assert/strict";
 
 import {
   COPILOT_CAPABILITY,
   buildCopilotTools,
 } from "../../../src/lib/agents/copilot/tools";
+import type { UpdateThemeDeps } from "../../../src/lib/agents/copilot/tools";
+import type { ToolExecuteContext } from "../../../src/lib/agents/tools";
+import type { OrgTheme } from "../../../src/lib/theme/types";
 import { isWinLadderOn } from "../../../src/lib/web-build/policy";
+
+function fakeCtx(overrides: Partial<ToolExecuteContext> = {}): ToolExecuteContext {
+  return {
+    orgId: "org-real-123",
+    orgSlug: "acme",
+    agentId: "agt-1",
+    conversationId: "conv-1",
+    testMode: false,
+    ...overrides,
+  };
+}
+
+function fakeTheme(overrides: Partial<OrgTheme> = {}): OrgTheme {
+  return {
+    primaryColor: "#111111",
+    accentColor: "#222222",
+    fontFamily: "Inter",
+    mode: "light",
+    borderRadius: "rounded",
+    logoUrl: null,
+    ...overrides,
+  };
+}
 
 const EXPECTED_TOOL_NAMES = [
   "get_site_structure",
@@ -124,6 +153,67 @@ describe("buildCopilotTools", () => {
       borderRadius: "pill",
     });
     assert.equal(allGood.success, true);
+  });
+
+  test("update_theme.execute calls saveThemeForOrg with ctx.orgId, ignoring any orgId-shaped field on the model args", async () => {
+    const tools = buildCopilotTools();
+    const updateTheme = tools.find((t) => t.name === "update_theme");
+    assert.ok(updateTheme, "update_theme tool must exist");
+
+    const saveThemeForOrg = mock.fn(async (_orgId: string, _patch: Partial<OrgTheme>) =>
+      fakeTheme({ accentColor: "#7fb3d5" }),
+    );
+    const deps: UpdateThemeDeps = { saveThemeForOrg };
+
+    // A malicious/hallucinated args object carrying a different orgId-like
+    // field. update_theme's zod schema has no orgId-shaped property at all,
+    // so this can only ever be ignored — the org write MUST come from
+    // ctx.orgId, never from model-supplied args.
+    const maliciousArgs = {
+      accentColor: "#7fb3d5",
+      orgId: "attacker-org",
+      workspaceId: "attacker-org-2",
+    };
+
+    const ctx = fakeCtx({ orgId: "org-real-123" });
+    const result = await (
+      updateTheme!.execute as unknown as (
+        input: unknown,
+        ctx: ToolExecuteContext,
+        deps: UpdateThemeDeps,
+      ) => Promise<unknown>
+    )(maliciousArgs, ctx, deps);
+
+    assert.equal(saveThemeForOrg.mock.callCount(), 1);
+    const [calledOrgId] = saveThemeForOrg.mock.calls[0]!.arguments;
+    assert.equal(calledOrgId, "org-real-123", "must write to ctx.orgId, not any args-supplied org field");
+    assert.notEqual(calledOrgId, "attacker-org");
+    assert.notEqual(calledOrgId, "attacker-org-2");
+    assert.deepEqual(result, { ok: true, theme: fakeTheme({ accentColor: "#7fb3d5" }) });
+  });
+
+  test("update_theme.execute passes an accent-only patch to saveThemeForOrg as exactly { accentColor } (no other fields injected)", async () => {
+    const tools = buildCopilotTools();
+    const updateTheme = tools.find((t) => t.name === "update_theme");
+    assert.ok(updateTheme, "update_theme tool must exist");
+
+    const saveThemeForOrg = mock.fn(async (_orgId: string, _patch: Partial<OrgTheme>) =>
+      fakeTheme({ accentColor: "#abcdef" }),
+    );
+    const deps: UpdateThemeDeps = { saveThemeForOrg };
+
+    const ctx = fakeCtx();
+    await (
+      updateTheme!.execute as unknown as (
+        input: unknown,
+        ctx: ToolExecuteContext,
+        deps: UpdateThemeDeps,
+      ) => Promise<unknown>
+    )({ accentColor: "#abcdef" }, ctx, deps);
+
+    assert.equal(saveThemeForOrg.mock.callCount(), 1);
+    const [, calledPatch] = saveThemeForOrg.mock.calls[0]!.arguments;
+    assert.deepEqual(calledPatch, { accentColor: "#abcdef" });
   });
 });
 

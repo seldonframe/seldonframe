@@ -113,6 +113,12 @@ export async function saveThemeSettingsAction(formData: FormData) {
   const borderRadius = String(formData.get("borderRadius") ?? "").trim();
   const logoUrlInput = String(formData.get("logoUrl") ?? "").trim();
 
+  // The settings form always submits every field (primaryColor, accentColor,
+  // fontFamily, mode, borderRadius, logoUrl), so merge-over-current here is
+  // equivalent to a full replace — there's no "unset" field left to merge from
+  // the old value. A future partial-FormData caller (e.g. a single-field PATCH)
+  // would instead genuinely MERGE over the current theme, not reset it — that's
+  // the behavior saveThemeForOrg's merge semantics exist for.
   await saveThemeForOrg(orgId, {
     primaryColor,
     accentColor,

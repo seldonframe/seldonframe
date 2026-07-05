@@ -431,7 +431,23 @@ const updateThemeInput = z
     { message: "At least one theme field must be provided." },
   );
 
-const updateTheme: AgentTool<z.infer<typeof updateThemeInput>> = {
+/** Injectable seam for update_theme's execute (mirrors the DI pattern used by
+ *  bookAppointment / lookUpAvailability in lib/agents/tools.ts): this repo
+ *  prefers dependency injection over node:test mock.module / vi.mock because
+ *  tsx's CJS interop makes module mocking unreliable (see
+ *  agents/voice/realtime-tools.ts's PATTERN NOTE). Defaults to the real
+ *  saveThemeForOrg so production callers are unaffected. */
+export type UpdateThemeDeps = {
+  saveThemeForOrg: (orgId: string, patch: Partial<OrgTheme>) => Promise<OrgTheme>;
+};
+
+const updateTheme: AgentTool<z.infer<typeof updateThemeInput>> & {
+  execute: (
+    input: z.infer<typeof updateThemeInput>,
+    ctx: ToolExecuteContext,
+    deps?: UpdateThemeDeps,
+  ) => ReturnType<AgentTool<z.infer<typeof updateThemeInput>>["execute"]>;
+} = {
   name: "update_theme",
   description:
     "Set the workspace's brand theme: primary/accent color (hex), font family, light/dark mode, or border radius. Use THIS tool for any visual-style ask (colors, fonts, dark mode, corner roundness) — use edit_site only for content, copy, or section layout changes.",
@@ -451,7 +467,11 @@ const updateTheme: AgentTool<z.infer<typeof updateThemeInput>> = {
     },
     required: [],
   },
-  execute: (input, ctx: ToolExecuteContext) =>
+  execute: (
+    input,
+    ctx: ToolExecuteContext,
+    deps: UpdateThemeDeps = { saveThemeForOrg },
+  ) =>
     safe(async () => {
       const patch: Partial<OrgTheme> = {};
       if (input.accentColor !== undefined) {
@@ -470,7 +490,10 @@ const updateTheme: AgentTool<z.infer<typeof updateThemeInput>> = {
       if (input.mode !== undefined) patch.mode = input.mode;
       if (input.borderRadius !== undefined) patch.borderRadius = input.borderRadius;
 
-      const theme = await saveThemeForOrg(ctx.orgId, patch);
+      // ctx.orgId is the ONLY source of the org to write — input is a zod-parsed
+      // model-args object that has no orgId-shaped field in its schema at all, so
+      // even a malicious/hallucinated arg object can't redirect the write.
+      const theme = await deps.saveThemeForOrg(ctx.orgId, patch);
 
       logEvent("theme_update", { fields: Object.keys(patch), via: "copilot" }, { orgId: ctx.orgId });
 
