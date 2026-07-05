@@ -37,3 +37,9 @@ export function resolveWebBuildRateLimit(env: {
 export function isWinLadderOn(env: { SF_WIN_LADDER?: string | undefined }): boolean {
   return env.SF_WIN_LADDER?.trim() === "1";
 }
+
+/** Simple-home module registry flag (2026-07-05). Same strict-"1" contract as
+ *  isWinLadderOn: anything else keeps the simplified surface dark. */
+export function isSimpleHomeOn(env: { SF_SIMPLE_HOME?: string | undefined }): boolean {
+  return env.SF_SIMPLE_HOME === "1";
+}
