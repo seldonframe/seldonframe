@@ -10,7 +10,7 @@ import { sql } from "drizzle-orm";
 import { db } from "@/db";
 import { deployments, organizations } from "@/db/schema";
 import { workspaceHasPaidTier } from "@/lib/billing/tier-resolver";
-import { resolveBuilderTelephony } from "@/lib/telephony/config";
+import { hasLiveSmsForOrg } from "@/lib/telephony/config";
 import { MODULE_IDS, DEFAULT_FRESH_MODULES, type ModuleId } from "./modules";
 
 const MODULE_ID_SET = new Set<string>(MODULE_IDS as readonly string[]);
@@ -118,9 +118,12 @@ async function defaultHasActiveDeployment(orgId: string): Promise<boolean> {
   return Boolean(row);
 }
 
+// Fixed post-review (commit 6e5a31bb0): "SMS is live" must NOT require
+// voiceTrunkSid (voice-only field). hasLiveSmsForOrg applies the shared
+// accountSid+authToken+fromNumber predicate, agreeing with the nav gate
+// and the /conversations empty state.
 async function defaultHasSmsLive(orgId: string): Promise<boolean> {
-  const result = await resolveBuilderTelephony(orgId);
-  return result.ok;
+  return hasLiveSmsForOrg(orgId);
 }
 
 export const defaultCanDisableModuleDeps: CanDisableModuleDeps = {

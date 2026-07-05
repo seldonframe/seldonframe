@@ -23,7 +23,7 @@ import { db } from "@/db";
 import { contacts, smsMessages } from "@/db/schema";
 import { getOrgId } from "@/lib/auth/helpers";
 import { getLabels } from "@/lib/soul/labels";
-import { resolveBuilderTelephony } from "@/lib/telephony/config";
+import { hasLiveSmsForOrg } from "@/lib/telephony/config";
 
 type ThreadRow = {
   contactId: string;
@@ -62,13 +62,14 @@ export default async function ConversationsPage() {
 
   const labels = await getLabels();
 
-  // Inbox SMS-gate (2026-07-05): the empty state differs depending on
-  // whether a phone is connected at all. No phone ⇒ an actionable CTA to
-  // /settings/integrations (the Twilio-connect route) instead of the
-  // generic "no messages yet" copy, which would be confusing/dead-end for
-  // an operator who hasn't set up texting yet.
-  const telephony = await resolveBuilderTelephony(orgId);
-  const phoneConnected = telephony.ok;
+  // Inbox SMS-gate (2026-07-05, fixed post-review — commit 6e5a31bb0): the empty
+  // state differs depending on whether a phone is connected at all. No phone ⇒
+  // an actionable CTA to /settings/integrations (the Twilio-connect route)
+  // instead of the generic "no messages yet" copy, which would be confusing/
+  // dead-end for an operator who hasn't set up texting yet. Uses the shared
+  // hasLiveSms predicate (accountSid + authToken + fromNumber — NEVER
+  // voiceTrunkSid) so this agrees with the nav gate and /settings/features.
+  const phoneConnected = await hasLiveSmsForOrg(orgId);
 
   // Load all sms_messages for this workspace that are tied to a
   // contact. Ordered by created_at desc so the threads display

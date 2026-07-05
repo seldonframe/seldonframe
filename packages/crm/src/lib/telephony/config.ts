@@ -43,6 +43,8 @@ type TwilioIntegrationBlob = {
   accountSid?: string;
   authToken?: string;
   voiceTrunkSid?: string;
+  /** SMS sender number — same field lib/sms/providers/twilio.ts:15 reads. */
+  fromNumber?: string;
   [key: string]: unknown;
 };
 
@@ -88,6 +90,60 @@ export function pickTelephonyFromIntegrations(integrations: unknown): TelephonyP
       : null;
 
   return { accountSid, authTokenRaw, voiceTrunkSid };
+}
+
+// ─── SMS-live predicate (review fix, commit 6e5a31bb0) ────────────────────────
+//
+// "SMS is live" must NOT require voiceTrunkSid — that field is voice-only
+// (used to provision numbers for client deployments). An SMS-only operator
+// (accountSid + authToken + fromNumber, no trunk) is the common case and
+// must read as "live" consistently across the nav gate, the /conversations
+// empty state, and /settings/features. This predicate is the single source
+// of truth for all three; it mirrors lib/sms/providers/twilio.ts:isConfigured
+// exactly (accountSid && authToken && fromNumber), just without decrypting
+// authToken (presence-check only, same as the nav gate already did).
+
+/**
+ * Pure function — true iff the twilio integration blob has accountSid,
+ * authToken, and fromNumber all present (non-empty). Never requires
+ * voiceTrunkSid. Unit-tested in tests/unit/telephony/has-live-sms.spec.ts.
+ */
+export function hasLiveSms(integrations: unknown): boolean {
+  if (!integrations || typeof integrations !== "object") {
+    return false;
+  }
+
+  const blob = integrations as Record<string, unknown>;
+  if (!blob.twilio || typeof blob.twilio !== "object") {
+    return false;
+  }
+
+  const twilio = blob.twilio as TwilioIntegrationBlob;
+
+  const accountSid = typeof twilio.accountSid === "string" && twilio.accountSid.trim();
+  const authTokenRaw = typeof twilio.authToken === "string" && twilio.authToken.trim();
+  const fromNumber = typeof twilio.fromNumber === "string" && twilio.fromNumber.trim();
+
+  return Boolean(accountSid && authTokenRaw && fromNumber);
+}
+
+/**
+ * DB wrapper for hasLiveSms — loads the org's integrations blob and applies
+ * the same presence-only predicate. Soft-fails to false on error/not-found
+ * so a DB hiccup never fabricates a "live" state.
+ */
+export async function hasLiveSmsForOrg(orgId: string): Promise<boolean> {
+  try {
+    const [org] = await db
+      .select({ integrations: organizations.integrations })
+      .from(organizations)
+      .where(eq(organizations.id, orgId))
+      .limit(1);
+
+    return hasLiveSms(org?.integrations ?? null);
+  } catch {
+    return false;
+  }
 }
 
 // ─── DB wrapper ───────────────────────────────────────────────────────────────

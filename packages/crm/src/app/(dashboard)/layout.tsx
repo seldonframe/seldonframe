@@ -18,7 +18,7 @@ import { SeldonChat } from "@/components/seldon-chat";
 import { CommandBar } from "@/components/command-bar";
 import { isWinLadderOn, isSimpleHomeOn } from "@/lib/web-build/policy";
 import { readEnabledModules } from "@/lib/workspace/surface";
-import { pickTelephonyFromIntegrations } from "@/lib/telephony/config";
+import { hasLiveSms } from "@/lib/telephony/config";
 import { buildWorkspaceUrls } from "@/lib/billing/anonymous-workspace";
 import { registerCrmEventListeners } from "@/lib/events/listeners";
 import { getAllBlocksForOrg } from "@/lib/blocks/registry";
@@ -154,17 +154,14 @@ export default async function DashboardLayout({
   const simpleHomeOn = isSimpleHomeOn({ SF_SIMPLE_HOME: process.env.SF_SIMPLE_HOME });
   const enabledModules = simpleHomeOn ? readEnabledModules(activeOrg?.settings) : null;
 
-  // Inbox SMS-gate (2026-07-05): /conversations shows whenever the ACTIVE
-  // org (the one whose nav we're building — respects switched-into-client
-  // workspaces via activeOrg, not the operator's primary org) has a usable
-  // Twilio number, regardless of the module toggle. Pure predicate — reuses
-  // the same accountSid+authToken check resolveBuilderTelephony wraps, no
-  // extra DB round trip (activeOrg.integrations is already selected above).
-  // Note: authTokenRaw is the still-encrypted "v1."-prefixed value here (no
-  // decryption needed just to test presence — resolveBuilderTelephony does
-  // the real decrypt when telephony is actually used).
-  const telephonyPick = pickTelephonyFromIntegrations(activeOrg?.integrations);
-  const smsLive = telephonyPick.accountSid !== null && telephonyPick.authTokenRaw !== null;
+  // Inbox SMS-gate (2026-07-05, fixed post-review — commit 6e5a31bb0): /conversations
+  // shows whenever the ACTIVE org (the one whose nav we're building — respects
+  // switched-into-client workspaces via activeOrg, not the operator's primary org)
+  // has a usable Twilio number, regardless of the module toggle. Uses the shared
+  // hasLiveSms predicate (accountSid + authToken + fromNumber — NEVER voiceTrunkSid,
+  // which is voice-only) so this agrees with /conversations and /settings/features.
+  // No extra DB round trip — activeOrg.integrations is already selected above.
+  const smsLive = hasLiveSms(activeOrg?.integrations);
 
   // Command bar (Task 7): auto-open-once fires only the FIRST time a
   // simple-home org with a materialized module set (not grandfathered) has
