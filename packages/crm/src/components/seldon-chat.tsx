@@ -10,7 +10,8 @@
 
 import Link from "next/link";
 import { useEffect, useRef, useState } from "react";
-import { MessageCircle, Send, Sparkles, X } from "lucide-react";
+import { upload } from "@vercel/blob/client";
+import { MessageCircle, Paperclip, Send, Sparkles, X } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Textarea } from "@/components/ui/textarea";
 import { ChatMarkdown } from "@/components/chat-markdown";
@@ -56,6 +57,19 @@ type DesignOptions = { isHealth: boolean; chips: DesignChip[] };
  *  model calls update_media with no ambiguity. */
 type MediaPhoto = { url: string; thumbUrl: string; alt: string; credit: string; source: string };
 type MediaOptions = { slot: string; photos: MediaPhoto[] };
+
+/** T4 — a file the operator attached/dropped into the chat, uploaded to
+ *  Blob and awaiting send. Cleared once the message threading it in is
+ *  sent (the copilot applies it via update_media→resolveExternalMedia,
+ *  the same SSRF-gated apply path every other media source uses). */
+type PendingAttachment = { url: string; name: string; kind: "image" | "video" };
+
+type AttachState =
+  | { status: "idle" }
+  | { status: "uploading"; name: string }
+  | { status: "error"; message: string };
+
+const ATTACH_ACCEPT = "image/*,video/mp4,video/webm";
 
 type TurnResponse =
   | {
@@ -105,7 +119,11 @@ export function SeldonChat({ enabled, previewUrl, hideLauncher }: SeldonChatProp
   const [chips, setChips] = useState<string[]>([]);
   const [designOptions, setDesignOptions] = useState<DesignChip[]>([]);
   const [mediaOptions, setMediaOptions] = useState<MediaOptions | null>(null);
+  const [pendingAttachment, setPendingAttachment] = useState<PendingAttachment | null>(null);
+  const [attachState, setAttachState] = useState<AttachState>({ status: "idle" });
+  const [isDraggingFile, setDraggingFile] = useState(false);
   const containerRef = useRef<HTMLDivElement>(null);
+  const fileInputRef = useRef<HTMLInputElement>(null);
 
   useEffect(() => {
     if (!open) return;
@@ -162,16 +180,57 @@ export function SeldonChat({ enabled, previewUrl, hideLauncher }: SeldonChatProp
     return () => clearInterval(interval);
   }, [pending]);
 
+  /** T4 — upload an attached/dropped file to Blob via the media upload
+   *  token route, then store it as a pending attachment chip. The actual
+   *  "apply to the site" happens on send (sendMessage folds the uploaded
+   *  URL into the message text so the copilot calls update_media). */
+  async function handleFile(file: File) {
+    const kind: PendingAttachment["kind"] = file.type.startsWith("video/") ? "video" : "image";
+    setAttachState({ status: "uploading", name: file.name });
+
+    try {
+      const safeName = file.name.replace(/[^a-zA-Z0-9._-]/g, "_").slice(0, 128);
+      const pathname = `seldonchat/${crypto.randomUUID()}-${safeName}`;
+
+      const result = await upload(pathname, file, {
+        access: "public",
+        handleUploadUrl: "/api/v1/workspace/media/upload",
+        contentType: file.type,
+        clientPayload: JSON.stringify({ contentType: file.type }),
+      });
+
+      setPendingAttachment({ url: result.url, name: file.name, kind });
+      setAttachState({ status: "idle" });
+    } catch (err) {
+      const message = err instanceof Error ? err.message : "Upload failed. Please try again.";
+      setAttachState({
+        status: "error",
+        message: humanizeAttachError(message),
+      });
+    }
+  }
+
   async function sendMessage(payload: string, displayText?: string) {
-    const trimmed = payload.trim();
-    if (!trimmed || pending) return;
+    const attachment = pendingAttachment;
+    const userText = payload.trim();
+    if ((!userText && !attachment) || pending) return;
+
+    const trimmed = attachment
+      ? `${userText || "Use this uploaded file"} — uploaded ${attachment.kind} URL: ${attachment.url}`
+      : userText;
+    const shownText = attachment
+      ? `${displayText ?? userText ?? ""}${userText || displayText ? " " : ""}📎 ${attachment.name}`.trim()
+      : (displayText ?? payload).trim() || trimmed;
+
+    if (!trimmed) return;
 
     setError(null);
     setMessages((current) => [
       ...current,
-      { id: `user-${Date.now()}`, role: "user", content: (displayText ?? payload).trim() || trimmed },
+      { id: `user-${Date.now()}`, role: "user", content: shownText },
     ]);
     setInput("");
+    setPendingAttachment(null);
     setPending(true);
 
     try {
@@ -254,7 +313,28 @@ export function SeldonChat({ enabled, previewUrl, hideLauncher }: SeldonChatProp
             showTwoPane ? "h-[560px] w-[calc(100vw-2.5rem)] max-w-4xl lg:w-[900px]" : "h-[520px] w-[calc(100vw-2.5rem)] max-w-md"
           }`}
         >
-          <div className={`flex min-w-0 flex-col ${showTwoPane ? "w-full lg:w-[420px] lg:border-r lg:border-border" : "w-full"}`}>
+          <div
+            className={`relative flex min-w-0 flex-col ${showTwoPane ? "w-full lg:w-[420px] lg:border-r lg:border-border" : "w-full"}`}
+            onDragOver={(event) => {
+              event.preventDefault();
+              setDraggingFile(true);
+            }}
+            onDragLeave={(event) => {
+              event.preventDefault();
+              setDraggingFile(false);
+            }}
+            onDrop={(event) => {
+              event.preventDefault();
+              setDraggingFile(false);
+              const file = event.dataTransfer.files?.[0];
+              if (file) void handleFile(file);
+            }}
+          >
+            {isDraggingFile ? (
+              <div className="pointer-events-none absolute inset-0 z-10 flex items-center justify-center rounded-lg border-2 border-dashed border-primary bg-popover/90 text-sm font-medium text-foreground">
+                Drop a photo or video to attach
+              </div>
+            ) : null}
             <div className="flex items-center justify-between border-b border-border px-4 py-3">
               <p className="flex items-center gap-2 text-sm font-semibold text-foreground">
                 <Sparkles className="size-4" />
@@ -407,6 +487,12 @@ export function SeldonChat({ enabled, previewUrl, hideLauncher }: SeldonChatProp
                 </div>
               ) : null}
 
+              {attachState.status === "error" ? (
+                <div className="max-w-[90%] rounded-lg bg-destructive/10 px-3 py-2 text-sm text-destructive">
+                  {attachState.message}
+                </div>
+              ) : null}
+
               {capped ? (
                 <div className="space-y-2 rounded-lg border border-border bg-muted/30 p-4 text-sm">
                   <p className="font-medium text-foreground">
@@ -423,6 +509,26 @@ export function SeldonChat({ enabled, previewUrl, hideLauncher }: SeldonChatProp
             </div>
 
             <div className="border-t border-border p-3">
+              {pendingAttachment ? (
+                <div className="mb-2 flex flex-wrap items-center gap-2">
+                  <span className="inline-flex max-w-full items-center gap-1.5 rounded-full border border-border bg-muted/40 px-3 py-1 text-xs text-foreground">
+                    <span className="truncate">📎 {pendingAttachment.name}</span>
+                    <button
+                      type="button"
+                      onClick={() => setPendingAttachment(null)}
+                      aria-label="Remove attachment"
+                      className="text-muted-foreground hover:text-foreground"
+                    >
+                      <X className="size-3" />
+                    </button>
+                  </span>
+                </div>
+              ) : null}
+              {attachState.status === "uploading" ? (
+                <div className="mb-2 flex flex-wrap items-center gap-2 text-xs text-muted-foreground">
+                  Uploading {attachState.name}…
+                </div>
+              ) : null}
               <form
                 className="flex items-end gap-2"
                 onSubmit={(event) => {
@@ -430,6 +536,27 @@ export function SeldonChat({ enabled, previewUrl, hideLauncher }: SeldonChatProp
                   void sendMessage(input);
                 }}
               >
+                <input
+                  ref={fileInputRef}
+                  type="file"
+                  accept={ATTACH_ACCEPT}
+                  className="hidden"
+                  onChange={(event) => {
+                    const file = event.target.files?.[0];
+                    if (file) void handleFile(file);
+                    event.target.value = "";
+                  }}
+                />
+                <button
+                  type="button"
+                  onClick={() => fileInputRef.current?.click()}
+                  disabled={pending || Boolean(capped) || attachState.status === "uploading"}
+                  aria-label="Attach a photo or video"
+                  title="Attach a photo or video"
+                  className="flex size-9 shrink-0 items-center justify-center rounded-md border border-border text-muted-foreground transition-colors hover:bg-muted hover:text-foreground disabled:cursor-not-allowed disabled:opacity-50"
+                >
+                  <Paperclip className="size-4" />
+                </button>
                 <Textarea
                   value={input}
                   onChange={(event) => setInput(event.target.value)}
@@ -439,7 +566,7 @@ export function SeldonChat({ enabled, previewUrl, hideLauncher }: SeldonChatProp
                   onKeyDown={(event) => {
                     if (event.key === "Enter" && !event.shiftKey) {
                       event.preventDefault();
-                      if (input.trim()) {
+                      if (input.trim() || pendingAttachment) {
                         void sendMessage(input);
                       }
                     }
@@ -447,7 +574,11 @@ export function SeldonChat({ enabled, previewUrl, hideLauncher }: SeldonChatProp
                 />
                 <Button
                   type="submit"
-                  disabled={pending || Boolean(capped) || input.trim().length === 0}
+                  disabled={
+                    pending ||
+                    Boolean(capped) ||
+                    (input.trim().length === 0 && !pendingAttachment)
+                  }
                 >
                   <Send className="h-4 w-4" />
                   Send
@@ -492,4 +623,18 @@ export function SeldonChat({ enabled, previewUrl, hideLauncher }: SeldonChatProp
       )}
     </div>
   );
+}
+
+/** T4 — turn a raw upload-token/Blob error into operator-friendly copy. */
+function humanizeAttachError(message: string): string {
+  if (message.includes("content_type_not_allowed")) {
+    return "That file type isn't supported — attach an image (PNG/JPEG/WEBP/GIF/SVG) or a video (MP4/WEBM).";
+  }
+  if (message.includes("Unauthorized") || message.includes("unauthorized")) {
+    return "You need to be signed in to attach files.";
+  }
+  if (message.toLowerCase().includes("exceeds") || message.toLowerCase().includes("too large")) {
+    return "That file is too large — images up to 5 MB, videos up to 50 MB.";
+  }
+  return "Upload failed. Please try again.";
 }
