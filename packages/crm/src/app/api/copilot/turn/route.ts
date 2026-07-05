@@ -25,6 +25,7 @@ import { executeTurn } from "@/lib/agents/runtime";
 import type { AgentBlueprint } from "@/db/schema";
 import { capResponse, COPILOT_PERSONA } from "@/lib/agents/copilot/cap";
 import { buildDesignChips, type DesignChipsResult } from "@/lib/agents/copilot/design-chips";
+import type { StockPhoto } from "@/lib/media/stock-search";
 
 export const runtime = "nodejs";
 
@@ -112,10 +113,33 @@ export async function POST(request: NextRequest) {
     }
   }
 
+  // Render search_media's result as clickable thumbnails instead of letting
+  // the model verbalize stock-photo URLs as prose (same rationale as
+  // designOptions above). Omitted entirely when no search_media call
+  // happened this turn, or when it returned zero photos.
+  let mediaOptions: { slot: string; photos: StockPhoto[] } | undefined;
+  const searchMediaCall = result.toolCalls.find((call) => call.name === "search_media");
+  if (searchMediaCall) {
+    const toolResult = result.toolResults.find((r) => r.toolCallId === searchMediaCall.id);
+    if (toolResult?.ok) {
+      const output = toolResult.output as
+        | { ok?: boolean; target_slot?: string; photos?: StockPhoto[] }
+        | undefined;
+      const photos = Array.isArray(output?.photos) ? output.photos : [];
+      if (output?.ok === true && photos.length > 0) {
+        mediaOptions = {
+          slot: typeof output.target_slot === "string" ? output.target_slot : "hero_background",
+          photos,
+        };
+      }
+    }
+  }
+
   return NextResponse.json({
     kind: "reply",
     text: result.assistantMessage,
     toolEvents,
     ...(designOptions ? { designOptions } : {}),
+    ...(mediaOptions ? { mediaOptions } : {}),
   });
 }

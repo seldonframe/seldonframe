@@ -50,8 +50,21 @@ type DesignChip = {
 
 type DesignOptions = { isHealth: boolean; chips: DesignChip[] };
 
+/** A stock photo surfaced from a `search_media` tool call this turn (see
+ *  api/copilot/turn/route.ts). Rendered as a tappable thumbnail; tapping
+ *  sends a deterministic apply payload naming the exact slot + URL so the
+ *  model calls update_media with no ambiguity. */
+type MediaPhoto = { url: string; thumbUrl: string; alt: string; credit: string; source: string };
+type MediaOptions = { slot: string; photos: MediaPhoto[] };
+
 type TurnResponse =
-  | { kind: "reply"; text: string; toolEvents: ToolEvent[]; designOptions?: DesignOptions }
+  | {
+      kind: "reply";
+      text: string;
+      toolEvents: ToolEvent[];
+      designOptions?: DesignOptions;
+      mediaOptions?: MediaOptions;
+    }
   | { kind: "capped"; used: number; limit: number; upgrade: string };
 
 const EXAMPLE_PROMPTS = [
@@ -91,6 +104,7 @@ export function SeldonChat({ enabled, previewUrl, hideLauncher }: SeldonChatProp
   const [pendingPhraseIndex, setPendingPhraseIndex] = useState(0);
   const [chips, setChips] = useState<string[]>([]);
   const [designOptions, setDesignOptions] = useState<DesignChip[]>([]);
+  const [mediaOptions, setMediaOptions] = useState<MediaOptions | null>(null);
   const containerRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
@@ -191,6 +205,15 @@ export function SeldonChat({ enabled, previewUrl, hideLauncher }: SeldonChatProp
         setDesignOptions(data.designOptions.chips);
       } else if (data.toolEvents.some((event) => event.name === "update_design" && event.ok)) {
         setDesignOptions([]);
+      }
+
+      // Media picker thumbnails: show a fresh set when search_media ran this
+      // turn, clear it once a pick actually applied (a successful
+      // update_media), otherwise leave whatever's showing.
+      if (data.mediaOptions?.photos?.length) {
+        setMediaOptions(data.mediaOptions);
+      } else if (data.toolEvents.some((event) => event.name === "update_media" && event.ok)) {
+        setMediaOptions(null);
       }
 
       if (previewUrl && shouldBustPreview(data.toolEvents)) {
@@ -335,6 +358,38 @@ export function SeldonChat({ enabled, previewUrl, hideLauncher }: SeldonChatProp
                           />
                         ) : null}
                         {chip.label}
+                      </button>
+                    ))}
+                  </div>
+                </div>
+              ) : null}
+
+              {mediaOptions && mediaOptions.photos.length > 0 ? (
+                <div className="space-y-2">
+                  <p className="text-xs font-medium text-muted-foreground">
+                    Tap a photo to use it
+                  </p>
+                  <div className="flex flex-wrap gap-2">
+                    {mediaOptions.photos.map((photo) => (
+                      <button
+                        key={photo.url}
+                        type="button"
+                        disabled={pending}
+                        title={`${photo.source}${photo.credit ? ` — ${photo.credit}` : ""}`}
+                        onClick={() =>
+                          void sendMessage(
+                            `Set the ${mediaOptions.slot} to this image: ${photo.url}`,
+                            "Applying photo…",
+                          )
+                        }
+                        className="size-[72px] shrink-0 overflow-hidden rounded-lg border border-border transition-opacity hover:opacity-80 disabled:cursor-not-allowed disabled:opacity-50"
+                      >
+                        {/* eslint-disable-next-line @next/next/no-img-element -- external stock-photo thumbnail, not a local/optimizable asset */}
+                        <img
+                          src={photo.thumbUrl}
+                          alt={photo.alt}
+                          className="size-full object-cover"
+                        />
                       </button>
                     ))}
                   </div>

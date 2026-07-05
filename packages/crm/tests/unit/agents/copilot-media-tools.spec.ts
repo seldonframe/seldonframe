@@ -21,7 +21,7 @@ import type {
 import type { ToolExecuteContext } from "../../../src/lib/agents/tools";
 import type { StockPhoto } from "../../../src/lib/media/stock-search";
 import type { ResolveMediaResult } from "../../../src/lib/media/resolve-url";
-import type { SetR1MediaResult } from "../../../src/lib/landing/set-r1-media";
+import type { SetR1MediaResult, SetR1MediaInput } from "../../../src/lib/landing/set-r1-media";
 
 function fakeCtx(overrides: Partial<ToolExecuteContext> = {}): ToolExecuteContext {
   return {
@@ -98,8 +98,8 @@ describe("search_media", () => {
       target_slot: string;
     };
 
-    assert.equal((deps.searchStockPhotos as ReturnType<typeof mock.fn>).mock.callCount(), 1);
-    const [calledQuery] = (deps.searchStockPhotos as ReturnType<typeof mock.fn>).mock.calls[0]!
+    assert.equal((deps.searchStockPhotos as unknown as ReturnType<typeof mock.fn>).mock.callCount(), 1);
+    const [calledQuery] = (deps.searchStockPhotos as unknown as ReturnType<typeof mock.fn>).mock.calls[0]!
       .arguments;
     assert.equal(calledQuery, "plumber at work");
 
@@ -107,8 +107,8 @@ describe("search_media", () => {
     assert.deepEqual(result.photos, fakePhotos());
 
     // Never writes.
-    assert.equal((deps.setR1Media as ReturnType<typeof mock.fn>).mock.callCount(), 0);
-    assert.equal((deps.clearR1Media as ReturnType<typeof mock.fn>).mock.callCount(), 0);
+    assert.equal((deps.setR1Media as unknown as ReturnType<typeof mock.fn>).mock.callCount(), 0);
+    assert.equal((deps.clearR1Media as unknown as ReturnType<typeof mock.fn>).mock.callCount(), 0);
   });
 
   test("defaults target_slot to hero_background when not provided", async () => {
@@ -175,15 +175,15 @@ describe("update_media", () => {
       ) => Promise<unknown>
     )(maliciousArgs, ctx, deps)) as { ok: boolean };
 
-    const resolveMock = deps.resolveExternalMedia as ReturnType<typeof mock.fn>;
+    const resolveMock = deps.resolveExternalMedia as unknown as ReturnType<typeof mock.fn>;
     assert.equal(resolveMock.mock.callCount(), 1);
     const [resolvedUrl, resolvedKind] = resolveMock.mock.calls[0]!.arguments;
     assert.equal(resolvedUrl, "https://example.com/photo.jpg");
     assert.equal(resolvedKind, "image");
 
-    const setMock = deps.setR1Media as ReturnType<typeof mock.fn>;
+    const setMock = deps.setR1Media as unknown as ReturnType<typeof mock.fn>;
     assert.equal(setMock.mock.callCount(), 1);
-    const [calledOrgId, calledInput] = setMock.mock.calls[0]!.arguments;
+    const [calledOrgId, calledInput] = setMock.mock.calls[0]!.arguments as [string, SetR1MediaInput];
     assert.equal(calledOrgId, "org-real-123", "must write to ctx.orgId, not any args-supplied org field");
     assert.notEqual(calledOrgId, "attacker-org");
     assert.notEqual(calledOrgId, "attacker-org-2");
@@ -215,7 +215,7 @@ describe("update_media", () => {
 
     assert.equal(result.ok, false);
     assert.match(result.error ?? "", /unsafe_url/);
-    assert.equal((deps.setR1Media as ReturnType<typeof mock.fn>).mock.callCount(), 0);
+    assert.equal((deps.setR1Media as unknown as ReturnType<typeof mock.fn>).mock.callCount(), 0);
   });
 
   test("kind:video routes to hero_background_video slot handling and passes the pass-through url", async () => {
@@ -242,9 +242,9 @@ describe("update_media", () => {
       deps,
     )) as { ok: boolean };
 
-    const setMock = deps.setR1Media as ReturnType<typeof mock.fn>;
+    const setMock = deps.setR1Media as unknown as ReturnType<typeof mock.fn>;
     assert.equal(setMock.mock.callCount(), 1);
-    const [, calledInput] = setMock.mock.calls[0]!.arguments;
+    const [, calledInput] = setMock.mock.calls[0]!.arguments as [string, SetR1MediaInput];
     assert.equal(calledInput.slot, "hero_background_video");
     assert.equal(calledInput.src, "https://cdn.example.com/clip.mp4");
     assert.equal(result.ok, true);
@@ -307,7 +307,7 @@ describe("delete_media", () => {
       ) => Promise<unknown>
     )(maliciousArgs, ctx, deps)) as { ok: boolean };
 
-    const clearMock = deps.clearR1Media as ReturnType<typeof mock.fn>;
+    const clearMock = deps.clearR1Media as unknown as ReturnType<typeof mock.fn>;
     assert.equal(clearMock.mock.callCount(), 1);
     const [calledOrgId, calledSlot] = clearMock.mock.calls[0]!.arguments;
     assert.equal(calledOrgId, "org-real-123");
