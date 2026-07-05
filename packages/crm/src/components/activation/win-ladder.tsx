@@ -123,12 +123,16 @@ export function WinLadder({ state, hrefs, shareSlot, agentPicksSlot }: WinLadder
                         >
                           Test your booking page →
                         </a>
-                        <Link
-                          href={hrefs.integrationsUrl}
-                          className="text-xs text-muted-foreground underline underline-offset-4 hover:text-foreground"
-                        >
-                          Connect your calendar
-                        </Link>
+                        {state.calendarConnected ? (
+                          <span className="text-xs text-muted-foreground">✓ Calendar connected</span>
+                        ) : (
+                          <Link
+                            href={hrefs.integrationsUrl}
+                            className="text-xs text-muted-foreground underline underline-offset-4 hover:text-foreground"
+                          >
+                            Connect your calendar
+                          </Link>
+                        )}
                       </>
                     ) : null}
 

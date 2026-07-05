@@ -45,6 +45,10 @@ import { readEnabledModules } from "@/lib/workspace/surface";
 import { resolveLadderInputs, stampLadderEvent } from "@/lib/activation/ladder-server";
 import { computeLadderState } from "@/lib/activation/ladder";
 import { WinLadder } from "@/components/activation/win-ladder";
+// F2 fix (2026-07-05, SH2-F2) — auto-refreshes the ladder's server state
+// (nav + ladder recompute) without a manual reload, on OAuth-return,
+// SeldonChat tool activity, and tab-visibility-regained.
+import { LadderAutoRefresh } from "@/components/activation/ladder-auto-refresh";
 // 2026-07-04 — Task 9: step-3 share assets (copy link + QR) slotted into
 // the win-ladder's go_live row via WinLadder's shareSlot prop.
 import { buildShareAssets } from "@/lib/activation/share";
@@ -777,15 +781,18 @@ export default async function DashboardPage({
                 SF_WIN_LADDER is on; ladderState is null flag-off so this
                 whole block is a no-op then. */}
             {ladderState ? (
-              <WinLadder
-                state={ladderState}
-                hrefs={{
-                  bookingUrl: publicBookingUrl ?? urls.home,
-                  ...ladderHrefs,
-                }}
-                shareSlot={shareSlot}
-                agentPicksSlot={agentPicksSlot}
-              />
+              <>
+                <LadderAutoRefresh />
+                <WinLadder
+                  state={ladderState}
+                  hrefs={{
+                    bookingUrl: publicBookingUrl ?? urls.home,
+                    ...ladderHrefs,
+                  }}
+                  shareSlot={shareSlot}
+                  agentPicksSlot={agentPicksSlot}
+                />
+              </>
             ) : null}
           </div>
         </div>
@@ -1524,15 +1531,18 @@ export default async function DashboardPage({
           the first contact/deal/booking arrives. Shares the one ladderState
           computed above the branch split — no extra query here. */}
       {ladderState && ladderState.completedCount < 4 && activeWorkspace ? (
-        <WinLadder
-          state={ladderState}
-          hrefs={{
-            bookingUrl: buildPublicBookingUrl(activeWorkspace, appointmentTypeRows[0]?.bookingSlug),
-            ...ladderHrefs,
-          }}
-          shareSlot={shareSlot}
-          agentPicksSlot={agentPicksSlot}
-        />
+        <>
+          <LadderAutoRefresh />
+          <WinLadder
+            state={ladderState}
+            hrefs={{
+              bookingUrl: buildPublicBookingUrl(activeWorkspace, appointmentTypeRows[0]?.bookingSlug),
+              ...ladderHrefs,
+            }}
+            shareSlot={shareSlot}
+            agentPicksSlot={agentPicksSlot}
+          />
+        </>
       ) : null}
 
       {/* v1.25.4 — operator "Today" snapshot widget. Replaces the v1.25.3

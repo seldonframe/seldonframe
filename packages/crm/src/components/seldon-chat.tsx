@@ -169,6 +169,15 @@ export function SeldonChat({ enabled, previewUrl, hideLauncher }: SeldonChatProp
       if (previewUrl && shouldBustPreview(data.toolEvents)) {
         setPreviewNonce(Date.now());
       }
+
+      // F2 fix (2026-07-05, SH2-F2) — any successful tool call (mutating or
+      // not — e.g. a successful enable_module also changes the nav) should
+      // let LadderAutoRefresh pick up the DB state change via
+      // router.refresh(), without this component needing to know anything
+      // about the ladder.
+      if (data.toolEvents.some((event) => event.ok)) {
+        window.dispatchEvent(new CustomEvent("seldonchat:acted"));
+      }
     } catch {
       setError("Something broke — try again");
     } finally {

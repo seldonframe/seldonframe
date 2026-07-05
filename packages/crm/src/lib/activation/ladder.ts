@@ -24,6 +24,11 @@ export type LadderState = {
   steps: LadderStep[];
   current: LadderStepId | null;
   completedCount: number;
+  // F2 fix (2026-07-05, SH2-F2) — threaded through from LadderInputs so the
+  // test_booking row can render a confirmed "calendar connected" indicator
+  // instead of always showing the "Connect your calendar" link, even after
+  // the calendar is already connected.
+  calendarConnected: boolean;
 };
 
 export function computeLadderState(i: LadderInputs): LadderState {
@@ -41,5 +46,6 @@ export function computeLadderState(i: LadderInputs): LadderState {
     steps,
     current: firstNotDone ? firstNotDone.id : null,
     completedCount,
+    calendarConnected: i.calendarConnected,
   };
 }

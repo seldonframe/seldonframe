@@ -5,6 +5,7 @@ import { describe, test } from "node:test";
 import assert from "node:assert/strict";
 
 import { computeLadderState, type LadderInputs } from "../../../src/lib/activation/ladder";
+import { shouldAutoRefresh } from "../../../src/components/activation/ladder-auto-refresh";
 
 function inputs(overrides: Partial<LadderInputs> = {}): LadderInputs {
   return {
@@ -40,6 +41,14 @@ describe("computeLadderState", () => {
     assert.equal(step1.done, true);
     assert.equal(state.current, "make_it_yours");
     assert.equal(state.completedCount, 1);
+  });
+
+  test("calendarConnected passes through to state so the UI can render a confirmed indicator", () => {
+    const connected = computeLadderState(inputs({ calendarConnected: true }));
+    assert.equal(connected.calendarConnected, true);
+
+    const notConnected = computeLadderState(inputs({ calendarConnected: false }));
+    assert.equal(notConnected.calendarConnected, false);
   });
 
   test("landingVersionCount >= 1 without copilot use marks make_it_yours done", () => {
@@ -120,5 +129,23 @@ describe("computeLadderState", () => {
     assert.equal(withExtraAgent.steps.find((s) => s.id === "hire_agent")!.done, true);
     assert.equal(withExtraAgent.current, null);
     assert.equal(withExtraAgent.completedCount, 4);
+  });
+});
+
+describe("shouldAutoRefresh", () => {
+  test("returns true when lastMs is null (no refresh has happened yet this page-load)", () => {
+    assert.equal(shouldAutoRefresh(100_000, null, 60_000), true);
+  });
+
+  test("returns false when elapsed since lastMs is under minGapMs", () => {
+    assert.equal(shouldAutoRefresh(100_000, 50_000, 60_000), false); // 50s elapsed < 60s min
+  });
+
+  test("returns true when elapsed since lastMs meets minGapMs exactly", () => {
+    assert.equal(shouldAutoRefresh(110_000, 50_000, 60_000), true); // 60s elapsed == 60s min
+  });
+
+  test("returns true when elapsed since lastMs exceeds minGapMs", () => {
+    assert.equal(shouldAutoRefresh(200_000, 50_000, 60_000), true); // 150s elapsed > 60s min
   });
 });
