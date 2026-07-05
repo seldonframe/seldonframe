@@ -631,12 +631,17 @@ function HeroStyles() {
       /* A user-added background (media editing) sits behind foreground text that
          HeroSplit / HeroLeftAsymmetric styled for a LIGHT ground — so the
          non-accent headline, lede, and kicker wash out dark-on-dark. Borrow
-         HeroCinematic's -light treatment (verbatim values) for on-background
-         legibility; the .accent span keeps its own --primary color. Caught by
-         vision-verify: eyebrow + body were illegible on a set background. */
+         HeroCinematic's -light treatment for on-background legibility; the
+         .accent span keeps its own --primary color. Users can set ANY image
+         (dark OR bright), so a text-shadow scrim guarantees contrast even over
+         the bright regions of a photo — the standard text-over-photo treatment
+         (inherits onto the .accent span too). Caught + hardened via vision-verify. */
+      .hero-has-bg-wrap .hero-headline,
+      .hero-has-bg-wrap .hero-lede,
+      .hero-has-bg-wrap .kicker { text-shadow: 0 1px 2px rgba(0, 0, 0, 0.5), 0 2px 18px rgba(0, 0, 0, 0.38); }
       .hero-has-bg-wrap .hero-headline { color: #fff; }
-      .hero-has-bg-wrap .hero-lede { color: rgba(255, 255, 255, 0.78); }
-      .hero-has-bg-wrap .kicker { color: rgba(255, 255, 255, 0.78); }
+      .hero-has-bg-wrap .hero-lede { color: rgba(255, 255, 255, 0.85); }
+      .hero-has-bg-wrap .kicker { color: rgba(255, 255, 255, 0.82); }
       .hero-bg-media {
         position: absolute; inset: 0; width: 100%; height: 100%;
         object-fit: cover;
