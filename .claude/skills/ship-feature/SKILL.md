@@ -40,6 +40,7 @@ The loop is already fidelity-routed: subagents are drop-and-retrieve (they read 
 - **`fable` (Fable 5) is the best model — spend it where judgment is scarce**, never on mechanical read-and-judge. `opus` (Opus 4.8) is the swappable peer at the top tier; prefer the swap to `opus` **when the maker was `fable`**, so the reviewer is a *different family* and its blind spots don't correlate with the maker's.
 - Aliases: `haiku`=Haiku 4.5 · `sonnet`=Sonnet 5 · `opus`=Opus 4.8 · `fable`=Fable 5. **Always name the model on every dispatch** — an omitted model inherits the session's (usually the most expensive).
 - Why it pays: a real session ran 4 vision-graders on `sonnet` (~218k tokens — its single biggest line item, *larger than the actual coding*) doing pure `haiku` work.
+- **Right-size the task, not just the model.** Before a read-a-file / hand-a-file-to-a-subagent step, check the size — if it's big, the task is "grep/jq/node the span", never "Read the whole file" (a `haiku` scout handed a 242k-token log just fails). Drop+retrieve at the task level: the controller holds the plan + conclusions; files/greps hold the bytes.
 
 ### Output contracts (the 5× slice)
 
