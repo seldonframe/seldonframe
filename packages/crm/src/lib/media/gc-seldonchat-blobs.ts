@@ -73,11 +73,14 @@ export function selectOrphanBlobs(
   const toDelete: SeldonchatBlob[] = [];
   const keptFresh: SeldonchatBlob[] = [];
   const keptReferenced: SeldonchatBlob[] = [];
+  // Hoisted once: the substring fallback is O(referenced) per blob, so build
+  // the array a single time rather than per-iteration.
+  const referencedList = Array.from(referenced);
 
   for (const blob of blobs) {
     const isReferenced =
       referenced.has(blob.url) ||
-      Array.from(referenced).some((refUrl) => refUrl.includes(blob.pathname));
+      referencedList.some((refUrl) => refUrl.includes(blob.pathname));
 
     if (isReferenced) {
       keptReferenced.push(blob);
@@ -119,7 +122,12 @@ export type SeldonchatBlobGcSummary = {
   at: string;
   scanned: number;
   referenced_count: number;
+  /** Orphans selected for deletion this run (post-cap — matches `deleted` on a
+   *  successful, uncapped run). */
   to_delete: number;
+  /** True orphan backlog BEFORE the maxDeletions cap — so a persistently
+   *  capped runaway is visible in the summary line, not just the per-blob logs. */
+  to_delete_total: number;
   deleted: number;
   kept_fresh: number;
   kept_referenced: number;
@@ -190,6 +198,7 @@ export async function runSeldonchatBlobGc(
     scanned: allBlobs.length,
     referenced_count: referenced.size,
     to_delete: toDeleteCapped.length,
+    to_delete_total: toDelete.length,
     deleted,
     kept_fresh: keptFresh.length,
     kept_referenced: keptReferenced.length,

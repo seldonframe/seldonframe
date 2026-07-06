@@ -204,6 +204,8 @@ describe("runSeldonchatBlobGc", () => {
     assert.equal(capturedUrls.length, 2);
     assert.equal(summary.deleted, 2);
     assert.equal(summary.capped, true);
+    assert.equal(summary.to_delete, 2); // post-cap
+    assert.equal(summary.to_delete_total, 3); // true backlog before the cap
   });
 
   test("pagination via cursor accumulates all blobs across two pages", async () => {
