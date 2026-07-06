@@ -40,13 +40,23 @@ reasoning about code.
    path. (Set `MICROLINK_API_KEY` for higher rate limits; the free endpoint works
    without it, but can rate-limit on rapid retries — space them out.)
 
-3. **Grade — independent (maker ≠ checker).** Dispatch a vision-grader SUBAGENT
-   (Agent tool) that `Read`s the PNG and grades it against the goal + a rubric,
-   returning `{ pass: boolean, gaps: string[] }`. Do NOT let the code's author
-   grade its own pixels — a fresh grader sees only the artifact + the rubric,
-   with no stake in the maker's reasoning (the same reason `verify-build` is
-   independent). For a quick self-check inline, `Read` the PNG yourself — but a
-   real gate uses a separate grader.
+3. **Grade — independent (maker ≠ checker), on `haiku` — PINNED.** Dispatch a
+   vision-grader SUBAGENT (Agent tool, **`model: "haiku"` — do not override**)
+   that `Read`s the PNG and grades it against the goal + a rubric, returning
+   `{ pass: boolean, gaps: string[] }`. Read-a-PNG→verdict is haiku work; a
+   real session ran 4 graders on sonnet (~218k tokens — the session's biggest
+   line item) purely because the model was left to dispatch-time habit. The pin
+   lives HERE so it can't drift. (If haiku ever provably misses what sonnet
+   catches — run 10 known-good + 10 known-bad screenshots — change the pin
+   here, on evidence, not per-dispatch.)
+   Do NOT let the code's author grade its own pixels — a fresh grader sees only
+   the artifact + the rubric, with no stake in the maker's reasoning. For a
+   quick self-check inline, `Read` the PNG yourself — but a real gate uses a
+   separate grader.
+   **Prefer a before/after DIFF grade when a baseline exists:** hand the grader
+   both screenshots and ask "what changed — is the change the requested one,
+   and did anything regress?" A visual diff is more sensitive to regressions
+   (the duplicate-nav class) and less subjective than an absolute grade.
 
 4. **Act.** Pass → done. Gaps → feed each gap back to the maker → re-render →
    re-grade until pass or a hard iteration cap (an objective stop, like `/goal`).

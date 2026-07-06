@@ -28,19 +28,21 @@ The loop is already fidelity-routed: subagents are drop-and-retrieve (they read 
 | role | model | why |
 |---|---|---|
 | scout · locate-a-fact | `haiku` | Read → return a span; never raw dumps into the controller |
-| grader · vision / verify | `haiku` | Read artifact → `{pass, gaps}` |
+| grader · vision / verify | `haiku` **(pinned)** | Read artifact → `{pass, gaps}`; pinned in the vision-verify skill so it can't drift |
 | summarizer · classify | `haiku` | cheap text transform |
 | implementer · brief already contains the code | `haiku` | transcription + run the tests |
 | implementer · prose brief (the maker) | `sonnet` | writes real code from a spec, effort medium |
-| implementer · hard / novel / architectural | `fable` | escalate only when the build itself needs judgment |
+| implementer · hard / novel / architectural | `fable` | **generation** is where the best model's edge is load-bearing |
 | reviewer · normal diff | `sonnet` | judgment, scaled to the diff's risk |
-| reviewer · hot-path · money · auth · schema · concurrency · subtle | `fable` *(swap `opus`)* | the review that catches the fail-soft / race bug — the best model earns its price here |
-| final whole-branch review | `fable` *(swap `opus`)* | broad, most capable, once |
+| reviewer · hot-path · money · auth · schema · concurrency · subtle | `opus` | reads a diff at least as well as `fable` for ~38% of the cost; also decorrelates blind spots when the maker was `fable` |
+| final whole-branch review | `opus` | broad, top-tier, once |
 
-- **`fable` (Fable 5) is the best model — spend it where judgment is scarce**, never on mechanical read-and-judge. `opus` (Opus 4.8) is the swappable peer at the top tier; prefer the swap to `opus` **when the maker was `fable`**, so the reviewer is a *different family* and its blind spots don't correlate with the maker's.
-- Aliases: `haiku`=Haiku 4.5 · `sonnet`=Sonnet 5 · `opus`=Opus 4.8 · `fable`=Fable 5. **Always name the model on every dispatch** — an omitted model inherits the session's (usually the most expensive).
-- Why it pays: a real session ran 4 vision-graders on `sonnet` (~218k tokens — its single biggest line item, *larger than the actual coding*) doing pure `haiku` work.
+- **Spend `fable` (Fable 5) on novel GENERATION, not on reading diffs.** At $10/$50 + its ~30%-heavier tokenizer, a Fable review costs ~2.6× the identical Opus review with no demonstrated catch-rate edge — and Fable's weekly cap makes it an unreliable default. Reviews default to `opus`; escalate a review to `fable` only for a genuinely novel architecture where generation-grade reasoning is required to even understand the diff.
+- Prices (per MTok in/out, 2026-07): `haiku` $1/$5 · `sonnet` $2/$10 intro (**$3/$15 from 2026-09-01 — re-audit this table ~Aug 25**) · `opus` $5/$25 · `fable` $10/$50 (+~30% tokenizer). Aliases: `haiku`=Haiku 4.5 · `sonnet`=Sonnet 5 · `opus`=Opus 4.8 · `fable`=Fable 5.
+- **Enforcement is mechanical, not discipline:** every dispatch names the model, and role-pinned models live IN the role's skill (the grader pin lives in vision-verify). A real session's tier table said `grader → haiku` and the dispatch still ran Sonnet (~218k tokens, the biggest line item) — a locked table enforced by memory isn't locked.
+- **Diff-size router:** a ≤~200-line single-task, non-money/auth/concurrency change gets ONE review (skip the per-task + final double-read — they'd read the same lines); `<50 LOC` mechanical fixes can go `haiku`-implementer + one `sonnet` review. Reserve the two-tier review for multi-task branches where the final adds cross-task integration coverage.
 - **Right-size the task, not just the model.** Before a read-a-file / hand-a-file-to-a-subagent step, check the size — if it's big, the task is "grep/jq/node the span", never "Read the whole file" (a `haiku` scout handed a 242k-token log just fails). Drop+retrieve at the task level: the controller holds the plan + conclusions; files/greps hold the bytes.
+- **Batch the grade wave when nothing blocks on it:** vision-grade fans and other fire-and-forget verification can ride the Batch API (50% off) — a human gate follows anyway, so the async latency is invisible. Never batch interactive stages (recon feeding a live plan, the implementer you're waiting on).
 
 ### Output contracts (the 5× slice)
 
