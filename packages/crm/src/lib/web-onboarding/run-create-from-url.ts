@@ -40,6 +40,18 @@ import type { LimitDecision } from "@/lib/billing/limits";
 import type { ExtractedBusinessFacts } from "./extraction-prompt";
 import { runR1LandingStep } from "@/lib/landing/r1-landing-step";
 import { applyLandingTemplateForWorkspace } from "@/lib/landing/apply-landing-template";
+import { isVisionVerifyOn } from "@/lib/web-build/policy";
+import {
+  visionVerifyPage,
+  buildVisionCheckLog,
+  type VisionCheckResult,
+} from "@/lib/vision/verify-page";
+import {
+  shouldGenerationVerify,
+  buildGenerationVisionGoal,
+  GENERATION_RUBRIC,
+} from "@/lib/vision/generation-gate";
+import { logEvent } from "@/lib/observability/log";
 
 export type RunDeps = {
   enforceWorkspaceLimit: (args: { primaryOrgId: string | null; ownedWorkspaceCount: number }) => Promise<LimitDecision>;
@@ -494,6 +506,57 @@ export async function runCreateFromUrl(input: RunInput): Promise<RunResult> {
         }
       }
 
+      // 7e. Track B P2 — vision-verify GATE ON GENERATION. After the site is
+      //     fully built (r1 landing step above), and ONLY IF the flag is on,
+      //     screenshot the live public URL and grade it with the same
+      //     fail-soft engine P1 already ships (lib/vision/verify-page.ts).
+      //     ABSOLUTE fail-soft guarantee: generation is the money path — a
+      //     screenshot outage, slow grader, or garbled model output must
+      //     NEVER delay or fail "your site is ready". The whole check is
+      //     wrapped in its own try/catch + a 10s race-timeout fallback
+      //     (shorter than P1's copilot-turn 15s since this sits in the
+      //     middle of the build SSE stream, not a side-channel), and
+      //     `visionCheck` is only attached to the `done` payload below when
+      //     the check actually produced a result.
+      let visionCheck: VisionCheckResult | undefined;
+      if (result.workspace_id && result.public_urls?.home) {
+        const flagOn = isVisionVerifyOn({ SF_VISION_VERIFY: process.env.SF_VISION_VERIFY });
+        if (shouldGenerationVerify(flagOn)) {
+          const startedAt = Date.now();
+          let timer: ReturnType<typeof setTimeout> | undefined;
+          try {
+            visionCheck = await Promise.race([
+              visionVerifyPage(
+                result.public_urls.home,
+                buildGenerationVisionGoal(facts.business_name),
+                GENERATION_RUBRIC,
+              ),
+              new Promise<VisionCheckResult>((resolve) => {
+                timer = setTimeout(() => resolve({ pass: true, gaps: [], skipped: "timeout" }), 10_000);
+              }),
+            ]);
+          } catch {
+            visionCheck = undefined;
+          } finally {
+            clearTimeout(timer);
+          }
+
+          try {
+            const record = buildVisionCheckLog({
+              orgId: result.workspace_id,
+              fired: true,
+              verdict: visionCheck,
+              durationMs: Date.now() - startedAt,
+              triggerTool: "generation",
+              triggerSlot: null,
+            });
+            logEvent("vision_check", record, { orgId: result.workspace_id, severity: "info" });
+          } catch {
+            // Logging must never affect the build.
+          }
+        }
+      }
+
       // 8. Emit the granular progress events the UI listens for. createFull-
       //    Workspace is atomic from our perspective (no internal callbacks),
       //    so the three events fire in fast succession. The user briefly sees
@@ -562,6 +625,7 @@ export async function runCreateFromUrl(input: RunInput): Promise<RunResult> {
         slug: result.slug,
         dashboardUrl: `/clients/${result.slug}/ready`,
         publicHomeUrl: result.public_urls?.home,
+        ...(visionCheck ? { visionCheck } : {}),
         ...(input.includeClaimGrant
           ? {
               ws_id: result.workspace_id,
