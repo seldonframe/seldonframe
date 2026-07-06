@@ -15,6 +15,7 @@ import { MessageCircle, Paperclip, Send, Sparkles, X } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Textarea } from "@/components/ui/textarea";
 import { ChatMarkdown } from "@/components/chat-markdown";
+import { computeDevicePreview, type DeviceMode } from "@/lib/copilot/device-preview";
 
 type SeldonChatProps = {
   enabled: boolean;
@@ -145,6 +146,10 @@ export function SeldonChat({ enabled, previewUrl, hideLauncher }: SeldonChatProp
   const [isDraggingFile, setDraggingFile] = useState(false);
   const containerRef = useRef<HTMLDivElement>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
+  const [previewDevice, setPreviewDevice] = useState<DeviceMode>("desktop");
+  const previewPaneRef = useRef<HTMLDivElement | null>(null);
+  const [paneSize, setPaneSize] = useState({ width: 0, height: 0 });
+  const showTwoPane = Boolean(previewUrl);
 
   useEffect(() => {
     if (!open) return;
@@ -187,6 +192,19 @@ export function SeldonChat({ enabled, previewUrl, hideLauncher }: SeldonChatProp
       window.removeEventListener("seldonchat:open", handleOpen);
     };
   }, [enabled]);
+
+  // Device preview toggle — measure the scaling area (not the toggle bar)
+  // so computeDevicePreview can scale the iframe to the true desktop/mobile
+  // viewport width instead of the pane's native ~480px in-panel width.
+  useEffect(() => {
+    const el = previewPaneRef.current;
+    if (!el || typeof ResizeObserver === "undefined") return;
+    const ro = new ResizeObserver((entries) => {
+      for (const e of entries) setPaneSize({ width: e.contentRect.width, height: e.contentRect.height });
+    });
+    ro.observe(el);
+    return () => ro.disconnect();
+  }, [open, showTwoPane]);
 
   // Hotfix H3 — cycle the pending status phrase every ~2.5s while a turn is
   // in flight; stop and reset to the first phrase as soon as it resolves.
@@ -328,8 +346,6 @@ export function SeldonChat({ enabled, previewUrl, hideLauncher }: SeldonChatProp
   if (!enabled) {
     return null;
   }
-
-  const showTwoPane = Boolean(previewUrl);
 
   return (
     <div ref={containerRef} className="fixed bottom-5 left-5 z-40 print:hidden">
@@ -640,13 +656,35 @@ export function SeldonChat({ enabled, previewUrl, hideLauncher }: SeldonChatProp
           </div>
 
           {showTwoPane ? (
-            <div className="hidden min-w-0 flex-1 lg:block">
-              <iframe
-                key={previewNonce}
-                src={previewNonce ? `${previewUrl}?v=${previewNonce}` : previewUrl ?? undefined}
-                title="Live workspace preview"
-                className="h-full w-full border-0"
-              />
+            <div className="hidden min-w-0 flex-1 lg:flex lg:flex-col">
+              <div className="flex items-center justify-center gap-1 border-b border-border py-1.5">
+                {(["desktop", "mobile"] as const).map((m) => (
+                  <button
+                    key={m}
+                    type="button"
+                    onClick={() => setPreviewDevice(m)}
+                    className={`rounded px-2.5 py-0.5 text-xs transition-colors ${
+                      previewDevice === m ? "bg-muted font-medium text-foreground" : "text-muted-foreground hover:text-foreground"
+                    }`}
+                  >
+                    {m === "desktop" ? "Desktop" : "Mobile"}
+                  </button>
+                ))}
+              </div>
+              <div ref={previewPaneRef} className="relative min-h-0 flex-1 overflow-hidden bg-muted/20">
+                {(() => {
+                  const dp = computeDevicePreview(paneSize.width, paneSize.height, previewDevice);
+                  return (
+                    <iframe
+                      key={previewNonce}
+                      src={previewNonce ? `${previewUrl}?v=${previewNonce}` : previewUrl ?? undefined}
+                      title="Live workspace preview"
+                      style={{ width: dp.width, height: dp.height, transform: `scale(${dp.scale})`, transformOrigin: "top left" }}
+                      className="border-0"
+                    />
+                  );
+                })()}
+              </div>
             </div>
           ) : null}
         </div>
