@@ -30,7 +30,8 @@ import { capResponse, COPILOT_PERSONA } from "@/lib/agents/copilot/cap";
 import { buildDesignChips, type DesignChipsResult } from "@/lib/agents/copilot/design-chips";
 import type { StockPhoto } from "@/lib/media/stock-search";
 import { buildWorkspaceUrls } from "@/lib/billing/anonymous-workspace";
-import { shouldVisionVerify, visionVerifyPage, type VisionCheckResult } from "@/lib/vision/verify-page";
+import { shouldVisionVerify, visionVerifyPage, buildVisionCheckLog, type VisionCheckResult } from "@/lib/vision/verify-page";
+import { logEvent } from "@/lib/observability/log";
 
 export const runtime = "nodejs";
 
@@ -159,28 +160,80 @@ export async function POST(request: NextRequest) {
   // backed by actually seeing the result. Flag-gated + fail-soft: wrapped
   // in its own try/catch + hard timeout, and `visionCheck` is only attached
   // when the check actually ran — any error here must never fail the turn.
+  //
+  // Observability: emit a `vision_check` structured log (same convention as
+  // `media_update` via lib/observability/log.ts's logEvent) whenever a
+  // preview-busting edit happened this turn — flag ON records fired:true +
+  // the verdict, flag OFF records fired:false, making both "did it run" and
+  // "is the flag on" visible in Vercel logs. Logging itself is wrapped in
+  // its own try/catch so it can never throw or slow the reply.
   let visionCheck: VisionCheckResult | undefined;
   try {
-    if (shouldVisionVerify(toolEvents, isVisionVerifyOn({ SF_VISION_VERIFY: process.env.SF_VISION_VERIFY }))) {
-      const org = await db
-        .select({ slug: organizations.slug })
-        .from(organizations)
-        .where(eq(organizations.id, orgId))
-        .limit(1)
-        .then((rows) => rows[0] ?? null);
+    const flagOn = isVisionVerifyOn({ SF_VISION_VERIFY: process.env.SF_VISION_VERIFY });
+    const editHappened = shouldVisionVerify(toolEvents, true);
 
-      if (org?.slug) {
-        const publicUrl = buildWorkspaceUrls(org.slug, WORKSPACE_BASE_DOMAIN, orgId).home;
-        let timer: ReturnType<typeof setTimeout> | undefined;
+    if (editHappened) {
+      const triggerCall = result.toolCalls.find((call) =>
+        /^(edit_|update_|move_|delete_|add_|undo_)/.test(call.name),
+      );
+      const triggerResult = triggerCall
+        ? result.toolResults.find((r) => r.toolCallId === triggerCall.id)
+        : undefined;
+      const triggerOutput = triggerResult?.output as { slot?: string } | undefined;
+      const triggerTool = triggerCall?.name ?? null;
+      const triggerSlot = typeof triggerOutput?.slot === "string" ? triggerOutput.slot : null;
+
+      if (!flagOn) {
         try {
-          visionCheck = await Promise.race([
-            visionVerifyPage(publicUrl, message, SITE_RUBRIC),
-            new Promise<VisionCheckResult>((resolve) => {
-              timer = setTimeout(() => resolve({ pass: true, gaps: [], skipped: "timeout" }), VISION_VERIFY_TIMEOUT_MS);
-            }),
-          ]);
+          const record = buildVisionCheckLog({
+            orgId,
+            fired: false,
+            durationMs: 0,
+            triggerTool,
+            triggerSlot,
+          });
+          logEvent("vision_check", record, { orgId, severity: "info" });
+        } catch {
+          // Logging must never affect the reply.
+        }
+      } else {
+        const startedAt = Date.now();
+        try {
+          const org = await db
+            .select({ slug: organizations.slug })
+            .from(organizations)
+            .where(eq(organizations.id, orgId))
+            .limit(1)
+            .then((rows) => rows[0] ?? null);
+
+          if (org?.slug) {
+            const publicUrl = buildWorkspaceUrls(org.slug, WORKSPACE_BASE_DOMAIN, orgId).home;
+            let timer: ReturnType<typeof setTimeout> | undefined;
+            try {
+              visionCheck = await Promise.race([
+                visionVerifyPage(publicUrl, message, SITE_RUBRIC),
+                new Promise<VisionCheckResult>((resolve) => {
+                  timer = setTimeout(() => resolve({ pass: true, gaps: [], skipped: "timeout" }), VISION_VERIFY_TIMEOUT_MS);
+                }),
+              ]);
+            } finally {
+              clearTimeout(timer);
+            }
+          }
         } finally {
-          clearTimeout(timer);
+          try {
+            const record = buildVisionCheckLog({
+              orgId,
+              fired: true,
+              verdict: visionCheck,
+              durationMs: Date.now() - startedAt,
+              triggerTool,
+              triggerSlot,
+            });
+            logEvent("vision_check", record, { orgId, severity: "info" });
+          } catch {
+            // Logging must never affect the reply.
+          }
         }
       }
     }

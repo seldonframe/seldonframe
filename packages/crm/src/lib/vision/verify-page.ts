@@ -230,3 +230,39 @@ export async function visionVerifyPage(
   const verdict = await gradeScreenshot(rendered.base64, rendered.mediaType, goal, rubric, deps);
   return verdict;
 }
+
+export type VisionCheckLogInput = {
+  orgId: string;
+  fired: boolean;
+  verdict?: VisionCheckResult;
+  durationMs: number;
+  triggerTool?: string | null;
+  triggerSlot?: string | null;
+};
+
+/**
+ * Pure builder for the vision-verify structured log record — same shape/
+ * conventions as the `media_update` log (lib/agents/copilot/tools.ts via
+ * lib/observability/log.ts's logEvent): `{event, at, severity, org_id, ...}`.
+ * Kept pure and DI-free (no Date.now() side effect beyond `at`) so it's
+ * trivially unit-testable. The route emits this via the SAME logEvent
+ * helper, wrapped in try/catch, so a logging failure can never throw or
+ * slow the copilot reply — see observability report for the emit site.
+ */
+export function buildVisionCheckLog(input: VisionCheckLogInput): Record<string, unknown> {
+  const { orgId, fired, verdict, durationMs, triggerTool, triggerSlot } = input;
+  return {
+    event: "vision_check",
+    at: new Date().toISOString(),
+    severity: "info",
+    org_id: orgId,
+    fired,
+    pass: verdict?.pass ?? null,
+    gaps_count: verdict?.gaps?.length ?? 0,
+    gaps: verdict?.gaps ?? [],
+    skipped: verdict?.skipped ?? null,
+    duration_ms: durationMs,
+    trigger_tool: triggerTool ?? null,
+    trigger_slot: triggerSlot ?? null,
+  };
+}
