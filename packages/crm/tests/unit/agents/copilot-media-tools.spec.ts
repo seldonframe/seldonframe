@@ -21,7 +21,11 @@ import type {
 import type { ToolExecuteContext } from "../../../src/lib/agents/tools";
 import type { StockPhoto } from "../../../src/lib/media/stock-search";
 import type { ResolveMediaResult } from "../../../src/lib/media/resolve-url";
-import type { SetR1MediaResult, SetR1MediaInput } from "../../../src/lib/landing/set-r1-media";
+import type {
+  SetR1MediaResult,
+  SetR1MediaInput,
+} from "../../../src/lib/landing/set-r1-media";
+import type { R1LandingPayload } from "../../../src/lib/landing/r1-payload-prompt";
 
 function fakeCtx(overrides: Partial<ToolExecuteContext> = {}): ToolExecuteContext {
   return {
@@ -69,7 +73,50 @@ function makeDeps(overrides: Partial<MediaToolsDeps> = {}): MediaToolsDeps {
     clearR1Media: mock.fn(
       async (_orgId: string, slot: string): Promise<SetR1MediaResult> => ({ ok: true, slot }),
     ),
+    loadR1Payload: mock.fn(
+      async (_orgId: string) => ({
+        payload: fakePayload(),
+        archetype: "bold-urgency" as const,
+      }),
+    ),
     ...overrides,
+  };
+}
+
+function fakePayload(): R1LandingPayload {
+  return {
+    hero: {
+      archetype: "bold-urgency",
+      businessName: "Acme Plumbing",
+      tagline: "We fix it fast.",
+      subhead: "24/7 emergency service.",
+      primaryCTA: { label: "Call now", href: "tel:5551234567" },
+      trustBadges: [{ label: "Licensed" }],
+      heroImage: { src: "https://example.com/old-hero.jpg", alt: "old hero" },
+    },
+    services: {
+      archetype: "bold-urgency",
+      heading: "Our services",
+      services: [
+        { id: "svc-1", name: "Drain cleaning", description: "We clear drains." },
+        { id: "svc-2", name: "Emergency Electrical Repair", description: "24/7 electrical." },
+      ],
+    },
+    testimonials: {
+      archetype: "bold-urgency",
+      heading: "What customers say",
+      testimonials: [],
+    },
+    faq: {
+      archetype: "bold-urgency",
+      heading: "FAQ",
+      items: [],
+    },
+    footer: {
+      archetype: "bold-urgency",
+      businessName: "Acme Plumbing",
+      phone: "5551234567",
+    },
   };
 }
 
@@ -387,6 +434,70 @@ describe("delete_media", () => {
     assert.equal(empty.success, false);
     const ok = tool.inputSchema.safeParse({ slot: "hero_image" });
     assert.equal(ok.success, true);
+  });
+});
+
+describe("list_media_slots", () => {
+  test("returns the labeled slot map, reading ctx.orgId only (no orgId in schema)", async () => {
+    const tool = getTool("list_media_slots");
+    const deps = makeDeps();
+    const ctx = fakeCtx();
+
+    assert.deepEqual(Object.keys((tool.inputSchema as { shape?: object }).shape ?? {}), []);
+
+    const result = (await (
+      tool.execute as unknown as (
+        input: unknown,
+        ctx: ToolExecuteContext,
+        deps: MediaToolsDeps,
+      ) => Promise<unknown>
+    )({}, ctx, deps)) as {
+      ok: boolean;
+      slots: { slot: string; label: string; hasImage: boolean }[];
+    };
+
+    const loadMock = deps.loadR1Payload as unknown as ReturnType<typeof mock.fn>;
+    assert.equal(loadMock.mock.callCount(), 1);
+    assert.equal(loadMock.mock.calls[0]!.arguments[0], "org-real-123");
+
+    assert.equal(result.ok, true);
+    assert.equal(result.slots.length, 5); // 3 hero slots + 2 services
+    assert.deepEqual(
+      result.slots.map((s) => s.slot),
+      [
+        "hero_image",
+        "hero_background",
+        "hero_background_video",
+        "service_photo:0",
+        "service_photo:1",
+      ],
+    );
+    const emergencySlot = result.slots.find((s) => s.label === "Emergency Electrical Repair");
+    assert.ok(emergencySlot, "the service label must resolve by name, not index");
+    assert.equal(emergencySlot!.slot, "service_photo:1");
+    assert.equal(emergencySlot!.hasImage, false);
+
+    const heroSlot = result.slots.find((s) => s.slot === "hero_image");
+    assert.equal(heroSlot!.hasImage, true);
+  });
+
+  test("surfaces a missing landing page honestly (no throw)", async () => {
+    const deps = makeDeps({
+      loadR1Payload: mock.fn(async () => null),
+    });
+    const tool = getTool("list_media_slots");
+    const ctx = fakeCtx();
+
+    const result = (await (
+      tool.execute as unknown as (
+        input: unknown,
+        ctx: ToolExecuteContext,
+        deps: MediaToolsDeps,
+      ) => Promise<unknown>
+    )({}, ctx, deps)) as { ok: boolean; error?: string };
+
+    assert.equal(result.ok, false);
+    assert.match(result.error ?? "", /no_landing_exists/);
   });
 });
 

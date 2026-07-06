@@ -53,8 +53,11 @@ export interface SetR1MediaDeps {
 }
 
 /** Default DI: loads the r1 row straight from landing_pages, saves via the
- *  shared saveLandingPayload upsert, revalidates the public /w/[slug] path. */
-async function defaultLoad(
+ *  shared saveLandingPayload upsert, revalidates the public /w/[slug] path.
+ *  Exported (as `defaultLoad`) so other read-only callers — e.g. the
+ *  list_media_slots copilot tool — can load the payload the exact same way
+ *  setR1Media does, without duplicating the row/slug/status lookup. */
+export async function defaultLoad(
   orgId: string,
 ): Promise<{ payload: R1LandingPayload; archetype: AestheticArchetypeId } | null> {
   const [row] = await db
@@ -240,4 +243,51 @@ export async function clearR1Media(
   await deps.save(orgId, nextPayload, archetype);
   deps.revalidate(orgId);
   return { ok: true, slot };
+}
+
+/** A single addressable media slot in an r1 payload, labeled for a human
+ *  (and an LLM) to resolve a location like "the photo above Emergency
+ *  Electrical Repair" to the exact slot id — instead of guessing an index. */
+export interface MediaSlotInfo {
+  slot: string;
+  label: string;
+  hasImage: boolean;
+}
+
+/**
+ * Pure: builds the full labeled slot map for an r1 payload, in visual order
+ * (hero slots first, then one entry per service in array order — array order
+ * IS display order). Defensive against missing/partial payloads: never
+ * throws, degrades to `hasImage:false` for absent fields and to hero-only
+ * when there are no services.
+ */
+export function buildMediaSlotMap(payload: R1LandingPayload): MediaSlotInfo[] {
+  const slots: MediaSlotInfo[] = [
+    {
+      slot: "hero_image",
+      label: "Hero photo",
+      hasImage: Boolean(payload.hero?.heroImage?.src),
+    },
+    {
+      slot: "hero_background",
+      label: "Hero background image",
+      hasImage: Boolean(payload.hero?.backgroundImage?.src),
+    },
+    {
+      slot: "hero_background_video",
+      label: "Hero background video",
+      hasImage: Boolean(payload.hero?.backgroundVideo?.src),
+    },
+  ];
+
+  const services = payload.services?.services ?? [];
+  services.forEach((service, i) => {
+    slots.push({
+      slot: `service_photo:${i}`,
+      label: service?.name ?? `Service ${i + 1}`,
+      hasImage: Boolean(service?.photo?.src),
+    });
+  });
+
+  return slots;
 }

@@ -68,6 +68,8 @@ import {
 import {
   setR1Media as setR1MediaDefault,
   clearR1Media as clearR1MediaDefault,
+  defaultLoad as loadR1PayloadDefault,
+  buildMediaSlotMap,
   type SetR1MediaInput,
   type SetR1MediaResult,
 } from "@/lib/landing/set-r1-media";
@@ -1057,6 +1059,7 @@ export type MediaToolsDeps = {
   resolveExternalMedia: (url: string, kind: MediaKind) => Promise<ResolveMediaResult>;
   setR1Media: (orgId: string, input: SetR1MediaInput) => Promise<SetR1MediaResult>;
   clearR1Media: (orgId: string, slot: string) => Promise<SetR1MediaResult>;
+  loadR1Payload: typeof loadR1PayloadDefault;
 };
 
 const defaultMediaToolsDeps: MediaToolsDeps = {
@@ -1064,6 +1067,7 @@ const defaultMediaToolsDeps: MediaToolsDeps = {
   resolveExternalMedia: resolveExternalMediaDefault,
   setR1Media: setR1MediaDefault,
   clearR1Media: clearR1MediaDefault,
+  loadR1Payload: loadR1PayloadDefault,
 };
 
 const MEDIA_SLOT_DESCRIPTION =
@@ -1123,6 +1127,63 @@ const searchMedia: AgentTool<z.infer<typeof searchMediaInput>> & {
     }),
 };
 
+// ─── list_media_slots ────────────────────────────────────────────────────────
+//
+// Media-targeting fix: gives the model a LABELED slot map instead of making
+// it guess service_photo:<index> indices from a natural-language location
+// like "the photo above Emergency Electrical Repair". READ-ONLY — reads
+// ctx.orgId's r1 payload the exact same way setR1Media does (loadR1Payload)
+// and returns buildMediaSlotMap's pure labeling, nothing is written. The
+// `list_` prefix intentionally does NOT match the turn route's preview-bust
+// regex (^(edit_|update_|move_|delete_|add_|undo_)/, see api/copilot/turn/
+// route.ts) — this tool must never be treated as a mutating call.
+
+const listMediaSlotsInput = z.object({});
+
+const listMediaSlots: AgentTool<z.infer<typeof listMediaSlotsInput>> & {
+  execute: (
+    input: z.infer<typeof listMediaSlotsInput>,
+    ctx: ToolExecuteContext,
+    deps?: MediaToolsDeps,
+  ) => ReturnType<AgentTool<z.infer<typeof listMediaSlotsInput>>["execute"]>;
+} = {
+  name: "list_media_slots",
+  description:
+    "List the site's image slots with human labels + whether each already has an image. ALWAYS call this before update_media to resolve a location like 'the photo above Emergency Electrical Repair' to the exact slot — never guess an index.",
+  inputSchema: listMediaSlotsInput,
+  jsonSchema: {
+    type: "object",
+    properties: {},
+    required: [],
+  },
+  // ctx.orgId is the ONLY source of the org to read — no orgId-shaped field
+  // in this tool's schema at all, same rule as update_media/delete_media.
+  execute: (
+    _input,
+    ctx: ToolExecuteContext,
+    deps: MediaToolsDeps = defaultMediaToolsDeps,
+  ) =>
+    safe(async () => {
+      const loaded = await deps.loadR1Payload(ctx.orgId);
+      if (!loaded) {
+        return {
+          ok: false as const,
+          error: "no_landing_exists",
+          message: "This workspace doesn't have a landing page yet.",
+        };
+      }
+
+      const slots = buildMediaSlotMap(loaded.payload);
+
+      return {
+        ok: true as const,
+        slots,
+        message:
+          "Here are the site's image slots — use the exact slot id with update_media, matched by label.",
+      };
+    }),
+};
+
 const updateMediaInput = z.object({
   slot: z.string().min(1, "slot is required"),
   url: z.string().min(1, "url is required"),
@@ -1139,7 +1200,7 @@ const updateMedia: AgentTool<z.infer<typeof updateMediaInput>> & {
 } = {
   name: "update_media",
   description:
-    "Set an image or background video on the site from a URL (a stock-photo URL from search_media's results, or any image/video URL the operator gives you). Validates the URL is safe and re-hosts images before applying. Pass kind:'video' (and slot:'hero_background_video') for a background video; otherwise defaults to image. Use the slot vocabulary: hero_background (main background image, the default for \"add/change the background\"), hero_background_video, hero_image (foreground hero photo), service_photo:<index>.",
+    "Set an image or background video on the site from a URL (a stock-photo URL from search_media's results, or any image/video URL the operator gives you). Validates the URL is safe and re-hosts images before applying. Pass kind:'video' (and slot:'hero_background_video') for a background video; otherwise defaults to image. Use the slot vocabulary: hero_background (main background image, the default for \"add/change the background\"), hero_background_video, hero_image (foreground hero photo), service_photo:<index>. Call list_media_slots first to get the valid slots + labels; never guess a service_photo index.",
   inputSchema: updateMediaInput,
   jsonSchema: {
     type: "object",
@@ -1213,7 +1274,7 @@ const updateMedia: AgentTool<z.infer<typeof updateMediaInput>> & {
         return {
           ok: false as const,
           error: setResult.error,
-          message: `Couldn't apply that to ${input.slot} (${setResult.error}).`,
+          message: `Couldn't set ${input.slot}: ${setResult.error}. Call list_media_slots to see the valid slots.`,
         };
       }
 
@@ -1296,6 +1357,7 @@ export function buildCopilotTools(): AgentTool[] {
     disableModule as AgentTool,
     pinCard as AgentTool,
     searchMedia as AgentTool,
+    listMediaSlots as AgentTool,
     updateMedia as AgentTool,
     deleteMedia as AgentTool,
   ];
