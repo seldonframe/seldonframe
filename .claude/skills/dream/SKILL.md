@@ -28,11 +28,19 @@ learns garbage. Never weaken the verifier to make a cluster go away.
 ## Steps
 
 ### 1. Collect
-Query the last 24h of reflection events:
-`collectRecentReflections(<now-24h ISO>)` (`packages/crm/src/lib/vision/collect-reflections.ts`).
-Split into `failures` (`pass=false && !skipped`) and the denominator (`total`
-non-skipped). Compute `passRate = 1 - failures/total`. If `failures.length === 0`,
-STOP after logging the metric (a clean day — nothing to propose).
+Pull the last 24h of reflection events from the **CRON_SECRET-authed export
+endpoint** (so this run needs NO database credentials — only the secret):
+```
+curl -s -H "x-cron-secret: $CRON_SECRET" \
+  "https://app.seldonframe.com/api/cron/dream-collect?sinceHours=24"
+```
+It returns `{ since, window_hours, summary: { total, failures, skipped, pass_rate }, count, reflections: [...] }`.
+The server already computes the metric (`summary`) via `summarizeReflections`;
+`reflections` are the raw rows to cluster. If `CRON_SECRET` is unset the endpoint
+401s — report that and stop. If `summary.failures === 0`, log the metric and STOP
+(a clean day — nothing to propose). (`CRON_SECRET` is already set in Vercel; the
+run environment just needs the secret value, not DB access. The underlying query
+is `collectRecentReflections` / `summarizeReflections` in `packages/crm/src/lib/vision/`.)
 
 ### 2. Cluster (fan out — haiku)
 Group `failures` by signature: `trigger_tool` + normalized gap phrasing. For each
