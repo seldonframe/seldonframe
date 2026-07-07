@@ -177,9 +177,21 @@ export async function renderScreenshot(url: string, deps: RenderDeps = {}): Prom
     const cacheBust = Math.floor(Math.random() * 1e9);
     const sep = url.includes("?") ? "&" : "?";
     const target = `${url}${sep}vcb=${cacheBust}`;
+    // Taller viewport (2600 CSS px, was 900): the grader must SEE below the
+    // fold, or any edit to a below-900px element (service photos, the "what we
+    // fix" grid, faq) reads as "not present on this screenshot" — a false
+    // NEGATIVE that tells the operator a successful change failed. Confirmed
+    // 2026-07-07: a service_photo:0 image swap graded pass:false purely because
+    // the card sits below the top 900px; at 2600px the whole service grid is
+    // captured and legible.
+    // NOT microlink fullPage: a full 14k-px page downscales (Anthropic caps the
+    // long edge ~1568px) to an illegible ~280px-wide sliver — worse than a crop.
+    // 2600px covers hero + service grid and stays legible after downscale
+    // (~772px wide). Deep footer/faq grading is a follow-on (region-aware or
+    // downscale-in-code capture) — see the vision-verify accuracy follow-up.
     const api =
       `${MICROLINK_ENDPOINT}?url=${encodeURIComponent(target)}` +
-      "&screenshot=true&meta=false&viewport.width=1280&viewport.height=900&waitUntil=networkidle2";
+      "&screenshot=true&meta=false&viewport.width=1280&viewport.height=2600&waitUntil=networkidle2";
     const headers = apiKey ? { "x-api-key": apiKey } : undefined;
 
     const metaResponse = await fetchImpl(api, { headers, signal: controller.signal });
