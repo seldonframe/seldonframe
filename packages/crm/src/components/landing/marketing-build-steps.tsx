@@ -35,7 +35,7 @@ const STEPS: readonly Step[] = [
   {
     num: "1",
     title: "Paste a URL — or describe the business.",
-    body: "Your client's website, or a quick Google Maps description. We'll build from either.",
+    body: "Your website, or a quick description of your business. We build from either.",
     mock: <ScanMock />,
   },
   {
@@ -55,14 +55,14 @@ const STEPS: readonly Step[] = [
   },
   {
     num: "3",
-    title: "Hand it over — or keep it for yourself.",
-    body: "Agencies resell it under their own brand. SMBs run it directly. Either way, you own it.",
+    title: "Go live and let it run.",
+    body: "Your site, booking, and AI agent go live on your own domain — answering customers and booking jobs while you work. You own all of it.",
     mock: (
       <ArriveMock
         rows={[
           { label: "Custom domain connected", emphasis: true },
-          "Your branding applied",
-          "Hands-free",
+          "Answering customers 24/7",
+          "You own everything",
         ]}
       />
     ),
@@ -90,8 +90,8 @@ export function MarketingBuildSteps() {
             </em>
           </h2>
           <p className="mt-4 max-w-[54ch] text-[clamp(15.5px,1.9vw,18px)] leading-[1.55] text-[#6E665A]">
-            Whether you&rsquo;re setting up your own front office or onboarding a client,
-            the flow is identical — and it takes about 3 minutes.
+            Your whole front office — website, booking, CRM, and a 24/7 AI agent — built
+            from a single link and ready for customers. No code, no setup fee, no waiting.
           </p>
 
           {/* "What you need" beat — BYOK as a qualifier, not a barrier. */}

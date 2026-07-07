@@ -24,14 +24,12 @@ import { Check } from "lucide-react";
 
 // Everything that's included in the flat $29/mo (the whole platform).
 const INCLUDED: readonly string[] = [
-  "Website + landing pages on your own domain",
-  "Booking page (Cal.diy) tied to live availability",
-  "CRM — contacts, deals, tasks, notes",
-  "Intake forms wired to the CRM",
-  "24/7 AI agent across voice, SMS, web chat & email",
-  "Build ANY agent in the Studio — connect external tools",
-  "Whitelabel + resell each workspace to clients",
-  "Own + export everything (AGPL — no lock-in)",
+  "A website on your own domain, customized to your business — live and taking customers in minutes.",
+  "A CRM and pipeline, so every lead lands in one place and you always know who to call next.",
+  "A booking page tied to your real calendar, so customers book themselves while you're on the job.",
+  "A lead form wired straight to your CRM, so no inquiry ever slips through the cracks.",
+  "A website chatbot built in, so your site answers questions and books work for you 24/7.",
+  "Add any AI agent to take the busywork off your plate — just tell it what you want, no code.",
 ];
 
 export function LandingMarketingPricingSection() {
@@ -59,9 +57,8 @@ export function LandingMarketingPricingSection() {
             </em>
           </h2>
           <p className="mx-auto mt-4 max-w-[56ch] text-[16px] leading-[1.55] text-[#6E665A]">
-            $29 a month flat — less than a part-time hire, and a single booked job pays for
-            the year. No metered bills, no per-seat tax, no surprise invoices. Build it free,
-            cancel anytime.
+            No metered bills, no per-seat tax, no surprise invoices. Build it free, cancel
+            anytime.
           </p>
         </div>
 
@@ -81,7 +78,8 @@ export function LandingMarketingPricingSection() {
               SeldonFrame
             </h3>
             <p className="mt-1.5 text-[13.5px] leading-[1.5] text-[#6E665A]">
-              The whole platform — build it for your business, or sell it to your clients.
+              Everything you need to get customers and get paid — in one place, on one flat
+              bill.
             </p>
 
             <div className="mt-5 flex items-baseline gap-1.5">
@@ -92,6 +90,9 @@ export function LandingMarketingPricingSection() {
             </div>
             <p className="mt-2 text-[13px] leading-[1.5] text-[#6E665A]">
               Unlimited workspaces · cancel anytime
+            </p>
+            <p className="mt-1 text-[13px] font-[500] text-[#221D17]">
+              One booked job pays for the year.
             </p>
 
             <Link
@@ -116,11 +117,14 @@ export function LandingMarketingPricingSection() {
                   </li>
                 ))}
               </ul>
-              <p className="mt-5 text-[12.5px] leading-[1.5] text-[#6E665A]">
-                The voice receptionist is <strong className="font-[600] text-[#221D17]">included</strong> — not a paid
-                add-on. Your agents run on your own AI key (and Twilio for calls/texts), billed by the provider at
-                cost. <strong className="font-[600] text-[#221D17]">We never mark it up — that&rsquo;s why it&rsquo;s a flat
-                $29, not a metered bill that punishes growth.</strong>
+              <p className="mt-5 rounded-[12px] border border-[rgba(0,137,123,.25)] bg-[rgba(0,137,123,.08)] px-4 py-3 text-[13.5px] leading-[1.5] text-[#221D17]">
+                Want a voice agent that answers every call? A review agent that turns happy
+                customers into 5-star Google reviews? A speed-to-lead agent that texts back
+                missed calls before they hire someone else? Add them in a click.
+              </p>
+              <p className="mt-4 text-[12.5px] leading-[1.5] text-[#6E665A]">
+                Your agents run on your own AI key (and Twilio for calls/texts), billed by
+                the provider at cost.
               </p>
             </div>
           </article>
@@ -137,14 +141,14 @@ export function LandingMarketingPricingSection() {
               We only make money when you do.
             </h3>
             <p className="mt-3 text-[13.5px] leading-[1.55] text-[#6E665A]">
-              On top of the flat $29, we take 2% of revenue —{" "}
-              <strong className="font-[600] text-[#221D17]">only when SeldonFrame is your sales channel</strong>{" "}
-              (a marketplace sale, a booking, an accepted proposal). When the work doesn&rsquo;t flow
-              through us, the fee is zero.
+              SeldonFrame doesn&rsquo;t just build your site — it helps you send proposals,
+              take payments, and close the deal in the same place you booked the job. When
+              money comes in through SeldonFrame, we keep a flat 2%. That&rsquo;s the only
+              time we charge it. Get paid any other way, and we take nothing.
             </p>
 
             <p className="mt-5 rounded-[12px] border border-[rgba(34,29,23,.08)] bg-[#FFFDFA] px-4 py-3 text-[13px] leading-[1.45] text-[#6E665A]">
-              Only on what you sell through SeldonFrame — sell anywhere else and we take nothing.
+              You keep 98% of every dollar we help you collect — and 100% of everything else.
             </p>
 
             <p className="mt-auto pt-5 text-[12.5px] leading-[1.5] text-[#6E665A]">

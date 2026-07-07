@@ -22,8 +22,9 @@
 //     via useReducedMotion() so no motion components mount at all.
 
 import { useEffect, useRef, useState, type ReactNode } from "react";
+import Link from "next/link";
 import { motion, useInView, useReducedMotion } from "framer-motion";
-import { Bot, Calendar, FileText, MessageSquare, Phone, Star, Users } from "lucide-react";
+import { Calendar, FileText, MessageSquare, Phone, Star, Users } from "lucide-react";
 
 // Shared spring-ish ease used everywhere (the brief's cubic-bezier).
 const EASE = [0.22, 1, 0.36, 1] as const;
@@ -56,7 +57,7 @@ const FEATURES = [
   {
     icon: Phone,
     title: "Missed-call text-back",
-    body: "Can't pick up? It texts them back in under 3 minutes — before they dial the next company.",
+    body: "Can't pick up? It texts them back in seconds — before they dial the next company.",
     mock: <SmsMock />,
   },
   {
@@ -171,15 +172,20 @@ export function MarketingAgents() {
           </span>
         </div>
 
-        {/* Marketplace line — honest framing (templates today, marketplace coming) */}
-        <div className="mt-8 inline-flex items-center gap-2.5 rounded-[14px] border border-[rgba(0,137,123,.30)] bg-[rgba(0,137,123,.10)] px-4 py-3">
-          <span className="inline-flex size-7 shrink-0 items-center justify-center rounded-md border border-[rgba(0,137,123,.35)] bg-[rgba(0,137,123,.20)] text-[#6fc28f]">
-            <Bot size={14} aria-hidden />
-          </span>
-          <p className="m-0 text-[13.5px] leading-[1.5] text-[rgba(246,242,234,.82)]">
-            A growing library of agents to install in one click —{" "}
-            <strong className="font-[500] text-[#FFFDFA]">templates today, a full marketplace coming.</strong>
-          </p>
+        {/* CTAs — browse the marketplace, or build a custom agent in the Studio */}
+        <div className="mt-8 flex flex-wrap gap-3">
+          <Link
+            href="/marketplace"
+            className="inline-flex items-center gap-2 rounded-full bg-[#F6F2EA] px-5 py-3 text-[14px] font-[600] text-[#1F2B24] transition-transform hover:-translate-y-px"
+          >
+            Browse the agent marketplace →
+          </Link>
+          <Link
+            href="/build"
+            className="inline-flex items-center gap-2 rounded-full border border-[rgba(255,255,255,.22)] bg-transparent px-5 py-3 text-[14px] font-[500] text-[rgba(246,242,234,.9)] transition-colors hover:border-[rgba(255,255,255,.4)]"
+          >
+            Or build your own in the Studio →
+          </Link>
         </div>
       </div>
     </section>

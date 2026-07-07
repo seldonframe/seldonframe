@@ -289,8 +289,8 @@ export function MarketingHero({
             }}
             autoComplete="off"
             spellCheck={false}
-            placeholder="https://your-clients-hvac-company.com"
-            aria-label="Paste your client's website URL"
+            placeholder="https://your-hvac-company.com"
+            aria-label="Paste your website URL"
             className="h-14 w-full border-0 bg-transparent font-mono text-[15px] text-[#221D17] caret-[#00897B] outline-none placeholder:text-[#9A9183]"
           />
         </div>
@@ -305,7 +305,7 @@ export function MarketingHero({
             rows={4}
             spellCheck={false}
             placeholder="Family-owned HVAC in Stockton, CA. 24/7 emergency service. Licensed C-20, bonded, insured. 4.8 stars on Google with 412 reviews."
-            aria-label="Describe your client's business"
+            aria-label="Describe your business"
             className="block max-h-60 min-h-[110px] w-full resize-none border-0 bg-transparent font-sans text-[15px] leading-[1.55] tracking-[-0.005em] text-[#221D17] caret-[#00897B] outline-none placeholder:text-[#9A9183]"
           />
         </div>
