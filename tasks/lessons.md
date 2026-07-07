@@ -1949,3 +1949,33 @@ C4 close-out with empirical SLICE 11 data.
 - ~~The locked tier v1: fable at the top for the two judgment roles, opus swappable.~~ (superseded above)
 - **⏰ 2026-08-25: re-audit the tier table** — Sonnet 5 steps from $2/$10 to $3/$15 on 2026-09-01 (gap to Haiku widens 2×→3×); push any borderline sonnet role to haiku before the step.
 - **Live-smoke is now verify-build check #6** (curl changed routes → 200 + DOM sentinel + clean logs) — promoted from the RSC-outage *lesson* to an enforced *gate*; static gates prove it compiles, only a live request proves it runs.
+
+---
+
+## L-XX — Copilot text/structure edit tools write the DEAD `slug='home'` model; live site is `slug='r1'` (never-lies violation)
+
+- **Trigger:** User told SeldonChat "change the headline for 'Max Electrical'". The
+  copilot called `update_section_field` (section=hero, field=headline), which
+  `mutateSectionField`+`renderBlueprint`'d the `slug='home'` general-service-v1
+  blueprint and returned `ok:true` → the model truthfully said "Done ✅". The LIVE
+  SRP site renders from `slug='r1'` (`blueprint_json.payload`, R1 React renderer),
+  so the page never changed. The shipped `vision_check` (reads the real r1 page)
+  correctly returned `pass:false` — surfaced as a contradictory "Heads up, not
+  visible" note AFTER the false "Done".
+- **Root cause:** `LANDING_SLUG = "home"` in `lib/agents/copilot/tools.ts:79`
+  drives `update_section_field` (and the `edit_site`/move/delete/add-section
+  family). Only the MEDIA tools were migrated to r1 (`setR1Media`/`loadR1Payload`,
+  `R1_SLUG='r1'`). This is the **THIRD instance** of the same class:
+  `applyHeroBackground` (slug='home' no-op) and `upload_workspace_image` were the
+  first two, both fixed by routing through `setR1Media`. The text/structure surface
+  was never migrated → every non-media copilot edit is a silent no-op on r1 orgs.
+- **Rule:** (1) The r1 payload (`slug='r1'`, `blueprint_json.payload`) is the ONE
+  authoritative live model. ANY copilot edit tool must read+write it (via the
+  `loadR1Payload`/`saveLandingPayload` seam that media tools use), mapping the r1
+  schema (hero headline == `hero.tagline`, there is NO `hero.headline`). Legacy
+  `slug='home'` writes are dead unless the org genuinely has no r1 page — fall back
+  only then. (2) A tool's `ok:true` must mean "the RENDERED surface changed," not
+  "a DB row was written" — tie success to a read-back/render assertion, and let the
+  `vision_check` GATE the "Done" claim, never trail it. (3) When you migrate a live
+  data model, grep EVERY writer of the old slug in one pass — piecemeal migration
+  (media-only) left a whole tool family lying. See memory [[seldonchat-media-editing]].
