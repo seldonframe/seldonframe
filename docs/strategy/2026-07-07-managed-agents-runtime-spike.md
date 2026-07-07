@@ -108,3 +108,34 @@ Anthropic agent ecosystem, not just our own storefront.
 Decision gate to go further: eval parity, p95 < 3s, cost within ~20% of
 native, and a believable GA path. Any miss → shelve, keep the doc, re-check
 at GA.
+
+## 8. Addendum (2026-07-07): the advisor tool — a runtime COST lever we can adopt without Managed Agents
+
+Anthropic's advisor tool (beta `advisor-tool-2026-03-01`, Messages API) lets a
+cheap executor model consult a stronger advisor mid-generation inside ONE
+request: Sonnet executor + Fable advisor scored ~92% of Fable-solo on
+SWE-bench Pro at ~63% of the price; the Managed Agents orchestrator variant
+(Fable plans, Sonnet workers) hit 96% at 46% on BrowseComp. Unlike the full
+Managed Agents migration, this drops into `executeTurn` TODAY as just a tools[]
+entry — no runtime seam needed.
+
+Why it matters to SF specifically:
+- **BYOK gets cheaper without getting dumber.** Builders' agents could run
+  haiku/sonnet executors with an opus advisor (`max_tokens: 2048` cap,
+  advisor-side `caching` for long threads) — the builder's per-conversation
+  cost drops while plan quality holds. That is "never-taxes" engineering:
+  we cut THEIR bill, not our margin.
+- **Tier-0 voice margin math changes.** The $0.15/min SF-managed tier was
+  unprofitable on an uncached full model ([[voice-deploy-3tier-pricing]]);
+  a cheap executor + rare capped advisor calls is a new point on that curve —
+  re-run the unit economics before the metering money-spec.
+- **Never-lies synergy:** the advisor is a stronger model reviewing the plan
+  mid-turn — a natural companion to our validators/read-back, at a fraction of
+  running the big model end-to-end.
+- Caveats: Anthropic-key conversations only (BYOK-OpenAI/Gemini unaffected);
+  beta header; Fable-as-advisor returns encrypted results (fine — round-trip
+  verbatim); don't nudge Opus executors (measured regression).
+
+Spike task (half-day, independent of §7): flag-gated advisor entry in
+`executeTurn`'s tool array for Anthropic-key orgs, replay the same 10 golden
+conversations, compare eval pass rate + cost per conversation vs current.
