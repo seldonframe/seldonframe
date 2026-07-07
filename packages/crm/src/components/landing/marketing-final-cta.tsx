@@ -29,7 +29,7 @@ export function MarketingFinalCta() {
 
         <p className="mx-auto mt-5 max-w-[50ch] text-[16.5px] leading-[1.55] text-[rgba(246,242,234,.74)]">
           Paste a URL or describe your business. We build the website, booking,
-          AI receptionist, intake, and CRM — all wired together and live in under a minute.
+          AI receptionist, intake, and CRM — all wired together and live in 3 minutes.
           For your business, or your clients&rsquo;.
         </p>
 

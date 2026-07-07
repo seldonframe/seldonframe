@@ -66,13 +66,13 @@ export function MarketingNav() {
         <div className="inline-flex items-center gap-2 md:gap-3">
           <Link
             href="/login"
-            className="inline-flex h-[34px] items-center rounded-full border border-[rgba(34,29,23,.18)] bg-transparent px-4 text-[13.5px] font-medium text-[#6E665A] transition-colors hover:border-[rgba(34,29,23,.28)] hover:text-[#221D17]"
+            className="inline-flex h-[34px] items-center whitespace-nowrap rounded-full border border-[rgba(34,29,23,.18)] bg-transparent px-4 text-[13.5px] font-medium text-[#6E665A] transition-colors hover:border-[rgba(34,29,23,.28)] hover:text-[#221D17]"
           >
             Log in
           </Link>
           <Link
             href="/signup"
-            className="inline-flex h-9 items-center justify-center gap-2 rounded-full bg-[#1F2B24] px-4 text-[13.5px] font-semibold text-[#F6F2EA] shadow-[0_1px_2px_rgba(34,29,23,.10),0_6px_16px_rgba(34,29,23,.10),0_18px_40px_rgba(34,29,23,.06),inset_0_1.5px_0_rgba(255,255,255,.12)] transition-all hover:-translate-y-px hover:shadow-[0_2px_4px_rgba(34,29,23,.12),0_12px_26px_rgba(34,29,23,.14),inset_0_1.5px_0_rgba(255,255,255,.14)] active:translate-y-px focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[#00897B]"
+            className="inline-flex h-9 items-center justify-center gap-2 whitespace-nowrap rounded-full bg-[#1F2B24] px-4 text-[13.5px] font-semibold text-[#F6F2EA] shadow-[0_1px_2px_rgba(34,29,23,.10),0_6px_16px_rgba(34,29,23,.10),0_18px_40px_rgba(34,29,23,.06),inset_0_1.5px_0_rgba(255,255,255,.12)] transition-all hover:-translate-y-px hover:shadow-[0_2px_4px_rgba(34,29,23,.12),0_12px_26px_rgba(34,29,23,.14),inset_0_1.5px_0_rgba(255,255,255,.14)] active:translate-y-px focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[#00897B]"
           >
             <span className="size-1.5 rounded-full bg-[#00897B]" aria-hidden />
             Start for free

@@ -91,7 +91,7 @@ export function MarketingBuildSteps() {
           </h2>
           <p className="mt-4 max-w-[54ch] text-[clamp(15.5px,1.9vw,18px)] leading-[1.55] text-[#6E665A]">
             Whether you&rsquo;re setting up your own front office or onboarding a client,
-            the flow is identical — and it takes under a minute.
+            the flow is identical — and it takes about 3 minutes.
           </p>
 
           {/* "What you need" beat — BYOK as a qualifier, not a barrier. */}
