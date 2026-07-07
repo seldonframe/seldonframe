@@ -55,25 +55,35 @@ export const runtime = "nodejs";
 // template row it created).
 type CreatedSummary = { name: string; trigger: AgentBlueprint["trigger"] };
 
-type Body = {
-  description?: unknown;
-  review_url?: unknown;
-};
+/**
+ * Pure request-body parse (exported for unit tests). ONLY reads `description`
+ * and `review_url` — there is deliberately no `orgId` field (org is always the
+ * authed caller's, resolved by the guard), so no caller can inject a target org.
+ */
+export function parseGenerateBody(
+  body: unknown,
+): { ok: true; description: string; reviewUrl?: string } | { ok: false } {
+  const b = (body ?? {}) as { description?: unknown; review_url?: unknown };
+  const description = typeof b.description === "string" ? b.description.trim() : "";
+  if (!description) return { ok: false };
+  const reviewUrl = typeof b.review_url === "string" ? b.review_url.trim() || undefined : undefined;
+  return { ok: true, description, reviewUrl };
+}
 
 export async function POST(request: Request) {
   const guard = await guardApiRequest(request);
   if ("error" in guard) return guard.error;
   const orgId = guard.orgId;
 
-  const body = (await request.json().catch(() => ({}))) as Body;
-  const description = typeof body.description === "string" ? body.description.trim() : "";
-  if (!description) {
+  const rawBody = await request.json().catch(() => ({}));
+  const parsed = parseGenerateBody(rawBody);
+  if (!parsed.ok) {
     return NextResponse.json(
       { ok: false, error: "missing_required_field", required: ["description"] },
       { status: 400 },
     );
   }
-  const reviewUrl = typeof body.review_url === "string" ? body.review_url.trim() || undefined : undefined;
+  const { description, reviewUrl } = parsed;
 
   let created: CreatedSummary | undefined;
 
