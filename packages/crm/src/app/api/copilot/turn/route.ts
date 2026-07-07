@@ -32,6 +32,7 @@ import type { StockPhoto } from "@/lib/media/stock-search";
 import { buildWorkspaceUrls } from "@/lib/billing/anonymous-workspace";
 import { shouldVisionVerify, visionVerifyPage, buildVisionCheckLog, type VisionCheckResult } from "@/lib/vision/verify-page";
 import { reconcileReplyWithVision } from "@/lib/vision/reconcile-reply";
+import { persistReflection } from "@/lib/vision/persist-reflection";
 import { logEvent } from "@/lib/observability/log";
 
 export const runtime = "nodejs";
@@ -246,6 +247,22 @@ export async function POST(request: NextRequest) {
                 triggerSlot,
               });
               logEvent("vision_check", record, { orgId, severity: "info" });
+              // Dream-loop prerequisite (2026-07-06) — dual-write the same
+              // verdict into agent_reflection_events so the daily dream
+              // routine has a queryable collect source. Fail-soft: wrapped in
+              // the same try/catch as the log line above, and persistReflection
+              // itself never throws (see persist-reflection.ts). Only persists
+              // when a real grade ran (`check` defined) — a skipped/never-ran
+              // check has nothing to cluster.
+              if (check) {
+                await persistReflection({
+                  orgId,
+                  surface: "copilot",
+                  instruction: goalMessage,
+                  triggerTool,
+                  verdict: check,
+                });
+              }
             } catch {
               // Logging must never affect the reply.
             }
@@ -291,6 +308,11 @@ export async function POST(request: NextRequest) {
         conversationId,
         userMessage: retryInstruction,
         blueprintOverride,
+        // EPHEMERAL — the retryInstruction is SYNTHETIC coaching text, not
+        // operator input. persist:false so it's never written to agentTurns and
+        // can't leak into future turns' history as prior USER context. The retry
+        // still runs the real tools against the live workspace and is re-graded.
+        persist: false,
       });
 
       if (retryResult.ok) {
