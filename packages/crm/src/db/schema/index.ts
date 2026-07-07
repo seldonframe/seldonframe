@@ -190,3 +190,10 @@ export * from "./agent-taste-sessions";
 // Repeat pastes of the same URL skip scrape + LLM entirely (~$0). See
 // lib/web-build/extraction-cache-store.ts.
 export * from "./url-extraction-cache";
+
+// 2026-07-06 — `/dream` loop prerequisite: agent_reflection_events (migration
+// 0066). Additive table persisting every vision_check verdict (previously
+// console.log-only) so the daily dream routine has a queryable collect
+// source. See docs/superpowers/specs/2026-07-06-dream-loop-design.md +
+// lib/vision/persist-reflection.ts / collect-reflections.ts.
+export * from "./agent-reflection-events";
