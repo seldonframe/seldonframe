@@ -274,7 +274,12 @@ export async function POST(request: NextRequest) {
     visionCheck &&
     visionCheck.pass === false &&
     !visionCheck.skipped &&
-    result.toolCalls.some((call) => /^(edit_|update_|move_|delete_|add_|undo_)/.test(call.name))
+    // Only auto-retry NON-destructive edits. A failed move_/delete_/undo_ must
+    // not be re-run (the retry re-invokes the full agent and could delete/move
+    // a second section) — destructive ops need explicit operator intent, not a
+    // silent second attempt. (delete_section also needs confirm:true, which the
+    // retry won't carry; this is defense-in-depth on top of that.)
+    result.toolCalls.some((call) => /^(edit_|update_|add_)/.test(call.name))
   ) {
     try {
       const retryInstruction =
