@@ -17,7 +17,7 @@ const COLUMNS: readonly Column[] = [
       { label: "Features", href: "#modules" },
       { label: "Pricing", href: "#pricing" },
       { label: "Marketplace", href: "/marketplace" },
-      { label: "For agencies", href: "#agencies" },
+      { label: "For agencies", href: "/agencies" },
       { label: "Changelog", href: "https://github.com/seldonframe/crm/releases", external: true },
     ],
   },
@@ -90,7 +90,7 @@ export function MarketingFooter() {
                 Start building
               </Link>
               <Link
-                href="#agencies"
+                href="/agencies"
                 className="inline-flex items-center gap-1.5 self-start text-[13px] font-[500] text-[#00897B] transition-colors hover:text-[#00695C]"
               >
                 For agencies →

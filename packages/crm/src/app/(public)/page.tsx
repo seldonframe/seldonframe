@@ -8,7 +8,7 @@
 // with the new HTML-faithful section list.
 //
 // Order (2026-06-22 positioning v2 — one idea per section ladder):
-//   Nav (fixed) → Hero (+ demo marquee) → BuildSteps (the 60s demo)
+//   Nav (fixed) → Hero (+ demo marquee) → BuildSteps (the 3-min demo)
 //   → IdeStrip ("Every IDE" — 2026-07-01, links to /build#install)
 //   → Modules (Run rung) → SmbCta (Sell rung) → Agents (Hire agents)
 //   → AgencyMath (Build & sell rung) → Pricing → ProofStrip
@@ -41,7 +41,6 @@ import { isWebUngatedBuildOn } from "@/lib/web-build/policy";
 import { MarketingNav } from "@/components/landing/marketing-nav";
 import { MarketingHero } from "@/components/landing/marketing-hero";
 import { MarketingProofStrip } from "@/components/landing/marketing-proof-strip";
-import { MarketingAgencyMath } from "@/components/landing/marketing-agency-math";
 import { MarketingBuildSteps } from "@/components/landing/marketing-build-steps";
 import { MarketingIdeStrip } from "@/components/landing/marketing-ide-strip";
 import { MarketingModules, MarketingAgents } from "@/components/landing/marketing-modules";
@@ -55,10 +54,10 @@ import { MarketingFooter } from "@/components/landing/marketing-footer";
 import { POSITIONING_ONE_LINER } from "./home-copy";
 
 export const metadata: Metadata = {
-  title: "SeldonFrame — Your entire service business, live in 60 seconds.",
+  title: "SeldonFrame — Your entire service business, live in 3 minutes.",
   description: POSITIONING_ONE_LINER,
   openGraph: {
-    title: "SeldonFrame — Your entire service business, live in 60 seconds.",
+    title: "SeldonFrame — Your entire service business, live in 3 minutes.",
     description: POSITIONING_ONE_LINER,
     type: "website",
     url: "https://seldonframe.com",
@@ -66,7 +65,7 @@ export const metadata: Metadata = {
   },
   twitter: {
     card: "summary_large_image",
-    title: "SeldonFrame — Your entire service business, live in 60 seconds.",
+    title: "SeldonFrame — Your entire service business, live in 3 minutes.",
     description: POSITIONING_ONE_LINER,
     images: ["/brand/twitter-card.png"],
   },
@@ -86,7 +85,7 @@ export default async function PublicHomePage() {
       <MarketingNav />
       <main id="main-content">
         {/* Positioning v2 ladder (2026-06-22) — one idea per section:
-            Hero + 60s demo → Run → Sell → Hire agents → Build & sell →
+            Hero + 3-min demo → Run → Sell → Hire agents → Build & sell →
             pricing / proof / FAQ / close. The "Why not just…" comparison
             (MarketingReplace) is demoted off the homepage to keep the
             ladder to one idea per rung; the component still ships. */}
@@ -100,7 +99,6 @@ export default async function PublicHomePage() {
         <MarketingModules />
         <MarketingSmbCta />
         <MarketingAgents />
-        <MarketingAgencyMath />
         <LandingMarketingPricingSection />
         <MarketingProofStrip />
         <LandingMarketingFaqSection />
