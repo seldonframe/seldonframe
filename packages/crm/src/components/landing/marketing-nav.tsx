@@ -66,7 +66,7 @@ export function MarketingNav() {
         <div className="inline-flex items-center gap-2 md:gap-3">
           <Link
             href="/login"
-            className="inline-flex h-[34px] items-center whitespace-nowrap rounded-full border border-[rgba(34,29,23,.18)] bg-transparent px-4 text-[13.5px] font-medium text-[#6E665A] transition-colors hover:border-[rgba(34,29,23,.28)] hover:text-[#221D17]"
+            className="hidden h-[34px] items-center whitespace-nowrap rounded-full border border-[rgba(34,29,23,.18)] bg-transparent px-4 text-[13.5px] font-medium text-[#6E665A] transition-colors hover:border-[rgba(34,29,23,.28)] hover:text-[#221D17] sm:inline-flex"
           >
             Log in
           </Link>

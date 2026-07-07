@@ -251,28 +251,28 @@ export function MarketingHero({
             role="tab"
             aria-selected={tab === "url"}
             onClick={() => handleTab("url")}
-            className={`inline-flex h-[34px] items-center justify-center gap-2 rounded-[7px] px-3 text-[13px] transition-colors ${
+            className={`inline-flex h-[34px] items-center justify-center gap-1.5 rounded-[7px] px-2 text-[12px] transition-colors sm:gap-2 sm:px-3 sm:text-[13px] ${
               tab === "url"
                 ? "bg-[#FFFDFA] font-[600] text-[#221D17] shadow-[0_1px_3px_rgba(34,29,23,.10)]"
                 : "font-[500] text-[#6E665A] hover:text-[#221D17]"
             }`}
           >
-            <Globe size={13} aria-hidden />
-            Paste website URL
+            <Globe size={13} className="shrink-0" aria-hidden />
+            Paste a URL
           </button>
           <button
             type="button"
             role="tab"
             aria-selected={tab === "biz"}
             onClick={() => handleTab("biz")}
-            className={`inline-flex h-[34px] items-center justify-center gap-2 rounded-[7px] px-3 text-[13px] transition-colors ${
+            className={`inline-flex h-[34px] items-center justify-center gap-1.5 rounded-[7px] px-2 text-[12px] transition-colors sm:gap-2 sm:px-3 sm:text-[13px] ${
               tab === "biz"
                 ? "bg-[#FFFDFA] font-[600] text-[#221D17] shadow-[0_1px_3px_rgba(34,29,23,.10)]"
                 : "font-[500] text-[#6E665A] hover:text-[#221D17]"
             }`}
           >
-            <FileText size={13} aria-hidden />
-            No website? Describe the business
+            <FileText size={13} className="shrink-0" aria-hidden />
+            Describe the business
           </button>
         </div>
 
