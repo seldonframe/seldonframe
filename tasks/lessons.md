@@ -1979,3 +1979,26 @@ C4 close-out with empirical SLICE 11 data.
   `vision_check` GATE the "Done" claim, never trail it. (3) When you migrate a live
   data model, grep EVERY writer of the old slug in one pass — piecemeal migration
   (media-only) left a whole tool family lying. See memory [[seldonchat-media-editing]].
+
+---
+
+## L-XX — Sticky + backdrop-blur + z-index = a stacking-context TRAP; portal dropdowns to escape
+
+- **Trigger:** The dashboard notifications dropdown (`z-30`, inside the `DashboardTopbar`
+  which is `sticky top-0 z-10 backdrop-blur-xl`) rendered BEHIND the "Ask SeldonChat"
+  command bar (`sticky top-0 z-20 backdrop-blur-xl`), on both mobile and desktop. The
+  dropdown's `z-30` was higher than the bar's `z-20`, yet it lost.
+- **Root cause:** `position: sticky` + a `z-index` + `backdrop-filter` EACH create a new
+  stacking context. The topbar (z-10) and command-bar (z-20) are siblings, so the command
+  bar's ENTIRE context paints above the topbar's ENTIRE context. The dropdown's `z-30` is
+  only relative to the topbar's z-10 context — it can't escape to beat a sibling context.
+  `backdrop-filter` on the ancestor ALSO makes it the containing block for `position:fixed`
+  descendants, so switching the dropdown to `fixed` doesn't escape either.
+- **Rule:** A dropdown/popover/tooltip that must overlay siblings should **portal to
+  `document.body`** (`createPortal`) with `position: fixed` anchored to its trigger's
+  `getBoundingClientRect()` + a high z-index — so it renders outside every ancestor
+  stacking/filter trap. Don't try to win with a bigger `z-index` when the ancestor is
+  `sticky`/`fixed`/`transform`/`filter`/`will-change` — z-index only compares WITHIN a
+  context. (Anchor synchronously on open to avoid a position flash; reposition on
+  scroll/resize; theme CSS vars still work since it's the same document.) Pattern shipped in
+  `components/layout/notifications-bell.tsx`.
