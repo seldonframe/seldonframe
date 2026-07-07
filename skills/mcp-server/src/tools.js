@@ -4746,7 +4746,7 @@ export const TOOLS = [
     name: "create_agent",
     description:
       "USE WHEN USER SAYS: 'add a chatbot to my website', 'add an AI assistant to my landing page', 'put a chat widget on my site', 'create a website chatbot', 'add an AI agent that answers customer questions', 'I want chat on my homepage', 'build me a chatbot for [business]'. " +
-      "DON'T confuse with: list_blocks (chat widgets are NOT a block type — agents are a separate primitive); send_conversation_turn (that's for inbound SMS/email auto-reply, NOT a website widget). If the operator wants chat on their website, THIS is the tool. " +
+      "DON'T confuse with: list_blocks (chat widgets are NOT a block type — agents are a separate primitive); send_conversation_turn (that's for inbound SMS/email auto-reply, NOT a website widget); generate_agent (for an agent that ACTS on bookings/leads/a schedule — review requester, speed-to-lead, follow-up — use generate_agent instead; THIS tool only builds a website chat widget with no trigger). If the operator wants chat on their website, THIS is the tool. " +
       "Creates a new agent for this workspace. Agents are conversational interfaces (web chat, voice, SMS) that answer FAQs, book appointments, and escalate to humans — composed from typed primitives + the workspace's Soul (industry, voice, services). " +
       "WHAT GETS COMPOSED AUTOMATICALLY: persona derived from soul.industry + soul.voice; FAQ knowledge from your `faq` array; pricing facts from `pricing_facts` (validators block any $-amount the agent invents that's not in this list); typed tools (look_up_availability, book_appointment, find_my_existing_appointment, escalate_to_human, provide_faq_answer). " +
       "WHAT YOU PROVIDE: name, archetype (website-chatbot for v1.26.x+; voice-receptionist + sms-followup-bot queued), channel (web_chat / voice / sms / email), inline FAQ pairs, allowed pricing facts, optional greeting. " +
@@ -4940,6 +4940,50 @@ export const TOOLS = [
       }
       const result = await api("POST", "/build/deploy", {
         body,
+        workspace_id: ws,
+      });
+      return result;
+    },
+  },
+
+  // ───────────────────────────────────────────────────────────────────────
+  // v1.60.0 — GENERATE. Build an agent from ONE plain-English sentence. This
+  // is the front door for anything that DOES something on an event/schedule
+  // (review requester, speed-to-lead, after-hours receptionist) — a real,
+  // event-firing agent (trigger + skill + guardrails), not a website widget.
+  // Wires POST /api/v1/agents/generate → the same deterministic generator
+  // (parseAgentIntent → assembleAgentBundle, LLM-classify optional and
+  // fail-soft) the Studio dashboard uses. Returns a template_id; the next
+  // step is ALWAYS deploy_agent to make it live and firing.
+  // ───────────────────────────────────────────────────────────────────────
+
+  {
+    name: "generate_agent",
+    description:
+      "USE WHEN USER SAYS: 'create a google review requester for my dentist office', 'text new leads instantly', 'build a speed-to-lead texter', 'set up an after-hours receptionist', 'make an agent that follows up after every booking'. " +
+      "Build a working AI agent from a plain-English description. It classifies the intent and assembles a deployable agent — trigger (e.g. fires on booking.completed or lead.created, or answers inbound calls/chats) + skill (the playbook it follows) + guardrails (quiet hours, rate caps, safety rubric) — all wired automatically, no manual configuration. " +
+      "Returns a template_id — then call deploy_agent with { source: { template_id } } to make it live and firing on its trigger (e.g. after every booking, or the instant a new lead arrives). " +
+      "USE THIS (not create_agent) for ANY agent that DOES something on an event or a schedule — a review request after a job, an instant reply to a new lead, a scheduled recap. create_agent is ONLY for a website chat widget with no trigger. " +
+      "Delivery note: a freshly generated event-outbound agent (review-requester / speed-to-lead) defaults to EMAIL so it can send a real message today without the workspace connecting a phone number first (see `warnings` in the response); mention texting/SMS explicitly in your description if you want it to try SMS instead — full delivery still needs the workspace's own Twilio connected, surfaced by deploy_agent as a 'telephony' requirement.",
+    inputSchema: obj(
+      {
+        workspace_id: str("Workspace id (bearer workspace)."),
+        description: str(
+          "One plain-English sentence describing the agent to build, e.g. 'a Google review requester for a dentist' or 'a speed-to-lead texter for new website leads'.",
+        ),
+        review_url: str(
+          "Optional: the business's Google review link. Wins over any URL found in the description. Only relevant for a review-requester agent; omit otherwise.",
+        ),
+      },
+      ["workspace_id", "description"],
+    ),
+    handler: async (args) => {
+      const ws = args.workspace_id;
+      const result = await api("POST", "/agents/generate", {
+        body: {
+          description: args.description,
+          review_url: args.review_url ?? undefined,
+        },
         workspace_id: ws,
       });
       return result;
