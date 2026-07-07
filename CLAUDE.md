@@ -76,6 +76,13 @@ These supersede older notes in §1 where they conflict. Read before any product/
 - **Thin Harness + Fat Skills**: Never bloat the core; make blocks rich and forkable.
 - **Delight First**: The first 60 seconds must feel magical for a new builder.
 
+### 3.1 Named failure modes — catch yourself, STOP, don't push through
+(From Karpathy's *CLAUDE.md field notes*. When you notice one, the right move is to stop, not to power through — same reflex as §2.1's "re-plan immediately.")
+- **Optimistic Path** — you handled the happy path and ignored the 500 / null / empty case. A tool that reports success on a write it never verified is this bug (it's what made SeldonChat lie "Done ✅"). **Success must be defined against the observable end-state, not "the code ran."** Reject a missing/malformed input with an explicit error, never a silent pass.
+- **Runaway Refactor** — a fix that starts cascading across files. Stop and reduce the blast radius (or split it into its own slice) rather than letting one change metastasize.
+- **Kitchen Sink** — restructuring adjacent code "while you're in here." Reinforces **Minimal Impact**: touch only what the task needs.
+- **Wrong Abstraction** — abstracting on the first occurrence. Copy-paste twice before you extract; a premature helper is harder to undo than duplication.
+
 ## How to Use This File
 - Claude Code reads this file automatically at the start of every session.
 - Always begin major work with: “Review CLAUDE.md and the current plan in tasks/todo.md”
