@@ -289,10 +289,14 @@ export async function POST(request: NextRequest) {
       });
 
       if (retryResult.ok) {
+        // Grade the retry against the ORIGINAL user intent (`message`), NOT
+        // the synthetic retry instruction — otherwise the vision check would
+        // verify the page against "your last edit didn't appear…" meta-text
+        // and could falsely pass, re-reporting a still-broken edit as done.
         const retryVisionCheck = await runVisionCheck(
           retryResult.toolCalls,
           retryResult.toolResults,
-          retryInstruction,
+          message,
         );
         finalResult = retryResult;
         visionCheck = retryVisionCheck;
