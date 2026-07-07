@@ -82,9 +82,13 @@ const LEAD_RE = /lead|inquir|new customer|contact form/i;
 /** Receptionist intent: answer inbound calls / chats — the always-on front desk. */
 const RECEPTION_RE = /answer|reception|phone|call/i;
 
-/** Channel hint: an explicit "email" mention routes outbound to email; the
- *  default for the event skills is SMS (faster, higher open-rate). */
+/** Channel hint: an explicit "email" mention routes outbound to email; an
+ *  explicit "text"/"SMS" mention routes outbound to SMS. See
+ *  {@link resolveDayOneChannel} for how these combine with the day-one default
+ *  (email — it delivers without BYO Twilio; SMS requires a connected Twilio
+ *  number). */
 const EMAIL_RE = /email/i;
+const SMS_RE = /\b(sms|text message|text(s)?\b|texting)/i;
 
 /** First http(s) URL in the sentence — used as the review link. */
 const URL_RE = /https?:\/\/\S+/i;
@@ -122,7 +126,7 @@ const URL_RE = /https?:\/\/\S+/i;
 export function heuristicIntent(sentence: string): AgentIntent {
   const text = typeof sentence === "string" ? sentence : "";
 
-  const channel: EventChannel = EMAIL_RE.test(text) ? "email" : "sms";
+  const channel: EventChannel = resolveDayOneChannel(text);
   const reviewUrl = extractUrl(text);
 
   // The skill + the (pre-resolution) trigger, decided by priority order.
@@ -256,6 +260,32 @@ export function mergeIntent(
   if (reviewUrl !== undefined) merged.businessHints = { reviewUrl };
 
   return merged;
+}
+
+// ─── day-one delivery channel (P2) ───────────────────────────────────────────
+
+/**
+ * Pick the outbound channel for an event-triggered agent (review-requester /
+ * speed-to-lead) so a FRESHLY generated agent can deliver a real message TODAY
+ * — without requiring the workspace to have already connected BYO Twilio.
+ *
+ * `lib/sms/api.ts` is strictly BYO-Twilio (no managed fallback → a 422 on a
+ * fresh workspace); `lib/emails/api.ts` has a platform `RESEND_API_KEY`
+ * fallback that sends from day one. So the default here is **email**, not SMS
+ * — unless the sentence EXPLICITLY asks for text/SMS (SMS_RE), in which case we
+ * honor that (the operator can still upgrade fully once Twilio is connected;
+ * this predicate is just the classifier's DEFAULT, not a hard cap — the LLM
+ * classify path and a later editor change can still choose SMS). An explicit
+ * "email" mention always wins outright, matching the prior behavior.
+ *
+ * PURE — never throws. Priority: explicit "email" mention > explicit SMS/text
+ * mention > default email.
+ */
+export function resolveDayOneChannel(sentence: string): EventChannel {
+  const text = typeof sentence === "string" ? sentence : "";
+  if (EMAIL_RE.test(text)) return "email";
+  if (SMS_RE.test(text)) return "sms";
+  return "email";
 }
 
 // ─── helpers ─────────────────────────────────────────────────────────────────
