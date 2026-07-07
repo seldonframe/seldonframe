@@ -7,6 +7,20 @@ with a checkable plan, gets ticked off as it ships, and ends with a review block
 
 ## In flight
 
+### Task — build-pipeline upgrade: mechanical tier pins + wedge strategy (2026-07-07) — DONE
+
+Trigger: reflection on the Managed Agents multi-agent API vs our pipeline. Findings: the ship-feature tier table was already the "plan big, execute small" pattern, but the agent definitions contradicted it (scout pinned opus, implementer pinned fable) — the exact "locked by memory isn't locked" drift the skill itself warns about.
+
+- [x] `.claude/agents/` roster added to the REPO (travels to cloud/scheduled agents): scout (haiku) · implementer (sonnet, fable-by-override) · reviewer (opus, sonnet-by-override) · vision-grader (haiku, pinned) · verify-runner (haiku) · smoke-runner (haiku). User-level `~/.claude/agents` pins corrected to match.
+- [x] ship-feature: enforcement bullet now points at the roster (dispatch by `subagent_type`, never name a model unless escalating); verify step names verify-runner/vision-grader/smoke-runner.
+- [x] vision-verify step 3: dispatch `subagent_type: vision-grader` (pin lives in the agent definition).
+- [x] `docs/strategy/2026-07-07-wedge-to-1m-arr.md` — PROPOSAL: agency-channel AI-receptionist wedge, ICP/offer/pricing, probability table, 90-day ladder, 4 explicit Max decision points.
+- [x] `docs/strategy/2026-07-07-managed-agents-runtime-spike.md` — SPIKE: sessions/threads/vaults ↔ deployment/conversation/per-client-creds mapping, BYOK story, AgentRuntime seam (native | managed-agents, fail-soft), 2-3 day spike plan + decision gates.
+- [ ] Scheduled cloud green-main guardian (daily verify-build sweep) — created via /schedule this session; first run pending.
+
+Review: docs + agent-config only, zero app-code impact; no migration; verify = files present + skills reference resolvable agent names.
+
+
 ### Task 10 — deploy-verb Tier-0 payoff + stripeMode threading (spec 2026-07-01-voice-deploy-metered-billing) — DONE
 
 Worktree `icp3-wedge/packages/crm` (this repo, HEAD 24c70133). Brief: `.superpowers/sdd/task-10-brief.md`. CONTRACT RULE: `runDeploy`'s DeployResult JSON stays byte-for-byte; new failure reason `"insufficient_balance"` rides the existing `{ok:false,reason}` catch-all (CLI's `DeployResult` type already has `{ok:false;reason:string}` — zero CLI type change needed).
