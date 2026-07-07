@@ -56,7 +56,7 @@ const FEATURES = [
   {
     icon: Phone,
     title: "Missed-call text-back",
-    body: "Can't pick up? It texts them back in under 60 seconds — before they dial the next company.",
+    body: "Can't pick up? It texts them back in under 3 minutes — before they dial the next company.",
     mock: <SmsMock />,
   },
   {

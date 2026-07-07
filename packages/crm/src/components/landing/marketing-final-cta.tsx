@@ -23,7 +23,7 @@ export function MarketingFinalCta() {
         <h2 className="mx-auto mt-4 max-w-[18ch] text-[clamp(30px,5.2vw,54px)] font-[500] leading-[1.05] tracking-[-0.03em] text-[#F6F2EA]">
           Your front office is{" "}
           <em className="font-[Newsreader,Georgia,serif] font-normal not-italic text-[rgba(246,242,234,.75)]">
-            60 seconds away.
+            3 minutes away.
           </em>
         </h2>
 
@@ -42,7 +42,7 @@ export function MarketingFinalCta() {
             Build it free →
           </Link>
           <Link
-            href="#agencies"
+            href="/agencies"
             className="inline-flex items-center gap-2 rounded-full border border-[rgba(255,255,255,.16)] bg-transparent px-6 py-4 text-[15px] font-[500] text-[rgba(246,242,234,.88)] transition-all hover:bg-[rgba(255,255,255,.08)] active:translate-y-px"
           >
             For agencies →

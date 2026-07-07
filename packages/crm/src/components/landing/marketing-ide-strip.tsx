@@ -3,7 +3,7 @@
 // "Works with your IDE" strip — added alongside the "One server. Every IDE."
 // install section on /build (packages/crm/src/app/build/page.tsx). Same
 // compact parchment-band + chip-row pattern as MarketingProofStrip (slim,
-// server component, no client hooks), placed right after the 60-second
+// server component, no client hooks), placed right after the 3-minute
 // BuildSteps demo since installing from an IDE is a "how it works" detail, not
 // a proof or pricing point. Links to the fuller install section on /build.
 //

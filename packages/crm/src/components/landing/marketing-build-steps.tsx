@@ -40,7 +40,7 @@ const STEPS: readonly Step[] = [
   },
   {
     num: "2",
-    title: "Watch it spin up in 60 seconds.",
+    title: "Watch it spin up in 3 minutes.",
     body: "The build runs live — website, booking, intake, CRM, and a 24/7 AI agent that answers across voice, SMS, chat, and email. Everything wired together.",
     mock: (
       <ArriveMock
@@ -86,7 +86,7 @@ export function MarketingBuildSteps() {
           <h2 className="mt-3.5 text-[clamp(27px,4.2vw,42px)] font-[500] leading-[1.08] tracking-[-0.025em] text-[#221D17]">
             Paste a URL.{" "}
             <em className="font-[Newsreader,Georgia,serif] font-normal not-italic">
-              Done in 60 seconds.
+              Done in 3 minutes.
             </em>
           </h2>
           <p className="mt-4 max-w-[54ch] text-[clamp(15.5px,1.9vw,18px)] leading-[1.55] text-[#6E665A]">
@@ -126,11 +126,6 @@ export function MarketingBuildSteps() {
           ))}
         </div>
 
-        {/* Summary note */}
-        <div className="mt-6 rounded-[16px] border border-[rgba(34,29,23,.08)] bg-[#EFE9DD] px-6 py-5 text-[15px] leading-[1.5] text-[#221D17]">
-          Miss a call mid-job?{" "}
-          <strong className="font-[600] text-[#00897B]">The AI receptionist texts them back before they dial a competitor</strong> — so every lead stays yours. And once the job&rsquo;s done, the review follow-up quietly asks for a 5-star Google review.
-        </div>
       </div>
 
       <style jsx>{`

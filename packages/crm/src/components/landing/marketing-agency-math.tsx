@@ -78,7 +78,7 @@ export function MarketingAgencyMath() {
                 "Your brand on the entire platform — clients never see SeldonFrame",
                 "Set your own per-client pricing and keep the spread",
                 "Unlimited client workspaces on the flat $29/mo — no per-seat tax",
-                "Onboard a new client in 60 seconds from a URL",
+                "Onboard a new client in 3 minutes from a URL",
               ].map((item) => (
                 <li key={item} className="flex items-start gap-3 text-[14px] leading-[1.5] text-[rgba(246,242,234,.82)]">
                   <span className="mt-0.5 flex size-[18px] shrink-0 items-center justify-center rounded-full bg-[#1F2B24] border border-[rgba(111,194,143,.35)]">

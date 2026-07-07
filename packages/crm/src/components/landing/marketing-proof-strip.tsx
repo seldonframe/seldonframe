@@ -7,7 +7,7 @@
 
 const CHIPS = [
   "Build it free",
-  "Live in 60 seconds",
+  "Live in 3 minutes",
   "$29/mo flat",
   "No code",
   "Cancel anytime",

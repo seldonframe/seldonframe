@@ -53,7 +53,7 @@ const FAQS: readonly FaqItem[] = [
   {
     question: "How does this compare to GoHighLevel?",
     answer:
-      "SeldonFrame builds a website, CRM, booking page, intake form, and a multi-surface AI agent in 60 seconds from a URL — no 2–4 week onboarding and no Zapier glue. It's $29/mo flat vs. GoHighLevel Agency Pro at $497/mo, the agents answer across voice, chat, SMS, and email, and you own it (AGPL-3.0 — self-host or use the cloud).",
+      "SeldonFrame builds a website, CRM, booking page, intake form, and a multi-surface AI agent in 3 minutes from a URL — no 2–4 week onboarding and no Zapier glue. It's $29/mo flat vs. GoHighLevel Agency Pro at $497/mo, the agents answer across voice, chat, SMS, and email, and you own it (AGPL-3.0 — self-host or use the cloud).",
   },
   {
     question: "Do I still need Zapier, Calendly, or Typeform?",
