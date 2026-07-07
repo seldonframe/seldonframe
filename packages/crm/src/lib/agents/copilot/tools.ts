@@ -73,6 +73,25 @@ import {
   type SetR1MediaInput,
   type SetR1MediaResult,
 } from "@/lib/landing/set-r1-media";
+import {
+  setR1Field as setR1FieldDefault,
+  type R1Section,
+  type SetR1FieldResult,
+} from "@/lib/landing/set-r1-field";
+
+/** The 8 top-level r1 payload sections (mirrors R1Section in set-r1-field.ts;
+ *  kept as a local const array so the zod enum/jsonSchema below don't need a
+ *  runtime import of a type-only union). */
+const R1_SECTIONS = [
+  "hero",
+  "services",
+  "testimonials",
+  "faq",
+  "footer",
+  "emergency",
+  "sticky",
+  "leadForm",
+] as const;
 
 export const COPILOT_CAPABILITY = "workspace_copilot";
 
@@ -93,10 +112,33 @@ async function safe<T>(fn: () => Promise<T>): Promise<T | { ok: false; error: st
 
 const getSiteStructureInput = z.object({});
 
+/** Read-only projection of the live r1 payload for get_site_structure: the
+ *  8 sections that exist on this payload, each with its current field
+ *  values, so the model edits against reality instead of guessing. */
+async function getR1Structure(orgId: string) {
+  const loaded = await loadR1PayloadDefault(orgId);
+  if (!loaded) return null;
+
+  const { payload } = loaded;
+  const sections = R1_SECTIONS.filter(
+    (section) => (payload as unknown as Record<string, unknown>)[section] !== undefined,
+  ).map((section) => ({
+    section,
+    fields: (payload as unknown as Record<string, unknown>)[section],
+  }));
+
+  return {
+    ok: true as const,
+    workspace_id: orgId,
+    slug: "r1",
+    sections,
+  };
+}
+
 const getSiteStructure: AgentTool<z.infer<typeof getSiteStructureInput>> = {
   name: "get_site_structure",
   description:
-    "Read the workspace's landing page section list (index, type, preview) plus its slug and public URL. Call this first before any section edit so you know the current layout and indices.",
+    "Read the workspace's live landing page: the sections that exist (hero, services, testimonials, faq, footer, emergency?, sticky?, leadForm?) and their current field values. Call this first before any field edit so you know the real field names and current values (e.g. the hero headline is the `tagline` field).",
   inputSchema: getSiteStructureInput,
   jsonSchema: {
     type: "object",
@@ -104,7 +146,12 @@ const getSiteStructure: AgentTool<z.infer<typeof getSiteStructureInput>> = {
     required: [],
   },
   execute: (_input, ctx: ToolExecuteContext) =>
-    safe(() => getLandingStructureForWorkspace(ctx.orgId)),
+    safe(async () => {
+      const r1 = await getR1Structure(ctx.orgId);
+      if (r1) return r1;
+      // Legacy fallback: no r1 page for this org.
+      return getLandingStructureForWorkspace(ctx.orgId);
+    }),
 };
 
 // ─── edit_site ───────────────────────────────────────────────────────────────
@@ -141,8 +188,17 @@ const editSite: AgentTool<z.infer<typeof editSiteInput>> = {
 
 // ─── update_section_field ───────────────────────────────────────────────────
 
+// Accepts both the r1 sections (hero, services, testimonials, faq, footer,
+// emergency, sticky, leadForm) AND the legacy VALID_SECTION_TYPES (e.g.
+// services-grid, trust-strip, mid-cta) — the tool tries the live r1 payload
+// first and only falls back to the legacy blueprint when the org has no r1
+// page, so both vocabularies must validate here.
+const UPDATE_SECTION_FIELD_SECTIONS = Array.from(
+  new Set([...R1_SECTIONS, ...VALID_SECTION_TYPES]),
+) as [string, ...string[]];
+
 const updateSectionFieldInput = z.object({
-  section: z.enum(VALID_SECTION_TYPES as [string, ...string[]]),
+  section: z.enum(UPDATE_SECTION_FIELD_SECTIONS),
   field: z.string().min(1, "field is required"),
   value: z.unknown(),
 });
@@ -224,19 +280,21 @@ async function updateSectionFieldForWorkspace(
 const updateSectionField: AgentTool<z.infer<typeof updateSectionFieldInput>> = {
   name: "update_section_field",
   description:
-    "Set a single field on a landing-page section by dot-path (e.g. section='hero', field='headline', value='Same-day HVAC repair'). The escape hatch for edits edit_site can't target precisely.",
+    "Set a single field on the live landing page section by dot-path. Sections: hero, services, testimonials, faq, footer, emergency, sticky, leadForm. Real field names — the hero headline is the `tagline` field (not 'headline'); also `subhead`, `primaryCTA.label`. Services/faq/testimonials use `heading` for their section title. Dot-paths address nested/array fields, e.g. `services.0.name`, `faq.items.1.answer`. The escape hatch for edits edit_site can't target precisely.",
   inputSchema: updateSectionFieldInput,
   jsonSchema: {
     type: "object",
     properties: {
       section: {
         type: "string",
-        enum: VALID_SECTION_TYPES,
-        description: "Section type to mutate.",
+        enum: UPDATE_SECTION_FIELD_SECTIONS,
+        description:
+          "Section to mutate: hero, services, testimonials, faq, footer, emergency, sticky, or leadForm (this workspace's live page). Legacy section-type names are accepted as a fallback for workspaces without a live page.",
       },
       field: {
         type: "string",
-        description: "Dot-segmented field path, e.g. 'headline' or 'items.0.title'.",
+        description:
+          "Dot-segmented field path, e.g. 'tagline' (hero headline), 'subhead', 'primaryCTA.label', 'services.0.name', 'faq.items.1.answer'.",
       },
       value: {
         description: "New value for the field (any JSON type; null clears an optional field).",
@@ -245,14 +303,28 @@ const updateSectionField: AgentTool<z.infer<typeof updateSectionFieldInput>> = {
     required: ["section", "field", "value"],
   },
   execute: (input, ctx: ToolExecuteContext) =>
-    safe(() =>
-      updateSectionFieldForWorkspace(
+    safe(async () => {
+      const r1Result: SetR1FieldResult = await setR1FieldDefault(
+        ctx.orgId,
+        input.section as R1Section,
+        input.field,
+        input.value,
+      );
+
+      if (r1Result.ok) return r1Result;
+
+      // Legacy fallback ONLY when this org has no r1 page at all — an
+      // r1 org with a bad field/section must see the real error so the
+      // model can retry with a correct field, never a silent no-op.
+      if (r1Result.error !== "no_r1_page") return r1Result;
+
+      return updateSectionFieldForWorkspace(
         ctx.orgId,
         input.section as LandingSection["type"],
         input.field,
         input.value,
-      ),
-    ),
+      );
+    }),
 };
 
 // ─── move_section ───────────────────────────────────────────────────────────
@@ -275,7 +347,22 @@ const moveSection: AgentTool<z.infer<typeof moveSectionInput>> = {
     required: ["fromIndex", "toIndex"],
   },
   execute: (input, ctx: ToolExecuteContext) =>
-    safe(() => moveSectionForWorkspace(ctx.orgId, input.fromIndex, input.toIndex)),
+    safe(async () => {
+      // r1 has no arbitrary sections[] array to index deterministically —
+      // when this org has a live r1 page, delegate to the working NL-edit
+      // pipeline (customizeLandingR1) instead of writing the dead legacy
+      // blueprint. Legacy path only when there's no r1 page at all.
+      const r1 = await loadR1PayloadDefault(ctx.orgId);
+      if (r1) {
+        return customizeLandingR1({
+          workspaceId: ctx.orgId,
+          instruction: `Move the section currently at position ${input.fromIndex} to position ${input.toIndex}.`,
+          userId: `copilot:${ctx.orgId}`,
+          byokKey: process.env.ANTHROPIC_API_KEY ?? "",
+        });
+      }
+      return moveSectionForWorkspace(ctx.orgId, input.fromIndex, input.toIndex);
+    }),
 };
 
 // ─── delete_section ──────────────────────────────────────────────────────────
@@ -303,7 +390,21 @@ const deleteSection: AgentTool<z.infer<typeof deleteSectionInput>> = {
     required: ["index", "confirm"],
   },
   execute: (input, ctx: ToolExecuteContext) =>
-    safe(() => deleteSectionForWorkspace(ctx.orgId, input.index)),
+    safe(async () => {
+      // Same rationale as move_section above: r1 has no arbitrary
+      // sections[] array to index, so delegate structural deletes to the
+      // working NL-edit pipeline when this org has a live r1 page.
+      const r1 = await loadR1PayloadDefault(ctx.orgId);
+      if (r1) {
+        return customizeLandingR1({
+          workspaceId: ctx.orgId,
+          instruction: `Remove the section currently at position ${input.index} from the page.`,
+          userId: `copilot:${ctx.orgId}`,
+          byokKey: process.env.ANTHROPIC_API_KEY ?? "",
+        });
+      }
+      return deleteSectionForWorkspace(ctx.orgId, input.index);
+    }),
 };
 
 // ─── add_intake_field ────────────────────────────────────────────────────────

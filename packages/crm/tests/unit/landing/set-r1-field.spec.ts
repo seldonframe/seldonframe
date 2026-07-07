@@ -34,8 +34,8 @@ function basePayload(): R1LandingPayload {
       archetype: "bold-urgency",
       heading: "FAQ",
       items: [
-        { question: "Do you offer emergency service?", answer: "Yes, 24/7." },
-        { question: "Are you licensed?", answer: "Yes." },
+        { id: "faq-1", question: "Do you offer emergency service?", answer: "Yes, 24/7." },
+        { id: "faq-2", question: "Are you licensed?", answer: "Yes." },
       ],
     },
     footer: {
