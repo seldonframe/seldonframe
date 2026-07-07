@@ -168,6 +168,33 @@ describe("setR1Field", () => {
     assert.equal(getRevalidateCalls(), 0);
   });
 
+  test("field_not_found: a flat NEW key on an existing section is rejected (never-lies)", async () => {
+    // hero.madeUpField is settable on the object but renders nothing — the tool
+    // must NOT report success for a hallucinated field name.
+    const payload = basePayload();
+    const { deps, getSaveCalls, getRevalidateCalls } = makeDeps(payload);
+
+    const result = await setR1Field("org-1", "hero", "madeUpField", "x", deps);
+
+    assert.equal(result.ok, false);
+    if (!result.ok) assert.equal(result.error, "field_not_found");
+    assert.equal(getSaveCalls(), 0);
+    assert.equal(getRevalidateCalls(), 0);
+  });
+
+  test("field_not_found: setting an absent optional nested field is rejected (use edit_site to add)", async () => {
+    // hero.secondaryCTA is absent in basePayload; editing its .label must fail
+    // rather than write a partial object that won't render correctly.
+    const payload = basePayload();
+    const { deps, getSaveCalls } = makeDeps(payload);
+
+    const result = await setR1Field("org-1", "hero", "secondaryCTA.label", "Learn more", deps);
+
+    assert.equal(result.ok, false);
+    if (!result.ok) assert.equal(result.error, "field_not_found");
+    assert.equal(getSaveCalls(), 0);
+  });
+
   test("no_r1_page: load returns null", async () => {
     const { deps, getSaveCalls } = makeDeps(null);
 

@@ -7,8 +7,9 @@
 // reported ok:true. See docs/superpowers/specs/2026-07-06-seldonchat-never-lies-fix.md.
 //
 // DI'd load/save/revalidate (mirrors set-r1-media.ts's SetR1MediaDeps
-// pattern) so unit tests need no DB. Reuses setByPath (lib/blueprint/mutate.ts)
-// as the write primitive — this file does NOT reimplement path traversal.
+// pattern) so unit tests need no DB. Path traversal (readByPath/setByPath) is
+// reimplemented locally because lib/blueprint/mutate.ts's setByPath is
+// module-private and this slice must not edit that file.
 
 import { revalidatePath } from "next/cache";
 import { and, eq } from "drizzle-orm";
@@ -183,6 +184,17 @@ export async function setR1Field(
 
   const nextPayload = structuredClone(payload) as unknown as Record<string, unknown>;
   const nextSection = nextPayload[section] as Record<string, unknown>;
+
+  // Never-lies guard #1: the field must ALREADY EXIST on the live payload.
+  // setByPath will happily create a brand-new flat key on an existing section
+  // object (e.g. hero.madeUpField), which would pass the value-echo check below
+  // yet render NOTHING — silently relocating the very bug this fixes. Requiring
+  // a defined prior value means update_section_field can only edit fields that
+  // actually render; adding a new/optional field is edit_site's job.
+  const before = readByPath(nextSection, path);
+  if (before === undefined) {
+    return { ok: false, error: "field_not_found", section, field, path };
+  }
 
   try {
     setByPath(nextSection, path, value);
