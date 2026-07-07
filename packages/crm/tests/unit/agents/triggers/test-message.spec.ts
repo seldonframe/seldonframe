@@ -2,9 +2,11 @@
 //
 // composeTestEventAgentMessage wraps the live skills (composeReviewRequest /
 // composeSpeedToLead) and prefixes "[TEST] ". The load-bearing contract:
-//   • review skill WITH a link → body contains the link AND the [TEST] marker;
-//   • review skill WITHOUT a link → { ok:false, error:"review_link_required" }
-//     (the action turns this into "set the review link first");
+//   • review skill WITH a link → body contains the link AND the [TEST] marker,
+//     no placeholder used;
+//   • review skill WITHOUT a link → { ok:true, usedPlaceholder:true }, body
+//     contains PLACEHOLDER_REVIEW_URL (a template builder is never blocked —
+//     the real link is a per-buyer, deploy-time customization);
 //   • speed-to-lead → an ack body with the [TEST] marker (no link needed);
 //   • the marker is on the BODY (not the email subject).
 //
@@ -16,13 +18,14 @@ import assert from "node:assert/strict";
 
 import {
   composeTestEventAgentMessage,
+  PLACEHOLDER_REVIEW_URL,
   TEST_MESSAGE_PREFIX,
 } from "../../../../src/lib/agents/triggers/test-message";
 
 const REVIEW_URL = "https://g.page/r/acme-review";
 
 describe("composeTestEventAgentMessage", () => {
-  test("review-requester WITH a link → body has the link + [TEST] marker (sms)", () => {
+  test("review-requester WITH a link → body has the link + [TEST] marker, no placeholder (sms)", () => {
     const res = composeTestEventAgentMessage({
       skill: "review-requester",
       channel: "sms",
@@ -40,9 +43,10 @@ describe("composeTestEventAgentMessage", () => {
       res.body.includes(REVIEW_URL),
       `body must contain the review link; got: ${res.body}`,
     );
+    assert.ok(!res.usedPlaceholder, "an explicit reviewUrl must win — no placeholder");
   });
 
-  test("review-requester WITHOUT a link → ok:false review_link_required", () => {
+  test("review-requester WITHOUT a link → ok:true, uses the placeholder link (never blocks)", () => {
     for (const reviewUrl of [undefined, null, "", "   "]) {
       const res = composeTestEventAgentMessage({
         skill: "review-requester",
@@ -50,9 +54,13 @@ describe("composeTestEventAgentMessage", () => {
         businessName: "Acme",
         reviewUrl,
       });
-      assert.equal(res.ok, false, `reviewUrl=${JSON.stringify(reviewUrl)}`);
-      if (res.ok) return;
-      assert.equal(res.error, "review_link_required");
+      assert.equal(res.ok, true, `reviewUrl=${JSON.stringify(reviewUrl)}`);
+      if (!res.ok) return;
+      assert.equal(res.usedPlaceholder, true);
+      assert.ok(
+        res.body.includes(PLACEHOLDER_REVIEW_URL),
+        `body must contain the placeholder link; got: ${res.body}`,
+      );
     }
   });
 

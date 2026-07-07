@@ -9,15 +9,18 @@
 // message that leaked.
 //
 // It is the tested seam the `sendTestEventAgentAction` thin wrapper composes
-// through, so the marker + the review-link guard are unit-tested with zero I/O.
+// through, so the marker + the placeholder-link behavior are unit-tested with
+// zero I/O.
 //
-// PURE — no I/O, no "use server", no DB, no clock, never throws. The ONLY
-// failure it surfaces is the structural one the operator must fix first: a
-// review test with no review link is worthless (there's nothing to leave a
-// review at), so it returns `{ ok:false, error }` and the action turns that into
-// a clear "set the review link first" message. Everything else degrades
-// gracefully (missing name / business → generic-but-valid copy), exactly like
-// the live skills.
+// PURE — no I/O, no "use server", no DB, no clock, never throws. A template is
+// a marketplace PRODUCT the builder publishes; the Google review link is a
+// PER-BUYER, deploy-time customization (each client sets their own link when
+// they deploy). So a builder testing/publishing a template is never blocked
+// for lacking one — a review test with no real link composes with a clearly-
+// fake `PLACEHOLDER_REVIEW_URL` instead, and the result flags
+// `usedPlaceholder:true` so the caller can surface a non-blocking note.
+// Everything else degrades gracefully (missing name / business →
+// generic-but-valid copy), exactly like the live skills.
 
 import { composeReviewRequest } from "@/lib/agents/skills/review-requester";
 import { composeSpeedToLead } from "@/lib/agents/skills/speed-to-lead";
@@ -28,6 +31,12 @@ import type { EventAgentSkill } from "./run-event-agent";
  *  escaped to a customer). Exported so the test can assert it verbatim. */
 export const TEST_MESSAGE_PREFIX = "[TEST] ";
 
+/** A clearly-fake placeholder review link used to compose a review-requester
+ *  test when no real link has been set yet. The real link is a per-buyer,
+ *  deploy-time customization — a template builder never has (or needs) one. */
+export const PLACEHOLDER_REVIEW_URL =
+  "https://g.page/r/your-google-review-link";
+
 /** The inputs to compose a single test message — the same fields the live
  *  `EventAgentMatch` carries, resolved by the action from the template +
  *  deployment. `reviewUrl` is consulted ONLY for the review-requester skill. */
@@ -37,15 +46,16 @@ export type ComposeTestEventAgentArgs = {
   businessName?: string | null;
   contactName?: string | null;
   /** Review-requester only: the effective (deployment-wins) Google review link.
-   *  Required for a review test — absent/blank → `{ ok:false }`. */
+   *  Absent/blank → composes with `PLACEHOLDER_REVIEW_URL` instead (the real
+   *  link is a per-buyer, deploy-time customization, not a builder concern). */
   reviewUrl?: string | null;
   /** Speed-to-lead only: the one-line "what they asked about" summary. */
   leadSummary?: string | null;
 };
 
 export type ComposeTestEventAgentResult =
-  | { ok: true; subject?: string; body: string }
-  | { ok: false; error: "review_link_required" | "unknown_skill" };
+  | { ok: true; subject?: string; body: string; usedPlaceholder?: boolean }
+  | { ok: false; error: "unknown_skill" };
 
 /** Trim a possibly-null/blank string to a usable value, or null. */
 function clean(s: string | null | undefined): string | null {
@@ -56,10 +66,13 @@ function clean(s: string | null | undefined): string | null {
 
 /**
  * Compose the test message for `skill` + context, prefixing the body with
- * `TEST_MESSAGE_PREFIX`. Mirrors the live orchestrator's compose step:
- *   • review-requester REQUIRES a review link (else `{ ok:false,
- *     error:"review_link_required" }` — the action surfaces "set the review link
- *     first"); the composed body always contains the link;
+ * `TEST_MESSAGE_PREFIX`. Mirrors the live orchestrator's compose step, with one
+ * deliberate difference for the builder-facing test:
+ *   • review-requester with a real reviewUrl → composes with it, same as live;
+ *   • review-requester with NO reviewUrl → composes with
+ *     `PLACEHOLDER_REVIEW_URL` instead of blocking, and flags
+ *     `usedPlaceholder:true` (the real link is a per-buyer, deploy-time
+ *     customization — a template builder testing/publishing never has one);
  *   • speed-to-lead never needs a link;
  *   • any unknown skill → `{ ok:false, error:"unknown_skill" }` (defensive; the
  *     action only ever passes the two known skills).
@@ -75,21 +88,18 @@ export function composeTestEventAgentMessage(
 
   if (args.skill === "review-requester") {
     const reviewUrl = clean(args.reviewUrl);
-    if (!reviewUrl) {
-      // No link → the ask is worthless. The operator must set the review link
-      // first; the action turns this into a clear, actionable error.
-      return { ok: false, error: "review_link_required" };
-    }
+    const usedPlaceholder = !reviewUrl;
     const composed = composeReviewRequest({
       contactName,
       businessName,
-      reviewUrl,
+      reviewUrl: reviewUrl ?? PLACEHOLDER_REVIEW_URL,
       channel: args.channel,
     });
     return {
       ok: true,
       ...(composed.subject !== undefined ? { subject: composed.subject } : {}),
       body: `${TEST_MESSAGE_PREFIX}${composed.body}`,
+      ...(usedPlaceholder ? { usedPlaceholder: true } : {}),
     };
   }
 

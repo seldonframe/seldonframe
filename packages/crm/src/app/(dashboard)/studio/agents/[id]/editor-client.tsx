@@ -523,9 +523,13 @@ export function AgentTemplateEditor(props: Props) {
         {/* Send test — outbound (event) agents only. Fire a REAL "[TEST] "
             review/speed-to-lead message to your own number/email NOW, no booking
             or lead required. Bypasses the throttle/guardrails/verify gates (it's an
-            explicit operator action); a review test still requires a review link.
-            Shown for kind=event; uses the CURRENTLY-SELECTED channel — save first
-            if you just switched channels so the test matches what you'll deploy. */}
+            explicit operator action). A review test never blocks on a missing
+            review link — the Google review link is a per-buyer, deploy-time
+            customization (each client sets their own when they deploy this
+            template), so the test falls back to a placeholder link and the UI
+            notes it. Shown for kind=event; uses the CURRENTLY-SELECTED channel —
+            save first if you just switched channels so the test matches what
+            you'll deploy. */}
         {triggerKind === "event" && (
           <SendTestCard templateId={props.templateId} channel={triggerChannel} />
         )}
@@ -1050,9 +1054,12 @@ function TriggerCard({
 // number (SMS) or address (email) the operator types — typically their own — via
 // sendTestEventAgentAction. No booking/lead is needed: it's the "make my phone
 // fire a review request" affordance. The action bypasses the throttle/guardrails/
-// verify gates (explicit operator action) but still requires a review link for a
-// review test, surfacing a clear error if it's missing. The input shown matches
-// the agent's current channel (phone vs email).
+// verify gates (explicit operator action). A review test never blocks on a
+// missing review link: the link is a per-buyer, deploy-time customization (each
+// client sets their own when they deploy this template), so the test falls back
+// to a placeholder link — `result.usedPlaceholder` flags that so we can show a
+// non-blocking note instead of an error. The input shown matches the agent's
+// current channel (phone vs email).
 function SendTestCard({
   templateId,
   channel,
@@ -1064,10 +1071,12 @@ function SendTestCard({
   const [to, setTo] = useState("");
   const [isSending, startSend] = useTransition();
   const [okMsg, setOkMsg] = useState<string | null>(null);
+  const [placeholderNote, setPlaceholderNote] = useState(false);
   const [errMsg, setErrMsg] = useState<string | null>(null);
 
   const send = () => {
     setOkMsg(null);
+    setPlaceholderNote(false);
     setErrMsg(null);
     const dest = to.trim();
     if (!dest) {
@@ -1081,6 +1090,7 @@ function SendTestCard({
       });
       if (result.ok) {
         setOkMsg(`Sent to ${result.to}: ${result.preview}`);
+        setPlaceholderNote(Boolean(result.usedPlaceholder));
       } else {
         setErrMsg(result.error);
       }
@@ -1106,7 +1116,7 @@ function SendTestCard({
             of this agent&apos;s message to {isEmail ? "an address" : "a number"}{" "}
             you choose — no booking or lead needed. The message is prefixed with{" "}
             <code className="font-mono text-[11px]">[TEST]</code>. Save first if
-            you just changed the channel or review link.
+            you just changed the channel.
           </p>
         </div>
       </div>
@@ -1136,6 +1146,12 @@ function SendTestCard({
       {okMsg && (
         <p className="mt-2 text-xs text-emerald-700 dark:text-emerald-400">
           ✓ {okMsg}
+        </p>
+      )}
+      {placeholderNote && (
+        <p className="mt-1 text-xs text-muted-foreground">
+          The Google review link is set by each client when they deploy this
+          template — your test uses a placeholder link.
         </p>
       )}
       {errMsg && (
