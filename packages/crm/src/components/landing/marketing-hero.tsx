@@ -1,12 +1,13 @@
 // packages/crm/src/components/landing/marketing-hero.tsx
 //
 // Redesign 2026-06-18 — warm light aesthetic (seldonstudio.com style).
-// Positioning v2 (2026-06-22): one promise, one CTA. Leads the service-business
-// owner (SMB); the builder/agency is the top rung of the same ladder, lower on
-// the page. Two CTAs:
+// Shopify-homepage redesign (2026-07-06): one promise, ONE CTA — the
+// "For agencies →" secondary CTA is gone (that pitch now lives on
+// /agencies). The build-proof video panel (HeroBuildProof) is removed
+// entirely and the two-column split collapses to a single centered
+// column so the chatbox/form is the clear focal point.
 //   Primary: "Build it free →" → /signup (SMB self-serve; free ungated build,
 //   no trial countdown — the $29/mo charge only happens at the domain moment)
-//   Secondary: "For agencies →" → #agencies (white-label reseller pitch)
 //
 // Design tokens used:
 //   --paper:    #F6F2EA  (warm off-white background)
@@ -27,7 +28,6 @@ import { useRouter } from "next/navigation";
 import { ArrowRight, FileText, Globe } from "lucide-react";
 
 import { MarketingDemoMarquee } from "@/components/landing/marketing-demo-marquee";
-import { HeroBuildProof } from "@/components/landing/hero-build-proof";
 import { heroSubmitTarget } from "@/components/landing/hero-submit-target";
 
 // Re-exported for callers that only need the pure routing decision (e.g.
@@ -190,37 +190,34 @@ export function MarketingHero({
       aria-label="SeldonFrame hero"
       className="relative flex flex-col items-center justify-center overflow-hidden px-5 pb-24 pt-[100px] text-center md:px-8 md:pb-32 md:pt-[120px] lg:px-12"
     >
-      {/* Desktop: headline/CTA/form stack (~55%) + build-proof panel (~45%),
-          vertically centered. Below lg: single column, panel renders after
-          the form (see the lg:hidden instance below). */}
-      <div className="flex w-full max-w-[1180px] flex-col items-center lg:flex-row lg:items-center lg:justify-center lg:gap-12 lg:text-left">
-      <div className="flex w-full flex-col items-center text-center lg:basis-[55%] lg:items-start lg:text-left">
-      {/* Eyebrow — leads SMB, keeps the dual build-or-sell hint */}
+      {/* Single centered column (video panel removed — the chatbox/form is
+          the focal point). */}
+      <div className="flex w-full max-w-[860px] flex-col items-center">
+      <div className="flex w-full flex-col items-center text-center">
+      {/* Eyebrow */}
       <p className="inline-flex items-center gap-2.5 font-sans text-[12.5px] tracking-[0.04em] text-[#6E665A]">
         <span className="inline-block h-px w-4 bg-[#9A9183]" aria-hidden />
         <span className="sf-blink-dot inline-block size-1.5 rounded-full bg-[#00897B]" aria-hidden />
-        Run your service business — or build agents and sell them
+        Built in 3 minutes — No coding
       </p>
 
       {/* Headline */}
       <h1 className="mt-3 max-w-[20ch] text-balance font-sans text-[clamp(34px,4.8vw,56px)] font-[500] leading-[1.04] tracking-[-0.025em] text-[#221D17]">
-        Your entire service business,{" "}
+        Start a service business{" "}
         <em className="font-[Newsreader,Georgia,serif] font-normal not-italic tracking-[-0.01em]">
-          live in 60 seconds.
+          for free
         </em>
       </h1>
 
       {/* Subhead */}
-      <p className="mx-auto mt-4 max-w-[62ch] text-pretty text-[clamp(15.5px,1.6vw,17.5px)] leading-[1.55] text-[#6E665A] lg:mx-0">
-        Paste your URL and watch it build — a multi-page{" "}
-        <strong className="font-[500] text-[#221D17]">website, booking page, intake form, and CRM</strong>, wired
-        together and ready for customers. Then add no-code AI agents — start from a template or build your own — to{" "}
-        <strong className="font-[500] text-[#221D17]">answer every call, request reviews, and handle your DMs and email.</strong>{" "}
-        The busywork, done for you.
+      <p className="mx-auto mt-4 max-w-[62ch] text-pretty text-[clamp(15.5px,1.6vw,17.5px)] leading-[1.55] text-[#6E665A]">
+        SeldonFrame is the all-in-one platform to{" "}
+        <strong className="font-[500] text-[#221D17]">build, run, and grow</strong>{" "}
+        your online business with agents. Start free, then $29/mo.
       </p>
 
-      {/* Two CTAs */}
-      <div className="mt-7 flex flex-wrap items-center justify-center gap-3 lg:justify-start">
+      {/* Primary CTA */}
+      <div className="mt-7 flex flex-wrap items-center justify-center gap-3">
         <a
           href="/signup"
           className="inline-flex items-center gap-2.5 rounded-full bg-[#1F2B24] px-6 py-3.5 text-[15px] font-[500] text-[#F6F2EA] shadow-[0_1px_2px_rgba(34,29,23,.10),0_6px_16px_rgba(34,29,23,.10),0_18px_40px_rgba(34,29,23,.06),inset_0_1.5px_0_rgba(255,255,255,.12)] transition-all hover:-translate-y-[1.5px] hover:shadow-[0_2px_4px_rgba(34,29,23,.12),0_12px_26px_rgba(34,29,23,.14),inset_0_1.5px_0_rgba(255,255,255,.14)] active:translate-y-px"
@@ -228,17 +225,11 @@ export function MarketingHero({
           <span className="size-[7px] rounded-full bg-[#00897B] shadow-[0_0_0_4px_rgba(0,137,123,.22)]" aria-hidden />
           Build it free →
         </a>
-        <a
-          href="#agencies"
-          className="inline-flex items-center gap-2 rounded-full border border-[rgba(34,29,23,.16)] bg-[#FFFDFA] px-5 py-3.5 text-[15px] font-[500] text-[#221D17] shadow-[0_0_0_.5px_rgba(34,29,23,.08),0_4px_20px_rgba(34,29,23,.06)] transition-all hover:-translate-y-[1.5px]"
-        >
-          For agencies →
-        </a>
       </div>
 
-      {/* Trust line under the CTA — replaces the old "free" line */}
+      {/* Trust line under the CTA */}
       <p className="mt-4 max-w-[60ch] text-pretty text-[13.5px] leading-[1.5] text-[#6E665A]">
-        then $29/mo · unlimited workspaces · works with your ChatGPT, Claude, or Gemini key — we show you how
+        unlimited workspaces · works with your ChatGPT, Claude, or Gemini key
       </p>
 
       {/* Input form */}
@@ -337,24 +328,12 @@ export function MarketingHero({
           </button>
         </div>
       </form>
-
-      {/* Build-proof panel — mobile/tablet position: after the form, before
-          the checklist. Hidden at lg (the two-column instance takes over). */}
-      <div className="mt-8 w-full lg:hidden">
-        <HeroBuildProof ungatedBuildEnabled={ungatedBuildEnabled} />
-      </div>
-      </div>
-
-      {/* Build-proof panel — desktop position: right column, vertically
-          centered against the left stack. */}
-      <div className="hidden lg:flex lg:basis-[45%] lg:items-center lg:justify-center">
-        <HeroBuildProof ungatedBuildEnabled={ungatedBuildEnabled} />
       </div>
       </div>
 
       {/* Proof checklist */}
       <ul className="mt-6 flex flex-wrap items-center justify-center gap-x-5 gap-y-2">
-        {["Build it free", "Live in 60 seconds", "$29/mo flat", "Cancel anytime"].map((item) => (
+        {["Build it free", "Live in 3 minutes", "$29/mo flat", "Cancel anytime"].map((item) => (
           <li key={item} className="flex items-center gap-2 text-[13.5px] text-[#6E665A]">
             <span className="flex size-[17px] items-center justify-center rounded-full bg-[rgba(0,137,123,.12)] text-[10px] font-[700] text-[#00897B]" aria-hidden>✓</span>
             {item}

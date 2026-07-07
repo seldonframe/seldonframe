@@ -3,29 +3,19 @@
 // Redesign 2026-06-18 — warm light aesthetic matching seldonstudio.com.
 // Paper/parchment surface (#F6F2EA → #FFFDFA on scroll), Hanken Grotesk
 // sans, SeldonFrame green (#00897B) as accent (replaces teal #14b8a6).
-// Dual CTAs: "Start building" (SMB self-serve) + "For agencies →"
-// (white-label reseller path).
+//
+// Shopify-homepage redesign (2026-07-06) — single CTA, minimal nav. The
+// center nav links, the "For agencies →" button, and the mobile drawer
+// (now unnecessary with no nav links) are removed. Right cluster is just
+// a subtle "Log in" link + one primary CTA ("Start for free" → /signup).
 
 "use client";
 
 import { useEffect, useState } from "react";
 import Link from "next/link";
-import { Menu, X } from "lucide-react";
-
-type NavLink = { href: string; label: string };
-
-const NAV_LINKS: readonly NavLink[] = [
-  { href: "#build", label: "How it works" },
-  { href: "#pricing", label: "Pricing" },
-  { href: "#modules", label: "Features" },
-  { href: "/marketplace", label: "Marketplace" },
-  { href: "#agencies", label: "Agencies" },
-  { href: "#faq", label: "FAQ" },
-];
 
 export function MarketingNav() {
   const [solid, setSolid] = useState(false);
-  const [open, setOpen] = useState(false);
 
   useEffect(() => {
     const onScroll = () => setSolid(window.scrollY > 60);
@@ -72,93 +62,22 @@ export function MarketingNav() {
           <span>SeldonFrame</span>
         </Link>
 
-        {/* Desktop center nav */}
-        <nav aria-label="Sections" className="hidden items-center gap-6 min-[900px]:inline-flex">
-          {NAV_LINKS.map((link) => (
-            <Link
-              key={link.href}
-              href={link.href}
-              className="text-[14px] font-medium text-[#6E665A] transition-colors hover:text-[#221D17]"
-            >
-              {link.label}
-            </Link>
-          ))}
-        </nav>
-
-        {/* Right cluster */}
+        {/* Right cluster — subtle Log in + one primary CTA */}
         <div className="inline-flex items-center gap-2 md:gap-3">
           <Link
             href="/login"
-            className="hidden h-[34px] items-center rounded-full border border-[rgba(34,29,23,.18)] bg-transparent px-4 text-[13.5px] font-medium text-[#6E665A] transition-colors hover:border-[rgba(34,29,23,.28)] hover:text-[#221D17] sm:inline-flex"
+            className="inline-flex h-[34px] items-center rounded-full border border-[rgba(34,29,23,.18)] bg-transparent px-4 text-[13.5px] font-medium text-[#6E665A] transition-colors hover:border-[rgba(34,29,23,.28)] hover:text-[#221D17]"
           >
             Log in
-          </Link>
-          <Link
-            href="#agencies"
-            className="hidden h-[34px] items-center rounded-full border border-[rgba(34,29,23,.18)] bg-transparent px-4 text-[13.5px] font-medium text-[#00897B] transition-colors hover:border-[#00897B]/40 hover:text-[#00695C] md:inline-flex"
-          >
-            For agencies →
           </Link>
           <Link
             href="/signup"
             className="inline-flex h-9 items-center justify-center gap-2 rounded-full bg-[#1F2B24] px-4 text-[13.5px] font-semibold text-[#F6F2EA] shadow-[0_1px_2px_rgba(34,29,23,.10),0_6px_16px_rgba(34,29,23,.10),0_18px_40px_rgba(34,29,23,.06),inset_0_1.5px_0_rgba(255,255,255,.12)] transition-all hover:-translate-y-px hover:shadow-[0_2px_4px_rgba(34,29,23,.12),0_12px_26px_rgba(34,29,23,.14),inset_0_1.5px_0_rgba(255,255,255,.14)] active:translate-y-px focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[#00897B]"
           >
             <span className="size-1.5 rounded-full bg-[#00897B]" aria-hidden />
-            Start building
+            Start for free
           </Link>
-
-          {/* Mobile menu toggle */}
-          <button
-            type="button"
-            aria-label={open ? "Close menu" : "Open menu"}
-            aria-expanded={open}
-            aria-controls="marketing-nav-drawer"
-            onClick={() => setOpen((p) => !p)}
-            className="flex size-9 items-center justify-center rounded-full border border-[rgba(34,29,23,.14)] bg-[#FFFDFA] text-[#6E665A] transition-colors hover:text-[#221D17] min-[900px]:hidden"
-          >
-            {open ? <X size={17} /> : <Menu size={17} />}
-          </button>
         </div>
-      </div>
-
-      {/* Mobile drawer */}
-      <div
-        id="marketing-nav-drawer"
-        className={`overflow-hidden border-t border-[rgba(34,29,23,.08)] bg-[#FFFDFA]/97 backdrop-blur-md transition-[max-height] duration-200 ease-out min-[900px]:hidden ${
-          open ? "max-h-80" : "max-h-0"
-        }`}
-      >
-        <ul className="flex flex-col gap-1 px-4 py-3 text-[14px] font-medium text-[#6E665A]">
-          {NAV_LINKS.map((link) => (
-            <li key={link.href}>
-              <Link
-                href={link.href}
-                onClick={() => setOpen(false)}
-                className="block rounded-lg px-3 py-2.5 transition-colors hover:bg-[#EFE9DD] hover:text-[#221D17]"
-              >
-                {link.label}
-              </Link>
-            </li>
-          ))}
-          <li>
-            <Link
-              href="/login"
-              onClick={() => setOpen(false)}
-              className="block rounded-lg px-3 py-2.5 transition-colors hover:bg-[#EFE9DD] hover:text-[#221D17] sm:hidden"
-            >
-              Log in
-            </Link>
-          </li>
-          <li className="mt-2 border-t border-[rgba(34,29,23,.08)] pt-2">
-            <Link
-              href="/signup"
-              onClick={() => setOpen(false)}
-              className="block rounded-full bg-[#1F2B24] px-4 py-2.5 text-center text-[#F6F2EA]"
-            >
-              Start building
-            </Link>
-          </li>
-        </ul>
       </div>
     </header>
   );
