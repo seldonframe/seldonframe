@@ -52,7 +52,7 @@ import { parseUsageCap, evaluateUsageCap, periodKeyUtc } from "@/lib/billing/usa
 import { isAutopayConsoleOn } from "@/lib/web-build/policy";
 import { deriveRetainerStatus } from "@/lib/payments/retainer";
 import { db } from "@/db";
-import { organizations, subscriptions } from "@/db/schema";
+import { organizations, subscriptions, proposals } from "@/db/schema";
 import { inArray, desc } from "drizzle-orm";
 import { StudioTabs } from "../studio-tabs";
 import { DeploymentStatusBadge } from "./status-badge";
@@ -130,6 +130,13 @@ export default async function StudioClientsPage({
 
   // Autopay console (2026-07-08, Task 2) — flag-gated. Off → the editor is
   // absent entirely (pinned by a test) and this query never runs.
+  //
+  // IMPORTANT: subscriptions.orgId is the AGENCY's org (resolved from the
+  // connected Stripe account in the webhook), NEVER the client org — so this
+  // can't filter subscriptions by clientOrgId directly. The join key is
+  // proposals.previewWorkspaceId (repurposed for existing-client retainers,
+  // see lib/payments/retainer.ts::createProposalRowReal) →
+  // proposals.stripeSubscriptionId → subscriptions.stripeSubscriptionId.
   const autopayConsoleOn = isAutopayConsoleOn({ SF_AUTOPAY_CONSOLE: process.env.SF_AUTOPAY_CONSOLE });
   const retainerStatusByOrg = new Map<string, ReturnType<typeof deriveRetainerStatus>>();
   if (autopayConsoleOn) {
@@ -137,19 +144,40 @@ export default async function StudioClientsPage({
       .map((g) => g.clientOrgId)
       .filter((id): id is string => Boolean(id));
     if (clientOrgIds.length > 0) {
-      const subRows = await db
-        .select({ orgId: subscriptions.orgId, status: subscriptions.status, createdAt: subscriptions.createdAt })
-        .from(subscriptions)
-        .where(inArray(subscriptions.orgId, clientOrgIds))
-        .orderBy(desc(subscriptions.createdAt));
-      // Keep only the MOST RECENT subscription row per org (orderBy above
-      // means the first occurrence per orgId in iteration order is the latest).
-      const seen = new Set<string>();
-      for (const row of subRows) {
-        if (seen.has(row.orgId)) continue;
-        seen.add(row.orgId);
-        retainerStatusByOrg.set(row.orgId, deriveRetainerStatus({ subscription: { status: row.status } }));
+      const proposalRows = await db
+        .select({ clientOrgId: proposals.previewWorkspaceId, stripeSubscriptionId: proposals.stripeSubscriptionId })
+        .from(proposals)
+        .where(inArray(proposals.previewWorkspaceId, clientOrgIds));
+
+      const subIdToClientOrg = new Map<string, string>();
+      for (const row of proposalRows) {
+        if (row.clientOrgId && row.stripeSubscriptionId) {
+          subIdToClientOrg.set(row.stripeSubscriptionId, row.clientOrgId);
+        }
       }
+
+      if (subIdToClientOrg.size > 0) {
+        const subRows = await db
+          .select({
+            stripeSubscriptionId: subscriptions.stripeSubscriptionId,
+            status: subscriptions.status,
+            createdAt: subscriptions.createdAt,
+          })
+          .from(subscriptions)
+          .where(inArray(subscriptions.stripeSubscriptionId, Array.from(subIdToClientOrg.keys())))
+          .orderBy(desc(subscriptions.createdAt));
+
+        // Keep only the MOST RECENT subscription row per client org (orderBy
+        // above means the first occurrence per clientOrgId in iteration
+        // order is the latest).
+        for (const row of subRows) {
+          if (!row.stripeSubscriptionId) continue;
+          const clientOrgId = subIdToClientOrg.get(row.stripeSubscriptionId);
+          if (!clientOrgId || retainerStatusByOrg.has(clientOrgId)) continue;
+          retainerStatusByOrg.set(clientOrgId, deriveRetainerStatus({ subscription: { status: row.status } }));
+        }
+      }
+
       for (const orgId of clientOrgIds) {
         if (!retainerStatusByOrg.has(orgId)) retainerStatusByOrg.set(orgId, "none");
       }

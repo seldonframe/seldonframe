@@ -370,7 +370,13 @@ async function createProposalRowReal(
     agencyName: input.contact.name,
     monthlyPriceCents: input.monthlyPriceCents,
     setupFeeCents: input.setupFeeCents ?? 0,
-    previewWorkspaceId: null,
+    // previewWorkspaceId doubles as the CLIENT ORG join key for existing-client
+    // retainers (D1) — the webhook's own previewMode-flip logic is a safe no-op
+    // for an already-active client (it only flips workspaces still in
+    // previewMode:true), so reusing this column costs nothing and lets
+    // cancelClientRetainer + resolveProposalBySubscriptionId resolve the
+    // CLIENT org (not just the agency org that subscriptions.orgId carries).
+    previewWorkspaceId: input.clientOrgId,
     scopeItems: [{ label: "Monthly retainer" }],
     generatedHtml: `<p>Retainer checkout for ${input.contact.name}. $${(input.monthlyPriceCents / 100).toFixed(0)}/mo.</p>`,
   });
@@ -462,11 +468,29 @@ export async function cancelClientRetainer(
   return { ok: true };
 }
 
+/** Resolve a client org's active retainer subscription. IMPORTANT:
+ *  subscriptions.orgId is the AGENCY's org (resolved from the connected
+ *  Stripe account in the webhook — see resolveOrgByAccount in
+ *  app/api/webhooks/stripe/connect/route.ts), NEVER the client org. The
+ *  client join key is proposals.previewWorkspaceId (repurposed for
+ *  existing-client retainers — see createProposalRowReal above) →
+ *  proposals.stripeSubscriptionId → subscriptions.stripeSubscriptionId. */
 async function findActiveSubscriptionReal(clientOrgId: string): Promise<{ stripeSubscriptionId: string } | null> {
+  const proposalRows = await db
+    .select({ stripeSubscriptionId: proposals.stripeSubscriptionId })
+    .from(proposals)
+    .where(eq(proposals.previewWorkspaceId, clientOrgId));
+
+  const subscriptionIds = proposalRows
+    .map((r) => r.stripeSubscriptionId)
+    .filter((id): id is string => Boolean(id));
+  if (subscriptionIds.length === 0) return null;
+
+  const { inArray } = await import("drizzle-orm");
   const [row] = await db
     .select({ stripeSubscriptionId: subscriptions.stripeSubscriptionId })
     .from(subscriptions)
-    .where(and(eq(subscriptions.orgId, clientOrgId), eq(subscriptions.status, "active")))
+    .where(and(inArray(subscriptions.stripeSubscriptionId, subscriptionIds), eq(subscriptions.status, "active")))
     .orderBy(desc(subscriptions.createdAt))
     .limit(1);
   if (!row?.stripeSubscriptionId) return null;
