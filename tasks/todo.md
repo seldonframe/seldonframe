@@ -7,6 +7,18 @@ with a checkable plan, gets ticked off as it ships, and ends with a review block
 
 ## In flight
 
+### Task — GHL-intercept SEO/GEO engine (2026-07-08, branch feature/ghl-seo-engine)
+
+Design: docs/superpowers/specs/2026-07-08-ghl-seo-engine-design.md
+
+- [ ] A. Registry content: 10 new competitors in `alternative-pages.ts` + `alternative-pages-extras.ts` (+10 gohighlevel-vs-X VS_PAIRS)
+- [ ] B. Route folders: 10 `/alternative-to-<slug>` pages + 10 `.md` twins + 10 `compare/gohighlevel-vs-<slug>.md` twins
+- [ ] C. `/best` engine: `lib/seo/best-pages.ts` + spec, `components/seo/best-page.tsx`, `best/[slug]` + hub, ~30 combos, `.md` twins via `renderBestMarkdown`
+- [ ] D. Free tools: review-link-generator, ai-receptionist-cost-calculator, a2p-10dlc-checker, review-response-generator
+- [ ] E. Integration: sitemap.ts, llms.txt, tools hub TOOLS array, alternatives hub description
+- [ ] F. Verify: best-pages spec + existing seo specs, tsc-delta vs baseline, reviewer pass
+- [ ] G. Review section + memory update
+
 ### Task — build-pipeline upgrade: mechanical tier pins + wedge strategy (2026-07-07) — DONE
 
 Trigger: reflection on the Managed Agents multi-agent API vs our pipeline. Findings: the ship-feature tier table was already the "plan big, execute small" pattern, but the agent definitions contradicted it (scout pinned opus, implementer pinned fable) — the exact "locked by memory isn't locked" drift the skill itself warns about.

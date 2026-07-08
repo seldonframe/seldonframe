@@ -12,7 +12,7 @@ import { VS_PAIRS, vsSlug } from "@/lib/seo/alternative-pages-extras";
 export const metadata: Metadata = {
   title: "SeldonFrame vs the alternatives — honest comparisons for agencies & builders",
   description:
-    "How SeldonFrame compares to GoHighLevel, Vapi, Retell, Synthflow, Chatbase, Podium and more: AI receptionist, website, CRM and booking at $29/mo flat.",
+    "How SeldonFrame compares to GoHighLevel, HubSpot, ActiveCampaign, ClickFunnels, Vapi, Podium and more — plus HighLevel head-to-heads: AI receptionist, website, CRM and booking at $29/mo flat.",
   alternates: { canonical: "/alternatives" },
 };
 

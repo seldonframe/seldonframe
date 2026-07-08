@@ -15,6 +15,7 @@ import type { MetadataRoute } from "next";
 import { AGENT_JOBS, allJobVerticalPairs } from "@/lib/seo/agent-pages";
 import { COMPETITORS } from "@/lib/seo/alternative-pages";
 import { VS_PAIRS, vsSlug } from "@/lib/seo/alternative-pages-extras";
+import { allBestSlugs } from "@/lib/seo/best-pages";
 import { listMarketplaceAgentsFromDb } from "@/lib/marketplace/agent-listings";
 import { MARKETPLACE_SEED } from "@/components/marketplace/marketplace-seed";
 
@@ -111,14 +112,33 @@ export default async function sitemap(): Promise<MetadataRoute.Sitemap> {
     });
   }
 
+  // Best-of buying guides (/best hub + /best/<category>-for-<audience>).
+  entries.push({ url: `${base}/best`, lastModified: now, changeFrequency: "weekly", priority: 0.8 });
+  for (const slug of allBestSlugs()) {
+    entries.push({
+      url: `${base}/best/${slug}`,
+      lastModified: now,
+      changeFrequency: "monthly",
+      priority: 0.7,
+    });
+  }
+
   // Free tools.
   entries.push({ url: `${base}/tools`, lastModified: now, changeFrequency: "monthly", priority: 0.7 });
-  entries.push({
-    url: `${base}/tools/missed-call-calculator`,
-    lastModified: now,
-    changeFrequency: "monthly",
-    priority: 0.7,
-  });
+  for (const tool of [
+    "missed-call-calculator",
+    "google-review-link-generator",
+    "ai-receptionist-cost-calculator",
+    "a2p-10dlc-checker",
+    "review-response-generator",
+  ]) {
+    entries.push({
+      url: `${base}/tools/${tool}`,
+      lastModified: now,
+      changeFrequency: "monthly",
+      priority: 0.7,
+    });
+  }
 
   return entries;
 }

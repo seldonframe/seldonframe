@@ -1,0 +1,17 @@
+// /best/website-builder-for-hvac.md â€” Markdown twin of the listicle page.
+import { renderBestMarkdown } from "@/lib/seo/best-markdown";
+import { logMarkdownFetch } from "@/lib/marketplace/md-analytics";
+
+export const dynamic = "force-dynamic";
+
+export function GET(req: Request): Response {
+  logMarkdownFetch(req, { surface: "best_page", mode: "explicit_md", path: "/best/website-builder-for-hvac.md" });
+  const md = renderBestMarkdown("website-builder-for-hvac");
+  return new Response(md, {
+    headers: {
+      "Content-Type": "text/markdown; charset=utf-8",
+      Link: '<https://seldonframe.com/best/website-builder-for-hvac>; rel="alternate"; type="text/html"',
+      "Cache-Control": "public, max-age=300, s-maxage=3600",
+    },
+  });
+}

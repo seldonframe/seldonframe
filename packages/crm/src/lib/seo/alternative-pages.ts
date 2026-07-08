@@ -863,6 +863,526 @@ export const COMPETITORS: Competitor[] = [
       },
     ],
   },
+  {
+    slug: "activecampaign",
+    name: "ActiveCampaign",
+    category: "email automation & CRM",
+    oneLiner:
+      "ActiveCampaign is an automation-first email marketing platform with a light CRM layer, priced per contact.",
+    heroSub:
+      "Stop watching your bill climb with your list size. SeldonFrame gives a local business the AI receptionist, website, CRM and booking system at $29/mo flat, on your own keys — not per contact.",
+    intro: [
+      "Most people looking for an ActiveCampaign alternative hit the same wall: per-contact pricing. Plans run roughly $15–$145/mo at just 1,000 contacts (annual billing, configurator-gated), and the bill climbs steeply as the list grows — inactive and unsubscribed contacts often still count. There's no white-label layer for agencies, and nothing that answers a phone, texts back a missed call, or books a job into a calendar — ActiveCampaign automates email, it doesn't run the front office.",
+      "That's not to say ActiveCampaign isn't impressive — its automation-builder depth, deliverability reputation and 900+ integrations are genuinely best-in-class for email marketers. If your business lives and dies on segmented email sequences, it's hard to beat. But most local service businesses lose more revenue to an unanswered phone than an unopened newsletter.",
+    ],
+    them: {
+      bestFor: "Email marketers running deep automated sequences",
+      pricingModel: "~$15–$145/mo at 1,000 contacts (annual, configurator-gated); climbs with list size",
+      aiReceptionist: "None — Active Intelligence AI assists with content/predictions, not phone or SMS answering",
+      frontOffice: "None — email/CRM only; no website builder, booking calendar or intake forms",
+      whitelabel: "None — not built for agency resale",
+      aiCosts: "Bundled into per-contact plan tiers",
+      resale: "No native reseller program",
+    },
+    switchReasons: [
+      {
+        title: "Flat $29, not per-contact math",
+        body: "ActiveCampaign's bill grows with your list, often counting contacts you'll never email again. SeldonFrame is $29/mo flat with unlimited workspaces, whatever your contact count.",
+      },
+      {
+        title: "Answers phones, not just inboxes",
+        body: "ActiveCampaign has no phone or SMS receptionist. SeldonFrame's agent answers calls, texts back missed ones, and chats on the website — the same brain across every channel.",
+      },
+      {
+        title: "The whole front office, not just email",
+        body: "SeldonFrame includes a website, booking calendar, intake forms and CRM alongside the agent — ActiveCampaign assumes you already have all of that elsewhere.",
+      },
+      {
+        title: "Whitelabel for agencies",
+        body: "ActiveCampaign has no agency resale model. SeldonFrame includes a branded client portal and per-client workspaces at $29/mo.",
+      },
+    ],
+    whenTheyWin:
+      "Choose ActiveCampaign if segmented, deeply automated email marketing is your core deliverable and you need its integration depth with 900+ tools.",
+    faq: [
+      {
+        q: "Does SeldonFrame replace ActiveCampaign's email automation?",
+        a: "SeldonFrame handles the front-office jobs — speed-to-lead follow-ups, review requests, appointment reminders — over SMS and email triggered by real events (new lead, missed call, completed booking). It's not a general-purpose email-campaign builder for newsletters and broadcast sequences.",
+      },
+      {
+        q: "Will my costs grow with my contact list on SeldonFrame?",
+        a: "No — $29/mo is flat regardless of contact count. AI usage runs on your own key at provider cost, so growth doesn't compound your platform bill.",
+      },
+    ],
+  },
+  {
+    slug: "hubspot",
+    name: "HubSpot",
+    category: "enterprise CRM",
+    oneLiner:
+      "HubSpot is a premium all-in-one CRM and marketing platform that scales from a free tier to enterprise contracts.",
+    heroSub:
+      "Skip the 40x price cliff between Starter and Pro. SeldonFrame gives every client the AI receptionist, website, CRM and booking system at $29/mo flat, with no mandatory onboarding fee.",
+    intro: [
+      "Most people looking for a HubSpot alternative hit the same wall: the jump from entry to real usage is brutal. Marketing Starter runs $15/seat/mo, but Professional jumps to roughly $800/mo plus a mandatory $3,000 onboarding fee, and Enterprise runs $3,600/mo — a roughly 40x cliff between the tier that gets you noticed and the tier that does real marketing automation. AI features are metered via credits on top, and there's no white-label layer at any price; SMS and voice both need third-party add-ons.",
+      "That's not to say HubSpot isn't impressive — its CRM depth, reporting and enterprise polish are genuinely category-leading, and for a funded B2B sales team managing complex pipelines it scales further than almost anything else. But local service businesses don't need enterprise pipeline reporting; they need their phone answered and the job booked.",
+    ],
+    them: {
+      bestFor: "Funded B2B sales & marketing teams needing enterprise CRM depth",
+      pricingModel: "Free CRM; Marketing Starter $15/seat/mo; Pro ~$800/mo + $3,000 onboarding; Enterprise $3,600/mo",
+      aiReceptionist: "None — HubSpot Breeze AI assists with content, insights and chat, not phone answering",
+      frontOffice: "Partial — CRM and reporting are deep; SMS/voice need add-ons, no native booking-into-front-office flow",
+      whitelabel: "None — not an agency resale platform",
+      aiCosts: "Credit-metered on top of seat pricing",
+      resale: "No native agency reseller program",
+    },
+    switchReasons: [
+      {
+        title: "No 40x pricing cliff",
+        body: "HubSpot's jump from Starter to Pro is roughly $15/seat to $800/mo plus $3,000 onboarding. SeldonFrame is $29/mo flat — no onboarding fee, no seat multiplier.",
+      },
+      {
+        title: "A phone-answering agent, not just a smarter CRM",
+        body: "Breeze AI helps write content and summarize deals. SeldonFrame's agent answers calls, qualifies leads and books jobs directly — the phone is the product, not a feature request.",
+      },
+      {
+        title: "SMS and voice included, not bolted on",
+        body: "HubSpot needs third-party integrations for SMS and voice. SeldonFrame's receptionist handles voice, SMS and chat on your own Twilio and AI keys at raw cost.",
+      },
+      {
+        title: "Whitelabel for agencies serving local clients",
+        body: "HubSpot has no agency resale model. SeldonFrame gives every client a branded workspace under your agency's domain.",
+      },
+    ],
+    whenTheyWin:
+      "Choose HubSpot if you're a funded B2B team that needs enterprise-grade pipeline reporting, marketing attribution and CRM customization, and the budget to match.",
+    faq: [
+      {
+        q: "Is SeldonFrame a HubSpot replacement for enterprise sales teams?",
+        a: "No — HubSpot's enterprise reporting, attribution modeling and pipeline customization go deeper than SeldonFrame is built for. SeldonFrame is purpose-built for the local-service front office: an agent that answers, qualifies and books, with the CRM, site and calendar behind it.",
+      },
+      {
+        q: "Does SeldonFrame have a free tier like HubSpot's free CRM?",
+        a: "SeldonFrame lets you build the full workspace — site, CRM, booking, agent — free in about 3 minutes before you ever create an account; the $29/mo subscription starts when you claim and go live.",
+      },
+    ],
+  },
+  {
+    slug: "clickfunnels",
+    name: "ClickFunnels",
+    category: "funnel builder",
+    oneLiner:
+      "ClickFunnels is a funnel-building platform for offer-sellers, built around templated sales pages and checkout flows.",
+    heroSub:
+      "A funnel converts a click — it doesn't answer a phone. SeldonFrame pairs the front office with an AI receptionist that answers, qualifies and books, at $29/mo flat with no contact caps.",
+    intro: [
+      "Most people looking for a ClickFunnels alternative hit the same wall: contact caps and a missing back office. Launch runs $97/mo (10,000 contacts), Scale $197/mo, Optimize $297/mo — every tier caps contacts, so growth means an upgrade. There's no white-label or agency model, the CRM is thin, and there's no native SMS or voice — if a lead calls instead of clicking, ClickFunnels has nothing for that.",
+      "That's not to say ClickFunnels isn't impressive — its converting templates, fast solo-launch workflow and the Brunson ecosystem of courses and community are genuinely valuable for a single offer-seller. But local service businesses aren't selling a digital offer through a funnel; they're answering calls and booking jobs, and that's a different tool.",
+    ],
+    them: {
+      bestFor: "Solo offer-sellers building sales funnels and digital products",
+      pricingModel: "Launch $97/mo (10k contacts) / Scale $197/mo / Optimize $297/mo — contact caps every tier",
+      aiReceptionist: "None — no phone, SMS or chat answering",
+      frontOffice: "Partial — funnels and checkout pages; weak CRM, no booking calendar or intake forms",
+      whitelabel: "None — no agency or reseller model",
+      aiCosts: "Not applicable — no native AI agent",
+      resale: "No",
+    },
+    switchReasons: [
+      {
+        title: "No contact caps to upgrade past",
+        body: "Every ClickFunnels tier caps contacts. SeldonFrame is $29/mo flat with unlimited workspaces — growth doesn't force a plan change.",
+      },
+      {
+        title: "Answers the phone a funnel can't",
+        body: "ClickFunnels has no phone or SMS layer at all. SeldonFrame's receptionist answers calls, texts back missed ones, and books directly into a real calendar.",
+      },
+      {
+        title: "A real CRM and booking system, not just a funnel",
+        body: "SeldonFrame includes a full CRM, booking calendar and intake forms — ClickFunnels' CRM is thin by comparison, built for capturing leads, not running the business behind them.",
+      },
+      {
+        title: "Whitelabel for agencies",
+        body: "ClickFunnels has no agency resale model. SeldonFrame gives every client a branded workspace at $29/mo.",
+      },
+    ],
+    whenTheyWin:
+      "Choose ClickFunnels if you're a solo operator selling a single digital offer through a converting funnel, and want the Brunson-ecosystem templates and community around it.",
+    faq: [
+      {
+        q: "Can SeldonFrame build landing pages like ClickFunnels?",
+        a: "SeldonFrame generates a full multi-page service website — not a single-offer sales funnel — grounded in the business's real services, FAQs and reviews, with booking and intake built in.",
+      },
+      {
+        q: "Does SeldonFrame have contact caps like ClickFunnels?",
+        a: "No — $29/mo is flat regardless of contact count or list size.",
+      },
+    ],
+  },
+  {
+    slug: "keap",
+    name: "Keap",
+    category: "SMB CRM & automation",
+    oneLiner:
+      "Keap (Thryv-owned since October 2024) is a veteran small-business CRM and automation platform with invoicing and payments.",
+    heroSub:
+      "Skip the 3x-GHL entry price for a platform mid-acquisition. SeldonFrame gives every client an AI receptionist, website, CRM and booking system at $29/mo flat.",
+    intro: [
+      "Most people looking for a Keap alternative hit the same wall: the price and the timing. Plans start from $299/mo ($249 annual) for just 2 users and 1,500 contacts, plus $39 per additional user and a paid implementation package to get set up — roughly 3x GoHighLevel's entry price for a narrower feature set. Keap was acquired by Thryv in October 2024, and features are gradually folding into the Thryv product line, which leaves its standalone roadmap uncertain. There's no white-label layer and no AI receptionist.",
+      "That's not to say Keap isn't impressive — its automation maturity, invoicing/payments integration and onboarding culture built real loyalty over nearly two decades. If you're already deep in Keap and its acquisition-era changes don't concern you, switching costs may outweigh the savings. But for a business that just needs its phone answered and jobs booked, $299/mo plus per-user fees is a lot of platform for that one job.",
+    ],
+    them: {
+      bestFor: "Established SMBs with mature Keap automations already built",
+      pricingModel: "From $299/mo ($249 annual, 2 users, 1,500 contacts) + $39/user + paid implementation",
+      aiReceptionist: "None — no phone, SMS or chat AI agent",
+      frontOffice: "Partial — CRM, invoicing and payments; no website builder, no AI-driven booking",
+      whitelabel: "None — not built for agency resale",
+      aiCosts: "Not applicable — no native AI agent",
+      resale: "No",
+    },
+    switchReasons: [
+      {
+        title: "A third of the entry price",
+        body: "Keap starts at $299/mo for 2 users. SeldonFrame is $29/mo flat, unlimited use — no per-user fee, no paid implementation package required.",
+      },
+      {
+        title: "An AI receptionist Keap doesn't have",
+        body: "Keap has no phone or chat AI. SeldonFrame's agent answers calls, qualifies leads and books jobs into a real calendar automatically.",
+      },
+      {
+        title: "A website and booking calendar included",
+        body: "Keap is CRM-and-automation only. SeldonFrame adds a generated multi-page website, booking calendar and intake forms in the same workspace.",
+      },
+      {
+        title: "A platform on a stable, singular roadmap",
+        body: "Keap's post-acquisition roadmap is being absorbed into Thryv over time. SeldonFrame's roadmap is the AI front office, undivided.",
+      },
+    ],
+    whenTheyWin:
+      "Choose Keap if you have years of automations, invoicing and payment workflows already built there and the acquisition-era changes don't affect your use case.",
+    faq: [
+      {
+        q: "Does SeldonFrame do invoicing and payments like Keap?",
+        a: "SeldonFrame's core is the front office — receptionist, website, CRM, booking and intake. Payments run through Stripe where configured; deep invoicing workflows are not the product's focus the way they are for Keap.",
+      },
+      {
+        q: "Is switching from Keap disruptive?",
+        a: "Export your Keap contacts to CSV and import them into SeldonFrame; run both in parallel for a week while the new AI receptionist takes over call handling, then cancel Keap when you're confident.",
+      },
+    ],
+  },
+  {
+    slug: "linktree",
+    name: "Linktree",
+    category: "link-in-bio",
+    oneLiner:
+      "Linktree is a link-in-bio tool that turns one profile link into a landing page of links, not a business platform.",
+    heroSub:
+      "A link-in-bio page can't answer a phone or take a booking. SeldonFrame gives a local business a real website, AI receptionist, CRM and booking calendar at $29/mo flat.",
+    intro: [
+      "Most people looking for a Linktree alternative hit the same wall: it's one page of links, not a business. The free tier is genuinely usable, but paid tiers run $8–$35/mo, and 0% sales commission is Premium-only — below that, Linktree takes a 9–12% cut of anything sold through it. There's no CRM, no booking calendar, no automation and nothing that answers a phone or a text — it's a rented touchpoint pointing traffic somewhere else, not a system that runs the business.",
+      "That's not to say Linktree isn't impressive — the 60-second setup and creator mind-share it built are real, and for a creator who just needs one clean link to their content, it's still the fastest way to get one. But a local service business needs more than a link; it needs its calls answered and its jobs booked.",
+    ],
+    them: {
+      bestFor: "Creators and individuals who need one bio link, not a business system",
+      pricingModel: "Free / $8 / $15 / $35/mo — 0% sales commission only on the $35 Premium tier, 9–12% below it",
+      aiReceptionist: "None — link page only, no phone, SMS or chat",
+      frontOffice: "None — no website, CRM, booking calendar or intake forms",
+      whitelabel: "None — not built for agencies or client resale",
+      aiCosts: "Not applicable — no native AI agent",
+      resale: "No — and a sales commission applies below Premium",
+    },
+    switchReasons: [
+      {
+        title: "A real website, not a link page",
+        body: "SeldonFrame generates a full multi-page service site — services, booking, reviews, contact — not a single page of outbound links.",
+      },
+      {
+        title: "An AI receptionist Linktree can't offer",
+        body: "Linktree has no phone, SMS or chat capability. SeldonFrame's agent answers calls, qualifies leads and books jobs automatically.",
+      },
+      {
+        title: "No commission on what you sell",
+        body: "Linktree takes 9–12% of sales below its $35 Premium tier. SeldonFrame charges $29/mo flat — nothing extra on bookings you close yourself.",
+      },
+      {
+        title: "A CRM and calendar behind the link",
+        body: "Every lead that clicks through lands in a real CRM with a real booking calendar — not just a click-through log.",
+      },
+    ],
+    whenTheyWin:
+      "Choose Linktree if you're a creator who only needs one link consolidating your social profiles and content, with no need for a CRM, booking or phone answering.",
+    faq: [
+      {
+        q: "Can SeldonFrame replace my Linktree bio link?",
+        a: "Yes — SeldonFrame generates a full website with its own links, services and booking page; you can still point your social bio at it the same way you'd point it at a Linktree page.",
+      },
+      {
+        q: "Does SeldonFrame take a commission on sales like Linktree's lower tiers?",
+        a: "No — $29/mo is flat. SeldonFrame charges 2% only on sales processed through SeldonFrame checkout, and nothing on business you close yourself.",
+      },
+    ],
+  },
+  {
+    slug: "kartra",
+    name: "Kartra",
+    category: "creator all-in-one",
+    oneLiner:
+      "Kartra is an all-in-one platform for creators and coaches selling courses, memberships and video content, with contact-capped tiers.",
+    heroSub:
+      "500 contacts on the entry tier isn't a real local-business CRM. SeldonFrame gives every client an AI receptionist, website, CRM and booking system at $29/mo flat, no contact caps.",
+    intro: [
+      "Most people looking for a Kartra alternative hit the same wall: contact caps everywhere. Essentials runs $59/mo but caps at just 500 contacts, Starter $119/mo, Growth $229/mo, Pro $549/mo — every tier has a ceiling that forces an upgrade as the list grows. There's no white-label or sub-account model for agencies, and no phone or local-SMB tooling at all — Kartra is built for selling courses and memberships, not answering calls and booking jobs.",
+      "That's not to say Kartra isn't impressive — its course/membership/video/affiliate tooling and built-in helpdesk are genuinely deep for a creator-economy business. If you're selling a course with an affiliate program, it's a strong fit. But local service businesses don't sell memberships; they answer phones and book jobs, and a 500-contact cap won't survive a busy month.",
+    ],
+    them: {
+      bestFor: "Creators/coaches selling courses, memberships and video content",
+      pricingModel: "Essentials $59/mo (500 contacts) / Starter $119 / Growth $229 / Pro $549 — contact caps every tier",
+      aiReceptionist: "None — no phone, SMS or chat AI agent",
+      frontOffice: "Partial — course/membership/checkout pages and a helpdesk; no phone answering or client-service booking calendar",
+      whitelabel: "None — no agency or sub-account model",
+      aiCosts: "Not applicable — no native AI agent",
+      resale: "No native agency reseller program",
+    },
+    switchReasons: [
+      {
+        title: "No contact cap to outgrow",
+        body: "Kartra's Essentials tier caps at 500 contacts. SeldonFrame is $29/mo flat, unlimited contacts, unlimited workspaces.",
+      },
+      {
+        title: "An AI receptionist for a phone Kartra ignores",
+        body: "Kartra has no phone or SMS layer. SeldonFrame's agent answers calls, qualifies leads and books real jobs into a calendar.",
+      },
+      {
+        title: "Built for service businesses, not just course sales",
+        body: "SeldonFrame's booking calendar, intake forms and CRM are built for scheduling client work, not just selling a membership.",
+      },
+      {
+        title: "Whitelabel for agencies",
+        body: "Kartra has no agency resale model. SeldonFrame includes a branded client portal and per-client workspaces at $29/mo.",
+      },
+    ],
+    whenTheyWin:
+      "Choose Kartra if you're a creator or coach selling courses, memberships or video content and want built-in affiliate management and a helpdesk alongside checkout.",
+    faq: [
+      {
+        q: "Does SeldonFrame sell courses or memberships like Kartra?",
+        a: "No — SeldonFrame is built for local service businesses: an AI receptionist plus the website, CRM and booking calendar behind it. It doesn't include course-hosting or membership-site tooling.",
+      },
+      {
+        q: "Will I hit a contact cap on SeldonFrame like Kartra's tiers?",
+        a: "No — $29/mo is flat with no contact cap, at any tier.",
+      },
+    ],
+  },
+  {
+    slug: "sharpspring",
+    name: "SharpSpring (Constant Contact)",
+    category: "agency marketing automation",
+    oneLiner:
+      "SharpSpring is an agency-focused marketing automation platform now operating under Constant Contact, in maintenance mode post-acquisition.",
+    heroSub:
+      "A platform in maintenance mode with quote-gated pricing is a migration source, not a destination. SeldonFrame gives every client an AI receptionist, website, CRM and booking system at $29/mo flat, publicly priced.",
+    intro: [
+      "Most people looking for a SharpSpring alternative hit the same wall: nobody publishes the price, and the brand's future is uncertain. Pricing is quote-gated — the number commonly cited by agencies is around $449/mo per 1,000 contacts, but SharpSpring won't confirm it publicly. Since the Constant Contact acquisition, the brand has been reported as being phased toward retirement, with little visible product investment, and there's no local-SMB stack — no phone answering, no booking system, no intake forms.",
+      "That's not to say SharpSpring isn't impressive — unlimited users on a flat agency plan and VisitorID website tracking were genuinely ahead of the curve, and its agency heritage runs deep. But a platform being wound down under its acquirer isn't where you want to build a client's front office for the next five years.",
+    ],
+    them: {
+      bestFor: "Agencies with legacy SharpSpring accounts and VisitorID workflows",
+      pricingModel: "Quote-gated — commonly cited at ~$449/mo per 1,000 contacts",
+      aiReceptionist: "None — no phone, SMS or chat AI agent",
+      frontOffice: "None — marketing automation and CRM only; no website builder, booking calendar or intake forms",
+      whitelabel: "Yes — unlimited users on the agency plan",
+      aiCosts: "Not applicable — no native AI agent",
+      resale: "Limited — agency reselling exists but the platform's future is uncertain post-acquisition",
+    },
+    switchReasons: [
+      {
+        title: "A published price, not a quote call",
+        body: "SharpSpring won't tell you the price until you talk to sales. SeldonFrame is public: $29/mo flat.",
+      },
+      {
+        title: "An AI receptionist SharpSpring never built",
+        body: "SharpSpring has no phone or SMS answering. SeldonFrame's agent answers calls, qualifies leads and books jobs into a real calendar.",
+      },
+      {
+        title: "A platform investing forward, not winding down",
+        body: "SharpSpring is reported in maintenance mode post-acquisition. SeldonFrame's roadmap is the AI front office, actively shipping.",
+      },
+      {
+        title: "The whole front office in one workspace",
+        body: "Website, CRM, booking calendar and intake forms come with the agent — not marketing automation alone.",
+      },
+    ],
+    whenTheyWin:
+      "Choose SharpSpring if you have a mature agency book already running on it and VisitorID tracking is load-bearing for your current workflows.",
+    faq: [
+      {
+        q: "Why isn't SharpSpring's price listed anywhere?",
+        a: "SharpSpring pricing is quote-gated — agencies commonly report being quoted around $449/mo per 1,000 contacts, but the vendor doesn't publish a number. SeldonFrame's $29/mo flat price is public everywhere.",
+      },
+      {
+        q: "Is SharpSpring being discontinued?",
+        a: "SharpSpring operates under Constant Contact following its acquisition, and is widely reported to be in maintenance mode with limited new investment — worth confirming directly with the vendor before building new workflows on it.",
+      },
+    ],
+  },
+  {
+    slug: "klaviyo",
+    name: "Klaviyo",
+    category: "ecommerce email & SMS",
+    oneLiner:
+      "Klaviyo is an ecommerce-focused email and SMS marketing platform with a B2C CRM layer, priced per profile.",
+    heroSub:
+      "Klaviyo is built for ecommerce carts, not service-business phones. SeldonFrame gives a local business the AI receptionist, website, CRM and booking system at $29/mo flat.",
+    intro: [
+      "Most people looking for a Klaviyo alternative for a local service business hit the same wall: it's priced and built for ecommerce. Free covers 250 profiles; paid plans run roughly $30–45/mo at 1,000 profiles, climbing to around $130/mo at 10,000 — and profile counts include suppressed/unsubscribed contacts unless you actively prune them, with SMS usage billed on top. There's no agency or white-label model, no funnels, no website builder and no booking calendar — Klaviyo assumes a Shopify store, not a plumber's phone line.",
+      "That's not to say Klaviyo isn't impressive — its ecommerce data model, Shopify-native depth and deliverability are genuinely best-in-class for online retail. If your business is a Shopify store living on abandoned-cart flows, it's a strong choice. But local service businesses don't have shopping carts; they have phones that ring and jobs that need booking.",
+    ],
+    them: {
+      bestFor: "Ecommerce/Shopify brands running email + SMS lifecycle marketing",
+      pricingModel: "Free to 250 profiles; ~$30–45/mo @1k profiles, ~$130/mo @10k; SMS usage on top",
+      aiReceptionist: "None — no phone, voice or chat receptionist",
+      frontOffice: "None — email/SMS and B2C CRM only; no website, booking calendar or intake forms",
+      whitelabel: "None — not built for agency resale",
+      aiCosts: "Not applicable — no native AI agent",
+      resale: "No",
+    },
+    switchReasons: [
+      {
+        title: "Built for phones, not shopping carts",
+        body: "Klaviyo has no phone or voice capability at all. SeldonFrame's AI receptionist answers calls, qualifies leads and books jobs — the job a local business actually needs done.",
+      },
+      {
+        title: "Flat $29, not per-profile scaling",
+        body: "Klaviyo bills per profile, including suppressed contacts you have to actively prune. SeldonFrame is $29/mo flat regardless of contact count.",
+      },
+      {
+        title: "A website and booking calendar included",
+        body: "Klaviyo assumes you already have a Shopify store. SeldonFrame generates the whole front office — site, CRM, booking, intake — from a conversation.",
+      },
+      {
+        title: "Whitelabel for agencies",
+        body: "Klaviyo has no agency resale model. SeldonFrame includes branded client workspaces at $29/mo.",
+      },
+    ],
+    whenTheyWin:
+      "Choose Klaviyo if you're running an ecommerce or Shopify brand and need deep cart-recovery, lifecycle email and SMS flows tied to purchase data.",
+    faq: [
+      {
+        q: "Can SeldonFrame do abandoned-cart email like Klaviyo?",
+        a: "No — SeldonFrame isn't an ecommerce marketing platform. It's built for the local-service front office: an AI receptionist plus the site, CRM and booking calendar behind it, not cart-recovery flows for online stores.",
+      },
+      {
+        q: "Does SeldonFrame charge per contact like Klaviyo?",
+        a: "No — $29/mo is flat regardless of how many contacts are in your CRM.",
+      },
+    ],
+  },
+  {
+    slug: "zoho",
+    name: "Zoho",
+    category: "value CRM suite",
+    oneLiner:
+      "Zoho is a value-priced CRM and 45-app business suite, sold per user across gated editions.",
+    heroSub:
+      "45 apps to assemble is a project, not a front office. SeldonFrame gives every client a working AI receptionist, website, CRM and booking system at $29/mo flat — nothing to assemble.",
+    intro: [
+      "Most people looking for a Zoho alternative for a local service business hit the same wall: assembly required. CRM Standard runs $20/user/mo ($14 annual), climbing to $40/user for Enterprise, and Zoho One — the bundle that actually covers a business's needs — runs listed at ~$37–45/user/mo across 45+ apps you have to configure and connect yourself. There's no white-label layer, and nothing purpose-built for a local business's front office: no AI receptionist, no booking-calendar-plus-agent flow, weak native marketing/funnel tools.",
+      "That's not to say Zoho isn't impressive — the value and breadth are real, the CRM customization is deep, and Zia AI adds genuine predictive features. For a business willing to invest in configuring a 45-app suite around its exact workflow, it's an enormous amount of platform per dollar. But most local service businesses don't want to assemble a suite; they want the phone answered and the job booked, today.",
+    ],
+    them: {
+      bestFor: "Businesses willing to configure a broad, per-user app suite around their workflow",
+      pricingModel: "CRM Standard $20/user/mo ($14 annual) → Enterprise $40/user; Zoho One listed at ~$37–45/user/mo",
+      aiReceptionist: "None — Zia AI assists inside CRM workflows, not phone or SMS answering",
+      frontOffice: "Partial — deep CRM customization; website/booking/marketing require separate Zoho apps and setup",
+      whitelabel: "None — not built for agency resale",
+      aiCosts: "Bundled into per-user, per-edition pricing",
+      resale: "No native agency reseller program",
+    },
+    switchReasons: [
+      {
+        title: "Nothing to assemble",
+        body: "Zoho One is 45+ apps you configure and connect yourself. SeldonFrame generates a working front office — site, CRM, booking, agent — from one conversation.",
+      },
+      {
+        title: "Flat $29, not per-user, per-edition math",
+        body: "Zoho's pricing multiplies by users and editions. SeldonFrame is $29/mo flat regardless of team size.",
+      },
+      {
+        title: "An AI receptionist Zia doesn't provide",
+        body: "Zia assists inside CRM workflows. SeldonFrame's agent actually answers the phone, qualifies the lead and books the job.",
+      },
+      {
+        title: "Whitelabel for agencies",
+        body: "Zoho has no agency resale model. SeldonFrame includes branded client workspaces at $29/mo.",
+      },
+    ],
+    whenTheyWin:
+      "Choose Zoho if you want maximum CRM customization and app breadth per dollar, and have the time to configure a suite around your exact workflow.",
+    faq: [
+      {
+        q: "Is SeldonFrame as customizable as Zoho's CRM?",
+        a: "SeldonFrame's CRM is purpose-built for the local-service front-office job — contacts, deals, bookings, review automation — rather than a general-purpose, deeply configurable CRM. If you need Zoho-level field-level customization across 45 apps, Zoho goes further; if you need a working system today, SeldonFrame generates one.",
+      },
+      {
+        q: "Does Zia AI compare to SeldonFrame's agent?",
+        a: "No — Zia is a CRM copilot for your team. SeldonFrame's agent is customer-facing: it answers calls, SMS and chat, qualifies leads and books jobs directly.",
+      },
+    ],
+  },
+  {
+    slug: "salesforce",
+    name: "Salesforce",
+    category: "enterprise CRM",
+    oneLiner:
+      "Salesforce is the enterprise CRM standard, now down-marketing to SMBs via Starter and Pro Suite editions.",
+    heroSub:
+      "Enterprise CRM admin overhead doesn't fit a local service business. SeldonFrame gives every client an AI receptionist, website, CRM and booking system at $29/mo flat, no admin required.",
+    intro: [
+      "Most people looking for a Salesforce alternative for a local service business hit the same wall: it's built for enterprise, and it shows even in the down-market editions. Starter runs $25/user/mo, Pro Suite $100/user/mo, and Agentforce editions listed at up to $550/user/mo — with add-on sprawl and real admin overhead to configure and maintain even the entry tiers. There's no white-label layer, thin native marketing/funnel/SMS tooling for local SMBs, and per-user pricing that punishes a small team.",
+      "That's not to say Salesforce isn't impressive — the brand trust, compliance posture, near-limitless customization path via AppExchange and its Agentforce AI agent platform are genuinely unmatched at enterprise scale. If you're building for a large, complex sales org, nothing goes further. But a local service business doesn't need an admin-managed enterprise CRM; it needs its phone answered and its jobs booked, this week.",
+    ],
+    them: {
+      bestFor: "Large, complex sales organizations needing enterprise CRM depth",
+      pricingModel: "Starter $25/user/mo; Pro Suite $100/user/mo; Agentforce editions listed at up to $550/user",
+      aiReceptionist: "None natively for phone/SMS — Agentforce builds custom AI agents at enterprise pricing and complexity",
+      frontOffice: "Partial — deep CRM and reporting; marketing/funnel/SMS need add-ons; no native booking-into-front-office flow",
+      whitelabel: "None — not built for agency resale",
+      aiCosts: "Agentforce priced per-user on top of CRM editions",
+      resale: "No native agency reseller program",
+    },
+    switchReasons: [
+      {
+        title: "No admin overhead",
+        body: "Salesforce needs configuration and often a dedicated admin even at entry tiers. SeldonFrame generates a working front office from one conversation — no admin required.",
+      },
+      {
+        title: "Flat $29, not per-user enterprise editions",
+        body: "Salesforce pricing escalates per user, per edition, with Agentforce add-ons on top. SeldonFrame is $29/mo flat.",
+      },
+      {
+        title: "A receptionist built in, not a custom Agentforce build",
+        body: "Building a phone-answering agent on Agentforce is an enterprise project. SeldonFrame's receptionist is generated and ready to answer calls immediately.",
+      },
+      {
+        title: "Whitelabel for agencies",
+        body: "Salesforce has no agency resale model. SeldonFrame includes branded client workspaces at $29/mo.",
+      },
+    ],
+    whenTheyWin:
+      "Choose Salesforce if you're running a large, complex sales organization that needs enterprise compliance, deep customization and the AppExchange ecosystem.",
+    faq: [
+      {
+        q: "Is SeldonFrame's agent comparable to Salesforce Agentforce?",
+        a: "Agentforce is a platform for building custom AI agents inside Salesforce's enterprise CRM, at enterprise pricing and complexity. SeldonFrame ships a working AI receptionist — voice, SMS and chat, booking into a real calendar — generated from a conversation, purpose-built for local service businesses rather than assembled for enterprise sales orgs.",
+      },
+      {
+        q: "Do I need an admin to run SeldonFrame like Salesforce?",
+        a: "No — SeldonFrame is generated and configured from natural language; there's no dedicated admin role or certification required to run it.",
+      },
+    ],
+  },
 ];
 
 export function getCompetitor(slug: string): Competitor {

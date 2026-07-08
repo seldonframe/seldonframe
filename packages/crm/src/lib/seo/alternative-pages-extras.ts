@@ -471,6 +471,276 @@ export const EXTRAS: Record<string, CompetitorExtras> = {
     switchNote:
       "Run SeldonFrame as the first line (instant answer + booking) and keep a human service for escalations if you need one — the agent takes structured messages and notifies you instantly either way.",
   },
+  activecampaign: {
+    pros: [
+      "Best-in-class automation-builder depth for segmented email sequences",
+      "Strong deliverability reputation",
+      "900+ integrations across the marketing stack",
+      "Genuinely powerful for list-based nurture campaigns",
+    ],
+    cons: [
+      "Per-contact pricing climbs steeply with list size (~$15–$145/mo @1k contacts, annual)",
+      "No phone or SMS receptionist — email/CRM only",
+      "No white-label layer for agencies",
+      "Inactive/unsubscribed contacts often still count toward the bill",
+    ],
+    chooseThem: [
+      "Segmented email automation is your core deliverable",
+      "You need deep integration with 900+ marketing tools",
+      "Your business runs on newsletter and broadcast sequences",
+    ],
+    chooseSf: [
+      "Your clients lose money on unanswered phones, not unopened emails",
+      "You want flat $29/mo pricing that doesn't grow with your contact list",
+      "You want the whole front office — site, CRM, booking — not just email",
+      "You need whitelabel for agency resale, which ActiveCampaign doesn't offer",
+    ],
+    switchNote:
+      "Export your ActiveCampaign contacts to CSV and import them; recreate your top nurture sequences as SeldonFrame's event-triggered follow-ups (new lead, missed call, completed booking).",
+  },
+  hubspot: {
+    pros: [
+      "Category-leading CRM depth, reporting and enterprise polish",
+      "Scales further than almost anything else for complex B2B pipelines",
+      "Free CRM tier is genuinely usable to start",
+      "Breeze AI assists with content and deal insights",
+    ],
+    cons: [
+      "Roughly 40x price cliff from Starter ($15/seat) to Pro (~$800/mo + $3,000 onboarding)",
+      "AI features are credit-metered on top of seat pricing",
+      "No white-label layer at any price",
+      "SMS and voice both require third-party add-ons",
+    ],
+    chooseThem: [
+      "You're a funded B2B team needing enterprise pipeline reporting",
+      "You need deep marketing attribution modeling",
+      "Budget supports the Pro/Enterprise tiers and onboarding fee",
+    ],
+    chooseSf: [
+      "You need a phone-answering agent, not just a smarter CRM",
+      "You want SMS and voice included, not bolted-on add-ons",
+      "You want to skip the 40x pricing cliff and mandatory onboarding fee",
+      "You're an agency and need whitelabel client workspaces",
+    ],
+    switchNote:
+      "Export your HubSpot contacts and deals to CSV and import them; SeldonFrame's agent takes over answering and booking while your Breeze-generated content stays in place.",
+  },
+  clickfunnels: {
+    pros: [
+      "Converting templates built for fast solo launches",
+      "Strong Brunson ecosystem of courses and community",
+      "Purpose-built checkout and upsell flows for digital offers",
+      "Established playbooks for offer-sellers",
+    ],
+    cons: [
+      "Contact caps at every tier (10k on Launch, rising but still capped on higher tiers)",
+      "No phone, SMS or chat answering at all",
+      "Thin CRM — built for capturing leads, not running a business",
+      "No white-label or agency reseller model",
+    ],
+    chooseThem: [
+      "You're selling a single digital offer through a converting funnel",
+      "You want the Brunson-ecosystem templates and community",
+      "Funnel conversion, not phone answering, is your growth lever",
+    ],
+    chooseSf: [
+      "Your leads call in as often as they click through",
+      "You want no contact caps to upgrade past",
+      "You need a real CRM and booking calendar behind the funnel",
+      "You're an agency needing whitelabel client delivery",
+    ],
+    switchNote:
+      "Keep any funnel pages that convert well, and point their booking/contact forms at your new SeldonFrame workspace so leads land in a CRM with an AI agent following up.",
+  },
+  keap: {
+    pros: [
+      "Mature automation engine built over nearly two decades",
+      "Native invoicing and payments integration",
+      "Strong onboarding culture and support reputation",
+      "Deep CRM tagging and pipeline customization",
+    ],
+    cons: [
+      "Starts at $299/mo for just 2 users and 1,500 contacts — roughly 3x GHL's entry price",
+      "$39 per additional user, plus a paid implementation package",
+      "No AI receptionist or phone/SMS answering",
+      "Post-Thryv-acquisition roadmap uncertainty as features fold into Thryv",
+    ],
+    chooseThem: [
+      "You have years of mature Keap automations already built",
+      "Invoicing and payments integration is central to your workflow",
+      "The acquisition-era changes don't concern your use case",
+    ],
+    chooseSf: [
+      "You want a third of Keap's entry price with no per-user fee",
+      "You need an AI receptionist Keap doesn't offer",
+      "You want a website and AI-driven booking, not just CRM and invoicing",
+      "You want a platform on a stable, undivided roadmap",
+    ],
+    switchNote:
+      "Export your Keap contacts to CSV and import them; run both platforms in parallel for a week while the AI receptionist takes over call handling, then cancel Keap.",
+  },
+  linktree: {
+    pros: [
+      "60-second setup with genuine creator mind-share",
+      "Usable free tier",
+      "Fastest way to consolidate social links to one page",
+      "Simple, familiar to any audience",
+    ],
+    cons: [
+      "One page of links — no CRM, booking, automation or business system",
+      "9–12% commission on sales below the $35/mo Premium tier",
+      "No phone, SMS or chat capability at all",
+      "A rented touchpoint, not an owned business asset",
+    ],
+    chooseThem: [
+      "You're a creator who only needs one bio link",
+      "Your content and social profiles are the whole business",
+      "You have no need for a CRM, booking or phone answering",
+    ],
+    chooseSf: [
+      "You need a real multi-page website, not a link page",
+      "You want an AI receptionist that answers calls and books jobs",
+      "You don't want a sales commission on what you sell",
+      "You want a CRM and calendar behind every lead that clicks through",
+    ],
+    switchNote:
+      "Point your social bio link at your new SeldonFrame website once it's live — the generated site includes its own service pages, booking and contact options in place of the link list.",
+  },
+  kartra: {
+    pros: [
+      "Deep course/membership/video tooling for creator businesses",
+      "Built-in affiliate management",
+      "Native helpdesk alongside checkout",
+      "All-in-one for a coach or course seller's exact needs",
+    ],
+    cons: [
+      "Contact caps at every tier — Essentials caps at just 500 contacts",
+      "No phone, SMS or chat AI agent",
+      "No white-label or sub-account model for agencies",
+      "No local-SMB tooling — not built for service businesses",
+    ],
+    chooseThem: [
+      "You're a creator or coach selling courses or memberships",
+      "You want built-in affiliate management and a helpdesk",
+      "Video/membership hosting is core to your offer",
+    ],
+    chooseSf: [
+      "You're a service business, not a course seller",
+      "You want no contact cap to outgrow",
+      "You need an AI receptionist Kartra doesn't offer",
+      "You're an agency needing whitelabel client workspaces",
+    ],
+    switchNote:
+      "Export your Kartra contacts to CSV and import them; SeldonFrame's booking calendar replaces any client-scheduling workflows you'd built around Kartra's checkout pages.",
+  },
+  sharpspring: {
+    pros: [
+      "Unlimited users on a flat agency plan",
+      "VisitorID website tracking, ahead of its time",
+      "Deep agency heritage and workflow familiarity",
+      "Established integrations for agencies already on it",
+    ],
+    cons: [
+      "Pricing is quote-gated — commonly cited at ~$449/mo per 1,000 contacts",
+      "Reported to be in maintenance mode post-Constant-Contact acquisition",
+      "No phone, SMS or chat AI receptionist",
+      "No local-SMB front-office stack — no website, booking or intake tools",
+    ],
+    chooseThem: [
+      "You have a mature agency book already running on SharpSpring",
+      "VisitorID tracking is load-bearing for your current workflows",
+      "You're comfortable with a platform in maintenance mode",
+    ],
+    chooseSf: [
+      "You want public pricing, not a quote-gated sales call",
+      "You want an AI receptionist SharpSpring never built",
+      "You want a platform investing forward, not winding down",
+      "You want the whole front office, not marketing automation alone",
+    ],
+    switchNote:
+      "Export your SharpSpring contacts to CSV and import them; recreate any VisitorID-triggered workflows as SeldonFrame's event-triggered agent follow-ups where equivalent.",
+  },
+  klaviyo: {
+    pros: [
+      "Best-in-class ecommerce data model and Shopify-native depth",
+      "Strong deliverability for high-volume senders",
+      "Deep cart-recovery and lifecycle-email flows",
+      "Purpose-built for online retail marketing",
+    ],
+    cons: [
+      "Per-profile pricing (~$30–45/mo @1k, ~$130/mo @10k) including suppressed profiles unless pruned",
+      "SMS usage billed on top of profile pricing",
+      "No phone, voice or chat receptionist at all",
+      "No agency/white-label model, no funnels, site or booking calendar",
+    ],
+    chooseThem: [
+      "You're running an ecommerce or Shopify brand",
+      "Cart-recovery and lifecycle email/SMS are core to your revenue",
+      "Purchase-data-driven segmentation is what you need",
+    ],
+    chooseSf: [
+      "You're a local service business, not an online store",
+      "You want flat $29/mo, not per-profile scaling with suppressed contacts counted",
+      "You need a phone-answering AI receptionist, which Klaviyo doesn't have",
+      "You want a website and booking calendar included, not assumed elsewhere",
+    ],
+    switchNote:
+      "Klaviyo profiles don't map to service-business contacts one-to-one — start fresh by pasting your website into SeldonFrame, then import any existing customer list as CSV.",
+  },
+  zoho: {
+    pros: [
+      "Extreme value and breadth across 45+ apps",
+      "Deep CRM field-level customization",
+      "Zia AI adds predictive features inside workflows",
+      "Strong per-dollar value for configurable businesses",
+    ],
+    cons: [
+      "Assembly required — 45+ apps to configure and connect yourself",
+      "Per-user, per-edition pricing multiplies with team size",
+      "No white-label layer for agencies",
+      "Weak native local-SMB front-office tools (booking, receptionist)",
+    ],
+    chooseThem: [
+      "You want maximum CRM customization and app breadth per dollar",
+      "You have time to configure a suite around your exact workflow",
+      "Your team is large enough that per-user value pencils out",
+    ],
+    chooseSf: [
+      "You want a working system today, not 45 apps to assemble",
+      "You want flat $29/mo, not per-user, per-edition pricing",
+      "You need an AI receptionist Zia doesn't provide",
+      "You're an agency needing whitelabel client workspaces",
+    ],
+    switchNote:
+      "Export your Zoho CRM contacts to CSV and import them; SeldonFrame's generated workspace replaces the assembly of separate Zoho apps for site, booking and receptionist functions.",
+  },
+  salesforce: {
+    pros: [
+      "Unmatched brand trust, compliance posture and customization depth",
+      "AppExchange ecosystem for near-limitless extension",
+      "Agentforce AI agent platform at enterprise scale",
+      "Built for large, complex sales organizations",
+    ],
+    cons: [
+      "Per-user pricing escalates fast — Pro Suite $100/user, Agentforce editions to $550/user",
+      "Real admin overhead even at entry tiers",
+      "No white-label layer for agencies",
+      "Thin native marketing/funnel/SMS tooling for local SMBs",
+    ],
+    chooseThem: [
+      "You're running a large, complex sales organization",
+      "You need enterprise compliance and the AppExchange ecosystem",
+      "You have admin resources to configure and maintain it",
+    ],
+    chooseSf: [
+      "You don't have (or want) a dedicated CRM admin",
+      "You want flat $29/mo instead of per-user enterprise editions",
+      "You want a receptionist ready immediately, not a custom Agentforce build",
+      "You're an agency needing whitelabel client workspaces",
+    ],
+    switchNote:
+      "Export your Salesforce contacts and opportunities to CSV and import them; SeldonFrame's generated receptionist replaces the need for a custom Agentforce agent build.",
+  },
 };
 
 export function getExtras(slug: string): CompetitorExtras {
@@ -499,6 +769,16 @@ export const VS_PAIRS: VsPair[] = [
   { a: "podium", b: "goodcall", angle: "Quote-gated breadth vs per-caller simplicity for SMB phones — opposite pricing philosophies, same missing front office." },
   { a: "stammer-ai", b: "synthflow", angle: "The two whitelabel agent plays: Stammer's $197 agency dashboard vs Synthflow's $2,000 whitelabel add-on — chat-first vs voice-first." },
   { a: "smith-ai", b: "goodcall", angle: "Human-hybrid service vs pure-AI product for answering SMB phones — per-call vs per-caller billing." },
+  { a: "gohighlevel", b: "activecampaign", angle: "Full agency toolbox vs automation-first email specialist — GHL stacks per-location AI fees, ActiveCampaign has no phone or SMS layer at all." },
+  { a: "gohighlevel", b: "hubspot", angle: "Mid-market agency platform vs enterprise CRM — GHL's AI Employee add-on vs HubSpot's 40x Starter-to-Pro cliff, neither ships a flat-priced AI receptionist." },
+  { a: "gohighlevel", b: "clickfunnels", angle: "Full front office vs pure funnel builder — GHL at least has a CRM and calendar; ClickFunnels caps contacts and has no phone or SMS at all." },
+  { a: "gohighlevel", b: "keap", angle: "GHL's usage-metered AI add-on vs Keap's 3x-higher flat entry price — both charge extra for automation depth neither pairs with a native AI receptionist." },
+  { a: "gohighlevel", b: "linktree", angle: "A full agency platform vs a single link page — different categories entirely, but neither includes a phone-answering AI agent out of the box." },
+  { a: "gohighlevel", b: "kartra", angle: "Agency toolbox vs creator all-in-one — GHL sells to agencies serving local businesses, Kartra sells to coaches selling courses; neither answers a phone." },
+  { a: "gohighlevel", b: "sharpspring", angle: "An actively developed agency platform vs one reported in maintenance mode post-acquisition — GHL costs more but is still shipping." },
+  { a: "gohighlevel", b: "klaviyo", angle: "Local-business agency platform vs ecommerce email/SMS specialist — GHL serves service businesses, Klaviyo assumes a Shopify cart, and neither has a native voice receptionist." },
+  { a: "gohighlevel", b: "zoho", angle: "Turnkey agency toolbox vs 45-app value suite you assemble yourself — GHL costs more upfront, Zoho costs more in setup time." },
+  { a: "gohighlevel", b: "salesforce", angle: "Mid-market agency platform vs enterprise CRM standard — GHL undercuts Salesforce's per-user pricing but neither ships a flat-fee AI receptionist without an add-on or custom build." },
 ];
 
 export function vsSlug(pair: VsPair): string {

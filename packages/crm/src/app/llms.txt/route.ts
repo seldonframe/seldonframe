@@ -10,6 +10,7 @@
 import { AGENT_JOBS, VERTICALS } from "@/lib/seo/agent-pages";
 import { COMPETITORS, getCompetitor } from "@/lib/seo/alternative-pages";
 import { VS_PAIRS, vsSlug } from "@/lib/seo/alternative-pages-extras";
+import { BEST_PAGES, bestSlug, getBestPage } from "@/lib/seo/best-pages";
 import { siteBaseUrl } from "@/app/sitemap";
 import { loadStorefrontCatalog } from "@/lib/marketplace/load-storefront";
 import { logMarkdownFetch } from "@/lib/marketplace/md-analytics";
@@ -91,10 +92,35 @@ export async function GET(req: Request): Promise<Response> {
   }
   lines.push("");
 
+  // Best-of buying guides — the "best <tool> for <business>" listicles.
+  lines.push("## Best-of guides (the best tool for each business)");
+  lines.push("");
+  lines.push(
+    `- [All best-of guides](${base}/best): the best CRM, website builder, booking system and AI receptionist for each kind of business, honestly ranked.`,
+  );
+  for (const p of BEST_PAGES) {
+    const slug = bestSlug(p);
+    const { category, audience } = getBestPage(slug);
+    lines.push(`- [Best ${category.noun} for ${audience.label}](${base}/best/${slug})`);
+  }
+  lines.push("");
+
   lines.push("## Free tools");
   lines.push("");
   lines.push(
     `- [Missed Call Cost Calculator](${base}/tools/missed-call-calculator): estimate the revenue missed calls cost a service business.`,
+  );
+  lines.push(
+    `- [Google Review Link Generator](${base}/tools/google-review-link-generator): create a direct Google review link + printable QR code for any business.`,
+  );
+  lines.push(
+    `- [AI Receptionist Cost Calculator](${base}/tools/ai-receptionist-cost-calculator): compare a human receptionist, an answering service and per-minute AI on real monthly cost.`,
+  );
+  lines.push(
+    `- [A2P 10DLC Compliance Checker](${base}/tools/a2p-10dlc-checker): check whether your business texting meets US carrier registration rules before it gets filtered.`,
+  );
+  lines.push(
+    `- [Review Response Generator](${base}/tools/review-response-generator): well-written replies to any Google review — no signup, no AI required.`,
   );
   lines.push("");
 
@@ -118,6 +144,7 @@ export async function GET(req: Request): Promise<Response> {
   lines.push(`- [AI agent library (Markdown)](${base}/ai-agents.md): every agent, as clean Markdown.`);
   lines.push(`- Each agent page: append \`.md\` (e.g. [${base}/ai-agents/${AGENT_JOBS[0].slug}.md](${base}/ai-agents/${AGENT_JOBS[0].slug}.md)), including the by-industry pages (\`${base}/ai-agents/<job>/for/<vertical>.md\`).`);
   lines.push(`- Each comparison: append \`.md\` to any \`${base}/alternative-to-<name>\` or \`${base}/compare/<a>-vs-<b>\` URL.`);
+  lines.push(`- Each best-of guide: append \`.md\` to any \`${base}/best/<slug>\` URL.`);
   lines.push("");
 
   return new Response(lines.join("\n"), {
