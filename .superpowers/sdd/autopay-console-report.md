@@ -1,7 +1,12 @@
 # Autopay console — implementation report (2026-07-08)
 
 Branch: `feature/autopay-console`. Commits: `fca1b8c33` (T1) → `f2fa9fd68`
-(T2) → `a26fa69ca` (T3) → `d69ea4d24` (T4) → `2bc4d3453` (T5).
+(T2) → `a26fa69ca` (T3) → `d69ea4d24` (T4) → `2bc4d3453` (T5) →
+`b60cac1ac` (report) → `70c965d6a` (review fix: portal-billing retainer
+join) → `d763282ae` (review fix: dunning recovery + nits).
+
+**Money-severity review, wave 2 — both BLOCKING findings fixed, see
+"Review-fix wave" section near the end.**
 
 ## Files changed (complete)
 
@@ -31,7 +36,8 @@ New:
   `tests/unit/payments/portal-billing.spec.ts`,
   `tests/unit/payments/billing-portal.spec.ts`,
   `tests/unit/payments/dunning.spec.ts`,
-  `tests/unit/payments/revenue-rollup.spec.ts`
+  `tests/unit/payments/revenue-rollup.spec.ts`,
+  `tests/unit/payments/retainer-link.spec.ts` (review-fix wave — new)
 
 Modified:
 - `packages/crm/src/app/api/webhooks/stripe/connect/route.ts` — Task 1,
@@ -58,6 +64,26 @@ Modified:
 - `packages/crm/vercel.json` — registered `/api/cron/payment-dunning`
 - `packages/crm/src/app/(dashboard)/studio/clients/usage-panel.tsx` — added
   `RevenueStripTile`
+
+Review-fix wave (money-severity, 2026-07-08):
+- `packages/crm/src/lib/payments/retainer.ts` — added
+  `resolveRetainerLinkForClientOrg` (the shared client→agency join, BLOCKING
+  #1) + recovery handling in `applyRetainerInvoiceCycle` (same-id flip +
+  sibling-id stamp, BLOCKING #2) + the `amount_paid`/`partial` fix (nit c)
+- `packages/crm/src/lib/payments/portal-billing.ts` — rewritten to resolve
+  reads through the shared join instead of `session.orgId` directly
+- `packages/crm/src/lib/payments/portal-billing-actions.ts` — rewritten to
+  use the SAME shared join `updateRetainerCardAction` already (correctly)
+  approximated independently
+- `packages/crm/src/app/customer/[orgSlug]/(client)/billing/page.tsx` —
+  updated call site to pass `session.orgId` (the client org) straight through
+  to `getPortalBillingData`, which now does the join internally
+- `packages/crm/tests/unit/payments/portal-billing.spec.ts` — rewritten for
+  the new join-based contract, including the cross-org-leakage pin
+- `packages/crm/tests/unit/payments/connect-webhook-cycles.spec.ts` —
+  recovery (same-id + sibling-id) + `amount_paid`/`partial` test cases
+- `packages/crm/tests/unit/payments/dunning.spec.ts` — replaced the
+  tautological Stripe-free assertion with a real source-guard (nit b)
 
 ## Located surfaces (plan said "locate, grep first, name it")
 
@@ -200,9 +226,9 @@ percentage anywhere.
    unit-test the flag helper function itself. Followed that convention for
    `isAutopayConsoleOn` rather than inventing a new testing pattern.
 
-## Test results (verbatim tails)
+## Test results — ORIGINAL wave (pre-review, for history)
 
-Named specs (51 tests, the 7 new spec files):
+Named specs (51 tests, the 7 original spec files):
 ```
 ℹ tests 51
 ℹ suites 9
@@ -213,31 +239,48 @@ Named specs (51 tests, the 7 new spec files):
 ℹ todo 0
 ```
 
-Wide payments+billing+deployments+proposals+notifications+portal+customer
-sweep (real glob, 1166 tests):
+Wide sweep (real glob, 1166 tests): 1164 pass / 1 pre-existing unrelated
+fail / 1 skip. tsc 9 baseline, 0 touched. check-use-server clean. Both
+regression greps empty.
+
+## Test results — REVIEW-FIX wave (current, verbatim tails)
+
+Named payments specs (all 8 files in `tests/unit/payments/`, 64 tests):
 ```
-ℹ tests 1166
-ℹ pass 1164
+ℹ tests 64
+ℹ suites 10
+ℹ pass 64
+ℹ fail 0
+ℹ cancelled 0
+ℹ skipped 0
+ℹ todo 0
+```
+Per-file breakdown: `billing-portal.spec.ts` 4, `connect-webhook-cycles.spec.ts`
+17, `dunning.spec.ts` 10, `portal-billing.spec.ts` 7, `retainer-link.spec.ts`
+4 (new), `retainer-status.spec.ts` 8, `retainer.spec.ts` 9,
+`revenue-rollup.spec.ts` 5.
+
+Wide payments+billing+deployments+proposals+notifications+portal+customer
+sweep (real glob, 1179 tests):
+```
+ℹ tests 1179
+ℹ pass 1177
 ℹ fail 1
 ℹ skipped 1
 ```
-The 1 failure is `tests/unit/workflow-event-log/category-portal.spec.ts`
-("line 261 portal.login (refresh flow) — session.orgId"), a line-anchored
-regression test against `lib/portal/auth.ts` — a file this build never
-touches. Confirmed PRE-EXISTING by running the same spec against commit
-`f2fa9fd68` (before Task 3 even started) via `git stash`: identical failure,
-same line, same expected/actual. Not caused by this work. (The codebase's
-own `crm-unit-test-harness` memory note independently flags this exact class
-of test — "line-anchored `assertOrgIdExpr`" — as brittle.)
+The 1 failure is the SAME pre-existing `category-portal.spec.ts` line-261
+failure documented in the original wave (unrelated file, unrelated feature,
+confirmed pre-existing via `git stash` against a commit before this branch
+touched anything). Re-confirmed still isolated after the review-fix commits
+— no new failures introduced.
 
 tsc:
 ```
 9 errors total (baseline) — 0 in any file this build touched.
 ```
-(The 9 baseline errors are all pre-existing, unrelated: composio MCP client
-type drift, missing `posthog-node`/`posthog-js`/`markdown-to-jsx`/`qrcode`
-type declarations in the shared virtual store, and one copilot/turn route
-param-shape drift.)
+Same 9 pre-existing baseline errors as the original wave (composio MCP
+client type drift, missing `posthog-node`/`posthog-js`/`markdown-to-jsx`/
+`qrcode` type declarations, one copilot/turn route param-shape drift).
 
 check-use-server:
 ```
@@ -251,6 +294,76 @@ git diff --name-only origin/main..HEAD | grep -E "lib/billing/gmv|wallet-store|v
 git diff --name-only origin/main..HEAD | grep drizzle
 → (empty, no migration — as expected)
 ```
+
+## Review-fix wave — the two org-attribution lessons
+
+This is the **SECOND** cross-org-attribution bug found on this branch (the
+first was the `subscriptions.orgId` join-key bug documented above under
+`retainer.ts`, found and self-corrected during the original Task 3 build;
+this second one — the portal reading the wrong org entirely — shipped past
+that self-review and was only caught by the money-severity review pass).
+
+**Pattern common to both bugs:** every write in this feature happens under
+the AGENCY org (`payment_records.orgId`, `subscriptions.orgId`,
+`contacts.customFields.billing` — all written by
+`createDealOnAcceptance`/`insertPaymentRecordReal` with `orgId:
+resolved.agencyOrgId` / `proposal.agencyOrgId`). But TWO different caller
+contexts have a DIFFERENT org in scope: the agency's own Studio session
+(`getOrgId()` → the agency org, matches the writes — no bug possible there)
+and the CLIENT PORTAL session (`requirePortalSessionForOrg()` →
+`session.orgId` = the CLIENT org — never matches the writes directly). Any
+new code that reads these tables from a client-portal context and uses
+`session.orgId` as the query scope will silently return empty/null instead
+of erroring, because an org-scoped WHERE clause with the wrong id isn't a
+type error or a runtime exception — it's just a query that correctly
+matches zero rows. That's the Optimistic-Path shape (CLAUDE.md §3.1): the
+code "ran successfully" and looked identical in isolation (unit tests passed
+with DI'd fakes that assumed the caller passed the RIGHT id) but was wrong
+end-to-end.
+
+**Why the first fix didn't prevent the second bug:** the first fix
+(`findActiveSubscriptionReal`/the `page.tsx` status query) was scoped to
+the AGENCY-side caller context (the Studio page, `getOrgId()` = agency org
+already) — it fixed a wrong-TABLE-join bug, not a wrong-CALLER-ORG bug. The
+second bug was introduced in a DIFFERENT function (`portal-billing.ts`)
+written from the CLIENT-portal caller context, where the join direction
+needed is the OPPOSITE one (client→agency, not agency→client-subscription).
+Fixing one instance of "the join direction was wrong" didn't generalize to
+"every read from a client-facing surface needs to resolve through the same
+canonical join" — that generalization only happened when the review forced
+BOTH `portal-billing.ts` and `portal-billing-actions.ts` to be compared side
+by side and the contradiction became visible.
+
+**Proposed lessons.md rule** (one line, for `tasks/lessons.md`):
+
+> **Agency-side writes, client-side reads:** when a feature writes rows
+> under the AGENCY org but is also read from a CLIENT-facing session (portal,
+> magic link, public route), extract ONE shared `resolveXForClientOrg`-style
+> join function and make every client-facing read/write go through it —
+> never let two call sites independently re-derive "how do I get from the
+> client's session to the agency's rows." A client-scoped `session.orgId`
+> used directly against an agency-scoped table is a silent empty-result bug,
+> not a compile error or a runtime throw — it will pass isolated unit tests
+> that DI the "right" id and only surface in an end-to-end check.
+
+**Preview-mode-activation coupling (documented, not changed per review
+instruction):** `createProposalRowReal` (Task 2) repurposes
+`proposals.previewWorkspaceId` as the client-org join key for
+EXISTING-client retainers, by setting it to `input.clientOrgId`. The Connect
+webhook's `checkout.session.completed` handler
+(`app/api/webhooks/stripe/connect/route.ts`, the `if (proposal.previewWorkspaceId)`
+block ~line 520-539) reads that same column to decide whether to flip a
+workspace's `previewMode` from `true` to `false` on acceptance. For an
+ALREADY-ACTIVE client (the normal case — you're attaching a retainer to an
+existing, live client), this is a safe no-op: the workspace's
+`previewMode` is already `false`, so the flip-check does nothing. **But if
+an operator ever attaches a retainer checkout to a client workspace that is
+STILL in `previewMode: true`** (e.g., a not-yet-fully-onboarded client), the
+retainer checkout's acceptance will ALSO activate that preview workspace —
+a side effect the operator may not expect from "set up billing." This is
+existing, intentional-by-reuse behavior (not a new bug), left as-is per
+review instruction, but is worth Max knowing about: **attaching autopay to
+a preview-mode client workspace activates it.**
 
 ## Open risks
 
@@ -268,14 +381,13 @@ git diff --name-only origin/main..HEAD | grep drizzle
    (never in `previewMode: true`) still no-ops safely. Documented inline at
    both call sites; no test pins this specific interaction because it
    requires the full webhook route, not just the pure retainer logic.
-3. **`portal-billing-actions.ts`'s `updateRetainerCardAction`** resolves the
-   client's Stripe customer id via the SAME `proposals.previewWorkspaceId`
-   join and picks the FIRST matching proposal row (`.limit(1)`, no explicit
-   ordering) — if a client org somehow has multiple retainer proposals
-   (e.g., a canceled one followed by a new one), this could resolve a stale
-   customer id. Low risk (D7 explicitly scopes out mid-cycle changes /
-   multiple retainers), but worth a `orderBy(desc(createdAt))` hardening
-   pass if multi-retainer support is ever added.
+3. ~~**`portal-billing-actions.ts`'s `updateRetainerCardAction`**...~~
+   **RESOLVED in the review-fix wave.** `updateRetainerCardAction` now calls
+   the shared `resolveRetainerLinkForClientOrg`, whose
+   `findProposalByClientOrgIdReal` carries `orderBy(desc(proposals.createdAt))`
+   — the most recent retainer proposal always wins, so a client org with a
+   canceled-then-renewed retainer resolves the CURRENT one, not a stale
+   customer id.
 4. **Dunning cron's day-3/day-7 windows are wall-clock, not business-day**
    — matches the plan's literal spec ("day-3/day-7 escalation stamps"), no
    deviation, just noting for anyone tuning the cadence later.
@@ -283,3 +395,19 @@ git diff --name-only origin/main..HEAD | grep drizzle
    fixed as part of this task — it's out of this build's scope (unrelated
    file, unrelated feature) and fixing brittle line-anchored tests is
    itself flagged as a known anti-pattern in this codebase's lessons file.
+6. **(new, review-fix wave) The sibling-invoice recovery match
+   (`findOutstandingFailedForSubscriptionReal`)** matches on
+   `metadata.subscriptionId` via a jsonb `->>'subscriptionId'` comparison
+   and takes the MOST RECENT outstanding failed row
+   (`orderBy(desc(createdAt))`) — if a subscription somehow accumulates
+   MORE THAN ONE outstanding failed cycle before a recovery fires (e.g. two
+   consecutive failed months before the card gets fixed), only the most
+   recent one gets stamped `resolvedByLaterPayment`; the older one would
+   still need its own resolution (either a genuinely separate unpaid past
+   cycle, which is correct to keep chasing, or a Stripe-side quirk this
+   build doesn't model). Not pinned by a test — flagging as a real but
+   narrow edge case for anyone extending multi-cycle-failure handling.
+7. **Live smoke for the recovery/join fixes specifically** is still
+   outstanding, same caveat as risk #1 — no real Stripe test-mode
+   invoice.paid re-fire, no real portal session hitting the fixed
+   `/billing` page, has been exercised end-to-end yet.
