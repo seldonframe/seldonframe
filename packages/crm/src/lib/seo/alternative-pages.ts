@@ -1383,6 +1383,58 @@ export const COMPETITORS: Competitor[] = [
       },
     ],
   },
+  {
+    slug: "claude-projects",
+    name: "Claude Projects",
+    category: "DIY workflow",
+    oneLiner:
+      "Claude Projects is Anthropic's persistent-workspace feature — standing instructions plus a knowledge base that load into every conversation, which many agencies hand-build once per client.",
+    heroSub:
+      "One hand-built Claude Project per client is the DIY version of an AI front office. SeldonFrame generates the brief, the knowledge base and the retrieval tests — and attaches the website, CRM, booking calendar and receptionist that actually do the work — per client, automatically, at $29/mo flat.",
+    intro: [
+      "Most agencies who run client work through Claude Projects hit the same wall: everything the setup guides prescribe — write the standing brief, curate tight 1–3 page knowledge docs, test retrieval, review quarterly — is manual labor, repeated per client, forever. Conversations inside a project don't share history with each other, the output is chat text you still have to carry into other tools by hand, nothing answers the client's phone or books a job while you sleep, and the whole thing lives inside YOUR Claude account — there's nothing a client can log into, nothing to whitelabel, and a per-person subscription that doesn't scale into a book of business.",
+      "That's not to say Claude Projects isn't excellent — for your OWN context-rich work (research, writing, strategy) it's the best manual setup there is, and the discipline it teaches (standing briefs, tight grounded knowledge, testing retrieval before trusting it) is exactly the right philosophy. SeldonFrame's honest pitch is that it automates that same philosophy per client and attaches the business system: the Soul is the standing brief, the grounded FAQ/services are the tight docs, and auto-evals are 'test retrieval before you trust it' made mechanical.",
+    ],
+    them: {
+      bestFor: "Individuals running their own context-rich Claude workflows",
+      pricingModel: "Claude Pro ~$20/mo or Max from ~$100/mo per person; free plan caps at 5 projects without custom instructions",
+      aiReceptionist: "None — you chat with Claude yourself; nothing answers your clients' calls or website visitors",
+      frontOffice: "None — no website, CRM or booking; outputs are chat messages you copy into other tools",
+      whitelabel: "None — projects live in your Claude account; clients can't log in",
+      aiCosts: "Flat per-person subscription with usage limits",
+      resale: "No",
+    },
+    switchReasons: [
+      {
+        title: "The brief writes itself",
+        body: "Paste the client's website and SeldonFrame generates what your Project setup guide told you to hand-write: the standing brief (the Soul), the tight grounded knowledge, the scope — and keeps it current instead of drifting until the quarterly review.",
+      },
+      {
+        title: "Retrieval testing is automated",
+        body: "The guides say 'test that Claude can actually retrieve each document before trusting it.' SeldonFrame runs that as auto-evals on every agent, every publish — the never-lies gate, not a five-minute manual ritual per client.",
+      },
+      {
+        title: "Chat can't answer the phone",
+        body: "A Project produces text when you show up to ask. SeldonFrame's agents execute: they answer calls and webchat, qualify the lead, check real availability, and book the job into the client's own calendar and CRM — 24/7, without you in the loop.",
+      },
+      {
+        title: "Clients get a login; you get a book of business",
+        body: "Projects are trapped in your personal account. SeldonFrame gives every client a whitelabeled sub-account and portal under your brand — the difference between a workflow you run and a product you sell.",
+      },
+    ],
+    whenTheyWin:
+      "Keep Claude Projects for your OWN thinking, research and writing — it's the best manual setup there is for single-player context work (we use it too). The switch point is the moment the work belongs to a client.",
+    faq: [
+      {
+        q: "Is SeldonFrame built on Claude Projects?",
+        a: "No — SeldonFrame is its own platform. But it's BYOK, so your agents can run on your own Claude API key, and it's MCP-native, so you can build and manage workspaces from Claude itself. The philosophy — tight grounded context, tested before trusted — is the same; SeldonFrame automates it per client.",
+      },
+      {
+        q: "Can I keep using Claude Projects alongside SeldonFrame?",
+        a: "Yes, and many builders do: draft strategy and copy in your own Projects, then deploy the client-facing system — site, receptionist, CRM, booking — on SeldonFrame, where the client can actually log in and the agent actually executes.",
+      },
+    ],
+  },
 ];
 
 export function getCompetitor(slug: string): Competitor {

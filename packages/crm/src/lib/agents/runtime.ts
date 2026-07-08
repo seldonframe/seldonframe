@@ -46,6 +46,7 @@ import {
   type ToolExecuteContext,
 } from "./tools";
 import { resolveTurnModel } from "./runtime/turn-model";
+import { createTtlPromiseCache } from "./runtime/capped-reply-cache";
 import type { CalendarBinding } from "@/lib/agents/booking/calendar-backend";
 import type { BookingPolicy } from "@/lib/agents/booking/booking-policy";
 import { bindingToCtxBooking } from "@/lib/agents/booking/binding-ctx";
@@ -290,6 +291,57 @@ export async function executeTurn(input: {
   // getAIClient's behavior whenever the flag is off or any lookup
   // fails, so this is a no-op today until Max flips the flag.
   const aiResolution = await resolveRuntimeAiClient({ orgId: agent.orgId });
+
+  // Per-sub-account usage meter (2026-07-08) — Task 4: the "capped" branch
+  // (flag SF_USAGE_CAP_PAUSE, D5). An inherited-key sub-account whose agency
+  // set a breached "pause" cap gets ONE holding reply instead of an LLM
+  // call — persisted exactly like a normal assistant turn (never-lies: the
+  // customer's message is never silently dropped). Tokens/cost are zero
+  // (no LLM call was made), so this never counts against the cap it just
+  // triggered.
+  if (aiResolution.mode === "capped") {
+    const holdingReply = await resolveCappedUsageReply(agent.orgId);
+    const latencyMs = Date.now() - t0;
+
+    await db.insert(agentTurns).values({
+      conversationId: input.conversationId,
+      turnIndex: nextTurnIndex + 1,
+      role: "assistant",
+      content: holdingReply,
+      toolCalls: null,
+      toolResults: null,
+      validatorsPassed: [],
+      latencyMs,
+      tokensIn: 0,
+      tokensOut: 0,
+      model: "usage_capped",
+    });
+
+    await db
+      .update(agentConversations)
+      .set({ lastTurnAt: new Date(), turnCount: sql`${agentConversations.turnCount} + 2` })
+      .where(eq(agentConversations.id, input.conversationId));
+
+    console.warn(
+      `[agent-runtime] usage_capped agentId=${agent.id} convId=${conv.id} orgId=${agent.orgId}`,
+    );
+
+    if (nextTurnIndex === 0 && conv.status !== "test") {
+      await writeFirstTurnActivity(agent, orgRow.id, conv.id, input.userMessage);
+    }
+
+    return {
+      ok: true,
+      assistantMessage: holdingReply,
+      validators: [],
+      toolCalls: [],
+      toolResults: [],
+      tokensIn: 0,
+      tokensOut: 0,
+      latencyMs,
+    };
+  }
+
   if (!aiResolution.client) {
     return {
       ok: false,
@@ -733,6 +785,25 @@ export async function executeTurn(input: {
 
 // ─── helpers ───────────────────────────────────────────────────────────────
 // v1.27.9 — isDailyBudgetExhausted removed; see note in step 2 above.
+
+// Short-lived memoization (plan Task 4): caches the resolved holding-reply
+// promise per orgId so a conversation with multiple capped turns (or a burst
+// of concurrent turns for the same capped org) doesn't re-query the cap +
+// re-fire the notify check repeatedly. The notify itself is idempotent
+// either way (lastNotifiedPeriod), but this avoids redundant DB round-trips.
+// Bounded (TTL + maxEntries — the map used to grow forever in a long-lived
+// process); the TTL also caps how long an operator's holdingReply edit takes
+// to reach customers. Business logic (load cap, evaluate breach, resolve
+// agency owner, send + mark notified) lives in
+// lib/billing/usage-cap.ts::resolveCappedTurnReply — this is just the
+// runtime-local memoization wrapper.
+const cappedHoldingReplyCache = createTtlPromiseCache<string>({ ttlMs: 60_000, maxEntries: 500 });
+
+async function resolveCappedUsageReply(orgId: string): Promise<string> {
+  return cappedHoldingReplyCache.getOrCreate(orgId, () =>
+    import("@/lib/billing/usage-cap").then((m) => m.resolveCappedTurnReply(orgId)),
+  );
+}
 
 function computeCostCents(tokensIn: number, tokensOut: number): number {
   const cents =

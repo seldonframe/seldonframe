@@ -126,6 +126,21 @@ export interface Plan {
     contacts: MeteredItem | null;
     agentRuns: MeteredItem | null;
   };
+  /** 2026-07-08 — the /pricing tier-card feature checklist (PostPlanify-
+   *  style rich per-tier bullets, ~4-8 items). SINGLE SOURCE: this is the
+   *  ONLY place this copy lives — app/pricing/page.tsx passes it through
+   *  the existing serializable `tiers` prop unmodified, and
+   *  pricing-shell-marketing.tsx renders it verbatim. No component ever
+   *  hand-copies this list. Present ONLY on sellable (ladder) tiers —
+   *  the two grandfathered legacy tiers ("workspace", "agency") are not
+   *  marketed on /pricing and have no checklist. Every item must be TRUE
+   *  today or explicitly suffixed "(coming soon)" — this is a money-
+   *  adjacent honesty surface, not aspirational copy. */
+  marketingFeatures?: {
+    /** e.g. "Everything in Builder, plus:" — omitted on the base tier. */
+    header?: string;
+    items: string[];
+  };
 }
 
 export const PLANS: Plan[] = [
@@ -164,6 +179,18 @@ export const PLANS: Plan[] = [
       maxAgentRunsPerMonth: -1,
     },
     metered: { contacts: null, agentRuns: null },
+    marketingFeatures: {
+      items: [
+        "Unlimited workspaces for your own businesses",
+        "AI-generated website on your own domain",
+        "AI receptionist — answers calls, SMS & web chat",
+        "CRM, booking calendar & intake forms",
+        "8 ready-to-deploy agent templates in the Studio",
+        "Review-request + speed-to-lead automations",
+        "Bring your own AI key — provider cost, zero markup",
+        "Buy & sell agents on the marketplace",
+      ],
+    },
   },
   {
     id: "managed",
@@ -195,6 +222,15 @@ export const PLANS: Plan[] = [
       maxAgentRunsPerMonth: -1,
     },
     metered: { contacts: null, agentRuns: null },
+    marketingFeatures: {
+      header: "Everything in Builder, for one workspace — plus:",
+      items: [
+        "Runs on SeldonFrame's keys — zero setup (fair use)",
+        "No API keys, no configuration — live in minutes",
+        "Same full front office & agent templates",
+        "Custom domain included",
+      ],
+    },
   },
   {
     id: "agency_starter",
@@ -226,6 +262,21 @@ export const PLANS: Plan[] = [
       maxAgentRunsPerMonth: -1,
     },
     metered: { contacts: null, agentRuns: null },
+    marketingFeatures: {
+      header: "Everything in Builder, plus:",
+      items: [
+        "10 client sub-accounts",
+        "Full white-label — your brand, your domains",
+        "Branded client portal logins",
+        "Deploy agent templates to clients",
+        "Per-sub-account usage meter & caps",
+        // 2026-07-08 — "Priority email support" DROPPED from the coordinator's
+        // copy: limits.prioritySupport is false on this tier (only
+        // agency_growth/agency_scale + the grandfathered "agency" tier have
+        // it true) — see honesty-check finding in the build report. Shipping
+        // it here would contradict the catalog's own source of truth.
+      ],
+    },
   },
   {
     id: "agency_growth",
@@ -257,6 +308,15 @@ export const PLANS: Plan[] = [
       maxAgentRunsPerMonth: -1,
     },
     metered: { contacts: null, agentRuns: null },
+    marketingFeatures: {
+      header: "Everything in Starter, plus:",
+      items: [
+        "30 client sub-accounts",
+        "One-click deploy to ALL clients",
+        "White-label ROI reports (coming soon)",
+        "Priority support with demo-call onboarding",
+      ],
+    },
   },
   {
     id: "agency_scale",
@@ -288,6 +348,16 @@ export const PLANS: Plan[] = [
       maxAgentRunsPerMonth: -1,
     },
     metered: { contacts: null, agentRuns: null },
+    marketingFeatures: {
+      header: "Everything in Growth, plus:",
+      items: [
+        "Unlimited client sub-accounts",
+        "API + MCP access",
+        "Rent your agents via the marketplace rail",
+        "Set your own resale pricing",
+        "Dedicated onboarding",
+      ],
+    },
   },
   // ─── GRANDFATHERED legacy tiers (one-way door, spec §D1) ──────────
   // Existing subscribers hold these exact ids/limits/prices — they are

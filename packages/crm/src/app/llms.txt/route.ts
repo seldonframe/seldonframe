@@ -125,6 +125,9 @@ export async function GET(req: Request): Promise<Response> {
   lines.push(
     `- [Review Response Generator](${base}/tools/review-response-generator): well-written replies to any Google review — no signup, no AI required.`,
   );
+  lines.push(
+    `- [Claude Project Brief Generator](${base}/tools/claude-project-brief-generator): generate the standing-instructions block for a Claude Project (and see how SeldonFrame automates it per client).`,
+  );
   lines.push("");
 
   lines.push("## Pages");

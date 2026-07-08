@@ -260,6 +260,71 @@ describe("getPlanByStripePriceId", () => {
   });
 });
 
+describe("marketingFeatures — the /pricing tier-card checklist (single source, plans.ts)", () => {
+  const SELLABLE_IDS = ["builder", "managed", "agency_starter", "agency_growth", "agency_scale"] as const;
+  const GRANDFATHERED_IDS = ["workspace", "agency"] as const;
+
+  test("every sellable tier has marketingFeatures with at least one item", () => {
+    for (const id of SELLABLE_IDS) {
+      const plan = getPlan(id)!;
+      assert.ok(plan.marketingFeatures, `${id} must have marketingFeatures`);
+      assert.ok(plan.marketingFeatures!.items.length > 0, `${id}.marketingFeatures.items must be non-empty`);
+    }
+  });
+
+  test("grandfathered (non-sellable) tiers have NO marketingFeatures — they are not marketed on /pricing", () => {
+    for (const id of GRANDFATHERED_IDS) {
+      const plan = getPlan(id)!;
+      assert.equal(plan.marketingFeatures, undefined, `${id} must not have marketingFeatures`);
+    }
+  });
+
+  test("builder — the base tier — has no 'Everything in X, plus:' header (nothing precedes it)", () => {
+    const builder = getPlan("builder")!;
+    assert.equal(builder.marketingFeatures!.header, undefined);
+    assert.equal(builder.marketingFeatures!.items.length, 8);
+  });
+
+  test("managed, agency_starter, agency_growth, agency_scale each carry an 'Everything in X, plus:' header", () => {
+    assert.equal(
+      getPlan("managed")!.marketingFeatures!.header,
+      "Everything in Builder, for one workspace — plus:",
+    );
+    assert.equal(getPlan("agency_starter")!.marketingFeatures!.header, "Everything in Builder, plus:");
+    assert.equal(getPlan("agency_growth")!.marketingFeatures!.header, "Everything in Starter, plus:");
+    assert.equal(getPlan("agency_scale")!.marketingFeatures!.header, "Everything in Growth, plus:");
+  });
+
+  test("agency_growth's 'White-label ROI reports' item is explicitly marked '(coming soon)' — not built yet, per the honesty rule", () => {
+    const items = getPlan("agency_growth")!.marketingFeatures!.items;
+    const roiItem = items.find((i) => /ROI reports/i.test(i));
+    assert.ok(roiItem, "an ROI-reports item must exist");
+    assert.match(roiItem!, /\(coming soon\)/);
+  });
+
+  test("agency_starter does NOT claim 'Priority email support' — limits.prioritySupport is false on this tier (contradicts the catalog otherwise)", () => {
+    const starter = getPlan("agency_starter")!;
+    assert.equal(starter.limits.prioritySupport, false);
+    const hasPrioritySupportClaim = starter.marketingFeatures!.items.some((i) =>
+      /priority.*support/i.test(i),
+    );
+    assert.equal(
+      hasPrioritySupportClaim,
+      false,
+      "agency_starter must not claim priority support — the catalog's own prioritySupport flag is false for this tier",
+    );
+  });
+
+  test("no marketingFeatures item across any sellable tier mentions autopay or billing automation (not built yet)", () => {
+    for (const id of SELLABLE_IDS) {
+      const items = getPlan(id)!.marketingFeatures!.items;
+      for (const item of items) {
+        assert.doesNotMatch(item, /autopay/i, `${id}: "${item}"`);
+      }
+    }
+  });
+});
+
 describe("price-id constants", () => {
   test("the 5 new tier price-id constants are defined (env-backed, placeholder fallback)", () => {
     for (const id of [

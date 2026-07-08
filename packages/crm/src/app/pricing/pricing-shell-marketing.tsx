@@ -30,6 +30,20 @@
 //     still the unconfigured PLACEHOLDER renders "Book a demo" instead of
 //     wiring a checkout POST — inert without env, no new Stripe call sites.
 //
+// 2026-07-08 hydration-mismatch fix — "No price id lives in the client".
+// This file used to be "use client" AND import PLANS + isPlaceholderPriceId
+// directly, computing `isPlaceholderPriceId(tier.stripePriceId)` in the
+// browser. STRIPE_*_PRICE_ID env vars are SERVER-ONLY (readEnv() reads
+// process.env, undefined in the browser bundle), so every tier hydrated as
+// a placeholder client-side regardless of what was actually configured —
+// the SSR pass (env present) rendered the correct "Get started" primary,
+// the client pass (env absent) always recomputed "Book a demo", and the
+// client's re-render won after hydration. Fix: the parent Server Component
+// (app/pricing/page.tsx) now resolves `available` server-side and passes
+// serializable LadderTier props down. This file no longer imports PLANS,
+// price-ids, or any Stripe price id — see the legacy single-card
+// pricing-shell.tsx's own header rule this restores.
+//
 // CTA hierarchy (Max's explicit call, this task):
 //   PRIMARY  = "Get started" — dark ink rounded button (homepage style),
 //              wired to the SAME checkout/signup POST as before.
@@ -51,40 +65,55 @@
 import { useState } from "react";
 import Link from "next/link";
 import { Check } from "lucide-react";
-import { PLANS, type TierId as CatalogTierId } from "@/lib/billing/plans";
-import { isPlaceholderPriceId } from "@/lib/billing/price-ids";
 
 const BOOK_A_DEMO_URL = "https://app.seldonframe.com/book/seldonframes-workspace-7798/default";
 
 type Audience = "personal" | "agency";
 
-const PERSONAL_TIER_IDS: CatalogTierId[] = ["builder", "managed"];
-const AGENCY_TIER_IDS: CatalogTierId[] = ["agency_starter", "agency_growth", "agency_scale"];
+/** The tier ids this ladder ever renders. Kept as a plain string literal
+ *  union (NOT imported from lib/billing/plans's TierId) so this file has
+ *  zero dependency on the plans catalog — the parent Server Component owns
+ *  which tiers exist and passes them down as fully-resolved props. */
+export type LadderTierId =
+  | "builder"
+  | "managed"
+  | "agency_starter"
+  | "agency_growth"
+  | "agency_scale";
 
-type LadderTier = {
-  id: CatalogTierId;
+const PERSONAL_TIER_IDS: LadderTierId[] = ["builder", "managed"];
+const AGENCY_TIER_IDS: LadderTierId[] = ["agency_starter", "agency_growth", "agency_scale"];
+
+/** Serializable, price-id-free tier shape — resolved server-side in
+ *  app/pricing/page.tsx (buildLadderTiers). `available` is the ONLY
+ *  derived-from-env fact this component needs, and it's computed on the
+ *  server where STRIPE_*_PRICE_ID env vars actually resolve. */
+export type LadderTier = {
+  id: LadderTierId;
   name: string;
   price: number;
   tagline: string;
   maxSubAccounts: number;
   fullWhiteLabel: boolean;
-  stripePriceId: string;
+  /** true = a real Stripe price is configured (checkout wired); false =
+   *  still the unconfigured PLACEHOLDER (renders "Book a demo" instead). */
+  available: boolean;
+  /** 2026-07-08 — the rich per-tier feature checklist (PostPlanify style).
+   *  SINGLE SOURCE: this list is authored ONCE in lib/billing/plans.ts's
+   *  `Plan.marketingFeatures` and arrives here unmodified via the server-
+   *  resolved `tiers` prop — this file renders it verbatim, never copies
+   *  or edits the strings. Optional (undefined on tiers with no checklist,
+   *  though every sellable tier has one today). */
+  marketingFeatures?: {
+    header?: string;
+    items: string[];
+  };
 };
 
-const SELLABLE_TIERS: LadderTier[] = PLANS.filter((p) => p.sellable).map((p) => ({
-  id: p.id,
-  name: p.name,
-  price: p.price,
-  tagline: p.tagline,
-  maxSubAccounts: p.limits.maxSubAccounts,
-  fullWhiteLabel: p.limits.fullWhiteLabel,
-  stripePriceId: p.stripePriceId,
-}));
-
-function ladderTiersFor(audience: Audience): LadderTier[] {
+function ladderTiersFor(tiers: LadderTier[], audience: Audience): LadderTier[] {
   const ids = audience === "personal" ? PERSONAL_TIER_IDS : AGENCY_TIER_IDS;
   return ids
-    .map((id) => SELLABLE_TIERS.find((t) => t.id === id))
+    .map((id) => tiers.find((t) => t.id === id))
     .filter((t): t is LadderTier => Boolean(t));
 }
 
@@ -108,12 +137,17 @@ const INCLUDED: readonly string[] = [
 
 export type PricingShellMarketingProps = {
   isAuthed: boolean;
+  /** Server-resolved, price-id-free tier list (app/pricing/page.tsx's
+   *  buildLadderTiers). The only per-tier fact derived from env
+   *  (`available`) is already computed — this component never touches
+   *  process.env, PLANS, or a Stripe price id. */
+  tiers: LadderTier[];
 };
 
-export function PricingShellMarketing({ isAuthed }: PricingShellMarketingProps) {
+export function PricingShellMarketing({ isAuthed, tiers }: PricingShellMarketingProps) {
   const [audience, setAudience] = useState<Audience>("personal");
   const [error, setError] = useState<string | null>(null);
-  const [starting, setStarting] = useState<CatalogTierId | null>(null);
+  const [starting, setStarting] = useState<LadderTierId | null>(null);
 
   async function startTierCheckout(tier: LadderTier) {
     setError(null);
@@ -215,8 +249,8 @@ export function PricingShellMarketing({ isAuthed }: PricingShellMarketingProps) 
               className={`mt-8 grid gap-5 sm:grid-cols-2 lg:grid-cols-3 ${audience === aud ? "" : "hidden"}`}
               aria-hidden={audience !== aud}
             >
-              {ladderTiersFor(aud).map((tier) => {
-                const placeholder = isPlaceholderPriceId(tier.stripePriceId);
+              {ladderTiersFor(tiers, aud).map((tier) => {
+                const placeholder = !tier.available;
                 const subLabel = subAccountLabel(tier);
                 return (
                   <div
@@ -239,6 +273,33 @@ export function PricingShellMarketing({ isAuthed }: PricingShellMarketingProps) 
                     ) : null}
                     {tier.fullWhiteLabel ? (
                       <p className="text-[12.5px] text-[#6E665A]">Full white-label</p>
+                    ) : null}
+
+                    {/* PostPlanify-style rich feature checklist — SINGLE
+                        SOURCE is Plan.marketingFeatures (lib/billing/plans.ts),
+                        rendered verbatim here. `header` (e.g. "Everything in
+                        Builder, plus:") is bold above the checkmarked items;
+                        omitted on the base tier which has no "everything in
+                        X" predecessor. */}
+                    {tier.marketingFeatures ? (
+                      <div data-tier-features={tier.id} className="mt-1">
+                        {tier.marketingFeatures.header ? (
+                          <p className="mb-2 text-[12.5px] font-[600] text-[#221D17]">
+                            {tier.marketingFeatures.header}
+                          </p>
+                        ) : null}
+                        <ul className="flex flex-col gap-1.5">
+                          {tier.marketingFeatures.items.map((item) => (
+                            <li
+                              key={item}
+                              className="flex items-start gap-2 text-[13.5px] leading-[1.6] text-[#221D17]"
+                            >
+                              <Check size={14} className="mt-[3px] shrink-0 text-[#00897B]" aria-hidden />
+                              <span>{item}</span>
+                            </li>
+                          ))}
+                        </ul>
+                      </div>
                     ) : null}
 
                     {/* PRIMARY CTA */}

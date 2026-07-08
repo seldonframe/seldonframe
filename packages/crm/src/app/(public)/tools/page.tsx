@@ -39,6 +39,11 @@ const TOOLS = [
     name: "A2P 10DLC Compliance Checker",
     blurb: "Nine questions to find out whether your business texting is registered right — before carriers filter it.",
   },
+  {
+    href: "/tools/claude-project-brief-generator",
+    name: "Claude Project Brief Generator",
+    blurb: "Generate the complete standing-instructions block (role, tasks, tone, never-list) for a Claude Project — ready to paste.",
+  },
 ];
 
 export default function ToolsHubPage(): ReactElement {

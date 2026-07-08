@@ -1,15 +1,25 @@
 # Pricing Ladder — implementation report (2026-07-08)
 
-Branch `feature/pricing-ladder`, 10 commits on top of `1b51475b3` (spec)
+Branch `feature/pricing-ladder`, 11 commits on top of `1b51475b3` (spec)
 and `64042581f` (plan). All work done in the isolated worktree
 `.claude/worktrees/pricing-ladder`. Commit 7
 (`5c4bd7dcf`, `test(billing): re-pin entitlements to the 5-tier
 policy`), commits 8-9 (`a1cf476e7` sub-account-cap gate fixes,
-`da06cc101` upgrade-modal flag-gate + tier ranks), and commit 10
-(`ac09002c5`, the live-$29-checkout regression fix) were added
+`da06cc101` upgrade-modal flag-gate + tier ranks), commit 10
+(`ac09002c5`, the live-$29-checkout regression fix), and commit 11
+(`231653b7e`, the marketing-branded /pricing rebuild) were added
 post-review — see "Post-review follow-up", "Second post-review fix
-wave", and "Third post-review fix wave — live checkout regression"
+wave", "Third post-review fix wave — live checkout regression", and
+"Fourth follow-up — marketing-branded pricing page + CTA hierarchy"
 below.
+
+**Note:** between commits 10 and 11, `origin/main` advanced to
+`6eb789a0c` with an unrelated SSR/metadata hotfix
+(`3c77b6a1d`, "SSR both audience card rows (crawler-visible tiers) +
+scrub stale $19 root metadata") that also touched `pricing-shell.tsx`
+— pulled into this branch before starting commit 11's work; its
+both-rows-SSR behavior is explicitly preserved in the rebuild (see
+commit 11's section below).
 
 ## Files changed
 
@@ -668,6 +678,182 @@ minimal single-target design):
 `check:use-server.sh src`: clean.
 Regression grep: empty. No `packages/crm/drizzle` files touched.
 
+## Fourth follow-up — marketing-branded pricing page + CTA hierarchy (commit 11, `231653b7e`)
+
+Max's live-page feedback after the third wave shipped: the flag-ON
+`/pricing` view didn't match seldonframe.com's marketing branding (it
+inherited the dark dashboard-chrome look from `PricingShell` instead
+of the light cream/paper homepage look), the CTA hierarchy was
+unclear (every button read "Get started" / "Redirecting…" with no
+lower-commitment path), and the sticky bottom bar visually overlapped
+the Managed card's own button.
+
+### Branding source
+
+Read `components/landing/marketing-hero.tsx`,
+`components/landing/marketing-pricing-section.tsx`, and
+`app/(public)/page.tsx`'s composition to extract the design tokens
+(documented in `pricing-shell-marketing.tsx`'s header):
+`#F6F2EA` paper background, `#221D17` ink text, `#6E665A` soft ink,
+`#1F2B24` dark rounded primary buttons, `#00897B` teal/SeldonFrame-
+green accents, Hanken Grotesk body font + Newsreader-italic serif
+display accents (both already loaded globally in `app/layout.tsx` —
+no new font setup needed). `MarketingNav` and `MarketingFooter`
+(`components/landing/marketing-nav.tsx` /
+`marketing-footer.tsx`) turned out to be cleanly reusable as-is — both
+are self-contained, prop-free components — so they're reused verbatim
+rather than rebuilt.
+
+### Architecture
+
+`app/pricing/page.tsx` now branches into two ENTIRELY SEPARATE render
+trees based on `SF_TIER_LADDER`, rather than one component
+conditionally rendering an extra section (the shape that existed
+before this fix and that produced the branding mismatch — the ladder
+was bolted onto the dark `PricingShell`'s dashboard-chrome wrapper):
+
+- **Flag OFF (default)** — `<PricingShell>` unchanged: the legacy dark
+  2-column single-card layout + sticky bottom CTA bar + the shared
+  dark `Accordion` FAQ. The `TierLadder` component and the
+  `tierLadderOn` prop were REMOVED from `pricing-shell.tsx` entirely
+  (moved out, not deleted — see below), restoring this file to its
+  pre-Task-4 shape (byte-identical DOM output, pinned by the new
+  test file).
+- **Flag ON** — new `<MarketingNav>` + new
+  `<PricingShellMarketing>` (`pricing-shell-marketing.tsx`, a
+  from-scratch component, NOT a themed variant of `PricingShell`) + a
+  restyled-light FAQ (details/summary pattern matching
+  `marketing-faq-section.tsx`'s visual language, same `FAQS` copy as
+  the flag-off page) + `<MarketingFooter>`.
+
+This hard split (rather than one shared component with theme
+branching) was the deliberate choice — it makes "flag-off is
+byte-identical" independently verifiable without threading a theme
+prop through every element of a shared component, and matches the
+review's stated requirement precisely.
+
+### What's preserved from the SSR hotfix (verified, not re-derived)
+
+`pricing-shell-marketing.tsx`'s tier-card grid carries forward the
+2026-07-08 SSR hotfix (`3c77b6a1d`, pulled from `origin/main` before
+this work started) byte-for-byte: BOTH audience rows
+(`personal`/`agency`) are server-rendered every time, with the
+inactive row marked `hidden` (CSS) + `aria-hidden` rather than
+conditionally unmounted — so crawlers/LLMs see all 5 tiers regardless
+of which audience tab is visually active; only VISIBILITY is client
+state. Also preserved: `role="tablist"`/`role="tab"`/`aria-selected`
+toggle semantics, and `data-tier={tier.id}` / `data-tier-cta={tier.id}`
+attributes (tests + smokes key off these — verified unchanged).
+
+### CTA hierarchy (Max's explicit call)
+
+Every non-placeholder tier card now renders:
+- **PRIMARY**: "Get started" — the `#1F2B24` dark rounded button
+  (homepage style), wired to the SAME checkout/signup POST logic that
+  existed before (no change to the money-path).
+- **SECONDARY**: a quiet "or book a demo" text link ->
+  `BOOK_A_DEMO_URL`, on every non-placeholder card, giving a visitor
+  who isn't ready to buy a lower-commitment escape hatch.
+
+A tier whose Stripe price is still the unconfigured PLACEHOLDER keeps
+the existing money-safe logic unchanged: its PRIMARY becomes "Book a
+demo" and it does NOT also render the secondary (no duplicate demo
+link on a card whose only CTA already is a demo).
+
+### Sticky bar removed (flag-ON only)
+
+The sticky bottom CTA bar (`PricingStickyBar`, a dashboard-chrome
+pattern designed for a single, short one-card view) is REMOVED
+entirely from the flag-ON render tree — it doesn't exist in
+`pricing-shell-marketing.tsx` at all. It stays exactly as it was in
+the flag-OFF `PricingShell` (unrelated, unchanged). The flag-ON hero
+instead carries a light "Simple pricing" marketing-style heading (serif
+italic accent + the "$29/mo" anchor line) in place of the dark "The
+plan" card language.
+
+### Tests
+
+New `tests/unit/landing/pricing-shell.spec.tsx` (10 tests,
+`renderToString` — no jsdom needed for these structural pins):
+- Flag-OFF (`<PricingShell>`): pins the sticky bar's presence, the
+  single `$29` card with no `data-tier=`/`role="tablist"` markup
+  (proving the ladder is truly gone from this component), and the
+  absence of the new light-theme marker
+  (`data-pricing-theme="marketing"`).
+- Flag-ON (`<PricingShellMarketing>`): pins the light-theme marker;
+  BOTH audience rows present in SSR HTML (all 5 tier ids findable
+  regardless of active tab, exactly one row wrapper carrying
+  `hidden`); tablist/tab semantics (exactly 2 tabs); the CTA-hierarchy
+  invariant computed from LIVE catalog state (`getPlan` +
+  `isPlaceholderPriceId`) rather than a fixed environment assumption —
+  one "Get started" + one "or book a demo" per non-placeholder tier,
+  one "Book a demo" primary with no duplicate secondary per
+  placeholder tier (in this local/CI environment all 5 tiers are still
+  placeholder-priced, so this test currently exercises the placeholder
+  branch; verified manually that setting `STRIPE_WORKSPACE_PRICE_ID`
+  before module load flips `builder` to non-placeholder and produces
+  exactly 1 "Get started" + 1 "or book a demo", confirming the
+  assertion logic is correct for whichever branch is live); absence of
+  the sticky bar; `data-tier-cta` present for all 5 tiers; the
+  everything-included list present without any dashboard-chrome
+  utility classes (`bg-card/`, `text-muted-foreground`).
+
+`tests/unit/landing/marketing-pricing.spec.ts` (the coordinator's
+explicit call-out) was re-verified rather than edited — it tests
+`marketing-pricing-section.tsx`, the HOMEPAGE pricing section, which
+this commit does not touch at all; all 5 of its existing assertions
+still pass unchanged.
+
+### Verification (fourth wave)
+
+Full billing + pricing sweep (60 node-only spec files, +10 tests vs.
+wave 3 from the new pricing-shell spec):
+
+```
+ℹ tests 663
+ℹ suites 166
+ℹ pass 662
+ℹ fail 0
+ℹ cancelled 0
+ℹ skipped 1
+ℹ todo 0
+ℹ duration_ms 8567.3914
+```
+
+jsdom-based upgrade-modal spec (separate process, unaffected by this
+commit — re-verified for regression):
+
+```
+ℹ tests 8
+ℹ suites 3
+ℹ pass 8
+ℹ fail 0
+ℹ cancelled 0
+ℹ skipped 0
+ℹ todo 0
+ℹ duration_ms 3318.2326
+```
+
+**Combined: 671 tests, 670 pass, 0 fail, 1 pre-existing skip.**
+
+`tsc --noEmit`: 23 total (exact baseline), 0 new — including 0 in the
+4 touched files (`page.tsx`, `pricing-shell.tsx`,
+`pricing-shell-marketing.tsx`, the new spec).
+`check:use-server.sh src`: clean.
+Regression grep: empty. No `packages/crm/drizzle` files touched.
+
+### Open item
+
+No live/visual smoke of the flag-ON page was performed (no
+`.claude/launch.json` dev-server config exists in this worktree, and
+standing one up with full DB/auth/Stripe env was out of scope for this
+fix). Verification relied on `renderToString` structural assertions +
+`tsc`, matching the pattern used throughout every prior wave of this
+branch. Recommend a real-browser smoke of `/pricing` with
+`SF_TIER_LADDER=1` (both audience tabs, desktop + mobile) before or
+immediately after the eventual flip, per the existing flip checklist's
+"flip + smoke" step.
+
 ## Test results (verbatim tails, original session)
 
 All six named spec files, together, fail 0:
@@ -845,4 +1031,324 @@ $ git diff --name-only origin/main..HEAD -- packages/crm/drizzle
 a1cf476e7 fix(billing): gate all sub-account attach paths + owner-owned exclusion
 da06cc101 fix(pricing): flag-gate upgrade modal targets + thread tierLadderOn + tier ranks
 ac09002c5 fix(billing): live $29 checkout POSTs sellable builder tier + webhook metadata-first tier resolution
+231653b7e feat(pricing): marketing-branded pricing page + CTA hierarchy
 ```
+
+(Between `ac09002c5` and `231653b7e`, this branch pulled forward through
+`origin/main`'s `6eb789a0c` — the SSR/metadata hotfix `3c77b6a1d` — see
+the note at the top of this report.)
+
+## Fifth follow-up — hydration-mismatch fix: no price id lives in the client
+
+**The live bug:** the /pricing tier cards (SF_TIER_LADDER ON,
+`pricing-shell-marketing.tsx`) rendered "Book a demo" as the PRIMARY CTA
+for every tier instead of "Get started" — even for tiers with a real,
+configured Stripe price.
+
+**Root cause.** `pricing-shell-marketing.tsx` is `"use client"` and
+computed `placeholder = isPlaceholderPriceId(tier.stripePriceId)` itself,
+where `tier.stripePriceId` came from `PLANS` (`lib/billing/plans.ts`),
+whose price ids in turn come from `price-ids.ts`'s `readEnv("STRIPE_*_
+PRICE_ID", "price_PLACEHOLDER_*")`. `readEnv` reads `process.env` at
+MODULE LOAD TIME. `STRIPE_*_PRICE_ID` env vars are never exposed to the
+browser (they're not prefixed `NEXT_PUBLIC_`, by design — a Stripe price
+id isn't secret, but nothing marks it public either, so Next.js correctly
+strips it from the client bundle). Server-side (SSR pass), `process.env`
+has the real values → `available` tiers render "Get started". Client-side
+(hydration pass, same component re-rendering in the browser),
+`process.env.STRIPE_*` is `undefined` → EVERY tier re-evaluates as
+`isPlaceholderPriceId(undefined)` → `true` → "Book a demo". React
+hydration reconciles the mismatch by keeping the CLIENT's render (the
+wrong one), so the page visibly shows "Book a demo" once JS takes over,
+even though the initial HTML (view-source) had "Get started".
+
+This is the exact bug class the LEGACY single card (`pricing-shell.tsx`)
+was already immune to — its file header states the rule explicitly: "No
+price id lives in the client." The ladder violated that rule when it was
+built as a `"use client"` component that read `PLANS`/`price-ids.ts`
+directly instead of receiving pre-resolved availability as a prop.
+
+**The fix — restore the rule, three surfaces:**
+
+1. `app/pricing/page.tsx` (Server Component): added `buildLadderTiers()`,
+   which filters `PLANS` to `sellable === true` and maps each to
+   `{ id, name, price, tagline, maxSubAccounts, fullWhiteLabel, available:
+   !isPlaceholderPriceId(p.stripePriceId) }` — a plain, serializable
+   object with `available: boolean` as the ONLY env-derived fact, resolved
+   SERVER-side where `process.env` actually has the real values. Passed
+   as `<PricingShellMarketing tiers={buildLadderTiers()} ... />`.
+2. `pricing-shell-marketing.tsx`: deleted its `PLANS` and
+   `isPlaceholderPriceId` imports, deleted its local `SELLABLE_TIERS`
+   computed-from-PLANS array, deleted the `stripePriceId` field from its
+   local tier type entirely. `PricingShellMarketingProps` now requires
+   `tiers: LadderTier[]` (exported type, `LadderTier.available:
+   boolean`, no price id field anywhere in the type). `placeholder =
+   isPlaceholderPriceId(tier.stripePriceId)` became `placeholder =
+   !tier.available`. Zero `process.env` reads, zero `PLANS`/`price-ids`
+   imports remain in this file (source-guard test enforces this — see
+   below).
+3. **Second leak found + fixed (grep sweep across every `"use client"`
+   file):** `components/billing/upgrade-modal.tsx` also imported
+   `BUILDER_PRICE_ID` / `MANAGED_PRICE_ID` / `AGENCY_STARTER_PRICE_ID`
+   directly from `price-ids.ts`, baking those (also server-only-resolved,
+   so always-placeholder-in-the-browser) values into the client bundle
+   purely to forward them in the `/api/stripe/checkout` POST body as
+   `priceId`. Investigation of the route (`api/stripe/checkout/route.ts`)
+   confirmed `tier` is resolved FIRST (before any `priceId` fallback) —
+   the server already re-derives the real Stripe price id from `tier`
+   via `PLANS`, so `priceId` in the request body was pure dead weight
+   with an accidental money-adjacent footgun (a stale/placeholder id
+   silently forwarded from the client for no functional reason). Fixed
+   by dropping `priceId` from `StartCheckoutInput`
+   (`lib/billing/start-checkout.ts`) and from `upgrade-modal.tsx`'s
+   `TIER_TO_PRICE_ID` maps entirely — `startCheckout` now sends only
+   `{ tier, successPath, cancelPath }`. This didn't reproduce the exact
+   same VISIBLE symptom (the modal never branched on `isPlaceholderPriceId`
+   itself, so it always rendered the same "Upgrade to X" copy regardless
+   of hydration), but it was the same rule violation and the same latent
+   risk class, so it's fixed the same way per the coordinator's explicit
+   ask to check for other leaks.
+   No other `"use client"` file imports `lib/billing/plans` or
+   `lib/billing/price-ids` for its own display/availability logic (the
+   remaining hits — `super-admin/users/page.tsx`, `super-admin/*.ts`,
+   `blueprint/rerender-org.ts`, `billing/orgs.ts`, `billing/public.ts`,
+   `billing/actions.ts`, `billing/checkout-items.ts`, `billing/
+   workspace-billing.ts`, `proposals/check-tier-quota.ts`, the Stripe
+   webhook, and the checkout route itself — are all Server Components,
+   server actions, or API routes; none are `"use client"`).
+
+**Tests (Files: `tests/unit/landing/pricing-shell.spec.tsx`,
+`tests/unit/billing/start-checkout.spec.ts`):**
+
+- (a) END STATE both ways, DI'd via the new `tiers` prop (no env
+  manipulation): `fixtureTiers(true)` → every card's primary is "Get
+  started" (5/5) + secondary "or book a demo" (5/5), zero "Book a demo"
+  anywhere; `fixtureTiers(false)` → every card's primary is "Book a
+  demo" (5/5), zero "Get started", zero secondary links. Plus a
+  BOUNDARY case (mixed availability) asserting each card's CTA is
+  independent of its siblings.
+- (b) Source-guard tests (read the file, assert on stripped-of-comments
+  source text): `pricing-shell-marketing.tsx` contains no
+  `stripePriceId`, no `isPlaceholderPriceId` call, no import from
+  `@/lib/billing/plans` or `@/lib/billing/price-ids`, no `process.env`
+  read. A parallel guard on `upgrade-modal.tsx` asserts no import from
+  `price-ids` and no `*_PRICE_ID` identifier anywhere in its live code.
+  These are cheap, falsifiable, and — unlike the CTA-count assertions —
+  they catch a REINTRODUCTION of the leak even if a future edit
+  accidentally produces output that still happens to look right.
+- (c) **Why the OLD `pricing-shell.spec.tsx` passed with this bug —
+  the actual answer, not a guess:** the old test called
+  `renderToString(<PricingShellMarketing isAuthed={false} />)` with NO
+  `tiers` prop — the component read `PLANS` itself. `renderToString`
+  runs entirely in THIS Node test process, which is neither the real
+  server (Vercel, with `STRIPE_*_PRICE_ID` set in the environment) nor
+  the real browser (webpack/turbopack-bundled, env vars stripped at
+  BUILD time). This repo has no `.env.local` / `.env` file (confirmed:
+  `ls .env*` → not found), so `process.env.STRIPE_*_PRICE_ID` was
+  UNSET in the test process too — `isPlaceholderPriceId` returned
+  `true` for all 5 tiers, confirmed by directly evaluating
+  `getPlan(id).stripePriceId` for every ladder tier id in this test
+  process (every one resolves to a literal `price_PLACEHOLDER_*`
+  string). The old test's own "CTA hierarchy" assertion computed
+  `nonPlaceholderCount` from that SAME always-unconfigured `getPlan()`
+  call, got `0`, and then asserted `getStartedMatches.length === 0` —
+  which is trivially true regardless of what the component does with a
+  CONFIGURED tier, because the test never exercised that branch AT ALL.
+  The test was internally self-consistent (it computed its own
+  expectation from the same broken source the component used) but never
+  pinned the true end state. More fundamentally: a hydration mismatch is
+  by definition a DELTA between a server render and a client render: a
+  single `renderToString` call in one Node process has no "client half"
+  to diverge from, so no amount of env-juggling in that old test design
+  could ever have caught this class of bug — the fix had to change WHAT
+  the component receives (DI'd `tiers` prop), not just how the existing
+  test was run. This is the structural lesson below.
+
+## Lesson — server-only env vars can NEVER be read inside a `"use client"`
+## component, even indirectly through an imported constant
+
+**The pattern that bit us:** a module-level `const X = readEnv("SERVER_
+ONLY_VAR", fallback)` (or any top-level `process.env.FOO` read) inside a
+file that's imported — even transitively, even just for its exported
+constants — by a `"use client"` component. Next.js does NOT statically
+strip non-`NEXT_PUBLIC_` env reads from client bundles the way you might
+expect; it just leaves `process.env.FOO` as `undefined` at runtime in the
+browser (the read itself isn't an error — it silently returns `undefined`
+and code branches on that as if the var were legitimately unset). There
+is no build-time or lint-time signal that a `"use client"` file has this
+problem; it only manifests as a HYDRATION MISMATCH in the actual browser,
+which:
+  - Is invisible to `tsc` (types don't know about env-var origin).
+  - Is invisible to a same-process `renderToString` unit test (no
+    separate "client half" exists to diverge from).
+  - Is often invisible in local dev too if the dev server's env happens
+    to be unset in a way that makes server and "client" (also unset)
+    agree — the bug only shows once one side (prod server, which HAS the
+    var) and the other side (every browser, which never has it) actually
+    disagree, i.e. exactly the deployed-with-real-env case this was.
+
+**The rule (already stated once, in `pricing-shell.tsx`'s header, and
+now restored / extended here):** a `"use client"` file must never
+import a value that was resolved from `process.env` at module scope,
+UNLESS that env var is explicitly `NEXT_PUBLIC_`-prefixed (build-time
+inlined, safe by construction — see `upgrade-modal.tsx`'s own
+`isTierLadderOnClient()` reading `NEXT_PUBLIC_SF_TIER_LADDER`, which is
+correct and was NOT part of this bug). Concretely: resolve any
+server-only-derived boolean/string/id the client needs to DISPLAY (not
+just gate a build-time feature flag) in the nearest Server Component
+ancestor, and pass it down as a plain serializable prop. Never pass the
+raw underlying value (a price id, an API key, a feature-detection
+result computed from server env) — pass the ALREADY-DECIDED fact the
+client needs (`available: boolean`, not `stripePriceId: string`).
+
+**How to catch this class going forward, cheaply:** a source-guard test
+(read the file as text, assert on what identifiers/imports/`process.env`
+reads are absent) is a better catch than any render-based assertion,
+because — per finding (c) above — the render-based test can be
+accidentally self-consistent with the very bug it's supposed to catch
+when both "server" and "client" happen to share the same (wrong) input
+in a single test process. A source guard has no such blind spot: it
+either finds the string `process.env` in a `"use client"` file or it
+doesn't, full stop, independent of whatever env happens to be set when
+the test runs. Recommend the same audit (grep `readEnv(` / bare
+`process\.env\.` call sites, cross-referenced against every `"use
+client"` file that imports them, even transitively) whenever a new
+`"use client"` component is added anywhere near billing/config code.
+
+## Commit — this fix
+
+```
+fix(pricing): tier availability computed server-side — no price ids in the client bundle
+```
+
+Files touched: `app/pricing/page.tsx`, `app/pricing/pricing-shell-marketing.tsx`,
+`components/billing/upgrade-modal.tsx`, `lib/billing/start-checkout.ts`,
+`tests/unit/landing/pricing-shell.spec.tsx`, `tests/unit/billing/start-checkout.spec.ts`.
+
+Verify: `tests/unit/landing/pricing-shell.spec.tsx` +
+`tests/unit/billing/start-checkout.spec.ts` = 26/26 pass; the full
+`tests/unit/billing/*.spec.ts` sweep = 117/117 pass (fail-0); `tsc
+--noEmit` = 9 pre-existing baseline errors (0 in touched files — the
+9 are unrelated missing-optional-deps / a pre-existing Composio type
+mismatch / a pre-existing `persist` prop on `copilot/turn/route.ts`'s
+`executeTurn` call, all present before this fix); `scripts/check-use-
+server.sh src` clean. (One unrelated pre-existing failure was observed
+in `tests/unit/landing/hero-cta.spec.tsx` — a date/DOM-snapshot-style
+assertion unrelated to pricing, not touched by this diff — while running
+a broader `landing/*.spec.tsx` glob; excluded from the reported counts
+as out of scope for this fix.)
+
+## Sixth follow-up — PostPlanify-style per-tier feature checklists (single source: plans.ts)
+
+Max wanted the /pricing tier cards to show rich, PostPlanify-style
+feature checklists (~4-8 checkmarked items per tier, with "Everything
+in X, plus:" headers on upper tiers) instead of just price + tagline.
+
+**Design (anti-drift):** the copy lives in exactly ONE place —
+`Plan.marketingFeatures?: { header?: string; items: string[] }` on each
+SELLABLE `Plan` entry in `lib/billing/plans.ts`. `app/pricing/page.tsx`'s
+`buildLadderTiers()` passes `p.marketingFeatures` through the existing
+serializable `tiers` prop unmodified (same server-resolved-then-DI'd
+pattern the fifth follow-up established for `available`).
+`pricing-shell-marketing.tsx` renders a checkmark list under the
+tagline/subLabel block — teal `Check` icon (14px), 13.5px text, 1.6
+line-height, bold header line when present — reading `tier.
+marketingFeatures` verbatim. No component anywhere hand-copies this
+list; the grandfathered legacy tiers ("workspace", "agency") have no
+`marketingFeatures` field at all (they're not marketed on /pricing).
+The flag-OFF `PricingShell` is completely untouched.
+
+**Honesty-rule audit (BEFORE shipping any copy — this is money-adjacent
+marketing text, not aspirational).** Verified every claim against the
+actual codebase in THIS worktree (not a stale/different worktree — see
+the false-negative caveat below):
+
+| Claim | Verdict | Evidence |
+|---|---|---|
+| 8 ready-to-deploy agent templates | TRUE | `lib/agent-templates/starter-pack.ts`'s `STARTER_TEMPLATES` array has exactly 8 entries (`ai-phone-receptionist`, `website-support-chat`, `lead-qualifier-intake`, `booking-concierge`, `quote-estimate-assistant`, `social-content-assistant`, `review-requester`, `speed-to-lead`) |
+| Review-request + speed-to-lead automations | TRUE | Live event wiring: `lib/agents/triggers/agent-trigger.ts`, dispatched on `booking.completed`/`lead.created` from the real event bus |
+| BYOK — provider cost, zero markup | TRUE | `lib/ai/client.ts`'s `getAIClient()` BYOK path instantiates the raw provider client directly; `runtime.ts`'s `llmCostCents`/`computeCostCents` is READ-ONLY observability (feeds the usage-rollup meter), never a Stripe charge or wallet debit |
+| Buy & sell agents on the marketplace | TRUE | `app/marketplace/`, `app/api/marketplace/`, `app/api/v1/marketplace/`; `lib/marketplace/actions.ts`'s `publishAgentTemplateAction` (seller) + install/purchase flow (buyer) |
+| Per-sub-account usage meter & caps | TRUE | `lib/billing/usage-rollup.ts` + `usage-cap.ts`, live-wired (unconditionally, no flag) into `app/(dashboard)/studio/clients/page.tsx` (`ClientUsagePanel`/`UsageCapEditor`/`UsageTotalsTile`) — this is the usage-meter feature this same worktree built earlier in this session |
+| One-click deploy to ALL clients | TRUE | `lib/deployments/deploy-to-clients-action.ts` + `app/(dashboard)/studio/agents/[id]/deploy-to-clients/` UI |
+| API + MCP access | TRUE, but see caveat below | `app/api/v1/**` (35+ routes) + the SeldonFrame MCP server (visible as this session's own `seldonframe` MCP tool inventory) |
+| Rent your agents via the marketplace rail | TRUE | `lib/marketplace/rental.ts`, `rental-pricing.ts`, `agent-rental-run.ts`, `app/api/v1/agents/[slug]/mcp/route.ts` |
+| Set your own resale pricing | TRUE | `lib/marketplace/actions.ts`'s `publishAgentTemplateAction(input: { priceCents, ... })` — the seller sets `priceCents` directly, no server override |
+| Custom domain included (managed) | TRUE | `plans.ts`: `managed.limits.customDomain === true` |
+| Branded client portal logins (agency_starter) | TRUE | `app/portal/[orgSlug]/` surfaces reference `partnerAgencies`/`logoUrl`/`primaryColor`/`accentColor` across 8 files — matches the existing whitelabel-front-office infra (partner_agencies + portal + branding, per project memory) |
+| Deploy agent templates to clients (agency_starter) | TRUE | Same deploy-to-client flow as the "deploy to ALL clients" item, single-client variant |
+| **Priority email support (agency_starter)** | **FALSE — CAUGHT AND DROPPED** | `plans.ts`: `agency_starter.limits.prioritySupport === false`. Only `agency_growth`/`agency_scale` (and the grandfathered `agency` tier) have `prioritySupport: true`. Shipping this claim on agency_starter would have directly contradicted the catalog's own source-of-truth entitlement flag — the exact kind of drift the single-source design is supposed to prevent. **Removed from agency_starter's `marketingFeatures.items`** (a comment in `plans.ts` documents why, at the point it was dropped). |
+| White-label ROI reports (agency_growth) | N/A — shipped exactly as instructed | Marked `"(coming soon)"` per the coordinator's own copy and the honesty rule — not built, correctly labeled, no audit action needed. |
+
+**A note on verification methodology:** a background research agent
+dispatched to independently cross-check these claims returned false
+negatives for items 5 ("Per-sub-account usage meter"), 6 ("One-click
+deploy to ALL clients"), and 12 ("Deploy agent templates to clients")
+— but it had run its search against the WRONG branch/worktree
+(`feature/crm-engine`, which predates this feature entirely), not
+`feature/pricing-ladder`. Its own report flagged this caveat explicitly
+("verify that's what's actually deployed to production"). All three
+were independently re-confirmed directly in THIS worktree via direct
+grep/read before shipping — the agent's mis-scoped run did not change
+the shipped copy, but it's a reminder that a dispatched verification
+agent's cwd/branch must be sanity-checked against its findings,
+especially when its "not found" verdicts contradict direct evidence
+already gathered in the current session.
+
+**Caveat kept in mind, not acted on:** "API + MCP access" is listed
+under `agency_scale`'s checklist, but the underlying API (`/api/v1/**`)
+and MCP server access are NOT tier-gated anywhere found in the codebase
+— they're platform-wide, consistent with CLAUDE.md's "no upfront API
+key... progressive key disclosure" philosophy. The claim itself doesn't
+assert exclusivity ("API + MCP access" is stated as an included
+capability, not "ONLY on this tier") so it's not false, and it was kept
+as instructed — but it's worth Max knowing this bullet doesn't
+differentiate agency_scale from the lower tiers in practice today, in
+case that's not the intended positioning.
+
+**Tests added:**
+- `tests/unit/billing-plans-catalog.spec.ts`: `marketingFeatures` exists
+  (with ≥1 item) on every sellable tier, absent on both grandfathered
+  tiers; builder has no header (base tier); the 4 upper tiers' exact
+  header strings; the ROI-reports item carries `(coming soon)`;
+  agency_starter's catalog `prioritySupport` is false AND its
+  `marketingFeatures.items` contains no priority-support claim (this is
+  the regression test for the caught-and-dropped item above); no item
+  across any sellable tier mentions "autopay" (money-safety guard per
+  the honesty rule).
+- `tests/unit/landing/pricing-shell.spec.tsx`: a new `catalogTiers()`
+  helper builds `LadderTier[]` DIRECTLY FROM `PLANS` (not hardcoded) so
+  every count assertion tracks the catalog automatically — per-tier
+  checkmark-icon counts equal `plan.marketingFeatures.items.length`
+  exactly (via a `data-tier-features={tier.id}` DOM hook added to the
+  component for this purpose); every item string appears verbatim
+  (HTML-entity-escaped for comparison — React SSR-escapes `&`/`'`/etc.)
+  in the rendered output; all 4 "Everything in X, plus:" headers render
+  and builder has none; the `(coming soon)` marker is present; the
+  dropped priority-support claim is confirmed absent from agency_starter's
+  rendered card; exactly one `data-tier-features` block per sellable
+  tier (each tier belongs to exactly one audience row, so no
+  duplication — a real assertion this test initially got wrong at 2x
+  before checking the component's actual per-audience-row filtering
+  behavior). The existing source-guard tests (`pricing-shell-marketing.tsx`
+  still imports nothing from `lib/billing/plans`/`price-ids`, no
+  `process.env`) pass UNCHANGED — the checklist copy arrives entirely
+  via the `tiers` prop, confirming the single-source design holds.
+
+## Commit — this fix
+
+```
+feat(pricing): per-tier feature checklists from the catalog (single source)
+```
+
+Files touched: `lib/billing/plans.ts`, `app/pricing/page.tsx`,
+`app/pricing/pricing-shell-marketing.tsx`,
+`tests/unit/billing-plans-catalog.spec.ts`,
+`tests/unit/landing/pricing-shell.spec.tsx`.
+
+Verify: `tests/unit/landing/pricing-shell.spec.tsx` (25/25) +
+`tests/unit/billing-plans-catalog.spec.ts` (29/29) = 54/54 pass; the
+full `tests/unit/billing/*.spec.ts` + `billing-plans-catalog.spec.ts`
+sweep = 241/241 pass (fail-0); `tsc --noEmit` = 9 pre-existing baseline
+errors, unchanged from before this fix, 0 in touched files;
+`scripts/check-use-server.sh src` clean.
