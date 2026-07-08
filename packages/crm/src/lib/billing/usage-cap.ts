@@ -16,7 +16,7 @@
 // pure breach/notify-idempotency predicate; Task 4 wires it into the runtime.
 
 import { db } from "@/db";
-import { agentConversations, organizations, partnerAgencies } from "@/db/schema";
+import { agentConversations, organizations, partnerAgencies, users } from "@/db/schema";
 import { and, eq, gte, sql } from "drizzle-orm";
 
 export type UsageCapMode = "notify" | "pause";
@@ -206,34 +206,141 @@ export function resolveCappedHoldingReply(holdingReply: string | null | undefine
   return trimmed && trimmed.length > 0 ? trimmed : DEFAULT_USAGE_CAP_HOLDING_REPLY;
 }
 
-/** Resolve the holding reply for a capped turn AND best-effort fire the T3
- *  notify (once per period). Single entry point for the runtime's capped
- *  branch (lib/agents/runtime.ts) so all the DB reads for "load the cap,
- *  compute this period's spend, evaluate breach, resolve the agency owner's
- *  email, send + mark notified" live in ONE place rather than duplicated
- *  inline in the runtime. Fail-soft throughout — any error degrades to just
- *  returning the default holding reply text; the notify is always
- *  best-effort and never blocks the reply. */
-export async function resolveCappedTurnReply(orgId: string): Promise<string> {
+// ─── the agency notify-email chain (2026-07-08 opus-review follow-up,
+// item 4) ─────────────────────────────────────────────────────────────────
+//
+// ownerUserId → users.email, else supportEmail, else ownerWorkspaceId →
+// organizations.ownerId → users.email. The last hop is the fix for
+// workspace-owned agencies (ownerWorkspaceId only), which previously fell
+// out of cap-breach emails with reason `no_owner_email`. Shared by BOTH the
+// capped-turn notify below and the daily cron sweep
+// (api/cron/usage-caps/route.ts) so the chain can't drift between them.
+
+export type AgencyNotifyTarget = { agencyName: string | null; toEmail: string | null };
+
+export type AgencyNotifyTargetDeps = {
+  getAgencyRow: (agencyId: string) => Promise<{
+    name: string | null;
+    ownerUserId: string | null;
+    ownerWorkspaceId: string | null;
+    supportEmail: string | null;
+  } | null>;
+  getUserEmail: (userId: string) => Promise<string | null>;
+  /** organizations.ownerId for the agency's ownerWorkspaceId — the
+   *  workspace-owned-agency fallback hop. */
+  getOrgOwnerUserId: (orgId: string) => Promise<string | null>;
+};
+
+function defaultAgencyNotifyTargetDeps(): AgencyNotifyTargetDeps {
+  return {
+    getAgencyRow: async (agencyId) => {
+      const [row] = await db
+        .select({
+          name: partnerAgencies.name,
+          ownerUserId: partnerAgencies.ownerUserId,
+          ownerWorkspaceId: partnerAgencies.ownerWorkspaceId,
+          supportEmail: partnerAgencies.supportEmail,
+        })
+        .from(partnerAgencies)
+        .where(eq(partnerAgencies.id, agencyId))
+        .limit(1);
+      return row ?? null;
+    },
+    getUserEmail: async (userId) => {
+      const [row] = await db
+        .select({ email: users.email })
+        .from(users)
+        .where(eq(users.id, userId))
+        .limit(1);
+      return row?.email ?? null;
+    },
+    getOrgOwnerUserId: async (orgId) => {
+      const [row] = await db
+        .select({ ownerId: organizations.ownerId })
+        .from(organizations)
+        .where(eq(organizations.id, orgId))
+        .limit(1);
+      return row?.ownerId ?? null;
+    },
+  };
+}
+
+/** Resolve where a cap-breach alert for `agencyId` should go. Chain:
+ *  owner user's email → supportEmail → the owner WORKSPACE's owner email
+ *  (workspace-owned agencies). `toEmail: null` = genuinely nowhere to send
+ *  (skipped by callers). Fail-soft: any dep error → null, never throws. */
+export async function resolveAgencyNotifyTarget(
+  agencyId: string,
+  deps: AgencyNotifyTargetDeps = defaultAgencyNotifyTargetDeps(),
+): Promise<AgencyNotifyTarget | null> {
   try {
-    const cap = await loadUsageCapForOrg(orgId);
-    const reply = resolveCappedHoldingReply(cap?.holdingReply ?? null);
-    if (!cap) return reply;
+    const agency = await deps.getAgencyRow(agencyId);
+    if (!agency) return null;
 
-    try {
-      const now = new Date();
-      const periodKey = periodKeyUtc(now);
-      const periodStart = new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), 1));
+    let toEmail: string | null = null;
+    if (agency.ownerUserId) {
+      toEmail = await deps.getUserEmail(agency.ownerUserId);
+    }
+    if (!toEmail) toEmail = agency.supportEmail ?? null;
+    if (!toEmail && agency.ownerWorkspaceId) {
+      const workspaceOwnerId = await deps.getOrgOwnerUserId(agency.ownerWorkspaceId);
+      if (workspaceOwnerId) toEmail = await deps.getUserEmail(workspaceOwnerId);
+    }
 
+    return { agencyName: agency.name, toEmail };
+  } catch (err) {
+    console.warn(
+      `[usage-cap] resolveAgencyNotifyTarget_failed agencyId=${agencyId} err=${err instanceof Error ? err.message : String(err)}`,
+    );
+    return null;
+  }
+}
+
+// ─── the capped-turn reply + best-effort notify ───────────────────────────
+
+/** The alert payload sendUsageCapAlert takes — shared by the capped-turn
+ *  path and the cron sweep deps. */
+export type UsageCapAlertParams = {
+  agencyName: string;
+  clientName: string;
+  clientOrgSlug: string;
+  estCostCents: number;
+  capCents: number;
+  mode: UsageCapMode;
+  toEmail: string;
+};
+
+/** Injectable deps for resolveCappedTurnReplyWithDeps — DI'd in unit tests
+ *  (2026-07-08 opus-review follow-up, item 2), defaulted to the real DB
+ *  reads + email send in production. */
+export type CappedTurnReplyDeps = {
+  loadCap: (orgId: string) => Promise<UsageCap | null>;
+  /** This period's estimated cost (agent_conversations rollup, one org). */
+  getEstCostCentsForOrg: (orgId: string, periodStart: Date) => Promise<number>;
+  getOrgSummary: (orgId: string) => Promise<{
+    name: string;
+    slug: string;
+    parentAgencyId: string | null;
+    settings: unknown;
+  } | null>;
+  resolveAgencyNotifyTarget: (agencyId: string) => Promise<AgencyNotifyTarget | null>;
+  sendAlert: (params: UsageCapAlertParams) => Promise<void>;
+  markNotified: (orgId: string, settings: Record<string, unknown>, periodKey: string) => Promise<void>;
+  now: () => Date;
+};
+
+function defaultCappedTurnReplyDeps(): CappedTurnReplyDeps {
+  return {
+    loadCap: loadUsageCapForOrg,
+    getEstCostCentsForOrg: async (orgId, periodStart) => {
       const [row] = await db
         .select({ total: sql<number>`coalesce(sum(${agentConversations.llmCostCents}), 0)::int` })
         .from(agentConversations)
         .where(and(eq(agentConversations.orgId, orgId), gte(agentConversations.startedAt, periodStart)));
-      const estCostCents = Number(row?.total ?? 0);
-      const evaluation = evaluateUsageCap({ cap, estCostCents, periodKey });
-      if (!evaluation.shouldNotify) return reply;
-
-      const [orgRow] = await db
+      return Number(row?.total ?? 0);
+    },
+    getOrgSummary: async (orgId) => {
+      const [row] = await db
         .select({
           name: organizations.name,
           slug: organizations.slug,
@@ -243,43 +350,72 @@ export async function resolveCappedTurnReply(orgId: string): Promise<string> {
         .from(organizations)
         .where(eq(organizations.id, orgId))
         .limit(1);
+      return row ?? null;
+    },
+    resolveAgencyNotifyTarget: (agencyId) => resolveAgencyNotifyTarget(agencyId),
+    sendAlert: async (params) => {
+      const { sendUsageCapAlert } = await import("@/lib/notifications/ops-notifications");
+      await sendUsageCapAlert(params);
+    },
+    markNotified: async (orgId, settings) => {
+      await db
+        .update(organizations)
+        .set({ settings, updatedAt: new Date() })
+        .where(eq(organizations.id, orgId));
+    },
+    now: () => new Date(),
+  };
+}
+
+/** Resolve the holding reply for a capped turn AND best-effort fire the T3
+ *  notify (once per period). Single entry point for the runtime's capped
+ *  branch (lib/agents/runtime.ts) so all the reads for "load the cap,
+ *  compute this period's spend, evaluate breach, resolve the agency's notify
+ *  email, send + mark notified" live in ONE place rather than duplicated
+ *  inline in the runtime. Fail-soft throughout — any error degrades to just
+ *  returning the holding reply text; the notify is always best-effort and
+ *  never blocks the reply. A failed send does NOT mark the period notified,
+ *  so the next capped turn retries. */
+export async function resolveCappedTurnReplyWithDeps(
+  orgId: string,
+  deps: CappedTurnReplyDeps,
+): Promise<string> {
+  try {
+    const cap = await deps.loadCap(orgId);
+    const reply = resolveCappedHoldingReply(cap?.holdingReply ?? null);
+    if (!cap) return reply;
+
+    try {
+      const now = deps.now();
+      const periodKey = periodKeyUtc(now);
+      const periodStart = new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), 1));
+
+      const estCostCents = await deps.getEstCostCentsForOrg(orgId, periodStart);
+      const evaluation = evaluateUsageCap({ cap, estCostCents, periodKey });
+      if (!evaluation.shouldNotify) return reply;
+
+      const orgRow = await deps.getOrgSummary(orgId);
       if (!orgRow?.parentAgencyId) return reply;
 
-      const [agencyRow] = await db
-        .select({ name: partnerAgencies.name, ownerUserId: partnerAgencies.ownerUserId, supportEmail: partnerAgencies.supportEmail })
-        .from(partnerAgencies)
-        .where(eq(partnerAgencies.id, orgRow.parentAgencyId))
-        .limit(1);
-      if (!agencyRow) return reply;
+      const target = await deps.resolveAgencyNotifyTarget(orgRow.parentAgencyId);
+      if (!target?.toEmail) return reply;
 
-      let toEmail: string | null = agencyRow.supportEmail ?? null;
-      if (agencyRow.ownerUserId) {
-        const { users } = await import("@/db/schema");
-        const [ownerRow] = await db
-          .select({ email: users.email })
-          .from(users)
-          .where(eq(users.id, agencyRow.ownerUserId))
-          .limit(1);
-        if (ownerRow?.email) toEmail = ownerRow.email;
-      }
-      if (!toEmail) return reply;
-
-      const { sendUsageCapAlert } = await import("@/lib/notifications/ops-notifications");
-      await sendUsageCapAlert({
-        agencyName: agencyRow.name ?? "Your agency",
+      await deps.sendAlert({
+        agencyName: target.agencyName ?? "Your agency",
         clientName: orgRow.name,
         clientOrgSlug: orgRow.slug,
         estCostCents,
         capCents: cap.monthlyEstCostCentsCap,
         mode: cap.mode,
-        toEmail,
+        toEmail: target.toEmail,
       });
 
-      const settingsObj = (orgRow.settings ?? {}) as Record<string, unknown>;
-      await db
-        .update(organizations)
-        .set({ settings: { ...settingsObj, usageCap: { ...cap, lastNotifiedPeriod: periodKey } }, updatedAt: new Date() })
-        .where(eq(organizations.id, orgId));
+      const settingsObj = (orgRow.settings && typeof orgRow.settings === "object" ? orgRow.settings : {}) as Record<string, unknown>;
+      await deps.markNotified(
+        orgId,
+        { ...settingsObj, usageCap: { ...cap, lastNotifiedPeriod: periodKey } },
+        periodKey,
+      );
     } catch (notifyErr) {
       console.warn(
         `[usage-cap] resolveCappedTurnReply_notify_failed orgId=${orgId} err=${notifyErr instanceof Error ? notifyErr.message : String(notifyErr)}`,
@@ -293,6 +429,12 @@ export async function resolveCappedTurnReply(orgId: string): Promise<string> {
     );
     return DEFAULT_USAGE_CAP_HOLDING_REPLY;
   }
+}
+
+/** Production entry point — resolveCappedTurnReplyWithDeps with the real DB
+ *  reads + email send. */
+export async function resolveCappedTurnReply(orgId: string): Promise<string> {
+  return resolveCappedTurnReplyWithDeps(orgId, defaultCappedTurnReplyDeps());
 }
 
 // ─── the daily cron sweep (D5 — "notify fires without anyone visiting the

@@ -17,9 +17,10 @@
 // reimplemented. This module takes that org-id list as an injected dependency
 // so the org-set resolution stays owned by subaccount-count.ts.
 
-import { and, eq, gte, inArray, isNull, like, ne, or, sql } from "drizzle-orm";
+import { and, gte, inArray, like, sql } from "drizzle-orm";
 import { db } from "@/db";
-import { agentConversations, organizations, partnerAgencies, walletTransactions } from "@/db/schema";
+import { agentConversations, walletTransactions } from "@/db/schema";
+import { listCountableClientSubAccountOrgIds } from "./subaccount-count";
 
 /** Calendar-month UTC period boundary. `now` defaults to `new Date()` in
  *  production callers; injected in tests for determinism across month/year
@@ -93,32 +94,6 @@ export type UsageRollupDeps = {
   queryVoiceSpendCents: (orgIds: string[], periodStart: Date) => Promise<VoiceSpendRow[]>;
 };
 
-/** The SAME counted-sub-account predicate as subaccount-count.ts, resolved
- *  directly to org ids (that module returns a COUNT; this rollup needs the
- *  actual ids to group by). Mirrors its WHERE clause exactly. */
-async function defaultCountedSubAccountOrgIds(userId: string): Promise<string[]> {
-  const ownedAgencies = await db
-    .select({ id: partnerAgencies.id })
-    .from(partnerAgencies)
-    .where(eq(partnerAgencies.ownerUserId, userId));
-
-  if (ownedAgencies.length === 0) return [];
-  const agencyIds = ownedAgencies.map((a) => a.id);
-
-  const attached = await db
-    .select({ id: organizations.id })
-    .from(organizations)
-    .where(
-      and(
-        inArray(organizations.parentAgencyId, agencyIds),
-        isNull(organizations.archivedAt),
-        or(isNull(organizations.ownerId), ne(organizations.ownerId, userId)),
-      ),
-    );
-
-  return attached.map((o) => o.id);
-}
-
 async function defaultQueryConversationRollup(
   orgIds: string[],
   periodStart: Date,
@@ -183,7 +158,10 @@ async function defaultQueryVoiceSpendCents(
 
 export function defaultUsageRollupDeps(): UsageRollupDeps {
   return {
-    countedSubAccountOrgIds: defaultCountedSubAccountOrgIds,
+    // The SAME counted-sub-account query the billing cap uses
+    // (subaccount-count.ts) — shared, not mirrored, so the WHERE clause
+    // can't drift (2026-07-08 opus-review follow-up, item 3).
+    countedSubAccountOrgIds: listCountableClientSubAccountOrgIds,
     queryConversationRollup: defaultQueryConversationRollup,
     queryVoiceSpendCents: defaultQueryVoiceSpendCents,
   };
