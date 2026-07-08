@@ -116,7 +116,9 @@ export async function GET(request: Request) {
     height: OG_HEIGHT,
     fonts,
     headers: {
-      "Cache-Control": "public, immutable, no-transform, max-age=31536000, s-maxage=31536000",
+      // Not immutable: card copy embeds price strings that change at the
+      // quarterly fact refresh — let CDNs/scrapers re-pull within ~30 days.
+      "Cache-Control": "public, no-transform, max-age=86400, s-maxage=2592000",
     },
   });
 }

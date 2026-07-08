@@ -34,6 +34,9 @@ export type CompetitorPricing = {
   pricingUrl: string;
   /** e.g. "July 2026" — when this competitor's numbers were last checked. */
   verified: string;
+  /** True when ANY tier hides pricing behind sales. The template only shows
+   *  the quote-gated banner when EVERY plan price is quote-y — so `true` here
+   *  does NOT mean the vendor has no public prices at all. */
   quoteGated: boolean;
   freeTier?: string;
   annualNote?: string;

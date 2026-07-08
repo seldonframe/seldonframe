@@ -177,7 +177,8 @@ function fitFontSize(
     px -= 2;
     ctx.font = fontBuilder(px);
   }
-  return px;
+  // The 2px decrement can overshoot an odd floor by one step — clamp back.
+  return Math.max(px, minPx);
 }
 
 function roundRect(
