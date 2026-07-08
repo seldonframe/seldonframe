@@ -11,13 +11,23 @@ with a checkable plan, gets ticked off as it ships, and ends with a review block
 
 Design: docs/superpowers/specs/2026-07-08-ghl-seo-engine-design.md
 
-- [ ] A. Registry content: 10 new competitors in `alternative-pages.ts` + `alternative-pages-extras.ts` (+10 gohighlevel-vs-X VS_PAIRS)
-- [ ] B. Route folders: 10 `/alternative-to-<slug>` pages + 10 `.md` twins + 10 `compare/gohighlevel-vs-<slug>.md` twins
-- [ ] C. `/best` engine: `lib/seo/best-pages.ts` + spec, `components/seo/best-page.tsx`, `best/[slug]` + hub, ~30 combos, `.md` twins via `renderBestMarkdown`
-- [ ] D. Free tools: review-link-generator, ai-receptionist-cost-calculator, a2p-10dlc-checker, review-response-generator
-- [ ] E. Integration: sitemap.ts, llms.txt, tools hub TOOLS array, alternatives hub description
-- [ ] F. Verify: best-pages spec + existing seo specs, tsc-delta vs baseline, reviewer pass
-- [ ] G. Review section + memory update
+- [x] A. Registry content: 10 new competitors in `alternative-pages.ts` + `alternative-pages-extras.ts` (+10 gohighlevel-vs-X VS_PAIRS)
+- [x] B. Route folders: 10 `/alternative-to-<slug>` pages + 10 `.md` twins + 10 `compare/gohighlevel-vs-<slug>.md` twins
+- [x] C. `/best` engine: `lib/seo/best-pages.ts` + spec (51 tests), `components/seo/best-page.tsx`, `best/[slug]` + hub, 37 combos, `.md` twins via `renderBestMarkdown`
+- [x] D. Free tools: review-link-generator, ai-receptionist-cost-calculator, a2p-10dlc-checker, review-response-generator
+- [x] E. Integration: sitemap.ts, llms.txt, tools hub TOOLS array, alternatives hub description, `best_page` md-analytics surface
+- [x] F. Verify: 159/159 seo specs ✓ · tsc-delta 0 (436→436, none in our files) ✓ · use-server clean ✓ · regression grep clean after rebase onto 231653b7e ✓ · opus reviewer verdict SHIP (0 blocking; mojibake + llms casing fixed in b4663b702) · local `next build` NOT runnable in this env (pre-existing `workflow/next` missing locally — Vercel installs it; the pushed branch's Vercel preview is the real build gate)
+- [x] G. Review section + memory update
+
+Review (2026-07-08): SHIPPED to origin/feature/ghl-seo-engine (567873f4c..b4663b702,
+rebased onto 231653b7e). 94 files, ~5k lines, all additive static SEO surface:
+11 gohighlevel-vs-X head-to-heads (10 new competitors in the registries),
+21 new /alternative-to-* page+md routes, /best engine (37 listicles + hub + md
+twins + 51-test spec), 4 free tools (/tools now 5). CODE-CORRECT + spec-verified;
+NOT live-smoked (needs merge + deploy). Human gates left for Max: (1) check the
+Vercel preview build passes + eyeball /best/crm-for-small-business +
+/compare/gohighlevel-vs-hubspot + the 4 tools, (2) merge to main, (3) quarterly
+pricing-fact refresh now covers 25 competitors + /best contender price lines.
 
 ### Task — build-pipeline upgrade: mechanical tier pins + wedge strategy (2026-07-07) — DONE
 
