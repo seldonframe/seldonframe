@@ -56,7 +56,8 @@ import { organizations, subscriptions, proposals } from "@/db/schema";
 import { inArray, desc } from "drizzle-orm";
 import { StudioTabs } from "../studio-tabs";
 import { DeploymentStatusBadge } from "./status-badge";
-import { ClientUsagePanel, UsageTotalsTile } from "./usage-panel";
+import { ClientUsagePanel, UsageTotalsTile, RevenueStripTile } from "./usage-panel";
+import { getAgencyRevenueRollup } from "@/lib/payments/revenue-rollup";
 import { UsageCapEditor, UsageCapBreachBanner } from "./usage-cap-editor";
 import { BillingRetainerEditor } from "./billing-retainer-editor";
 import {
@@ -184,6 +185,12 @@ export default async function StudioClientsPage({
     }
   }
 
+  // Autopay console (2026-07-08, Task 5) — the month-to-date revenue strip.
+  // ONE grouped query for the whole book (the usage-rollup pattern). Flag-
+  // gated with the rest; omitted when the agency has collected nothing yet.
+  const revenueRollup = autopayConsoleOn ? await getAgencyRevenueRollup(orgId) : null;
+  const hasRevenue = Boolean(revenueRollup && revenueRollup.totals.collectedCents > 0);
+
   return (
     <section className="animate-page-enter space-y-6">
       <StudioTabs />
@@ -239,8 +246,12 @@ export default async function StudioClientsPage({
         </article>
       ) : (
         <>
-          {/* ── Portfolio KPI strip: Clients · Total MRR · Active agents (+ Usage) ── */}
-          <div className={`grid grid-cols-1 gap-3 sm:grid-cols-3 ${hasUsage ? "lg:grid-cols-4" : ""}`}>
+          {/* ── Portfolio KPI strip: Clients · Total MRR · Active agents (+ Usage, + Revenue) ── */}
+          <div
+            className={`grid grid-cols-1 gap-3 sm:grid-cols-3 ${
+              hasUsage || hasRevenue ? "lg:grid-cols-4" : ""
+            }`}
+          >
             <ClientKpiTile
               label="Clients"
               value={totals.clientCount.toLocaleString("en-US")}
@@ -260,6 +271,7 @@ export default async function StudioClientsPage({
               tone="neutral"
             />
             {hasUsage && <UsageTotalsTile totals={usageRollup.totals} />}
+            {hasRevenue && revenueRollup && <RevenueStripTile totals={revenueRollup.totals} />}
           </div>
 
           <div className="space-y-4">
