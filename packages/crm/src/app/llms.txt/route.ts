@@ -96,6 +96,9 @@ export async function GET(req: Request): Promise<Response> {
   lines.push(
     `- [Missed Call Cost Calculator](${base}/tools/missed-call-calculator): estimate the revenue missed calls cost a service business.`,
   );
+  lines.push(
+    `- [Claude Project Brief Generator](${base}/tools/claude-project-brief-generator): generate the standing-instructions block for a Claude Project (and see how SeldonFrame automates it per client).`,
+  );
   lines.push("");
 
   lines.push("## Pages");

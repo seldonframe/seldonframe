@@ -119,6 +119,12 @@ export default async function sitemap(): Promise<MetadataRoute.Sitemap> {
     changeFrequency: "monthly",
     priority: 0.7,
   });
+  entries.push({
+    url: `${base}/tools/claude-project-brief-generator`,
+    lastModified: now,
+    changeFrequency: "monthly",
+    priority: 0.7,
+  });
 
   return entries;
 }

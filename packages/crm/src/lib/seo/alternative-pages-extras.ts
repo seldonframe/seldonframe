@@ -471,6 +471,34 @@ export const EXTRAS: Record<string, CompetitorExtras> = {
     switchNote:
       "Run SeldonFrame as the first line (instant answer + booking) and keep a human service for escalations if you need one — the agent takes structured messages and notifies you instantly either way.",
   },
+  "claude-projects": {
+    pros: [
+      "Persistent instructions + knowledge that load into every conversation — no re-briefing",
+      "Teaches exactly the right discipline: standing briefs, tight 1–3 page docs, retrieval testing",
+      "Available on every Claude plan, with desktop Cowork adding scoped memory and scheduled tasks",
+      "Unbeatable for your own research, writing and strategy work",
+    ],
+    cons: [
+      "One manual setup AND ongoing maintenance per client — the labor scales linearly with your client book",
+      "Conversations inside a project don't share history with each other",
+      "Nothing executes: no calls answered, no jobs booked, no CRM written — output is chat text you carry by hand",
+      "No client access, no whitelabel — everything lives in your personal Claude account",
+      "Retrieval dilution management (which docs, how tight) is entirely on you",
+    ],
+    chooseThem: [
+      "The work is YOUR OWN thinking — research, writing, strategy, code review",
+      "You want a single-player second brain, not a client-facing system",
+      "You already live in claude.ai daily and the output's final home is a document",
+    ],
+    chooseSf: [
+      "The work belongs to a CLIENT — they need a site, an answered phone, booked jobs, a CRM",
+      "You want the brief + knowledge base generated from the client's website and kept current automatically",
+      "You need clients to log in under your brand (whitelabel sub-accounts, portal)",
+      "You want the agent to EXECUTE — answer, qualify, book — not just draft text when you show up",
+    ],
+    switchNote:
+      "Paste each client's website — SeldonFrame builds what your Project brief described (the Soul is the standing brief; grounded FAQ/services are the tight docs) and auto-tests retrieval on every publish. Keep your personal Projects for your own thinking; move the client-facing work to a system the client can live in.",
+  },
 };
 
 export function getExtras(slug: string): CompetitorExtras {

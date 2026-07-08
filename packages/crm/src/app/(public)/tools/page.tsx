@@ -19,6 +19,11 @@ const TOOLS = [
     name: "Missed Call Cost Calculator",
     blurb: "Estimate the monthly revenue missed calls cost your business — and what an AI receptionist recovers.",
   },
+  {
+    href: "/tools/claude-project-brief-generator",
+    name: "Claude Project Brief Generator",
+    blurb: "Generate the complete standing-instructions block (role, tasks, tone, never-list) for a Claude Project — ready to paste.",
+  },
 ];
 
 export default function ToolsHubPage(): ReactElement {
