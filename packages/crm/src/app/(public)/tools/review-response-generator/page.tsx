@@ -26,6 +26,8 @@ export const metadata: Metadata = {
   openGraph: { title: TITLE, description: DESCRIPTION, url: "/tools/review-response-generator", type: "website" },
 };
 
+// FAQ strings render via dangerouslySetInnerHTML (inline <strong> only).
+// INVARIANT: keep these literal constants — never interpolate user/dynamic input.
 const FAQ = [
   {
     q: "Should I respond to every Google review?",

@@ -26,6 +26,8 @@ export const metadata: Metadata = {
   openGraph: { title: TITLE, description: DESCRIPTION, url: "/tools/a2p-10dlc-checker", type: "website" },
 };
 
+// FAQ strings render via dangerouslySetInnerHTML (inline <strong> only).
+// INVARIANT: keep these literal constants — never interpolate user/dynamic input.
 const FAQ = [
   {
     q: "What is A2P 10DLC?",

@@ -13,8 +13,10 @@ import type { ReactNode } from "react";
 const MONEY_RE =
   /\$\d[\d,]*(?:\.\d+)?(?:k)?(?:\s?[-–—]\s?\$?\d[\d,]*(?:\.\d+)?(?:k)?)?(?:\/(?:mo|month|yr|year|min|credit|contact|user|seat|location|call))?/gi;
 
-/** Percentages: 5%, 2.5%, 5–3–2%, etc. */
-const PERCENT_RE = /\d+(?:\.\d+)?%/g;
+/** Percentages, including ranges/ladders that end in one % sign: 5%, 2.5%,
+ *  9–12%, 5–3–2% — the optional leading `N–` parts keep a range from being
+ *  half-bolded (e.g. "9–12% commission"). */
+const PERCENT_RE = /\d+(?:\.\d+)?(?:\s?[-–—]\s?\d+(?:\.\d+)?)*%/g;
 
 /** High-signal pricing-model / positioning phrases, case-insensitive.
  *  Longer/more-specific phrases are listed first so overlapping matches

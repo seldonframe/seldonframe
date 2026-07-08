@@ -90,8 +90,8 @@ export function MissedCallCalculator(): ReactElement {
       </p>
 
       <p style={{ margin: "16px 0 0", fontSize: 12.5, color: "rgba(34,29,23,0.55)", lineHeight: 1.5 }}>
-        *Assumes ~80% of missed calls get answered, qualified and booked or texted back by an AI receptionist that picks up
-        24/7. SeldonFrame is $29/mo flat — at these numbers it pays for itself with{" "}
+        *"Calls you get" is an estimate — we assume about half of your calls already get answered. Assumes ~80% of missed
+        calls get answered, qualified and booked or texted back by an AI receptionist that picks up 24/7. SeldonFrame is $29/mo flat — at these numbers it pays for itself with{" "}
         <strong>
           {lostMonthly > 0 ? (jobValue * (closeRate / 100) >= 29 ? "the first saved call" : "a handful of saved calls") : "a single saved call"}
         </strong>

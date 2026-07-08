@@ -26,10 +26,12 @@ export const metadata: Metadata = {
   openGraph: { title: TITLE, description: DESCRIPTION, url: "/tools/missed-call-calculator", type: "website" },
 };
 
+// FAQ strings render via dangerouslySetInnerHTML (inline <strong> only).
+// INVARIANT: keep these literal constants — never interpolate user/dynamic input.
 const FAQ = [
   {
     q: "How much does a missed call actually cost a service business?",
-    a: "Multiply your close rate by your job value. Close <strong>30%</strong> of callers on <strong>$400</strong> jobs? You lose about <strong>$120</strong> every time the phone rings out. Most callers won't leave a voicemail — they just call the next company.",
+    a: "Multiply your close rate by your job value. Close <strong>30%</strong> of callers on <strong>$400</strong> jobs? You lose about <strong>$120</strong> every time the phone rings out. Industry studies keep finding the same thing: most callers won't leave a voicemail — they just call the next company.",
   },
   {
     q: "What percentage of missed callers call a competitor instead?",

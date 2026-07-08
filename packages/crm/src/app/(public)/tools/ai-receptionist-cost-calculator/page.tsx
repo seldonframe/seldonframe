@@ -26,6 +26,8 @@ export const metadata: Metadata = {
   openGraph: { title: TITLE, description: DESCRIPTION, url: "/tools/ai-receptionist-cost-calculator", type: "website" },
 };
 
+// FAQ strings render via dangerouslySetInnerHTML (inline <strong> only).
+// INVARIANT: keep these literal constants — never interpolate user/dynamic input.
 const FAQ = [
   {
     q: "How much does an AI receptionist cost compared to a human receptionist?",
