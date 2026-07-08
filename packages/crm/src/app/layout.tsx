@@ -44,7 +44,7 @@ const newsreader = Newsreader({
 // README). The legacy /logo.svg path is kept on disk for now (not
 // removed in this commit) but no longer referenced from layout meta.
 export const metadata: Metadata = {
-  metadataBase: new URL("https://seldonframe.com"),
+  metadataBase: new URL("https://www.seldonframe.com"),
   title: "SeldonFrame — Open-source alternative to GoHighLevel",
   description:
     "A complete AI front office — website, booking, CRM, intake, and AI chatbot — wired together in minutes. For your business or your clients'. Plans from $29/mo. AGPL-3.0, no Zapier required.",

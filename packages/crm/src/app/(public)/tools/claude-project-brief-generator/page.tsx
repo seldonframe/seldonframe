@@ -9,16 +9,20 @@ import { MarketplaceNav, MarketplaceFooter } from "@/components/marketplace/mark
 import { MarketplaceStyles } from "@/components/marketplace/marketplace-styles";
 import { MKT } from "@/components/marketplace/marketplace-data";
 import { ClaudeProjectBriefGenerator } from "@/components/seo/claude-project-brief-generator";
+import { buildOgUrl } from "@/lib/seo/og-card";
 
 const TITLE = "Claude Project Brief Generator — free standing-instructions template for client work";
 const DESCRIPTION =
   "Free tool: generate a ready-to-paste Claude Project instructions block (role, tasks, tone, assumptions, never-list) plus the knowledge-base checklist — the standing brief that makes Projects actually work for client work.";
 
+const OG_URL = buildOgUrl({ kind: "tool", name: "Claude Project Brief Generator", hook: "The standing brief that makes Projects work" });
+
 export const metadata: Metadata = {
   title: TITLE,
   description: DESCRIPTION,
   alternates: { canonical: "/tools/claude-project-brief-generator" },
-  openGraph: { title: TITLE, description: DESCRIPTION, url: "/tools/claude-project-brief-generator", type: "website" },
+  openGraph: { title: TITLE, description: DESCRIPTION, url: "/tools/claude-project-brief-generator", type: "website", images: [{ url: OG_URL, width: 1200, height: 630 }] },
+  twitter: { card: "summary_large_image", title: TITLE, description: DESCRIPTION, images: [OG_URL] },
 };
 
 const FAQ = [

@@ -12,7 +12,7 @@ import { VS_PAIRS, vsSlug } from "@/lib/seo/alternative-pages-extras";
 export const metadata: Metadata = {
   title: "SeldonFrame vs the alternatives — honest comparisons for agencies & builders",
   description:
-    "How SeldonFrame compares to GoHighLevel, Vapi, Retell, Synthflow, Chatbase, Podium and more: AI receptionist, website, CRM and booking at $29/mo flat.",
+    "How SeldonFrame compares to GoHighLevel, HubSpot, ActiveCampaign, ClickFunnels, Vapi, Podium and more — plus HighLevel head-to-heads: AI receptionist, website, CRM and booking at $29/mo flat.",
   alternates: { canonical: "/alternatives" },
 };
 
@@ -56,6 +56,40 @@ export default function AlternativesHubPage(): ReactElement {
               </div>
               <div style={{ fontSize: 17, fontWeight: 800, marginTop: 6 }}>Alternative to {c.name}</div>
               <p style={{ margin: "8px 0 0", fontSize: 13.5, lineHeight: 1.55, color: "rgba(34,29,23,0.62)" }}>{c.oneLiner}</p>
+            </Link>
+          ))}
+        </div>
+
+        <h2 style={{ margin: "44px 0 0", fontSize: 26, fontWeight: 800, letterSpacing: "-0.02em" }}>SeldonFrame head-to-head</h2>
+        <p style={{ margin: "10px 0 0", fontSize: 15, lineHeight: 1.55, color: "rgba(34,29,23,0.65)", maxWidth: 640 }}>
+          The direct comparisons — pricing, the AI receptionist, the front office behind it, and where each tool honestly wins.
+        </p>
+        <div style={{ display: "flex", flexWrap: "wrap", gap: 8, marginTop: 18 }}>
+          {COMPETITORS.map((c) => (
+            <Link
+              key={c.slug}
+              href={`/compare/seldonframe-vs-${c.slug}`}
+              className="sf-link"
+              style={{ fontSize: 13.5, fontWeight: 600, color: "rgba(34,29,23,0.7)", border: `1px solid ${MKT.ink10}`, borderRadius: 999, padding: "7px 14px", textDecoration: "none", background: "rgba(255,255,255,0.5)" }}
+            >
+              {`SeldonFrame vs ${c.name}`}
+            </Link>
+          ))}
+        </div>
+
+        <h2 style={{ margin: "44px 0 0", fontSize: 26, fontWeight: 800, letterSpacing: "-0.02em" }}>Pricing breakdowns</h2>
+        <p style={{ margin: "10px 0 0", fontSize: 15, lineHeight: 1.55, color: "rgba(34,29,23,0.65)", maxWidth: 640 }}>
+          What each tool really costs — plans, the add-ons that stack on top, and the checked source.
+        </p>
+        <div style={{ display: "flex", flexWrap: "wrap", gap: 8, marginTop: 18 }}>
+          {COMPETITORS.map((c) => (
+            <Link
+              key={c.slug}
+              href={`/${c.slug}-pricing`}
+              className="sf-link"
+              style={{ fontSize: 13.5, fontWeight: 600, color: "rgba(34,29,23,0.7)", border: `1px solid ${MKT.ink10}`, borderRadius: 999, padding: "7px 14px", textDecoration: "none", background: "rgba(255,255,255,0.5)" }}
+            >
+              {`${c.name} pricing`}
             </Link>
           ))}
         </div>

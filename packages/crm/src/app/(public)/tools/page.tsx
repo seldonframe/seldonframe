@@ -1,5 +1,5 @@
 // /tools — the free-tools hub (PostPlanify motion: high-intent utility pages
-// that rank and convert). One tool at launch; add new tools here + sitemap.
+// that rank and convert). Add new tools here + sitemap + llms.txt.
 import type { Metadata } from "next";
 import type { ReactElement } from "react";
 import Link from "next/link";
@@ -18,6 +18,26 @@ const TOOLS = [
     href: "/tools/missed-call-calculator",
     name: "Missed Call Cost Calculator",
     blurb: "Estimate the monthly revenue missed calls cost your business — and what an AI receptionist recovers.",
+  },
+  {
+    href: "/tools/ai-receptionist-cost-calculator",
+    name: "AI Receptionist Cost Calculator",
+    blurb: "Compare what a human receptionist, an answering service and per-minute AI really cost per month.",
+  },
+  {
+    href: "/tools/google-review-link-generator",
+    name: "Google Review Link Generator",
+    blurb: "Turn your Google Place ID into a direct review link and a printable QR code — free, no signup.",
+  },
+  {
+    href: "/tools/review-response-generator",
+    name: "Review Response Generator",
+    blurb: "Well-written replies to any Google review — pick the rating, scenario and tone, then copy.",
+  },
+  {
+    href: "/tools/a2p-10dlc-checker",
+    name: "A2P 10DLC Compliance Checker",
+    blurb: "Nine questions to find out whether your business texting is registered right — before carriers filter it.",
   },
   {
     href: "/tools/claude-project-brief-generator",

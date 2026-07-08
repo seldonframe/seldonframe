@@ -1,20 +1,58 @@
-// /compare/<a>-vs-<b> — third-party head-to-head pages (X vs Y ending in the
-// SeldonFrame both-worlds answer), statically generated from the curated
-// VS_PAIRS registry. Additive: no DB.
+// /compare/<a>-vs-<b> — head-to-head comparison pages, statically generated.
+// Two families share this route:
+//   /compare/seldonframe-vs-<slug>  — SeldonFrame vs each registry competitor
+//     (the first-person flagship comparison, SeldonFrameVsPage), one per
+//     COMPETITORS entry.
+//   /compare/<a>-vs-<b>             — third-party X vs Y pages from the curated
+//     VS_PAIRS registry, ending in the SeldonFrame both-worlds answer (VsPage).
+// Additive: no DB.
 import type { Metadata } from "next";
 import { notFound } from "next/navigation";
 import { VsPage } from "@/components/seo/vs-page";
+import { SeldonFrameVsPage } from "@/components/seo/seldonframe-vs-page";
 import { VS_PAIRS, getVsPair, vsSlug } from "@/lib/seo/alternative-pages-extras";
-import { LAST_UPDATED } from "@/lib/seo/alternative-pages";
+import { COMPETITORS, getCompetitor, LAST_UPDATED, type Competitor } from "@/lib/seo/alternative-pages";
+import { buildOgUrl, shortPrice } from "@/lib/seo/og-card";
 
 type RouteParams = { params: Promise<{ pair: string }> };
 
+const SF_VS_PREFIX = "seldonframe-vs-";
+
+/** Resolve a /compare/seldonframe-vs-<slug> param to its competitor, or null. */
+function resolveSfVs(pairSlug: string): Competitor | null {
+  if (!pairSlug.startsWith(SF_VS_PREFIX)) return null;
+  try {
+    return getCompetitor(pairSlug.slice(SF_VS_PREFIX.length));
+  } catch {
+    return null;
+  }
+}
+
 export function generateStaticParams(): { pair: string }[] {
-  return VS_PAIRS.map((p) => ({ pair: vsSlug(p) }));
+  return [
+    ...COMPETITORS.map((c) => ({ pair: `${SF_VS_PREFIX}${c.slug}` })),
+    ...VS_PAIRS.map((p) => ({ pair: vsSlug(p) })),
+  ];
 }
 
 export async function generateMetadata({ params }: RouteParams): Promise<Metadata> {
   const { pair: pairSlug } = await params;
+  const canonical = `/compare/${pairSlug}`;
+
+  const sfVs = resolveSfVs(pairSlug);
+  if (sfVs) {
+    const title = `SeldonFrame vs ${sfVs.name}: Which Should You Choose? (${LAST_UPDATED})`;
+    const description = `SeldonFrame vs ${sfVs.name}, honestly compared: pricing, the AI receptionist, website, CRM & booking behind it, whitelabel and switching — including where ${sfVs.name} wins.`;
+    const ogUrl = buildOgUrl({ kind: "sf-vs", slug: sfVs.slug, name: sfVs.name, price: shortPrice(sfVs.them.pricingModel) });
+    return {
+      title,
+      description,
+      alternates: { canonical, types: { "text/markdown": `${canonical}.md` } },
+      openGraph: { title, description, url: canonical, type: "website", images: [{ url: ogUrl, width: 1200, height: 630 }] },
+      twitter: { card: "summary_large_image", title, description, images: [ogUrl] },
+    };
+  }
+
   let resolved;
   try {
     resolved = getVsPair(pairSlug);
@@ -24,18 +62,22 @@ export async function generateMetadata({ params }: RouteParams): Promise<Metadat
   const { a, b } = resolved;
   const title = `${a.name} vs ${b.name}: What You Need to Know (${LAST_UPDATED}) — SeldonFrame`;
   const description = `${a.name} vs ${b.name}, honestly compared: pricing, AI receptionist, whitelabel and the business system behind the agent — plus the both-worlds option.`;
-  const canonical = `/compare/${pairSlug}`;
+  const ogUrl = buildOgUrl({ kind: "vs", a: a.name, b: b.name });
   return {
     title,
     description,
     alternates: { canonical, types: { "text/markdown": `${canonical}.md` } },
-    openGraph: { title, description, url: canonical, type: "website" },
-    twitter: { card: "summary_large_image", title, description },
+    openGraph: { title, description, url: canonical, type: "website", images: [{ url: ogUrl, width: 1200, height: 630 }] },
+    twitter: { card: "summary_large_image", title, description, images: [ogUrl] },
   };
 }
 
 export default async function ComparePairPage({ params }: RouteParams) {
   const { pair: pairSlug } = await params;
+
+  const sfVs = resolveSfVs(pairSlug);
+  if (sfVs) return <SeldonFrameVsPage competitor={sfVs} />;
+
   let resolved;
   try {
     resolved = getVsPair(pairSlug);

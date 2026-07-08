@@ -15,6 +15,11 @@ import { MarketplaceNav, MarketplaceFooter, SeldonFrameMark } from "@/components
 import { MarketplaceStyles } from "@/components/marketplace/marketplace-styles";
 import { MKT } from "@/components/marketplace/marketplace-data";
 import { MarkdownPointer } from "@/components/seo/markdown-pointer";
+import { TldrBox } from "@/components/seo/tldr-box";
+import { FrontOfficeFlow } from "@/components/seo/front-office-flow";
+import { BuildWidget } from "@/components/seo/build-widget";
+import { isWebUngatedBuildOn } from "@/lib/web-build/policy";
+import { emphasize } from "@/lib/seo/emphasize";
 import {
   COMPETITORS,
   COMPARISON_LABELS,
@@ -31,6 +36,28 @@ import {
   START_HREF,
   DEMO_HREF,
 } from "@/lib/seo/alternative-pages-extras";
+
+/** Small muted "prices checked" trust line with an outbound link to the
+ *  competitor's own pricing page — shared by all three comparison templates
+ *  (alternative-page, seldonframe-vs-page, vs-page) so every rendered price
+ *  is independently verifiable. Never-lies: this only links, never restates
+ *  a number. */
+export function PricingSourceLine({ name, url }: { name: string; url: string }): ReactElement {
+  return (
+    <p style={{ margin: "14px 0 0", fontSize: 12.5, lineHeight: 1.5, color: "rgba(34,29,23,0.5)" }}>
+      {`Prices checked ${LAST_UPDATED} on `}
+      <a
+        href={url}
+        rel="nofollow noopener"
+        target="_blank"
+        style={{ color: "rgba(34,29,23,0.6)", textDecoration: "underline" }}
+      >
+        {`${name}'s pricing page`}
+      </a>
+      .
+    </p>
+  );
+}
 
 export function AlternativePage({ competitor }: { competitor: Competitor }): ReactElement {
   const c = competitor;
@@ -108,9 +135,17 @@ export function AlternativePage({ competitor }: { competitor: Competitor }): Rea
           <h2 style={H2}>{`${c.name} vs SeldonFrame: what you need to know`}</h2>
           {c.intro.map((para, i) => (
             <p key={i} style={{ margin: "16px 0 0", fontSize: 16.5, lineHeight: 1.65, color: "rgba(34,29,23,0.78)", maxWidth: 760 }}>
-              {para}
+              {emphasize(para)}
             </p>
           ))}
+          <TldrBox
+            items={[
+              { icon: "💰", label: `${c.name} pricing`, text: c.them.pricingModel },
+              { icon: "💰", label: "SeldonFrame pricing", text: "$29/mo flat, unlimited workspaces, first workspace free forever" },
+              { icon: "👍", label: `Pick ${c.name} if`, text: x.chooseThem[0] },
+              { icon: "🏆", label: "Pick SeldonFrame if", text: x.chooseSf[0] },
+            ]}
+          />
         </section>
 
         {/* ── COMPARISON TABLE ── */}
@@ -137,9 +172,9 @@ export function AlternativePage({ competitor }: { competitor: Competitor }): Rea
                 {COMPARISON_LABELS.map((row) => (
                   <tr key={row.key}>
                     <td style={{ ...TD, fontWeight: 700 }}>{row.label}</td>
-                    <td style={{ ...TD, color: "rgba(34,29,23,0.66)" }}>{c.them[row.key]}</td>
+                    <td style={{ ...TD, color: "rgba(34,29,23,0.66)" }}>{emphasize(c.them[row.key])}</td>
                     <td style={{ ...TD, background: "rgba(0,137,123,0.05)", color: "rgba(34,29,23,0.85)", fontWeight: 500 }}>
-                      {SF_COLUMN[row.key]}
+                      {emphasize(SF_COLUMN[row.key])}
                     </td>
                   </tr>
                 ))}
@@ -147,6 +182,8 @@ export function AlternativePage({ competitor }: { competitor: Competitor }): Rea
             </table>
           </div>
           <CtaRow />
+          <FrontOfficeFlow competitorName={c.name} competitorCategory={c.category} />
+          <PricingSourceLine name={c.name} url={c.pricingSourceUrl} />
         </section>
 
         {/* ── PROS & CONS ── */}
@@ -241,6 +278,8 @@ export function AlternativePage({ competitor }: { competitor: Competitor }): Rea
             ))}
           </div>
         </section>
+
+        <BuildWidget ungatedBuildEnabled={isWebUngatedBuildOn({ SF_WEB_UNGATED_BUILD: process.env.SF_WEB_UNGATED_BUILD })} />
 
         {/* ── FINAL CTA ── */}
         <section
@@ -343,7 +382,7 @@ function ProsConsCard({ title, pros, cons, highlight }: { title: string; pros: s
         {pros.map((p) => (
           <li key={p} style={{ ...LI }}>
             <span style={{ color: MKT.green, fontWeight: 800, marginRight: 8 }}>+</span>
-            {p}
+            {emphasize(p)}
           </li>
         ))}
       </ul>
@@ -352,7 +391,7 @@ function ProsConsCard({ title, pros, cons, highlight }: { title: string; pros: s
         {cons.map((p) => (
           <li key={p} style={{ ...LI }}>
             <span style={{ color: "#C0392B", fontWeight: 800, marginRight: 8 }}>−</span>
-            {p}
+            {emphasize(p)}
           </li>
         ))}
       </ul>

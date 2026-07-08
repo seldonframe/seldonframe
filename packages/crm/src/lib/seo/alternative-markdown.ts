@@ -12,8 +12,9 @@ import {
   type Competitor,
 } from "@/lib/seo/alternative-pages";
 import { getExtras, SF_PROS, SF_CONS, SWITCH_STEPS, DEMO_HREF, type VsPair } from "@/lib/seo/alternative-pages-extras";
+import { emphasizeMd } from "@/lib/seo/emphasize";
 
-const BASE = "https://seldonframe.com";
+const BASE = "https://www.seldonframe.com";
 
 export function renderAlternativeMarkdown(c: Competitor): string {
   const x = getExtras(c.slug);
@@ -26,6 +27,13 @@ export function renderAlternativeMarkdown(c: Competitor): string {
   L.push("");
   L.push(`Last updated: ${LAST_UPDATED}. HTML version: ${BASE}/alternative-to-${c.slug}`);
   L.push("");
+  L.push(`## The short version`);
+  L.push("");
+  L.push(`- **${c.name} pricing:** ${emphasizeMd(c.them.pricingModel)}`);
+  L.push(`- **SeldonFrame pricing:** ${emphasizeMd("$29/mo flat, unlimited workspaces, first workspace free forever")}`);
+  L.push(`- **Pick ${c.name} if:** ${emphasizeMd(x.chooseThem[0])}`);
+  L.push(`- **Pick SeldonFrame if:** ${emphasizeMd(x.chooseSf[0])}`);
+  L.push("");
   L.push(`## ${c.name} vs SeldonFrame: what you need to know`);
   L.push("");
   for (const p of c.intro) {
@@ -37,8 +45,10 @@ export function renderAlternativeMarkdown(c: Competitor): string {
   L.push(`| Feature | ${c.name} | SeldonFrame |`);
   L.push("|---|---|---|");
   for (const row of COMPARISON_LABELS) {
-    L.push(`| ${row.label} | ${c.them[row.key]} | ${SF_COLUMN[row.key]} |`);
+    L.push(`| ${row.label} | ${emphasizeMd(c.them[row.key])} | ${emphasizeMd(SF_COLUMN[row.key])} |`);
   }
+  L.push("");
+  L.push(`Prices checked ${LAST_UPDATED} on [${c.name}'s pricing page](${c.pricingSourceUrl}).`);
   L.push("");
   L.push(`## Pros & cons`);
   L.push("");
@@ -97,6 +107,13 @@ export function renderVsMarkdown(pair: VsPair, a: Competitor, b: Competitor): st
   L.push("");
   L.push(`HTML version: ${BASE}/compare/${pair.a}-vs-${pair.b}`);
   L.push("");
+  L.push(`## The short version`);
+  L.push("");
+  L.push(`- **${a.name} pricing:** ${emphasizeMd(a.them.pricingModel)}`);
+  L.push(`- **${b.name} pricing:** ${emphasizeMd(b.them.pricingModel)}`);
+  L.push(`- **The real trade-off:** ${emphasizeMd(pair.angle)}`);
+  L.push(`- **The third option:** ${emphasizeMd("SeldonFrame ships the whole front office at $29/mo flat — see below")}`);
+  L.push("");
   for (const c of [a, b]) {
     L.push(`## ${c.name}`);
     L.push("");
@@ -114,8 +131,10 @@ export function renderVsMarkdown(pair: VsPair, a: Competitor, b: Competitor): st
   L.push(`| Feature | ${a.name} | ${b.name} | SeldonFrame |`);
   L.push("|---|---|---|---|");
   for (const row of COMPARISON_LABELS) {
-    L.push(`| ${row.label} | ${a.them[row.key]} | ${b.them[row.key]} | ${SF_COLUMN[row.key]} |`);
+    L.push(`| ${row.label} | ${emphasizeMd(a.them[row.key])} | ${emphasizeMd(b.them[row.key])} | ${emphasizeMd(SF_COLUMN[row.key])} |`);
   }
+  L.push("");
+  L.push(`Prices checked ${LAST_UPDATED} on [${a.name}'s pricing page](${a.pricingSourceUrl}) and [${b.name}'s pricing page](${b.pricingSourceUrl}).`);
   L.push("");
   L.push(`## If you need what BOTH do`);
   L.push("");

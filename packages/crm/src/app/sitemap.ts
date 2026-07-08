@@ -8,20 +8,22 @@
 // seed) /marketplace/[slug] listing — so search engines discover the full tree
 // and the programmatic↔marketplace cross-links are crawlable both ways.
 //
-// Base URL matches the root layout's metadataBase (https://seldonframe.com); an
+// Base URL matches the root layout's metadataBase (https://www.seldonframe.com); an
 // env override (NEXT_PUBLIC_SITE_URL) wins for non-prod deploys.
 
 import type { MetadataRoute } from "next";
 import { AGENT_JOBS, allJobVerticalPairs } from "@/lib/seo/agent-pages";
 import { COMPETITORS } from "@/lib/seo/alternative-pages";
 import { VS_PAIRS, vsSlug } from "@/lib/seo/alternative-pages-extras";
+import { allBestSlugs } from "@/lib/seo/best-pages";
+import { allPricingSlugs } from "@/lib/seo/competitor-pricing";
 import { listMarketplaceAgentsFromDb } from "@/lib/marketplace/agent-listings";
 import { MARKETPLACE_SEED } from "@/components/marketplace/marketplace-seed";
 
 /** The canonical public base URL — mirrors layout.tsx's metadataBase. */
 export function siteBaseUrl(): string {
   const fromEnv = process.env.NEXT_PUBLIC_SITE_URL?.trim();
-  return (fromEnv && fromEnv.replace(/\/$/, "")) || "https://seldonframe.com";
+  return (fromEnv && fromEnv.replace(/\/$/, "")) || "https://www.seldonframe.com";
 }
 
 /** Resolve the marketplace listing slugs to include (live, else seed). */
@@ -101,6 +103,28 @@ export default async function sitemap(): Promise<MetadataRoute.Sitemap> {
     });
   }
 
+  // Competitor pricing breakdowns (/<slug>-pricing) — the highest-intent
+  // keyword family ("<name> pricing"); one per registry competitor.
+  for (const slug of allPricingSlugs()) {
+    entries.push({
+      url: `${base}/${slug}-pricing`,
+      lastModified: now,
+      changeFrequency: "monthly",
+      priority: 0.8,
+    });
+  }
+
+  // SeldonFrame head-to-head pages (/compare/seldonframe-vs-<slug>) — the
+  // first-person flagship comparisons, one per registry competitor.
+  for (const competitor of COMPETITORS) {
+    entries.push({
+      url: `${base}/compare/seldonframe-vs-${competitor.slug}`,
+      lastModified: now,
+      changeFrequency: "monthly",
+      priority: 0.8,
+    });
+  }
+
   // Head-to-head comparison pages (/compare/<a>-vs-<b>).
   for (const pair of VS_PAIRS) {
     entries.push({
@@ -111,20 +135,34 @@ export default async function sitemap(): Promise<MetadataRoute.Sitemap> {
     });
   }
 
+  // Best-of buying guides (/best hub + /best/<category>-for-<audience>).
+  entries.push({ url: `${base}/best`, lastModified: now, changeFrequency: "weekly", priority: 0.8 });
+  for (const slug of allBestSlugs()) {
+    entries.push({
+      url: `${base}/best/${slug}`,
+      lastModified: now,
+      changeFrequency: "monthly",
+      priority: 0.7,
+    });
+  }
+
   // Free tools.
   entries.push({ url: `${base}/tools`, lastModified: now, changeFrequency: "monthly", priority: 0.7 });
-  entries.push({
-    url: `${base}/tools/missed-call-calculator`,
-    lastModified: now,
-    changeFrequency: "monthly",
-    priority: 0.7,
-  });
-  entries.push({
-    url: `${base}/tools/claude-project-brief-generator`,
-    lastModified: now,
-    changeFrequency: "monthly",
-    priority: 0.7,
-  });
+  for (const tool of [
+    "missed-call-calculator",
+    "google-review-link-generator",
+    "ai-receptionist-cost-calculator",
+    "a2p-10dlc-checker",
+    "review-response-generator",
+    "claude-project-brief-generator",
+  ]) {
+    entries.push({
+      url: `${base}/tools/${tool}`,
+      lastModified: now,
+      changeFrequency: "monthly",
+      priority: 0.7,
+    });
+  }
 
   return entries;
 }

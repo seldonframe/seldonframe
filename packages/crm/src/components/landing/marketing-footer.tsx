@@ -1,7 +1,8 @@
 // packages/crm/src/components/landing/marketing-footer.tsx
 //
 // Redesign 2026-06-18 — warm light aesthetic.
-// Five-column footer on md+. Paper-soft background, warm ink typography.
+// Six-column footer on md+ (brand + 5 link columns incl. the Compare/Free-tools
+// SEO mesh, PostPlanify-style). Paper-soft background, warm ink typography.
 // Dual CTA strip above the columns — SMB + agency paths.
 
 import Link from "next/link";
@@ -32,16 +33,41 @@ const COLUMNS: readonly Column[] = [
     ],
   },
   {
+    heading: "Compare",
+    links: [
+      { label: "SeldonFrame vs GoHighLevel", href: "/compare/seldonframe-vs-gohighlevel" },
+      { label: "SeldonFrame vs HubSpot", href: "/compare/seldonframe-vs-hubspot" },
+      { label: "SeldonFrame vs Salesforce", href: "/compare/seldonframe-vs-salesforce" },
+      { label: "SeldonFrame vs Zoho", href: "/compare/seldonframe-vs-zoho" },
+      { label: "SeldonFrame vs ActiveCampaign", href: "/compare/seldonframe-vs-activecampaign" },
+      { label: "SeldonFrame vs ClickFunnels", href: "/compare/seldonframe-vs-clickfunnels" },
+      { label: "SeldonFrame vs Keap", href: "/compare/seldonframe-vs-keap" },
+      { label: "SeldonFrame vs Klaviyo", href: "/compare/seldonframe-vs-klaviyo" },
+      { label: "SeldonFrame vs Kartra", href: "/compare/seldonframe-vs-kartra" },
+      { label: "SeldonFrame vs Vendasta", href: "/compare/seldonframe-vs-vendasta" },
+      { label: "SeldonFrame vs Podium", href: "/compare/seldonframe-vs-podium" },
+      { label: "SeldonFrame vs Linktree", href: "/compare/seldonframe-vs-linktree" },
+      { label: "All comparisons →", href: "/alternatives" },
+    ],
+  },
+  {
+    heading: "Free tools",
+    links: [
+      { label: "Missed Call Calculator", href: "/tools/missed-call-calculator" },
+      { label: "AI Receptionist Cost Calculator", href: "/tools/ai-receptionist-cost-calculator" },
+      { label: "Google Review Link Generator", href: "/tools/google-review-link-generator" },
+      { label: "Review Response Generator", href: "/tools/review-response-generator" },
+      { label: "A2P 10DLC Checker", href: "/tools/a2p-10dlc-checker" },
+      { label: "Best CRM for Small Business", href: "/best/crm-for-small-business" },
+      { label: "Best-of guides →", href: "/best" },
+    ],
+  },
+  {
     heading: "Company",
     links: [
       { label: "Contact", href: "mailto:hello@seldonframe.com" },
       { label: "Partnerships", href: "mailto:partner@seldonframe.com" },
       { label: "GitHub", href: "https://github.com/seldonframe/crm", external: true },
-    ],
-  },
-  {
-    heading: "Legal",
-    links: [
       { label: "Terms", href: "https://app.seldonframe.com/terms", external: true },
       { label: "Privacy", href: "https://app.seldonframe.com/policy", external: true },
     ],
@@ -58,7 +84,7 @@ export function MarketingFooter() {
 
       <div className="mx-auto max-w-[1120px]">
         {/* Brand block */}
-        <div className="grid grid-cols-1 gap-10 md:grid-cols-[1.6fr_repeat(4,1fr)] md:gap-10">
+        <div className="grid grid-cols-1 gap-10 md:grid-cols-[1.4fr_repeat(5,1fr)] md:gap-8">
           <div className="flex max-w-[340px] flex-col gap-5">
             <Link
               href="/"
