@@ -12,7 +12,7 @@ export function GET(req: Request): Response {
   return new Response(md, {
     headers: {
       "Content-Type": "text/markdown; charset=utf-8",
-      Link: '<https://seldonframe.com/alternative-to-my-ai-front-desk>; rel="alternate"; type="text/html"',
+      Link: '<https://www.seldonframe.com/alternative-to-my-ai-front-desk>; rel="alternate"; type="text/html"',
       "Cache-Control": "public, max-age=300, s-maxage=3600",
     },
   });

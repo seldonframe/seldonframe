@@ -15,7 +15,7 @@ import { getExtras, SF_PROS, SF_CONS, SWITCH_STEPS, DEMO_HREF } from "@/lib/seo/
 import { composeSeldonframeVsFaq, composeSeldonframeVsIntro } from "@/components/seo/seldonframe-vs-page";
 import { emphasizeMd } from "@/lib/seo/emphasize";
 
-const BASE = "https://seldonframe.com";
+const BASE = "https://www.seldonframe.com";
 
 export function renderSeldonframeVsMarkdown(c: Competitor): string {
   const x = getExtras(c.slug);

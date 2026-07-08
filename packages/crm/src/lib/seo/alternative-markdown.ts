@@ -14,7 +14,7 @@ import {
 import { getExtras, SF_PROS, SF_CONS, SWITCH_STEPS, DEMO_HREF, type VsPair } from "@/lib/seo/alternative-pages-extras";
 import { emphasizeMd } from "@/lib/seo/emphasize";
 
-const BASE = "https://seldonframe.com";
+const BASE = "https://www.seldonframe.com";
 
 export function renderAlternativeMarkdown(c: Competitor): string {
   const x = getExtras(c.slug);

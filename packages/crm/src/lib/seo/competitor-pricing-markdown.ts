@@ -6,7 +6,7 @@ import { getCompetitorPricing, type CompetitorPricing } from "@/lib/seo/competit
 import { getCompetitor } from "@/lib/seo/alternative-pages";
 import { emphasizeMd } from "@/lib/seo/emphasize";
 
-const BASE = "https://seldonframe.com";
+const BASE = "https://www.seldonframe.com";
 
 export function renderCompetitorPricingMarkdown(slug: string): string {
   const p = getCompetitorPricing(slug);
