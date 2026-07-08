@@ -40,6 +40,31 @@ const TOOLS = [
     blurb: "Nine questions to find out whether your business texting is registered right — before carriers filter it.",
   },
   {
+    href: "/tools/hubspot-pricing-calculator",
+    name: "HubSpot Pricing Calculator",
+    blurb: "Seats, contacts, hubs and the $3,000 onboarding — see what HubSpot really costs before the sales call.",
+  },
+  {
+    href: "/tools/gohighlevel-cost-calculator",
+    name: "GoHighLevel Cost Calculator",
+    blurb: "Base plan + AI Employee per sub-account + usage, multiplied by your client count — the real agency bill.",
+  },
+  {
+    href: "/tools/voice-ai-cost-calculator",
+    name: "Voice AI Cost Calculator",
+    blurb: "STT + LLM + TTS + telephony stacked per minute — why the advertised $0.05/min is really ~$0.30.",
+  },
+  {
+    href: "/tools/klaviyo-cost-calculator",
+    name: "Klaviyo Cost Calculator",
+    blurb: "Profiles and SMS sends in, monthly bill out — including the suppressed-profiles gotcha.",
+  },
+  {
+    href: "/tools/agency-margin-calculator",
+    name: "Agency Margin Calculator",
+    blurb: "Retainer minus tool stack minus labor — see your real margin per client and what a flat stack changes.",
+  },
+  {
     href: "/tools/claude-project-brief-generator",
     name: "Claude Project Brief Generator",
     blurb: "Generate the complete standing-instructions block (role, tasks, tone, never-list) for a Claude Project — ready to paste.",

@@ -54,6 +54,9 @@ const COLUMNS: readonly Column[] = [
     heading: "Free tools",
     links: [
       { label: "Missed Call Calculator", href: "/tools/missed-call-calculator" },
+      { label: "HubSpot Pricing Calculator", href: "/tools/hubspot-pricing-calculator" },
+      { label: "GoHighLevel Cost Calculator", href: "/tools/gohighlevel-cost-calculator" },
+      { label: "Voice AI Cost Calculator", href: "/tools/voice-ai-cost-calculator" },
       { label: "AI Receptionist Cost Calculator", href: "/tools/ai-receptionist-cost-calculator" },
       { label: "Google Review Link Generator", href: "/tools/google-review-link-generator" },
       { label: "Review Response Generator", href: "/tools/review-response-generator" },

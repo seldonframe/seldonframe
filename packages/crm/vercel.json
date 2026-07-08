@@ -58,6 +58,10 @@
     {
       "path": "/api/cron/usage-caps",
       "schedule": "0 7 * * *"
+    },
+    {
+      "path": "/api/cron/indexnow",
+      "schedule": "0 8 * * 1"
     }
   ]
 }

@@ -131,6 +131,21 @@ export async function GET(req: Request): Promise<Response> {
   lines.push(
     `- [Claude Project Brief Generator](${base}/tools/claude-project-brief-generator): generate the standing-instructions block for a Claude Project (and see how SeldonFrame automates it per client).`,
   );
+  lines.push(
+    `- [HubSpot Pricing Calculator](${base}/tools/hubspot-pricing-calculator): seats × contacts × hubs × onboarding — what HubSpot really costs.`,
+  );
+  lines.push(
+    `- [GoHighLevel Cost Calculator](${base}/tools/gohighlevel-cost-calculator): base plan + AI Employee per sub-account + usage at N clients.`,
+  );
+  lines.push(
+    `- [Voice AI Cost Calculator](${base}/tools/voice-ai-cost-calculator): the real per-minute cost of a voice AI stack (STT + LLM + TTS + telephony).`,
+  );
+  lines.push(
+    `- [Klaviyo Cost Calculator](${base}/tools/klaviyo-cost-calculator): profiles + SMS sends → your monthly Klaviyo bill.`,
+  );
+  lines.push(
+    `- [Agency Margin Calculator](${base}/tools/agency-margin-calculator): retainer minus tool stack minus labor — your real margin per client.`,
+  );
   lines.push("");
 
   lines.push("## Pages");

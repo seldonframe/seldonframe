@@ -155,6 +155,11 @@ export default async function sitemap(): Promise<MetadataRoute.Sitemap> {
     "a2p-10dlc-checker",
     "review-response-generator",
     "claude-project-brief-generator",
+    "hubspot-pricing-calculator",
+    "gohighlevel-cost-calculator",
+    "voice-ai-cost-calculator",
+    "klaviyo-cost-calculator",
+    "agency-margin-calculator",
   ]) {
     entries.push({
       url: `${base}/tools/${tool}`,

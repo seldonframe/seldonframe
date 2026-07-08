@@ -1,5 +1,6 @@
 // Shared "shareable result" module for the free SEO calculator tools
-// (missed-call-calculator.tsx, ai-receptionist-cost-calculator.tsx).
+// (missed-call-calculator.tsx, ai-receptionist-cost-calculator.tsx,
+// gohighlevel-cost-calculator.tsx, agency-margin-calculator.tsx).
 //
 // Two responsibilities live here:
 //   1. Pure URL query-state encode/decode helpers (unit-testable, no DOM).
@@ -17,6 +18,10 @@
 //   Missed-call calculator:      mc = missedPerWeek, jv = jobValue, cr = closeRate
 //   AI receptionist cost calc:   cm = callsPerMonth, am = avgMinutes, wg = wage,
 //                                 ar = answeringRate, ai = aiRate
+//   GoHighLevel cost calc:       gc = clients, gp = plan, ge = aiEmployeeOn,
+//                                 gs = smsPerClient, gm = emailPerClient, gv = voiceMinPerClient
+//   Agency margin calc:          mr = retainer, mn = clients, ms = stackCostPerClient,
+//                                 mh = hoursPerClient, mw = hourlyRate
 
 export interface MissedCallState {
   missedPerWeek: number;
@@ -130,6 +135,133 @@ export function decodeCostCalcState(search: string): Partial<CostCalcState> {
 
   const ai = parseNum(params, "ai");
   if (ai !== undefined) out.aiRate = clamp(ai, COST_CALC_BOUNDS.aiRate.min, COST_CALC_BOUNDS.aiRate.max);
+
+  return out;
+}
+
+// ─── GoHighLevel cost calculator state ──────────────────────────────────
+
+export type GhlPlan = "starter" | "unlimited" | "agencyPro";
+
+export interface GhlCostState {
+  clients: number;
+  plan: GhlPlan;
+  aiEmployeeOn: boolean;
+  smsPerClient: number;
+  emailPerClient: number;
+  voiceMinPerClient: number;
+}
+
+export interface GhlCostBounds {
+  clients: { min: number; max: number };
+  smsPerClient: { min: number; max: number };
+  emailPerClient: { min: number; max: number };
+  voiceMinPerClient: { min: number; max: number };
+}
+
+export const GHL_COST_BOUNDS: GhlCostBounds = {
+  clients: { min: 1, max: 50 },
+  smsPerClient: { min: 0, max: 2000 },
+  emailPerClient: { min: 0, max: 20000 },
+  voiceMinPerClient: { min: 0, max: 2000 },
+};
+
+const GHL_PLANS: GhlPlan[] = ["starter", "unlimited", "agencyPro"];
+
+function isGhlPlan(v: string | null): v is GhlPlan {
+  return v !== null && (GHL_PLANS as string[]).includes(v);
+}
+
+export function encodeGhlCostState(state: GhlCostState): string {
+  const params = new URLSearchParams();
+  params.set("gc", String(Math.round(state.clients)));
+  params.set("gp", state.plan);
+  params.set("ge", state.aiEmployeeOn ? "1" : "0");
+  params.set("gs", String(Math.round(state.smsPerClient)));
+  params.set("gm", String(Math.round(state.emailPerClient)));
+  params.set("gv", String(Math.round(state.voiceMinPerClient)));
+  return params.toString();
+}
+
+export function decodeGhlCostState(search: string): Partial<GhlCostState> {
+  const params = new URLSearchParams(search);
+  const out: Partial<GhlCostState> = {};
+
+  const gc = parseNum(params, "gc");
+  if (gc !== undefined) out.clients = clamp(gc, GHL_COST_BOUNDS.clients.min, GHL_COST_BOUNDS.clients.max);
+
+  const gp = params.get("gp");
+  if (isGhlPlan(gp)) out.plan = gp;
+
+  const ge = params.get("ge");
+  if (ge === "0" || ge === "1") out.aiEmployeeOn = ge === "1";
+
+  const gs = parseNum(params, "gs");
+  if (gs !== undefined) out.smsPerClient = clamp(gs, GHL_COST_BOUNDS.smsPerClient.min, GHL_COST_BOUNDS.smsPerClient.max);
+
+  const gm = parseNum(params, "gm");
+  if (gm !== undefined) out.emailPerClient = clamp(gm, GHL_COST_BOUNDS.emailPerClient.min, GHL_COST_BOUNDS.emailPerClient.max);
+
+  const gv = parseNum(params, "gv");
+  if (gv !== undefined) out.voiceMinPerClient = clamp(gv, GHL_COST_BOUNDS.voiceMinPerClient.min, GHL_COST_BOUNDS.voiceMinPerClient.max);
+
+  return out;
+}
+
+// ─── Agency margin calculator state ─────────────────────────────────────
+
+export interface AgencyMarginState {
+  retainer: number;
+  clients: number;
+  stackCostPerClient: number;
+  hoursPerClient: number;
+  hourlyRate: number;
+}
+
+export interface AgencyMarginBounds {
+  retainer: { min: number; max: number };
+  clients: { min: number; max: number };
+  stackCostPerClient: { min: number; max: number };
+  hoursPerClient: { min: number; max: number };
+  hourlyRate: { min: number; max: number };
+}
+
+export const AGENCY_MARGIN_BOUNDS: AgencyMarginBounds = {
+  retainer: { min: 100, max: 2000 },
+  clients: { min: 1, max: 100 },
+  stackCostPerClient: { min: 0, max: 500 },
+  hoursPerClient: { min: 0, max: 40 },
+  hourlyRate: { min: 10, max: 200 },
+};
+
+export function encodeAgencyMarginState(state: AgencyMarginState): string {
+  const params = new URLSearchParams();
+  params.set("mr", String(Math.round(state.retainer)));
+  params.set("mn", String(Math.round(state.clients)));
+  params.set("ms", String(Math.round(state.stackCostPerClient)));
+  params.set("mh", String(state.hoursPerClient));
+  params.set("mw", String(Math.round(state.hourlyRate)));
+  return params.toString();
+}
+
+export function decodeAgencyMarginState(search: string): Partial<AgencyMarginState> {
+  const params = new URLSearchParams(search);
+  const out: Partial<AgencyMarginState> = {};
+
+  const mr = parseNum(params, "mr");
+  if (mr !== undefined) out.retainer = clamp(mr, AGENCY_MARGIN_BOUNDS.retainer.min, AGENCY_MARGIN_BOUNDS.retainer.max);
+
+  const mn = parseNum(params, "mn");
+  if (mn !== undefined) out.clients = clamp(mn, AGENCY_MARGIN_BOUNDS.clients.min, AGENCY_MARGIN_BOUNDS.clients.max);
+
+  const ms = parseNum(params, "ms");
+  if (ms !== undefined) out.stackCostPerClient = clamp(ms, AGENCY_MARGIN_BOUNDS.stackCostPerClient.min, AGENCY_MARGIN_BOUNDS.stackCostPerClient.max);
+
+  const mh = parseNum(params, "mh");
+  if (mh !== undefined) out.hoursPerClient = clamp(mh, AGENCY_MARGIN_BOUNDS.hoursPerClient.min, AGENCY_MARGIN_BOUNDS.hoursPerClient.max);
+
+  const mw = parseNum(params, "mw");
+  if (mw !== undefined) out.hourlyRate = clamp(mw, AGENCY_MARGIN_BOUNDS.hourlyRate.min, AGENCY_MARGIN_BOUNDS.hourlyRate.max);
 
   return out;
 }
