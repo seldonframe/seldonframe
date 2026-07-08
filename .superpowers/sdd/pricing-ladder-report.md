@@ -1,0 +1,848 @@
+# Pricing Ladder — implementation report (2026-07-08)
+
+Branch `feature/pricing-ladder`, 10 commits on top of `1b51475b3` (spec)
+and `64042581f` (plan). All work done in the isolated worktree
+`.claude/worktrees/pricing-ladder`. Commit 7
+(`5c4bd7dcf`, `test(billing): re-pin entitlements to the 5-tier
+policy`), commits 8-9 (`a1cf476e7` sub-account-cap gate fixes,
+`da06cc101` upgrade-modal flag-gate + tier ranks), and commit 10
+(`ac09002c5`, the live-$29-checkout regression fix) were added
+post-review — see "Post-review follow-up", "Second post-review fix
+wave", and "Third post-review fix wave — live checkout regression"
+below.
+
+## Files changed
+
+**Task 1 — `5089ec164` feat(billing): 5-tier catalog + grandfathered legacy plans**
+- `packages/crm/src/lib/billing/plans.ts` — `TierId` union expanded to 7
+  (5 sellable + 2 grandfathered); `Plan.sellable` + `Plan.limits.maxSubAccounts`
+  added; `PLANS[]` rewritten (5 new tier objects + grandfathered
+  `workspace`/`agency` with untouched limits); top-of-file comment rewritten.
+- `packages/crm/src/lib/billing/features.ts` — `TIER_FEATURES` gets 5 new
+  keys + grandfathered `workspace`/`agency` keys (unchanged shape);
+  `normalizeTierId` passes through the 5 new ids.
+- `packages/crm/src/lib/billing/price-ids.ts` — 4 new env-backed price id
+  constants (`MANAGED_PRICE_ID`, `AGENCY_STARTER_PRICE_ID`,
+  `AGENCY_GROWTH_PRICE_ID`, `AGENCY_SCALE_PRICE_ID`) with
+  `price_PLACEHOLDER_*` fallbacks; added to `ALLOWED_PRICE_IDS`
+  (5 new + 2 grandfathered).
+- `packages/crm/src/lib/billing/tier-resolve.ts` — `resolveTierFromPriceIds`
+  (the webhook's data-driven price→tier map) extended for the 5 new tiers,
+  ranked `agency_scale > agency_growth > agency_starter > agency
+  (grandfathered) > managed > workspace (grandfathered) > builder`.
+- `packages/crm/tests/unit/billing-plans-catalog.spec.ts` — rewritten,
+  22 tests pinning the 7-tier catalog + grandfather invariants.
+
+**Task 2 — `7fb04adef` feat(billing): sub-account limit on the handoff boundary**
+- `packages/crm/src/lib/billing/limits.ts` — new pure
+  `maxSubAccountsForTier` / `enforceSubAccountLimit` (reads
+  `Plan.limits.maxSubAccounts`; no DB import, to avoid a circular import
+  since `orgs.ts` already imports `enforceWorkspaceLimit` from this file).
+- `packages/crm/src/lib/billing/orgs.ts` — exported
+  `fetchAgencyAttachedWorkspaceIds` (was module-private) for the limit
+  check to count current attachments.
+- `packages/crm/src/app/api/v1/partner-agencies/route.ts` — new
+  `enforceSubAccountLimitForUser` (DB-wired wrapper, lives here rather
+  than in limits.ts to avoid the circular import); wired in BEFORE the
+  `attachWorkspaceToAgency` store call on the `"attach"` op; returns 402
+  `subaccount_limit_reached` on cap.
+- `packages/crm/src/components/billing/upgrade-modal.tsx` — rewritten to
+  the new ladder (Managed $49 / Agency Starter $99), replacing the stale
+  "$49 workspace / $297 agency" copy.
+- `packages/crm/tests/unit/billing/subaccount-limit.spec.ts` (new) —
+  8 tests, pure-core DI.
+- `packages/crm/tests/unit/billing-features.spec.ts` — collateral fix:
+  the "builder" test pinned the OLD ($19, landing-pages-only) shape that
+  Task 1's `features.ts` edit repurposed; updated to the new $29
+  unlimited-workspaces shape.
+
+**Task 3 — `20d6d1319` feat(billing): checkout for the 5-tier ladder (inert without env)**
+- `packages/crm/src/lib/billing/checkout-items.ts` —
+  `TIER_BASE_PRICE`/`tierFromBasePriceId` extended to all 7 tiers.
+- `packages/crm/src/app/api/stripe/checkout/route.ts` — tier resolution
+  (body.tier / lookup_key / priceId) covers the 5 new ids; new
+  `Plan.sellable` gate rejects a resolved-but-non-sellable tier with 409
+  `tier_unavailable`; the existing placeholder-price fail-soft (Hotfix
+  H4b) now also carries `reason: "tier_unavailable"` and returns 409
+  (was a bare 503).
+- `packages/crm/tests/unit/billing-checkout-items.spec.ts` — rewritten,
+  10 tests.
+
+**Task 4 — `68e8cb8a0` feat(pricing): audience-toggle pricing page behind SF_TIER_LADDER**
+- `packages/crm/src/app/pricing/pricing-shell.tsx` — new `<TierLadder>`
+  component (audience toggle "For your businesses" / "For your clients'
+  businesses", cards from `PLANS.filter(p => p.sellable)`, "Book a demo"
+  CTA for placeholder-priced tiers); rendered below the existing
+  single-$29 hero when `tierLadderOn` prop is true (default false).
+- `packages/crm/src/app/pricing/page.tsx` — reads `SF_TIER_LADDER`
+  server-side (strict `"1"` contract, local helper — did not add to
+  `lib/web-build/policy.ts`, out of scope) and passes it to
+  `<PricingShell>`. **Deviation**: the plan's global file list marks this
+  file "(Task 6 only)"; Task 4's own task text explicitly requires
+  wiring the flag here for the toggle to ever activate. Reconciled by
+  treating "(Task 6 only)" as referring to the FAQ-copy edit only.
+- `packages/crm/src/components/landing/marketing-pricing-section.tsx` —
+  new `tierLadderOn` prop (default false); adds one flag-gated line
+  under the $29 card ("Running client sub-accounts? Agency plans from
+  $99/mo → See agency pricing", links `/pricing`). Card content
+  unchanged when the flag is off.
+- `packages/crm/src/lib/billing/plans.ts` — top-of-file comment updated
+  (was describing the pre-ladder single-plan model; now describes the
+  7-tier catalog + the flag's UI-only scope). No behavior change.
+- `packages/crm/tests/unit/landing/marketing-pricing.spec.ts` —
+  rewritten (previous spec pinned a stale 3-tier `data-tier` matrix that
+  predated the 2026-06-22 single-card rewrite and was already failing at
+  HEAD); 5 tests.
+
+**Task 5 — `0cda290e2` feat(ai): agency key inheritance + launch-window banner (flagged)**
+- `packages/crm/src/lib/ai/client.ts` — new `resolveAgencyKeyOrgId`
+  (resolves `partner_agencies.ownerWorkspaceId ?? (ownerUserId ->
+  users.orgId)`, DI-injectable, fail-soft) and `resolveRuntimeAiClient`
+  (wraps `getAIClient`: own BYOK always wins → flag+parentAgencyId →
+  agency owner's BYOK → platform fallback; every step wrapped so ANY
+  error falls through to `getAIClient`'s own result — never throws).
+- `packages/crm/src/lib/agents/runtime.ts` — the sole `getAIClient` call
+  site (line ~286, inside a `"use server"` file) now calls
+  `resolveRuntimeAiClient`. Voice (OPENAI) runtime untouched.
+- `packages/crm/src/components/dashboard/agency-key-banner.tsx` (new) —
+  purely presentational `<AgencyKeyBanner show={boolean}>`; all gating
+  computed server-side.
+- `packages/crm/src/app/(dashboard)/layout.tsx` — `activeOrg` select
+  extended with `parentAgencyId` + `createdAt` (no extra query — same
+  row already fetched); `showAgencyKeyBanner` computed (flag on +
+  parentAgencyId set + no own Anthropic BYOK key + org age > 14 days);
+  banner rendered next to `TestModeBanner`.
+- `packages/crm/tests/unit/ai/resolve-runtime-client.spec.ts` (new) —
+  13 tests (resolution order, both flag states, 5 distinct fail-soft
+  paths).
+
+**Task 6 — `878b56ee9` feat(pricing): flip-time copy — registry + FAQs** (isolated, last, cherry-pickable)
+- `packages/crm/src/lib/seo/alternative-pages.ts` —
+  `SF_COLUMN.pricingModel` → `"From $29/mo flat — unlimited workspaces
+  (agency whitelabel from $99/mo)"`. Single source of truth consumed by
+  all 25 `/vs/<competitor>` pages + their markdown twins
+  (`alternative-markdown.ts`) + comparison components (`vs-page.tsx`,
+  `alternative-page.tsx`) — verified no per-page literal copies exist.
+  `llms.txt` only links to `/pricing` (no hardcoded pricing string).
+- `packages/crm/src/app/pricing/page.tsx` — FAQS array: workspace-count
+  and white-label answers now mention the agency ladder ($99/mo,
+  sub-accounts) while keeping "$29/mo flat" as the Builder-plan truth.
+- `packages/crm/src/components/landing/marketing-faq-section.tsx` — same
+  two answers updated; "$29/mo flat" remains the homepage anchor
+  (one-number rule).
+- `packages/crm/tests/unit/landing/marketing-faq.spec.ts` — rewritten
+  (previous spec pinned an even older $297/$497 GoHighLevel-era
+  8-question ladder, already failing at HEAD before this branch —
+  confirmed via `git stash`: current component renders 9 FAQs, not 8);
+  8 tests pinning the current 9-question component + ladder mentions.
+
+## Deviations from the plan (and why)
+
+1. **`tier-resolve.ts` edited instead of `handlers.ts`.** The plan
+   listed `handlers.ts (only if price→tier map isn't fully data-driven)`.
+   Reading `handlers.ts` showed it imports `resolveTierFromPriceIds` from
+   a *separate* file, `tier-resolve.ts` — that file **is** the
+   data-driven price→tier map the plan was pointing at, just under a
+   name the plan author guessed slightly wrong. Edited `tier-resolve.ts`
+   directly; `handlers.ts` itself needed no changes.
+
+2. **`orgs.ts` gained one export** (`fetchAgencyAttachedWorkspaceIds`,
+   previously module-private) — necessary for the sub-account count and
+   explicitly anticipated by the plan's "callers" phrasing, but not
+   itself named as a file to touch. Minimal (one `export` keyword + a
+   doc comment), no behavior change to the function itself.
+
+3. **`enforceSubAccountLimitForUser` lives in `api/v1/partner-agencies/route.ts`,
+   not in `limits.ts`.** `orgs.ts` already imports `enforceWorkspaceLimit`
+   from `limits.ts`; had I added `orgs.ts`'s `fetchAgencyAttachedWorkspaceIds`
+   as an import into `limits.ts`, that would create `limits.ts ↔ orgs.ts`
+   circular import. Kept `limits.ts`'s new functions pure (no DB import)
+   and put the DB-wired wrapper at the sole call site instead. The pure
+   core (`maxSubAccountsForTier`, `enforceSubAccountLimit`) is exactly
+   where the plan said it should be and is what's unit-tested.
+
+4. **`tests/unit/billing-features.spec.ts` touched (not in the plan's
+   file list).** Task 1's `features.ts` edit repurposed the `"builder"`
+   key from the old $19 landing-pages-only shape to the new $29
+   unlimited-workspaces shape. This broke a pre-existing test that
+   pinned the old shape. Per CLAUDE.md/spec D6 ("never weaken the
+   gate"), fixed it rather than leaving a broken test in the suite —
+   4-line assertion change, no scope creep.
+
+5. **`app/pricing/page.tsx` edited in Task 4, not held for Task 6.**
+   The plan's global file list marks this file "(Task 6 only)", but
+   Task 4's own task description explicitly says "flag read server-side
+   in pricing/page.tsx and passed as prop." Without this, `tierLadderOn`
+   would never be true and Task 4's toggle would be permanently dead
+   code. Reconciled by wiring the flag-read + prop-pass in Task 4 and
+   reserving the FAQ-copy edit (the actual Task 6 concern) for Task 6.
+
+6. **`app/(public)/page.tsx` (homepage) NOT wired to pass `tierLadderOn`
+   to `LandingMarketingPricingSection`.** This file isn't in the plan's
+   file list. The component defaults `tierLadderOn` to `false`, so the
+   flag-off (current, dark) behavior is unaffected — but the homepage's
+   quiet ladder-pointer line can never actually appear even after Max
+   flips `SF_TIER_LADDER=1`, until someone wires this one prop. Flagged
+   as an open risk below rather than expanding scope.
+
+7. **`lib/billing/feature-flags.ts` (FEATURE_TIERS / TIER_RANK) NOT
+   updated** for the 5 new tier ids, even though it's logically adjacent
+   to `features.ts`. Investigated: `hasFeature`/`tierMeetsMinimum` are
+   defined but never called from any live app code path (only
+   referenced in a comment) — confirmed via grep. Leaving it stale is
+   inert today; flagged as an open risk in case a future caller adopts
+   `hasFeature` and finds the 5 new tiers rank as 0 (unlock nothing).
+
+8. **My original verify sweep's glob missed `tests/unit/billing-entitlements.spec.ts`
+   entirely.** I ran the plan's 6 explicitly-named spec files plus a
+   secondary sweep of `tests/unit/billing-features.spec.ts`,
+   `tests/unit/billing-workspace-limit.spec.ts`, and
+   `tests/unit/billing/*.spec.ts` (107 tests) — but never globbed the
+   *other* top-level `tests/unit/billing-*.spec.ts` files (there are 10:
+   byok-gate-removed, checkout-items, checkout-session-params,
+   entitlements, features, plans-catalog, price-ids-placeholder-guard,
+   tier-resolve, webhook-state-consolidation, workspace-limit), so
+   `billing-entitlements.spec.ts` never ran. An independent
+   verify-runner caught this with a wider sweep and found 2 stale pins.
+   See "Post-review follow-up" below for the fix + the corrected full
+   sweep.
+
+## Post-review follow-up (commit 7 — `5c4bd7dcf`)
+
+**What was wrong:** `tests/unit/billing-entitlements.spec.ts` had 2
+tests pinning pre-ladder policy that Task 1's catalog change already
+silently invalidated:
+- `"only agency can submit + sell blocks"` (line 82) — the approved
+  spec changed marketplace sell/rent to be available on EVERY sellable
+  tier (5% fee uniformly), and `entitlements.ts`'s
+  `canSubmitBlocks`/`canSellBlocks` already read
+  `plan.limits.marketplace`, which Task 1 set `true` on builder,
+  managed, and all 3 agency_* tiers (plus the grandfathered `agency`
+  tier) — matching the new policy. Only the grandfathered `workspace`
+  tier keeps `marketplace: false` (frozen, one-way door). **The
+  production code was already correct**; only the test's expectations
+  were stale.
+- `"builder = 0 full workspaces (landing pages only)"` (line 100) —
+  pinned the dead $19 builder shape. New builder (spec D1) is
+  unlimited own workspaces (`maxOrgs: -1` → `getMaxOrgs`'s
+  `Number.POSITIVE_INFINITY` sentinel).
+
+**Route/action audit for divergent marketplace gating:** grepped every
+`canSubmitBlocks`/`canSellBlocks` call site. `canSellBlocks` has no
+live caller anywhere in `src/`. `canSubmitBlocks` has exactly one
+caller — `lib/marketplace/actions.ts:1371` inside
+`generateBlockForReviewAction` — which resolves the plan via
+`resolvePlanFromPlanId` (→ `plans.ts`, the same catalog Task 1 edited)
+and gates purely through `canSubmitBlocks(plan)`. Also grepped for any
+route/action hard-coding a tier string (`tier === "agency"` /
+`planId === "agency"`) near marketplace submission — found 7 matches,
+all unrelated to marketplace gating (workspace-count/quota logic in
+`orgs.ts`, `limits.ts`, `settings/billing/page.tsx`,
+`proposals/check-tier-quota.ts`, `stripe/webhook/route.ts`). **No
+divergent route found** — `entitlements.ts` → `plans.ts` remains the
+single source of truth for marketplace gating; nothing else needed
+changing.
+
+**Fix:** updated both assertions in
+`tests/unit/billing-entitlements.spec.ts` with comments citing
+`docs/superpowers/specs/2026-07-08-pricing-ladder-design.md` (D1 for
+the builder re-pin, the model paragraph + Task 1 feature booleans for
+the marketplace re-pin). Committed separately (`5c4bd7dcf`,
+`test(billing): re-pin entitlements to the 5-tier policy`) — no
+amending of prior commits.
+
+**Corrected full sweep glob** (the one that should have run from the
+start): every `tests/unit/billing-*.spec.ts` (top-level, 10 files) +
+every file under `tests/unit/billing/` (9 files) +
+`tests/unit/marketplace/billing/` (8 files) + `*entitlement*.spec.ts` +
+`*feature*.spec.ts` + `tests/unit/ai/*.spec.ts` +
+`tests/unit/landing/*pricing*.spec.ts` /
+`tests/unit/landing/*faq*.spec.ts` — 31 files, 319 tests total.
+
+```
+$ FILES=$( { find tests/unit -maxdepth 1 -iname "billing*.spec.ts"; \
+    find tests/unit/billing -iname "*.spec.ts"; \
+    find tests/unit/marketplace/billing -iname "*.spec.ts"; \
+    find tests/unit -iname "*entitlement*.spec.ts"; \
+    find tests/unit -iname "*feature*.spec.ts"; \
+    find tests/unit/ai -iname "*.spec.ts"; \
+    find tests/unit/landing -iname "*pricing*.spec.ts" -o -iname "*faq*.spec.ts"; \
+  } | sort -u )
+$ node --import tsx --test $FILES
+...
+ℹ tests 319
+ℹ suites 93
+ℹ pass 318
+ℹ fail 0
+ℹ cancelled 0
+ℹ skipped 1
+ℹ todo 0
+ℹ duration_ms 4682.4118
+```
+
+The 1 skip is pre-existing and unrelated to this branch: TAP output
+shows `# SKIP AGENCY_WORKSPACE_OVERAGE_PRICE_ID not configured in env`
+in `billing-webhook-state-consolidation.spec.ts` — an intentional
+env-conditional skip (the overage price id is env-only, no
+placeholder), not a hidden failure.
+
+`tsc --noEmit` re-run after the re-pin: 23 total errors (exactly
+baseline), 0 new outside it. `check:use-server.sh src`: clean.
+Regression grep: empty.
+
+## Second post-review fix wave (commits 8-9)
+
+Opus review verdict: fix-first, one BLOCKING finding + 4 non-blocking
+items in the same wave.
+
+### BLOCKING — sub-account cap bypassable + miscounts (spec invariant 5)
+
+Two writes of `organizations.parentAgencyId` existed OUTSIDE the one
+route (`api/v1/partner-agencies`) gated in commit 2
+(`7fb04adef`):
+
+1. **`deployments/store.ts::setOrgParentAgency`**, called from
+   `provisionClientWorkspaceForDeployment` — the deploy-to-client
+   activation flow (`deployments/actions.ts:611`,
+   `provisionDeploymentNumberAction`). This was completely ungated
+   (the module's own header comment literally said "Not gated; the
+   agency-creation tier check already happened upstream" — which was
+   false once the sub-account ladder existed). A builder at their
+   tier's cap could deploy unlimited additional client workspaces
+   simply by activating more deployments.
+
+2. **`agency-profile/sync-to-partner-agency.ts`'s bulk-attach** on
+   every `/settings/agency-profile` save — this one is intentionally
+   ungated (it's an idempotent self-branding sync, not a client
+   handoff) but the ORIGINAL counting query
+   (`fetchAgencyAttachedWorkspaceIds`) would have counted its
+   auto-attached rows (the agency owner's OWN unparented workspaces,
+   `organizations.ownerId = the saving user`) against the cap —
+   producing false rejections purely from an operator saving their
+   profile.
+
+**Root fix — refined the counted unit** (new
+`packages/crm/src/lib/billing/subaccount-count.ts`): a counted
+sub-account is now `parentAgencyId IN (agencies owned by the user) AND
+archivedAt IS NULL AND ownerId IS DISTINCT FROM the agency owner's
+userId`. A client sub-account is a handoff by definition; an org whose
+owner IS the agency owner is self-branding, not a handoff, and is
+excluded. This is a SEPARATE query from
+`lib/billing/orgs.ts::fetchAgencyAttachedWorkspaceIds`, which keeps
+its original semantics (org listing / branding rollup) unchanged for
+its other callers — deliberately not touched, per the fix design's
+"extend or wrap without changing other callers' semantics" instruction.
+The exact predicate (`isCountableClientSubAccount`) is exported and
+unit-tested directly (7 tests) so the live SQL WHERE clause can be
+trusted to encode the same rule without a DB round trip in tests.
+
+**Gate wiring:**
+- `api/v1/partner-agencies/route.ts`'s existing
+  `enforceSubAccountLimitForUser` now calls
+  `countClientSubAccountsForOwner` (the refined count) instead of
+  `fetchAgencyAttachedWorkspaceIds`.
+- `provisionClientWorkspaceForDeployment`
+  (`lib/deployments/provision-client-workspace.ts`) gained a new
+  REQUIRED dep, `enforceSubAccountCap: (builderOrgId) =>
+  Promise<SubAccountCapDecision>`, checked immediately after the
+  idempotent already-provisioned guard and BEFORE `buildInput`/
+  `createFullWorkspace`/anything else. An over-cap decision returns
+  `{ ok:false, error:"subaccount_limit_reached", used, limit }` with
+  **zero side effects** — no workspace created, no agency attach, no
+  deployment row updated. The idempotent guard runs first and
+  short-circuits before the cap check (a re-activation of an
+  already-provisioned deployment creates no new attachment, so
+  there's nothing to gate — confirmed by a dedicated test). Wired to
+  the real DB implementation in `actions.ts`'s `buildProvisionDeps()`
+  (resolves the builder org's `ownerId` → tier via
+  `resolveTierForWorkspace` → refined count via
+  `countClientSubAccountsForOwner` → `enforceSubAccountLimit`). The
+  stale "Not gated" comment on `setOrgParentAgency` was removed and
+  replaced with a pointer to where the gate now lives.
+- The outer action (`provisionDeploymentNumberAction`) keeps its
+  pre-existing soft-fail contract for Twilio-number activation ("never
+  block the action's success on provisioning, never let it throw") —
+  that contract predates this fix and wasn't part of the requested
+  change; I did NOT alter it, since doing so would be a larger, unasked
+  behavior change to the Twilio activation flow. What changed is that
+  the `subaccount_limit_reached` rejection is now structurally
+  distinguishable in the `console.warn` log line (carries `used`/
+  `limit`) instead of being indistinguishable from a transient
+  `create_threw`/`create_failed`.
+
+**New tests:** `tests/unit/billing/subaccount-count.spec.ts` (7 tests:
+the refined predicate, including the exact owner-owned-exclusion case
+that motivated the fix, plus a mixed-set test proving only genuine
+handoffs count) + 3 new tests added to
+`tests/unit/deployments/provision-client-workspace.spec.ts`
+(blocked-at-cap with zero side effects, under-cap proceeds normally,
+idempotent-skip does not re-check the cap) — all DI-fakes, no DB.
+
+### NON-BLOCKING (same wave)
+
+5. **upgrade-modal flag-gate.** The modal was unconditionally showing
+   the NEW ladder targets (Managed/Agency Starter), which 409
+   `tier_unavailable` at checkout until Max sets the new Stripe price
+   env vars — while main's LIVE behavior (Workspace/Agency,
+   grandfathered, real prices) is what every current 402-workspace-
+   limit path actually needs today. Flag-gated behind
+   `NEXT_PUBLIC_SF_TIER_LADDER` (a client-safe, build-time twin of the
+   server flag `SF_TIER_LADDER` — this component has no server-
+   component ancestor across its 4+ call sites that would let a single
+   server-read prop thread down cheaply, so it reads its own copy
+   directly, same dark-by-default strict-`"1"` contract as every other
+   flag). Flag off (default) now renders BYTE-IDENTICAL targets/copy/
+   price-ids to main's current live modal. Rewrote
+   `tests/unit/web-onboarding/upgrade-modal.spec.tsx` (8 tests: 3
+   flag-independent free-tier tests, 3 pinning flag-OFF = main's exact
+   grandfathered targets + the `tier:"workspace"` checkout payload, 2
+   pinning flag-ON = the new ladder + `tier:"agency_starter"` payload).
+   Also fixed a latent test-isolation bug found while writing these:
+   the spec file had no `cleanup()` between tests, so `render()` calls
+   accumulated in the shared jsdom document and a later test's
+   ABSENCE assertion (new in this wave) would have seen a PREVIOUS
+   test's still-mounted DOM.
+
+6. **Dead homepage line.** `app/(public)/page.tsx:102` and
+   `app/(marketing)/pricing-public/page.tsx:52` never passed
+   `tierLadderOn` to `LandingMarketingPricingSection` (both are server
+   components; each now reads `SF_TIER_LADDER` server-side, mirroring
+   `pricing/page.tsx`'s local helper — not centralized into
+   `lib/web-build/policy.ts`, kept out of scope). The D4 homepage
+   quiet-line is now reachable post-flip on both marketing surfaces
+   that render the pricing section.
+
+7. **`feature-flags.ts` TIER_RANK extended.** Added the 5 new tier ids
+   to `TIER_RANK` (ranked by actual entitlement level from `plans.ts`'s
+   `Plan.limits`, not by price: `managed` ranks with `builder`;
+   `agency_starter`/`agency_growth`/`agency_scale` all rank with the
+   grandfathered `agency`), closing the latent bug where
+   `hasFeature()`/`tierMeetsMinimum` would rank every new-tier
+   subscriber at 0 (unlock nothing) if a future caller wires them up
+   (confirmed still dead code today — see deviation #7 in the original
+   session's notes above; this fix makes it correct WHEN it's wired,
+   not live yet). Added 2 tests to
+   `tests/unit/billing/feature-flags.spec.ts`.
+
+8. **Flip checklist addition.** Appended to spec §6 (see the updated
+   flip checklist in the Open Risks section below):
+   **"Task-6 copy commit (`878b56ee9`) must not deploy ahead of
+   `SF_TIER_LADDER=1`"** — the FAQ/registry copy in that commit
+   describes the ladder as live ("Running client sub-accounts? Agency
+   plans from $99/mo") but the underlying checkout only works once the
+   flag is on AND the Stripe prices exist; deploying that copy commit
+   to production before the flip would show truthful-sounding copy
+   backed by a 409.
+
+### Verification (second wave)
+
+Full billing/entitlements/features/pricing/deployments sweep (58
+files, the node-only spec files — `node --import tsx --test`):
+
+```
+ℹ tests 631
+ℹ suites 160
+ℹ pass 630
+ℹ fail 0
+ℹ cancelled 0
+ℹ skipped 1
+ℹ todo 0
+ℹ duration_ms 7801.8574
+```
+
+Plus the jsdom-based upgrade-modal spec (separate process — needs
+`--import ./tests/setup-dom.ts`):
+
+```
+ℹ tests 8
+ℹ suites 3
+ℹ pass 8
+ℹ fail 0
+ℹ cancelled 0
+ℹ skipped 0
+ℹ todo 0
+ℹ duration_ms 3070.9755
+```
+
+**Combined: 639 tests, 638 pass, 0 fail, 1 pre-existing skip**
+(same env-conditional skip as before, unrelated to this branch).
+
+`tsc --noEmit`: 23 total (exact baseline), 0 new.
+`check:use-server.sh src`: clean.
+Regression grep (`bookings/actions|create-for-customer|messaging/|lib/sms/|agents/booking/|voice/openai|landing-r1/`):
+empty. No `packages/crm/drizzle` files touched.
+
+## Third post-review fix wave — live checkout regression (commit 10, `ac09002c5`)
+
+A second, independent re-review of the sub-account-cap fix (wave 2)
+found it clean, but surfaced a NEW BLOCKING regression the sub-account
+work incidentally exposed: **the live $29 checkout would 409 on merge,
+flag-independent** — a real production outage waiting to happen, not a
+theoretical gap.
+
+### The Optimistic-Path lesson (CLAUDE.md §3.1)
+
+CLAUDE.md §3.1 names this exact failure mode:
+
+> **Optimistic Path** — you handled the happy path and ignored the 500
+> / null / empty case. A tool that reports success on a write it never
+> verified is this bug... **Success must be defined against the
+> observable end-state, not "the code ran."** Reject a missing/
+> malformed input with an explicit error, never a silent pass.
+
+Every test I wrote in waves 1-2 for the upgrade-modal (and every
+pre-existing test for pricing-shell.tsx's single card) asserted the
+**shape of the outgoing fetch() call** — that `body.tier` equaled the
+expected string, that the URL was `/api/stripe/checkout`. None of them
+asserted that the **route would accept the request**. That's the
+Optimistic Path bug precisely: "the code ran" (a POST was sent with
+the right-looking body) was mistaken for "the feature works" (the
+route returns 200, not 409). The tests were green; the checkout was
+broken. A `fetch` mock that returns `{status:200}` unconditionally
+cannot catch a real route-level rejection — it only proves the UI
+*tried*, never that the *system* would have succeeded.
+
+**Root cause chain:** Task 1 (this branch, wave 1) made `"workspace"`/
+`"agency"` `sellable: false` (frozen, grandfathered). Task 3 (also
+wave 1) added a checkout-route gate that 409s any non-sellable tier,
+**flag-independently** (it runs regardless of `SF_TIER_LADDER`). But
+`pricing-shell.tsx`'s always-rendered single card (`PLAN.id:
+"workspace"`) and the flag-off `upgrade-modal.tsx` (`"workspace"`/
+`"agency"` targets) were never updated to stop targeting the
+now-frozen tiers — both are the LIVE, currently-shipping UI paths, not
+behind any flag. Merged as-is, every "Get started" click and every
+workspace-limit upgrade click would have 409'd.
+
+### The shared-price-id webhook design
+
+**The fix:** repoint the live UI to `"builder"` (the intended new
+sellable $29 tier per spec D1) instead of adding a NEW Stripe price —
+`BUILDER_PRICE_ID` was changed from its own (still-unconfigured)
+`STRIPE_BUILDER_PRICE_ID` env var to `= WORKSPACE_PRICE_ID` directly
+(`price-ids.ts`), so `"builder"` resolves to the EXACT same
+live-configured Stripe price `"workspace"` used to use. This is
+deliberately a relabel, not a new checkout path or a new Stripe
+product — verified by reading `checkout-items.ts`'s `TIER_BASE_PRICE`
+map and confirming main's `pricing-shell.tsx` POSTs `tier:"workspace"`
+→ `WORKSPACE_PRICE_ID` → env `STRIPE_WORKSPACE_PRICE_ID` (the one Max
+has actually configured), not `AGENCY_BASE_PRICE_ID` as an initial
+memory-note skim might suggest.
+
+This means **one Stripe price id now maps to two tier ids** — legacy
+`workspace` subscribers (existing, frozen) and new `builder`
+purchasers (new checkout going forward). Price-id-only inference can
+no longer distinguish them. The design: `stripe-billing/handlers.ts`'s
+`customer.subscription.updated` handler now prefers
+`subscription.metadata.tier` (embedded at checkout via
+`buildCheckoutSessionParams`'s `subscription_data.metadata`, and
+persisted on the Stripe subscription object for its entire lifetime,
+renewals included) over price-id inference — price-id inference
+remains only as the fallback for legacy pre-metadata rows. Without
+this, EVERY renewal/quantity-change event for a shared-price
+subscriber (whether they originally checked out as `builder` or as a
+grandfathered `workspace` sub) would have relabeled them to
+`"workspace"` (`resolveTierFromPriceIds`'s documented precedence
+checks `workspace` before `builder`), silently reassigning new builder
+purchasers back into the frozen grandfathered tier on their very first
+renewal.
+
+`invoice.paid`/`invoice.payment_failed` were already correct before
+this fix (the module comment already said "the authoritative tier
+writer is customer.subscription.updated... mutating tier here... we
+preserve the existing tier") — confirmed by reading the handler (never
+reads price ids, the `updateOrgSubscription` patch never includes
+`tier`) and pinned explicitly with a new test simulating a renewal
+invoice for an existing grandfathered workspace subscriber.
+
+### Fixes landed
+
+1. **`pricing-shell.tsx`**: `PLAN.id` → `"builder"` (was `"workspace"`).
+2. **`upgrade-modal.tsx`**: flag-off collapses to a SINGLE `"builder"`
+   target rather than trying to also manufacture an "agency-ish"
+   second card. Main's original modal offered "Agency $297,
+   unlimited/10-included workspaces" as the recommended upsell; there
+   is no sellable tier that preserves that semantic (`agency_starter`
+   $99 is for CLIENT SUB-ACCOUNTS, a materially different offer, not
+   "more of your own workspaces"). Mis-selling `agency_starter` as a
+   like-for-like Agency replacement would itself be a false-advertising
+   bug, so flag-off intentionally shows builder only; the real ladder
+   comparison is reachable at `/pricing` once `SF_TIER_LADDER` is on.
+3. **`price-ids.ts`**: `BUILDER_PRICE_ID = WORKSPACE_PRICE_ID` (was its
+   own placeholder-only env var).
+4. **`stripe-billing/handlers.ts`**: `customer.subscription.updated`
+   is now metadata-first (see design above).
+5. **`checkout-items.ts`**: new pure, exported
+   `resolveCheckoutTierGate(tier)` — extracted from `route.ts`'s inline
+   sellable-gate block so the route AND tests share the exact same
+   function (route.ts now calls it; no re-implementation drift
+   possible). This is what makes the new test class (below) a true
+   end-state assertion instead of another optimistic mock.
+6. **`route.ts`**: calls `resolveCheckoutTierGate` instead of its own
+   inline `getPlan(...).sellable` check (same behavior, now shared +
+   testable).
+7. **Non-blocking (item #5 of the review)**: extracted the duplicated
+   inline sub-account-cap closure — was hand-written once in
+   `deployments/actions.ts`'s `buildProvisionDeps` and once in
+   `api/v1/partner-agencies/route.ts` — into a single shared
+   `resolveSubAccountCapForBuilderOrg(orgId)` (`subaccount-count.ts`),
+   used by both call sites now.
+
+### The missing test class (now closed)
+
+New `tests/unit/billing/checkout-tier-gate.spec.ts` (16 tests):
+- An explicit audit table (`UI_REACHABLE_TIERS`) of every tier id a
+  live UI surface can currently POST — the single card, both
+  `TierLadder` audiences, and both upgrade-modal flag states — each
+  asserted against the REAL `resolveCheckoutTierGate` (not a
+  reimplementation) to never reject as `not_sellable`. This test class
+  would have caught the original bug on the first run (both grandfathered
+  tiers were, at the time, still reachable from the live UI and both
+  would have failed the `not_sellable` assertion).
+- A regression pin: `resolveCheckoutTierGate("workspace")` and
+  `resolveCheckoutTierGate("agency")` are explicitly asserted to still
+  reject (`not_sellable`) — these must NEVER become reachable from a
+  NEW checkout POST again.
+- An env-independent design note baked into the tests: whether a tier
+  is `Plan.sellable` is an invariant this repo can assert offline;
+  whether its Stripe price is configured (`placeholder_price`) is an
+  environment fact that depends on Max's env vars and is NOT asserted
+  in a fixed direction — the tests check the gate's `detail` field
+  distinguishes the two failure classes rather than asserting a
+  environment-dependent outcome.
+
+### Fallout from the shared price id (all intentional, now documented)
+
+Making `BUILDER_PRICE_ID === WORKSPACE_PRICE_ID` broke 3 pre-existing
+test assertions that expected price-id-only resolution to
+disambiguate the two tiers — all 3 are genuinely ambiguous now by
+design (metadata is the disambiguator going forward), fixed with
+documentation rather than silently changing behavior further:
+- `billing-tier-resolve.spec.ts`: `resolveTierFromPriceIds([BUILDER_
+  PRICE_ID])` now resolves `"workspace"` (documented precedence checks
+  workspace first) — added a sanity test pinning that the two
+  constants are equal BY DESIGN, not by accident.
+- `billing-checkout-items.spec.ts`: `tierFromBasePriceId(WORKSPACE_
+  PRICE_ID)` now resolves `"builder"` (if-chain checks builder first) —
+  intentionally prefers the new sellable tier for a bare-price-id
+  lookup, mirroring the "prefer the new tier when ambiguous" principle
+  from the webhook fix.
+- `billing-plans-catalog.spec.ts`: `getPlanByStripePriceId(WORKSPACE_
+  PRICE_ID)` now resolves to the `builder` Plan (first-match-wins scan
+  over `PLANS[]`, builder listed before workspace) — documented as a
+  reverse-lookup byproduct that does NOT affect any subscriber's
+  actually-stored tier (that's written once by the webhook, which is
+  metadata-first).
+
+### Verification (third wave)
+
+Full node-only sweep (60 files after adding checkout-tier-gate.spec.ts):
+
+```
+ℹ tests 653
+ℹ suites 164
+ℹ pass 652
+ℹ fail 0
+ℹ cancelled 0
+ℹ skipped 1
+ℹ todo 0
+ℹ duration_ms 7831.6044
+```
+
+jsdom-based upgrade-modal spec (rewritten flag-off block for the
+minimal single-target design):
+
+```
+ℹ tests 8
+ℹ suites 3
+ℹ pass 8
+ℹ fail 0
+ℹ cancelled 0
+ℹ skipped 0
+ℹ todo 0
+ℹ duration_ms 3171.5431
+```
+
+**Combined: 661 tests, 660 pass, 0 fail, 1 pre-existing skip.**
+
+`tsc --noEmit`: 23 total (exact baseline), 0 new.
+`check:use-server.sh src`: clean.
+Regression grep: empty. No `packages/crm/drizzle` files touched.
+
+## Test results (verbatim tails, original session)
+
+All six named spec files, together, fail 0:
+
+```
+$ node --import tsx --test tests/unit/billing-plans-catalog.spec.ts tests/unit/billing-checkout-items.spec.ts tests/unit/landing/marketing-pricing.spec.ts tests/unit/landing/marketing-faq.spec.ts tests/unit/billing/subaccount-limit.spec.ts tests/unit/ai/resolve-runtime-client.spec.ts
+...
+ℹ tests 66
+ℹ suites 13
+ℹ pass 66
+ℹ fail 0
+ℹ cancelled 0
+ℹ skipped 0
+ℹ todo 0
+ℹ duration_ms 1068.5132
+```
+
+Broader billing regression sweep (all `tests/unit/billing*.spec.ts` +
+`tests/unit/billing/*.spec.ts`), fail 0:
+
+```
+ℹ tests 107
+ℹ suites 33
+ℹ pass 107
+ℹ fail 0
+ℹ cancelled 0
+ℹ skipped 0
+ℹ todo 0
+ℹ duration_ms 2623.625
+```
+
+`tsc --noEmit`:
+
+```
+$ node_modules/.bin/tsc -p tsconfig.json --noEmit 2>&1 | wc -l
+23
+$ node_modules/.bin/tsc -p tsconfig.json --noEmit 2>&1 | grep -v "^\.next/types\|posthog\|qrcode\|markdown-to-jsx\|composio/client\|copilot/turn"
+(empty)
+```
+
+23 total errors — exactly the documented baseline (`.next/types`
+staleness ×14, `markdown-to-jsx`/`posthog-js`/`qrcode`/`posthog-node`
+missing-module ×4, `composio` `mcp` ×3, `copilot/turn` `persist` ×1,
+`posthog-node` in the analytics spec ×1). Zero new errors outside that
+set.
+
+`check:use-server.sh`:
+
+```
+$ bash scripts/check-use-server.sh src
+✓ All 'use server' files export only async functions / types.
+```
+
+Regression grep (must be empty — confirmed empty, exit 1 = no match):
+
+```
+$ git diff --name-only origin/main..HEAD | grep -E "bookings/actions|create-for-customer|messaging/|lib/sms/|agents/booking/|voice/openai|landing-r1/"
+(no output, exit 1)
+```
+
+Migration journal untouched:
+
+```
+$ git diff --name-only origin/main..HEAD -- packages/crm/drizzle
+(no output)
+```
+
+## Open risks
+
+1. ~~**Homepage ladder-pointer line is dead code today.**~~ **RESOLVED
+   in the second post-review fix wave (commit `da06cc101`).**
+   `app/(public)/page.tsx` and `app/(marketing)/pricing-public/page.tsx`
+   now both read `SF_TIER_LADDER` server-side and pass `tierLadderOn`
+   down. The homepage line is reachable post-flip.
+
+2. ~~**`feature-flags.ts`'s `TIER_RANK`/`FEATURE_TIERS` not extended**~~
+   **RESOLVED in the second post-review fix wave (commit `da06cc101`).**
+   `TIER_RANK` now includes the 5 new tier ids. `FEATURE_TIERS` itself
+   (the `MinimumTier` map, distinct from `TIER_RANK`) was intentionally
+   left untouched — it still only maps flags to the 3 legacy minimum
+   tiers (`builder`/`workspace`/`agency`), which is sufficient because
+   `tierMeetsMinimum`'s rank comparison is what actually needed the
+   new ids; `hasFeature`/`tierMeetsMinimum` remain unreachable from any
+   live app code path.
+
+3. **`vision-verify` on `/pricing` (both toggle states, desktop +
+   mobile) not run** — the plan's §4 validation lists this alongside
+   the six spec-file/tsc/use-server/grep checks I did run. This requires
+   a live dev-server render + independent vision grading pass, which is
+   outside what this implementation task covers; recommend running it
+   before the flip (spec §6 already lists "flip + smoke" as Max's
+   action).
+
+4. **Live smoke of `/pricing` + one checkout-intent 402 path** — also
+   listed in plan §4 validation, also not run here (requires a running
+   server + real HTTP round trip). The unit-level equivalents
+   (`tier_unavailable` 409 response shape, `isPlaceholderPriceId` gate)
+   are covered by Task 3's rewritten spec, but an actual live 402/409
+   round trip against a dev server was not exercised in this session.
+
+5. **`getPlan(tier)` in `maxSubAccountsForTier`** takes a `BillingTier`
+   (includes `"inactive"`) but is typed to accept a `string` planId —
+   `getPlan("inactive")` correctly returns `undefined` (no catalog entry
+   named "inactive") and falls through to the `?? 0` default, but this
+   relies on that coincidental non-match rather than an explicit
+   `"inactive" -> 0` branch. Behaviorally correct (verified by the
+   `inactive: 0` test case) but worth noting for a future refactor.
+
+6. **`provisionDeploymentNumberAction`'s soft-fail contract is
+   unchanged by design.** The sub-account cap gate makes
+   `provisionClientWorkspaceForDeployment` itself refuse to provision
+   over cap (zero side effects), but the OUTER Twilio-activation action
+   still returns `{ ok:true }` even when provisioning was blocked by
+   the cap — this preserves the pre-existing "activation must always
+   succeed" bridge contract (the agent falls back to writing the
+   builder org). This means an over-cap builder's Twilio number
+   activation silently succeeds while their client workspace silently
+   isn't created; the `console.warn` log line is the only surfaced
+   signal today (carries `used`/`limit`). If product wants the operator
+   to SEE "you're over your sub-account cap" at the point of clicking
+   "Get a number", that requires a UI-facing change to
+   `ProvisionDeploymentNumberActionResult`, which was not requested and
+   would be a larger behavior change to a flow whose existing contract
+   is "never block Twilio activation on workspace provisioning."
+
+## Flip checklist (spec §6, updated)
+
+1. Create 4 Stripe prices ($49/$99/$199/$299) + set
+   `STRIPE_MANAGED_PRICE_ID`, `STRIPE_AGENCY_STARTER_PRICE_ID`,
+   `STRIPE_AGENCY_GROWTH_PRICE_ID`, `STRIPE_AGENCY_SCALE_PRICE_ID` in
+   Vercel.
+2. Flip `SF_TIER_LADDER=1` **AND** `NEXT_PUBLIC_SF_TIER_LADDER=1`
+   together (the upgrade-modal's client-safe flag twin, added in the
+   second post-review fix wave — flipping only the server flag leaves
+   the modal showing grandfathered targets while `/pricing` shows the
+   new ladder, an inconsistent but non-broken state; flipping only the
+   client flag would show ladder targets that 409 until step 1 is
+   done). Then smoke one $49 test-mode checkout.
+3. Flip `SF_AGENCY_KEY_INHERIT=1` after confirming your own agency key
+   is set.
+4. Approve the T4 registry-copy commit (`878b56ee9`) with the flip.
+5. **NEW — Task-6 copy commit (`878b56ee9`) must not deploy ahead of
+   `SF_TIER_LADDER=1`.** That commit's FAQ/registry copy describes the
+   agency ladder as available today ("Running client sub-accounts?
+   Agency plans from $99/mo"); if it ships to production before the
+   flag flip + Stripe prices exist, the copy is truthful-sounding but
+   checkout 409s. Deploy it in the same release as step 2, not before.
+6. **NEW (third wave) — the live $29 card + upgrade-modal flag-off
+   path are UNCONDITIONAL, not part of the SF_TIER_LADDER flip.** They
+   already merge/deploy targeting `"builder"` (sharing
+   `WORKSPACE_PRICE_ID`'s live-configured price) regardless of the
+   flag. No additional flip action needed for these two surfaces — they
+   work today, on merge, with the SAME Stripe price that's already
+   configured. Only the NEW tiers (managed, agency_starter/growth/
+   scale) need step 1's new Stripe prices before their surfaces
+   (the flagged `TierLadder` + flag-on modal) go live.
+7. **NEW (third wave) — once Max creates a real, distinct Builder
+   Stripe price**, update `price-ids.ts`'s `BUILDER_PRICE_ID` to read
+   `STRIPE_BUILDER_PRICE_ID` instead of `= WORKSPACE_PRICE_ID`, and
+   drop the shared-price-id special-casing this wave added to
+   `stripe-billing/handlers.ts` (the metadata-first preference can stay
+   as a general hardening, but the specific "two tiers share one
+   price" ambiguity goes away).
+
+## Commits
+
+```
+5089ec164 feat(billing): 5-tier catalog + grandfathered legacy plans
+7fb04adef feat(billing): sub-account limit on the handoff boundary
+20d6d1319 feat(billing): checkout for the 5-tier ladder (inert without env)
+68e8cb8a0 feat(pricing): audience-toggle pricing page behind SF_TIER_LADDER
+0cda290e2 feat(ai): agency key inheritance + launch-window banner (flagged)
+878b56ee9 feat(pricing): flip-time copy — registry + FAQs
+5c4bd7dcf test(billing): re-pin entitlements to the 5-tier policy
+a1cf476e7 fix(billing): gate all sub-account attach paths + owner-owned exclusion
+da06cc101 fix(pricing): flag-gate upgrade modal targets + thread tierLadderOn + tier ranks
+ac09002c5 fix(billing): live $29 checkout POSTs sellable builder tier + webhook metadata-first tier resolution
+```

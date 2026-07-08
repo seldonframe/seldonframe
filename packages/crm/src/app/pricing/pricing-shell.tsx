@@ -130,8 +130,6 @@ function TierLadder({ isAuthed }: TierLadderProps) {
   const [error, setError] = useState<string | null>(null);
   const [starting, setStarting] = useState<CatalogTierId | null>(null);
 
-  const tiers = ladderTiersFor(audience);
-
   async function startTierCheckout(tier: LadderTier) {
     setError(null);
     setStarting(tier.id);
@@ -193,8 +191,15 @@ function TierLadder({ isAuthed }: TierLadderProps) {
         </button>
       </div>
 
-      <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
-        {tiers.map((tier) => {
+      {/* Both audience rows are server-rendered (inactive one CSS-hidden) so
+          crawlers/LLMs see all five tiers — only visibility is client state. */}
+      {(["personal", "agency"] as Audience[]).map((aud) => (
+      <div
+        key={aud}
+        className={`grid gap-4 sm:grid-cols-2 lg:grid-cols-3 ${audience === aud ? "" : "hidden"}`}
+        aria-hidden={audience !== aud}
+      >
+        {ladderTiersFor(aud).map((tier) => {
           const placeholder = isPlaceholderPriceId(tier.stripePriceId);
           const subLabel = subAccountLabel(tier);
           return (
@@ -252,6 +257,7 @@ function TierLadder({ isAuthed }: TierLadderProps) {
           );
         })}
       </div>
+      ))}
 
       {error ? (
         <p role="alert" className="text-sm text-destructive">
