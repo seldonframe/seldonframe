@@ -36,8 +36,10 @@ candidates so the apply layer owns the money semantics (query stays a dumb fetch
 "pick the same-period sibling over the prior-period one" work when both are outstanding. Fail-open
 on missing period info (legacy/degenerate) is deliberate: notify-only blast radius, and the worse
 failure is dunning a paid client. Same-invoice-id recovery untouched per the review directive.
-NOTE: `feature/autopay-console` is still NOT on main — it's merged into worktree branch
-`claude/hungry-jang-c20e73` together with this fix; merge to main is Max's gate.
+NOTE: `feature/autopay-console` reached main mid-session (another session merged
+`2a5360cbb..d645afea6`); origin/main was merged back into `claude/hungry-jang-c20e73`, so the
+branch is now exactly main + this fix (71/71 + tsc-baseline re-verified post-merge). Merge to
+main is Max's gate.
 
 ### Task — GHL-intercept SEO/GEO engine (2026-07-08, branch feature/ghl-seo-engine)
 
