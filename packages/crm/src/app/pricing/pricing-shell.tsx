@@ -5,16 +5,26 @@
 //
 // 2026-07-04 /pricing truth pass (Task 11): the platform sells exactly
 // ONE plan — $29/mo flat, unlimited workspaces, cancel anytime. The
-// old Builder $19 / Workspace $49 / Agency $297 ladder never shipped to
-// checkout truthfully and is gone. The single card POSTs
-// `{ tier: "workspace" }` to /api/stripe/checkout — that's the
-// allowlisted server-side path that resolves to GROWTH_BASE_PRICE_ID
-// (see route.ts). 2026-07-05: the free ungated build→claim→use
-// experience already IS the trial, so this checkout charges
-// immediately (no trial_period_days) — cancel anytime from Settings.
-// No price id lives in the client. Included-features copy is pulled
-// verbatim from components/landing/marketing-pricing-section.tsx so the
-// authed page and the marketing page never drift.
+// single card POSTs `{ tier: "workspace" }` to /api/stripe/checkout.
+// 2026-07-05: the free ungated build→claim→use experience already IS
+// the trial, so this checkout charges immediately (no
+// trial_period_days) — cancel anytime from Settings. No price id lives
+// in the client. Included-features copy is pulled verbatim from
+// components/landing/marketing-pricing-section.tsx so the authed page
+// and the marketing page never drift.
+//
+// 2026-07-08 pricing ladder (Task 4, behind SF_TIER_LADDER): an
+// audience toggle appears ABOVE the single-plan card — "For your
+// businesses" (Builder $29 / Managed $49) vs. "For your clients'
+// businesses" (Agency Starter $99 / Growth $199 / Scale $299,
+// sub-account vocabulary). Cards are data-driven from
+// `PLANS.filter(p => p.sellable)` (single source of truth — plans.ts).
+// Money-safe: a tier whose Stripe price is still the unconfigured
+// PLACEHOLDER renders its CTA as "Book a demo" (mailto/demo link)
+// instead of POSTing to checkout — no new Stripe call sites, inert
+// without the env var. Flag OFF renders the exact pre-existing single
+// $29 card (byte-compatible — this component's default export path is
+// unchanged).
 //
 // Buyer-facing copy rule: never mention GMV / marketplace fees here —
 // that's backend economics, not a buyer-facing plan detail.
@@ -24,6 +34,8 @@
 import { useState } from "react";
 import Link from "next/link";
 import { Check } from "lucide-react";
+import { PLANS, type TierId as CatalogTierId } from "@/lib/billing/plans";
+import { isPlaceholderPriceId } from "@/lib/billing/price-ids";
 
 type TierId = "workspace";
 
@@ -56,11 +68,198 @@ const PLAN: Tier = {
   ],
 };
 
-type PricingShellProps = {
+// ─── 2026-07-08 audience toggle (SF_TIER_LADDER) ──────────────────────
+
+const BOOK_A_DEMO_URL = "https://app.seldonframe.com/book/seldonframes-workspace-7798/default";
+
+type Audience = "personal" | "agency";
+
+const PERSONAL_TIER_IDS: CatalogTierId[] = ["builder", "managed"];
+const AGENCY_TIER_IDS: CatalogTierId[] = ["agency_starter", "agency_growth", "agency_scale"];
+
+type LadderTier = {
+  id: CatalogTierId;
+  name: string;
+  price: number;
+  tagline: string;
+  maxSubAccounts: number;
+  fullWhiteLabel: boolean;
+  stripePriceId: string;
+};
+
+const SELLABLE_TIERS: LadderTier[] = PLANS.filter((p) => p.sellable).map((p) => ({
+  id: p.id,
+  name: p.name,
+  price: p.price,
+  tagline: p.tagline,
+  maxSubAccounts: p.limits.maxSubAccounts,
+  fullWhiteLabel: p.limits.fullWhiteLabel,
+  stripePriceId: p.stripePriceId,
+}));
+
+function ladderTiersFor(audience: Audience): LadderTier[] {
+  const ids = audience === "personal" ? PERSONAL_TIER_IDS : AGENCY_TIER_IDS;
+  return ids
+    .map((id) => SELLABLE_TIERS.find((t) => t.id === id))
+    .filter((t): t is LadderTier => Boolean(t));
+}
+
+function subAccountLabel(tier: LadderTier): string {
+  if (tier.maxSubAccounts === 0) return "";
+  if (tier.maxSubAccounts === -1) return "Unlimited client sub-accounts";
+  return `${tier.maxSubAccounts} client sub-accounts included`;
+}
+
+type TierLadderProps = {
   isAuthed: boolean;
 };
 
-export function PricingShell({ isAuthed }: PricingShellProps) {
+function TierLadder({ isAuthed }: TierLadderProps) {
+  const [audience, setAudience] = useState<Audience>("personal");
+  const [error, setError] = useState<string | null>(null);
+  const [starting, setStarting] = useState<CatalogTierId | null>(null);
+
+  const tiers = ladderTiersFor(audience);
+
+  async function startTierCheckout(tier: LadderTier) {
+    setError(null);
+    setStarting(tier.id);
+    try {
+      const res = await fetch("/api/stripe/checkout", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          tier: tier.id,
+          successPath: "/dashboard?upgraded=1&session_id={CHECKOUT_SESSION_ID}",
+          cancelPath: "/pricing",
+        }),
+      });
+      if (res.status === 401) {
+        window.location.assign(`/signup?plan=${encodeURIComponent(tier.id)}`);
+        return;
+      }
+      const data = (await res.json().catch(() => ({}))) as { url?: string; error?: string };
+      if (data.url) {
+        window.location.assign(data.url);
+        return;
+      }
+      setError(data.error ?? "Couldn't start checkout. Try again in a moment.");
+    } catch {
+      setError("Couldn't reach Stripe. Check your connection and try again.");
+    } finally {
+      setStarting(null);
+    }
+  }
+
+  return (
+    <div className="mt-10 space-y-6">
+      <div
+        role="tablist"
+        aria-label="Choose your audience"
+        className="inline-flex rounded-full border border-border/70 bg-card/40 p-1"
+      >
+        <button
+          type="button"
+          role="tab"
+          aria-selected={audience === "personal"}
+          onClick={() => setAudience("personal")}
+          className={`rounded-full px-4 py-1.5 text-sm font-medium transition-colors ${
+            audience === "personal" ? "bg-primary text-primary-foreground" : "text-muted-foreground"
+          }`}
+        >
+          For your businesses
+        </button>
+        <button
+          type="button"
+          role="tab"
+          aria-selected={audience === "agency"}
+          onClick={() => setAudience("agency")}
+          className={`rounded-full px-4 py-1.5 text-sm font-medium transition-colors ${
+            audience === "agency" ? "bg-primary text-primary-foreground" : "text-muted-foreground"
+          }`}
+        >
+          For your clients&apos; businesses
+        </button>
+      </div>
+
+      <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
+        {tiers.map((tier) => {
+          const placeholder = isPlaceholderPriceId(tier.stripePriceId);
+          const subLabel = subAccountLabel(tier);
+          return (
+            <div
+              key={tier.id}
+              data-tier={tier.id}
+              className="flex flex-col gap-3 rounded-2xl border border-border/70 bg-card/40 p-5"
+            >
+              <span className="text-[11px] font-semibold uppercase tracking-[0.12em] text-muted-foreground">
+                {tier.name}
+              </span>
+              <p className="flex items-baseline gap-1.5">
+                <span className="text-2xl font-semibold tracking-tight text-foreground">
+                  ${tier.price}
+                </span>
+                <span className="text-sm text-muted-foreground">/ mo</span>
+              </p>
+              <p className="text-sm text-muted-foreground">{tier.tagline}</p>
+              {subLabel ? (
+                <p className="text-xs font-medium text-primary">{subLabel}</p>
+              ) : null}
+              {tier.fullWhiteLabel ? (
+                <p className="text-xs text-muted-foreground">Full white-label</p>
+              ) : null}
+              {placeholder ? (
+                <a
+                  href={BOOK_A_DEMO_URL}
+                  target="_blank"
+                  rel="noreferrer"
+                  data-tier-cta={tier.id}
+                  className="crm-button-primary mt-2 inline-flex h-9 items-center justify-center px-4 text-sm font-medium"
+                >
+                  Book a demo
+                </a>
+              ) : isAuthed ? (
+                <button
+                  type="button"
+                  data-tier-cta={tier.id}
+                  onClick={() => startTierCheckout(tier)}
+                  disabled={starting !== null}
+                  className="crm-button-primary mt-2 inline-flex h-9 items-center justify-center px-4 text-sm font-medium disabled:cursor-not-allowed disabled:opacity-70"
+                >
+                  {starting === tier.id ? "Redirecting…" : "Get started"}
+                </button>
+              ) : (
+                <Link
+                  href={`/signup?plan=${tier.id}`}
+                  data-tier-cta={tier.id}
+                  className="crm-button-primary mt-2 inline-flex h-9 items-center justify-center px-4 text-sm font-medium"
+                >
+                  Get started
+                </Link>
+              )}
+            </div>
+          );
+        })}
+      </div>
+
+      {error ? (
+        <p role="alert" className="text-sm text-destructive">
+          {error}
+        </p>
+      ) : null}
+    </div>
+  );
+}
+
+type PricingShellProps = {
+  isAuthed: boolean;
+  /** SF_TIER_LADDER — flag read server-side in pricing/page.tsx and
+   *  passed down. Default false so any caller that doesn't pass it
+   *  (tests, storybook-style usage) keeps today's single-card view. */
+  tierLadderOn?: boolean;
+};
+
+export function PricingShell({ isAuthed, tierLadderOn = false }: PricingShellProps) {
   // There's exactly one plan — no selector state needed.
   const selected = PLAN;
   // Errors from /api/stripe/checkout. Inline error surface lives in the
@@ -190,6 +389,11 @@ export function PricingShell({ isAuthed }: PricingShellProps) {
           </div>
         </div>
       </div>
+
+      {/* 2026-07-08 pricing ladder — audience toggle, flag-gated. Renders
+          BELOW the single-plan hero so the $29 card stays the primary
+          truth; the ladder is the expansion path for agency operators. */}
+      {tierLadderOn ? <TierLadder isAuthed={isAuthed} /> : null}
 
       {/* Sticky bottom CTA — there's exactly one plan, so copy + button
           are static: POST /api/stripe/checkout + redirect to the

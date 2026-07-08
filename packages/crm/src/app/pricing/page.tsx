@@ -38,6 +38,14 @@ import {
 import { auth } from "@/auth";
 import { PricingShell } from "./pricing-shell";
 
+/** SF_TIER_LADDER (2026-07-08) — same strict-"1" contract as the other
+ *  dark-by-default flags in lib/web-build/policy.ts (isWinLadderOn,
+ *  isSimpleHomeOn). Read server-side here rather than adding a new
+ *  export to policy.ts (kept out of this task's touched-files list). */
+function isTierLadderOn(env: { SF_TIER_LADDER?: string | undefined }): boolean {
+  return env.SF_TIER_LADDER?.trim() === "1";
+}
+
 const FAQS: Array<{ q: string; a: string }> = [
   {
     q: "How many client workspaces can I run?",
@@ -66,13 +74,14 @@ export default async function PricingPage({ searchParams }: PricingPageProps) {
   if (searchParams) await searchParams; // keep Next.js happy if callers pass params
 
   const isAuthed = Boolean(session?.user);
+  const tierLadderOn = isTierLadderOn({ SF_TIER_LADDER: process.env.SF_TIER_LADDER });
 
   return (
     <main className="crm-page">
       {/* pb-28 reserves room for the sticky CTA so the last FAQ row
           never hides behind it. */}
       <section className="mx-auto max-w-6xl px-4 pb-28 pt-10 sm:px-6 sm:pt-14">
-        <PricingShell isAuthed={isAuthed} />
+        <PricingShell isAuthed={isAuthed} tierLadderOn={tierLadderOn} />
 
         <div className="mt-16">
           <p className="text-xs font-semibold uppercase tracking-[0.16em] text-muted-foreground">

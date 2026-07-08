@@ -1,20 +1,18 @@
-// 2026-06-22 pricing reconciliation. The catalog now offers ONE public
-// plan — the "agency" tier, repurposed to **$29/mo flat · unlimited
-// workspaces · cancel anytime** — matching the marketing site. The
-// builder/workspace tiers remain in the catalog (no longer offered) only
-// so legacy subscriptions + stored planIds keep resolving in the webhook.
+// 2026-07-08 pricing ladder. The catalog offers 5 SELLABLE tiers behind
+// SF_TIER_LADDER (spec docs/superpowers/specs/2026-07-08-pricing-ladder-design.md):
+//   Builder $29 · Managed $49 · Agency Starter $99 · Agency Growth $199
+//   · Agency Scale $299 (Plan.sellable === true).
+// Two GRANDFATHERED legacy tiers ("workspace" $49, "agency" $29-flat)
+// remain in the catalog ONLY so existing subscribers' ids/limits/price
+// keep resolving byte-identically (Plan.sellable === false — new
+// checkout never offers them). Until SF_TIER_LADDER flips, the public
+// pricing page still renders the single $29 flat card (see
+// pricing-shell.tsx) even though the catalog itself already has 5
+// sellable tiers — the flag gates the UI, not the data model.
 //
-//   SeldonFrame ($29/mo, id "agency") — the single offered plan:
-//                        UNLIMITED full workspaces (no per-workspace
-//                        overage), white-label, marketplace, all
-//                        modules. 2026-07-05: the free ungated
-//                        build→claim→use experience IS the trial, so
-//                        the platform checkout routes charge immediately
-//                        (no trial_period_days).
-//
-// (Earlier 2026-06-18 model — Builder $19 / Workspace $49 / Agency $297
-// with a $10/workspace overage — is superseded. Those tier objects stay
-// catalogued for back-compat; only "agency" is sold, now at $29 flat.)
+// (2026-06-22 reconciliation — the prior single-plan-only era — and the
+// even-earlier 2026-06-18 Builder $19/Workspace $49/Agency $297 model
+// are both superseded; those tier shapes are grandfathered above.)
 //
 // Legacy plan ids ("free", "growth", "scale", "cloud-starter",
 // "cloud-pro", "pro-3", etc.) are still resolvable via `getPlan()` so

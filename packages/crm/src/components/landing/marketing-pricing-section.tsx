@@ -32,7 +32,18 @@ const INCLUDED: readonly string[] = [
   "Add any AI agent to take the busywork off your plate — just tell it what you want, no code.",
 ];
 
-export function LandingMarketingPricingSection() {
+export type LandingMarketingPricingSectionProps = {
+  /** SF_TIER_LADDER (2026-07-08). Flag OFF (default) renders byte-
+   *  identical to the single-$29-card view. Flag ON adds ONE quiet
+   *  line under the card pointing agency operators at the ladder on
+   *  /pricing — the homepage keeps its one-number rule; the card
+   *  itself never changes. */
+  tierLadderOn?: boolean;
+};
+
+export function LandingMarketingPricingSection({
+  tierLadderOn = false,
+}: LandingMarketingPricingSectionProps = {}) {
   return (
     <section
       id="pricing"
@@ -126,6 +137,14 @@ export function LandingMarketingPricingSection() {
                 Your agents run on your own AI key (and Twilio for calls/texts), billed by
                 the provider at cost.
               </p>
+              {tierLadderOn ? (
+                <p className="mt-4 text-[12.5px] leading-[1.5] text-[#6E665A]">
+                  Running client sub-accounts? Agency plans from $99/mo →{" "}
+                  <Link href="/pricing" className="font-[500] text-[#00897B] underline underline-offset-2">
+                    See agency pricing
+                  </Link>
+                </p>
+              ) : null}
             </div>
           </article>
 
