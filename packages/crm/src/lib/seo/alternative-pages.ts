@@ -53,7 +53,7 @@ export const SF_COLUMN = {
   frontOffice: "Included — multi-page website, CRM, booking calendar, intake forms, review requests in every workspace",
   whitelabel: "Included — whitelabel client portal, per-client workspaces, custom domains, one-click multi-client deploy",
   aiCosts: "BYOK — bring your own AI (and Twilio) keys and pay providers at raw cost, zero markup",
-  resale: "Built in — publish agents to the marketplace or rent them via MCP (2% seller fee)",
+  resale: "Built in — publish agents to the marketplace or rent them via MCP (5% marketplace fee)",
 } as const;
 
 export const COMPARISON_LABELS: { key: keyof typeof SF_COLUMN; label: string }[] = [
@@ -74,7 +74,7 @@ export const SHARED_FAQ: AltFaqItem[] = [
   },
   {
     q: "Do you take a cut of what I charge my clients?",
-    a: "No. What you invoice your clients is yours — there is no revenue share on client work you sell yourself. Marketplace sales carry a small seller fee (2%), and a GMV fee applies only when SeldonFrame itself is the sales channel.",
+    a: "SeldonFrame follows the same principle as Shopify: the platform is $29/mo flat, plus 2% on sales processed through SeldonFrame checkout, and 5% when you sell agents through the SeldonFrame marketplace. Client retainers you invoice outside SeldonFrame carry no fee at all.",
   },
   {
     q: "How fast can I see it working?",
@@ -600,6 +600,266 @@ export const COMPETITORS: Competitor[] = [
       {
         q: "Can it handle booking, not just answering?",
         a: "Yes — booking is native: the agent reads real availability from the workspace calendar and books directly into it, with confirmations over SMS/email.",
+      },
+    ],
+  },
+  {
+    slug: "voiceflow",
+    name: "Voiceflow",
+    category: "conversation-design platform",
+    oneLiner:
+      "Voiceflow is a visual conversation-design platform technical teams use to build and orchestrate voice and chat AI agents.",
+    heroSub:
+      "Skip the flow-diagram project and the per-seat credit math. SeldonFrame generates the working agent — and the website, CRM and booking system behind it — from one conversation, at $29/mo flat.",
+    intro: [
+      "Most people looking for a Voiceflow alternative hit the same wall: costs stack in three directions at once. Editor seats run $60–$150/mo each, credits burn on top, telephony bills separately — and when your credits run out mid-cycle, there are no top-ups: your bots simply stop responding until the next cycle. Reviewers consistently call it the most expensive option at low volume, and the flow-builder itself demands real conversation-design effort per agent.",
+      "That's not to say Voiceflow isn't impressive — for teams designing genuinely complex, branching conversational products, the visual builder is one of the best there is, with real multi-channel support and concurrent call handling. But an agency deploying receptionists for local businesses doesn't need a conversation IDE; it needs a working front office per client.",
+    ],
+    them: {
+      bestFor: "Technical teams designing complex conversational flows",
+      pricingModel: "Free sandbox; ~$60–$150/mo per editor + credits; no mid-cycle top-ups (bots stop at the ceiling); enterprise contracts run far higher",
+      aiReceptionist: "Voice + chat agents you design flow-by-flow",
+      frontOffice: "None — no CRM, website or booking calendar",
+      whitelabel: "No formal agency/whitelabel pricing tier",
+      aiCosts: "Credit-metered per interaction, on top of seats",
+      resale: "Informal — no productized reseller program",
+    },
+    switchReasons: [
+      {
+        title: "Bots that never stop mid-month",
+        body: "Voiceflow credits can't be topped up mid-cycle — hit the ceiling and your agents go silent. SeldonFrame runs on your own AI key at provider cost: no platform meter to exhaust.",
+      },
+      {
+        title: "No per-seat tax on your team",
+        body: "Every Voiceflow editor is $50–$150/mo. SeldonFrame is $29/mo flat for the platform — your whole team, unlimited client workspaces.",
+      },
+      {
+        title: "One conversation replaces the flow diagram",
+        body: "Describe the business and SeldonFrame generates the agent, grounded in the client's real services and FAQs — no canvas, no node-wiring, no conversation-design backlog.",
+      },
+      {
+        title: "The agent ships with its business system",
+        body: "A Voiceflow agent still needs a CRM, calendar and site around it. SeldonFrame includes all three in every workspace, and the agent books real jobs into them.",
+      },
+    ],
+    whenTheyWin:
+      "Choose Voiceflow if you're a product team designing a complex, custom conversational experience and conversation design IS the product.",
+    faq: [
+      {
+        q: "Can SeldonFrame handle complex conversation logic like Voiceflow?",
+        a: "SeldonFrame agents are built from editable plain-language skills plus deterministic tools for the parts that must never be improvised (availability, booking, message-taking). Most front-office jobs need reliable execution, not branching flow charts — and the parts that must be exact are code, not prompts.",
+      },
+      {
+        q: "Do I pay per seat?",
+        a: "No — $29/mo flat covers the platform. There are no per-editor fees.",
+      },
+    ],
+  },
+  {
+    slug: "lindy",
+    name: "Lindy",
+    category: "AI employee builder",
+    oneLiner:
+      "Lindy is a general-purpose AI agent builder for automating internal workflows like email triage, research and scheduling.",
+    heroSub:
+      "Lindy automates your inbox. SeldonFrame runs your clients' front office — receptionist, website, CRM and booking — whitelabeled, at $29/mo flat.",
+    intro: [
+      "Most people looking for a Lindy alternative hit the same wall: it's built for internal automation, not client delivery. There's no free tier, plans run $49.99–$199.99/mo on credits that burn unpredictably (a simple step costs 1 credit; email parsing or web research can cost 5–10), and there's no agency, whitelabel or reseller model at all. Voice is an add-on function inside a workflow, with the latency to match.",
+      "That's not to say Lindy isn't impressive — as a personal 'AI employee' for your own operations it's genuinely versatile, with a big template library and real multi-step capability. But you can't hand a Lindy to a plumbing company as their branded receptionist, and you can't run twenty clients on it.",
+    ],
+    them: {
+      bestFor: "Individuals & teams automating their own internal workflows",
+      pricingModel: "No free tier; $49.99–$199.99/mo credit-based, task-dependent burn + $10/1,000 top-ups",
+      aiReceptionist: "Voice is a bolt-on step inside a workflow, not a phone receptionist product",
+      frontOffice: "None — no CRM, website or booking calendar",
+      whitelabel: "None — no agency or reseller model",
+      aiCosts: "Credit-metered, varies 1–10 credits per step",
+      resale: "No",
+    },
+    switchReasons: [
+      {
+        title: "Built for clients, not just your inbox",
+        body: "SeldonFrame is a delivery platform: every client gets a branded workspace with the agent, site, CRM and calendar — something you can sell, not just use.",
+      },
+      {
+        title: "Predictable costs",
+        body: "Lindy's per-task credit burn varies with task complexity, which makes client pricing a guess. SeldonFrame is $29/mo flat plus your own keys at provider cost.",
+      },
+      {
+        title: "A real phone receptionist",
+        body: "Voice-native answering with deterministic booking beats a voice step bolted into a workflow — the receptionist is the product, not a node.",
+      },
+      {
+        title: "Whitelabel from day one",
+        body: "Client portal, custom domains, per-client workspaces — the agency motion Lindy simply doesn't have.",
+      },
+    ],
+    whenTheyWin:
+      "Choose Lindy if you want an AI employee for your OWN operations — inbox triage, research, internal scheduling — rather than a platform to deliver client-facing systems.",
+    faq: [
+      {
+        q: "Can SeldonFrame automate internal tasks too?",
+        a: "SeldonFrame agents fire on business events — new lead, missed call, completed job — and handle follow-ups, review requests and speed-to-lead automatically. It's front-office automation, purpose-built, rather than general workflow automation.",
+      },
+      {
+        q: "Is there a free way to try it?",
+        a: "Yes — paste a business's website and SeldonFrame builds the full workspace free in about 3 minutes, before you sign up.",
+      },
+    ],
+  },
+  {
+    slug: "durable",
+    name: "Durable",
+    category: "AI website builder",
+    oneLiner:
+      "Durable is an AI website builder with a light CRM and invoicing, aimed at solo operators who want a fast, cheap site.",
+    heroSub:
+      "A website that can't answer the phone is a brochure. SeldonFrame pairs the AI-generated site with an AI receptionist, CRM and booking calendar — $29/mo flat, unlimited workspaces.",
+    intro: [
+      "Most people looking for a Durable alternative hit the same wall: the site goes up in 30 seconds, and then the phone rings and nothing answers it. There's no AI voice at all — AI means a chat widget and content generation — the output is famously template-alike, users report domain-transfer friction, and the top plan caps at 5 businesses with no whitelabel layer, so agencies can't run a client book on it.",
+      "That's not to say Durable isn't impressive — it made instant websites real, the free tier is genuinely usable, and the pricing is refreshingly transparent. For a solo operator who just needs a web presence this week, it's a fine choice. But local service businesses don't lose jobs to a missing website nearly as often as they lose them to a missed call.",
+    ],
+    them: {
+      bestFor: "Solo operators who need a cheap site fast",
+      pricingModel: "Free tier; ~$22–$95/mo; top plan capped at 5 businesses",
+      aiReceptionist: "None — AI chat widget and content generation only, no phone answering",
+      frontOffice: "Partial — site + light CRM + invoicing; no real booking calendar behind an agent",
+      whitelabel: "None — not built for agencies",
+      aiCosts: "Bundled, capped by plan (messages/images per month)",
+      resale: "No",
+    },
+    switchReasons: [
+      {
+        title: "The site answers its own phone",
+        body: "SeldonFrame generates the multi-page site AND the AI receptionist behind it — calls answered, leads qualified, jobs booked into a real calendar.",
+      },
+      {
+        title: "Built for a client book, not 5 businesses",
+        body: "Durable's top plan caps at 5 businesses with no whitelabel. SeldonFrame is unlimited client workspaces with a branded agency portal at $29/mo.",
+      },
+      {
+        title: "A CRM that closes the loop",
+        body: "Every call, chat, form fill and booking lands in the workspace CRM with follow-up automation — not a contact list bolted to a site builder.",
+      },
+      {
+        title: "Sites grounded in the real business",
+        body: "Paste the business's existing website or describe it — SeldonFrame extracts services, reviews and FAQs so the generated site (and the agent) speak the client's actual business.",
+      },
+    ],
+    whenTheyWin:
+      "Choose Durable if you're a solo operator who only needs a simple website and invoicing this week, with no phone-answering or client-management needs.",
+    faq: [
+      {
+        q: "Does SeldonFrame generate multi-page sites like Durable?",
+        a: "Yes — a full multi-page service site (services, service areas, reviews, booking, intake) generated from one conversation or a pasted URL, with a dark/light theme system and custom domains.",
+      },
+      {
+        q: "Can I move my existing Durable site over?",
+        a: "Paste its URL — SeldonFrame extracts the services, copy and business facts and rebuilds the workspace around them in about 3 minutes; you point the domain when you're ready.",
+      },
+    ],
+  },
+  {
+    slug: "my-ai-front-desk",
+    name: "My AI Front Desk",
+    category: "AI receptionist",
+    oneLiner:
+      "My AI Front Desk (rebranding to Frontdesk) is an AI receptionist for phone, SMS and chat aimed at small local businesses.",
+    heroSub:
+      "200 minutes a month is about 40 calls. SeldonFrame gives you the receptionist on your own Twilio at carrier cost — plus the website, CRM and booking system — at $29/mo flat.",
+    intro: [
+      "Most people looking for a My AI Front Desk alternative hit the same wall: the minutes are thin and the agency story is a black box. The $99/mo plan includes 200 voice minutes — roughly 40 five-minute calls — before credit overages at about $0.25/minute equivalent kick in, and the Partner/agency tier has no published pricing at all. A mid-flight rebrand (to \"Frontdesk\") has left third-party pricing pages contradicting each other, which doesn't help confidence.",
+      "That's not to say My AI Front Desk isn't impressive — the $20 entry point is genuinely accessible, setup takes minutes, and it has broadened beyond pure voice into chat, SMS and email drafts. It's closer to the front-office thesis than the pure voice-API players. But 'closer' still means no real CRM, no website, no owned booking calendar — and Zapier as the system of record.",
+    ],
+    them: {
+      bestFor: "Single-location SMBs wanting a cheap receptionist add-on",
+      pricingModel: "$20/mo basic (no voice); $99/mo with 200 voice min, then ~$0.25/min-equivalent credit overage; agency tier unpublished",
+      aiReceptionist: "Yes — voice, SMS and chat",
+      frontOffice: "Light — automations + Zapier; no real CRM, website or owned booking calendar",
+      whitelabel: "Partner/Enterprise tier exists but pricing is not public",
+      aiCosts: "Credit-metered overages once plan minutes run out",
+      resale: "Via the opaque Partner tier",
+    },
+    switchReasons: [
+      {
+        title: "No minute anxiety",
+        body: "SeldonFrame doesn't sell minutes — connect your own Twilio number and calls cost carrier rates, with your own AI key at provider cost. A busy month is a good month, not an overage bill.",
+      },
+      {
+        title: "The whole front office, not a receptionist add-on",
+        body: "Website, CRM, booking calendar, intake and review automation come with the agent — the receptionist writes into a system you own.",
+      },
+      {
+        title: "Agency pricing you can actually model",
+        body: "Their Partner tier is quote-only. SeldonFrame's agency math is public: $29/mo flat, unlimited client workspaces, whitelabel included.",
+      },
+      {
+        title: "A platform, not a rebrand in motion",
+        body: "Registry-grounded agents, open core, portable data — the platform story is stable and inspectable.",
+      },
+    ],
+    whenTheyWin:
+      "Choose My AI Front Desk if you're a single location that wants the cheapest possible receptionist bolt-on and already lives happily in Zapier.",
+    faq: [
+      {
+        q: "What do calls actually cost on SeldonFrame?",
+        a: "Carrier rates on your own Twilio number plus your own AI key at provider cost — SeldonFrame doesn't meter or mark up minutes on the $29/mo plan.",
+      },
+      {
+        q: "Does SeldonFrame do missed-call text-back too?",
+        a: "Yes — missed calls trigger an instant SMS follow-up, and the conversation continues with the same agent that answers the phone.",
+      },
+    ],
+  },
+  {
+    slug: "smith-ai",
+    name: "Smith.ai",
+    category: "receptionist service",
+    oneLiner:
+      "Smith.ai is a North-America-based receptionist service combining AI with human receptionists, billed per call.",
+    heroSub:
+      "A service bills you per call, forever. SeldonFrame is a platform you (or your agency) own — AI receptionist, website, CRM and booking at $29/mo flat, on your own keys.",
+    intro: [
+      "Most people looking for a Smith.ai alternative hit the same wall: per-call economics and a quote gate. The public pricing page is now a lead-capture form — no numbers until you talk to sales — and the per-call billing users describe as a \"success tax\" means your receptionist bill scales linearly with your call volume, forever. And it's a service, not a platform: there's nothing to whitelabel, nothing to build on, and the CRM of record is someone else's.",
+      "That's not to say Smith.ai isn't impressive — the human-in-the-loop model delivers genuinely polished conversations, and for high-stakes professional services (law firms especially) a human voice on complex intake is worth paying for. But most local service businesses need every call answered instantly and booked into their own system — a job AI now does 24/7 for a flat platform fee.",
+    ],
+    them: {
+      bestFor: "Professional services wanting human-quality call handling",
+      pricingModel: "Quote-gated (pricing page is a sales form); per-call billing that scales with volume",
+      aiReceptionist: "Yes — AI + human hybrid, as a managed service",
+      frontOffice: "None — answers calls and hands off; your CRM/calendar live elsewhere",
+      whitelabel: "None — it's a consumed service, not a platform",
+      aiCosts: "Bundled into per-call pricing",
+      resale: "No",
+    },
+    switchReasons: [
+      {
+        title: "Flat platform fee vs per-call forever",
+        body: "Per-call billing punishes growth — more calls, bigger bill. SeldonFrame is $29/mo flat with calls at carrier + provider cost on your own keys.",
+      },
+      {
+        title: "Own the system, not just the answer",
+        body: "Every Smith.ai call ends in a handoff to tools you still had to buy. SeldonFrame's receptionist books into the workspace's own calendar and CRM.",
+      },
+      {
+        title: "24/7 without staffing math",
+        body: "AI answers instantly at 2am, during storms, on holidays — no per-call premium for after-hours coverage.",
+      },
+      {
+        title: "An agency can resell it",
+        body: "Smith.ai is something you consume; SeldonFrame is something you can deliver — whitelabeled, per client, with your margin.",
+      },
+    ],
+    whenTheyWin:
+      "Choose Smith.ai if complex, high-stakes intake (legal matters, sensitive callers) genuinely needs a trained human on the line and per-call pricing fits your volume.",
+    faq: [
+      {
+        q: "Is an AI receptionist as good as Smith.ai's humans?",
+        a: "For the core front-office job — answer, qualify, look up real availability, book, take a message — SeldonFrame's agent executes deterministically and never misses a call. For genuinely sensitive human conversations, we'd honestly point you to a human service; many businesses run AI-first with human escalation.",
+      },
+      {
+        q: "Can the agent take messages like a receptionist service?",
+        a: "Yes — when a caller needs a human, the agent takes a structured message and notifies the operator instantly by SMS/email, logged against the contact in the CRM.",
       },
     ],
   },

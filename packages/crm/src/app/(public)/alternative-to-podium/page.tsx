@@ -10,7 +10,7 @@ const meta = alternativePageMeta(SLUG);
 export const metadata: Metadata = {
   title: meta.title,
   description: meta.description,
-  alternates: { canonical: meta.canonical },
+  alternates: { canonical: meta.canonical, types: { "text/markdown": `${meta.canonical}.md` } },
   openGraph: { title: meta.title, description: meta.description, url: meta.canonical, type: "website" },
   twitter: { card: "summary_large_image", title: meta.title, description: meta.description },
 };

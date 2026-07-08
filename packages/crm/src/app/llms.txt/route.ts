@@ -8,6 +8,8 @@
 // Served as text/markdown at /llms.txt.
 
 import { AGENT_JOBS, VERTICALS } from "@/lib/seo/agent-pages";
+import { COMPETITORS, getCompetitor } from "@/lib/seo/alternative-pages";
+import { VS_PAIRS, vsSlug } from "@/lib/seo/alternative-pages-extras";
 import { siteBaseUrl } from "@/app/sitemap";
 import { loadStorefrontCatalog } from "@/lib/marketplace/load-storefront";
 import { logMarkdownFetch } from "@/lib/marketplace/md-analytics";
@@ -74,6 +76,28 @@ export async function GET(req: Request): Promise<Response> {
   }
   lines.push("");
 
+  // Honest competitor comparisons — the highest-intent answer pages for a
+  // buyer (or an AI) asking "what's the best alternative to X".
+  lines.push("## Comparisons (honest, updated)");
+  lines.push("");
+  lines.push(`- [All comparisons](${base}/alternatives): how SeldonFrame compares to every major alternative.`);
+  for (const c of COMPETITORS) {
+    lines.push(`- [Best ${c.name} alternative](${base}/alternative-to-${c.slug}): ${c.oneLiner}`);
+  }
+  for (const p of VS_PAIRS) {
+    lines.push(
+      `- [${getCompetitor(p.a).name} vs ${getCompetitor(p.b).name}](${base}/compare/${vsSlug(p)}): ${p.angle}`,
+    );
+  }
+  lines.push("");
+
+  lines.push("## Free tools");
+  lines.push("");
+  lines.push(
+    `- [Missed Call Cost Calculator](${base}/tools/missed-call-calculator): estimate the revenue missed calls cost a service business.`,
+  );
+  lines.push("");
+
   lines.push("## Pages");
   lines.push("");
   lines.push(`- [Agent Marketplace](${base}/marketplace): browse and install vetted agents, or rent them over MCP.`);
@@ -93,6 +117,7 @@ export async function GET(req: Request): Promise<Response> {
   lines.push(`- Each listing: append \`.md\` to any \`${base}/marketplace/<slug>\` URL.`);
   lines.push(`- [AI agent library (Markdown)](${base}/ai-agents.md): every agent, as clean Markdown.`);
   lines.push(`- Each agent page: append \`.md\` (e.g. [${base}/ai-agents/${AGENT_JOBS[0].slug}.md](${base}/ai-agents/${AGENT_JOBS[0].slug}.md)), including the by-industry pages (\`${base}/ai-agents/<job>/for/<vertical>.md\`).`);
+  lines.push(`- Each comparison: append \`.md\` to any \`${base}/alternative-to-<name>\` or \`${base}/compare/<a>-vs-<b>\` URL.`);
   lines.push("");
 
   return new Response(lines.join("\n"), {

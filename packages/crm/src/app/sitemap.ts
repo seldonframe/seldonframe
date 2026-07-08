@@ -14,6 +14,7 @@
 import type { MetadataRoute } from "next";
 import { AGENT_JOBS, allJobVerticalPairs } from "@/lib/seo/agent-pages";
 import { COMPETITORS } from "@/lib/seo/alternative-pages";
+import { VS_PAIRS, vsSlug } from "@/lib/seo/alternative-pages-extras";
 import { listMarketplaceAgentsFromDb } from "@/lib/marketplace/agent-listings";
 import { MARKETPLACE_SEED } from "@/components/marketplace/marketplace-seed";
 
@@ -99,6 +100,25 @@ export default async function sitemap(): Promise<MetadataRoute.Sitemap> {
       priority: 0.8,
     });
   }
+
+  // Head-to-head comparison pages (/compare/<a>-vs-<b>).
+  for (const pair of VS_PAIRS) {
+    entries.push({
+      url: `${base}/compare/${vsSlug(pair)}`,
+      lastModified: now,
+      changeFrequency: "monthly",
+      priority: 0.7,
+    });
+  }
+
+  // Free tools.
+  entries.push({ url: `${base}/tools`, lastModified: now, changeFrequency: "monthly", priority: 0.7 });
+  entries.push({
+    url: `${base}/tools/missed-call-calculator`,
+    lastModified: now,
+    changeFrequency: "monthly",
+    priority: 0.7,
+  });
 
   return entries;
 }

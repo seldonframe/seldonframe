@@ -33,7 +33,9 @@ export type MarkdownSurface =
   | "index" // /index.md  (conventional root markdown → redirect)
   | "home" // /home.md  (marketing homepage as markdown)
   | "llms_txt" // /llms.txt  (the GEO map)
-  | "robots_txt"; // /robots.txt
+  | "robots_txt" // /robots.txt
+  | "alternative_page" // /alternative-to-<slug>.md  (competitor comparison twin)
+  | "compare_page"; // /compare/<a>-vs-<b>.md  (head-to-head twin)
 
 /**
  * How the Markdown was requested:
