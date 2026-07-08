@@ -22,6 +22,11 @@
 // components/landing/marketing-pricing-section.tsx so the authed page
 // and the marketing page never drift.
 //
+// 2026-07-08 dedup follow-up: the checkout POST logic moved to the shared
+// tier-checkout.ts (it was byte-identical in both shells). Behavior and
+// rendered output are unchanged — renderToString output stays byte-equal
+// to the pinned shape; only the fetch plumbing is imported now.
+//
 // 2026-07-08 post-review fix wave (BLOCKING) — the single card now
 // POSTs `{ tier: "builder" }`, NOT `{ tier: "workspace" }`. Task 1's
 // catalog made "workspace" a GRANDFATHERED tier (sellable: false,
@@ -42,6 +47,7 @@
 import { useState } from "react";
 import Link from "next/link";
 import { Check } from "lucide-react";
+import { requestTierCheckout } from "./tier-checkout";
 
 type TierId = "builder";
 
@@ -54,8 +60,12 @@ type Tier = {
   features: string[];
 };
 
-// Verbatim from marketing-pricing-section.tsx's INCLUDED list — keep in
-// sync if that copy changes.
+// FROZEN legacy copy of the everything-included list (pre-rebrand
+// wording). The LIVE list is marketing-pricing-section.tsx's exported
+// INCLUDED (which the flag-ON PricingShellMarketing imports); this one has
+// already drifted from it and is intentionally NOT synced — this
+// component's rendered output is pinned by tests and only exists for the
+// SF_TIER_LADDER flag-OFF path.
 const PLAN: Tier = {
   id: "builder",
   name: "SeldonFrame",
@@ -97,31 +107,9 @@ export function PricingShell({ isAuthed }: PricingShellProps) {
     setPaidError(null);
     setPaidStarting(true);
     try {
-      const res = await fetch("/api/stripe/checkout", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          tier: tierId,
-          successPath: "/dashboard?upgraded=1&session_id={CHECKOUT_SESSION_ID}",
-          cancelPath: "/pricing",
-        }),
-      });
-      // Unauthed visitors get bounced to signup with the chosen plan.
-      if (res.status === 401) {
-        window.location.assign(`/signup?plan=${encodeURIComponent(tierId)}`);
-        return;
-      }
-      const data = (await res.json().catch(() => ({}))) as {
-        url?: string;
-        error?: string;
-      };
-      if (data.url) {
-        window.location.assign(data.url);
-        return;
-      }
-      setPaidError(data.error ?? "Couldn't start checkout. Try again in a moment.");
-    } catch {
-      setPaidError("Couldn't reach Stripe. Check your connection and try again.");
+      // Null when we're navigating away (Stripe url / signup bounce);
+      // otherwise the inline error message.
+      setPaidError(await requestTierCheckout(tierId));
     } finally {
       setPaidStarting(false);
     }

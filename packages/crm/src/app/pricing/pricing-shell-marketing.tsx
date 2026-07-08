@@ -51,60 +51,22 @@
 import { useState } from "react";
 import Link from "next/link";
 import { Check } from "lucide-react";
-import { PLANS, type TierId as CatalogTierId } from "@/lib/billing/plans";
+import type { TierId as CatalogTierId } from "@/lib/billing/plans";
 import { isPlaceholderPriceId } from "@/lib/billing/price-ids";
+// Shared /pricing checkout wiring + ladder helpers (2026-07-08 dedup —
+// formerly duplicated inline here; see tier-checkout.ts's header).
+import {
+  type Audience,
+  type LadderTier,
+  ladderTiersFor,
+  requestTierCheckout,
+  subAccountLabel,
+} from "./tier-checkout";
+// Everything-included list, restyled light — imported from the homepage
+// pricing card's exported source of truth (was a hand-synced duplicate).
+import { INCLUDED } from "@/components/landing/marketing-pricing-section";
 
 const BOOK_A_DEMO_URL = "https://app.seldonframe.com/book/seldonframes-workspace-7798/default";
-
-type Audience = "personal" | "agency";
-
-const PERSONAL_TIER_IDS: CatalogTierId[] = ["builder", "managed"];
-const AGENCY_TIER_IDS: CatalogTierId[] = ["agency_starter", "agency_growth", "agency_scale"];
-
-type LadderTier = {
-  id: CatalogTierId;
-  name: string;
-  price: number;
-  tagline: string;
-  maxSubAccounts: number;
-  fullWhiteLabel: boolean;
-  stripePriceId: string;
-};
-
-const SELLABLE_TIERS: LadderTier[] = PLANS.filter((p) => p.sellable).map((p) => ({
-  id: p.id,
-  name: p.name,
-  price: p.price,
-  tagline: p.tagline,
-  maxSubAccounts: p.limits.maxSubAccounts,
-  fullWhiteLabel: p.limits.fullWhiteLabel,
-  stripePriceId: p.stripePriceId,
-}));
-
-function ladderTiersFor(audience: Audience): LadderTier[] {
-  const ids = audience === "personal" ? PERSONAL_TIER_IDS : AGENCY_TIER_IDS;
-  return ids
-    .map((id) => SELLABLE_TIERS.find((t) => t.id === id))
-    .filter((t): t is LadderTier => Boolean(t));
-}
-
-function subAccountLabel(tier: LadderTier): string {
-  if (tier.maxSubAccounts === 0) return "";
-  if (tier.maxSubAccounts === -1) return "Unlimited client sub-accounts";
-  return `${tier.maxSubAccounts} client sub-accounts included`;
-}
-
-// Everything-included list, restyled light — verbatim from
-// marketing-pricing-section.tsx's INCLUDED const (kept in sync manually;
-// that component's own copy is the source of truth for the homepage card).
-const INCLUDED: readonly string[] = [
-  "A website on your own domain, customized to your business — live and taking customers in minutes.",
-  "A CRM and pipeline, so every lead lands in one place and you always know who to call next.",
-  "A booking page tied to your real calendar, so customers book themselves while you're on the job.",
-  "A lead form wired straight to your CRM, so no inquiry ever slips through the cracks.",
-  "A website chatbot built in, so your site answers questions and books work for you 24/7.",
-  "Add any AI agent to take the busywork off your plate — just tell it what you want, no code.",
-];
 
 export type PricingShellMarketingProps = {
   isAuthed: boolean;
@@ -119,27 +81,9 @@ export function PricingShellMarketing({ isAuthed }: PricingShellMarketingProps) 
     setError(null);
     setStarting(tier.id);
     try {
-      const res = await fetch("/api/stripe/checkout", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          tier: tier.id,
-          successPath: "/dashboard?upgraded=1&session_id={CHECKOUT_SESSION_ID}",
-          cancelPath: "/pricing",
-        }),
-      });
-      if (res.status === 401) {
-        window.location.assign(`/signup?plan=${encodeURIComponent(tier.id)}`);
-        return;
-      }
-      const data = (await res.json().catch(() => ({}))) as { url?: string; error?: string };
-      if (data.url) {
-        window.location.assign(data.url);
-        return;
-      }
-      setError(data.error ?? "Couldn't start checkout. Try again in a moment.");
-    } catch {
-      setError("Couldn't reach Stripe. Check your connection and try again.");
+      // Null when we're navigating away (Stripe url / signup bounce);
+      // otherwise the inline error message.
+      setError(await requestTierCheckout(tier.id));
     } finally {
       setStarting(null);
     }

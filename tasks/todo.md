@@ -7,6 +7,37 @@ with a checkable plan, gets ticked off as it ships, and ends with a review block
 
 ## In flight
 
+### Task — pricing-shell dedup refactor (2026-07-08, follow-up to the rebrand review)
+
+Branch claude/sweet-noether-152813 (worktree sharp-joliot-f717e8, off origin/main 231653b7e).
+
+Findings that shaped the plan:
+- The task text is slightly stale: `ladderTiersFor`/`subAccountLabel`/`SELLABLE_TIERS` now
+  live ONLY in pricing-shell-marketing.tsx (the extraction commit already removed them from
+  pricing-shell.tsx). The real remaining duplication is the checkout POST logic
+  (`startPaidCheckout` vs `startTierCheckout` — identical fetch/401/error handling).
+- `lib/billing/start-checkout.ts` exists but has DIFFERENT wire semantics (priceId in body,
+  `/clients` cancelPath, throws) — reusing it would change behavior. New pricing-scoped
+  module per the task instead.
+- The flag-OFF shell's feature list has ALREADY drifted from marketing-pricing-section.tsx's
+  INCLUDED (8 old-copy items vs 6 new-copy items). Importing the shared list there WOULD
+  change the flag-OFF rendered output, which is forbidden → only the marketing shell imports
+  it; the flag-OFF copy is frozen legacy and its "keep in sync" comment gets corrected.
+
+- [x] Baseline: pricing-shell.spec.tsx + marketing-pricing.spec.ts → 15/15 pass
+- [x] Baseline: SSR sha256 of both shells (authed+unauthed) via render-hash.tmp.tsx
+- [x] Baseline: tsc (junctioned node_modules method) → 436 errors, list saved for delta
+- [ ] Create src/app/pricing/tier-checkout.ts: requestTierCheckout (shared POST/401/error
+      logic) + LadderTier/Audience/SELLABLE_TIERS/ladderTiersFor/subAccountLabel moved from
+      the marketing shell
+- [ ] pricing-shell-marketing.tsx consumes tier-checkout.ts + imports INCLUDED from
+      marketing-pricing-section.tsx (drop both local copies)
+- [ ] pricing-shell.tsx consumes requestTierCheckout (render output untouched); fix the
+      stale "keep in sync" comment on its frozen feature list
+- [ ] Export INCLUDED from marketing-pricing-section.tsx (no render change)
+- [ ] Verify: specs 15/15 · SSR hashes identical to baseline · tsc delta = 0 · delete
+      render-hash.tmp.tsx
+
 ### Task — build-pipeline upgrade: mechanical tier pins + wedge strategy (2026-07-07) — DONE
 
 Trigger: reflection on the Managed Agents multi-agent API vs our pipeline. Findings: the ship-feature tier table was already the "plan big, execute small" pattern, but the agent definitions contradicted it (scout pinned opus, implementer pinned fable) — the exact "locked by memory isn't locked" drift the skill itself warns about.

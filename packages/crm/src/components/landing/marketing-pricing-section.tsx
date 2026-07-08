@@ -23,7 +23,12 @@ import Link from "next/link";
 import { Check } from "lucide-react";
 
 // Everything that's included in the flat $29/mo (the whole platform).
-const INCLUDED: readonly string[] = [
+// SINGLE SOURCE OF TRUTH for the everything-included copy — exported so
+// /pricing's PricingShellMarketing renders the same list instead of a
+// hand-synced duplicate (2026-07-08 dedup). The legacy flag-OFF
+// PricingShell keeps its own frozen pre-rebrand list (its tests pin that
+// rendered output) and is intentionally NOT wired to this export.
+export const INCLUDED: readonly string[] = [
   "A website on your own domain, customized to your business — live and taking customers in minutes.",
   "A CRM and pipeline, so every lead lands in one place and you always know who to call next.",
   "A booking page tied to your real calendar, so customers book themselves while you're on the job.",
