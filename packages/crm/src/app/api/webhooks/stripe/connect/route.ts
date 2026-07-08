@@ -22,6 +22,7 @@ import { notifyAgencyOfAcceptance } from "@/lib/proposals/notify-agency";
 import { notifyProspectOfActivation } from "@/lib/proposals/notify-prospect";
 import { sendEmailFromApi } from "@/lib/emails/api";
 import { createDealOnAcceptance } from "@/lib/proposals/create-deal-on-acceptance";
+import { recordRetainerInvoiceCycle } from "@/lib/payments/retainer";
 
 export const runtime = "nodejs";
 
@@ -400,7 +401,22 @@ export async function POST(request: Request) {
           invoiceId: localId ?? invoice.id!,
           amountDue: (invoice.amount_due ?? 0) / 100,
         }, { orgId: orgId });
-      } else if (event.type === "invoice.voided") {
+      }
+
+      // Autopay console Task 1 — record every retainer billing CYCLE
+      // (lib/payments/retainer.ts). Fail-soft: any error here must never
+      // break the shared Connect webhook route for other event types.
+      if (event.type === "invoice.paid" || event.type === "invoice.payment_failed") {
+        try {
+          await recordRetainerInvoiceCycle(event);
+        } catch (err: unknown) {
+          logEvent("retainer_cycle_record_failed", {
+            error: err instanceof Error ? err.message : String(err),
+          });
+        }
+      }
+
+      if (event.type === "invoice.voided") {
         await emitSeldonEvent("invoice.voided", {
           contactId: null,
           invoiceId: localId ?? invoice.id!,
