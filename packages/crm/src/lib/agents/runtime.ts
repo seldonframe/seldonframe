@@ -46,6 +46,7 @@ import {
   type ToolExecuteContext,
 } from "./tools";
 import { resolveTurnModel } from "./runtime/turn-model";
+import { createTtlPromiseCache } from "./runtime/capped-reply-cache";
 import type { CalendarBinding } from "@/lib/agents/booking/calendar-backend";
 import type { BookingPolicy } from "@/lib/agents/booking/booking-policy";
 import { bindingToCtxBooking } from "@/lib/agents/booking/binding-ctx";
@@ -785,23 +786,23 @@ export async function executeTurn(input: {
 // ─── helpers ───────────────────────────────────────────────────────────────
 // v1.27.9 — isDailyBudgetExhausted removed; see note in step 2 above.
 
-// Per-request memoization (plan Task 4): caches the resolved holding-reply
+// Short-lived memoization (plan Task 4): caches the resolved holding-reply
 // promise per orgId so a conversation with multiple capped turns (or a burst
 // of concurrent turns for the same capped org) doesn't re-query the cap +
 // re-fire the notify check repeatedly. The notify itself is idempotent
 // either way (lastNotifiedPeriod), but this avoids redundant DB round-trips.
-// Business logic (load cap, evaluate breach, resolve agency owner, send +
-// mark notified) lives in lib/billing/usage-cap.ts::resolveCappedTurnReply —
-// this is just the runtime-local memoization wrapper.
-const cappedHoldingReplyCache = new Map<string, Promise<string>>();
+// Bounded (TTL + maxEntries — the map used to grow forever in a long-lived
+// process); the TTL also caps how long an operator's holdingReply edit takes
+// to reach customers. Business logic (load cap, evaluate breach, resolve
+// agency owner, send + mark notified) lives in
+// lib/billing/usage-cap.ts::resolveCappedTurnReply — this is just the
+// runtime-local memoization wrapper.
+const cappedHoldingReplyCache = createTtlPromiseCache<string>({ ttlMs: 60_000, maxEntries: 500 });
 
 async function resolveCappedUsageReply(orgId: string): Promise<string> {
-  const cached = cappedHoldingReplyCache.get(orgId);
-  if (cached) return cached;
-
-  const promise = import("@/lib/billing/usage-cap").then((m) => m.resolveCappedTurnReply(orgId));
-  cappedHoldingReplyCache.set(orgId, promise);
-  return promise;
+  return cappedHoldingReplyCache.getOrCreate(orgId, () =>
+    import("@/lib/billing/usage-cap").then((m) => m.resolveCappedTurnReply(orgId)),
+  );
 }
 
 function computeCostCents(tokensIn: number, tokensOut: number): number {

@@ -23,10 +23,14 @@ import {
   authorizeUsageCapSetterForOrg,
   checkUsageCapBreaches,
   resolveCappedHoldingReply,
+  resolveAgencyNotifyTarget,
+  resolveCappedTurnReplyWithDeps,
   DEFAULT_USAGE_CAP_HOLDING_REPLY,
   type UsageCap,
   type CapCandidateOrg,
   type UsageCapSweepDeps,
+  type AgencyNotifyTargetDeps,
+  type CappedTurnReplyDeps,
 } from "@/lib/billing/usage-cap";
 
 describe("parseUsageCap — tolerant parse", () => {
@@ -465,5 +469,309 @@ describe("checkUsageCapBreaches — the daily cron sweep", () => {
     );
     assert.deepEqual(result.skipped, [{ orgId: ORG_1, reason: "no_parent_agency" }]);
     assert.equal(result.notified, 0);
+  });
+});
+
+// ─── 2026-07-08 opus-review follow-up (item 4): the notify-email chain,
+// including the workspace-owned-agency fallback ─────────────────────────
+
+describe("resolveAgencyNotifyTarget — owner email chain with workspace-owned fallback", () => {
+  const AGENCY_ID = "agency-1";
+
+  function makeTargetDeps(over: Partial<AgencyNotifyTargetDeps> = {}): AgencyNotifyTargetDeps {
+    return {
+      getAgencyRow: async () => ({
+        name: "Acme Agency",
+        ownerUserId: null,
+        ownerWorkspaceId: null,
+        supportEmail: null,
+      }),
+      getUserEmail: async () => null,
+      getOrgOwnerUserId: async () => null,
+      ...over,
+    };
+  }
+
+  test("ownerUserId with a resolvable email wins (even over supportEmail)", async () => {
+    const target = await resolveAgencyNotifyTarget(AGENCY_ID, makeTargetDeps({
+      getAgencyRow: async () => ({
+        name: "Acme Agency",
+        ownerUserId: "user-1",
+        ownerWorkspaceId: null,
+        supportEmail: "support@acme.test",
+      }),
+      getUserEmail: async (userId) => (userId === "user-1" ? "owner@acme.test" : null),
+    }));
+    assert.deepEqual(target, { agencyName: "Acme Agency", toEmail: "owner@acme.test" });
+  });
+
+  test("ownerUserId without an email falls back to supportEmail", async () => {
+    const target = await resolveAgencyNotifyTarget(AGENCY_ID, makeTargetDeps({
+      getAgencyRow: async () => ({
+        name: "Acme Agency",
+        ownerUserId: "user-1",
+        ownerWorkspaceId: null,
+        supportEmail: "support@acme.test",
+      }),
+    }));
+    assert.equal(target?.toEmail, "support@acme.test");
+  });
+
+  test("workspace-owned agency (ownerWorkspaceId only) resolves the WORKSPACE owner's email — the review-item-4 gap", async () => {
+    const target = await resolveAgencyNotifyTarget(AGENCY_ID, makeTargetDeps({
+      getAgencyRow: async () => ({
+        name: "Acme Agency",
+        ownerUserId: null,
+        ownerWorkspaceId: "ws-1",
+        supportEmail: null,
+      }),
+      getOrgOwnerUserId: async (orgId) => (orgId === "ws-1" ? "ws-owner-user" : null),
+      getUserEmail: async (userId) => (userId === "ws-owner-user" ? "wsowner@acme.test" : null),
+    }));
+    assert.deepEqual(target, { agencyName: "Acme Agency", toEmail: "wsowner@acme.test" });
+  });
+
+  test("workspace-owned agency whose workspace has no ownerId → toEmail null (still skipped, by design)", async () => {
+    const target = await resolveAgencyNotifyTarget(AGENCY_ID, makeTargetDeps({
+      getAgencyRow: async () => ({
+        name: "Acme Agency",
+        ownerUserId: null,
+        ownerWorkspaceId: "ws-1",
+        supportEmail: null,
+      }),
+    }));
+    assert.deepEqual(target, { agencyName: "Acme Agency", toEmail: null });
+  });
+
+  test("supportEmail beats the workspace fallback (explicit contact wins over inferred)", async () => {
+    const target = await resolveAgencyNotifyTarget(AGENCY_ID, makeTargetDeps({
+      getAgencyRow: async () => ({
+        name: "Acme Agency",
+        ownerUserId: null,
+        ownerWorkspaceId: "ws-1",
+        supportEmail: "support@acme.test",
+      }),
+      getOrgOwnerUserId: async () => "ws-owner-user",
+      getUserEmail: async () => "wsowner@acme.test",
+    }));
+    assert.equal(target?.toEmail, "support@acme.test");
+  });
+
+  test("agency not found → null", async () => {
+    const target = await resolveAgencyNotifyTarget(AGENCY_ID, makeTargetDeps({
+      getAgencyRow: async () => null,
+    }));
+    assert.equal(target, null);
+  });
+
+  test("a throwing dep → null (fail-soft, never throws)", async () => {
+    const target = await resolveAgencyNotifyTarget(AGENCY_ID, makeTargetDeps({
+      getAgencyRow: async () => {
+        throw new Error("db down");
+      },
+    }));
+    assert.equal(target, null);
+  });
+});
+
+// ─── 2026-07-08 opus-review follow-up (item 2): the DB body of
+// resolveCappedTurnReply, DI-faked end-state assertions ──────────────────
+
+describe("resolveCappedTurnReplyWithDeps — end states of the capped-turn notify path", () => {
+  const NOW = new Date("2026-07-08T12:00:00Z");
+  const ORG_ID = "org-1";
+
+  function makeReplyDeps(over: Partial<CappedTurnReplyDeps> = {}): CappedTurnReplyDeps {
+    return {
+      loadCap: async () => cap(),
+      getEstCostCentsForOrg: async () => 0,
+      getOrgSummary: async () => ({
+        name: "Acme Plumbing",
+        slug: "acme-plumbing",
+        parentAgencyId: "agency-1",
+        settings: { usageCap: { monthlyEstCostCentsCap: 1000, mode: "notify" } },
+      }),
+      resolveAgencyNotifyTarget: async () => ({ agencyName: "Acme Agency", toEmail: "owner@acme.test" }),
+      sendAlert: async () => {},
+      markNotified: async () => {},
+      now: () => NOW,
+      ...over,
+    };
+  }
+
+  test("no cap set → default holding reply, no alert, no mark", async () => {
+    let sent = 0;
+    let marked = 0;
+    const reply = await resolveCappedTurnReplyWithDeps(ORG_ID, makeReplyDeps({
+      loadCap: async () => null,
+      sendAlert: async () => {
+        sent += 1;
+      },
+      markNotified: async () => {
+        marked += 1;
+      },
+    }));
+    assert.equal(reply, DEFAULT_USAGE_CAP_HOLDING_REPLY);
+    assert.equal(sent, 0);
+    assert.equal(marked, 0);
+  });
+
+  test("custom holdingReply is returned to the customer", async () => {
+    const reply = await resolveCappedTurnReplyWithDeps(ORG_ID, makeReplyDeps({
+      loadCap: async () => cap({ holdingReply: "We'll text you back within the hour." }),
+    }));
+    assert.equal(reply, "We'll text you back within the hour.");
+  });
+
+  test("breached + never notified → alert sent ONCE with the right params, lastNotifiedPeriod written", async () => {
+    const sentParams: unknown[] = [];
+    let markedSettings: Record<string, unknown> | null = null;
+    let markedPeriod: string | null = null;
+
+    const reply = await resolveCappedTurnReplyWithDeps(ORG_ID, makeReplyDeps({
+      getEstCostCentsForOrg: async () => 1500,
+      sendAlert: async (p) => {
+        sentParams.push(p);
+      },
+      markNotified: async (_orgId, settings, periodKey) => {
+        markedSettings = settings;
+        markedPeriod = periodKey;
+      },
+    }));
+
+    assert.equal(reply, DEFAULT_USAGE_CAP_HOLDING_REPLY);
+    assert.equal(sentParams.length, 1);
+    const p = sentParams[0] as { toEmail: string; clientName: string; estCostCents: number; capCents: number };
+    assert.equal(p.toEmail, "owner@acme.test");
+    assert.equal(p.clientName, "Acme Plumbing");
+    assert.equal(p.estCostCents, 1500);
+    assert.equal(p.capCents, 1000);
+    assert.equal(markedPeriod, "2026-07");
+    const written = (markedSettings as unknown as { usageCap: { lastNotifiedPeriod: string } }).usageCap;
+    assert.equal(written.lastNotifiedPeriod, "2026-07");
+  });
+
+  test("breached but already notified THIS period → no alert, no re-mark (idempotent)", async () => {
+    let sent = 0;
+    let marked = 0;
+    await resolveCappedTurnReplyWithDeps(ORG_ID, makeReplyDeps({
+      loadCap: async () => cap({ lastNotifiedPeriod: "2026-07" }),
+      getEstCostCentsForOrg: async () => 1500,
+      sendAlert: async () => {
+        sent += 1;
+      },
+      markNotified: async () => {
+        marked += 1;
+      },
+    }));
+    assert.equal(sent, 0);
+    assert.equal(marked, 0);
+  });
+
+  test("under cap → no alert", async () => {
+    let sent = 0;
+    await resolveCappedTurnReplyWithDeps(ORG_ID, makeReplyDeps({
+      getEstCostCentsForOrg: async () => 500,
+      sendAlert: async () => {
+        sent += 1;
+      },
+    }));
+    assert.equal(sent, 0);
+  });
+
+  test("no notify email resolvable → reply still returned, nothing sent or marked", async () => {
+    let sent = 0;
+    let marked = 0;
+    const reply = await resolveCappedTurnReplyWithDeps(ORG_ID, makeReplyDeps({
+      getEstCostCentsForOrg: async () => 1500,
+      resolveAgencyNotifyTarget: async () => ({ agencyName: "Acme Agency", toEmail: null }),
+      sendAlert: async () => {
+        sent += 1;
+      },
+      markNotified: async () => {
+        marked += 1;
+      },
+    }));
+    assert.equal(reply, DEFAULT_USAGE_CAP_HOLDING_REPLY);
+    assert.equal(sent, 0);
+    assert.equal(marked, 0);
+  });
+
+  test("sendAlert throws → fail-soft: reply still returned AND lastNotifiedPeriod NOT written (retry next turn)", async () => {
+    let marked = 0;
+    const reply = await resolveCappedTurnReplyWithDeps(ORG_ID, makeReplyDeps({
+      getEstCostCentsForOrg: async () => 1500,
+      sendAlert: async () => {
+        throw new Error("resend down");
+      },
+      markNotified: async () => {
+        marked += 1;
+      },
+    }));
+    assert.equal(reply, DEFAULT_USAGE_CAP_HOLDING_REPLY);
+    assert.equal(marked, 0);
+  });
+
+  test("loadCap throws → fail-soft to the default holding reply", async () => {
+    const reply = await resolveCappedTurnReplyWithDeps(ORG_ID, makeReplyDeps({
+      loadCap: async () => {
+        throw new Error("db down");
+      },
+    }));
+    assert.equal(reply, DEFAULT_USAGE_CAP_HOLDING_REPLY);
+  });
+
+  test("getEstCostCentsForOrg throws → notify is skipped but the reply (incl. custom copy) still returns", async () => {
+    let sent = 0;
+    const reply = await resolveCappedTurnReplyWithDeps(ORG_ID, makeReplyDeps({
+      loadCap: async () => cap({ holdingReply: "Back shortly!" }),
+      getEstCostCentsForOrg: async () => {
+        throw new Error("db timeout");
+      },
+      sendAlert: async () => {
+        sent += 1;
+      },
+    }));
+    assert.equal(reply, "Back shortly!");
+    assert.equal(sent, 0);
+  });
+
+  test("org summary missing or unattached (no parentAgencyId) → no alert, reply returned", async () => {
+    let sent = 0;
+    const reply = await resolveCappedTurnReplyWithDeps(ORG_ID, makeReplyDeps({
+      getEstCostCentsForOrg: async () => 1500,
+      getOrgSummary: async () => ({
+        name: "Acme Plumbing",
+        slug: "acme-plumbing",
+        parentAgencyId: null,
+        settings: {},
+      }),
+      sendAlert: async () => {
+        sent += 1;
+      },
+    }));
+    assert.equal(sent, 0);
+    assert.equal(reply, DEFAULT_USAGE_CAP_HOLDING_REPLY);
+  });
+
+  test("two sequential capped turns: the mark from turn 1 suppresses the send on turn 2 (once per period end-to-end)", async () => {
+    // Mutable fake store — the same thing the DB row does in production.
+    let stored = cap();
+    let sent = 0;
+    const deps = makeReplyDeps({
+      loadCap: async () => stored,
+      getEstCostCentsForOrg: async () => 1500,
+      sendAlert: async () => {
+        sent += 1;
+      },
+      markNotified: async (_orgId, settings) => {
+        const written = (settings as { usageCap: UsageCap }).usageCap;
+        stored = { ...written };
+      },
+    });
+
+    await resolveCappedTurnReplyWithDeps(ORG_ID, deps);
+    await resolveCappedTurnReplyWithDeps(ORG_ID, deps);
+    assert.equal(sent, 1);
   });
 });

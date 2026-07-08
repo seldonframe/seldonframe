@@ -69,11 +69,15 @@ export function isCountableClientSubAccount(
 }
 
 /**
- * Count CLIENT sub-accounts attached to agencies owned by `userId` —
- * see isCountableClientSubAccount for the exact predicate this SQL
- * encodes.
+ * The countable CLIENT sub-account org ids for `userId` — the ONE live
+ * query encoding isCountableClientSubAccount (agencies owned by the
+ * user → attached orgs, unarchived, ownerId distinct from the user).
+ * The billing cap counts these (countClientSubAccountsForOwner); the
+ * usage rollup (lib/billing/usage-rollup.ts) groups by them. Both go
+ * through here so the WHERE clause can't drift between them
+ * (2026-07-08 opus-review follow-up, item 3).
  *
- * This is a SEPARATE counting query from
+ * This is a SEPARATE query from
  * lib/billing/orgs.ts::fetchAgencyAttachedWorkspaceIds (org listing /
  * branding rollup — unchanged, other callers keep its original
  * semantics). Real DB implementation; the pure predicate above is
@@ -83,15 +87,15 @@ export function isCountableClientSubAccount(
  * its own DI boundary, e.g. provisionClientWorkspaceForDeployment's
  * `enforceSubAccountCap` dep).
  */
-export async function countClientSubAccountsForOwner(userId: string): Promise<number> {
-  if (!isUuidShape(userId)) return 0;
+export async function listCountableClientSubAccountOrgIds(userId: string): Promise<string[]> {
+  if (!isUuidShape(userId)) return [];
 
   const ownedAgencies = await db
     .select({ id: partnerAgencies.id })
     .from(partnerAgencies)
     .where(eq(partnerAgencies.ownerUserId, userId));
 
-  if (ownedAgencies.length === 0) return 0;
+  if (ownedAgencies.length === 0) return [];
 
   const agencyIds = ownedAgencies.map((a) => a.id);
 
@@ -106,7 +110,15 @@ export async function countClientSubAccountsForOwner(userId: string): Promise<nu
       ),
     );
 
-  return attached.length;
+  return attached.map((o) => o.id);
+}
+
+/**
+ * Count CLIENT sub-accounts attached to agencies owned by `userId` —
+ * see isCountableClientSubAccount for the exact predicate.
+ */
+export async function countClientSubAccountsForOwner(userId: string): Promise<number> {
+  return (await listCountableClientSubAccountOrgIds(userId)).length;
 }
 
 // ─── 2026-07-08 second post-review fix wave (item #5, non-blocking) ───

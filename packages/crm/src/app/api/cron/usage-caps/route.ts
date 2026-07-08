@@ -10,8 +10,8 @@
 
 import { and, eq, gte, sql } from "drizzle-orm";
 import { db } from "@/db";
-import { agentConversations, organizations, partnerAgencies, users } from "@/db/schema";
-import { checkUsageCapBreaches, type CapCandidateOrg } from "@/lib/billing/usage-cap";
+import { agentConversations, organizations, partnerAgencies } from "@/db/schema";
+import { checkUsageCapBreaches, resolveAgencyNotifyTarget, type CapCandidateOrg } from "@/lib/billing/usage-cap";
 import { sendUsageCapAlert } from "@/lib/notifications/ops-notifications";
 
 export const runtime = "nodejs";
@@ -75,24 +75,11 @@ async function getEstCostCentsForOrg(orgId: string, periodStart: Date): Promise<
   return Number(row?.total ?? 0);
 }
 
+// Owner-email chain (incl. the workspace-owned-agency fallback) is shared
+// with the capped-turn notify path — usage-cap.ts::resolveAgencyNotifyTarget.
 async function resolveAgencyOwnerEmail(agencyId: string): Promise<string | null> {
-  const [agency] = await db
-    .select({ ownerUserId: partnerAgencies.ownerUserId, supportEmail: partnerAgencies.supportEmail })
-    .from(partnerAgencies)
-    .where(eq(partnerAgencies.id, agencyId))
-    .limit(1);
-  if (!agency) return null;
-
-  if (agency.ownerUserId) {
-    const [owner] = await db
-      .select({ email: users.email })
-      .from(users)
-      .where(eq(users.id, agency.ownerUserId))
-      .limit(1);
-    if (owner?.email) return owner.email;
-  }
-
-  return agency.supportEmail ?? null;
+  const target = await resolveAgencyNotifyTarget(agencyId);
+  return target?.toEmail ?? null;
 }
 
 async function resolveAgencyName(agencyId: string): Promise<string | null> {
