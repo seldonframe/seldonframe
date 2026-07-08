@@ -19,6 +19,12 @@ Design: docs/superpowers/specs/2026-07-08-ghl-seo-engine-design.md
 - [x] F. Verify: 159/159 seo specs ✓ · tsc-delta 0 (436→436, none in our files) ✓ · use-server clean ✓ · regression grep clean after rebase onto 231653b7e ✓ · opus reviewer verdict SHIP (0 blocking; mojibake + llms casing fixed in b4663b702) · local `next build` NOT runnable in this env (pre-existing `workflow/next` missing locally — Vercel installs it; the pushed branch's Vercel preview is the real build gate)
 - [x] G. Review section + memory update
 
+Wave 2 (Max's correction, same day): first-person /compare/seldonframe-vs-<slug> for all
+25 competitors (flagship template + 25 .md twins + composed non-duplicate intros), footer
+Compare/Free-tools mesh on marketing + marketplace footers, /alternatives hub chip row,
+third-party vs-page FAQ/JSON-LD enrichment. 211 seo tests green; 2nd opus review READY
+0-blocking; pushed through 84d34f34e.
+
 Review (2026-07-08): SHIPPED to origin/feature/ghl-seo-engine (567873f4c..b4663b702,
 rebased onto 231653b7e). 94 files, ~5k lines, all additive static SEO surface:
 11 gohighlevel-vs-X head-to-heads (10 new competitors in the registries),
