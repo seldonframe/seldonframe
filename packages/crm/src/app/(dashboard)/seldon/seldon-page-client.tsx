@@ -53,7 +53,11 @@ type SeldonUsageInfo = {
   meteredUsed: number;
   byokUsed: number;
   totalThisMonth: number;
-  mode: "byok" | "included" | "metered";
+  // 2026-07-08 — AIClientMode (lib/ai/client.ts) gained "capped" (the
+  // per-sub-account usage-meter pause branch, resolveRuntimeAiClient-only —
+  // getSeldonUsageStats/getAIClient never return it). Widened here so this
+  // display type stays structurally assignable to SeldonUsageStats.
+  mode: "byok" | "included" | "metered" | "capped";
 };
 
 const initialState: SeldonRunState = { ok: false };

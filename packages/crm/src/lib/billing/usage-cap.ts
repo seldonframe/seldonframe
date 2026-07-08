@@ -16,8 +16,8 @@
 // pure breach/notify-idempotency predicate; Task 4 wires it into the runtime.
 
 import { db } from "@/db";
-import { organizations, partnerAgencies } from "@/db/schema";
-import { eq } from "drizzle-orm";
+import { agentConversations, organizations, partnerAgencies } from "@/db/schema";
+import { and, eq, gte, sql } from "drizzle-orm";
 
 export type UsageCapMode = "notify" | "pause";
 
@@ -190,6 +190,108 @@ export async function authorizeUsageCapSetterForOrg(params: {
     return callerAgencyId === targetParentAgencyId;
   } catch {
     return false;
+  }
+}
+
+/** The default holding reply the capped runtime path sends when the agency
+ *  hasn't configured a custom one (spec D5 — "Thanks for reaching out...").
+ *  NEVER a silent drop: this string is what the customer actually sees. */
+export const DEFAULT_USAGE_CAP_HOLDING_REPLY =
+  "Thanks for reaching out — we've noted your message and will get back to you shortly.";
+
+/** Pure: resolve the actual holding-reply text for a capped turn. Operator
+ *  override wins when set and non-blank; otherwise the default copy. */
+export function resolveCappedHoldingReply(holdingReply: string | null | undefined): string {
+  const trimmed = holdingReply?.trim();
+  return trimmed && trimmed.length > 0 ? trimmed : DEFAULT_USAGE_CAP_HOLDING_REPLY;
+}
+
+/** Resolve the holding reply for a capped turn AND best-effort fire the T3
+ *  notify (once per period). Single entry point for the runtime's capped
+ *  branch (lib/agents/runtime.ts) so all the DB reads for "load the cap,
+ *  compute this period's spend, evaluate breach, resolve the agency owner's
+ *  email, send + mark notified" live in ONE place rather than duplicated
+ *  inline in the runtime. Fail-soft throughout — any error degrades to just
+ *  returning the default holding reply text; the notify is always
+ *  best-effort and never blocks the reply. */
+export async function resolveCappedTurnReply(orgId: string): Promise<string> {
+  try {
+    const cap = await loadUsageCapForOrg(orgId);
+    const reply = resolveCappedHoldingReply(cap?.holdingReply ?? null);
+    if (!cap) return reply;
+
+    try {
+      const now = new Date();
+      const periodKey = periodKeyUtc(now);
+      const periodStart = new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), 1));
+
+      const [row] = await db
+        .select({ total: sql<number>`coalesce(sum(${agentConversations.llmCostCents}), 0)::int` })
+        .from(agentConversations)
+        .where(and(eq(agentConversations.orgId, orgId), gte(agentConversations.startedAt, periodStart)));
+      const estCostCents = Number(row?.total ?? 0);
+      const evaluation = evaluateUsageCap({ cap, estCostCents, periodKey });
+      if (!evaluation.shouldNotify) return reply;
+
+      const [orgRow] = await db
+        .select({
+          name: organizations.name,
+          slug: organizations.slug,
+          parentAgencyId: organizations.parentAgencyId,
+          settings: organizations.settings,
+        })
+        .from(organizations)
+        .where(eq(organizations.id, orgId))
+        .limit(1);
+      if (!orgRow?.parentAgencyId) return reply;
+
+      const [agencyRow] = await db
+        .select({ name: partnerAgencies.name, ownerUserId: partnerAgencies.ownerUserId, supportEmail: partnerAgencies.supportEmail })
+        .from(partnerAgencies)
+        .where(eq(partnerAgencies.id, orgRow.parentAgencyId))
+        .limit(1);
+      if (!agencyRow) return reply;
+
+      let toEmail: string | null = agencyRow.supportEmail ?? null;
+      if (agencyRow.ownerUserId) {
+        const { users } = await import("@/db/schema");
+        const [ownerRow] = await db
+          .select({ email: users.email })
+          .from(users)
+          .where(eq(users.id, agencyRow.ownerUserId))
+          .limit(1);
+        if (ownerRow?.email) toEmail = ownerRow.email;
+      }
+      if (!toEmail) return reply;
+
+      const { sendUsageCapAlert } = await import("@/lib/notifications/ops-notifications");
+      await sendUsageCapAlert({
+        agencyName: agencyRow.name ?? "Your agency",
+        clientName: orgRow.name,
+        clientOrgSlug: orgRow.slug,
+        estCostCents,
+        capCents: cap.monthlyEstCostCentsCap,
+        mode: cap.mode,
+        toEmail,
+      });
+
+      const settingsObj = (orgRow.settings ?? {}) as Record<string, unknown>;
+      await db
+        .update(organizations)
+        .set({ settings: { ...settingsObj, usageCap: { ...cap, lastNotifiedPeriod: periodKey } }, updatedAt: new Date() })
+        .where(eq(organizations.id, orgId));
+    } catch (notifyErr) {
+      console.warn(
+        `[usage-cap] resolveCappedTurnReply_notify_failed orgId=${orgId} err=${notifyErr instanceof Error ? notifyErr.message : String(notifyErr)}`,
+      );
+    }
+
+    return reply;
+  } catch (err) {
+    console.warn(
+      `[usage-cap] resolveCappedTurnReply_failed orgId=${orgId} err=${err instanceof Error ? err.message : String(err)}`,
+    );
+    return DEFAULT_USAGE_CAP_HOLDING_REPLY;
   }
 }
 

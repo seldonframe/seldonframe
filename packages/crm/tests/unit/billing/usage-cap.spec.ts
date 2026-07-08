@@ -22,6 +22,8 @@ import {
   authorizeUsageCapSetter,
   authorizeUsageCapSetterForOrg,
   checkUsageCapBreaches,
+  resolveCappedHoldingReply,
+  DEFAULT_USAGE_CAP_HOLDING_REPLY,
   type UsageCap,
   type CapCandidateOrg,
   type UsageCapSweepDeps,
@@ -266,6 +268,25 @@ describe("authorizeUsageCapSetterForOrg — the org-scoped Studio-action guard",
       },
     });
     assert.equal(result, false);
+  });
+});
+
+describe("resolveCappedHoldingReply — the never-silent-drop copy (spec D5)", () => {
+  test("operator override, when set and non-blank, wins", () => {
+    assert.equal(resolveCappedHoldingReply("Be right with you!"), "Be right with you!");
+  });
+
+  test("null → the default copy", () => {
+    assert.equal(resolveCappedHoldingReply(null), DEFAULT_USAGE_CAP_HOLDING_REPLY);
+  });
+
+  test("undefined → the default copy", () => {
+    assert.equal(resolveCappedHoldingReply(undefined), DEFAULT_USAGE_CAP_HOLDING_REPLY);
+  });
+
+  test("blank/whitespace-only override → falls back to the default (never sends an empty message)", () => {
+    assert.equal(resolveCappedHoldingReply("   "), DEFAULT_USAGE_CAP_HOLDING_REPLY);
+    assert.equal(resolveCappedHoldingReply(""), DEFAULT_USAGE_CAP_HOLDING_REPLY);
   });
 });
 
