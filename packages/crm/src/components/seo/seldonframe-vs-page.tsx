@@ -34,6 +34,17 @@ import {
   DEMO_HREF,
 } from "@/lib/seo/alternative-pages-extras";
 
+/** Distinct intro paragraphs for the vs family — composed from registry facts,
+ *  NOT c.intro (the /alternative-to page owns those verbatim), so the two
+ *  indexable pages per competitor never share body copy (near-duplicate
+ *  hygiene). Pure + exported for the Markdown twin and unit tests. */
+export function composeSeldonframeVsIntro(c: Competitor): [string, string] {
+  return [
+    `${c.name} and SeldonFrame usually end up on the same shortlist for different reasons. ${c.oneLiner} SeldonFrame comes at the same problem from the other direction: one flat $29/mo workspace where the AI receptionist, website, CRM, booking calendar and intake forms arrive pre-wired — generated from a single conversation in about 3 minutes.`,
+    `${c.whenTheyWin} SeldonFrame's case is the opposite one: when the outcome you're buying is answered calls, qualified leads and jobs booked into a CRM you own, that whole front office ships on day one and the economics stay flat as you grow. The rest of this page walks the differences row by row — pricing model, the AI receptionist, the business system behind it, whitelabel, and what switching actually takes.`,
+  ];
+}
+
 /** Compose the two extra FAQ items unique to the SeldonFrame-vs-X template
  *  (on top of the competitor's own faq[] + SHARED_FAQ). Pure + exported so it
  *  can be unit-tested and reused by the Markdown twin. */
@@ -54,7 +65,8 @@ export function SeldonFrameVsPage({ competitor }: { competitor: Competitor }): R
   const c = competitor;
   const x = getExtras(c.slug);
   const faq = [...c.faq, ...composeSeldonframeVsFaq(c), ...SHARED_FAQ];
-  const h1 = `SeldonFrame vs ${c.name}: Which Should You Choose? (2026)`;
+  const year = LAST_UPDATED.split(" ").pop() ?? "2026";
+  const h1 = `SeldonFrame vs ${c.name}: Which Should You Choose? (${year})`;
 
   const others = COMPETITORS.filter((o) => o.slug !== c.slug);
   const sameCategory = others.filter((o) => o.category === c.category);
@@ -116,9 +128,9 @@ export function SeldonFrameVsPage({ competitor }: { competitor: Competitor }): R
           <p style={{ margin: "16px 0 0", fontSize: 18.5, lineHeight: 1.5, color: "rgba(34,29,23,0.7)", maxWidth: 700 }}>{c.heroSub}</p>
         </header>
 
-        {/* ── HONEST INTRO ── */}
+        {/* ── HONEST INTRO (composed for the vs family — see composeSeldonframeVsIntro) ── */}
         <section style={{ padding: "34px 0 8px" }}>
-          {c.intro.map((para, i) => (
+          {composeSeldonframeVsIntro(c).map((para, i) => (
             <p key={i} style={{ margin: "0 0 16px", fontSize: 16.5, lineHeight: 1.65, color: "rgba(34,29,23,0.78)", maxWidth: 760 }}>
               {para}
             </p>

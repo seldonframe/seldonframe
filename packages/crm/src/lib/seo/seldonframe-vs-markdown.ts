@@ -12,7 +12,7 @@ import {
   type Competitor,
 } from "@/lib/seo/alternative-pages";
 import { getExtras, SF_PROS, SF_CONS, SWITCH_STEPS, DEMO_HREF } from "@/lib/seo/alternative-pages-extras";
-import { composeSeldonframeVsFaq } from "@/components/seo/seldonframe-vs-page";
+import { composeSeldonframeVsFaq, composeSeldonframeVsIntro } from "@/components/seo/seldonframe-vs-page";
 
 const BASE = "https://seldonframe.com";
 
@@ -21,7 +21,7 @@ export function renderSeldonframeVsMarkdown(c: Competitor): string {
   const faq = [...c.faq, ...composeSeldonframeVsFaq(c), ...SHARED_FAQ];
   const L: string[] = [];
 
-  L.push(`# SeldonFrame vs ${c.name}: Which Should You Choose? (2026)`);
+  L.push(`# SeldonFrame vs ${c.name}: Which Should You Choose? (${LAST_UPDATED.split(" ").pop() ?? "2026"})`);
   L.push("");
   L.push(`> ${c.heroSub}`);
   L.push("");
@@ -29,7 +29,7 @@ export function renderSeldonframeVsMarkdown(c: Competitor): string {
   L.push("");
   L.push(`## SeldonFrame vs ${c.name}: what you need to know`);
   L.push("");
-  for (const p of c.intro) {
+  for (const p of composeSeldonframeVsIntro(c)) {
     L.push(p);
     L.push("");
   }
