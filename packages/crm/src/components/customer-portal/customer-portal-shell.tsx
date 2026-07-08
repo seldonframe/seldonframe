@@ -40,6 +40,8 @@ export type CustomerPortalShellProps = {
   customerEmail: string | null;
   /** Sign-out form action. */
   signOutAction: () => Promise<void>;
+  /** Autopay console (2026-07-08, Task 3) — flag-gated Billing nav tab. */
+  showBilling?: boolean;
   /** Page content. */
   children: ReactNode;
 };
@@ -51,6 +53,7 @@ export function CustomerPortalShell({
   branding,
   customerEmail,
   signOutAction,
+  showBilling = false,
   children,
 }: CustomerPortalShellProps) {
   // Light-mode override — customer portal is always light per design
@@ -136,6 +139,7 @@ export function CustomerPortalShell({
           orgSlug={orgSlug}
           customerEmail={customerEmail}
           signOutAction={signOutAction}
+          showBilling={showBilling}
         />
 
         <div className="flex flex-1">
