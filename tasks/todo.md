@@ -7,6 +7,38 @@ with a checkable plan, gets ticked off as it ships, and ends with a review block
 
 ## In flight
 
+### Task — Retainer sibling-recovery period narrowing (2026-07-08, money-review follow-up, worktree hungry-jang-c20e73)
+
+Fix from the autopay-console money review: `findOutstandingFailedForSubscriptionReal` matched ANY
+outstanding failed retainer row on the subscription, so a month-2 invoice.paid stamped
+`resolvedByLaterPayment` on a genuinely-unpaid month-1 failed row — silently killing its dunning
+signal. Notify-only impact, but the agency loses "month 1 was never collected".
+
+- [x] Merge `feature/autopay-console` into the worktree branch (was not on main)
+- [x] RED: 7 new tests in `connect-webhook-cycles.spec.ts` (periods on the decision · period stamp in
+      metadata at write time · next-period paid must NOT stamp prior-period failed · same-period
+      sibling still does · legacy row w/o period stamp fails open · same-period picked over prior)
+- [x] GREEN: decision carries `periodStart/periodEnd` (invoice.period_start/end) · apply stamps them
+      into row metadata · dep returns ALL candidates (array) and the apply layer picks the first
+      same-or-newer-period one via `siblingCoversSameOrNewerPeriod` (prior = periodEnd <= paidStart;
+      contiguous months → `<=`) · same-invoice-id recovery path untouched
+- [x] Gate: payments specs 71/71 ✓ · tsc 9 = baseline ✓ · wide sweep 7992 tests / 84 fails, ALL in
+      the 10 known env-dependent spec files (activation·analytics·build-mcp·chatgpt·marketplace-mcp·
+      seldon-chat·web-build-stream), zero in payments — none attributable
+- [x] Independent reviewer (subagent): verdict SHIP, 0 blocking; its one actionable nit (no pin on
+      the incoming-invoice-missing-period fail-open branch) added as a 24th test
+
+**Review:** Fix is 2 files. `decideRetainerCycleFromInvoiceEvent` carries `periodStart/periodEnd`;
+`applyRetainerInvoiceCycle` stamps them into metadata at write time and the sibling recovery only
+resolves same-or-newer-period failed rows (`siblingCoversSameOrNewerPeriod`: prior =
+`periodEnd <= paidPeriodStart`, contiguous-month boundary correct). The dep seam now returns ALL
+candidates so the apply layer owns the money semantics (query stays a dumb fetch) — this also makes
+"pick the same-period sibling over the prior-period one" work when both are outstanding. Fail-open
+on missing period info (legacy/degenerate) is deliberate: notify-only blast radius, and the worse
+failure is dunning a paid client. Same-invoice-id recovery untouched per the review directive.
+NOTE: `feature/autopay-console` is still NOT on main — it's merged into worktree branch
+`claude/hungry-jang-c20e73` together with this fix; merge to main is Max's gate.
+
 ### Task — GHL-intercept SEO/GEO engine (2026-07-08, branch feature/ghl-seo-engine)
 
 Design: docs/superpowers/specs/2026-07-08-ghl-seo-engine-design.md

@@ -73,6 +73,13 @@ export type RetainerCycleDecision =
        *  partially-applied balance). Surfaced so the agency's revenue
        *  picture isn't silently wrong about a short payment. */
       partial: boolean;
+      /** The invoice's billing period (unix seconds), stamped into the row's
+       *  metadata at write time and read back by the sibling-recovery period
+       *  narrowing (2026-07-08 money-review follow-up): a month-2 success must
+       *  never resolve a month-1 failed row. Null when Stripe omits the field
+       *  (degenerate — the narrowing then fails open to the old behavior). */
+      periodStart: number | null;
+      periodEnd: number | null;
     }
   | { action: "skip"; reason: string };
 
@@ -98,6 +105,8 @@ export function decideRetainerCycleFromInvoiceEvent(event: Stripe.Event): Retain
 
   const currency = (invoice.currency ?? "usd").toUpperCase();
   const hostedInvoiceUrl = invoice.hosted_invoice_url ?? null;
+  const periodStart = typeof invoice.period_start === "number" ? invoice.period_start : null;
+  const periodEnd = typeof invoice.period_end === "number" ? invoice.period_end : null;
 
   if (event.type === "invoice.paid") {
     // Prefer amount_paid ONLY when it's actually positive — a zero/absent
@@ -119,6 +128,8 @@ export function decideRetainerCycleFromInvoiceEvent(event: Stripe.Event): Retain
       currency,
       hostedInvoiceUrl,
       partial,
+      periodStart,
+      periodEnd,
     };
   }
 
@@ -132,6 +143,8 @@ export function decideRetainerCycleFromInvoiceEvent(event: Stripe.Event): Retain
     currency,
     hostedInvoiceUrl,
     partial: false,
+    periodStart,
+    periodEnd,
   };
 }
 
@@ -151,14 +164,16 @@ export type RetainerInvoiceCycleDeps = {
    *  so the caller can tell "already recorded, nothing to do" apart from
    *  "recorded as FAILED, this invoice.paid is a RECOVERY". */
   findExistingBySourceId: (sourceId: string) => Promise<ExistingPaymentRecordRow | null>;
-  /** Find an OUTSTANDING (status:"failed", not yet resolvedByLaterPayment)
-   *  payment_records row for this subscription whose stripeInvoiceId is
+  /** Find ALL OUTSTANDING (status:"failed", not yet resolvedByLaterPayment)
+   *  payment_records rows for this subscription whose stripeInvoiceId is
    *  DIFFERENT from the one on the incoming event — the sibling-invoice
-   *  recovery case. Null → none. */
+   *  recovery CANDIDATES, newest first. The apply layer (not this query)
+   *  decides which one — if any — the payment actually resolves, by
+   *  comparing billing periods. Empty array → none. */
   findOutstandingFailedForSubscription: (
     subscriptionId: string,
     excludingStripeInvoiceId: string,
-  ) => Promise<OutstandingFailedSiblingRow | null>;
+  ) => Promise<OutstandingFailedSiblingRow[]>;
   /** Resolve the agency org + contact that own this subscription, via the
    *  proposal it was created from. Null → unknown subscription (fail-soft skip). */
   resolveProposalBySubscriptionId: (
@@ -193,7 +208,16 @@ export type RetainerInvoiceCycleResult =
  *  stamp `metadata.resolvedByLaterPayment = true` on the failed row so the
  *  dunning cron (dunning.ts's `resolved_by_later_payment` guard) stops
  *  emailing a client who already paid. Without this, dunning notifies
- *  forever. */
+ *  forever.
+ *
+ *  PERIOD NARROWING (2026-07-08 money-review follow-up): the sibling case
+ *  only resolves failed rows covering the SAME-or-NEWER billing period as
+ *  the paid invoice. Without this, a month-2 success would stamp a
+ *  genuinely-unpaid month-1 failed row and the agency silently loses the
+ *  "month 1 was never collected" signal. Rows written before periods were
+ *  stamped (no metadata.periodStart/periodEnd) fail OPEN to the old
+ *  behavior — that window predates launch and the worse failure there is
+ *  dunning a client who already paid. */
 export async function applyRetainerInvoiceCycle(
   event: Stripe.Event,
   deps: RetainerInvoiceCycleDeps,
@@ -248,6 +272,10 @@ export async function applyRetainerInvoiceCycle(
     if (decision.status === "completed" && decision.partial) {
       metadata.partial = true;
     }
+    // Billing period stamp — what the sibling-recovery period narrowing
+    // reads back on a later invoice.paid for this subscription.
+    if (decision.periodStart != null) metadata.periodStart = decision.periodStart;
+    if (decision.periodEnd != null) metadata.periodEnd = decision.periodEnd;
 
     await deps.insertPaymentRecord({
       orgId: resolved.agencyOrgId,
@@ -266,9 +294,13 @@ export async function applyRetainerInvoiceCycle(
     // RECOVERY (sibling invoice id): this NEW invoice recorded successfully —
     // if an OUTSTANDING failed row exists for a DIFFERENT invoice id on the
     // same subscription, Stripe issued a replacement invoice rather than
-    // re-firing the original. Stamp the sibling so dunning stops chasing it.
+    // re-firing the original. Stamp the sibling so dunning stops chasing it —
+    // but ONLY a sibling covering the same-or-newer billing period (see the
+    // PERIOD NARROWING note above): a next-period success never resolves a
+    // prior period's uncollected failure.
     if (decision.status === "completed") {
-      const sibling = await deps.findOutstandingFailedForSubscription(decision.subscriptionId, decision.stripeInvoiceId);
+      const candidates = await deps.findOutstandingFailedForSubscription(decision.subscriptionId, decision.stripeInvoiceId);
+      const sibling = candidates.find((row) => siblingCoversSameOrNewerPeriod(row.metadata, decision.periodStart));
       if (sibling) {
         await deps.updatePaymentRecord(sibling.id, {
           metadata: { ...sibling.metadata, resolvedByLaterPayment: true, resolvedAt: new Date().toISOString() },
@@ -285,6 +317,25 @@ export async function applyRetainerInvoiceCycle(
   }
 }
 
+/** Is this outstanding failed row resolvable by a payment whose billing
+ *  period starts at `paidPeriodStart` (unix seconds)? True unless the row
+ *  provably covers a STRICTLY-PRIOR period — `periodEnd <= paidPeriodStart`
+ *  (contiguous months: month 1's end IS month 2's start, so <= not <).
+ *  Missing period info on either side fails OPEN (resolvable): those are
+ *  pre-launch legacy rows or degenerate Stripe shapes, and the worse failure
+ *  there is dunning a client who already paid. */
+function siblingCoversSameOrNewerPeriod(
+  metadata: Record<string, unknown>,
+  paidPeriodStart: number | null,
+): boolean {
+  if (paidPeriodStart == null) return true;
+  const end = typeof metadata.periodEnd === "number" ? metadata.periodEnd : null;
+  if (end != null) return end > paidPeriodStart;
+  const start = typeof metadata.periodStart === "number" ? metadata.periodStart : null;
+  if (start != null) return start >= paidPeriodStart;
+  return true;
+}
+
 // ── Production deps — real DB reads/writes, wired by the webhook route ──────
 
 async function findExistingBySourceIdReal(sourceId: string): Promise<ExistingPaymentRecordRow | null> {
@@ -297,16 +348,18 @@ async function findExistingBySourceIdReal(sourceId: string): Promise<ExistingPay
   return { id: row.id, status: row.status, metadata: (row.metadata as Record<string, unknown>) ?? {} };
 }
 
-/** Find an OUTSTANDING (status:"failed", not yet resolvedByLaterPayment)
- *  retainer row for this subscription whose sourceId (stripeInvoiceId) is
- *  DIFFERENT from the one on the incoming event. The subscription id lives
- *  in metadata.subscriptionId (there's no dedicated column on
- *  payment_records) — matched via a bound jsonb ->> text comparison, never
- *  sql.raw interpolation. */
+/** Find ALL OUTSTANDING (status:"failed", not yet resolvedByLaterPayment)
+ *  retainer rows for this subscription whose sourceId (stripeInvoiceId) is
+ *  DIFFERENT from the one on the incoming event, newest first. The
+ *  subscription id lives in metadata.subscriptionId (there's no dedicated
+ *  column on payment_records) — matched via a bound jsonb ->> text
+ *  comparison, never sql.raw interpolation. Which candidate a payment
+ *  actually resolves is the apply layer's call (period narrowing) — this
+ *  query stays a dumb candidate fetch. */
 async function findOutstandingFailedForSubscriptionReal(
   subscriptionId: string,
   excludingStripeInvoiceId: string,
-): Promise<OutstandingFailedSiblingRow | null> {
+): Promise<OutstandingFailedSiblingRow[]> {
   const rows = await db
     .select({ id: paymentRecords.id, sourceId: paymentRecords.sourceId, metadata: paymentRecords.metadata })
     .from(paymentRecords)
@@ -319,13 +372,14 @@ async function findOutstandingFailedForSubscriptionReal(
     )
     .orderBy(desc(paymentRecords.createdAt));
 
+  const candidates: OutstandingFailedSiblingRow[] = [];
   for (const row of rows) {
     if (!row.sourceId || row.sourceId === excludingStripeInvoiceId) continue;
     const metadata = (row.metadata as Record<string, unknown>) ?? {};
     if (metadata.resolvedByLaterPayment === true) continue;
-    return { id: row.id, stripeInvoiceId: row.sourceId, metadata };
+    candidates.push({ id: row.id, stripeInvoiceId: row.sourceId, metadata });
   }
-  return null;
+  return candidates;
 }
 
 /** Resolve the agency org + contact for a subscription id via the proposal it
