@@ -1,11 +1,23 @@
 // packages/crm/src/app/pricing/page.tsx
 //
-// 2026-05-17 — Thin Server Component shell. Does two things:
+// 2026-05-17 — Thin Server Component shell. Reads the auth session and
+// branches between two ENTIRELY SEPARATE renderings:
 //
-//   1. Reads the auth session (Server-only API).
-//   2. Renders <PricingShell> (full interactive 2-column layout owns
-//      hero + trust signals + single plan card + sticky CTA) and the
-//      static FAQ accordion below it.
+//   SF_TIER_LADDER OFF (default) — the legacy dark dashboard-chrome
+//     single-card view: <PricingShell> (2-column layout, sticky CTA)
+//     + the shared Accordion FAQ. BYTE-IDENTICAL to the pre-branding-fix
+//     output (tests pin this).
+//
+//   SF_TIER_LADDER ON — 2026-07-08 marketing-branding fix wave. Max's
+//     feedback: the flag-ON view didn't match seldonframe.com's light
+//     cream/paper marketing branding, the CTA hierarchy was unclear, and
+//     the sticky bottom bar overlapped a card button. Renders
+//     <MarketingNav> (reused verbatim from the homepage — self-contained,
+//     no props) + <PricingShellMarketing> (light-themed audience toggle +
+//     tier cards, see that file's header for the full design) + a
+//     restyled-light FAQ (details/summary pattern, matching
+//     marketing-faq-section.tsx's visual language) + <MarketingFooter>
+//     (also reused verbatim). NO sticky bar in this path.
 //
 // 2026-07-04 /pricing truth pass (Task 11): the platform sells exactly
 // ONE plan — $29/mo flat, unlimited workspaces, cancel anytime. The
@@ -26,8 +38,6 @@
 // immediately. No money-back guarantee; "cancel anytime" is the only
 // safety line (a standard Stripe subscription, cancelable from the
 // billing portal).
-//
-// All interactive UI lives in pricing-shell.tsx.
 
 import {
   Accordion,
@@ -37,6 +47,9 @@ import {
 } from "@/components/ui/accordion";
 import { auth } from "@/auth";
 import { PricingShell } from "./pricing-shell";
+import { PricingShellMarketing } from "./pricing-shell-marketing";
+import { MarketingNav } from "@/components/landing/marketing-nav";
+import { MarketingFooter } from "@/components/landing/marketing-footer";
 
 /** SF_TIER_LADDER (2026-07-08) — same strict-"1" contract as the other
  *  dark-by-default flags in lib/web-build/policy.ts (isWinLadderOn,
@@ -76,12 +89,72 @@ export default async function PricingPage({ searchParams }: PricingPageProps) {
   const isAuthed = Boolean(session?.user);
   const tierLadderOn = isTierLadderOn({ SF_TIER_LADDER: process.env.SF_TIER_LADDER });
 
+  if (tierLadderOn) {
+    return (
+      <div data-pricing-page="marketing" className="min-h-screen bg-[#F6F2EA] text-[#221D17]">
+        <MarketingNav />
+        {/* pt-[100px] clears MarketingNav's fixed header — same offset
+            the homepage hero uses (marketing-hero.tsx). */}
+        <main id="main-content" className="pt-[100px]">
+          <PricingShellMarketing isAuthed={isAuthed} />
+
+          {/* FAQ — restyled light (details/summary pattern, matches
+              marketing-faq-section.tsx's visual language) instead of the
+              dark Accordion kit used in the flag-off path. Same FAQS
+              content (the ladder-aware copy) as the legacy page. */}
+          <section
+            id="pricing-faq"
+            aria-labelledby="pricing-faq-heading"
+            className="border-t border-[rgba(34,29,23,.08)] bg-[#F6F2EA] px-5 py-16 md:px-8 md:py-20 lg:px-12"
+          >
+            <div className="mx-auto max-w-[760px]">
+              <div className="text-center">
+                <div className="inline-flex items-center justify-center gap-2.5 text-[12px] font-[600] uppercase tracking-[0.09em] text-[#00897B]">
+                  <span className="h-px w-4 bg-[#00897B] opacity-50" aria-hidden />
+                  FAQ
+                  <span className="h-px w-4 bg-[#00897B] opacity-50" aria-hidden />
+                </div>
+                <h2
+                  id="pricing-faq-heading"
+                  className="mt-3.5 text-[clamp(24px,3.6vw,34px)] font-[500] leading-[1.1] tracking-[-0.02em] text-[#221D17]"
+                >
+                  Frequently asked
+                </h2>
+              </div>
+
+              <div className="mt-8 border-t border-[rgba(34,29,23,.10)]">
+                {FAQS.map((faq) => (
+                  <details key={faq.q} className="group border-b border-[rgba(34,29,23,.10)]">
+                    <summary className="flex cursor-pointer list-none items-center justify-between gap-4 py-5 text-[16px] font-[500] leading-tight tracking-[-0.01em] text-[#221D17] [&::-webkit-details-marker]:hidden">
+                      <span>{faq.q}</span>
+                      <span
+                        aria-hidden
+                        className="relative flex size-[20px] shrink-0 transition-transform duration-[300ms] group-open:rotate-[135deg]"
+                      >
+                        <span className="absolute left-1/2 top-[3px] bottom-[3px] w-[2px] -translate-x-1/2 rounded-sm bg-[#00897B]" />
+                        <span className="absolute top-1/2 left-[3px] right-[3px] h-[2px] -translate-y-1/2 rounded-sm bg-[#00897B]" />
+                      </span>
+                    </summary>
+                    <p className="pb-6 pr-10 text-[14.5px] leading-[1.6] text-[#6E665A] max-w-[64ch]">
+                      {faq.a}
+                    </p>
+                  </details>
+                ))}
+              </div>
+            </div>
+          </section>
+        </main>
+        <MarketingFooter />
+      </div>
+    );
+  }
+
   return (
     <main className="crm-page">
       {/* pb-28 reserves room for the sticky CTA so the last FAQ row
           never hides behind it. */}
       <section className="mx-auto max-w-6xl px-4 pb-28 pt-10 sm:px-6 sm:pt-14">
-        <PricingShell isAuthed={isAuthed} tierLadderOn={tierLadderOn} />
+        <PricingShell isAuthed={isAuthed} />
 
         <div className="mt-16">
           <p className="text-xs font-semibold uppercase tracking-[0.16em] text-muted-foreground">
