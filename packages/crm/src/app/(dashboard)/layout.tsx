@@ -12,6 +12,7 @@ import { Sidebar } from "@/components/layout/sidebar";
 import { CommandPalette } from "@/components/layout/command-palette";
 import { DemoBanner } from "@/components/layout/demo-banner";
 import { TestModeBanner } from "@/components/layout/test-mode-banner";
+import { AgencyKeyBanner } from "@/components/dashboard/agency-key-banner";
 import { DashboardTopbar } from "@/components/layout/dashboard-topbar";
 import { HelpButton } from "@/components/layout/help-button";
 import { SeldonChat } from "@/components/seldon-chat";
@@ -121,7 +122,7 @@ export default async function DashboardLayout({
 
   const [activeOrg, orgMemberCount, effectiveBranding] = orgId
     ? await Promise.all([
-        db.select({ id: organizations.id, name: organizations.name, testMode: organizations.testMode, slug: organizations.slug, settings: organizations.settings, integrations: organizations.integrations }).from(organizations).where(eq(organizations.id, orgId)).limit(1).then((rows) => rows[0] ?? null),
+        db.select({ id: organizations.id, name: organizations.name, testMode: organizations.testMode, slug: organizations.slug, settings: organizations.settings, integrations: organizations.integrations, parentAgencyId: organizations.parentAgencyId, createdAt: organizations.createdAt }).from(organizations).where(eq(organizations.id, orgId)).limit(1).then((rows) => rows[0] ?? null),
         db
           .select({ count: sql<number>`count(*)` })
           .from(users)
@@ -162,6 +163,25 @@ export default async function DashboardLayout({
   // which is voice-only) so this agrees with /conversations and /settings/features.
   // No extra DB round trip — activeOrg.integrations is already selected above.
   const smsLive = hasLiveSms(activeOrg?.integrations);
+
+  // Agency key inheritance advisory banner (2026-07-08 pricing ladder,
+  // Task 5, flag SF_AGENCY_KEY_INHERIT): shown when the ACTIVE org is a
+  // sub-account (parentAgencyId set), has no BYOK Anthropic key of its
+  // own, and is older than the 14-day soft launch window. No extra DB
+  // round trip — activeOrg.integrations/parentAgencyId/createdAt are
+  // already selected above. v1 is advisory-only (never blocks).
+  const agencyKeyInheritOn = process.env.SF_AGENCY_KEY_INHERIT?.trim() === "1";
+  const orgHasOwnAnthropicKey = Boolean(
+    (activeOrg?.integrations as { anthropic?: { apiKey?: string } } | undefined)?.anthropic?.apiKey,
+  );
+  const orgAgeMs = activeOrg?.createdAt ? Date.now() - new Date(activeOrg.createdAt).getTime() : 0;
+  const FOURTEEN_DAYS_MS = 14 * 24 * 60 * 60 * 1000;
+  const showAgencyKeyBanner = Boolean(
+    agencyKeyInheritOn &&
+      activeOrg?.parentAgencyId &&
+      !orgHasOwnAnthropicKey &&
+      orgAgeMs > FOURTEEN_DAYS_MS,
+  );
 
   // Command bar (Task 7): auto-open-once fires only the FIRST time a
   // simple-home org with a materialized module set (not grandfathered) has
@@ -337,6 +357,7 @@ export default async function DashboardLayout({
             <div className="min-h-screen min-w-0 flex-1 overflow-y-auto overflow-x-clip px-4 py-4 sm:px-6 sm:py-6 lg:px-8 lg:py-8">
               <DemoBanner />
               <TestModeBanner testMode={activeOrg?.testMode ?? false} />
+              <AgencyKeyBanner show={showAgencyKeyBanner} />
               {isSwitchedOrg && activeOrg ? (
                 <div className="mb-5 rounded-2xl border border-border/80 bg-card/75 px-4 py-3 text-sm text-muted-foreground shadow-(--shadow-xs)">
                   <span className="font-medium text-foreground">{activeOrg.name}</span> active · {" "}

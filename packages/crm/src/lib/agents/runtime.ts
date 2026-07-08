@@ -35,7 +35,7 @@ import {
   type AgentToolResult,
   type AgentValidatorResult,
 } from "@/db/schema";
-import { getAIClient } from "@/lib/ai/client";
+import { resolveRuntimeAiClient } from "@/lib/ai/client";
 import { composeSystemPrompt, applyDeploymentPersona } from "./prompt";
 import type { DeploymentPromptPersona } from "./prompt";
 import { runValidators } from "./validators";
@@ -283,7 +283,13 @@ export async function executeTurn(input: {
   // encrypted at rest). Operator pays Anthropic directly; SF charges
   // separately per agent turn. If no BYOK key is set AND no platform
   // key is available (e.g. SF env not configured), gracefully degrade.
-  const aiResolution = await getAIClient({ orgId: agent.orgId });
+  // 2026-07-08 pricing ladder — agency key inheritance (flag
+  // SF_AGENCY_KEY_INHERIT): sub-account workspaces with no BYOK key of
+  // their own inherit the owning agency's key instead of silently
+  // falling to the platform key. Fail-soft wrapper — identical to
+  // getAIClient's behavior whenever the flag is off or any lookup
+  // fails, so this is a no-op today until Max flips the flag.
+  const aiResolution = await resolveRuntimeAiClient({ orgId: agent.orgId });
   if (!aiResolution.client) {
     return {
       ok: false,

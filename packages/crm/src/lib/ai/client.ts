@@ -1,7 +1,7 @@
 import Anthropic from "@anthropic-ai/sdk";
 import { and, eq, gte, sql } from "drizzle-orm";
 import { db } from "@/db";
-import { organizations, seldonUsage, users } from "@/db/schema";
+import { organizations, partnerAgencies, seldonUsage, users } from "@/db/schema";
 import { decryptValue } from "@/lib/encryption";
 
 export type AIClientMode = "byok" | "included" | "metered";
@@ -234,6 +234,130 @@ export async function getAIClient(params: { orgId: string; userId?: string | nul
     includedLimit,
     planId,
   };
+}
+
+// ─── 2026-07-08 pricing ladder — agency key inheritance (flag SF_AGENCY_KEY_INHERIT) ───
+//
+// Resolution order (spec D3):
+//   1. org's own BYOK key (getAIClient's existing behavior — unchanged, always wins).
+//   2. NEW: if the flag is on AND the org has a parentAgencyId -> the
+//      agency owner org's BYOK key.
+//   3. platform env fallback (unchanged — the safety net stays; this is
+//      what step 2 falls through to when the agency owner has no key
+//      either, and what the whole wrapper falls through to on ANY error).
+//
+// Fail-soft is load-bearing: a broken lookup in the inheritance path
+// must never break agent runtime. Every injected dependency call is
+// wrapped so a throw anywhere in steps 1b/2 degrades to the org's own
+// (step 1's) resolution, never propagates.
+
+/** Narrow DB reads needed to find the agency owner org, injectable so
+ *  resolveAgencyKeyOrgId is unit-testable without a DB (mirrors the
+ *  hasFeature / enforceWorkspaceLimit DI pattern). */
+export type AgencyKeyOrgDeps = {
+  getPartnerAgencyOwner: (
+    agencyId: string,
+  ) => Promise<{ ownerWorkspaceId: string | null; ownerUserId: string | null } | null>;
+  getUserOrgId: (userId: string) => Promise<string | null>;
+};
+
+const defaultAgencyKeyOrgDeps: AgencyKeyOrgDeps = {
+  getPartnerAgencyOwner: async (agencyId) => {
+    const [row] = await db
+      .select({
+        ownerWorkspaceId: partnerAgencies.ownerWorkspaceId,
+        ownerUserId: partnerAgencies.ownerUserId,
+      })
+      .from(partnerAgencies)
+      .where(eq(partnerAgencies.id, agencyId))
+      .limit(1);
+    return row ?? null;
+  },
+  getUserOrgId: async (userId) => {
+    const [row] = await db.select({ orgId: users.orgId }).from(users).where(eq(users.id, userId)).limit(1);
+    return row?.orgId ?? null;
+  },
+};
+
+/** Resolve the agency OWNER org id for a partner_agencies row —
+ *  `ownerWorkspaceId ?? (ownerUserId -> users.orgId)` (spec D3). Returns
+ *  null for any unresolvable case (agency not found, no owner identity,
+ *  owner user has no primary org) OR any thrown error — fail-soft by
+ *  construction so a broken lookup never surfaces past this function. */
+export async function resolveAgencyKeyOrgId(
+  agencyId: string,
+  deps: AgencyKeyOrgDeps = defaultAgencyKeyOrgDeps,
+): Promise<string | null> {
+  try {
+    const agency = await deps.getPartnerAgencyOwner(agencyId);
+    if (!agency) return null;
+    if (agency.ownerWorkspaceId) return agency.ownerWorkspaceId;
+    if (agency.ownerUserId) {
+      const orgId = await deps.getUserOrgId(agency.ownerUserId);
+      return orgId ?? null;
+    }
+    return null;
+  } catch {
+    return null;
+  }
+}
+
+/** Injectable deps for resolveRuntimeAiClient. Production default reads
+ *  the SF_AGENCY_KEY_INHERIT env flag (strict "1", same contract as the
+ *  other dark-by-default flags) and wires the real getAIClient +
+ *  organizations.parentAgencyId lookup + resolveAgencyKeyOrgId. */
+export type RuntimeAiClientDeps = {
+  flagOn: boolean;
+  getAIClient: (params: { orgId: string; userId?: string | null }) => Promise<AIClientResolution>;
+  getParentAgencyId: (orgId: string) => Promise<string | null>;
+  resolveAgencyOrgId: (agencyId: string) => Promise<string | null>;
+};
+
+function defaultRuntimeAiClientDeps(): RuntimeAiClientDeps {
+  return {
+    flagOn: process.env.SF_AGENCY_KEY_INHERIT?.trim() === "1",
+    getAIClient,
+    getParentAgencyId: async (orgId) => {
+      const [row] = await db
+        .select({ parentAgencyId: organizations.parentAgencyId })
+        .from(organizations)
+        .where(eq(organizations.id, orgId))
+        .limit(1);
+      return row?.parentAgencyId ?? null;
+    },
+    resolveAgencyOrgId: (agencyId) => resolveAgencyKeyOrgId(agencyId),
+  };
+}
+
+/** Wraps getAIClient with the agency-key-inheritance seam. NEVER throws —
+ *  any error anywhere in the inheritance path (steps 1b/2) falls through
+ *  to the org's own getAIClient resolution (step 1), which is today's
+ *  exact behavior. Voice runtime (OPENAI env) is untouched — this only
+ *  wraps the Anthropic-facing chat/agent runtime client. */
+export async function resolveRuntimeAiClient(
+  params: { orgId: string; userId?: string | null },
+  deps: RuntimeAiClientDeps = defaultRuntimeAiClientDeps(),
+): Promise<AIClientResolution> {
+  const own = await deps.getAIClient(params);
+
+  if (!deps.flagOn) return own;
+  // Own BYOK key always wins (step 1) — no reason to look at the agency's key.
+  if (own.mode === "byok") return own;
+
+  try {
+    const parentAgencyId = await deps.getParentAgencyId(params.orgId);
+    if (!parentAgencyId) return own;
+
+    const agencyOrgId = await deps.resolveAgencyOrgId(parentAgencyId);
+    if (!agencyOrgId) return own;
+
+    const agencyResolution = await deps.getAIClient({ orgId: agencyOrgId });
+    if (agencyResolution.mode === "byok") return agencyResolution;
+
+    return own;
+  } catch {
+    return own;
+  }
 }
 
 export type SeldonUsageStats = {
