@@ -8,8 +8,13 @@
 
 import { describe, test } from "node:test";
 import assert from "node:assert/strict";
+import { readFileSync } from "node:fs";
+import { join } from "node:path";
+import { fileURLToPath } from "node:url";
 
 import { runPaymentDunningSweep, type DunningSweepDeps, type FailedPaymentRow } from "@/lib/payments/dunning";
+
+const __dirname = join(fileURLToPath(import.meta.url), "..");
 
 function daysAgo(n: number): Date {
   return new Date(Date.now() - n * 24 * 60 * 60 * 1000);
@@ -162,9 +167,33 @@ describe("runPaymentDunningSweep — notify-only, never calls Stripe", () => {
     assert.equal(result.skipped.length, 1);
   });
 
-  test("THE CRON NEVER CALLS STRIPE — deps has no Stripe seam at all (type-level pin)", () => {
-    // No stripe-shaped key exists on DunningSweepDeps — enforced by the
-    // type import above compiling without a Stripe import.
-    assert.ok(true);
+  test("THE CRON NEVER CALLS STRIPE — real source guard: neither dunning.ts nor the cron route imports 'stripe'", () => {
+    // A tautological assert.ok(true) doesn't actually catch a future
+    // regression (money-severity review nit b) — read the real source and
+    // assert no `stripe` import/token, the way a source-guard should.
+    const dunningSource = readFileSync(
+      join(__dirname, "..", "..", "..", "src", "lib", "payments", "dunning.ts"),
+      "utf8",
+    );
+    const cronRouteSource = readFileSync(
+      join(__dirname, "..", "..", "..", "src", "app", "api", "cron", "payment-dunning", "route.ts"),
+      "utf8",
+    );
+
+    for (const [label, source] of [
+      ["dunning.ts", dunningSource],
+      ["payment-dunning/route.ts", cronRouteSource],
+    ] as const) {
+      assert.doesNotMatch(
+        source,
+        /from\s+["']stripe["']|require\(["']stripe["']\)/,
+        `${label} must never import the "stripe" package — the dunning cron notifies only, it never charges`,
+      );
+      assert.doesNotMatch(
+        source,
+        /\bstripe\.(subscriptions|checkout|billingPortal|paymentIntents|charges)\b/,
+        `${label} must never call a Stripe API surface`,
+      );
+    }
   });
 });

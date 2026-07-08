@@ -16,6 +16,14 @@
 //    double-record — checkout.session.completed already wrote that row.
 //  - unknown subscription (no proposal match) → a logged skip, NEVER a throw.
 //  - invoice.payment_failed → a "failed" row + metadata.dunning stamp.
+//  - RECOVERY (money-severity review fix, BLOCKING #2): Stripe re-fires
+//    invoice.paid for the SAME invoice id after a successful smart retry —
+//    the existing FAILED row must flip to "completed" +
+//    metadata.resolvedByLaterPayment=true (never a second row). Stripe can
+//    ALSO issue a brand-new invoice id for the same subscription+period — the
+//    outstanding failed SIBLING row (different invoice id, same
+//    subscription) must also get stamped resolvedByLaterPayment so the
+//    dunning cron stops emailing a client who already paid.
 
 import { describe, test } from "node:test";
 import assert from "node:assert/strict";
@@ -91,6 +99,39 @@ describe("decideRetainerCycleFromInvoiceEvent — pure decision", () => {
     if (decision.action !== "record") return;
     assert.equal(decision.status, "failed");
     assert.equal(decision.amountCents, 49700);
+    assert.equal(decision.partial, false);
+  });
+
+  test("invoice.paid with amount_paid === total (the normal case) → not partial", () => {
+    const decision = decideRetainerCycleFromInvoiceEvent(
+      invoiceEvent("invoice.paid", { total: 49700, amount_paid: 49700 }),
+    );
+    assert.equal(decision.action, "record");
+    if (decision.action !== "record") return;
+    assert.equal(decision.amountCents, 49700);
+    assert.equal(decision.partial, false);
+  });
+
+  test("invoice.paid with amount_paid LESS than total → records the amount actually paid, flags partial:true", () => {
+    const decision = decideRetainerCycleFromInvoiceEvent(
+      invoiceEvent("invoice.paid", { total: 49700, amount_paid: 20000 }),
+    );
+    assert.equal(decision.action, "record");
+    if (decision.action !== "record") return;
+    assert.equal(decision.amountCents, 20000);
+    assert.equal(decision.partial, true);
+  });
+
+  test("invoice.paid with amount_paid = 0 (degenerate) → falls back to total, never records $0 for a real cycle", () => {
+    const decision = decideRetainerCycleFromInvoiceEvent(
+      invoiceEvent("invoice.paid", { total: 49700, amount_paid: 0 }),
+    );
+    assert.equal(decision.action, "record");
+    if (decision.action !== "record") return;
+    assert.equal(decision.amountCents, 49700);
+    // amount_paid wasn't positive, so this isn't treated as a "confirmed
+    // partial" — it's the fallback path, not a partial payment signal.
+    assert.equal(decision.partial, false);
   });
 });
 
@@ -98,10 +139,13 @@ describe("applyRetainerInvoiceCycle — end state via DI fakes", () => {
   function makeDeps(over: Partial<RetainerInvoiceCycleDeps> = {}): {
     deps: RetainerInvoiceCycleDeps;
     inserted: Array<Record<string, unknown>>;
+    updated: Array<{ id: string; patch: Record<string, unknown> }>;
   } {
     const inserted: Array<Record<string, unknown>> = [];
+    const updated: Array<{ id: string; patch: Record<string, unknown> }> = [];
     const deps: RetainerInvoiceCycleDeps = {
       findExistingBySourceId: async () => null,
+      findOutstandingFailedForSubscription: async () => null,
       resolveProposalBySubscriptionId: async () => ({
         agencyOrgId: "org-agency-1",
         contactId: "contact-1",
@@ -109,9 +153,12 @@ describe("applyRetainerInvoiceCycle — end state via DI fakes", () => {
       insertPaymentRecord: async (row) => {
         inserted.push(row);
       },
+      updatePaymentRecord: async (id, patch) => {
+        updated.push({ id, patch });
+      },
       ...over,
     };
-    return { deps, inserted };
+    return { deps, inserted, updated };
   }
 
   test("invoice.paid (cycle) → inserts ONE completed payment_records row, org+contact resolved via subscription", async () => {
@@ -127,14 +174,92 @@ describe("applyRetainerInvoiceCycle — end state via DI fakes", () => {
     assert.equal(inserted[0]!.amount, "497.00");
   });
 
-  test("duplicate invoice.paid delivery (same stripeInvoiceId) → NO second row", async () => {
-    const { deps, inserted } = makeDeps({
+  test("duplicate invoice.paid delivery (same stripeInvoiceId, already completed) → NO second row, no update", async () => {
+    const { deps, inserted, updated } = makeDeps({
       findExistingBySourceId: async (sourceId) =>
-        sourceId === "in_123" ? { id: "existing-row-1" } : null,
+        sourceId === "in_123" ? { id: "existing-row-1", status: "completed", metadata: {} } : null,
     });
     const result = await applyRetainerInvoiceCycle(invoiceEvent("invoice.paid"), deps);
     assert.equal(result.outcome, "already_recorded");
     assert.equal(inserted.length, 0);
+    assert.equal(updated.length, 0);
+  });
+
+  test("RECOVERY (same invoice id) — invoice.paid re-fired for a stripeInvoiceId whose row is currently 'failed' → flips it to completed + resolvedByLaterPayment, NO second row", async () => {
+    const { deps, inserted, updated } = makeDeps({
+      findExistingBySourceId: async (sourceId) =>
+        sourceId === "in_123"
+          ? {
+              id: "existing-failed-row-1",
+              status: "failed",
+              metadata: { dunning: { failedAt: "2026-07-01T00:00:00.000Z", notifyStage: 1 } },
+            }
+          : null,
+    });
+    const result = await applyRetainerInvoiceCycle(invoiceEvent("invoice.paid"), deps);
+    assert.equal(result.outcome, "recovered");
+    assert.equal(inserted.length, 0);
+    assert.equal(updated.length, 1);
+    assert.equal(updated[0]!.id, "existing-failed-row-1");
+    assert.equal(updated[0]!.patch.status, "completed");
+    assert.equal(updated[0]!.patch.amount, "497.00");
+    const metadata = updated[0]!.patch.metadata as {
+      resolvedByLaterPayment?: boolean;
+      paidAt?: string;
+      dunning?: { notifyStage?: number };
+    };
+    assert.equal(metadata.resolvedByLaterPayment, true);
+    assert.equal(typeof metadata.paidAt, "string");
+    // the original dunning stamp is preserved (not reset) — the sweep's
+    // resolvedByLaterPayment check short-circuits BEFORE it ever looks at
+    // notifyStage again, so leaving it as-is is safe and auditable.
+    assert.equal(metadata.dunning?.notifyStage, 1);
+
+    // After the flip, a dunning sweep over this row must see
+    // resolvedByLaterPayment and skip it (pinned in dunning.spec.ts's
+    // existing "resolved_by_later_payment" case — this test only pins the
+    // WRITE side of the recovery).
+  });
+
+  test("RECOVERY (sibling invoice id) — invoice.paid for a NEW invoice id on the same subscription, while an OUTSTANDING failed row exists for a DIFFERENT invoice id → the new invoice records normally AND the outstanding failed sibling gets stamped resolvedByLaterPayment", async () => {
+    const { deps, inserted, updated } = makeDeps({
+      findExistingBySourceId: async () => null, // this invoice id (in_123) has no row yet
+      findOutstandingFailedForSubscription: async (subscriptionId) =>
+        subscriptionId === "sub_123"
+          ? {
+              id: "outstanding-failed-row-99",
+              stripeInvoiceId: "in_OLD_999",
+              metadata: { dunning: { failedAt: "2026-07-01T00:00:00.000Z", notifyStage: 0 } },
+            }
+          : null,
+    });
+    const result = await applyRetainerInvoiceCycle(invoiceEvent("invoice.paid"), deps);
+    assert.equal(result.outcome, "recorded");
+    // the NEW invoice is recorded as its own row
+    assert.equal(inserted.length, 1);
+    assert.equal(inserted[0]!.sourceId, "in_123");
+    assert.equal(inserted[0]!.status, "completed");
+    // the OLD outstanding failed sibling (different invoice id) is stamped,
+    // never inserted twice
+    assert.equal(updated.length, 1);
+    assert.equal(updated[0]!.id, "outstanding-failed-row-99");
+    const metadata = updated[0]!.patch.metadata as { resolvedByLaterPayment?: boolean };
+    assert.equal(metadata.resolvedByLaterPayment, true);
+  });
+
+  test("RECOVERY does not fire for invoice.payment_failed events (only invoice.paid recovers)", async () => {
+    const { deps, updated } = makeDeps({
+      findExistingBySourceId: async (sourceId) =>
+        sourceId === "in_123" ? { id: "existing-failed-row-1", status: "failed", metadata: {} } : null,
+    });
+    const result = await applyRetainerInvoiceCycle(
+      invoiceEvent("invoice.payment_failed", { amount_due: 49700, amount_paid: 0 }),
+      deps,
+    );
+    // a repeat payment_failed for an already-failed row is just "already
+    // recorded" (still failed) — no recovery semantics apply to a failure event.
+    assert.equal(result.outcome, "already_recorded");
+    assert.equal(updated.length, 0);
   });
 
   test("initial-close invoice (billing_reason subscription_create) → skipped, no insert", async () => {
@@ -166,6 +291,19 @@ describe("applyRetainerInvoiceCycle — end state via DI fakes", () => {
     const result = await applyRetainerInvoiceCycle(invoiceEvent("invoice.paid"), deps);
     assert.equal(result.outcome, "skipped");
     assert.equal(inserted.length, 0);
+  });
+
+  test("invoice.paid with a partial amount_paid → inserts a completed row with metadata.partial=true", async () => {
+    const { deps, inserted } = makeDeps();
+    const result = await applyRetainerInvoiceCycle(
+      invoiceEvent("invoice.paid", { total: 49700, amount_paid: 20000 }),
+      deps,
+    );
+    assert.equal(result.outcome, "recorded");
+    assert.equal(inserted.length, 1);
+    assert.equal(inserted[0]!.amount, "200.00");
+    const metadata = inserted[0]!.metadata as { partial?: boolean };
+    assert.equal(metadata.partial, true);
   });
 
   test("invoice.payment_failed → inserts a failed row with dunning stamp", async () => {
