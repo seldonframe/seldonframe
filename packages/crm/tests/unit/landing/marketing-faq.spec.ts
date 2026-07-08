@@ -1,19 +1,13 @@
-// Snapshot-shape tests for LandingMarketingFaqSection (Cut C Phase 6 +
-// onboarding-pivot Q7/Q8 additions).
+// Snapshot-shape tests for LandingMarketingFaqSection.
 //
-// Eight Q&As aligned to the locked 2026-06-18 pricing ladder
-// (Builder $19 / Workspace $49 / Agency $297, no free tier). The tests
-// check (a) exactly 8 <details> rendered, (b) each expected concept is
-// present (who-it's-for, workspace count, white-label, domain, usage
-// fees, managed AI, GHL comparison, tool-stack replacement), (c) a few
-// load-bearing claims (white-label = Agency $297 with no Growth/Scale,
-// managed AI with BYOK only on self-host, $497 GHL comparison),
-// (d) the FAQPage JSON-LD schema script is emitted with the same
-// answer text — Google's structured-data validator drops the schema
-// otherwise.
-//
-// Patterns kept loose-but-distinct so a future ux-copy polish that
-// reorders sentences doesn't break the assertion.
+// 2026-07-08 pricing ladder (Task 6, flip-time commit): the homepage
+// FAQ keeps "$29/mo flat" as the anchor truth (one-number rule) and
+// now ALSO mentions the agency ladder (whitelabel + client sub-accounts
+// starting at $99/mo) in the workspace-count and white-label answers.
+// The previous spec pinned an even older $297/$497 GoHighLevel-era
+// ladder that predates the 2026-06-22 flat-price rewrite and was
+// already failing before this branch (9 FAQs exist, not 8) — rewritten
+// here to match the CURRENT 9-question component.
 
 import { describe, test } from "node:test";
 import assert from "node:assert/strict";
@@ -33,21 +27,22 @@ function flatten(node: unknown, acc: AnyEl[] = []): AnyEl[] {
 }
 
 const EXPECTED_QUESTIONS = [
-  /SMB|agenc/i, // Q1 — who SeldonFrame is for
-  /how many .*workspaces/i, // Q2 — workspace count per plan
-  /white-label/i, // Q3 — white-label for clients
-  /domain/i, // Q4 — custom domain
-  /usage fees|surprise/i, // Q5 — no metered / surprise bills
-  /AI key|managed/i, // Q6 — managed AI, no BYOK required
-  /GoHighLevel/i, // Q7 — GHL comparison
-  /Zapier|Calendly|Typeform/i, // Q8 — replaces the tool stack
+  /who is seldonframe for/i, // who SeldonFrame is for
+  /own AI key/i, // BYOK
+  /how much is it/i, // price
+  /free to start/i, // no card required
+  /how many .*workspaces/i, // workspace count
+  /white-label/i, // white-label for clients
+  /own domain/i, // custom domain
+  /GoHighLevel/i, // GHL comparison
+  /Zapier|Calendly|Typeform/i, // replaces the tool stack
 ];
 
-describe("LandingMarketingFaqSection — 8 agency-focused Q&A", () => {
-  test("renders exactly 8 <details> entries", () => {
+describe("LandingMarketingFaqSection — 9 Q&A, $29 anchor + agency ladder mentions", () => {
+  test("renders exactly 9 <details> entries", () => {
     const result = LandingMarketingFaqSection();
     const details = flatten(result).filter((el) => el.type === "details");
-    assert.equal(details.length, 8);
+    assert.equal(details.length, 9);
   });
 
   test("each expected question concept appears at least once", () => {
@@ -58,26 +53,26 @@ describe("LandingMarketingFaqSection — 8 agency-focused Q&A", () => {
     }
   });
 
-  test("white-label answer is scoped to the Agency plan ($297), not Growth/Scale", () => {
+  test("$29/mo flat remains the anchor truth", () => {
     const result = LandingMarketingFaqSection();
     const text = JSON.stringify(result);
-    // New locked ladder: white-label is the Agency tier ($297/mo).
-    assert.match(text, /white-label/i);
-    assert.match(text, /Agency/);
-    assert.match(text, /\$297/);
-    // The retired Free / Growth / Scale tiers must not reappear.
-    assert.doesNotMatch(text, /Growth|Scale/);
+    assert.match(text, /\$29\/mo flat/);
+    assert.match(text, /cancel anytime/i);
   });
 
-  test("AI answer: managed on paid plans, BYOK only on self-host", () => {
+  test("workspace-count answer mentions the agency ladder ($99/mo) without displacing the $29 anchor", () => {
     const result = LandingMarketingFaqSection();
     const text = JSON.stringify(result);
-    // New locked ladder: AI is managed/included on every paid plan;
-    // bring-your-own-key is only for the self-hosted edition.
-    assert.match(text, /managed/i);
-    assert.match(text, /self-host/i);
-    // The retired "every tier / all tiers" BYOK promise is gone.
-    assert.doesNotMatch(text, /(all tiers|every tier)/i);
+    assert.match(text, /sub-accounts?/i);
+    assert.match(text, /\$99\/mo/);
+  });
+
+  test("white-label answer scopes whitelabel to the agency ladder ($99/mo and up)", () => {
+    const result = LandingMarketingFaqSection();
+    const text = JSON.stringify(result);
+    assert.match(text, /white-label/i);
+    assert.match(text, /agency plan/i);
+    assert.match(text, /\$99\/mo/);
   });
 
   test("GHL-comparison answer carries the $29 vs $497 wallet math", () => {
@@ -88,15 +83,14 @@ describe("LandingMarketingFaqSection — 8 agency-focused Q&A", () => {
     assert.match(text, /AGPL-3\.0/);
   });
 
-  test("tool-stack answer opens with 'No' and lists the displaced stack", () => {
+  test("tool-stack answer leads with 'No' and lists the displaced stack", () => {
     const result = LandingMarketingFaqSection();
     const text = JSON.stringify(result);
-    // Q8 leads with "No." to do the heavy lifting up front.
     assert.match(text, /"No\./);
     assert.match(text, /Zapier task fees/i);
   });
 
-  test("embeds FAQPage JSON-LD schema for Google rich results", () => {
+  test("embeds FAQPage JSON-LD schema for Google rich results, matching the 9 questions", () => {
     const result = LandingMarketingFaqSection();
     const scripts = flatten(result).filter((el) => el.type === "script");
     assert.equal(scripts.length, 1, "must embed exactly one schema script");
@@ -106,8 +100,7 @@ describe("LandingMarketingFaqSection — 8 agency-focused Q&A", () => {
         ?.dangerouslySetInnerHTML?.__html ?? ""
     );
     assert.match(html, /"@type":"FAQPage"/);
-    // Schema mainEntity must enumerate exactly 8 Question entries.
     const questionMatches = html.match(/"@type":"Question"/g) ?? [];
-    assert.equal(questionMatches.length, 8, "schema must contain 8 Question entries");
+    assert.equal(questionMatches.length, 9, "schema must contain 9 Question entries");
   });
 });

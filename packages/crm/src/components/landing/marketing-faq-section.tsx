@@ -8,6 +8,13 @@
 // the BYOK-as-qualifier framing (positioning v2, 2026-06-22; trial removed
 // 2026-07-05 — the free ungated build→claim→use experience already IS the
 // trial, so checkout charges immediately).
+//
+// 2026-07-08 pricing ladder (Task 6, flip-time commit): "$29/mo flat"
+// stays the anchor truth for the homepage (one-number rule) — the
+// white-label + workspace-count answers now mention that agencies
+// running CLIENT sub-accounts have a ladder starting at $99/mo,
+// without displacing the $29 anchor. Ships as part of the flip-time
+// commit alongside the SF_COLUMN comparison-registry edit.
 
 type FaqItem = { question: string; answer: string };
 
@@ -38,12 +45,12 @@ const FAQS: readonly FaqItem[] = [
   {
     question: "How many workspaces can I run?",
     answer:
-      "Unlimited, on the flat $29/mo. There's no per-workspace tax and no per-seat pricing — build one front office for yourself or a hundred for your clients on the same flat plan.",
+      "Unlimited of your own, on the flat $29/mo — there's no per-workspace tax and no per-seat pricing. Running client sub-accounts under your own brand is a separate agency ladder starting at $99/mo (whitelabel included from the first tier).",
   },
   {
     question: "Can I white-label this for my clients?",
     answer:
-      "Yes — it's included in the flat $29/mo. Your brand appears on the entire platform; clients never see SeldonFrame. You set your own per-client pricing and keep the spread. Reselling to your own clients goes through your brand, so it isn't subject to the GMV fee.",
+      "Yes — whitelabel is included on every agency plan, starting at $99/mo. Your brand appears on the entire platform; clients never see SeldonFrame. You set your own per-client pricing and keep the spread. Reselling to your own clients goes through your brand, so it isn't subject to the GMV fee.",
   },
   {
     question: "What if a client wants their own domain?",

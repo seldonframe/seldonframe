@@ -49,11 +49,11 @@ function isTierLadderOn(env: { SF_TIER_LADDER?: string | undefined }): boolean {
 const FAQS: Array<{ q: string; a: string }> = [
   {
     q: "How many client workspaces can I run?",
-    a: "As many as you want. SeldonFrame is one flat $29/mo plan with unlimited workspaces — no per-workspace charge, no tier to upgrade into for more.",
+    a: "As many of your own as you want, on the flat $29/mo Builder plan — no per-workspace charge. Running CLIENT sub-accounts under your own brand is the agency ladder, starting at $99/mo (Agency Starter includes 10 sub-accounts).",
   },
   {
     q: "Can I white-label SeldonFrame for my clients?",
-    a: "Yes. Whitelabel and resell each workspace to clients is included in the plan.",
+    a: "Yes — whitelabel and resell to clients is included on every agency plan (Agency Starter $99/mo and up). The flat $29/mo Builder plan is for your own workspaces, not whitelabel resale.",
   },
   {
     q: "Is there a free trial?",

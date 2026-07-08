@@ -48,7 +48,7 @@ export type Competitor = {
 /** SeldonFrame's side of the comparison table — identical on every page. */
 export const SF_COLUMN = {
   bestFor: "Agencies & builders running AI front offices for clients",
-  pricingModel: "$29/mo flat — unlimited workspaces, no per-feature add-ons",
+  pricingModel: "From $29/mo flat — unlimited workspaces (agency whitelabel from $99/mo)",
   aiReceptionist: "Native — AI receptionist answers, qualifies & books across voice, SMS & web chat",
   frontOffice: "Included — multi-page website, CRM, booking calendar, intake forms, review requests in every workspace",
   whitelabel: "Included — whitelabel client portal, per-client workspaces, custom domains, one-click multi-client deploy",
