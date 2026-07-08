@@ -1,0 +1,108 @@
+// 2026-07-08 pricing-ladder — REFINED sub-account counting (post-review
+// fix wave).
+//
+// Bug: the original enforceSubAccountLimit wiring counted every org
+// with `parentAgencyId IN (agencies I own)` via
+// fetchAgencyAttachedWorkspaceIds (orgs.ts). That's correct for
+// "which workspaces does this agency brand" (its original purpose —
+// org listing + branding rollup, still unchanged) but WRONG for the
+// billing cap: two write paths attach `parentAgencyId` WITHOUT ever
+// handing the workspace off to anyone:
+//   1. syncAgencyProfileToPartnerAgency (agency-profile/sync-to-partner-agency.ts)
+//      auto-attaches every workspace the OWNER THEMSELVES owns
+//      (organizations.ownerId = the agency owner's userId) so their
+//      own branding applies. These are the owner's OWN workspaces, not
+//      client sub-accounts.
+//   2. (not fixed here, but the same principle) any future
+//      self-service branding flow that attaches an owner-owned org.
+//
+// A "counted sub-account" per spec invariant 5 is a org that has been
+// HANDED OFF to a client — by definition, `organizations.ownerId` is
+// NOT the agency owner's own userId (an anonymous/client-owned
+// workspace, or a workspace owned by a different user entirely).
+//
+// This module does NOT change fetchAgencyAttachedWorkspaceIds's
+// existing semantics (org listing / branding rollup callers are
+// unaffected) — it's a SEPARATE counting query used only by the
+// billing cap (enforceSubAccountLimitForUser call sites).
+
+import { and, eq, inArray, isNull, ne, or } from "drizzle-orm";
+import { db } from "@/db";
+import { organizations, partnerAgencies } from "@/db/schema";
+
+function isUuidShape(value: string): boolean {
+  return /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(value);
+}
+
+/** The minimal org-row shape the counting predicate needs. Mirrors
+ *  what the real query selects, so the pure predicate below and the
+ *  live SQL WHERE clause stay provably equivalent. */
+export type SubAccountCandidateOrg = {
+  id: string;
+  parentAgencyId: string | null;
+  archivedAt: Date | null;
+  ownerId: string | null;
+};
+
+/**
+ * PURE predicate: is `org` a countable CLIENT sub-account of an agency
+ * owned by `ownerUserId`? True when `parentAgencyId` is one of the
+ * owner's agencies AND `archivedAt IS NULL` AND `ownerId IS DISTINCT
+ * FROM ownerUserId` (a client sub-account is handed off by
+ * definition — the owner's own branding attachments, e.g.
+ * syncAgencyProfileToPartnerAgency's auto-attach of the owner's OWN
+ * workspaces, don't count against the cap). Exported + unit-tested
+ * without a DB so the live SQL query below can be trusted to encode
+ * the same rule.
+ */
+export function isCountableClientSubAccount(
+  org: SubAccountCandidateOrg,
+  params: { ownerUserId: string; ownedAgencyIds: string[] },
+): boolean {
+  if (!org.parentAgencyId) return false;
+  if (!params.ownedAgencyIds.includes(org.parentAgencyId)) return false;
+  if (org.archivedAt) return false;
+  if (org.ownerId === params.ownerUserId) return false;
+  return true;
+}
+
+/**
+ * Count CLIENT sub-accounts attached to agencies owned by `userId` —
+ * see isCountableClientSubAccount for the exact predicate this SQL
+ * encodes.
+ *
+ * This is a SEPARATE counting query from
+ * lib/billing/orgs.ts::fetchAgencyAttachedWorkspaceIds (org listing /
+ * branding rollup — unchanged, other callers keep its original
+ * semantics). Real DB implementation; the pure predicate above is
+ * what's unit-tested directly (mirrors the enforceWorkspaceLimit /
+ * hasFeature DI pattern — this module's DB read has no injectable
+ * seam of its own because every current caller already wraps it in
+ * its own DI boundary, e.g. provisionClientWorkspaceForDeployment's
+ * `enforceSubAccountCap` dep).
+ */
+export async function countClientSubAccountsForOwner(userId: string): Promise<number> {
+  if (!isUuidShape(userId)) return 0;
+
+  const ownedAgencies = await db
+    .select({ id: partnerAgencies.id })
+    .from(partnerAgencies)
+    .where(eq(partnerAgencies.ownerUserId, userId));
+
+  if (ownedAgencies.length === 0) return 0;
+
+  const agencyIds = ownedAgencies.map((a) => a.id);
+
+  const attached = await db
+    .select({ id: organizations.id })
+    .from(organizations)
+    .where(
+      and(
+        inArray(organizations.parentAgencyId, agencyIds),
+        isNull(organizations.archivedAt),
+        or(isNull(organizations.ownerId), ne(organizations.ownerId, userId)),
+      ),
+    );
+
+  return attached.length;
+}

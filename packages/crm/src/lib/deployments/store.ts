@@ -1003,8 +1003,15 @@ export async function resolveBuilderAgency(
  * it inherits the agency's branding. This is the SAME update attachWorkspaceToAgency
  * performs (partner-agencies/store.ts) — but WITHOUT its interactive
  * ownership/tier validation, because here the caller is the server provisioning a
- * workspace it just created (not a user request). Not gated; the agency-creation
- * tier check already happened upstream.
+ * workspace it just created (not a user request).
+ *
+ * 2026-07-08 post-review fix wave (spec invariant 5) — this function
+ * itself stays a plain write (it always did — the caller decides
+ * whether to call it), but its ONLY caller
+ * (provisionClientWorkspaceForDeployment, via the `setParentAgency`
+ * dep) now gates the sub-account cap BEFORE this point via the
+ * `enforceSubAccountCap` dep. Do not add a new caller of this function
+ * without checking whether it also needs that gate.
  */
 export async function setOrgParentAgency(
   orgId: string,

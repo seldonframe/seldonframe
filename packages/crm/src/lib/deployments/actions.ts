@@ -613,9 +613,19 @@ export async function provisionDeploymentNumberAction(input: {
       fresh,
     );
     if (!provisioned.ok) {
+      // 2026-07-08 — subaccount_limit_reached is a real, structured
+      // gate rejection (not a transient error): the builder is over
+      // their tier's sub-account cap. Twilio activation still succeeds
+      // (this bridge's soft-fail contract is unchanged — the agent
+      // falls back to writing the builder org) but the log line
+      // surfaces the used/limit detail distinctly so it's
+      // distinguishable from a create_threw/create_failed transient.
       console.warn("[deployments][provision] client workspace not provisioned (continuing)", {
         deploymentId: existing.id,
         error: provisioned.error,
+        ...(provisioned.error === "subaccount_limit_reached"
+          ? { used: provisioned.used, limit: provisioned.limit }
+          : {}),
       });
     }
   } catch (err) {
@@ -640,6 +650,32 @@ function buildProvisionDeps() {
     setParentAgency: setOrgParentAgency,
     updateDeployment: async (id: string, patch: { clientOrgId: string }) => {
       await updateDeployment({ id, patch });
+    },
+    // 2026-07-08 post-review fix wave (spec invariant 5, BLOCKING) — the
+    // deploy-to-client path is a real sub-account handoff, gated the
+    // same way the manual attach API is: resolve the builder org's
+    // tier (walking the agency chain, same read as
+    // enforceWorkspaceLimit) and the REFINED sub-account count
+    // (countClientSubAccountsForOwner — excludes the owner's own
+    // self-branding attachments; see subaccount-count.ts).
+    enforceSubAccountCap: async (builderOrgId: string) => {
+      const { db } = await import("@/db");
+      const { organizations } = await import("@/db/schema/organizations");
+      const { eq } = await import("drizzle-orm");
+      const { resolveTierForWorkspace } = await import("@/lib/billing/tier-resolver");
+      const { enforceSubAccountLimit } = await import("@/lib/billing/limits");
+      const { countClientSubAccountsForOwner } = await import("@/lib/billing/subaccount-count");
+
+      const [org] = await db
+        .select({ ownerId: organizations.ownerId })
+        .from(organizations)
+        .where(eq(organizations.id, builderOrgId))
+        .limit(1);
+      const ownerId = org?.ownerId ?? null;
+
+      const tier = await resolveTierForWorkspace(builderOrgId);
+      const used = ownerId ? await countClientSubAccountsForOwner(ownerId).catch(() => 0) : 0;
+      return enforceSubAccountLimit({ tier, currentCount: used });
     },
     // #3 — best-effort copy of the deploying template's MCP connectors onto the
     // client workspace's default TEXT agent. Soft-fail by construction

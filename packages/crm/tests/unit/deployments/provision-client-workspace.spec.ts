@@ -53,13 +53,16 @@ function fakeDeployment(over: Partial<Deployment> = {}): Deployment {
   } as Deployment;
 }
 
-/** A baseline happy-path deps set; each test overrides the seam it exercises. */
+/** A baseline happy-path deps set; each test overrides the seam it exercises.
+ *  enforceSubAccountCap defaults to always-allow so the existing suite (written
+ *  before the cap gate existed) keeps exercising every OTHER seam unchanged. */
 function baseDeps(over: Partial<ProvisionClientWorkspaceDeps> = {}): ProvisionClientWorkspaceDeps {
   return {
     createFullWorkspace: async () => ({ status: "ready", workspace_id: "client-org-9" }),
     resolveBuilderAgency: async () => "agency-1",
     setParentAgency: async () => {},
     updateDeployment: async () => {},
+    enforceSubAccountCap: async () => ({ ok: true }),
     ...over,
   };
 }
@@ -84,6 +87,70 @@ describe("provisionClientWorkspaceForDeployment", () => {
     assert.deepEqual(result, { ok: true, orgId: "existing-org", skipped: true });
     assert.equal(created, false, "must NOT call createFullWorkspace when already provisioned");
     assert.equal(updated, false, "must NOT re-persist clientOrgId");
+  });
+
+  // 2026-07-08 post-review fix wave — spec invariant 5 (sub-account cap
+  // bypassable + miscounts, BLOCKING). The deploy-provisioning path
+  // (provisionClientWorkspaceForDeployment, invoked from
+  // activateDeploymentAction's Twilio-number activation flow) was an
+  // UNGATED write of parentAgencyId — a builder at the sub-account cap
+  // could keep deploying client workspaces indefinitely by activating
+  // more deployments. The cap must be checked BEFORE any provisioning
+  // side effect (no half-provisioned state on rejection).
+  test("BLOCKED at cap — enforceSubAccountCap rejects → no createFullWorkspace, no persist, structured reject returned", async () => {
+    let created = false;
+    let persisted = false;
+    const deps = baseDeps({
+      enforceSubAccountCap: async (builderOrgId) => {
+        assert.equal(builderOrgId, "builder-1");
+        return { ok: false, reason: "subaccount_limit_reached", used: 10, limit: 10 };
+      },
+      createFullWorkspace: async () => {
+        created = true;
+        return { status: "ready", workspace_id: "should-not-happen" };
+      },
+      updateDeployment: async () => {
+        persisted = true;
+      },
+    });
+    const result = await provisionClientWorkspaceForDeployment(deps, fakeDeployment());
+    assert.deepEqual(result, {
+      ok: false,
+      error: "subaccount_limit_reached",
+      used: 10,
+      limit: 10,
+    });
+    assert.equal(created, false, "must NOT call createFullWorkspace when over cap");
+    assert.equal(persisted, false, "must NOT persist clientOrgId when over cap");
+  });
+
+  test("UNDER cap — enforceSubAccountCap allows → provisioning proceeds normally", async () => {
+    let capChecked = false;
+    const deps = baseDeps({
+      enforceSubAccountCap: async () => {
+        capChecked = true;
+        return { ok: true };
+      },
+    });
+    const result = await provisionClientWorkspaceForDeployment(deps, fakeDeployment());
+    assert.deepEqual(result, { ok: true, orgId: "client-org-9" });
+    assert.equal(capChecked, true, "the cap gate must be consulted on every non-idempotent call");
+  });
+
+  test("idempotent skip path does NOT re-check the cap (already provisioned, no new attach)", async () => {
+    let capChecked = false;
+    const deps = baseDeps({
+      enforceSubAccountCap: async () => {
+        capChecked = true;
+        return { ok: true };
+      },
+    });
+    const result = await provisionClientWorkspaceForDeployment(
+      deps,
+      fakeDeployment({ clientOrgId: "existing-org" }),
+    );
+    assert.deepEqual(result, { ok: true, orgId: "existing-org", skipped: true });
+    assert.equal(capChecked, false, "re-activation of an already-provisioned deployment must not re-check the cap");
   });
 
   test("happy — create ok → agency resolved → parentAgency set → clientOrgId persisted", async () => {

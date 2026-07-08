@@ -27,26 +27,29 @@ import {
 } from "@/lib/partner-agencies/sender-domain";
 import { enforceSubAccountLimit } from "@/lib/billing/limits";
 import { resolveTierForWorkspace } from "@/lib/billing/tier-resolver";
-import { fetchAgencyAttachedWorkspaceIds } from "@/lib/billing/orgs";
+import { countClientSubAccountsForOwner } from "@/lib/billing/subaccount-count";
 
 /** 2026-07-08 — sub-account limit at the handoff boundary. Resolves the
  *  caller's effective tier from their bearer WORKSPACE (same read path
  *  as enforceWorkspaceLimit — resolveTierForWorkspace walks the agency
- *  chain) and counts current attachments via
- *  fetchAgencyAttachedWorkspaceIds (keyed by the real human owner user
- *  id — anonymous-workspace-as-actor callers have no partner_agencies
- *  rows to count yet, so they read as 0/unlimited-cap-only). Wrapped
- *  BEFORE the attachWorkspaceToAgency store call so the store itself
- *  stays pure. */
+ *  chain) and counts current attachments via the REFINED count
+ *  (countClientSubAccountsForOwner — excludes the owner's own
+ *  self-branding attachments; see subaccount-count.ts for why plain
+ *  fetchAgencyAttachedWorkspaceIds is the wrong counting unit for
+ *  billing). Keyed by the real human owner user id —
+ *  anonymous-workspace-as-actor callers have no partner_agencies rows
+ *  to count yet, so they read as 0/unlimited-cap-only. Wrapped BEFORE
+ *  the attachWorkspaceToAgency store call so the store itself stays
+ *  pure. */
 async function enforceSubAccountLimitForUser(params: {
   bearerOrgId: string;
   ownerUserId?: string;
 }) {
   const tier = await resolveTierForWorkspace(params.bearerOrgId);
-  const attached = params.ownerUserId
-    ? await fetchAgencyAttachedWorkspaceIds(params.ownerUserId).catch(() => [])
-    : [];
-  return enforceSubAccountLimit({ tier, currentCount: attached.length });
+  const used = params.ownerUserId
+    ? await countClientSubAccountsForOwner(params.ownerUserId).catch(() => 0)
+    : 0;
+  return enforceSubAccountLimit({ tier, currentCount: used });
 }
 
 type Body = {
