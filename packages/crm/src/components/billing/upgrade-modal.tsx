@@ -58,11 +58,18 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { startCheckout } from "@/lib/billing/start-checkout";
-import {
-  BUILDER_PRICE_ID,
-  MANAGED_PRICE_ID,
-  AGENCY_STARTER_PRICE_ID,
-} from "@/lib/billing/price-ids";
+
+// 2026-07-08 hydration-mismatch fix ("no price id lives in the client",
+// see pricing-shell-marketing.tsx's header for the full bug writeup) —
+// this file used to import BUILDER_PRICE_ID / MANAGED_PRICE_ID /
+// AGENCY_STARTER_PRICE_ID from lib/billing/price-ids DIRECTLY into a
+// "use client" component, baking those (server-only-env-resolved, so
+// always-placeholder-in-the-browser) values into the bundle purely to
+// forward them in the checkout POST body. /api/stripe/checkout resolves
+// the Stripe price id server-side from `tier` alone (checked FIRST,
+// before any priceId fallback — see route.ts's targetTier resolution),
+// so the client never needed a price id at all. startCheckout now sends
+// only `{ tier }`.
 
 /** Same strict-"1" contract as every other flag in this codebase
  *  (isWinLadderOn / isSimpleHomeOn / isTierLadderOn in
@@ -99,10 +106,6 @@ const LEGACY_COPY: Record<LegacyUpgradeTarget, TierCard> = {
   },
 };
 
-const LEGACY_TIER_TO_PRICE_ID: Record<LegacyUpgradeTarget, string> = {
-  builder: BUILDER_PRICE_ID,
-};
-
 // ── Flag ON — the new sellable ladder ───────────────────────────────────
 type LadderUpgradeTarget = "managed" | "agency_starter";
 
@@ -130,11 +133,6 @@ const LADDER_COPY: Record<LadderUpgradeTarget, TierCard> = {
     cta: "Upgrade to Agency Starter",
     recommendedLabel: "Recommended",
   },
-};
-
-const LADDER_TIER_TO_PRICE_ID: Record<LadderUpgradeTarget, string> = {
-  managed: MANAGED_PRICE_ID,
-  agency_starter: AGENCY_STARTER_PRICE_ID,
 };
 
 type UpgradeTarget = LegacyUpgradeTarget | LadderUpgradeTarget;
@@ -190,9 +188,6 @@ export function UpgradeModal({ open, onOpenChange, tier, used, limit }: UpgradeM
   const COPY: Record<UpgradeTarget, TierCard> = ladderOn
     ? (LADDER_COPY as Record<UpgradeTarget, TierCard>)
     : (LEGACY_COPY as Record<UpgradeTarget, TierCard>);
-  const TIER_TO_PRICE_ID: Record<UpgradeTarget, string> = ladderOn
-    ? (LADDER_TIER_TO_PRICE_ID as Record<UpgradeTarget, string>)
-    : (LEGACY_TIER_TO_PRICE_ID as Record<UpgradeTarget, string>);
   // No "recommended" badge makes sense with a single flag-off target.
   const recommendedTarget: UpgradeTarget | null = ladderOn ? "agency_starter" : null;
 
@@ -200,10 +195,7 @@ export function UpgradeModal({ open, onOpenChange, tier, used, limit }: UpgradeM
     setPending(target);
     setError(null);
     try {
-      const { url } = await startCheckout({
-        priceId: TIER_TO_PRICE_ID[target],
-        tier: target,
-      });
+      const { url } = await startCheckout({ tier: target });
       window.location.href = url;
     } catch (err) {
       setError(err instanceof Error ? err.message : "Checkout could not start. Try again.");

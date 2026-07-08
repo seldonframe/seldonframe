@@ -7,18 +7,21 @@
 // tier ladder (builder | workspace | agency). Legacy "growth"/"scale"
 // are gone from the client surface; the checkout route still remaps them
 // server-side for replayed/old links, but the modal sends new tiers.
+//
+// 2026-07-08 hydration-mismatch fix ("no price id lives in the client") —
+// `priceId` DROPPED from StartCheckoutInput. The route resolves the
+// Stripe price id server-side from `tier` alone; this helper (called
+// from a "use client" component, upgrade-modal.tsx) never needs a price
+// id in the request body at all. Tests updated to assert `body.priceId`
+// is simply ABSENT, not merely "whatever value was passed."
 
 import { describe, test } from "node:test";
 import assert from "node:assert/strict";
 
 import { startCheckout } from "../../../src/lib/billing/start-checkout";
-import {
-  WORKSPACE_PRICE_ID,
-  AGENCY_BASE_PRICE_ID,
-} from "../../../src/lib/billing/price-ids";
 
 describe("startCheckout", () => {
-  test("POSTs to /api/stripe/checkout with priceId + tier + successPath + cancelPath", async () => {
+  test("POSTs to /api/stripe/checkout with tier + successPath + cancelPath — no priceId field at all", async () => {
     const calls: Array<{ url: string; init: RequestInit }> = [];
     const fakeFetch = async (url: string | URL | Request, init?: RequestInit) => {
       calls.push({ url: String(url), init: init ?? {} });
@@ -29,7 +32,6 @@ describe("startCheckout", () => {
     };
 
     const result = await startCheckout({
-      priceId: WORKSPACE_PRICE_ID,
       tier: "workspace",
       fetchImpl: fakeFetch as unknown as typeof fetch,
     });
@@ -38,7 +40,7 @@ describe("startCheckout", () => {
     assert.equal(calls[0]!.url, "/api/stripe/checkout");
     assert.equal(calls[0]!.init.method, "POST");
     const body = JSON.parse(String(calls[0]!.init.body));
-    assert.equal(body.priceId, WORKSPACE_PRICE_ID);
+    assert.equal("priceId" in body, false, "the request body must never carry a price id");
     assert.equal(body.tier, "workspace");
     assert.equal(body.successPath, "/dashboard?upgraded=workspace");
     assert.equal(body.cancelPath, "/clients");
@@ -56,7 +58,6 @@ describe("startCheckout", () => {
     };
 
     await startCheckout({
-      priceId: AGENCY_BASE_PRICE_ID,
       tier: "agency",
       fetchImpl: fakeFetch as unknown as typeof fetch,
     });
@@ -77,7 +78,6 @@ describe("startCheckout", () => {
     };
 
     await startCheckout({
-      priceId: "price_builder_19",
       tier: "builder",
       fetchImpl: fakeFetch as unknown as typeof fetch,
     });
@@ -85,6 +85,25 @@ describe("startCheckout", () => {
     const body = JSON.parse(String(calls[0]!.init.body));
     assert.equal(body.tier, "builder");
     assert.equal(body.successPath, "/dashboard?upgraded=builder");
+  });
+
+  test("supports the ladder tiers (managed / agency_starter / agency_growth / agency_scale)", async () => {
+    for (const tier of ["managed", "agency_starter", "agency_growth", "agency_scale"] as const) {
+      const calls: Array<{ url: string; init: RequestInit }> = [];
+      const fakeFetch = async (url: string | URL | Request, init?: RequestInit) => {
+        calls.push({ url: String(url), init: init ?? {} });
+        return new Response(JSON.stringify({ url: `https://stripe.checkout/session-${tier}` }), {
+          status: 200,
+          headers: { "content-type": "application/json" },
+        });
+      };
+
+      await startCheckout({ tier, fetchImpl: fakeFetch as unknown as typeof fetch });
+
+      const body = JSON.parse(String(calls[0]!.init.body));
+      assert.equal(body.tier, tier);
+      assert.equal("priceId" in body, false);
+    }
   });
 
   test("throws with the API's error message when the API responds non-2xx", async () => {
@@ -97,7 +116,6 @@ describe("startCheckout", () => {
     await assert.rejects(
       () =>
         startCheckout({
-          priceId: WORKSPACE_PRICE_ID,
           tier: "workspace",
           fetchImpl: fakeFetch as unknown as typeof fetch,
         }),
@@ -115,7 +133,6 @@ describe("startCheckout", () => {
     await assert.rejects(
       () =>
         startCheckout({
-          priceId: WORKSPACE_PRICE_ID,
           tier: "workspace",
           fetchImpl: fakeFetch as unknown as typeof fetch,
         }),
@@ -133,7 +150,6 @@ describe("startCheckout", () => {
     await assert.rejects(
       () =>
         startCheckout({
-          priceId: WORKSPACE_PRICE_ID,
           tier: "workspace",
           fetchImpl: fakeFetch as unknown as typeof fetch,
         }),
