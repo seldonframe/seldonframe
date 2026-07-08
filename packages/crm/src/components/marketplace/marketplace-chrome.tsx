@@ -12,6 +12,23 @@ import type { ReactElement } from "react";
 import { MarketplaceIcon } from "./marketplace-icons";
 import { MKT } from "./marketplace-data";
 import { AGENT_JOBS } from "@/lib/seo/agent-pages";
+import { COMPETITORS } from "@/lib/seo/alternative-pages";
+
+/** Footer "Compare" links — every /alternative-to-<slug> page (from the
+ *  registry, so a renamed competitor can't leave a dead link), plus the hub
+ *  and the free tools. The PostPlanify-style internal-link block: these render
+ *  on EVERY page using this footer, which is what makes the comparison pages
+ *  crawlable from the whole surface. */
+function compareFooterItems(): { label: string; href: string }[] {
+  return [
+    { label: "All comparisons", href: "/alternatives" },
+    ...COMPETITORS.map((c) => ({
+      label: `Alternative to ${c.name}`,
+      href: `/alternative-to-${c.slug}`,
+    })),
+    { label: "Free tools", href: "/tools" },
+  ];
+}
 
 /**
  * Footer "Browse" links into the /ai-agents directory. Each label maps to a REAL
@@ -231,7 +248,7 @@ export function MarketplaceFooter(): ReactElement {
           margin: "0 auto",
           padding: "54px 32px 40px",
           display: "grid",
-          gridTemplateColumns: "1.4fr 1fr 1fr 1fr",
+          gridTemplateColumns: "1.4fr 1fr 1fr 1fr 1.1fr",
           gap: 32,
         }}
       >
@@ -257,6 +274,7 @@ export function MarketplaceFooter(): ReactElement {
           ]}
         />
         <FooterCol title="Company" items={["About", "Trust & safety", "Status", "Contact"]} />
+        <FooterCol title="Compare" items={compareFooterItems()} />
       </div>
       <div style={{ borderTop: "1px solid rgba(246,242,234,0.12)" }}>
         <div

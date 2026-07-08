@@ -2002,3 +2002,5 @@ C4 close-out with empirical SLICE 11 data.
   context. (Anchor synchronously on open to avoid a position flash; reposition on
   scroll/resize; theme CSS vars still work since it's the same document.) Pattern shipped in
   `components/layout/notifications-bell.tsx`.
+
+- Research-agent briefs MUST forbid sub-delegation (one agent spawned ~10 children -> platform rate-limit storm killed the whole fleet, 2026-07-07); <10 web queries = run inline, no subagent. See docs/learnings/2026-07-07-research-fanout-rate-limit.md
