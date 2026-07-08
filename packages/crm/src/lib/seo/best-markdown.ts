@@ -8,7 +8,7 @@ import { START_HREF, DEMO_HREF } from "./alternative-pages-extras";
 import { emphasizeMd } from "./emphasize";
 import { composeCheapestOption } from "@/components/seo/best-page";
 
-const BASE = "https://seldonframe.com";
+const BASE = "https://www.seldonframe.com";
 
 function contenderLine(c: BestContender): string {
   return `- **${c.name}** — ${emphasizeMd(c.from)}. ${c.oneLiner} Best for: ${c.bestFor}. Watch out: ${c.watchOut}`;

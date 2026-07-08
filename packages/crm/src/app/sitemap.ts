@@ -8,7 +8,7 @@
 // seed) /marketplace/[slug] listing — so search engines discover the full tree
 // and the programmatic↔marketplace cross-links are crawlable both ways.
 //
-// Base URL matches the root layout's metadataBase (https://seldonframe.com); an
+// Base URL matches the root layout's metadataBase (https://www.seldonframe.com); an
 // env override (NEXT_PUBLIC_SITE_URL) wins for non-prod deploys.
 
 import type { MetadataRoute } from "next";
@@ -23,7 +23,7 @@ import { MARKETPLACE_SEED } from "@/components/marketplace/marketplace-seed";
 /** The canonical public base URL — mirrors layout.tsx's metadataBase. */
 export function siteBaseUrl(): string {
   const fromEnv = process.env.NEXT_PUBLIC_SITE_URL?.trim();
-  return (fromEnv && fromEnv.replace(/\/$/, "")) || "https://seldonframe.com";
+  return (fromEnv && fromEnv.replace(/\/$/, "")) || "https://www.seldonframe.com";
 }
 
 /** Resolve the marketplace listing slugs to include (live, else seed). */
