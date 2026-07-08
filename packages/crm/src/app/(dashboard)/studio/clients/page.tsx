@@ -49,13 +49,17 @@ import {
 } from "@/lib/agents/triggers/agent-trigger";
 import { getAgencyUsageRollup, usageByOrgId } from "@/lib/billing/usage-rollup";
 import { parseUsageCap, evaluateUsageCap, periodKeyUtc } from "@/lib/billing/usage-cap";
+import { isAutopayConsoleOn } from "@/lib/web-build/policy";
+import { deriveRetainerStatus } from "@/lib/payments/retainer";
 import { db } from "@/db";
-import { organizations } from "@/db/schema";
-import { inArray } from "drizzle-orm";
+import { organizations, subscriptions, proposals } from "@/db/schema";
+import { inArray, desc } from "drizzle-orm";
 import { StudioTabs } from "../studio-tabs";
 import { DeploymentStatusBadge } from "./status-badge";
-import { ClientUsagePanel, UsageTotalsTile } from "./usage-panel";
+import { ClientUsagePanel, UsageTotalsTile, RevenueStripTile } from "./usage-panel";
+import { getAgencyRevenueRollup } from "@/lib/payments/revenue-rollup";
 import { UsageCapEditor, UsageCapBreachBanner } from "./usage-cap-editor";
+import { BillingRetainerEditor } from "./billing-retainer-editor";
 import {
   ActivateForm,
   ActivateOutboundButton,
@@ -125,6 +129,68 @@ export default async function StudioClientsPage({
     capRows.map((row) => [row.id, parseUsageCap(row.settings)] as const),
   );
 
+  // Autopay console (2026-07-08, Task 2) — flag-gated. Off → the editor is
+  // absent entirely (pinned by a test) and this query never runs.
+  //
+  // IMPORTANT: subscriptions.orgId is the AGENCY's org (resolved from the
+  // connected Stripe account in the webhook), NEVER the client org — so this
+  // can't filter subscriptions by clientOrgId directly. The join key is
+  // proposals.previewWorkspaceId (repurposed for existing-client retainers,
+  // see lib/payments/retainer.ts::createProposalRowReal) →
+  // proposals.stripeSubscriptionId → subscriptions.stripeSubscriptionId.
+  const autopayConsoleOn = isAutopayConsoleOn({ SF_AUTOPAY_CONSOLE: process.env.SF_AUTOPAY_CONSOLE });
+  const retainerStatusByOrg = new Map<string, ReturnType<typeof deriveRetainerStatus>>();
+  if (autopayConsoleOn) {
+    const clientOrgIds = clients
+      .map((g) => g.clientOrgId)
+      .filter((id): id is string => Boolean(id));
+    if (clientOrgIds.length > 0) {
+      const proposalRows = await db
+        .select({ clientOrgId: proposals.previewWorkspaceId, stripeSubscriptionId: proposals.stripeSubscriptionId })
+        .from(proposals)
+        .where(inArray(proposals.previewWorkspaceId, clientOrgIds));
+
+      const subIdToClientOrg = new Map<string, string>();
+      for (const row of proposalRows) {
+        if (row.clientOrgId && row.stripeSubscriptionId) {
+          subIdToClientOrg.set(row.stripeSubscriptionId, row.clientOrgId);
+        }
+      }
+
+      if (subIdToClientOrg.size > 0) {
+        const subRows = await db
+          .select({
+            stripeSubscriptionId: subscriptions.stripeSubscriptionId,
+            status: subscriptions.status,
+            createdAt: subscriptions.createdAt,
+          })
+          .from(subscriptions)
+          .where(inArray(subscriptions.stripeSubscriptionId, Array.from(subIdToClientOrg.keys())))
+          .orderBy(desc(subscriptions.createdAt));
+
+        // Keep only the MOST RECENT subscription row per client org (orderBy
+        // above means the first occurrence per clientOrgId in iteration
+        // order is the latest).
+        for (const row of subRows) {
+          if (!row.stripeSubscriptionId) continue;
+          const clientOrgId = subIdToClientOrg.get(row.stripeSubscriptionId);
+          if (!clientOrgId || retainerStatusByOrg.has(clientOrgId)) continue;
+          retainerStatusByOrg.set(clientOrgId, deriveRetainerStatus({ subscription: { status: row.status } }));
+        }
+      }
+
+      for (const orgId of clientOrgIds) {
+        if (!retainerStatusByOrg.has(orgId)) retainerStatusByOrg.set(orgId, "none");
+      }
+    }
+  }
+
+  // Autopay console (2026-07-08, Task 5) — the month-to-date revenue strip.
+  // ONE grouped query for the whole book (the usage-rollup pattern). Flag-
+  // gated with the rest; omitted when the agency has collected nothing yet.
+  const revenueRollup = autopayConsoleOn ? await getAgencyRevenueRollup(orgId) : null;
+  const hasRevenue = Boolean(revenueRollup && revenueRollup.totals.collectedCents > 0);
+
   return (
     <section className="animate-page-enter space-y-6">
       <StudioTabs />
@@ -180,8 +246,12 @@ export default async function StudioClientsPage({
         </article>
       ) : (
         <>
-          {/* ── Portfolio KPI strip: Clients · Total MRR · Active agents (+ Usage) ── */}
-          <div className={`grid grid-cols-1 gap-3 sm:grid-cols-3 ${hasUsage ? "lg:grid-cols-4" : ""}`}>
+          {/* ── Portfolio KPI strip: Clients · Total MRR · Active agents (+ Usage, + Revenue) ── */}
+          <div
+            className={`grid grid-cols-1 gap-3 sm:grid-cols-3 ${
+              hasUsage || hasRevenue ? "lg:grid-cols-4" : ""
+            }`}
+          >
             <ClientKpiTile
               label="Clients"
               value={totals.clientCount.toLocaleString("en-US")}
@@ -201,6 +271,7 @@ export default async function StudioClientsPage({
               tone="neutral"
             />
             {hasUsage && <UsageTotalsTile totals={usageRollup.totals} />}
+            {hasRevenue && revenueRollup && <RevenueStripTile totals={revenueRollup.totals} />}
           </div>
 
           <div className="space-y-4">
@@ -453,6 +524,17 @@ export default async function StudioClientsPage({
                         </>
                       );
                     })()}
+
+                  {/* Autopay console (2026-07-08, Task 2) — flag-gated "Billing &
+                      retainer" editor. Status is derived server-side
+                      (deriveRetainerStatus) from the stored subscriptions row;
+                      never a Stripe call to render. */}
+                  {autopayConsoleOn && client.clientOrgId && (
+                    <BillingRetainerEditor
+                      clientOrgId={client.clientOrgId}
+                      status={retainerStatusByOrg.get(client.clientOrgId) ?? "none"}
+                    />
+                  )}
 
                   {/* ── Card footer: Deploy another agent + Open client. The
                       grouped client now carries its workspace slug (joined from

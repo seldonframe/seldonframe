@@ -52,3 +52,11 @@ export function isSimpleHomeOn(env: { SF_SIMPLE_HOME?: string | undefined }): bo
 export function isVisionVerifyOn(env: { SF_VISION_VERIFY?: string | undefined }): boolean {
   return env.SF_VISION_VERIFY?.trim() === "1";
 }
+
+/** Autopay console flag (2026-07-08): gates the agency billing/retainer
+ *  editor, the client-portal Billing section, and the revenue strip. Task 1
+ *  (cycle recording) is NOT gated by this — it's additive + idempotent and
+ *  ships live-on-merge. Same strict-"1" contract as the flags above. */
+export function isAutopayConsoleOn(env: { SF_AUTOPAY_CONSOLE?: string | undefined }): boolean {
+  return env.SF_AUTOPAY_CONSOLE?.trim() === "1";
+}

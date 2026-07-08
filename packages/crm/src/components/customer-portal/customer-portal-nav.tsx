@@ -21,22 +21,27 @@ export type CustomerPortalNavProps = {
   orgSlug: string;
   customerEmail: string | null;
   signOutAction: () => Promise<void>;
+  /** Autopay console (2026-07-08, Task 3) — flag-gated Billing tab. Absent
+   *  (or false) → the nav item + route both stay dark. */
+  showBilling?: boolean;
 };
 
 type NavItem = {
-  key: "home" | "appointments" | "documents" | "messages" | "account";
+  key: "home" | "appointments" | "documents" | "messages" | "billing" | "account";
   label: string;
   /** Path tail after `/customer/<slug>`. "" = home. */
   pathTail: string;
 };
 
-const NAV_ITEMS: NavItem[] = [
+const BASE_NAV_ITEMS: NavItem[] = [
   { key: "home", label: "Home", pathTail: "" },
   { key: "appointments", label: "Appointments", pathTail: "/appointments" },
   { key: "documents", label: "Documents", pathTail: "/documents" },
   { key: "messages", label: "Messages", pathTail: "/messages" },
   { key: "account", label: "Account", pathTail: "/account" },
 ];
+
+const BILLING_NAV_ITEM: NavItem = { key: "billing", label: "Billing", pathTail: "/billing" };
 
 function isActive(
   pathname: string,
@@ -58,9 +63,11 @@ export function CustomerPortalNav({
   orgSlug,
   customerEmail,
   signOutAction,
+  showBilling = false,
 }: CustomerPortalNavProps) {
   const pathname = usePathname() ?? "";
   const base = `/customer/${orgSlug}`;
+  const NAV_ITEMS: NavItem[] = showBilling ? [...BASE_NAV_ITEMS, BILLING_NAV_ITEM] : BASE_NAV_ITEMS;
 
   return (
     <>

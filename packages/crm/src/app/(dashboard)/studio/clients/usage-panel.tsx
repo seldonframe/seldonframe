@@ -11,8 +11,9 @@
 // Server Component (no "use client" — no interactivity yet; the cap editor
 // lands here in Task 3 as a nested client island).
 
-import { Gauge } from "lucide-react";
+import { Gauge, Wallet } from "lucide-react";
 import { formatUsageLine, type OrgUsageRow } from "@/lib/billing/usage-rollup";
+import type { RevenueRollupTotals } from "@/lib/payments/revenue-rollup";
 
 /** One client card's usage line — a quiet, secondary-tone strip beneath the
  *  agent list. `row` is undefined when the client has no provisioned org yet
@@ -57,6 +58,46 @@ export function UsageTotalsTile({
         <div className="mt-0.5 text-xs text-muted-foreground">
           Estimated AI cost this month · {totals.conversations.toLocaleString("en-US")} conversations ·{" "}
           {totalTokens.toLocaleString("en-US")} tokens
+        </div>
+      </div>
+    </div>
+  );
+}
+
+/** Autopay console (2026-07-08, Task 5) — the month-to-date revenue strip.
+ *  Sits alongside the Clients / Total-MRR / Active-agents / Usage KPI tiles.
+ *  Flag-gated (SF_AUTOPAY_CONSOLE) by the caller; omitted when the agency has
+ *  collected nothing this period (nothing to show). The fee line is a
+ *  DISPLAY number only, read from GMV_FEE_PERCENT — Stripe already collected
+ *  it at the application_fee_percent level on each charge. */
+export function RevenueStripTile({ totals }: { totals: RevenueRollupTotals }) {
+  const collectedDollars = (totals.collectedCents / 100).toLocaleString("en-US", {
+    style: "currency",
+    currency: "USD",
+    minimumFractionDigits: 0,
+    maximumFractionDigits: 0,
+  });
+  const feeDollars = (totals.feeCents / 100).toLocaleString("en-US", {
+    style: "currency",
+    currency: "USD",
+    minimumFractionDigits: 0,
+    maximumFractionDigits: 0,
+  });
+
+  return (
+    <div className="flex items-center gap-3 rounded-2xl border border-border bg-card p-4 shadow-(--shadow-xs)">
+      <span
+        className="inline-flex size-11 shrink-0 items-center justify-center rounded-xl bg-emerald-500/10 text-emerald-700 dark:text-emerald-400"
+        aria-hidden
+      >
+        <Wallet className="size-[22px]" />
+      </span>
+      <div>
+        <div className="font-mono text-2xl font-semibold tracking-tight text-foreground">
+          {collectedDollars}
+        </div>
+        <div className="mt-0.5 text-xs text-muted-foreground">
+          Collected this month across your book · includes SeldonFrame&apos;s {feeDollars} platform fee
         </div>
       </div>
     </div>

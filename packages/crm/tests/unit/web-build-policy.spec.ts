@@ -2,6 +2,7 @@ import { test } from "node:test";
 import assert from "node:assert/strict";
 import {
   isWebUngatedBuildOn,
+  isAutopayConsoleOn,
   WEB_BUILD_RATE_LIMIT,
   WEB_BUILD_RATE_WINDOW_MS,
   WEB_UNGATED_ORIGIN,
@@ -17,6 +18,14 @@ test("flag: on only for exact '1' (trimmed)", () => {
   assert.equal(isWebUngatedBuildOn({ SF_WEB_UNGATED_BUILD: "true" }), false);
   assert.equal(isWebUngatedBuildOn({ SF_WEB_UNGATED_BUILD: "0" }), false);
   assert.equal(isWebUngatedBuildOn({}), false);
+});
+
+test("flag: SF_AUTOPAY_CONSOLE — on only for exact '1' (trimmed); everything else keeps the console dark", () => {
+  assert.equal(isAutopayConsoleOn({ SF_AUTOPAY_CONSOLE: "1" }), true);
+  assert.equal(isAutopayConsoleOn({ SF_AUTOPAY_CONSOLE: " 1 " }), true);
+  assert.equal(isAutopayConsoleOn({ SF_AUTOPAY_CONSOLE: "true" }), false);
+  assert.equal(isAutopayConsoleOn({ SF_AUTOPAY_CONSOLE: "0" }), false);
+  assert.equal(isAutopayConsoleOn({}), false);
 });
 
 test("constants", () => {
