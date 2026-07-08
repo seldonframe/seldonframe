@@ -38,6 +38,14 @@ import { redirect } from "next/navigation";
 import { auth } from "@/auth";
 import { isWebUngatedBuildOn } from "@/lib/web-build/policy";
 
+/** SF_TIER_LADDER (2026-07-08) — same strict-"1" contract as the other
+ *  dark-by-default flags. Duplicated locally (also in
+ *  app/pricing/page.tsx) rather than added to lib/web-build/policy.ts,
+ *  which is outside this task's touched-files list. */
+function isTierLadderOn(env: { SF_TIER_LADDER?: string | undefined }): boolean {
+  return env.SF_TIER_LADDER?.trim() === "1";
+}
+
 import { MarketingNav } from "@/components/landing/marketing-nav";
 import { MarketingHero } from "@/components/landing/marketing-hero";
 import { MarketingProofStrip } from "@/components/landing/marketing-proof-strip";
@@ -76,6 +84,7 @@ export default async function PublicHomePage() {
   if (session?.user?.id) {
     redirect("/dashboard");
   }
+  const tierLadderOn = isTierLadderOn({ SF_TIER_LADDER: process.env.SF_TIER_LADDER });
 
   return (
     // Light-theme marketing surface — warm paper / Hanken Grotesk /
@@ -99,7 +108,7 @@ export default async function PublicHomePage() {
         <MarketingModules />
         <MarketingSmbCta />
         <MarketingAgents />
-        <LandingMarketingPricingSection />
+        <LandingMarketingPricingSection tierLadderOn={tierLadderOn} />
         <MarketingProofStrip />
         <LandingMarketingFaqSection />
         <MarketingFinalCta />

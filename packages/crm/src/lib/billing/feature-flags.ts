@@ -31,10 +31,29 @@ export const FEATURE_TIERS: Record<FeatureFlag, MinimumTier> = {
 
 // Rank order. "inactive" (no plan) and any legacy/unknown string sort
 // to 0 so they unlock nothing.
+//
+// 2026-07-08 post-review fix wave (item #7) — extended for the 5 new
+// pricing-ladder tiers (plans.ts) so hasFeature()/tierMeetsMinimum
+// don't silently rank them at 0 (unlock nothing) if a future caller
+// wires them up. Ranked by actual entitlement level from plans.ts's
+// Plan.limits, not by price:
+//   builder / managed  — no client_portal, no white_label_portal
+//                         (same rank as the legacy "builder" minimum —
+//                         both unlock branding_hidden/custom_domain,
+//                         neither unlocks client_portal/ai_agents).
+//   workspace           — GRANDFATHERED; unchanged rank (client_portal
+//                          + ai_agents, no white-label).
+//   agency_starter/
+//   growth/scale         — full white-label + client portal, same as
+//                           the grandfathered "agency" tier.
 const TIER_RANK: Record<string, number> = {
   inactive: 0,
   builder: 1,
+  managed: 1,
   workspace: 2,
+  agency_starter: 3,
+  agency_growth: 3,
+  agency_scale: 3,
   agency: 3,
 };
 

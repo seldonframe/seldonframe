@@ -16,6 +16,15 @@ import { LandingMarketingFaqSection } from "@/components/landing/marketing-faq-s
 import { MarketingFinalCta } from "@/components/landing/marketing-final-cta";
 import { MarketingFooter } from "@/components/landing/marketing-footer";
 
+/** SF_TIER_LADDER (2026-07-08) — same strict-"1" contract as the other
+ *  dark-by-default flags. Duplicated locally (also in
+ *  app/pricing/page.tsx + app/(public)/page.tsx) rather than added to
+ *  lib/web-build/policy.ts, which is outside this task's touched-files
+ *  list. */
+function isTierLadderOn(env: { SF_TIER_LADDER?: string | undefined }): boolean {
+  return env.SF_TIER_LADDER?.trim() === "1";
+}
+
 export const metadata: Metadata = {
   title: "Pricing — SeldonFrame",
   description:
@@ -23,6 +32,7 @@ export const metadata: Metadata = {
 };
 
 export default function PricingPublicPage() {
+  const tierLadderOn = isTierLadderOn({ SF_TIER_LADDER: process.env.SF_TIER_LADDER });
   return (
     <div className="min-h-screen bg-[#F6F2EA] text-[#221D17] selection:bg-[#00897B]/20 selection:text-[#00897B]">
       <MarketingNav />
@@ -49,7 +59,7 @@ export default function PricingPublicPage() {
           </div>
         </section>
 
-        <LandingMarketingPricingSection />
+        <LandingMarketingPricingSection tierLadderOn={tierLadderOn} />
         <LandingMarketingFaqSection />
         <MarketingFinalCta />
       </main>
