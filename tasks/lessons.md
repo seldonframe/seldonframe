@@ -2004,3 +2004,6 @@ C4 close-out with empirical SLICE 11 data.
   `components/layout/notifications-bell.tsx`.
 
 - Research-agent briefs MUST forbid sub-delegation (one agent spawned ~10 children -> platform rate-limit storm killed the whole fleet, 2026-07-07); <10 web queries = run inline, no subagent. See docs/learnings/2026-07-07-research-fanout-rate-limit.md
+
+- Money-path UI tests must assert the ROUTE-LEVEL end state, not "the POST fired" against a mocked fetch (Optimistic Path, CLAUDE.md 3.1): the pricing-ladder branch shipped green tests while the live $29 checkout 409d. Pattern: extract the route gate to a pure fn (resolveCheckoutTierGate) and test THAT for every tier id the UI can POST. 2026-07-08.
+- Client-side-only conditional renders hide content from crawlers/LLMs: SSR both states and toggle visibility with CSS (pricing-shell audience rows). Curl the served HTML for sentinels of EVERY state before calling a marketing surface done. 2026-07-08.
