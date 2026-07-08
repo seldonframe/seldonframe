@@ -27,16 +27,30 @@ Findings that shaped the plan:
 - [x] Baseline: pricing-shell.spec.tsx + marketing-pricing.spec.ts → 15/15 pass
 - [x] Baseline: SSR sha256 of both shells (authed+unauthed) via render-hash.tmp.tsx
 - [x] Baseline: tsc (junctioned node_modules method) → 436 errors, list saved for delta
-- [ ] Create src/app/pricing/tier-checkout.ts: requestTierCheckout (shared POST/401/error
+- [x] Create src/app/pricing/tier-checkout.ts: requestTierCheckout (shared POST/401/error
       logic) + LadderTier/Audience/SELLABLE_TIERS/ladderTiersFor/subAccountLabel moved from
       the marketing shell
-- [ ] pricing-shell-marketing.tsx consumes tier-checkout.ts + imports INCLUDED from
+- [x] pricing-shell-marketing.tsx consumes tier-checkout.ts + imports INCLUDED from
       marketing-pricing-section.tsx (drop both local copies)
-- [ ] pricing-shell.tsx consumes requestTierCheckout (render output untouched); fix the
+- [x] pricing-shell.tsx consumes requestTierCheckout (render output untouched); fix the
       stale "keep in sync" comment on its frozen feature list
-- [ ] Export INCLUDED from marketing-pricing-section.tsx (no render change)
-- [ ] Verify: specs 15/15 · SSR hashes identical to baseline · tsc delta = 0 · delete
+- [x] Export INCLUDED from marketing-pricing-section.tsx (no render change)
+- [x] Verify: specs 15/15 · SSR hashes identical to baseline · tsc delta = 0 · delete
       render-hash.tmp.tsx
+
+Review (2026-07-08, commit f0c8c0cb5 on claude/sweet-noether-152813 — NOT merged):
+- Verified: pricing-shell.spec.tsx + marketing-pricing.spec.ts 15/15 fail-0; SSR sha256 of
+  BOTH shells (authed + unauthed) byte-identical to the pre-refactor baseline; tsc error
+  list diff vs baseline = zero (436 = the junctioned-node_modules ambient count, judged by
+  delta per the worktree-typecheck lesson); check:use-server green.
+- 10 failing specs elsewhere in tests/unit/landing + tests/unit/billing (lead-form, hero,
+  r1 generator, how-it-works, setup-intent) were PROVEN pre-existing: same 10 fail with the
+  touched files restored to origin/main.
+- Deliberately NOT done: wiring the flag-OFF PricingShell to the shared INCLUDED export —
+  its feature list had already drifted (8 old-copy items vs the live 6) and syncing it would
+  change the pinned flag-OFF rendered output, which the task forbids. The list is frozen +
+  documented instead. If the flag-OFF path ever gets retired or re-copyedited, that's the
+  moment to collapse it.
 
 ### Task — build-pipeline upgrade: mechanical tier pins + wedge strategy (2026-07-07) — DONE
 
