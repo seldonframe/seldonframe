@@ -1237,3 +1237,118 @@ in `tests/unit/landing/hero-cta.spec.tsx` — a date/DOM-snapshot-style
 assertion unrelated to pricing, not touched by this diff — while running
 a broader `landing/*.spec.tsx` glob; excluded from the reported counts
 as out of scope for this fix.)
+
+## Sixth follow-up — PostPlanify-style per-tier feature checklists (single source: plans.ts)
+
+Max wanted the /pricing tier cards to show rich, PostPlanify-style
+feature checklists (~4-8 checkmarked items per tier, with "Everything
+in X, plus:" headers on upper tiers) instead of just price + tagline.
+
+**Design (anti-drift):** the copy lives in exactly ONE place —
+`Plan.marketingFeatures?: { header?: string; items: string[] }` on each
+SELLABLE `Plan` entry in `lib/billing/plans.ts`. `app/pricing/page.tsx`'s
+`buildLadderTiers()` passes `p.marketingFeatures` through the existing
+serializable `tiers` prop unmodified (same server-resolved-then-DI'd
+pattern the fifth follow-up established for `available`).
+`pricing-shell-marketing.tsx` renders a checkmark list under the
+tagline/subLabel block — teal `Check` icon (14px), 13.5px text, 1.6
+line-height, bold header line when present — reading `tier.
+marketingFeatures` verbatim. No component anywhere hand-copies this
+list; the grandfathered legacy tiers ("workspace", "agency") have no
+`marketingFeatures` field at all (they're not marketed on /pricing).
+The flag-OFF `PricingShell` is completely untouched.
+
+**Honesty-rule audit (BEFORE shipping any copy — this is money-adjacent
+marketing text, not aspirational).** Verified every claim against the
+actual codebase in THIS worktree (not a stale/different worktree — see
+the false-negative caveat below):
+
+| Claim | Verdict | Evidence |
+|---|---|---|
+| 8 ready-to-deploy agent templates | TRUE | `lib/agent-templates/starter-pack.ts`'s `STARTER_TEMPLATES` array has exactly 8 entries (`ai-phone-receptionist`, `website-support-chat`, `lead-qualifier-intake`, `booking-concierge`, `quote-estimate-assistant`, `social-content-assistant`, `review-requester`, `speed-to-lead`) |
+| Review-request + speed-to-lead automations | TRUE | Live event wiring: `lib/agents/triggers/agent-trigger.ts`, dispatched on `booking.completed`/`lead.created` from the real event bus |
+| BYOK — provider cost, zero markup | TRUE | `lib/ai/client.ts`'s `getAIClient()` BYOK path instantiates the raw provider client directly; `runtime.ts`'s `llmCostCents`/`computeCostCents` is READ-ONLY observability (feeds the usage-rollup meter), never a Stripe charge or wallet debit |
+| Buy & sell agents on the marketplace | TRUE | `app/marketplace/`, `app/api/marketplace/`, `app/api/v1/marketplace/`; `lib/marketplace/actions.ts`'s `publishAgentTemplateAction` (seller) + install/purchase flow (buyer) |
+| Per-sub-account usage meter & caps | TRUE | `lib/billing/usage-rollup.ts` + `usage-cap.ts`, live-wired (unconditionally, no flag) into `app/(dashboard)/studio/clients/page.tsx` (`ClientUsagePanel`/`UsageCapEditor`/`UsageTotalsTile`) — this is the usage-meter feature this same worktree built earlier in this session |
+| One-click deploy to ALL clients | TRUE | `lib/deployments/deploy-to-clients-action.ts` + `app/(dashboard)/studio/agents/[id]/deploy-to-clients/` UI |
+| API + MCP access | TRUE, but see caveat below | `app/api/v1/**` (35+ routes) + the SeldonFrame MCP server (visible as this session's own `seldonframe` MCP tool inventory) |
+| Rent your agents via the marketplace rail | TRUE | `lib/marketplace/rental.ts`, `rental-pricing.ts`, `agent-rental-run.ts`, `app/api/v1/agents/[slug]/mcp/route.ts` |
+| Set your own resale pricing | TRUE | `lib/marketplace/actions.ts`'s `publishAgentTemplateAction(input: { priceCents, ... })` — the seller sets `priceCents` directly, no server override |
+| Custom domain included (managed) | TRUE | `plans.ts`: `managed.limits.customDomain === true` |
+| Branded client portal logins (agency_starter) | TRUE | `app/portal/[orgSlug]/` surfaces reference `partnerAgencies`/`logoUrl`/`primaryColor`/`accentColor` across 8 files — matches the existing whitelabel-front-office infra (partner_agencies + portal + branding, per project memory) |
+| Deploy agent templates to clients (agency_starter) | TRUE | Same deploy-to-client flow as the "deploy to ALL clients" item, single-client variant |
+| **Priority email support (agency_starter)** | **FALSE — CAUGHT AND DROPPED** | `plans.ts`: `agency_starter.limits.prioritySupport === false`. Only `agency_growth`/`agency_scale` (and the grandfathered `agency` tier) have `prioritySupport: true`. Shipping this claim on agency_starter would have directly contradicted the catalog's own source-of-truth entitlement flag — the exact kind of drift the single-source design is supposed to prevent. **Removed from agency_starter's `marketingFeatures.items`** (a comment in `plans.ts` documents why, at the point it was dropped). |
+| White-label ROI reports (agency_growth) | N/A — shipped exactly as instructed | Marked `"(coming soon)"` per the coordinator's own copy and the honesty rule — not built, correctly labeled, no audit action needed. |
+
+**A note on verification methodology:** a background research agent
+dispatched to independently cross-check these claims returned false
+negatives for items 5 ("Per-sub-account usage meter"), 6 ("One-click
+deploy to ALL clients"), and 12 ("Deploy agent templates to clients")
+— but it had run its search against the WRONG branch/worktree
+(`feature/crm-engine`, which predates this feature entirely), not
+`feature/pricing-ladder`. Its own report flagged this caveat explicitly
+("verify that's what's actually deployed to production"). All three
+were independently re-confirmed directly in THIS worktree via direct
+grep/read before shipping — the agent's mis-scoped run did not change
+the shipped copy, but it's a reminder that a dispatched verification
+agent's cwd/branch must be sanity-checked against its findings,
+especially when its "not found" verdicts contradict direct evidence
+already gathered in the current session.
+
+**Caveat kept in mind, not acted on:** "API + MCP access" is listed
+under `agency_scale`'s checklist, but the underlying API (`/api/v1/**`)
+and MCP server access are NOT tier-gated anywhere found in the codebase
+— they're platform-wide, consistent with CLAUDE.md's "no upfront API
+key... progressive key disclosure" philosophy. The claim itself doesn't
+assert exclusivity ("API + MCP access" is stated as an included
+capability, not "ONLY on this tier") so it's not false, and it was kept
+as instructed — but it's worth Max knowing this bullet doesn't
+differentiate agency_scale from the lower tiers in practice today, in
+case that's not the intended positioning.
+
+**Tests added:**
+- `tests/unit/billing-plans-catalog.spec.ts`: `marketingFeatures` exists
+  (with ≥1 item) on every sellable tier, absent on both grandfathered
+  tiers; builder has no header (base tier); the 4 upper tiers' exact
+  header strings; the ROI-reports item carries `(coming soon)`;
+  agency_starter's catalog `prioritySupport` is false AND its
+  `marketingFeatures.items` contains no priority-support claim (this is
+  the regression test for the caught-and-dropped item above); no item
+  across any sellable tier mentions "autopay" (money-safety guard per
+  the honesty rule).
+- `tests/unit/landing/pricing-shell.spec.tsx`: a new `catalogTiers()`
+  helper builds `LadderTier[]` DIRECTLY FROM `PLANS` (not hardcoded) so
+  every count assertion tracks the catalog automatically — per-tier
+  checkmark-icon counts equal `plan.marketingFeatures.items.length`
+  exactly (via a `data-tier-features={tier.id}` DOM hook added to the
+  component for this purpose); every item string appears verbatim
+  (HTML-entity-escaped for comparison — React SSR-escapes `&`/`'`/etc.)
+  in the rendered output; all 4 "Everything in X, plus:" headers render
+  and builder has none; the `(coming soon)` marker is present; the
+  dropped priority-support claim is confirmed absent from agency_starter's
+  rendered card; exactly one `data-tier-features` block per sellable
+  tier (each tier belongs to exactly one audience row, so no
+  duplication — a real assertion this test initially got wrong at 2x
+  before checking the component's actual per-audience-row filtering
+  behavior). The existing source-guard tests (`pricing-shell-marketing.tsx`
+  still imports nothing from `lib/billing/plans`/`price-ids`, no
+  `process.env`) pass UNCHANGED — the checklist copy arrives entirely
+  via the `tiers` prop, confirming the single-source design holds.
+
+## Commit — this fix
+
+```
+feat(pricing): per-tier feature checklists from the catalog (single source)
+```
+
+Files touched: `lib/billing/plans.ts`, `app/pricing/page.tsx`,
+`app/pricing/pricing-shell-marketing.tsx`,
+`tests/unit/billing-plans-catalog.spec.ts`,
+`tests/unit/landing/pricing-shell.spec.tsx`.
+
+Verify: `tests/unit/landing/pricing-shell.spec.tsx` (25/25) +
+`tests/unit/billing-plans-catalog.spec.ts` (29/29) = 54/54 pass; the
+full `tests/unit/billing/*.spec.ts` + `billing-plans-catalog.spec.ts`
+sweep = 241/241 pass (fail-0); `tsc --noEmit` = 9 pre-existing baseline
+errors, unchanged from before this fix, 0 in touched files;
+`scripts/check-use-server.sh src` clean.

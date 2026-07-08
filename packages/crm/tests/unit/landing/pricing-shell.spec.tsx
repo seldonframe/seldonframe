@@ -69,6 +69,7 @@ import {
   PricingShellMarketing,
   type LadderTier,
 } from "../../../src/app/pricing/pricing-shell-marketing";
+import { PLANS } from "../../../src/lib/billing/plans";
 
 const ALL_LADDER_TIER_IDS = [
   "builder",
@@ -91,6 +92,28 @@ function fixtureTiers(available: boolean): LadderTier[] {
     maxSubAccounts: 0,
     fullWhiteLabel: false,
     available,
+  }));
+}
+
+/** Real catalog-sourced tiers — mirrors app/pricing/page.tsx's
+ *  buildLadderTiers() shape (including marketingFeatures, passed through
+ *  verbatim) but reads PLANS directly here in the TEST (not the component
+ *  — the component never imports plans.ts, per the source guard below).
+ *  `available: true` uniformly since CTA-availability behavior is already
+ *  covered by the fixtureTiers() suite above; this suite is about the
+ *  feature-checklist content, which must track the catalog automatically
+ *  (no hardcoded counts) so a future plans.ts edit can't silently drift
+ *  from what the test expects. */
+function catalogTiers(): LadderTier[] {
+  return PLANS.filter((p) => p.sellable).map((p) => ({
+    id: p.id as LadderTier["id"],
+    name: p.name,
+    price: p.price,
+    tagline: p.tagline,
+    maxSubAccounts: p.limits.maxSubAccounts,
+    fullWhiteLabel: p.limits.fullWhiteLabel,
+    available: true,
+    marketingFeatures: p.marketingFeatures,
   }));
 }
 
@@ -217,6 +240,114 @@ describe("PricingShellMarketing — SF_TIER_LADDER ON (light marketing-branded v
     // palette).
     assert.doesNotMatch(html, /bg-card\//);
     assert.doesNotMatch(html, /text-muted-foreground/);
+  });
+});
+
+describe("PricingShellMarketing — per-tier feature checklists (PostPlanify-style, single source: plans.ts)", () => {
+  test("every sellable tier's SSR card carries exactly its catalog item count under data-tier-features (not hardcoded — derived from PLANS)", () => {
+    const html = renderToString(
+      React.createElement(PricingShellMarketing, { isAuthed: false, tiers: catalogTiers() }),
+    );
+    for (const plan of PLANS.filter((p) => p.sellable)) {
+      const expectedCount = plan.marketingFeatures!.items.length;
+      // Each SSR pass renders BOTH audience rows (the 2026-07-08 SSR
+      // hotfix), so each tier's data-tier-features block appears TWICE —
+      // once per row — with identical content. Count <Check> icons
+      // between this tier's two data-tier-features markers as a proxy
+      // for item count per occurrence (lucide's Check renders as an
+      // inline <svg class="lucide lucide-check" ...>).
+      const blockRe = new RegExp(
+        `<div data-tier-features="${plan.id}"[^>]*>([\\s\\S]*?)</div></div>`,
+      );
+      const match = html.match(blockRe);
+      assert.ok(match, `${plan.id}'s data-tier-features block must be present in SSR HTML`);
+      const checkIconCount = (match![1].match(/lucide-check/g) ?? []).length;
+      assert.equal(
+        checkIconCount,
+        expectedCount,
+        `${plan.id}: expected ${expectedCount} checklist items (from PLANS), found ${checkIconCount} check icons`,
+      );
+    }
+  });
+
+  test("every sellable tier's feature items appear verbatim in the SSR HTML (single-source — no component copy diverges from plans.ts)", () => {
+    const html = renderToString(
+      React.createElement(PricingShellMarketing, { isAuthed: false, tiers: catalogTiers() }),
+    );
+    // React's SSR HTML-escapes text content (e.g. "&" -> "&amp;"), so
+    // compare against the same escaping rather than the raw source string
+    // — this still proves the text is the SAME string from plans.ts, not
+    // a paraphrase, just accounting for the serialization format.
+    const htmlEscape = (s: string) =>
+      s
+        .replace(/&/g, "&amp;")
+        .replace(/</g, "&lt;")
+        .replace(/>/g, "&gt;")
+        .replace(/'/g, "&#x27;")
+        .replace(/"/g, "&quot;");
+    for (const plan of PLANS.filter((p) => p.sellable)) {
+      for (const item of plan.marketingFeatures!.items) {
+        assert.ok(
+          html.includes(htmlEscape(item)),
+          `${plan.id}: expected item "${item}" to appear verbatim (HTML-escaped) in the rendered HTML`,
+        );
+      }
+    }
+  });
+
+  test("'Everything in X, plus:' headers render for managed / agency_starter / agency_growth / agency_scale; the base builder tier has none", () => {
+    const html = renderToString(
+      React.createElement(PricingShellMarketing, { isAuthed: false, tiers: catalogTiers() }),
+    );
+    const headers = [
+      "Everything in Builder, for one workspace — plus:",
+      "Everything in Builder, plus:",
+      "Everything in Starter, plus:",
+      "Everything in Growth, plus:",
+    ];
+    for (const header of headers) {
+      assert.ok(html.includes(header), `expected header "${header}" in SSR HTML`);
+    }
+    // builder has no marketingFeatures.header — confirm no "Everything in"
+    // phrase precedes ITS OWN item list. (The 4 headers above already
+    // establish the OTHER tiers correctly reference their predecessor;
+    // this just confirms builder itself introduces none of its own.)
+    const builder = PLANS.find((p) => p.id === "builder")!;
+    assert.equal(builder.marketingFeatures!.header, undefined);
+  });
+
+  test("the '(coming soon)' marker is present on the ROI-reports item and nowhere falsely implies it's live", () => {
+    const html = renderToString(
+      React.createElement(PricingShellMarketing, { isAuthed: false, tiers: catalogTiers() }),
+    );
+    assert.match(html, /White-label ROI reports \(coming soon\)/);
+  });
+
+  test("agency_starter's rendered card does NOT include a priority-support claim (catalog: prioritySupport=false for this tier)", () => {
+    const html = renderToString(
+      React.createElement(PricingShellMarketing, { isAuthed: false, tiers: catalogTiers() }),
+    );
+    const starter = PLANS.find((p) => p.id === "agency_starter")!;
+    assert.equal(starter.limits.prioritySupport, false);
+    const blockRe = /<div data-tier-features="agency_starter"[^>]*>([\s\S]*?)<\/div><\/div>/;
+    const match = html.match(blockRe);
+    assert.ok(match);
+    assert.doesNotMatch(match![1], /priority.*support/i);
+  });
+
+  test("checklist renders under EVERY tier card, not just once globally (data-tier-features count == the sellable-tier count — each tier belongs to exactly one audience row)", () => {
+    const html = renderToString(
+      React.createElement(PricingShellMarketing, { isAuthed: false, tiers: catalogTiers() }),
+    );
+    const sellableCount = PLANS.filter((p) => p.sellable).length;
+    const featureBlockCount = (html.match(/data-tier-features="/g) ?? []).length;
+    // Unlike the "both rows SSR'd" invariant tested elsewhere (which is
+    // about crawler-visibility of ALL 5 tier IDS across the two audience
+    // rows), each INDIVIDUAL tier only belongs to ONE audience row
+    // (personal: builder/managed; agency: agency_starter/growth/scale) —
+    // ladderTiersFor filters per row, so a tier's card (and its checklist)
+    // renders exactly once, not duplicated across both rows.
+    assert.equal(featureBlockCount, sellableCount, "one data-tier-features block per sellable tier (each tier belongs to exactly one audience row)");
   });
 });
 

@@ -80,6 +80,10 @@ function buildLadderTiers(): LadderTier[] {
     maxSubAccounts: p.limits.maxSubAccounts,
     fullWhiteLabel: p.limits.fullWhiteLabel,
     available: !isPlaceholderPriceId(p.stripePriceId),
+    // 2026-07-08 — PostPlanify-style rich feature checklist (per-tier
+    // marketingFeatures, single source in plans.ts). Passed through
+    // verbatim — this Server Component never edits the copy.
+    marketingFeatures: p.marketingFeatures,
   }));
 }
 

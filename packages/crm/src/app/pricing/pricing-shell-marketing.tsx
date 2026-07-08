@@ -98,6 +98,16 @@ export type LadderTier = {
   /** true = a real Stripe price is configured (checkout wired); false =
    *  still the unconfigured PLACEHOLDER (renders "Book a demo" instead). */
   available: boolean;
+  /** 2026-07-08 — the rich per-tier feature checklist (PostPlanify style).
+   *  SINGLE SOURCE: this list is authored ONCE in lib/billing/plans.ts's
+   *  `Plan.marketingFeatures` and arrives here unmodified via the server-
+   *  resolved `tiers` prop — this file renders it verbatim, never copies
+   *  or edits the strings. Optional (undefined on tiers with no checklist,
+   *  though every sellable tier has one today). */
+  marketingFeatures?: {
+    header?: string;
+    items: string[];
+  };
 };
 
 function ladderTiersFor(tiers: LadderTier[], audience: Audience): LadderTier[] {
@@ -263,6 +273,33 @@ export function PricingShellMarketing({ isAuthed, tiers }: PricingShellMarketing
                     ) : null}
                     {tier.fullWhiteLabel ? (
                       <p className="text-[12.5px] text-[#6E665A]">Full white-label</p>
+                    ) : null}
+
+                    {/* PostPlanify-style rich feature checklist — SINGLE
+                        SOURCE is Plan.marketingFeatures (lib/billing/plans.ts),
+                        rendered verbatim here. `header` (e.g. "Everything in
+                        Builder, plus:") is bold above the checkmarked items;
+                        omitted on the base tier which has no "everything in
+                        X" predecessor. */}
+                    {tier.marketingFeatures ? (
+                      <div data-tier-features={tier.id} className="mt-1">
+                        {tier.marketingFeatures.header ? (
+                          <p className="mb-2 text-[12.5px] font-[600] text-[#221D17]">
+                            {tier.marketingFeatures.header}
+                          </p>
+                        ) : null}
+                        <ul className="flex flex-col gap-1.5">
+                          {tier.marketingFeatures.items.map((item) => (
+                            <li
+                              key={item}
+                              className="flex items-start gap-2 text-[13.5px] leading-[1.6] text-[#221D17]"
+                            >
+                              <Check size={14} className="mt-[3px] shrink-0 text-[#00897B]" aria-hidden />
+                              <span>{item}</span>
+                            </li>
+                          ))}
+                        </ul>
+                      </div>
                     ) : null}
 
                     {/* PRIMARY CTA */}
