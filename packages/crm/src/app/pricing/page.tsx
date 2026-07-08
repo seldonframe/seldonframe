@@ -46,10 +46,42 @@ import {
   AccordionTrigger,
 } from "@/components/ui/accordion";
 import { auth } from "@/auth";
+import { PLANS } from "@/lib/billing/plans";
+import { isPlaceholderPriceId } from "@/lib/billing/price-ids";
 import { PricingShell } from "./pricing-shell";
-import { PricingShellMarketing } from "./pricing-shell-marketing";
+import { PricingShellMarketing, type LadderTier } from "./pricing-shell-marketing";
 import { MarketingNav } from "@/components/landing/marketing-nav";
 import { MarketingFooter } from "@/components/landing/marketing-footer";
+
+// 2026-07-08 hydration-mismatch fix — "No price id lives in the client"
+// (the rule the legacy single card in pricing-shell.tsx already followed).
+// STRIPE_*_PRICE_ID env vars are SERVER-ONLY: readEnv() in price-ids.ts
+// resolves them from process.env, which is undefined in the browser
+// bundle. PricingShellMarketing was a "use client" component computing
+// `isPlaceholderPriceId(tier.stripePriceId)` itself — every tier hydrated
+// as a placeholder client-side (env unset in the browser) even when the
+// SSR pass (env present, server-side) had resolved a real price, causing
+// a hydration mismatch where the client's "Book a demo" primary CTA always
+// won. Fix: resolve `available` (the ONLY thing the client needs to know)
+// server-side here, and pass serializable, price-id-free tier props down.
+function buildLadderTiers(): LadderTier[] {
+  // p.sellable === true is exactly the 5 ladder tiers (builder / managed /
+  // agency_starter / agency_growth / agency_scale) — the two grandfathered
+  // legacy ids ("workspace" / "agency") are sellable:false and never reach
+  // this filter. TS can't narrow TierId -> LadderTierId through a runtime
+  // .filter predicate, so the cast documents that invariant explicitly
+  // rather than widening LadderTierId to accept ids this ladder never
+  // actually renders.
+  return PLANS.filter((p) => p.sellable).map((p) => ({
+    id: p.id as LadderTier["id"],
+    name: p.name,
+    price: p.price,
+    tagline: p.tagline,
+    maxSubAccounts: p.limits.maxSubAccounts,
+    fullWhiteLabel: p.limits.fullWhiteLabel,
+    available: !isPlaceholderPriceId(p.stripePriceId),
+  }));
+}
 
 /** SF_TIER_LADDER (2026-07-08) — same strict-"1" contract as the other
  *  dark-by-default flags in lib/web-build/policy.ts (isWinLadderOn,
@@ -96,7 +128,7 @@ export default async function PricingPage({ searchParams }: PricingPageProps) {
         {/* pt-[100px] clears MarketingNav's fixed header — same offset
             the homepage hero uses (marketing-hero.tsx). */}
         <main id="main-content" className="pt-[100px]">
-          <PricingShellMarketing isAuthed={isAuthed} />
+          <PricingShellMarketing isAuthed={isAuthed} tiers={buildLadderTiers()} />
 
           {/* FAQ — restyled light (details/summary pattern, matches
               marketing-faq-section.tsx's visual language) instead of the
