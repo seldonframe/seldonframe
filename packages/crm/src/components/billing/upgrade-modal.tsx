@@ -3,17 +3,17 @@
 // 402 path, and the dashboard "create client" CTA when the operator is at
 // their workspace limit. DO NOT redefine this component elsewhere.
 //
-// 2026-06-18 pricing migration (Phase 3): the upgrade targets are the new
-// ladder — Workspace ($49, one full workspace) and Agency ($297, 10 client
-// workspaces included, +$10/mo each beyond). The legacy Growth/Scale cards
-// are gone. The "add another client workspace" framing maps to Agency
-// (the multi-workspace tier), with Workspace as the lighter option.
+// 2026-07-08 pricing ladder: the upgrade targets are the new NEW-tier
+// ladder — Managed ($49, one workspace) and Agency Starter ($99,
+// unlimited own workspaces + 10 client sub-accounts, whitelabel). The
+// stale "$49 workspace / $297 agency" copy (grandfathered tiers, no
+// longer sold) is gone; new checkouts only ever offer sellable tiers.
 //
 // Design system (Task 7.1):
 //   - Dialog / DialogContent / DialogHeader / DialogTitle / DialogDescription
 //   - Card / CardContent / CardHeader / CardTitle for tier cards
 //   - Button — variant="default" for the recommended CTA, "outline" / "ghost" otherwise
-//   - Badge — marks the Agency tier "Recommended"
+//   - Badge — marks the Agency Starter tier "Recommended"
 //   - Check icon from lucide-react for feature bullets
 "use client";
 
@@ -31,11 +31,11 @@ import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { startCheckout } from "@/lib/billing/start-checkout";
 import {
-  WORKSPACE_PRICE_ID,
-  AGENCY_BASE_PRICE_ID,
+  MANAGED_PRICE_ID,
+  AGENCY_STARTER_PRICE_ID,
 } from "@/lib/billing/price-ids";
 
-type UpgradeTarget = "workspace" | "agency";
+type UpgradeTarget = "managed" | "agency_starter";
 
 // User-facing strings — value-forward, no exclamation marks, no emoji.
 const COPY = {
@@ -49,8 +49,8 @@ const COPY = {
   freeDestination: "/signup/billing?next=/clients/new",
   subtitleTemplate: (used: number, limit: number) =>
     `You're using ${used} of ${limit} workspace${limit === 1 ? "" : "s"} on your current plan`,
-  workspace: {
-    name: "Workspace",
+  managed: {
+    name: "Managed",
     price: "$49/mo",
     features: [
       "1 full client workspace",
@@ -58,18 +58,18 @@ const COPY = {
       "AI chatbot included",
       "Custom domain · no SeldonFrame branding",
     ],
-    cta: "Upgrade to Workspace",
+    cta: "Upgrade to Managed",
   },
-  agency: {
-    name: "Agency",
-    price: "$297/mo",
+  agency_starter: {
+    name: "Agency Starter",
+    price: "$99/mo",
     features: [
-      "10 client workspaces included",
-      "$10/mo per workspace beyond 10",
+      "Unlimited own workspaces",
+      "10 client sub-accounts included",
       "Full white-label platform",
-      "Marketplace · priority support",
+      "Client portal · marketplace",
     ],
-    cta: "Upgrade to Agency",
+    cta: "Upgrade to Agency Starter",
     recommendedLabel: "Recommended",
   },
   footer:
@@ -82,18 +82,29 @@ const COPY = {
 // and assembles the line item + metadata server-side via
 // buildCheckoutSessionParams. Keeps secrets out of the client bundle.
 const TIER_TO_PRICE_ID: Record<UpgradeTarget, string> = {
-  workspace: WORKSPACE_PRICE_ID,
-  agency: AGENCY_BASE_PRICE_ID,
+  managed: MANAGED_PRICE_ID,
+  agency_starter: AGENCY_STARTER_PRICE_ID,
 };
 
 export type UpgradeModalProps = {
   open: boolean;
   onOpenChange: (open: boolean) => void;
   /** Current plan of the operator hitting the limit. Accepts legacy
-   *  display values ("free"/"growth"/"scale") as well as the new ladder
-   *  so callers that still compute a legacy tier label keep type-checking;
-   *  only the "free"/"inactive" branch changes the rendered surface. */
-  tier: "free" | "inactive" | "builder" | "workspace" | "growth" | "scale" | "agency";
+   *  display values as well as the ladder so callers that still compute
+   *  a legacy tier label keep type-checking; only the "free"/"inactive"
+   *  branch changes the rendered surface. */
+  tier:
+    | "free"
+    | "inactive"
+    | "builder"
+    | "managed"
+    | "agency_starter"
+    | "agency_growth"
+    | "agency_scale"
+    | "workspace"
+    | "growth"
+    | "scale"
+    | "agency";
   used: number;
   limit: number;
 };
@@ -167,14 +178,15 @@ export function UpgradeModal({ open, onOpenChange, tier, used, limit }: UpgradeM
           <DialogDescription>{COPY.subtitleTemplate(used, limit)}</DialogDescription>
         </DialogHeader>
 
-        {/* Agency gets ring-2 + shadow-md to back the "Recommended" badge;
-            CTAs differentiate (Workspace=outline, Agency=default). Agency
-            renders first so initial focus lands on the recommended upgrade
-            path (matches visual hierarchy + SR reading order). */}
+        {/* Agency Starter gets ring-2 + shadow-md to back the "Recommended"
+            badge; CTAs differentiate (Managed=outline, Agency Starter=default).
+            Agency Starter renders first so initial focus lands on the
+            recommended upgrade path (matches visual hierarchy + SR reading
+            order). */}
         <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
-          {(["agency", "workspace"] as const).map((target) => {
+          {(["agency_starter", "managed"] as const).map((target) => {
             const card = COPY[target];
-            const isAgency = target === "agency";
+            const isAgency = target === "agency_starter";
             return (
               <Card
                 key={target}
@@ -184,7 +196,7 @@ export function UpgradeModal({ open, onOpenChange, tier, used, limit }: UpgradeM
                   <div className="flex items-center justify-between gap-2">
                     <CardTitle>{card.name}</CardTitle>
                     {isAgency ? (
-                      <Badge variant="default">{COPY.agency.recommendedLabel}</Badge>
+                      <Badge variant="default">{COPY.agency_starter.recommendedLabel}</Badge>
                     ) : null}
                   </div>
                   <p className="text-sm font-medium text-foreground">{card.price}</p>

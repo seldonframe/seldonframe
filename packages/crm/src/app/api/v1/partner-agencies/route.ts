@@ -25,6 +25,29 @@ import {
   registerAgencySenderDomain,
   verifyAgencySenderDomain,
 } from "@/lib/partner-agencies/sender-domain";
+import { enforceSubAccountLimit } from "@/lib/billing/limits";
+import { resolveTierForWorkspace } from "@/lib/billing/tier-resolver";
+import { fetchAgencyAttachedWorkspaceIds } from "@/lib/billing/orgs";
+
+/** 2026-07-08 — sub-account limit at the handoff boundary. Resolves the
+ *  caller's effective tier from their bearer WORKSPACE (same read path
+ *  as enforceWorkspaceLimit — resolveTierForWorkspace walks the agency
+ *  chain) and counts current attachments via
+ *  fetchAgencyAttachedWorkspaceIds (keyed by the real human owner user
+ *  id — anonymous-workspace-as-actor callers have no partner_agencies
+ *  rows to count yet, so they read as 0/unlimited-cap-only). Wrapped
+ *  BEFORE the attachWorkspaceToAgency store call so the store itself
+ *  stays pure. */
+async function enforceSubAccountLimitForUser(params: {
+  bearerOrgId: string;
+  ownerUserId?: string;
+}) {
+  const tier = await resolveTierForWorkspace(params.bearerOrgId);
+  const attached = params.ownerUserId
+    ? await fetchAgencyAttachedWorkspaceIds(params.ownerUserId).catch(() => [])
+    : [];
+  return enforceSubAccountLimit({ tier, currentCount: attached.length });
+}
 
 type Body = {
   op?: unknown;
@@ -163,6 +186,32 @@ export async function POST(request: Request) {
         { status: 400 },
       );
     }
+    const limitDecision = await enforceSubAccountLimitForUser({
+      bearerOrgId: guard.orgId,
+      ownerUserId: ownerUserId ?? undefined,
+    });
+    if (!limitDecision.ok) {
+      logEvent(
+        "v17_attach_workspace_to_agency_failed",
+        {
+          error: limitDecision.reason,
+          used: limitDecision.used,
+          limit: limitDecision.limit,
+        },
+        { request, orgId: guard.orgId, status: 402, severity: "warn" },
+      );
+      return NextResponse.json(
+        {
+          ok: false,
+          error: limitDecision.reason,
+          used: limitDecision.used,
+          limit: limitDecision.limit,
+          upgradeUrl: "/settings/billing",
+        },
+        { status: 402 },
+      );
+    }
+
     const result = await attachWorkspaceToAgency({
       workspaceId: body.workspace_id,
       agencyId: body.agency_id,

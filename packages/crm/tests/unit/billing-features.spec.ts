@@ -64,11 +64,14 @@ describe("normalizeTierId", () => {
 });
 
 describe("getOrgFeatures", () => {
-  test("builder = landing pages only, no CRM/portal", () => {
+  // 2026-07-08 pricing ladder — "builder" is repurposed to the new $29
+  // tier (unlimited own workspaces, full front office, BYOK, no
+  // whitelabel/portal). The old $19 landing-pages-only shape never
+  // shipped to checkout, so no grandfathering is owed to it.
+  test("builder = unlimited workspaces, full front office, no whitelabel/portal", () => {
     const f = getOrgFeatures("builder");
-    assert.equal(f.maxWorkspaces, 0);
-    assert.equal(f.maxLandingPages, 10);
-    assert.equal(f.crm, false);
+    assert.equal(f.maxWorkspaces, -1);
+    assert.equal(f.crm, true);
     assert.equal(f.clientPortal, false);
     assert.equal(f.customDomains, true);
     assert.equal(f.whiteLabel, false);
