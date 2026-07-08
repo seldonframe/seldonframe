@@ -18,6 +18,9 @@ import { MKT } from "@/components/marketplace/marketplace-data";
 import { MarkdownPointer } from "@/components/seo/markdown-pointer";
 import { TldrBox } from "@/components/seo/tldr-box";
 import { FrontOfficeFlow } from "@/components/seo/front-office-flow";
+import { PricingSourceLine } from "@/components/seo/alternative-page";
+import { BuildWidget } from "@/components/seo/build-widget";
+import { isWebUngatedBuildOn } from "@/lib/web-build/policy";
 import { emphasize } from "@/lib/seo/emphasize";
 import {
   COMPETITORS,
@@ -235,6 +238,7 @@ export function SeldonFrameVsPage({ competitor }: { competitor: Competitor }): R
           </div>
           <CtaRow />
           <FrontOfficeFlow competitorName={c.name} competitorCategory={c.category} />
+          <PricingSourceLine name={c.name} url={c.pricingSourceUrl} />
         </section>
 
         {/* ── WHERE THEY WIN ── */}
@@ -316,6 +320,8 @@ export function SeldonFrameVsPage({ competitor }: { competitor: Competitor }): R
             </details>
           ))}
         </section>
+
+        <BuildWidget ungatedBuildEnabled={isWebUngatedBuildOn({ SF_WEB_UNGATED_BUILD: process.env.SF_WEB_UNGATED_BUILD })} />
 
         {/* ── FINAL CTA ── */}
         <section

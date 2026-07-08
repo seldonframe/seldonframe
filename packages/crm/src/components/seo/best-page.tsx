@@ -13,6 +13,9 @@ import { MarketplaceStyles } from "@/components/marketplace/marketplace-styles";
 import { MKT } from "@/components/marketplace/marketplace-data";
 import { MarkdownPointer } from "@/components/seo/markdown-pointer";
 import { TldrBox } from "@/components/seo/tldr-box";
+import { LiteYoutube } from "@/components/seo/lite-youtube";
+import { BuildWidget } from "@/components/seo/build-widget";
+import { isWebUngatedBuildOn } from "@/lib/web-build/policy";
 import { emphasize } from "@/lib/seo/emphasize";
 import {
   BEST_PAGES,
@@ -50,9 +53,21 @@ export function composeCheapestOption(category: BestCategory): string {
 }
 
 export function BestPage({ slug }: { slug: string }): ReactElement {
-  const { category, audience } = getBestPage(slug);
+  const { page, category, audience } = getBestPage(slug);
   const total = category.contenders.length + 1;
   const h1 = `The ${total} Best ${category.nounPlural} for ${audience.label} (2026)`;
+
+  const videoLd =
+    page.videoId && page.videoUploadDate
+      ? {
+          "@context": "https://schema.org",
+          "@type": "VideoObject",
+          name: h1,
+          thumbnailUrl: `https://i.ytimg.com/vi/${page.videoId}/hqdefault.jpg`,
+          uploadDate: page.videoUploadDate,
+          embedUrl: `https://www.youtube-nocookie.com/embed/${page.videoId}`,
+        }
+      : null;
 
   const itemListLd = {
     "@context": "https://schema.org",
@@ -105,6 +120,7 @@ export function BestPage({ slug }: { slug: string }): ReactElement {
       <MarkdownPointer href={`/best/${slug}.md`} />
       <script type="application/ld+json" dangerouslySetInnerHTML={{ __html: JSON.stringify(itemListLd) }} />
       <script type="application/ld+json" dangerouslySetInnerHTML={{ __html: JSON.stringify(faqLd) }} />
+      {videoLd && <script type="application/ld+json" dangerouslySetInnerHTML={{ __html: JSON.stringify(videoLd) }} />}
       <MarketplaceNav />
 
       <main style={{ maxWidth: 960, margin: "0 auto", padding: "26px 32px 70px", width: "100%" }}>
@@ -134,6 +150,7 @@ export function BestPage({ slug }: { slug: string }): ReactElement {
           <p style={{ margin: "12px 0 0", fontSize: 14.5, lineHeight: 1.6, color: "rgba(34,29,23,0.6)", maxWidth: 720 }}>
             {`We build one of these, so we put ourselves first below — but every other pick here gets a genuine strength list and a real, honest catch. We're not going to pretend the others don't work.`}
           </p>
+          {page.videoId && <LiteYoutube videoId={page.videoId} title={h1} />}
           <TldrBox
             items={[
               { icon: "🏆", label: "Our pick", text: "SeldonFrame — the whole front office at $29/mo flat (we build it, and we say below when the others win)" },
@@ -311,6 +328,8 @@ export function BestPage({ slug }: { slug: string }): ReactElement {
             </Link>
           </div>
         </section>
+
+        <BuildWidget ungatedBuildEnabled={isWebUngatedBuildOn({ SF_WEB_UNGATED_BUILD: process.env.SF_WEB_UNGATED_BUILD })} />
 
         {/* ── FINAL CTA ── */}
         <section

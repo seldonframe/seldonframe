@@ -5,7 +5,17 @@
 // inputs → four cost lines → a simple bar comparison. Styled on the MKT
 // palette to match the other free-tool pages.
 
-import { useState, type ReactElement } from "react";
+import { useState, useEffect, useRef, type ReactElement } from "react";
+
+import {
+  encodeCostCalcState,
+  decodeCostCalcState,
+  renderResultCard,
+  buildShareUrl,
+  copyToClipboard,
+  downloadCanvasAsImage,
+  shareResultCard,
+} from "./result-card";
 
 const INK = "#221D17";
 const GREEN = "#00897B";
@@ -23,6 +33,34 @@ export function AiReceptionistCostCalculator(): ReactElement {
   const [wage, setWage] = useState(18);
   const [answeringRate, setAnsweringRate] = useState(1.75);
   const [aiRate, setAiRate] = useState(0.3);
+  const replaceTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
+
+  // Hydrate from the URL on mount only — never during SSR (no `window`).
+  useEffect(() => {
+    if (typeof window === "undefined") return;
+    const decoded = decodeCostCalcState(window.location.search);
+    if (decoded.callsPerMonth !== undefined) setCallsPerMonth(decoded.callsPerMonth);
+    if (decoded.avgMinutes !== undefined) setAvgMinutes(decoded.avgMinutes);
+    if (decoded.wage !== undefined) setWage(decoded.wage);
+    if (decoded.answeringRate !== undefined) setAnsweringRate(decoded.answeringRate);
+    if (decoded.aiRate !== undefined) setAiRate(decoded.aiRate);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
+  // Keep the address bar in sync with the current inputs (throttled) so the
+  // URL is always a shareable permalink of whatever's on screen.
+  useEffect(() => {
+    if (typeof window === "undefined") return;
+    if (replaceTimer.current) clearTimeout(replaceTimer.current);
+    replaceTimer.current = setTimeout(() => {
+      const qs = encodeCostCalcState({ callsPerMonth, avgMinutes, wage, answeringRate, aiRate });
+      const url = `${window.location.pathname}?${qs}`;
+      window.history.replaceState(null, "", url);
+    }, 150);
+    return () => {
+      if (replaceTimer.current) clearTimeout(replaceTimer.current);
+    };
+  }, [callsPerMonth, avgMinutes, wage, answeringRate, aiRate]);
 
   // Estimate coverage hours a human receptionist needs from call volume:
   // calls x minutes gives total talk-time hours, tripled as a rough proxy for
@@ -45,6 +83,60 @@ export function AiReceptionistCostCalculator(): ReactElement {
   const maxValue = Math.max(...bars.map((b) => b.value), 1);
   const cheapest = bars.reduce((a, b) => (b.value < a.value ? b : a), bars[0]);
   const monthlySavings = Math.max(0, humanCost - SELDONFRAME_FLAT);
+
+  // ─── Shareable result card ───
+  // bigNumber = the savings figure when positive — "$X,XXX/mo saved" is the
+  // striking, share-worthy number (it's the story: "look what I'd save"),
+  // vs. "SeldonFrame $29 flat" which reads as a price tag, not a result.
+  // Falls back to the flat price only in the edge case where a human
+  // receptionist would already be cheaper than $29/mo.
+  const canvasRef = useRef<HTMLCanvasElement | null>(null);
+  const [copyFeedback, setCopyFeedback] = useState<string | null>(null);
+  const renderTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const canShare = typeof window !== "undefined" && typeof navigator !== "undefined" && typeof navigator.share === "function";
+
+  useEffect(() => {
+    if (renderTimer.current) clearTimeout(renderTimer.current);
+    renderTimer.current = setTimeout(() => {
+      const canvas = canvasRef.current;
+      if (!canvas) return;
+      renderResultCard(canvas, {
+        headline: "What a receptionist really costs per month",
+        bigNumber: monthlySavings > 0 ? `${money(monthlySavings)}/mo saved` : `${money(SELDONFRAME_FLAT)}/mo flat`,
+        subline: `Human ${money(humanCost)} · Answering service ${money(answeringServiceCost)} · Per-minute AI ${money(aiPerMinuteCost)}`,
+        rows: [
+          { label: "Human receptionist", value: `${money(humanCost)}/mo` },
+          { label: "Answering service", value: `${money(answeringServiceCost)}/mo` },
+          { label: "SeldonFrame", value: `${money(SELDONFRAME_FLAT)}/mo flat` },
+        ],
+        footer: "built free at seldonframe.com/tools",
+      });
+    }, 150);
+    return () => {
+      if (renderTimer.current) clearTimeout(renderTimer.current);
+    };
+  }, [humanCost, answeringServiceCost, aiPerMinuteCost, monthlySavings]);
+
+  const handleCopyLink = async () => {
+    const url = buildShareUrl(window.location.search);
+    const ok = await copyToClipboard(url);
+    setCopyFeedback(ok ? "Copied ✓" : "Copy failed");
+    setTimeout(() => setCopyFeedback(null), 2000);
+  };
+
+  const handleDownload = () => {
+    if (canvasRef.current) downloadCanvasAsImage(canvasRef.current, "receptionist-cost.png");
+  };
+
+  const handleNativeShare = async () => {
+    const url = buildShareUrl(window.location.search);
+    await shareResultCard(canvasRef.current, {
+      title: "What a receptionist really costs per month",
+      text: monthlySavings > 0 ? `I could save ~${money(monthlySavings)}/mo with an AI receptionist.` : "See what a receptionist really costs per month.",
+      url,
+      filename: "receptionist-cost.png",
+    });
+  };
 
   return (
     <div style={{ border: `1px solid ${INK10}`, borderRadius: 20, background: "rgba(255,255,255,0.6)", padding: "28px 28px" }}>
@@ -180,6 +272,40 @@ export function AiReceptionistCostCalculator(): ReactElement {
         <a href="/signup" style={{ background: INK, color: "#F6F2EA", padding: "13px 26px", borderRadius: 12, fontWeight: 700, fontSize: 15.5, textDecoration: "none" }}>
           Build your AI front office free in ~3 minutes
         </a>
+      </div>
+
+      <div style={{ marginTop: 28, borderTop: `1px solid ${INK10}`, paddingTop: 24 }}>
+        <div style={{ fontSize: 12, fontWeight: 700, letterSpacing: "0.06em", textTransform: "uppercase", color: "rgba(34,29,23,0.55)", marginBottom: 12 }}>
+          Share your result
+        </div>
+        <div style={{ borderRadius: 14, overflow: "hidden", border: `1px solid ${INK10}`, background: "#1F2B24", maxWidth: 640 }}>
+          <canvas ref={canvasRef} style={{ display: "block", width: "100%", height: "auto" }} aria-label="Downloadable result card comparing receptionist costs" />
+        </div>
+        <div style={{ display: "flex", flexWrap: "wrap", gap: 10, marginTop: 14, alignItems: "center" }}>
+          <button
+            type="button"
+            onClick={handleDownload}
+            style={{ border: `1.5px solid ${INK10}`, color: INK, padding: "10px 18px", borderRadius: 10, fontWeight: 700, fontSize: 14, background: "rgba(255,255,255,0.6)", cursor: "pointer" }}
+          >
+            ⬇ Download image
+          </button>
+          <button
+            type="button"
+            onClick={handleCopyLink}
+            style={{ border: `1.5px solid ${INK10}`, color: INK, padding: "10px 18px", borderRadius: 10, fontWeight: 700, fontSize: 14, background: "rgba(255,255,255,0.6)", cursor: "pointer" }}
+          >
+            🔗 {copyFeedback ?? "Copy link"}
+          </button>
+          {canShare && (
+            <button
+              type="button"
+              onClick={handleNativeShare}
+              style={{ border: `1.5px solid ${INK10}`, color: INK, padding: "10px 18px", borderRadius: 10, fontWeight: 700, fontSize: 14, background: "rgba(255,255,255,0.6)", cursor: "pointer" }}
+            >
+              Share
+            </button>
+          )}
+        </div>
       </div>
     </div>
   );

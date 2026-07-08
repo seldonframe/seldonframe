@@ -88,6 +88,9 @@ export async function GET(req: Request): Promise<Response> {
   for (const c of COMPETITORS) {
     lines.push(`- [Best ${c.name} alternative](${base}/alternative-to-${c.slug}): ${c.oneLiner}`);
   }
+  for (const c of COMPETITORS) {
+    lines.push(`- [${c.name} pricing breakdown](${base}/${c.slug}-pricing): plans, the costs that stack on top, and what you'll actually pay.`);
+  }
   for (const p of VS_PAIRS) {
     lines.push(
       `- [${getCompetitor(p.a).name} vs ${getCompetitor(p.b).name}](${base}/compare/${vsSlug(p)}): ${p.angle}`,

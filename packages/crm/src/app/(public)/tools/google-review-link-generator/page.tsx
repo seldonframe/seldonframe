@@ -9,6 +9,7 @@ import { MarketplaceNav, MarketplaceFooter } from "@/components/marketplace/mark
 import { MarketplaceStyles } from "@/components/marketplace/marketplace-styles";
 import { MKT } from "@/components/marketplace/marketplace-data";
 import { GoogleReviewLinkGenerator } from "@/components/seo/google-review-link-generator";
+import { buildOgUrl } from "@/lib/seo/og-card";
 
 /** FAQ answers use a few <strong> tags for readability; JSON-LD wants plain
  *  text, so strip tags before embedding in the schema. */
@@ -20,11 +21,14 @@ const TITLE = "Google Review Link Generator — free direct review link + QR cod
 const DESCRIPTION =
   "Free Google review link generator: turn your Place ID or Maps URL into a direct write-a-review link and a printable QR code, in seconds — no signup required.";
 
+const OG_URL = buildOgUrl({ kind: "tool", name: "Google Review Link Generator", hook: "Get your direct review link + QR code" });
+
 export const metadata: Metadata = {
   title: TITLE,
   description: DESCRIPTION,
   alternates: { canonical: "/tools/google-review-link-generator" },
-  openGraph: { title: TITLE, description: DESCRIPTION, url: "/tools/google-review-link-generator", type: "website" },
+  openGraph: { title: TITLE, description: DESCRIPTION, url: "/tools/google-review-link-generator", type: "website", images: [{ url: OG_URL, width: 1200, height: 630 }] },
+  twitter: { card: "summary_large_image", title: TITLE, description: DESCRIPTION, images: [OG_URL] },
 };
 
 // FAQ strings render via dangerouslySetInnerHTML (inline <strong> only).

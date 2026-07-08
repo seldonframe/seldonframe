@@ -17,6 +17,8 @@ import { MKT } from "@/components/marketplace/marketplace-data";
 import { MarkdownPointer } from "@/components/seo/markdown-pointer";
 import { TldrBox } from "@/components/seo/tldr-box";
 import { FrontOfficeFlow } from "@/components/seo/front-office-flow";
+import { BuildWidget } from "@/components/seo/build-widget";
+import { isWebUngatedBuildOn } from "@/lib/web-build/policy";
 import { emphasize } from "@/lib/seo/emphasize";
 import {
   COMPETITORS,
@@ -34,6 +36,28 @@ import {
   START_HREF,
   DEMO_HREF,
 } from "@/lib/seo/alternative-pages-extras";
+
+/** Small muted "prices checked" trust line with an outbound link to the
+ *  competitor's own pricing page — shared by all three comparison templates
+ *  (alternative-page, seldonframe-vs-page, vs-page) so every rendered price
+ *  is independently verifiable. Never-lies: this only links, never restates
+ *  a number. */
+export function PricingSourceLine({ name, url }: { name: string; url: string }): ReactElement {
+  return (
+    <p style={{ margin: "14px 0 0", fontSize: 12.5, lineHeight: 1.5, color: "rgba(34,29,23,0.5)" }}>
+      {`Prices checked ${LAST_UPDATED} on `}
+      <a
+        href={url}
+        rel="nofollow noopener"
+        target="_blank"
+        style={{ color: "rgba(34,29,23,0.6)", textDecoration: "underline" }}
+      >
+        {`${name}'s pricing page`}
+      </a>
+      .
+    </p>
+  );
+}
 
 export function AlternativePage({ competitor }: { competitor: Competitor }): ReactElement {
   const c = competitor;
@@ -159,6 +183,7 @@ export function AlternativePage({ competitor }: { competitor: Competitor }): Rea
           </div>
           <CtaRow />
           <FrontOfficeFlow competitorName={c.name} competitorCategory={c.category} />
+          <PricingSourceLine name={c.name} url={c.pricingSourceUrl} />
         </section>
 
         {/* ── PROS & CONS ── */}
@@ -253,6 +278,8 @@ export function AlternativePage({ competitor }: { competitor: Competitor }): Rea
             ))}
           </div>
         </section>
+
+        <BuildWidget ungatedBuildEnabled={isWebUngatedBuildOn({ SF_WEB_UNGATED_BUILD: process.env.SF_WEB_UNGATED_BUILD })} />
 
         {/* ── FINAL CTA ── */}
         <section

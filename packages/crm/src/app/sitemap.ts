@@ -16,6 +16,7 @@ import { AGENT_JOBS, allJobVerticalPairs } from "@/lib/seo/agent-pages";
 import { COMPETITORS } from "@/lib/seo/alternative-pages";
 import { VS_PAIRS, vsSlug } from "@/lib/seo/alternative-pages-extras";
 import { allBestSlugs } from "@/lib/seo/best-pages";
+import { allPricingSlugs } from "@/lib/seo/competitor-pricing";
 import { listMarketplaceAgentsFromDb } from "@/lib/marketplace/agent-listings";
 import { MARKETPLACE_SEED } from "@/components/marketplace/marketplace-seed";
 
@@ -96,6 +97,17 @@ export default async function sitemap(): Promise<MetadataRoute.Sitemap> {
   for (const competitor of COMPETITORS) {
     entries.push({
       url: `${base}/alternative-to-${competitor.slug}`,
+      lastModified: now,
+      changeFrequency: "monthly",
+      priority: 0.8,
+    });
+  }
+
+  // Competitor pricing breakdowns (/<slug>-pricing) — the highest-intent
+  // keyword family ("<name> pricing"); one per registry competitor.
+  for (const slug of allPricingSlugs()) {
+    entries.push({
+      url: `${base}/${slug}-pricing`,
       lastModified: now,
       changeFrequency: "monthly",
       priority: 0.8,

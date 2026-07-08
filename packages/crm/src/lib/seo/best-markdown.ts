@@ -15,7 +15,7 @@ function contenderLine(c: BestContender): string {
 }
 
 export function renderBestMarkdown(slug: string): string {
-  const { category, audience } = getBestPage(slug);
+  const { page, category, audience } = getBestPage(slug);
   const total = category.contenders.length + 1;
   const h1 = `The ${total} Best ${category.nounPlural} for ${audience.label} (2026)`;
   const L: string[] = [];
@@ -26,6 +26,10 @@ export function renderBestMarkdown(slug: string): string {
   L.push("");
   L.push(`HTML version: ${BASE}/best/${slug}`);
   L.push("");
+  if (page.videoId) {
+    L.push(`▶ Watch: [${h1}](https://www.youtube.com/watch?v=${page.videoId})`);
+    L.push("");
+  }
   L.push(`## The short version`);
   L.push("");
   L.push(

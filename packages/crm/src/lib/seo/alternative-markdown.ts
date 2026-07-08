@@ -48,6 +48,8 @@ export function renderAlternativeMarkdown(c: Competitor): string {
     L.push(`| ${row.label} | ${emphasizeMd(c.them[row.key])} | ${emphasizeMd(SF_COLUMN[row.key])} |`);
   }
   L.push("");
+  L.push(`Prices checked ${LAST_UPDATED} on [${c.name}'s pricing page](${c.pricingSourceUrl}).`);
+  L.push("");
   L.push(`## Pros & cons`);
   L.push("");
   L.push(`### ${c.name}`);
@@ -131,6 +133,8 @@ export function renderVsMarkdown(pair: VsPair, a: Competitor, b: Competitor): st
   for (const row of COMPARISON_LABELS) {
     L.push(`| ${row.label} | ${emphasizeMd(a.them[row.key])} | ${emphasizeMd(b.them[row.key])} | ${emphasizeMd(SF_COLUMN[row.key])} |`);
   }
+  L.push("");
+  L.push(`Prices checked ${LAST_UPDATED} on [${a.name}'s pricing page](${a.pricingSourceUrl}) and [${b.name}'s pricing page](${b.pricingSourceUrl}).`);
   L.push("");
   L.push(`## If you need what BOTH do`);
   L.push("");

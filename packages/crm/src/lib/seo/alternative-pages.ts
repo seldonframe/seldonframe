@@ -22,6 +22,10 @@ export type Competitor = {
   name: string;
   /** Short category kicker, e.g. "agency platform". */
   category: string;
+  /** The competitor's canonical public pricing page — cited on every page that
+   *  shows their price, so readers (and LLMs) can verify it themselves.
+   *  Researched 2026-07-08; see docs/superpowers/specs/2026-07-08-competitor-pricing-facts.md. */
+  pricingSourceUrl: string;
   /** Factual one-sentence description (used in intro + meta). */
   oneLiner: string;
   /** Hero subheadline: the specific wall people hit + what SF gives instead. */
@@ -87,6 +91,7 @@ export const COMPETITORS: Competitor[] = [
     slug: "gohighlevel",
     name: "GoHighLevel",
     category: "agency platform",
+    pricingSourceUrl: "https://www.gohighlevel.com/pricing",
     oneLiner:
       "GoHighLevel is an all-in-one white-label CRM and marketing-automation platform. Agencies use it to run funnels, email/SMS, and pipelines for local-business clients.",
     heroSub:
@@ -139,6 +144,7 @@ export const COMPETITORS: Competitor[] = [
     slug: "vapi",
     name: "Vapi",
     category: "voice AI API",
+    pricingSourceUrl: "https://vapi.ai/pricing",
     oneLiner:
       "Vapi is a developer-first API platform for building custom voice AI agents. You assemble and host your own voice stack.",
     heroSub:
@@ -191,6 +197,7 @@ export const COMPETITORS: Competitor[] = [
     slug: "retell-ai",
     name: "Retell AI",
     category: "voice AI API",
+    pricingSourceUrl: "https://www.retellai.com/pricing",
     oneLiner:
       "Retell AI is developer infrastructure for building voice and chat AI agents. It's priced per minute, built from separate pieces you assemble yourself.",
     heroSub:
@@ -243,6 +250,7 @@ export const COMPETITORS: Competitor[] = [
     slug: "synthflow",
     name: "Synthflow AI",
     category: "no-code voice AI",
+    pricingSourceUrl: "https://synthflow.ai/pricing",
     oneLiner:
       "Synthflow AI is a no-code voice-agent builder for phone receptionists and appointment booking.",
     heroSub:
@@ -295,6 +303,7 @@ export const COMPETITORS: Competitor[] = [
     slug: "chatbase",
     name: "Chatbase",
     category: "AI chatbot builder",
+    pricingSourceUrl: "https://www.chatbase.co/pricing",
     oneLiner:
       "Chatbase is a no-code platform for building AI chatbots trained on your own data and putting them on a website.",
     heroSub:
@@ -347,6 +356,7 @@ export const COMPETITORS: Competitor[] = [
     slug: "botpress",
     name: "Botpress",
     category: "agent platform",
+    pricingSourceUrl: "https://botpress.com/pricing",
     oneLiner:
       "Botpress is an open-source-rooted, developer-focused platform for building and running AI chatbots and agents.",
     heroSub:
@@ -399,6 +409,7 @@ export const COMPETITORS: Competitor[] = [
     slug: "stammer-ai",
     name: "Stammer.ai",
     category: "whitelabel agent platform",
+    pricingSourceUrl: "https://www.stammer.ai/pricing",
     oneLiner:
       "Stammer.ai is a white-label AI chat and voice agent platform. Agencies use it to resell agents under their own brand.",
     heroSub:
@@ -451,6 +462,7 @@ export const COMPETITORS: Competitor[] = [
     slug: "podium",
     name: "Podium",
     category: "SMB messaging & reviews",
+    pricingSourceUrl: "https://www.podium.com/pricing",
     oneLiner:
       "Podium is a messaging, reviews, and AI-employee platform for local businesses, sold through a sales-quote process.",
     heroSub:
@@ -503,6 +515,7 @@ export const COMPETITORS: Competitor[] = [
     slug: "vendasta",
     name: "Vendasta",
     category: "agency platform",
+    pricingSourceUrl: "https://www.vendasta.com/pricing/",
     oneLiner:
       "Vendasta is a white-label platform and product marketplace. Agencies use it to resell digital services to local-business clients.",
     heroSub:
@@ -555,17 +568,18 @@ export const COMPETITORS: Competitor[] = [
     slug: "goodcall",
     name: "Goodcall",
     category: "AI phone agent",
+    pricingSourceUrl: "https://www.goodcall.com/pricing",
     oneLiner:
       "Goodcall is a no-code AI phone agent for small businesses. It answers FAQs and takes appointments, billed per unique monthly caller.",
     heroSub:
       "An answered call should turn into a booked job in a real system. SeldonFrame pairs the receptionist with the website, CRM, and calendar it books into — $29/mo flat, no per-caller caps.",
     intro: [
-      "Most people looking for a Goodcall alternative hit the same wall: caller caps. Plans run $79–$249/mo per agent, with 100–500 unique callers included, and overages cost $0.50 per caller. The most common complaint is conversational depth — simple FAQs work fine, but multi-step conversations struggle. And the agent stands alone: no CRM behind it, no website, no booking calendar it owns.",
+      "Most people looking for a Goodcall alternative hit the same wall: caller caps. Plans are listed at $79/$129/$249 per month per agent (about 15% cheaper billed annually), with 100–500 unique callers included, and overages cost $0.50 per caller. The most common complaint is conversational depth — simple FAQs work fine, but multi-step conversations struggle. And the agent stands alone: no CRM behind it, no website, no booking calendar it owns.",
       "That said, Goodcall is impressive. The per-caller pricing (with unlimited minutes) is genuinely predictable for businesses with repeat callers, setup is fast, and it comes from Google's Area 120 incubator, which shows in how reliable it is. For a single-location shop that just needs the phone picked up, it's a tidy tool. But picking up is only step one — qualifying, booking, and tracking the job is where the revenue actually happens.",
     ],
     them: {
       bestFor: "Single-location SMBs that need calls answered simply",
-      pricingModel: "$79–$249/mo per agent; 100–500 unique callers included, $0.50/caller overage",
+      pricingModel: "Listed at $79/$129/$249 per agent/mo (~15% off annual); 100–500 unique callers included, $0.50/caller overage",
       aiReceptionist: "Yes — phone only",
       frontOffice: "None — no CRM, website or owned booking calendar",
       whitelabel: "No published agency/whitelabel program",
@@ -607,6 +621,7 @@ export const COMPETITORS: Competitor[] = [
     slug: "voiceflow",
     name: "Voiceflow",
     category: "conversation-design platform",
+    pricingSourceUrl: "https://www.voiceflow.com/pricing",
     oneLiner:
       "Voiceflow is a visual conversation-design platform. Technical teams use it to build and run voice and chat AI agents.",
     heroSub:
@@ -659,6 +674,7 @@ export const COMPETITORS: Competitor[] = [
     slug: "lindy",
     name: "Lindy",
     category: "AI employee builder",
+    pricingSourceUrl: "https://www.lindy.ai/pricing",
     oneLiner:
       "Lindy is a general-purpose AI agent builder for automating internal work like email triage, research, and scheduling.",
     heroSub:
@@ -711,6 +727,7 @@ export const COMPETITORS: Competitor[] = [
     slug: "durable",
     name: "Durable",
     category: "AI website builder",
+    pricingSourceUrl: "https://durable.com/pricing",
     oneLiner:
       "Durable is an AI website builder with a light CRM and invoicing, aimed at solo operators who want a fast, cheap site.",
     heroSub:
@@ -763,6 +780,7 @@ export const COMPETITORS: Competitor[] = [
     slug: "my-ai-front-desk",
     name: "My AI Front Desk",
     category: "AI receptionist",
+    pricingSourceUrl: "https://www.myaifrontdesk.com/pricing",
     oneLiner:
       "My AI Front Desk (rebranding to Frontdesk) is an AI receptionist for phone, SMS, and chat, aimed at small local businesses.",
     heroSub:
@@ -815,6 +833,7 @@ export const COMPETITORS: Competitor[] = [
     slug: "smith-ai",
     name: "Smith.ai",
     category: "receptionist service",
+    pricingSourceUrl: "https://smith.ai/pricing/ai-receptionist",
     oneLiner:
       "Smith.ai is a North-America-based receptionist service that combines AI with human receptionists, billed per call.",
     heroSub:
@@ -867,6 +886,7 @@ export const COMPETITORS: Competitor[] = [
     slug: "activecampaign",
     name: "ActiveCampaign",
     category: "email automation & CRM",
+    pricingSourceUrl: "https://www.activecampaign.com/pricing",
     oneLiner:
       "ActiveCampaign is an automation-first email marketing platform with a light CRM layer, priced per contact.",
     heroSub:
@@ -919,6 +939,7 @@ export const COMPETITORS: Competitor[] = [
     slug: "hubspot",
     name: "HubSpot",
     category: "enterprise CRM",
+    pricingSourceUrl: "https://www.hubspot.com/pricing/marketing",
     oneLiner:
       "HubSpot is a premium all-in-one CRM and marketing platform that scales from a free tier to enterprise contracts.",
     heroSub:
@@ -971,6 +992,7 @@ export const COMPETITORS: Competitor[] = [
     slug: "clickfunnels",
     name: "ClickFunnels",
     category: "funnel builder",
+    pricingSourceUrl: "https://www.clickfunnels.com/pricing",
     oneLiner:
       "ClickFunnels is a funnel-building platform for offer-sellers, built around ready-made sales pages and checkout flows.",
     heroSub:
@@ -1023,6 +1045,7 @@ export const COMPETITORS: Competitor[] = [
     slug: "keap",
     name: "Keap",
     category: "SMB CRM & automation",
+    pricingSourceUrl: "https://keap.com/pricing",
     oneLiner:
       "Keap (owned by Thryv since October 2024) is a veteran small-business CRM and automation platform with invoicing and payments.",
     heroSub:
@@ -1075,6 +1098,7 @@ export const COMPETITORS: Competitor[] = [
     slug: "linktree",
     name: "Linktree",
     category: "link-in-bio",
+    pricingSourceUrl: "https://linktr.ee/s/pricing/",
     oneLiner:
       "Linktree is a link-in-bio tool that turns one profile link into a page of links — not a business platform.",
     heroSub:
@@ -1127,6 +1151,7 @@ export const COMPETITORS: Competitor[] = [
     slug: "kartra",
     name: "Kartra",
     category: "creator all-in-one",
+    pricingSourceUrl: "https://kartra.com/pricing/",
     oneLiner:
       "Kartra is an all-in-one platform for creators and coaches selling courses, memberships, and video content, with contact-capped tiers.",
     heroSub:
@@ -1179,6 +1204,7 @@ export const COMPETITORS: Competitor[] = [
     slug: "sharpspring",
     name: "SharpSpring (Constant Contact)",
     category: "agency marketing automation",
+    pricingSourceUrl: "https://www.constantcontact.com/pricing/lead-gen-crm",
     oneLiner:
       "SharpSpring is an agency-focused marketing automation platform, now operating under Constant Contact and reported to be in maintenance mode after the acquisition.",
     heroSub:
@@ -1231,6 +1257,7 @@ export const COMPETITORS: Competitor[] = [
     slug: "klaviyo",
     name: "Klaviyo",
     category: "ecommerce email & SMS",
+    pricingSourceUrl: "https://www.klaviyo.com/pricing",
     oneLiner:
       "Klaviyo is an ecommerce-focused email and SMS marketing platform with a B2C CRM layer, priced per profile.",
     heroSub:
@@ -1283,6 +1310,7 @@ export const COMPETITORS: Competitor[] = [
     slug: "zoho",
     name: "Zoho",
     category: "value CRM suite",
+    pricingSourceUrl: "https://www.zoho.com/crm/zohocrm-pricing.html",
     oneLiner:
       "Zoho is a value-priced CRM and 45-app business suite, sold per user across gated editions.",
     heroSub:
@@ -1335,6 +1363,7 @@ export const COMPETITORS: Competitor[] = [
     slug: "salesforce",
     name: "Salesforce",
     category: "enterprise CRM",
+    pricingSourceUrl: "https://www.salesforce.com/small-business/pricing/",
     oneLiner:
       "Salesforce is the enterprise CRM standard, now also selling to small businesses through Starter and Pro Suite editions.",
     heroSub:
@@ -1387,6 +1416,7 @@ export const COMPETITORS: Competitor[] = [
     slug: "claude-projects",
     name: "Claude Projects",
     category: "DIY workflow",
+    pricingSourceUrl: "https://www.anthropic.com/pricing",
     oneLiner:
       "Claude Projects is Anthropic's persistent-workspace feature — standing instructions plus a knowledge base that load into every conversation, which many agencies hand-build once per client.",
     heroSub:

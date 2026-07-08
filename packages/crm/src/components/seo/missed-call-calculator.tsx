@@ -4,7 +4,17 @@
 // /tools/missed-call-calculator. Pure client math, no network calls: sliders →
 // lost-revenue estimate → CTA. Styled on the MKT palette to match the SEO pages.
 
-import { useState, type ReactElement, type CSSProperties } from "react";
+import { useState, useEffect, useRef, type ReactElement, type CSSProperties } from "react";
+
+import {
+  encodeMissedCallState,
+  decodeMissedCallState,
+  renderResultCard,
+  buildShareUrl,
+  copyToClipboard,
+  downloadCanvasAsImage,
+  shareResultCard,
+} from "./result-card";
 
 const INK = "#221D17";
 const GREEN = "#00897B";
@@ -20,6 +30,32 @@ export function MissedCallCalculator(): ReactElement {
   const [missedPerWeek, setMissedPerWeek] = useState(10);
   const [closeRate, setCloseRate] = useState(30);
   const [jobValue, setJobValue] = useState(400);
+  const replaceTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
+
+  // Hydrate from the URL on mount only — never during SSR (no `window`).
+  useEffect(() => {
+    if (typeof window === "undefined") return;
+    const decoded = decodeMissedCallState(window.location.search);
+    if (decoded.missedPerWeek !== undefined) setMissedPerWeek(decoded.missedPerWeek);
+    if (decoded.jobValue !== undefined) setJobValue(decoded.jobValue);
+    if (decoded.closeRate !== undefined) setCloseRate(decoded.closeRate);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
+  // Keep the address bar in sync with the current inputs (throttled) so the
+  // URL is always a shareable permalink of whatever's on screen.
+  useEffect(() => {
+    if (typeof window === "undefined") return;
+    if (replaceTimer.current) clearTimeout(replaceTimer.current);
+    replaceTimer.current = setTimeout(() => {
+      const qs = encodeMissedCallState({ missedPerWeek, jobValue, closeRate });
+      const url = `${window.location.pathname}?${qs}`;
+      window.history.replaceState(null, "", url);
+    }, 150);
+    return () => {
+      if (replaceTimer.current) clearTimeout(replaceTimer.current);
+    };
+  }, [missedPerWeek, jobValue, closeRate]);
 
   // 4.33 weeks/month; a missed call only costs you if it would have closed.
   const lostMonthly = Math.round(missedPerWeek * 4.33 * (closeRate / 100) * jobValue);
@@ -34,6 +70,50 @@ export function MissedCallCalculator(): ReactElement {
   const totalCallsProxy = Math.max(callsPerMonth * 2, callsPerMonth + 1); // assume at least half your calls go answered
   const funnelMax = totalCallsProxy;
   const barWidth = (v: number) => `${Math.max(6, Math.round((v / funnelMax) * 100))}%`;
+
+  // ─── Shareable result card ───
+  const canvasRef = useRef<HTMLCanvasElement | null>(null);
+  const [copyFeedback, setCopyFeedback] = useState<string | null>(null);
+  const renderTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const canShare = typeof window !== "undefined" && typeof navigator !== "undefined" && typeof navigator.share === "function";
+
+  useEffect(() => {
+    if (renderTimer.current) clearTimeout(renderTimer.current);
+    renderTimer.current = setTimeout(() => {
+      const canvas = canvasRef.current;
+      if (!canvas) return;
+      renderResultCard(canvas, {
+        headline: "Missed calls are costing this business",
+        bigNumber: `${money(lostMonthly)}/mo`,
+        subline: `${callsPerMonth} missed calls/mo × ${money(jobValue)} avg job × ${closeRate}% close rate`,
+        footer: "built free at seldonframe.com/tools",
+      });
+    }, 150);
+    return () => {
+      if (renderTimer.current) clearTimeout(renderTimer.current);
+    };
+  }, [lostMonthly, callsPerMonth, jobValue, closeRate]);
+
+  const handleCopyLink = async () => {
+    const url = buildShareUrl(window.location.search);
+    const ok = await copyToClipboard(url);
+    setCopyFeedback(ok ? "Copied ✓" : "Copy failed");
+    setTimeout(() => setCopyFeedback(null), 2000);
+  };
+
+  const handleDownload = () => {
+    if (canvasRef.current) downloadCanvasAsImage(canvasRef.current, "missed-call-cost.png");
+  };
+
+  const handleNativeShare = async () => {
+    const url = buildShareUrl(window.location.search);
+    await shareResultCard(canvasRef.current, {
+      title: "Missed calls are costing this business",
+      text: `We're losing ~${money(lostMonthly)}/mo to missed calls.`,
+      url,
+      filename: "missed-call-cost.png",
+    });
+  };
 
   return (
     <div style={{ border: `1px solid ${INK10}`, borderRadius: 20, background: "rgba(255,255,255,0.6)", padding: "28px 28px" }}>
@@ -107,6 +187,40 @@ export function MissedCallCalculator(): ReactElement {
         >
           Book a demo call
         </a>
+      </div>
+
+      <div style={{ marginTop: 28, borderTop: `1px solid ${INK10}`, paddingTop: 24 }}>
+        <div style={{ fontSize: 12, fontWeight: 700, letterSpacing: "0.06em", textTransform: "uppercase", color: "rgba(34,29,23,0.55)", marginBottom: 12 }}>
+          Share your result
+        </div>
+        <div style={{ borderRadius: 14, overflow: "hidden", border: `1px solid ${INK10}`, background: "#1F2B24", maxWidth: 640 }}>
+          <canvas ref={canvasRef} style={{ display: "block", width: "100%", height: "auto" }} aria-label="Downloadable result card showing the estimated monthly cost of missed calls" />
+        </div>
+        <div style={{ display: "flex", flexWrap: "wrap", gap: 10, marginTop: 14, alignItems: "center" }}>
+          <button
+            type="button"
+            onClick={handleDownload}
+            style={{ border: `1.5px solid ${INK10}`, color: INK, padding: "10px 18px", borderRadius: 10, fontWeight: 700, fontSize: 14, background: "rgba(255,255,255,0.6)", cursor: "pointer" }}
+          >
+            ⬇ Download image
+          </button>
+          <button
+            type="button"
+            onClick={handleCopyLink}
+            style={{ border: `1.5px solid ${INK10}`, color: INK, padding: "10px 18px", borderRadius: 10, fontWeight: 700, fontSize: 14, background: "rgba(255,255,255,0.6)", cursor: "pointer" }}
+          >
+            🔗 {copyFeedback ?? "Copy link"}
+          </button>
+          {canShare && (
+            <button
+              type="button"
+              onClick={handleNativeShare}
+              style={{ border: `1.5px solid ${INK10}`, color: INK, padding: "10px 18px", borderRadius: 10, fontWeight: 700, fontSize: 14, background: "rgba(255,255,255,0.6)", cursor: "pointer" }}
+            >
+              Share
+            </button>
+          )}
+        </div>
       </div>
     </div>
   );

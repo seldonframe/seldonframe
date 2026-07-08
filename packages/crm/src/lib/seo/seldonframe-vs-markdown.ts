@@ -53,6 +53,8 @@ export function renderSeldonframeVsMarkdown(c: Competitor): string {
     L.push(`| ${row.label} | ${emphasizeMd(SF_COLUMN[row.key])} | ${emphasizeMd(c.them[row.key])} |`);
   }
   L.push("");
+  L.push(`Prices checked ${LAST_UPDATED} on [${c.name}'s pricing page](${c.pricingSourceUrl}).`);
+  L.push("");
   L.push(`## Where ${c.name} wins`);
   L.push("");
   for (const p of x.pros) L.push(`- ${p}`);

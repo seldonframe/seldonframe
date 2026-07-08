@@ -8,6 +8,7 @@ import { MarketplaceNav, MarketplaceFooter } from "@/components/marketplace/mark
 import { MarketplaceStyles } from "@/components/marketplace/marketplace-styles";
 import { MKT } from "@/components/marketplace/marketplace-data";
 import { A2p10dlcChecker } from "@/components/seo/a2p-10dlc-checker";
+import { buildOgUrl } from "@/lib/seo/og-card";
 
 /** FAQ answers use a few <strong> tags for readability; JSON-LD wants plain
  *  text, so strip tags before embedding in the schema. */
@@ -19,11 +20,14 @@ const TITLE = "A2P 10DLC Compliance Checker — free readiness quiz";
 const DESCRIPTION =
   "Free A2P 10DLC compliance checker: answer 9 quick questions about your business texting setup and get a readiness score plus practical fixes for every gap.";
 
+const OG_URL = buildOgUrl({ kind: "tool", name: "A2P 10DLC Checker", hook: "Is your business texting compliant?" });
+
 export const metadata: Metadata = {
   title: TITLE,
   description: DESCRIPTION,
   alternates: { canonical: "/tools/a2p-10dlc-checker" },
-  openGraph: { title: TITLE, description: DESCRIPTION, url: "/tools/a2p-10dlc-checker", type: "website" },
+  openGraph: { title: TITLE, description: DESCRIPTION, url: "/tools/a2p-10dlc-checker", type: "website", images: [{ url: OG_URL, width: 1200, height: 630 }] },
+  twitter: { card: "summary_large_image", title: TITLE, description: DESCRIPTION, images: [OG_URL] },
 };
 
 // FAQ strings render via dangerouslySetInnerHTML (inline <strong> only).

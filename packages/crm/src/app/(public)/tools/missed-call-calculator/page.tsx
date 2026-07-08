@@ -8,6 +8,7 @@ import { MarketplaceNav, MarketplaceFooter } from "@/components/marketplace/mark
 import { MarketplaceStyles } from "@/components/marketplace/marketplace-styles";
 import { MKT } from "@/components/marketplace/marketplace-data";
 import { MissedCallCalculator } from "@/components/seo/missed-call-calculator";
+import { buildOgUrl } from "@/lib/seo/og-card";
 
 /** FAQ answers use a few <strong> tags for readability; JSON-LD wants plain
  *  text, so strip tags before embedding in the schema. */
@@ -19,11 +20,14 @@ const TITLE = "Missed Call Cost Calculator — how much revenue are missed calls
 const DESCRIPTION =
   "Free calculator: estimate the monthly revenue your business loses to missed calls, from your call volume, close rate and average job value — and what an AI receptionist recovers.";
 
+const OG_URL = buildOgUrl({ kind: "tool", name: "Missed Call Cost Calculator", hook: "What do missed calls cost you?" });
+
 export const metadata: Metadata = {
   title: TITLE,
   description: DESCRIPTION,
   alternates: { canonical: "/tools/missed-call-calculator" },
-  openGraph: { title: TITLE, description: DESCRIPTION, url: "/tools/missed-call-calculator", type: "website" },
+  openGraph: { title: TITLE, description: DESCRIPTION, url: "/tools/missed-call-calculator", type: "website", images: [{ url: OG_URL, width: 1200, height: 630 }] },
+  twitter: { card: "summary_large_image", title: TITLE, description: DESCRIPTION, images: [OG_URL] },
 };
 
 // FAQ strings render via dangerouslySetInnerHTML (inline <strong> only).

@@ -81,6 +81,12 @@ export type BestCategory = {
 export type BestPage = {
   category: string;
   audience: string;
+  /** YouTube video ID to embed under the H1 intro (lite-youtube.tsx) — a seam
+   *  only, never set until a real video exists for that combo. */
+  videoId?: string;
+  /** ISO 8601 upload date for the video, required alongside videoId before
+   *  VideoObject JSON-LD is emitted (schema.org requires uploadDate). */
+  videoUploadDate?: string;
 };
 
 // ─── audiences ──────────────────────────────────────────────────────────────

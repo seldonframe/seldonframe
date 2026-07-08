@@ -11,6 +11,7 @@ import { MarketplaceStyles } from "@/components/marketplace/marketplace-styles";
 import { MKT } from "@/components/marketplace/marketplace-data";
 import { MarkdownPointer } from "@/components/seo/markdown-pointer";
 import { TldrBox } from "@/components/seo/tldr-box";
+import { PricingSourceLine } from "@/components/seo/alternative-page";
 import { emphasize } from "@/lib/seo/emphasize";
 import { COMPARISON_LABELS, SF_COLUMN, LAST_UPDATED, type Competitor, type AltFaqItem } from "@/lib/seo/alternative-pages";
 import { getExtras, START_HREF, DEMO_HREF, type VsPair, vsSlug } from "@/lib/seo/alternative-pages-extras";
@@ -147,6 +148,10 @@ export function VsPage({ pair, a, b }: { pair: VsPair; a: Competitor; b: Competi
                 ))}
               </tbody>
             </table>
+          </div>
+          <div style={{ display: "flex", flexWrap: "wrap", gap: 4, columnGap: 18 }}>
+            <PricingSourceLine name={a.name} url={a.pricingSourceUrl} />
+            <PricingSourceLine name={b.name} url={b.pricingSourceUrl} />
           </div>
         </section>
 

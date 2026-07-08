@@ -317,7 +317,7 @@ export const EXTRAS: Record<string, CompetitorExtras> = {
       "A fair fit for simple, repeat-caller businesses",
     ],
     cons: [
-      "Unique-caller caps (100–500/mo) with $0.50/caller overage",
+      "Listed at $79/$129/$249 per agent/mo with unique-caller caps (100–500/mo) and $0.50/caller overage",
       "Good at single-turn questions — multi-step conversations struggle",
       "No CRM, website, or booking calendar it owns",
       "No published agency or whitelabel program",
@@ -807,6 +807,16 @@ export const VS_PAIRS: VsPair[] = [
   { a: "gohighlevel", b: "klaviyo", angle: "Local-business agency platform vs ecommerce email/SMS specialist — GHL serves service businesses, Klaviyo assumes a Shopify cart, and neither has a native voice receptionist." },
   { a: "gohighlevel", b: "zoho", angle: "A ready-to-go agency toolbox vs a 45-app value suite you assemble yourself — GHL costs more upfront, Zoho costs more in setup time." },
   { a: "gohighlevel", b: "salesforce", angle: "Mid-market agency platform vs enterprise CRM standard — GHL undercuts Salesforce's per-user pricing but neither ships a flat-fee AI receptionist without an add-on or custom build." },
+  { a: "hubspot", b: "salesforce", angle: "The two enterprise CRM standards: HubSpot's polish vs Salesforce's customization depth — both cost real money to reach, and neither ships a flat-fee AI receptionist." },
+  { a: "hubspot", b: "activecampaign", angle: "Enterprise CRM vs email-automation specialist — HubSpot's 40x Starter-to-Pro jump vs ActiveCampaign's per-contact climb; neither answers a phone." },
+  { a: "activecampaign", b: "klaviyo", angle: "Two per-contact email platforms for different audiences: ActiveCampaign's B2B automation depth vs Klaviyo's ecommerce data model — neither has a voice receptionist." },
+  { a: "clickfunnels", b: "kartra", angle: "The two funnel-and-checkout all-in-ones: ClickFunnels' converting templates vs Kartra's course/membership breadth — both cap contacts and neither answers a phone." },
+  { a: "zoho", b: "hubspot", angle: "Value CRM suite vs premium CRM standard — Zoho costs far less per seat but takes real setup time; HubSpot costs far more but is more ready to go out of the box." },
+  { a: "keap", b: "activecampaign", angle: "Established SMB CRM-and-invoicing vs deep email-automation — Keap's flat per-user price vs ActiveCampaign's per-contact climb, and neither has an AI receptionist." },
+  { a: "salesforce", b: "zoho", angle: "Enterprise CRM standard vs budget-friendly value suite — Salesforce goes further at a much higher per-user cost; Zoho gets close for a fraction of the price with more setup work." },
+  { a: "hubspot", b: "clickfunnels", angle: "Enterprise CRM vs solo-operator funnel builder — completely different budgets and audiences, but neither ships a native phone or SMS receptionist." },
+  { a: "klaviyo", b: "hubspot", angle: "Ecommerce email/SMS specialist vs general-purpose enterprise CRM — Klaviyo assumes a Shopify cart, HubSpot assumes a sales team; neither answers a phone." },
+  { a: "kartra", b: "gohighlevel", angle: "Creator all-in-one vs agency toolbox — Kartra sells courses and memberships, GoHighLevel sells to agencies serving local businesses; neither has a native AI receptionist in the base plan." },
 ];
 
 export function vsSlug(pair: VsPair): string {

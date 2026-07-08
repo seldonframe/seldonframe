@@ -8,6 +8,7 @@ import { MarketplaceNav, MarketplaceFooter } from "@/components/marketplace/mark
 import { MarketplaceStyles } from "@/components/marketplace/marketplace-styles";
 import { MKT } from "@/components/marketplace/marketplace-data";
 import { AiReceptionistCostCalculator } from "@/components/seo/ai-receptionist-cost-calculator";
+import { buildOgUrl } from "@/lib/seo/og-card";
 
 /** FAQ answers use a few <strong> tags for readability; JSON-LD wants plain
  *  text, so strip tags before embedding in the schema. */
@@ -19,11 +20,14 @@ const TITLE = "AI Receptionist Cost Calculator — compare vs. human & answering
 const DESCRIPTION =
   "Free calculator: compare the real monthly cost of a human receptionist, a live answering service, a per-minute AI phone service, and a flat-rate AI receptionist — based on your own call volume.";
 
+const OG_URL = buildOgUrl({ kind: "tool", name: "AI Receptionist Cost Calculator", hook: "What do missed calls cost you?" });
+
 export const metadata: Metadata = {
   title: TITLE,
   description: DESCRIPTION,
   alternates: { canonical: "/tools/ai-receptionist-cost-calculator" },
-  openGraph: { title: TITLE, description: DESCRIPTION, url: "/tools/ai-receptionist-cost-calculator", type: "website" },
+  openGraph: { title: TITLE, description: DESCRIPTION, url: "/tools/ai-receptionist-cost-calculator", type: "website", images: [{ url: OG_URL, width: 1200, height: 630 }] },
+  twitter: { card: "summary_large_image", title: TITLE, description: DESCRIPTION, images: [OG_URL] },
 };
 
 // FAQ strings render via dangerouslySetInnerHTML (inline <strong> only).

@@ -14,6 +14,8 @@
 // canonical/OG URLs resolve to absolute — so callers pass root-relative paths.
 
 import type { Metadata } from "next";
+import { getCompetitor } from "./alternative-pages";
+import { buildOgUrl, shortPrice } from "./og-card";
 
 export type BuildPageMetadataInput = {
   /** Root-relative path of the page, e.g. "/build" (a missing leading slash is
@@ -63,4 +65,15 @@ export function buildPageMetadata(input: BuildPageMetadataInput): Metadata {
       type: "website",
     },
   };
+}
+
+/**
+ * The OG card URL for a single /alternative-to-<slug> page: resolves the
+ * competitor from the registry and builds the `kind=alt` card URL with a
+ * short price string. One-liner for the 25 static alternative-to-* pages —
+ * pass straight into `openGraph.images` and `twitter.images`.
+ */
+export function alternativeOgUrl(slug: string): string {
+  const c = getCompetitor(slug);
+  return buildOgUrl({ kind: "alt", slug: c.slug, name: c.name, price: shortPrice(c.them.pricingModel) });
 }

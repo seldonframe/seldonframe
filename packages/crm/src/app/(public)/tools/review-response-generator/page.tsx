@@ -8,6 +8,7 @@ import { MarketplaceNav, MarketplaceFooter } from "@/components/marketplace/mark
 import { MarketplaceStyles } from "@/components/marketplace/marketplace-styles";
 import { MKT } from "@/components/marketplace/marketplace-data";
 import { ReviewResponseGenerator } from "@/components/seo/review-response-generator";
+import { buildOgUrl } from "@/lib/seo/og-card";
 
 /** FAQ answers use a few <strong> tags for readability; JSON-LD wants plain
  *  text, so strip tags before embedding in the schema. */
@@ -19,11 +20,14 @@ const TITLE = "Google Review Response Generator — free, no signup";
 const DESCRIPTION =
   "Free Google review response generator: pick a star rating and scenario, get a well-written response you can copy and post — no AI, no signup, just genuinely good templates.";
 
+const OG_URL = buildOgUrl({ kind: "tool", name: "Review Response Generator", hook: "Copy-paste replies for any star rating" });
+
 export const metadata: Metadata = {
   title: TITLE,
   description: DESCRIPTION,
   alternates: { canonical: "/tools/review-response-generator" },
-  openGraph: { title: TITLE, description: DESCRIPTION, url: "/tools/review-response-generator", type: "website" },
+  openGraph: { title: TITLE, description: DESCRIPTION, url: "/tools/review-response-generator", type: "website", images: [{ url: OG_URL, width: 1200, height: 630 }] },
+  twitter: { card: "summary_large_image", title: TITLE, description: DESCRIPTION, images: [OG_URL] },
 };
 
 // FAQ strings render via dangerouslySetInnerHTML (inline <strong> only).
