@@ -232,8 +232,20 @@ describe("getPlanByStripePriceId", () => {
     assert.equal(getPlanByStripePriceId(AGENCY_SCALE_PRICE_ID)?.plan.id, "agency_scale");
   });
 
-  test("grandfathered price ids still resolve to their exact grandfathered tier", () => {
-    assert.equal(getPlanByStripePriceId(WORKSPACE_PRICE_ID)?.plan.id, "workspace");
+  test("grandfathered price ids still resolve — AGENCY unambiguously; WORKSPACE resolves to builder (shares BUILDER_PRICE_ID's value, builder is checked first in PLANS[])", () => {
+    // 2026-07-08 SECOND post-review fix wave (BLOCKING): since
+    // BUILDER_PRICE_ID === WORKSPACE_PRICE_ID, getPlanByStripePriceId's
+    // first-match-wins scan over PLANS[] (builder listed before the
+    // grandfathered workspace entry) resolves the shared price to
+    // "builder". This is a byproduct of the repoint, not a new bug —
+    // getPlanByStripePriceId is a "given a bare price id, what's ONE
+    // plan it could mean" lookup (used for display/reverse-lookup, not
+    // for mutating a stored subscription's tier); the actual tier a
+    // subscriber holds lives in organizations.subscription.tier,
+    // written once by the webhook (which is metadata-first — see
+    // billing-webhook-state-consolidation.spec.ts) and never re-derived
+    // from this function.
+    assert.equal(getPlanByStripePriceId(WORKSPACE_PRICE_ID)?.plan.id, "builder");
     assert.equal(getPlanByStripePriceId(AGENCY_BASE_PRICE_ID)?.plan.id, "agency");
   });
 

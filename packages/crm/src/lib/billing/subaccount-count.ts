@@ -29,6 +29,8 @@
 import { and, eq, inArray, isNull, ne, or } from "drizzle-orm";
 import { db } from "@/db";
 import { organizations, partnerAgencies } from "@/db/schema";
+import { resolveTierForWorkspace } from "./tier-resolver";
+import { enforceSubAccountLimit, type SubAccountLimitDecision } from "./limits";
 
 function isUuidShape(value: string): boolean {
   return /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(value);
@@ -105,4 +107,37 @@ export async function countClientSubAccountsForOwner(userId: string): Promise<nu
     );
 
   return attached.length;
+}
+
+// ─── 2026-07-08 second post-review fix wave (item #5, non-blocking) ───
+//
+// The full "resolve tier + refined count + enforce cap" sequence was
+// duplicated: once inline in
+// deployments/actions.ts::buildProvisionDeps's enforceSubAccountCap
+// closure, once in api/v1/partner-agencies/route.ts's
+// enforceSubAccountLimitForUser. Extracted here as the single shared
+// implementation both now call.
+
+/** Resolve the FULL sub-account cap decision for a builder org: its
+ *  effective tier (resolveTierForWorkspace — walks the agency chain,
+ *  same read as enforceWorkspaceLimit) and the REFINED sub-account
+ *  count for its owner (countClientSubAccountsForOwner — excludes
+ *  self-branding attachments). Anonymous-workspace-as-actor orgs (no
+ *  ownerId) have no partner_agencies rows to count against yet, so
+ *  they read as used:0 (capped only by the tier's limit, never by a
+ *  count that can't exist). Never throws — a failed count read
+ *  degrades to 0 rather than blocking the caller. */
+export async function resolveSubAccountCapForBuilderOrg(
+  builderOrgId: string,
+): Promise<SubAccountLimitDecision> {
+  const [org] = await db
+    .select({ ownerId: organizations.ownerId })
+    .from(organizations)
+    .where(eq(organizations.id, builderOrgId))
+    .limit(1);
+  const ownerId = org?.ownerId ?? null;
+
+  const tier = await resolveTierForWorkspace(builderOrgId);
+  const used = ownerId ? await countClientSubAccountsForOwner(ownerId).catch(() => 0) : 0;
+  return enforceSubAccountLimit({ tier, currentCount: used });
 }

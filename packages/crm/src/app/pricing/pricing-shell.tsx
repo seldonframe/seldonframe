@@ -4,14 +4,25 @@
 // panel on the RIGHT, sticky CTA at the BOTTOM.
 //
 // 2026-07-04 /pricing truth pass (Task 11): the platform sells exactly
-// ONE plan — $29/mo flat, unlimited workspaces, cancel anytime. The
-// single card POSTs `{ tier: "workspace" }` to /api/stripe/checkout.
+// ONE plan — $29/mo flat, unlimited workspaces, cancel anytime.
 // 2026-07-05: the free ungated build→claim→use experience already IS
 // the trial, so this checkout charges immediately (no
 // trial_period_days) — cancel anytime from Settings. No price id lives
 // in the client. Included-features copy is pulled verbatim from
 // components/landing/marketing-pricing-section.tsx so the authed page
 // and the marketing page never drift.
+//
+// 2026-07-08 post-review fix wave (BLOCKING) — the single card now
+// POSTs `{ tier: "builder" }`, NOT `{ tier: "workspace" }`. Task 1's
+// catalog made "workspace" a GRANDFATHERED tier (sellable: false,
+// frozen for existing subscribers only); Task 3's checkout route gates
+// on Plan.sellable flag-INDEPENDENTLY, so a "workspace" POST 409s
+// tier_unavailable for every new visitor regardless of SF_TIER_LADDER.
+// "builder" is the new tier this live card actually represents (spec
+// D1) and is wired to the SAME configured Stripe price
+// (BUILDER_PRICE_ID === WORKSPACE_PRICE_ID as of price-ids.ts, until
+// Max creates a distinct Builder price) — so this is a pure relabel,
+// not a new checkout path or a new Stripe price.
 //
 // 2026-07-08 pricing ladder (Task 4, behind SF_TIER_LADDER): an
 // audience toggle appears ABOVE the single-plan card — "For your
@@ -37,7 +48,7 @@ import { Check } from "lucide-react";
 import { PLANS, type TierId as CatalogTierId } from "@/lib/billing/plans";
 import { isPlaceholderPriceId } from "@/lib/billing/price-ids";
 
-type TierId = "workspace";
+type TierId = "builder";
 
 type Tier = {
   id: TierId;
@@ -51,7 +62,7 @@ type Tier = {
 // Verbatim from marketing-pricing-section.tsx's INCLUDED list — keep in
 // sync if that copy changes.
 const PLAN: Tier = {
-  id: "workspace",
+  id: "builder",
   name: "SeldonFrame",
   price: "$29",
   cadence: "/ mo",

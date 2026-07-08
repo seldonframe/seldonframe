@@ -23,8 +23,9 @@ import {
 import {
   buildCheckoutSessionParams,
   tierFromBasePriceId,
+  resolveCheckoutTierGate,
 } from "@/lib/billing/checkout-items";
-import { getPlan, type TierId } from "@/lib/billing/plans";
+import type { TierId } from "@/lib/billing/plans";
 
 function normalizeReturnPath(value: unknown, fallback: string) {
   if (typeof value !== "string") {
@@ -206,14 +207,20 @@ export async function POST(req: NextRequest) {
   // Grandfathered tiers ("workspace", "agency") remain resolvable for
   // legacy replay/back-compat elsewhere (webhook, getPlanByStripePriceId)
   // but are rejected here so nobody can newly subscribe to a frozen tier.
-  if (targetTier) {
-    const plan = getPlan(targetTier);
-    if (!plan || !plan.sellable) {
-      return NextResponse.json(
-        { error: `Tier '${targetTier}' is not available for new checkout.`, reason: "tier_unavailable" },
-        { status: 409 }
-      );
-    }
+  //
+  // 2026-07-08 SECOND post-review fix wave — extracted to
+  // resolveCheckoutTierGate (checkout-items.ts) so the exact gate the
+  // route enforces is directly unit-testable (see
+  // tests/unit/billing/checkout-tier-gate.spec.ts) without a live
+  // server/DB. This is the "end-state" test class the review flagged:
+  // asserting a mocked fetch call was SENT is not the same as asserting
+  // the route would ACCEPT it.
+  const gate = resolveCheckoutTierGate(targetTier);
+  if (!gate.ok) {
+    return NextResponse.json(
+      { error: `Tier '${targetTier}' is not available for new checkout.`, reason: gate.reason },
+      { status: 409 }
+    );
   }
 
   const [dbUser] = await db

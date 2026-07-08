@@ -40,17 +40,31 @@ function readEnv(name: string, fallback = ""): string {
 // non-empty and checkout assembly doesn't crash pre-configuration;
 // they will NOT resolve at Stripe until the real ids are set.
 
-/** Builder $19/mo flat. Env: STRIPE_BUILDER_PRICE_ID. */
-export const BUILDER_PRICE_ID = readEnv(
-  "STRIPE_BUILDER_PRICE_ID",
-  "price_PLACEHOLDER_builder_19"
-);
-
 /** Workspace — $29/mo flat, SeldonFrame single plan. Env: STRIPE_WORKSPACE_PRICE_ID. */
 export const WORKSPACE_PRICE_ID = readEnv(
   "STRIPE_WORKSPACE_PRICE_ID",
   "price_PLACEHOLDER_workspace_49"
 );
+
+/** 2026-07-08 post-review fix wave (BLOCKING) — Builder $29/mo flat, the
+ *  new tier the LIVE single-card UI (pricing-shell.tsx) and the
+ *  flag-off upgrade-modal now target (repointed off the grandfathered,
+ *  no-longer-sellable "workspace" tier). Builder is DELIBERATELY wired
+ *  to the SAME configured price as WORKSPACE_PRICE_ID
+ *  (STRIPE_WORKSPACE_PRICE_ID) — NOT its own STRIPE_BUILDER_PRICE_ID
+ *  env var (which nobody has set; it would still be a placeholder,
+ *  turning the repoint into a tier_unavailable 409 instead of a
+ *  sellable-gate 409). One Stripe price id is now shared by two tier
+ *  ids: legacy "workspace" (existing subscribers, grandfathered,
+ *  frozen) and new "builder" (new checkout). See
+ *  webhooks/stripe-billing/handlers.ts for the metadata-first tier
+ *  resolution this requires (a shared price id is no longer
+ *  sufficient on its own to infer the tier on renewal/invoice
+ *  events — those events must read the STORED subscription tier, not
+ *  re-infer from price id). Once Max creates a real, distinct Builder
+ *  Stripe price, point this at STRIPE_BUILDER_PRICE_ID instead and
+ *  drop the shared-price-id webhook special-casing. */
+export const BUILDER_PRICE_ID = WORKSPACE_PRICE_ID;
 
 /** The single offered plan — $29/mo flat (unlimited workspaces). Env:
  *  STRIPE_AGENCY_BASE_PRICE_ID (var name reused; Max points it at the

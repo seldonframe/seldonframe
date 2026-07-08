@@ -3,28 +3,28 @@
 // 402 path, and the dashboard "create client" CTA when the operator is at
 // their workspace limit. DO NOT redefine this component elsewhere.
 //
-// 2026-06-18 pricing migration (Phase 3, LIVE on main / flag OFF): the
-// upgrade targets are Workspace ($49, one full workspace) and Agency
-// ($297, 10 client workspaces included, +$10/mo each beyond) — the
-// GRANDFATHERED legacy tiers, which have real (already-configured)
-// Stripe prices today.
+// 2026-07-08 SECOND post-review fix wave (BLOCKING — same bug class as
+// the pricing-shell.tsx single card): main's original modal targeted
+// the GRANDFATHERED legacy tiers ("workspace" $49 / "agency" $297).
+// Task 1's catalog made both `sellable: false`; Task 3's checkout
+// route gates on Plan.sellable FLAG-INDEPENDENTLY, so posting
+// tier:"workspace" or tier:"agency" now 409s tier_unavailable for
+// EVERY caller, flag on or off. Flag OFF (default) now offers a
+// SINGLE target — "builder" (the new $29 tier, wired to the SAME
+// configured Stripe price as the grandfathered "workspace" tier used
+// to use — see price-ids.ts's BUILDER_PRICE_ID). This is deliberately
+// MINIMAL: main's modal offered "Agency $297, unlimited/10 included
+// workspaces" as the upsell recommendation, but there is no sellable
+// equivalent that preserves that semantic (agency_starter is $99 for
+// CLIENT sub-accounts, a materially different offer, not "more of your
+// own workspaces"). Rather than mis-sell agency_starter as a like-for-
+// like Agency replacement, flag-off shows builder only; the agency
+// ladder is reachable from /pricing once SF_TIER_LADDER is on.
 //
 // 2026-07-08 pricing ladder (flag ON, SF_TIER_LADDER via the
-// NEXT_PUBLIC_ twin — see below): the upgrade targets switch to the new
+// NEXT_PUBLIC_ twin — see below): the upgrade targets are the new
 // sellable ladder — Managed ($49, one workspace) and Agency Starter
 // ($99, unlimited own workspaces + 10 client sub-accounts, whitelabel).
-//
-// POST-REVIEW FIX (blocking a live regression): this modal is a client
-// component reached from a workspace-limit 402 anywhere in the app
-// (dashboard CTA, /clients, /clients/new). Before this fix it
-// unconditionally rendered the NEW ladder targets — but /api/stripe/
-// checkout 409s "tier_unavailable" for managed/agency_starter until
-// Max creates their Stripe prices and sets the env vars (Task 3's
-// placeholder-price gate). That means every operator who hit the
-// workspace limit got an upgrade button that silently failed, even
-// though main's real (grandfathered) checkout worked fine. Flag-gating
-// restores main's exact live behavior when SF_TIER_LADDER is off
-// (today, and until Max's flip checklist — spec §6 — is complete).
 //
 // NEXT_PUBLIC_SF_TIER_LADDER is a build-time client-side twin of the
 // server flag SF_TIER_LADDER (read server-side in pricing/page.tsx).
@@ -59,8 +59,7 @@ import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { startCheckout } from "@/lib/billing/start-checkout";
 import {
-  WORKSPACE_PRICE_ID,
-  AGENCY_BASE_PRICE_ID,
+  BUILDER_PRICE_ID,
   MANAGED_PRICE_ID,
   AGENCY_STARTER_PRICE_ID,
 } from "@/lib/billing/price-ids";
@@ -81,38 +80,27 @@ type TierCard = {
   recommendedLabel?: string;
 };
 
-// ── Flag OFF (default) — main's LIVE targets, grandfathered tiers ──────
-type LegacyUpgradeTarget = "workspace" | "agency";
+// ── Flag OFF (default) — MINIMAL single sellable target ─────────────────
+// 2026-07-08 post-review: "builder" only (see file-header comment for
+// why this doesn't try to also offer an "agency-ish" second card).
+type LegacyUpgradeTarget = "builder";
 
 const LEGACY_COPY: Record<LegacyUpgradeTarget, TierCard> = {
-  workspace: {
-    name: "Workspace",
-    price: "$49/mo",
+  builder: {
+    name: "Builder",
+    price: "$29/mo",
     features: [
-      "1 full client workspace",
+      "Unlimited own workspaces",
       "Website, booking, intake & CRM",
       "AI chatbot included",
       "Custom domain · no SeldonFrame branding",
     ],
-    cta: "Upgrade to Workspace",
-  },
-  agency: {
-    name: "Agency",
-    price: "$297/mo",
-    features: [
-      "10 client workspaces included",
-      "$10/mo per workspace beyond 10",
-      "Full white-label platform",
-      "Marketplace · priority support",
-    ],
-    cta: "Upgrade to Agency",
-    recommendedLabel: "Recommended",
+    cta: "Upgrade to Builder",
   },
 };
 
 const LEGACY_TIER_TO_PRICE_ID: Record<LegacyUpgradeTarget, string> = {
-  workspace: WORKSPACE_PRICE_ID,
-  agency: AGENCY_BASE_PRICE_ID,
+  builder: BUILDER_PRICE_ID,
 };
 
 // ── Flag ON — the new sellable ladder ───────────────────────────────────
@@ -196,14 +184,17 @@ export function UpgradeModal({ open, onOpenChange, tier, used, limit }: UpgradeM
   const [error, setError] = useState<string | null>(null);
 
   const ladderOn = isTierLadderOnClient();
-  const targets: readonly UpgradeTarget[] = ladderOn ? ["agency_starter", "managed"] : ["agency", "workspace"];
+  // Flag off: MINIMAL — builder only (see file header). Flag on: the
+  // real 2-target ladder comparison.
+  const targets: readonly UpgradeTarget[] = ladderOn ? ["agency_starter", "managed"] : ["builder"];
   const COPY: Record<UpgradeTarget, TierCard> = ladderOn
     ? (LADDER_COPY as Record<UpgradeTarget, TierCard>)
     : (LEGACY_COPY as Record<UpgradeTarget, TierCard>);
   const TIER_TO_PRICE_ID: Record<UpgradeTarget, string> = ladderOn
     ? (LADDER_TIER_TO_PRICE_ID as Record<UpgradeTarget, string>)
     : (LEGACY_TIER_TO_PRICE_ID as Record<UpgradeTarget, string>);
-  const recommendedTarget: UpgradeTarget = ladderOn ? "agency_starter" : "agency";
+  // No "recommended" badge makes sense with a single flag-off target.
+  const recommendedTarget: UpgradeTarget | null = ladderOn ? "agency_starter" : null;
 
   async function upgrade(target: UpgradeTarget) {
     setPending(target);
@@ -270,15 +261,19 @@ export function UpgradeModal({ open, onOpenChange, tier, used, limit }: UpgradeM
           <DialogDescription>{SHARED_COPY.subtitleTemplate(used, limit)}</DialogDescription>
         </DialogHeader>
 
-        {/* The recommended tier (Agency / Agency Starter) gets ring-2 +
-            shadow-md to back the "Recommended" badge; CTAs differentiate
-            (lighter option=outline, recommended=default). The recommended
-            target renders first so initial focus lands on it (matches
-            visual hierarchy + SR reading order). */}
-        <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
+        {/* The recommended tier (Agency Starter, flag ON only) gets
+            ring-2 + shadow-md to back the "Recommended" badge; CTAs
+            differentiate (lighter option=outline, recommended=default).
+            With a single flag-off target there's nothing to compare
+            against, so its CTA renders as the normal primary action
+            (not muted "outline"). The recommended target renders first
+            so initial focus lands on it (matches visual hierarchy + SR
+            reading order). */}
+        <div className={targets.length > 1 ? "grid grid-cols-1 gap-4 md:grid-cols-2" : "grid grid-cols-1 gap-4"}>
           {targets.map((target) => {
             const card = COPY[target];
             const isRecommended = target === recommendedTarget;
+            const isPrimaryCta = isRecommended || targets.length === 1;
             return (
               <Card
                 key={target}
@@ -306,7 +301,7 @@ export function UpgradeModal({ open, onOpenChange, tier, used, limit }: UpgradeM
                     onClick={() => upgrade(target)}
                     disabled={pending !== null}
                     aria-busy={pending === target}
-                    variant={isRecommended ? "default" : "outline"}
+                    variant={isPrimaryCta ? "default" : "outline"}
                     className="w-full"
                   >
                     {pending === target ? "Redirecting..." : card.cta}

@@ -203,7 +203,25 @@ export async function handleBillingSubscriptionEvent(
       if (!processedEventIds) return { orgId, action: "duplicate" };
 
       const priceIds = priceIdsFromItems(subscription.items);
-      const tier = resolveTierFromPriceIds(priceIds);
+      // 2026-07-08 post-review fix wave (BLOCKING) — METADATA-FIRST tier
+      // resolution. Since price-ids.ts's BUILDER_PRICE_ID now equals
+      // WORKSPACE_PRICE_ID (both tiers share one Stripe price until Max
+      // creates a distinct Builder price), price-id inference alone can
+      // no longer distinguish a "builder" subscriber from a
+      // grandfathered "workspace" subscriber — resolveTierFromPriceIds
+      // would relabel EVERY shared-price subscriber to "workspace" on
+      // every renewal/quantity-change event, silently reassigning new
+      // builder purchasers back to the frozen grandfathered tier.
+      // subscription.metadata.tier is embedded at checkout
+      // (buildCheckoutSessionParams's subscription_data.metadata) and
+      // persists on the Stripe subscription object across its whole
+      // lifetime (renewals included) — so it's the authoritative source
+      // whenever it resolves to a real (non-"inactive") tier. Price-id
+      // inference is now only the FALLBACK, for subscriptions that
+      // predate metadata tagging (pre-2026-06-18 rows) or a genuine
+      // Stripe-side price swap that didn't carry updated metadata.
+      const metaTier = normalizeTierId(metadata?.tier);
+      const tier = metaTier !== "inactive" ? metaTier : resolveTierFromPriceIds(priceIds);
       const status = mapSubscriptionStatus(subscription.status);
       const currentPeriodEnd = toIso(
         (subscription as Stripe.Subscription & { current_period_end?: number }).current_period_end,

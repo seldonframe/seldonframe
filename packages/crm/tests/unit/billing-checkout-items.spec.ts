@@ -96,7 +96,22 @@ describe("tierFromBasePriceId", () => {
   });
 
   test("GRANDFATHERED legacy base ids still resolve (existing subscriptions / replay)", () => {
-    assert.equal(tierFromBasePriceId(WORKSPACE_PRICE_ID), "workspace");
+    // 2026-07-08 SECOND post-review fix wave (BLOCKING): BUILDER_PRICE_ID
+    // now EQUALS WORKSPACE_PRICE_ID (both tiers share the one live-
+    // configured $29 Stripe price until Max creates a distinct Builder
+    // price — see price-ids.ts). tierFromBasePriceId's if-chain checks
+    // "builder" before "workspace", so a bare priceId lookup on the
+    // shared price now resolves to the NEW sellable tier ("builder"),
+    // not the frozen grandfathered one — this is the intentional
+    // direction (a priceId-only checkout resolution should prefer the
+    // currently-sellable tier, mirroring the webhook's metadata-first
+    // preference for the new tier over silently relabeling to
+    // grandfathered). This does NOT affect existing workspace
+    // subscribers' STORED tier — that's set once at their original
+    // checkout and never re-derived from a bare priceId lookup again
+    // (see the webhook's metadata-first fix + the "existing workspace
+    // subscriber" pins in billing-webhook-state-consolidation.spec.ts).
+    assert.equal(tierFromBasePriceId(WORKSPACE_PRICE_ID), "builder");
     assert.equal(tierFromBasePriceId(AGENCY_BASE_PRICE_ID), "agency");
   });
 

@@ -3,10 +3,27 @@
 // the price-ids constants doesn't silently regress tier resolution.
 //
 // 2026-06-18 pricing migration — base prices map to the new ladder:
-//   BUILDER_PRICE_ID   → builder
 //   WORKSPACE_PRICE_ID → workspace   (legacy growth/starter also → workspace)
 //   AGENCY_BASE_PRICE_ID → agency    (legacy scale/pro/agency also → agency)
 // The no-subscription sentinel is "inactive" (was "free").
+//
+// 2026-07-08 SECOND post-review fix wave (BLOCKING) — BUILDER_PRICE_ID
+// now EQUALS WORKSPACE_PRICE_ID (both tiers share the one live-
+// configured $29 Stripe price until Max creates a distinct Builder
+// price — see price-ids.ts). Price-id-ONLY resolution can therefore no
+// longer distinguish a "builder" purchase from a grandfathered
+// "workspace" subscription; resolveTierFromPriceIds's documented
+// precedence (workspace checked before builder) means a shared-price
+// id always resolves to "workspace". This is EXPECTED and is exactly
+// why the webhook handler (stripe-billing/handlers.ts) was changed to
+// resolve tier from subscription.metadata.tier FIRST, falling back to
+// this price-id inference only for legacy rows with no tier metadata —
+// see tests/unit/billing-webhook-state-consolidation.spec.ts's
+// "metadata-first tier resolution" suite for the tests pinning that a
+// builder subscriber is NOT relabeled to workspace on renewal.
+// resolveTierFromPriceIds itself is UNCHANGED here — it's the
+// documented fallback path, and this file pins its (now ambiguous for
+// the shared price) behavior honestly.
 
 import { describe, test } from "node:test";
 import assert from "node:assert/strict";
@@ -31,10 +48,20 @@ describe("resolveTierFromPriceIds", () => {
     assert.equal(resolveTierFromPriceIds([undefined, ""]), "inactive");
   });
 
-  test("resolves each new base price id", () => {
-    assert.equal(resolveTierFromPriceIds([BUILDER_PRICE_ID]), "builder");
+  test("resolves each base price id (BUILDER and WORKSPACE currently share one Stripe price)", () => {
+    // BUILDER_PRICE_ID === WORKSPACE_PRICE_ID today (see file header) —
+    // price-id-only inference resolves the shared id to "workspace"
+    // (documented precedence: workspace checked before builder). This
+    // is the FALLBACK path only; real checkout/renewal events resolve
+    // "builder" via subscription.metadata.tier (handlers.ts), never
+    // through this function alone.
+    assert.equal(resolveTierFromPriceIds([BUILDER_PRICE_ID]), "workspace");
     assert.equal(resolveTierFromPriceIds([WORKSPACE_PRICE_ID]), "workspace");
     assert.equal(resolveTierFromPriceIds([AGENCY_BASE_PRICE_ID]), "agency");
+  });
+
+  test("sanity: BUILDER_PRICE_ID and WORKSPACE_PRICE_ID are the SAME value (documents the shared-price design, not an accident)", () => {
+    assert.equal(BUILDER_PRICE_ID, WORKSPACE_PRICE_ID);
   });
 
   test("workspace base still wins alongside arbitrary metered/overage ids", () => {

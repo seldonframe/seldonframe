@@ -98,30 +98,38 @@ describe("UpgradeModal — free tier (add-a-card branch, flag-independent)", () 
   });
 });
 
-describe("UpgradeModal — flag OFF (default) — main's LIVE grandfathered targets", () => {
+describe("UpgradeModal — flag OFF (default) — MINIMAL sellable single target", () => {
+  // 2026-07-08 SECOND post-review fix wave (BLOCKING) — main's ORIGINAL
+  // modal (Workspace $49 / Agency $297) targeted GRANDFATHERED tiers
+  // that Task 1's catalog made non-sellable; the checkout route's
+  // sellable gate (flag-INDEPENDENT) 409s tier_unavailable for both,
+  // exactly like the pricing-shell.tsx single-card regression this fix
+  // wave closes. Flag off now renders a SINGLE "Builder" target — the
+  // new sellable tier, wired to the SAME configured Stripe price the
+  // grandfathered workspace tier used to use (see price-ids.ts).
   beforeEach(() => setTierLadderEnv(undefined));
 
-  test("renders Workspace ($49) + Agency ($297) — NOT the new ladder", () => {
-    render(<UpgradeModal open={true} onOpenChange={() => {}} tier="workspace" used={3} limit={3} />);
-    assert.ok(screen.queryAllByText(/^Workspace$/).length > 0, "Workspace card not rendered");
-    assert.ok(screen.queryAllByText(/^Agency$/).length > 0, "Agency card not rendered");
-    assert.ok(screen.queryAllByText(/\$49\/mo/).length > 0, "Workspace price not rendered");
-    assert.ok(screen.queryAllByText(/\$297\/mo/).length > 0, "Agency price not rendered");
-    // The new ladder's targets must NOT appear when the flag is off.
+  test("renders Builder ($29) ONLY — not Workspace/Agency (both 409 tier_unavailable), not the new ladder", () => {
+    render(<UpgradeModal open={true} onOpenChange={() => {}} tier="builder" used={1} limit={1} />);
+    assert.ok(screen.queryAllByText(/^Builder$/).length > 0, "Builder card not rendered");
+    assert.ok(screen.queryAllByText(/\$29\/mo/).length > 0, "Builder price not rendered");
+    assert.equal(screen.queryAllByText(/^Workspace$/).length, 0, "grandfathered Workspace must not render");
+    assert.equal(screen.queryAllByText(/^Agency$/).length, 0, "grandfathered Agency must not render");
+    assert.equal(screen.queryAllByText(/\$297\/mo/).length, 0, "$297 must not render");
     assert.equal(screen.queryAllByText(/^Managed$/).length, 0, "Managed must not render when flag is off");
     assert.equal(screen.queryAllByText(/^Agency Starter$/).length, 0, "Agency Starter must not render when flag is off");
     assert.equal(screen.queryAllByText(/\$99\/mo/).length, 0, "$99 must not render when flag is off");
   });
 
   test("interpolates used and limit into the subtitle", () => {
-    render(<UpgradeModal open={true} onOpenChange={() => {}} tier="workspace" used={3} limit={3} />);
+    render(<UpgradeModal open={true} onOpenChange={() => {}} tier="builder" used={3} limit={3} />);
     assert.ok(
       screen.queryAllByText(/3 of 3 workspaces on your current plan/).length > 0,
       "Dynamic subtitle missing",
     );
   });
 
-  test("upgrade buttons POST to /api/stripe/checkout with the GRANDFATHERED tier + real price id", async () => {
+  test("upgrade button POSTs to /api/stripe/checkout with tier:'builder' — the SAME live Stripe price as before", async () => {
     const fetchMock = Object.assign(
       async (url: string, init?: RequestInit) => {
         fetchMock.calls.push({ url, body: init?.body ? JSON.parse(String(init.body)) : null });
@@ -132,17 +140,18 @@ describe("UpgradeModal — flag OFF (default) — main's LIVE grandfathered targ
     const originalFetch = globalThis.fetch;
     globalThis.fetch = fetchMock as unknown as typeof fetch;
     try {
-      render(<UpgradeModal open={true} onOpenChange={() => {}} tier="workspace" used={3} limit={3} />);
-      fireEvent.click(screen.getByRole("button", { name: /upgrade to workspace/i }));
+      render(<UpgradeModal open={true} onOpenChange={() => {}} tier="builder" used={3} limit={3} />);
+      fireEvent.click(screen.getByRole("button", { name: /upgrade to builder/i }));
       await Promise.resolve();
       await Promise.resolve();
       assert.equal(fetchMock.calls.length, 1, "Stripe checkout endpoint was not called");
       assert.equal(fetchMock.calls[0]!.url, "/api/stripe/checkout");
       const body = fetchMock.calls[0]!.body as { tier?: string; priceId?: string };
-      // Money-safe: the flag-off path must POST the GRANDFATHERED "workspace"
-      // tier id (which resolves to a real, already-configured Stripe price),
-      // never the new "managed" id (which 409s tier_unavailable without env).
-      assert.equal(body.tier, "workspace");
+      // Money-safe: the flag-off path must POST the NEW SELLABLE
+      // "builder" tier id, which resolves to the same live-configured
+      // Stripe price the old "workspace" id used — never the
+      // grandfathered "workspace"/"agency" ids, which now 409.
+      assert.equal(body.tier, "builder");
     } finally {
       globalThis.fetch = originalFetch;
     }
