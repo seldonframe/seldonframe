@@ -102,6 +102,17 @@ export default async function sitemap(): Promise<MetadataRoute.Sitemap> {
     });
   }
 
+  // SeldonFrame head-to-head pages (/compare/seldonframe-vs-<slug>) — the
+  // first-person flagship comparisons, one per registry competitor.
+  for (const competitor of COMPETITORS) {
+    entries.push({
+      url: `${base}/compare/seldonframe-vs-${competitor.slug}`,
+      lastModified: now,
+      changeFrequency: "monthly",
+      priority: 0.8,
+    });
+  }
+
   // Head-to-head comparison pages (/compare/<a>-vs-<b>).
   for (const pair of VS_PAIRS) {
     entries.push({

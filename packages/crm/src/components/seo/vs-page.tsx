@@ -10,12 +10,47 @@ import { MarketplaceNav, MarketplaceFooter } from "@/components/marketplace/mark
 import { MarketplaceStyles } from "@/components/marketplace/marketplace-styles";
 import { MKT } from "@/components/marketplace/marketplace-data";
 import { MarkdownPointer } from "@/components/seo/markdown-pointer";
-import { COMPARISON_LABELS, SF_COLUMN, LAST_UPDATED, type Competitor } from "@/lib/seo/alternative-pages";
+import { COMPARISON_LABELS, SF_COLUMN, LAST_UPDATED, type Competitor, type AltFaqItem } from "@/lib/seo/alternative-pages";
 import { getExtras, START_HREF, DEMO_HREF, type VsPair, vsSlug } from "@/lib/seo/alternative-pages-extras";
+
+/** Compose the 4 shared FAQ items for a third-party X-vs-Y page, honestly
+ *  built from registry data only (never-lies: no new facts). Pure + exported
+ *  so it's independently testable. */
+export function composeVsFaq(a: Competitor, b: Competitor): AltFaqItem[] {
+  return [
+    {
+      q: `Which is better, ${a.name} or ${b.name}?`,
+      a: `It depends what you need. ${a.name}: ${a.whenTheyWin} ${b.name}: ${b.whenTheyWin}`,
+    },
+    {
+      q: `What does ${a.name} cost vs ${b.name}?`,
+      a: `${a.name}: ${a.them.pricingModel}. ${b.name}: ${b.them.pricingModel}.`,
+    },
+    {
+      q: "Is there an alternative to both?",
+      a: `Yes — SeldonFrame ships the AI receptionist plus the website, CRM and booking calendar it books into, for $29/mo flat with unlimited workspaces. See how it compares: /alternatives.`,
+    },
+    {
+      q: `Can I switch from ${a.name} or ${b.name}?`,
+      a: `Yes — see the full switching guides for each: /alternative-to-${a.slug} and /alternative-to-${b.slug}.`,
+    },
+  ];
+}
 
 export function VsPage({ pair, a, b }: { pair: VsPair; a: Competitor; b: Competitor }): ReactElement {
   const xa = getExtras(a.slug);
   const xb = getExtras(b.slug);
+  const vsFaq = composeVsFaq(a, b);
+
+  const faqLd = {
+    "@context": "https://schema.org",
+    "@type": "FAQPage",
+    mainEntity: vsFaq.map((item) => ({
+      "@type": "Question",
+      name: item.q,
+      acceptedAnswer: { "@type": "Answer", text: item.a },
+    })),
+  };
 
   return (
     <div
@@ -30,6 +65,7 @@ export function VsPage({ pair, a, b }: { pair: VsPair; a: Competitor; b: Competi
         }
       `}</style>
       <MarkdownPointer href={`/compare/${vsSlug(pair)}.md`} />
+      <script type="application/ld+json" dangerouslySetInnerHTML={{ __html: JSON.stringify(faqLd) }} />
       <MarketplaceNav />
 
       <main style={{ maxWidth: 960, margin: "0 auto", padding: "26px 32px 70px", width: "100%" }}>
@@ -102,6 +138,35 @@ export function VsPage({ pair, a, b }: { pair: VsPair; a: Competitor; b: Competi
               </tbody>
             </table>
           </div>
+        </section>
+
+        {/* the honest take strip */}
+        <section style={{ padding: "32px 0 8px" }}>
+          <h2 style={{ margin: 0, fontSize: 22, fontWeight: 800, letterSpacing: "-0.02em" }}>The honest take</h2>
+          <div style={{ display: "flex", flexDirection: "column", gap: 12, marginTop: 16, maxWidth: 760 }}>
+            {[a, b].map((c) => (
+              <p
+                key={c.slug}
+                style={{ margin: 0, fontSize: 14.5, lineHeight: 1.6, color: "rgba(34,29,23,0.68)", background: MKT.ink05, borderRadius: 12, padding: "14px 18px", borderLeft: `3px solid ${MKT.ink10}` }}
+              >
+                <strong style={{ color: "rgba(34,29,23,0.82)" }}>{c.name}:</strong> {c.whenTheyWin}
+              </p>
+            ))}
+          </div>
+        </section>
+
+        {/* FAQ */}
+        <section style={{ padding: "32px 0 8px" }}>
+          <h2 style={{ margin: 0, fontSize: 22, fontWeight: 800, letterSpacing: "-0.02em", marginBottom: 14 }}>Frequently asked questions</h2>
+          {vsFaq.map((item) => (
+            <details
+              key={item.q}
+              style={{ border: `1px solid ${MKT.ink10}`, borderRadius: 12, padding: "14px 18px", marginBottom: 10, background: "rgba(255,255,255,0.55)" }}
+            >
+              <summary style={{ fontWeight: 700, fontSize: 15.5, cursor: "pointer" }}>{item.q}</summary>
+              <p style={{ margin: "10px 0 2px", fontSize: 14.5, lineHeight: 1.6, color: "rgba(34,29,23,0.72)" }}>{item.a}</p>
+            </details>
+          ))}
         </section>
 
         {/* the both-worlds plug */}

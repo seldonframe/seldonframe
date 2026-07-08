@@ -83,6 +83,9 @@ export async function GET(req: Request): Promise<Response> {
   lines.push("");
   lines.push(`- [All comparisons](${base}/alternatives): how SeldonFrame compares to every major alternative.`);
   for (const c of COMPETITORS) {
+    lines.push(`- [SeldonFrame vs ${c.name}](${base}/compare/seldonframe-vs-${c.slug}): head-to-head — pricing, AI receptionist, whitelabel, and where ${c.name} wins.`);
+  }
+  for (const c of COMPETITORS) {
     lines.push(`- [Best ${c.name} alternative](${base}/alternative-to-${c.slug}): ${c.oneLiner}`);
   }
   for (const p of VS_PAIRS) {

@@ -36,6 +36,7 @@ export type MarkdownSurface =
   | "robots_txt" // /robots.txt
   | "alternative_page" // /alternative-to-<slug>.md  (competitor comparison twin)
   | "compare_page" // /compare/<a>-vs-<b>.md  (head-to-head twin)
+  | "sf_vs_page" // /compare/seldonframe-vs-<slug>.md  (SeldonFrame head-to-head twin)
   | "best_page"; // /best/<category>-for-<audience>.md  (best-of listicle twin)
 
 /**

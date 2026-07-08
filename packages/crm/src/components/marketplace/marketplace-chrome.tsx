@@ -23,9 +23,10 @@ function compareFooterItems(): { label: string; href: string }[] {
   return [
     { label: "All comparisons", href: "/alternatives" },
     ...COMPETITORS.map((c) => ({
-      label: `Alternative to ${c.name}`,
-      href: `/alternative-to-${c.slug}`,
+      label: `SeldonFrame vs ${c.name}`,
+      href: `/compare/seldonframe-vs-${c.slug}`,
     })),
+    { label: "Best-of guides", href: "/best" },
     { label: "Free tools", href: "/tools" },
   ];
 }
