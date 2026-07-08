@@ -74,13 +74,13 @@ export interface StackPreset {
 export const STACK_PRESETS: StackPreset[] = [
   { key: "ghlStyle", label: "GHL-style stack ~$150+", hint: "Base plan + AI Employee add-on + rebilled usage, stacked per client" },
   { key: "typicalSaas", label: "Typical SaaS stack ~$80", hint: "A typical multi-tool SaaS stack (CRM + scheduling + email) per client" },
-  { key: "seldonframe", label: "SeldonFrame stack ~$3–10", hint: "Flat $29–299 plan ÷ clients, plus raw BYOK usage — no per-client software fee" },
+  { key: "seldonframe", label: "SeldonFrame stack ~$3–10", hint: "Flat plan ($29 builder, up to $299 agency) ÷ clients, plus raw BYOK usage — no per-client software fee" },
 ];
 
 /**
  * Resolve a preset key to a slider value for a given client count. GHL-style
  * and typical-SaaS are flat per-client estimates (hedged, "~" in the label).
- * SeldonFrame's is genuinely a function of client count — flat $29-299
+ * SeldonFrame's is genuinely a function of client count — flat $29 (builder) to $299 (agency)
  * divided across clients, plus a small raw-usage estimate — since that's the
  * actual pitch: the per-client software cost shrinks as an agency adds
  * clients, unlike a per-seat/per-sub-account competitor stack.

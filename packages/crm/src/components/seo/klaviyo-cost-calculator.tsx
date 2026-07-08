@@ -7,8 +7,8 @@
 // (registry, verified July 2026):
 //   - Free: 250 active profiles, 500 email sends/mo, 150 SMS credits/mo
 //   - Email: "from $20/mo (251-500 profiles), reported ~$100/mo at 5k,
-//     ~$400/mo at 25k" — these three registry price POINTS are the only
-//     published anchors; everything between them is a LINEAR INTERPOLATION,
+//     ~$400/mo at 25k" — these three paid price POINTS (plus the free tier
+//     at 250 profiles) are the only published anchors; everything between them is a LINEAR INTERPOLATION,
 //     always marked "~" in the UI (see interpolateKlaviyoPrice below).
 //   - SMS: "$0.01-$0.015 per US message" beyond the plan's SMS credit
 //     allotment — this calculator uses the registry's hedged midpoint,

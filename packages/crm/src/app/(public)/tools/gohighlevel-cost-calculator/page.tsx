@@ -53,7 +53,7 @@ const FAQ = [
   },
   {
     q: "How does SeldonFrame's pricing compare?",
-    a: "SeldonFrame is <strong>$29-$299/month flat</strong> for unlimited workspaces on the builder tier — no per-sub-account software fee. You connect your own AI provider and telephony account, so usage bills at raw provider cost with no markup.",
+    a: "SeldonFrame is <strong>$29/month flat</strong> on the builder tier (agency tiers up to $299) with unlimited workspaces — no per-sub-account software fee. You connect your own AI provider and telephony account, so usage bills at raw provider cost with no markup.",
   },
 ];
 

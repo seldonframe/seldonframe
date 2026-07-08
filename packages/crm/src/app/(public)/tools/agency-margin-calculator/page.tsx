@@ -53,7 +53,7 @@ const FAQ = [
   },
   {
     q: "How does SeldonFrame change the math?",
-    a: "SeldonFrame is a flat $29-$299/month platform fee, amortized across all your clients, plus raw BYOK usage (you pay your AI and telephony provider directly, at cost). That per-client software cost <strong>shrinks as you add clients</strong> instead of multiplying.",
+    a: "SeldonFrame is a flat platform fee ($29/month builder, up to $299/month agency), amortized across all your clients, plus raw BYOK usage (you pay your AI and telephony provider directly, at cost). That per-client software cost <strong>shrinks as you add clients</strong> instead of multiplying.",
   },
 ];
 

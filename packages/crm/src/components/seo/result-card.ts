@@ -1,6 +1,7 @@
 // Shared "shareable result" module for the free SEO calculator tools
-// (missed-call-calculator.tsx, ai-receptionist-cost-calculator.tsx,
-// gohighlevel-cost-calculator.tsx, agency-margin-calculator.tsx).
+// (the /tools calculator islands — missed-call, ai-receptionist-cost,
+// gohighlevel-cost, agency-margin, hubspot-pricing, klaviyo-cost,
+// voice-ai-cost — which import the canvas/share primitives below).
 //
 // Two responsibilities live here:
 //   1. Pure URL query-state encode/decode helpers (unit-testable, no DOM).
