@@ -19,6 +19,13 @@ Design: docs/superpowers/specs/2026-07-08-ghl-seo-engine-design.md
 - [x] F. Verify: 159/159 seo specs ✓ · tsc-delta 0 (436→436, none in our files) ✓ · use-server clean ✓ · regression grep clean after rebase onto 231653b7e ✓ · opus reviewer verdict SHIP (0 blocking; mojibake + llms casing fixed in b4663b702) · local `next build` NOT runnable in this env (pre-existing `workflow/next` missing locally — Vercel installs it; the pushed branch's Vercel preview is the real build gate)
 - [x] G. Review section + memory update
 
+Wave 3 (2026-07-08, DONE): visuals + 12-year-old readability across all SEO surfaces —
+- [x] G. Templates: TldrBox ("The short version" bullets) + FrontOfficeFlow diagram + emphasize()/emphasizeMd() auto-bolding into the 4 templates + 3 markdown twins (+20-test spec)
+- [x] H. Tools: per-tool point-making visual (money-leak funnel · savings bars · 3-step strips · A2P compliance ladder colored from quiz answers) + grade-6 copy pass (A2P legal disclaimer untouched)
+- [x] I. alternative-pages{,-extras}.ts prose simplified — dollar-token multisets verified IDENTICAL (221+49); all hedges survived (reviewer-audited)
+- [x] J. best-pages.ts prose simplified, same freeze (51/51)
+- [x] K. Gate: 231/231 seo specs · tsc delta 0 (436) · 3rd opus review READY 0-blocking (4 nits fixed: percent-range bolding, study hedge restored, literal-FAQ invariant comments, funnel proxy footnote) · pushed
+
 Wave 2 (Max's correction, same day): first-person /compare/seldonframe-vs-<slug> for all
 25 competitors (flagship template + 25 .md twins + composed non-duplicate intros), footer
 Compare/Free-tools mesh on marketing + marketplace footers, /alternatives hub chip row,
