@@ -175,7 +175,7 @@ function resolveApiKey(
  * itself stays observable from Vercel function logs.
  */
 async function dispatch(params: {
-  event: "new_signup" | "paid_conversion" | "new_lead" | "usage_cap_breach";
+  event: "new_signup" | "paid_conversion" | "new_lead" | "usage_cap_breach" | "retainer_payment_failed";
   to: string;
   from: string;
   subject: string;
@@ -559,6 +559,81 @@ Costs are estimated by SeldonFrame's internal price table — under BYOK the rea
 
   await dispatch({
     event: "usage_cap_breach",
+    to: params.toEmail,
+    from,
+    subject,
+    text,
+    html,
+    apiKey,
+    fetcher,
+  });
+}
+
+export type PaymentFailedAlertParams = {
+  /** The AGENCY owner's own display name. */
+  agencyName: string;
+  /** The AGENCY owner's own email — resolved by the caller (mirrors
+   *  sendUsageCapAlert's toEmail contract, NOT the platform ops inbox). */
+  toEmail: string;
+  amount: string;
+  currency: string;
+  /** Which dunning notice this is (1 = day-3 first notice, 2 = day-7 second
+   *  notice — Task 4's escalation stages). */
+  stage: number;
+};
+
+/**
+ * Sibling of sendUsageCapAlert — notifies the AGENCY OWNER that a client's
+ * retainer card was declined (Autopay console Task 4, dunning). Stripe's own
+ * smart retries handle re-charging the card; this is a notify-only alert.
+ * Never throws — same fail-soft contract as every other function here.
+ */
+export async function sendPaymentFailedAlert(
+  params: PaymentFailedAlertParams,
+  deps: OpsNotificationDeps = {},
+): Promise<void> {
+  const env = deps.env ?? process.env;
+  const fetcher = deps.fetcher ?? globalThis.fetch;
+  const apiKey = resolveApiKey(deps.apiKey, env);
+  const from = resolveFromAddress(env);
+
+  const amountDisplay = `$${Number(params.amount).toFixed(2)} ${params.currency}`;
+  const noticeLabel = params.stage >= 2 ? "Second notice" : "First notice";
+
+  const subject = `Retainer payment failed — ${amountDisplay} (${noticeLabel})`;
+
+  const text = `A client's retainer payment failed.
+
+Amount: ${amountDisplay}
+Notice: ${noticeLabel}
+
+Stripe is automatically retrying the charge on the card on file. The client has also been emailed a link to update their payment method or pay the outstanding invoice directly.`;
+
+  const safeAmount = escapeHtml(amountDisplay);
+  const safeNotice = escapeHtml(noticeLabel);
+
+  const html = `<!doctype html>
+<html lang="en">
+<body style="margin:0;padding:0;background:#f5f5f7;font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,Helvetica,Arial,sans-serif;color:#111;">
+  <table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="background:#f5f5f7;padding:24px 12px;">
+    <tr><td align="center">
+      <table role="presentation" width="560" cellpadding="0" cellspacing="0" style="max-width:560px;width:100%;background:#ffffff;border-radius:12px;overflow:hidden;border:1px solid #e5e7eb;">
+        <tr><td style="background:#b91c1c;padding:20px 24px;color:#ffffff;">
+          <div style="font-size:12px;letter-spacing:0.08em;text-transform:uppercase;color:#fecaca;margin-bottom:6px;">Retainer payment failed</div>
+          <div style="font-size:20px;font-weight:600;line-height:1.25;">${safeAmount} — ${safeNotice}</div>
+        </td></tr>
+        <tr><td style="padding:20px 24px;font-size:14px;line-height:1.6;color:#1a1a1f;">
+          <p style="margin:0;">Stripe is automatically retrying the charge on the card on file.</p>
+          <p style="margin:8px 0 0 0;color:#6b7280;font-size:13px;">The client has also been emailed a link to update their payment method or pay the outstanding invoice directly.</p>
+        </td></tr>
+      </table>
+    </td></tr>
+  </table>
+</body>
+</html>`;
+
+  await dispatch({
+    event: "retainer_payment_failed",
     to: params.toEmail,
     from,
     subject,
