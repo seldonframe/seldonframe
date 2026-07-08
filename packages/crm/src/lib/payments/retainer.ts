@@ -21,11 +21,14 @@
 //     A throw here would break the shared Connect webhook route for every
 //     other event type in the same request.
 
-import { and, eq, ilike } from "drizzle-orm";
+import { and, desc, eq, ilike } from "drizzle-orm";
+import StripeClient from "stripe";
 import type Stripe from "stripe";
 import { db } from "@/db";
-import { contacts, paymentRecords, proposals } from "@/db/schema";
+import { contacts, paymentRecords, proposals, stripeConnections, subscriptions } from "@/db/schema";
 import { logEvent } from "@/lib/observability/log";
+import { buildCheckoutSessionParams } from "@/lib/proposals/checkout";
+import { createProposal } from "@/lib/proposals/create";
 
 // ── the subscription id off an Invoice — mirrors
 // lib/marketplace/billing/webhook-handler.ts's invoiceSubscriptionId (the
@@ -257,4 +260,257 @@ export async function recordRetainerInvoiceCycle(
   event: Stripe.Event,
 ): Promise<RetainerInvoiceCycleResult> {
   return applyRetainerInvoiceCycle(event, defaultRetainerInvoiceCycleDeps());
+}
+
+// ── D1 — attach a retainer to an EXISTING client (createClientRetainerCheckout)
+//
+// REUSES buildCheckoutSessionParams verbatim (design D1): the same
+// subscription-mode Stripe Checkout with GMV_FEE_PERCENT that /start already
+// creates for new closes — zero new fee logic. Delivery is a checkout link;
+// card entry is always the client's own action in a Stripe-hosted surface, we
+// never touch or store card numbers here.
+
+export type CreateClientRetainerCheckoutInput = {
+  builderOrgId: string;
+  clientOrgId: string;
+  contact: { email: string; name: string; firstName?: string | null; phone?: string | null };
+  monthlyPriceCents: number;
+  setupFeeCents?: number;
+};
+
+export type CreateRetainerCheckoutDeps = {
+  /** The AGENCY's (builderOrgId's) active connected account, if any. Null →
+   *  no Stripe call is ever made (D6 money-safety: inert without a connection). */
+  getActiveConnection: (builderOrgId: string) => Promise<{ stripeAccountId: string } | null>;
+  /** Create the proposal row the checkout session's metadata points at —
+   *  reuses the SAME proposals table the /start live-sell flow uses, so the
+   *  Connect webhook's existing checkout.session.completed + cycle-recording
+   *  paths need no changes to pick this up. */
+  createProposalRow: (input: CreateClientRetainerCheckoutInput) => Promise<{ id: string; signedToken: string }>;
+  /** The single Stripe call this function makes — checkout session creation
+   *  via the connected account, using buildCheckoutSessionParams's output
+   *  verbatim. */
+  createCheckoutSession: (
+    params: Stripe.Checkout.SessionCreateParams,
+    options: Stripe.RequestOptions,
+  ) => Promise<{ id: string; url: string | null }>;
+  persistCheckoutSessionId: (proposalId: string, sessionId: string) => Promise<void>;
+  baseUrl: string;
+};
+
+export type CreateClientRetainerCheckoutResult =
+  | { ok: true; checkoutUrl: string; proposalId: string }
+  | {
+      ok: false;
+      reason: "stripe_not_connected" | "checkout_session_missing_url" | "stripe_error";
+    };
+
+export async function createClientRetainerCheckout(
+  input: CreateClientRetainerCheckoutInput,
+  deps: CreateRetainerCheckoutDeps,
+): Promise<CreateClientRetainerCheckoutResult> {
+  const connection = await deps.getActiveConnection(input.builderOrgId);
+  if (!connection) {
+    return { ok: false, reason: "stripe_not_connected" };
+  }
+
+  const proposal = await deps.createProposalRow(input);
+
+  const params = buildCheckoutSessionParams({
+    proposalId: proposal.id,
+    previewWorkspaceId: null,
+    prospectEmail: input.contact.email,
+    prospectName: input.contact.name,
+    monthlyPriceCents: input.monthlyPriceCents,
+    setupFeeCents: input.setupFeeCents,
+    signedToken: proposal.signedToken,
+    baseUrl: deps.baseUrl,
+  });
+
+  let session: { id: string; url: string | null };
+  try {
+    session = await deps.createCheckoutSession(params, { stripeAccount: connection.stripeAccountId });
+  } catch (err) {
+    logEvent("retainer_checkout_stripe_error", {
+      builderOrgId: input.builderOrgId,
+      clientOrgId: input.clientOrgId,
+      error: err instanceof Error ? err.message : String(err),
+    });
+    return { ok: false, reason: "stripe_error" };
+  }
+
+  if (!session.url) {
+    return { ok: false, reason: "checkout_session_missing_url" };
+  }
+
+  await deps.persistCheckoutSessionId(proposal.id, session.id);
+
+  return { ok: true, checkoutUrl: session.url, proposalId: proposal.id };
+}
+
+async function getActiveConnectionReal(builderOrgId: string): Promise<{ stripeAccountId: string } | null> {
+  const [row] = await db
+    .select({ stripeAccountId: stripeConnections.stripeAccountId })
+    .from(stripeConnections)
+    .where(and(eq(stripeConnections.orgId, builderOrgId), eq(stripeConnections.isActive, true)))
+    .limit(1);
+  return row ?? null;
+}
+
+async function createProposalRowReal(
+  input: CreateClientRetainerCheckoutInput,
+): Promise<{ id: string; signedToken: string }> {
+  const proposal = await createProposal({
+    agencyOrgId: input.builderOrgId,
+    createdByUserId: "", // system-created retainer attach; no human proposal author
+    prospectName: input.contact.name,
+    prospectEmail: input.contact.email,
+    prospectFirstName: input.contact.firstName ?? null,
+    prospectPhone: input.contact.phone ?? null,
+    agencyName: input.contact.name,
+    monthlyPriceCents: input.monthlyPriceCents,
+    setupFeeCents: input.setupFeeCents ?? 0,
+    previewWorkspaceId: null,
+    scopeItems: [{ label: "Monthly retainer" }],
+    generatedHtml: `<p>Retainer checkout for ${input.contact.name}. $${(input.monthlyPriceCents / 100).toFixed(0)}/mo.</p>`,
+  });
+  return { id: proposal.id, signedToken: proposal.signedToken };
+}
+
+function getStripeClientReal(): Stripe | null {
+  const secretKey = process.env.STRIPE_SECRET_KEY?.trim();
+  if (!secretKey) return null;
+  return new StripeClient(secretKey, { apiVersion: "2025-08-27.basil" });
+}
+
+export function defaultCreateRetainerCheckoutDeps(): CreateRetainerCheckoutDeps {
+  return {
+    getActiveConnection: getActiveConnectionReal,
+    createProposalRow: createProposalRowReal,
+    createCheckoutSession: async (params, options) => {
+      const stripe = getStripeClientReal();
+      if (!stripe) throw new Error("stripe_not_configured");
+      const session = await stripe.checkout.sessions.create(params, options);
+      return { id: session.id, url: session.url };
+    },
+    persistCheckoutSessionId: async (proposalId, sessionId) => {
+      await db
+        .update(proposals)
+        .set({ stripeCheckoutSessionId: sessionId, updatedAt: new Date() })
+        .where(eq(proposals.id, proposalId));
+    },
+    baseUrl: process.env.NEXT_PUBLIC_APP_URL?.trim() || "https://app.seldonframe.com",
+  };
+}
+
+/** Production entry point — the agency editor's server action calls this. */
+export async function createClientRetainer(
+  input: CreateClientRetainerCheckoutInput,
+): Promise<CreateClientRetainerCheckoutResult> {
+  return createClientRetainerCheckout(input, defaultCreateRetainerCheckoutDeps());
+}
+
+// ── cancel a client's retainer subscription — the ONE other new mutating
+// Stripe call besides checkout creation. Org-scoped (the caller must own the
+// client org) + inert without an active connection (D6).
+
+export type CancelClientRetainerInput = {
+  builderOrgId: string;
+  clientOrgId: string;
+};
+
+export type CancelRetainerDeps = {
+  /** Does builderOrgId own clientOrgId? (org-scoped authz — the same
+   *  resolveBuilderAgency-style ownership check the other client-card
+   *  editors use). */
+  authorize: (input: CancelClientRetainerInput) => Promise<boolean>;
+  getActiveConnection: (builderOrgId: string) => Promise<{ stripeAccountId: string } | null>;
+  /** Find the client's currently-active retainer subscription. Null → no
+   *  active subscription to cancel. */
+  findActiveSubscription: (clientOrgId: string) => Promise<{ stripeSubscriptionId: string } | null>;
+  cancelSubscription: (subscriptionId: string, stripeAccountId: string) => Promise<void>;
+};
+
+export type CancelClientRetainerResult =
+  | { ok: true }
+  | { ok: false; reason: "unauthorized" | "stripe_not_connected" | "no_active_subscription" | "stripe_error" };
+
+export async function cancelClientRetainer(
+  input: CancelClientRetainerInput,
+  deps: CancelRetainerDeps,
+): Promise<CancelClientRetainerResult> {
+  const authorized = await deps.authorize(input);
+  if (!authorized) return { ok: false, reason: "unauthorized" };
+
+  const connection = await deps.getActiveConnection(input.builderOrgId);
+  if (!connection) return { ok: false, reason: "stripe_not_connected" };
+
+  const activeSubscription = await deps.findActiveSubscription(input.clientOrgId);
+  if (!activeSubscription) return { ok: false, reason: "no_active_subscription" };
+
+  try {
+    await deps.cancelSubscription(activeSubscription.stripeSubscriptionId, connection.stripeAccountId);
+  } catch (err) {
+    logEvent("retainer_cancel_stripe_error", {
+      builderOrgId: input.builderOrgId,
+      clientOrgId: input.clientOrgId,
+      error: err instanceof Error ? err.message : String(err),
+    });
+    return { ok: false, reason: "stripe_error" };
+  }
+
+  return { ok: true };
+}
+
+async function findActiveSubscriptionReal(clientOrgId: string): Promise<{ stripeSubscriptionId: string } | null> {
+  const [row] = await db
+    .select({ stripeSubscriptionId: subscriptions.stripeSubscriptionId })
+    .from(subscriptions)
+    .where(and(eq(subscriptions.orgId, clientOrgId), eq(subscriptions.status, "active")))
+    .orderBy(desc(subscriptions.createdAt))
+    .limit(1);
+  if (!row?.stripeSubscriptionId) return null;
+  return { stripeSubscriptionId: row.stripeSubscriptionId };
+}
+
+// ── D4 — client-card retainer status. Pure: derived from the ALREADY-STORED
+// subscriptions row (never a Stripe call — the plan is explicit: "do NOT
+// call Stripe to render status"). The subscriptions row is kept current by
+// the Connect webhook's existing customer.subscription.* handler.
+
+export type RetainerStatus = "none" | "active" | "past_due" | "canceled";
+
+/** Stripe subscription statuses that mean "billing is on schedule" for our
+ *  purposes — trialing counts as active (no card-decline concern yet). */
+const ACTIVE_LIKE = new Set(["active", "trialing"]);
+/** Statuses that mean "the card needs attention" — the dunning cron's target. */
+const PAST_DUE_LIKE = new Set(["past_due", "unpaid"]);
+/** Statuses that mean "this subscription is done" — never returning. */
+const CANCELED_LIKE = new Set(["canceled", "incomplete_expired"]);
+
+export function deriveRetainerStatus(input: { subscription: { status: string } | null }): RetainerStatus {
+  if (!input.subscription) return "none";
+  const status = input.subscription.status;
+  if (PAST_DUE_LIKE.has(status)) return "past_due";
+  if (CANCELED_LIKE.has(status)) return "canceled";
+  if (ACTIVE_LIKE.has(status)) return "active";
+  // Unknown/future Stripe status → default to "active" rather than hiding a
+  // real subscription behind an unrecognized string (fail-soft toward
+  // visibility, not toward silence).
+  return "active";
+}
+
+export function defaultCancelRetainerDeps(
+  authorize: (input: CancelClientRetainerInput) => Promise<boolean>,
+): CancelRetainerDeps {
+  return {
+    authorize,
+    getActiveConnection: getActiveConnectionReal,
+    findActiveSubscription: findActiveSubscriptionReal,
+    cancelSubscription: async (subscriptionId, stripeAccountId) => {
+      const stripe = getStripeClientReal();
+      if (!stripe) throw new Error("stripe_not_configured");
+      await stripe.subscriptions.cancel(subscriptionId, {}, { stripeAccount: stripeAccountId });
+    },
+  };
 }

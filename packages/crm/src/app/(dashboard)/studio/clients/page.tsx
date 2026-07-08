@@ -49,13 +49,16 @@ import {
 } from "@/lib/agents/triggers/agent-trigger";
 import { getAgencyUsageRollup, usageByOrgId } from "@/lib/billing/usage-rollup";
 import { parseUsageCap, evaluateUsageCap, periodKeyUtc } from "@/lib/billing/usage-cap";
+import { isAutopayConsoleOn } from "@/lib/web-build/policy";
+import { deriveRetainerStatus } from "@/lib/payments/retainer";
 import { db } from "@/db";
-import { organizations } from "@/db/schema";
-import { inArray } from "drizzle-orm";
+import { organizations, subscriptions } from "@/db/schema";
+import { inArray, desc } from "drizzle-orm";
 import { StudioTabs } from "../studio-tabs";
 import { DeploymentStatusBadge } from "./status-badge";
 import { ClientUsagePanel, UsageTotalsTile } from "./usage-panel";
 import { UsageCapEditor, UsageCapBreachBanner } from "./usage-cap-editor";
+import { BillingRetainerEditor } from "./billing-retainer-editor";
 import {
   ActivateForm,
   ActivateOutboundButton,
@@ -124,6 +127,34 @@ export default async function StudioClientsPage({
   const capByOrg = new Map(
     capRows.map((row) => [row.id, parseUsageCap(row.settings)] as const),
   );
+
+  // Autopay console (2026-07-08, Task 2) — flag-gated. Off → the editor is
+  // absent entirely (pinned by a test) and this query never runs.
+  const autopayConsoleOn = isAutopayConsoleOn({ SF_AUTOPAY_CONSOLE: process.env.SF_AUTOPAY_CONSOLE });
+  const retainerStatusByOrg = new Map<string, ReturnType<typeof deriveRetainerStatus>>();
+  if (autopayConsoleOn) {
+    const clientOrgIds = clients
+      .map((g) => g.clientOrgId)
+      .filter((id): id is string => Boolean(id));
+    if (clientOrgIds.length > 0) {
+      const subRows = await db
+        .select({ orgId: subscriptions.orgId, status: subscriptions.status, createdAt: subscriptions.createdAt })
+        .from(subscriptions)
+        .where(inArray(subscriptions.orgId, clientOrgIds))
+        .orderBy(desc(subscriptions.createdAt));
+      // Keep only the MOST RECENT subscription row per org (orderBy above
+      // means the first occurrence per orgId in iteration order is the latest).
+      const seen = new Set<string>();
+      for (const row of subRows) {
+        if (seen.has(row.orgId)) continue;
+        seen.add(row.orgId);
+        retainerStatusByOrg.set(row.orgId, deriveRetainerStatus({ subscription: { status: row.status } }));
+      }
+      for (const orgId of clientOrgIds) {
+        if (!retainerStatusByOrg.has(orgId)) retainerStatusByOrg.set(orgId, "none");
+      }
+    }
+  }
 
   return (
     <section className="animate-page-enter space-y-6">
@@ -453,6 +484,17 @@ export default async function StudioClientsPage({
                         </>
                       );
                     })()}
+
+                  {/* Autopay console (2026-07-08, Task 2) — flag-gated "Billing &
+                      retainer" editor. Status is derived server-side
+                      (deriveRetainerStatus) from the stored subscriptions row;
+                      never a Stripe call to render. */}
+                  {autopayConsoleOn && client.clientOrgId && (
+                    <BillingRetainerEditor
+                      clientOrgId={client.clientOrgId}
+                      status={retainerStatusByOrg.get(client.clientOrgId) ?? "none"}
+                    />
+                  )}
 
                   {/* ── Card footer: Deploy another agent + Open client. The
                       grouped client now carries its workspace slug (joined from
