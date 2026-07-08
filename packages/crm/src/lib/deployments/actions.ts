@@ -1067,3 +1067,136 @@ export async function inviteClientToPortalAction(input: {
   revalidatePath("/studio/clients");
   return { ok: true, inviteUrl: result.inviteUrl };
 }
+
+// ─── setSubAccountUsageCapAction (per-sub-account usage meter, 2026-07-08) ──
+//
+// Sets (or clears) a client sub-account's monthly estimated-AI-cost cap.
+// Org-scoped to the AGENCY: the caller's own builder org must resolve (via
+// resolveBuilderAgency — the SAME lookup the deploy-to-client flow already
+// uses) to the SAME agency the target client org is attached to
+// (organizations.parentAgencyId). Persisted in organizations.settings.usageCap
+// (jsonb — no migration; see lib/billing/usage-cap.ts).
+
+export type SetSubAccountUsageCapActionResult =
+  | { ok: true }
+  | { ok: false; error: "unauthorized" | "not_found" | "invalid_input" | "update_failed" };
+
+export async function setSubAccountUsageCapAction(
+  input: {
+    clientOrgId: string;
+    /** null clears the cap (→ unset, no enforcement). */
+    monthlyEstCostCentsCap: number | null;
+    mode?: "notify" | "pause";
+    holdingReply?: string | null;
+  },
+  _deps?: {
+    getOrgId?: () => Promise<string | null>;
+    resolveBuilderAgency?: (builderOrgId: string) => Promise<string | null>;
+    getOrgParentAgencyId?: (orgId: string) => Promise<string | null>;
+    getOrgSettings?: (orgId: string) => Promise<Record<string, unknown> | null>;
+    updateOrgSettings?: (orgId: string, settings: Record<string, unknown>) => Promise<boolean>;
+    revalidate?: (path: string) => void;
+  },
+): Promise<SetSubAccountUsageCapActionResult> {
+  assertWritable();
+
+  const resolveOrgId = _deps?.getOrgId ?? getOrgId;
+  const callerOrgId = await resolveOrgId();
+  if (!callerOrgId) return { ok: false, error: "unauthorized" };
+
+  if (!input.clientOrgId || typeof input.clientOrgId !== "string") {
+    return { ok: false, error: "invalid_input" };
+  }
+  if (
+    input.monthlyEstCostCentsCap !== null &&
+    (typeof input.monthlyEstCostCentsCap !== "number" ||
+      !Number.isFinite(input.monthlyEstCostCentsCap) ||
+      input.monthlyEstCostCentsCap < 0)
+  ) {
+    return { ok: false, error: "invalid_input" };
+  }
+  if (input.mode && input.mode !== "notify" && input.mode !== "pause") {
+    return { ok: false, error: "invalid_input" };
+  }
+
+  const { authorizeUsageCapSetterForOrg } = await import("@/lib/billing/usage-cap");
+  const resolveBuilderAgencyFn = _deps?.resolveBuilderAgency ?? resolveBuilderAgency;
+  const getOrgParentAgencyIdFn =
+    _deps?.getOrgParentAgencyId ??
+    (async (orgId: string) => {
+      const { db } = await import("@/db");
+      const { organizations } = await import("@/db/schema/organizations");
+      const { eq } = await import("drizzle-orm");
+      const [row] = await db
+        .select({ parentAgencyId: organizations.parentAgencyId })
+        .from(organizations)
+        .where(eq(organizations.id, orgId))
+        .limit(1);
+      return row?.parentAgencyId ?? null;
+    });
+
+  const authorized = await authorizeUsageCapSetterForOrg({
+    callerOrgId,
+    targetOrgId: input.clientOrgId,
+    deps: { resolveBuilderAgency: resolveBuilderAgencyFn, getOrgParentAgencyId: getOrgParentAgencyIdFn },
+  });
+  if (!authorized) return { ok: false, error: "unauthorized" };
+
+  const getSettings =
+    _deps?.getOrgSettings ??
+    (async (orgId: string) => {
+      const { db } = await import("@/db");
+      const { organizations } = await import("@/db/schema/organizations");
+      const { eq } = await import("drizzle-orm");
+      const [row] = await db
+        .select({ settings: organizations.settings })
+        .from(organizations)
+        .where(eq(organizations.id, orgId))
+        .limit(1);
+      return row ? (row.settings ?? {}) : null;
+    });
+
+  const existingSettings = await getSettings(input.clientOrgId);
+  if (existingSettings === null) return { ok: false, error: "not_found" };
+
+  const nextSettings: Record<string, unknown> =
+    input.monthlyEstCostCentsCap === null
+      ? { ...existingSettings, usageCap: undefined }
+      : {
+          ...existingSettings,
+          usageCap: {
+            monthlyEstCostCentsCap: input.monthlyEstCostCentsCap,
+            mode: input.mode ?? "notify",
+            // Clearing the cap value resets notify idempotency; changing the
+            // cap amount/mode while it's still set preserves the existing
+            // lastNotifiedPeriod (no reason to re-spam an already-notified period).
+            lastNotifiedPeriod:
+              (existingSettings as { usageCap?: { lastNotifiedPeriod?: string } })?.usageCap
+                ?.lastNotifiedPeriod ?? null,
+            holdingReply: input.holdingReply ?? null,
+          },
+        };
+  // JSON.stringify drops `undefined` keys — the jsonb column never stores an
+  // explicit null placeholder for a cleared cap.
+  const cleanedSettings = JSON.parse(JSON.stringify(nextSettings));
+
+  const updateSettings =
+    _deps?.updateOrgSettings ??
+    (async (orgId: string, settings: Record<string, unknown>) => {
+      const { db } = await import("@/db");
+      const { organizations } = await import("@/db/schema/organizations");
+      const { eq } = await import("drizzle-orm");
+      const result = await db
+        .update(organizations)
+        .set({ settings, updatedAt: new Date() })
+        .where(eq(organizations.id, orgId))
+        .returning({ id: organizations.id });
+      return result.length > 0;
+    });
+
+  const updated = await updateSettings(input.clientOrgId, cleanedSettings);
+  if (!updated) return { ok: false, error: "update_failed" };
+
+  (_deps?.revalidate ?? revalidatePath)("/studio/clients");
+  return { ok: true };
+}

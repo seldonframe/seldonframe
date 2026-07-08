@@ -48,9 +48,14 @@ import {
   triggerLabel,
 } from "@/lib/agents/triggers/agent-trigger";
 import { getAgencyUsageRollup, usageByOrgId } from "@/lib/billing/usage-rollup";
+import { parseUsageCap, evaluateUsageCap, periodKeyUtc } from "@/lib/billing/usage-cap";
+import { db } from "@/db";
+import { organizations } from "@/db/schema";
+import { inArray } from "drizzle-orm";
 import { StudioTabs } from "../studio-tabs";
 import { DeploymentStatusBadge } from "./status-badge";
 import { ClientUsagePanel, UsageTotalsTile } from "./usage-panel";
+import { UsageCapEditor, UsageCapBreachBanner } from "./usage-cap-editor";
 import {
   ActivateForm,
   ActivateOutboundButton,
@@ -103,6 +108,22 @@ export default async function StudioClientsPage({
     : { perOrg: [], totals: { conversations: 0, tokensIn: 0, tokensOut: 0, estCostCents: 0, voiceSpendCents: 0 } };
   const usageByOrg = usageByOrgId(usageRollup);
   const hasUsage = usageRollup.perOrg.length > 0;
+
+  // Caps (Task 3, D4/D5): ONE query for every counted client org's settings —
+  // no N+1. Parsed + breach-evaluated per org against this period's estimated
+  // cost (already loaded above via usageByOrg).
+  const countedOrgIds = usageRollup.perOrg.map((r) => r.orgId);
+  const capRows =
+    countedOrgIds.length > 0
+      ? await db
+          .select({ id: organizations.id, settings: organizations.settings })
+          .from(organizations)
+          .where(inArray(organizations.id, countedOrgIds))
+      : [];
+  const periodKey = periodKeyUtc();
+  const capByOrg = new Map(
+    capRows.map((row) => [row.id, parseUsageCap(row.settings)] as const),
+  );
 
   return (
     <section className="animate-page-enter space-y-6">
@@ -405,6 +426,33 @@ export default async function StudioClientsPage({
                   {/* Per-sub-account usage meter (D3) — the client's rolled-up AI
                       usage this month, omitted when unprovisioned/zero-activity. */}
                   <ClientUsagePanel row={client.clientOrgId ? usageByOrg.get(client.clientOrgId) : undefined} />
+
+                  {/* Usage cap (D4/D5) — breach banner (only when the resolved cap is
+                      crossed this period) + the collapsible cap editor. Both keyed off
+                      the provisioned clientOrgId; omitted entirely for un-activated
+                      drafts (nothing to cap yet). */}
+                  {client.clientOrgId &&
+                    (() => {
+                      const cap = capByOrg.get(client.clientOrgId) ?? null;
+                      const usageRow = usageByOrg.get(client.clientOrgId);
+                      const evaluation = evaluateUsageCap({
+                        cap,
+                        estCostCents: usageRow?.estCostCents ?? 0,
+                        periodKey,
+                      });
+                      return (
+                        <>
+                          {evaluation.breached && cap && (
+                            <UsageCapBreachBanner
+                              estCostCents={usageRow?.estCostCents ?? 0}
+                              capCents={cap.monthlyEstCostCentsCap}
+                              mode={cap.mode}
+                            />
+                          )}
+                          <UsageCapEditor clientOrgId={client.clientOrgId} initial={cap} />
+                        </>
+                      );
+                    })()}
 
                   {/* ── Card footer: Deploy another agent + Open client. The
                       grouped client now carries its workspace slug (joined from
