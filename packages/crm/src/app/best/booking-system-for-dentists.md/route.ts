@@ -1,4 +1,4 @@
-// /best/booking-system-for-dentists.md â€” Markdown twin of the listicle page.
+// /best/booking-system-for-dentists.md — Markdown twin of the listicle page.
 import { renderBestMarkdown } from "@/lib/seo/best-markdown";
 import { logMarkdownFetch } from "@/lib/marketplace/md-analytics";
 

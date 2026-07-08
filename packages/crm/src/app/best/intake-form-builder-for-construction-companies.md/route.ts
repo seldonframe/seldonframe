@@ -1,4 +1,4 @@
-// /best/intake-form-builder-for-construction-companies.md â€” Markdown twin of the listicle page.
+// /best/intake-form-builder-for-construction-companies.md — Markdown twin of the listicle page.
 import { renderBestMarkdown } from "@/lib/seo/best-markdown";
 import { logMarkdownFetch } from "@/lib/marketplace/md-analytics";
 

@@ -10,7 +10,7 @@
 import { AGENT_JOBS, VERTICALS } from "@/lib/seo/agent-pages";
 import { COMPETITORS, getCompetitor } from "@/lib/seo/alternative-pages";
 import { VS_PAIRS, vsSlug } from "@/lib/seo/alternative-pages-extras";
-import { BEST_PAGES, bestSlug, getBestPage } from "@/lib/seo/best-pages";
+import { BEST_PAGES, bestSlug, getBestPage, midSentence } from "@/lib/seo/best-pages";
 import { siteBaseUrl } from "@/app/sitemap";
 import { loadStorefrontCatalog } from "@/lib/marketplace/load-storefront";
 import { logMarkdownFetch } from "@/lib/marketplace/md-analytics";
@@ -101,7 +101,7 @@ export async function GET(req: Request): Promise<Response> {
   for (const p of BEST_PAGES) {
     const slug = bestSlug(p);
     const { category, audience } = getBestPage(slug);
-    lines.push(`- [Best ${category.noun} for ${audience.label}](${base}/best/${slug})`);
+    lines.push(`- [Best ${category.noun} for ${midSentence(audience.label)}](${base}/best/${slug})`);
   }
   lines.push("");
 

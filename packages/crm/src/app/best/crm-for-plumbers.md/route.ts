@@ -1,4 +1,4 @@
-// /best/crm-for-plumbers.md â€” Markdown twin of the listicle page.
+// /best/crm-for-plumbers.md — Markdown twin of the listicle page.
 import { renderBestMarkdown } from "@/lib/seo/best-markdown";
 import { logMarkdownFetch } from "@/lib/marketplace/md-analytics";
 

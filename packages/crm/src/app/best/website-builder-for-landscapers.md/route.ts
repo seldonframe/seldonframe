@@ -1,4 +1,4 @@
-// /best/website-builder-for-landscapers.md â€” Markdown twin of the listicle page.
+// /best/website-builder-for-landscapers.md — Markdown twin of the listicle page.
 import { renderBestMarkdown } from "@/lib/seo/best-markdown";
 import { logMarkdownFetch } from "@/lib/marketplace/md-analytics";
 
