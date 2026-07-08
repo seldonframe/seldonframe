@@ -60,6 +60,37 @@ export const AGENCY_BASE_PRICE_ID = readEnv(
   "price_PLACEHOLDER_flat_29"
 );
 
+// ─── 2026-07-08 pricing ladder: 4 new sellable tier price ids ────────
+//
+// Managed $49 / Agency Starter $99 / Agency Growth $199 / Agency Scale
+// $299. Same PLACEHOLDER-fallback pattern as above: checkout stays
+// money-safe (isPlaceholderPriceId) until Max creates the real Stripe
+// prices and sets the env vars (see spec §6).
+
+/** Managed $49/mo flat, SF-keys runtime, one workspace. Env: STRIPE_MANAGED_PRICE_ID. */
+export const MANAGED_PRICE_ID = readEnv(
+  "STRIPE_MANAGED_PRICE_ID",
+  "price_PLACEHOLDER_managed_49"
+);
+
+/** Agency Starter $99/mo — 10 sub-accounts, whitelabel. Env: STRIPE_AGENCY_STARTER_PRICE_ID. */
+export const AGENCY_STARTER_PRICE_ID = readEnv(
+  "STRIPE_AGENCY_STARTER_PRICE_ID",
+  "price_PLACEHOLDER_agency_starter_99"
+);
+
+/** Agency Growth $199/mo — 30 sub-accounts, whitelabel. Env: STRIPE_AGENCY_GROWTH_PRICE_ID. */
+export const AGENCY_GROWTH_PRICE_ID = readEnv(
+  "STRIPE_AGENCY_GROWTH_PRICE_ID",
+  "price_PLACEHOLDER_agency_growth_199"
+);
+
+/** Agency Scale $299/mo — unlimited sub-accounts, whitelabel. Env: STRIPE_AGENCY_SCALE_PRICE_ID. */
+export const AGENCY_SCALE_PRICE_ID = readEnv(
+  "STRIPE_AGENCY_SCALE_PRICE_ID",
+  "price_PLACEHOLDER_agency_scale_299"
+);
+
 /** Agency "Extra client workspace" $10/mo, usage type = licensed
  *  (quantity). Drives the per-active-workspace overage (Phase 4).
  *  Env-only (no placeholder) — quantity items must reference a REAL
@@ -145,6 +176,15 @@ const ALLOWED_PRICE_IDS = new Set<string>([
   // New tier base prices
   GROWTH_BASE_PRICE_ID,
   SCALE_BASE_PRICE_ID,
+  // 2026-07-08 pricing ladder — the 5 sellable tier base prices.
+  BUILDER_PRICE_ID,
+  MANAGED_PRICE_ID,
+  AGENCY_STARTER_PRICE_ID,
+  AGENCY_GROWTH_PRICE_ID,
+  AGENCY_SCALE_PRICE_ID,
+  // Grandfathered legacy tier base prices (existing subscribers only).
+  WORKSPACE_PRICE_ID,
+  AGENCY_BASE_PRICE_ID,
   // Metered overages (only allowlisted when set; falsy strings are
   // filtered below)
   GROWTH_CONTACTS_PRICE_ID,

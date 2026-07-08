@@ -28,6 +28,10 @@
 
 import {
   BUILDER_PRICE_ID,
+  MANAGED_PRICE_ID,
+  AGENCY_STARTER_PRICE_ID,
+  AGENCY_GROWTH_PRICE_ID,
+  AGENCY_SCALE_PRICE_ID,
   WORKSPACE_PRICE_ID,
   AGENCY_BASE_PRICE_ID,
   LEGACY_CLOUD_STARTER_PRICE_ID,
@@ -35,7 +39,20 @@ import {
   LEGACY_CLOUD_AGENCY_PRICE_ID,
 } from "./price-ids";
 
-export type TierId = "builder" | "workspace" | "agency";
+// 2026-07-08 — pricing ladder. Five NEW sellable tiers (builder /
+// managed / agency_starter / agency_growth / agency_scale) plus two
+// GRANDFATHERED legacy tiers ("workspace", "agency") that existing
+// subscribers hold — their ids, limits, and price are frozen (one-way
+// door, spec §D1). New checkout only ever offers the 5 new ids
+// (Plan.sellable gates this).
+export type TierId =
+  | "builder"
+  | "managed"
+  | "agency_starter"
+  | "agency_growth"
+  | "agency_scale"
+  | "workspace"
+  | "agency";
 
 export interface MeteredItem {
   /** Number of units bundled in the base subscription. */
@@ -53,8 +70,12 @@ export interface Plan {
   name: string;
   /** Public-facing one-liner shown on /pricing + /settings/billing. */
   tagline: string;
-  /** Internal classification — all three current tiers are paid. */
+  /** Internal classification — all current tiers are paid. */
   type: "paid";
+  /** True for the 5 NEW tiers offered at checkout. False for the
+   *  grandfathered legacy tiers ("workspace", "agency") — they remain
+   *  in the catalog for resolution only; new checkouts never sell them. */
+  sellable: boolean;
   /** Flat base price in dollars/mo. */
   price: number;
   /** Yearly base price in dollars/yr. 0 = no yearly variant yet. */
@@ -75,6 +96,12 @@ export interface Plan {
     /** Agency: number of client workspaces included before the $10
      *  per-workspace overage kicks in. */
     includedWorkspaces: number;
+    /** 2026-07-08 — number of CLIENT sub-accounts (parent_agency_id
+     *  attachments) allowed on the agency_* tiers. -1 = unlimited. 0 on
+     *  every non-agency tier (builder/managed have no handoff surface).
+     *  Grandfathered "agency" keeps its existing unlimited whitelabel
+     *  entitlement (-1); "workspace" never had sub-accounts (0). */
+    maxSubAccounts: number;
     /** Full CRM (contacts/deals/pipeline). builder = false. */
     crm: boolean;
     /** Booking page + appointment types. builder = false. */
@@ -104,29 +131,36 @@ export interface Plan {
 }
 
 export const PLANS: Plan[] = [
+  // ─── 2026-07-08 pricing ladder — 5 SELLABLE tiers ─────────────────
   {
+    // Repurposes the "builder" id for the new $29 tier: unlimited OWN
+    // workspaces, full front-office, BYOK runtime. Not the same shape
+    // as the old ($19, landing-pages-only) "builder" — that tier never
+    // shipped to checkout, so no grandfathering is owed to it.
     id: "builder",
     name: "Builder",
-    tagline: "Launch up to 10 landing pages on your own domain",
+    tagline: "$29/mo · unlimited workspaces for your own businesses · BYOK",
     type: "paid",
-    price: 19,
+    sellable: true,
+    price: 29,
     yearlyPrice: 0,
     stripePriceId: BUILDER_PRICE_ID,
     stripeYearlyPriceId: "",
     workspaceOveragePriceId: "",
     limits: {
-      maxOrgs: 0,
-      maxLandingPages: 10,
-      includedWorkspaces: 0,
-      crm: false,
-      booking: false,
-      intake: false,
-      agents: false,
+      maxOrgs: -1,
+      maxLandingPages: -1,
+      includedWorkspaces: -1,
+      maxSubAccounts: 0,
+      crm: true,
+      booking: true,
+      intake: true,
+      agents: true,
       customDomain: true,
       removeBranding: true,
       fullWhiteLabel: false,
       clientPortal: false,
-      marketplace: false,
+      marketplace: true,
       prioritySupport: false,
       maxContacts: -1,
       maxAgentRunsPerMonth: -1,
@@ -134,10 +168,138 @@ export const PLANS: Plan[] = [
     metered: { contacts: null, agentRuns: null },
   },
   {
+    id: "managed",
+    name: "Managed",
+    tagline: "$49/mo · one workspace, runs on SeldonFrame's keys (fair use)",
+    type: "paid",
+    sellable: true,
+    price: 49,
+    yearlyPrice: 0,
+    stripePriceId: MANAGED_PRICE_ID,
+    stripeYearlyPriceId: "",
+    workspaceOveragePriceId: "",
+    limits: {
+      maxOrgs: 1,
+      maxLandingPages: -1,
+      includedWorkspaces: 1,
+      maxSubAccounts: 0,
+      crm: true,
+      booking: true,
+      intake: true,
+      agents: true,
+      customDomain: true,
+      removeBranding: true,
+      fullWhiteLabel: false,
+      clientPortal: false,
+      marketplace: true,
+      prioritySupport: false,
+      maxContacts: -1,
+      maxAgentRunsPerMonth: -1,
+    },
+    metered: { contacts: null, agentRuns: null },
+  },
+  {
+    id: "agency_starter",
+    name: "Agency Starter",
+    tagline: "$99/mo · unlimited own workspaces + 10 client sub-accounts",
+    type: "paid",
+    sellable: true,
+    price: 99,
+    yearlyPrice: 0,
+    stripePriceId: AGENCY_STARTER_PRICE_ID,
+    stripeYearlyPriceId: "",
+    workspaceOveragePriceId: "",
+    limits: {
+      maxOrgs: -1,
+      maxLandingPages: -1,
+      includedWorkspaces: -1,
+      maxSubAccounts: 10,
+      crm: true,
+      booking: true,
+      intake: true,
+      agents: true,
+      customDomain: true,
+      removeBranding: true,
+      fullWhiteLabel: true,
+      clientPortal: true,
+      marketplace: true,
+      prioritySupport: false,
+      maxContacts: -1,
+      maxAgentRunsPerMonth: -1,
+    },
+    metered: { contacts: null, agentRuns: null },
+  },
+  {
+    id: "agency_growth",
+    name: "Agency Growth",
+    tagline: "$199/mo · unlimited own workspaces + 30 client sub-accounts",
+    type: "paid",
+    sellable: true,
+    price: 199,
+    yearlyPrice: 0,
+    stripePriceId: AGENCY_GROWTH_PRICE_ID,
+    stripeYearlyPriceId: "",
+    workspaceOveragePriceId: "",
+    limits: {
+      maxOrgs: -1,
+      maxLandingPages: -1,
+      includedWorkspaces: -1,
+      maxSubAccounts: 30,
+      crm: true,
+      booking: true,
+      intake: true,
+      agents: true,
+      customDomain: true,
+      removeBranding: true,
+      fullWhiteLabel: true,
+      clientPortal: true,
+      marketplace: true,
+      prioritySupport: true,
+      maxContacts: -1,
+      maxAgentRunsPerMonth: -1,
+    },
+    metered: { contacts: null, agentRuns: null },
+  },
+  {
+    id: "agency_scale",
+    name: "Agency Scale",
+    tagline: "$299/mo · unlimited own workspaces + unlimited client sub-accounts",
+    type: "paid",
+    sellable: true,
+    price: 299,
+    yearlyPrice: 0,
+    stripePriceId: AGENCY_SCALE_PRICE_ID,
+    stripeYearlyPriceId: "",
+    workspaceOveragePriceId: "",
+    limits: {
+      maxOrgs: -1,
+      maxLandingPages: -1,
+      includedWorkspaces: -1,
+      maxSubAccounts: -1,
+      crm: true,
+      booking: true,
+      intake: true,
+      agents: true,
+      customDomain: true,
+      removeBranding: true,
+      fullWhiteLabel: true,
+      clientPortal: true,
+      marketplace: true,
+      prioritySupport: true,
+      maxContacts: -1,
+      maxAgentRunsPerMonth: -1,
+    },
+    metered: { contacts: null, agentRuns: null },
+  },
+  // ─── GRANDFATHERED legacy tiers (one-way door, spec §D1) ──────────
+  // Existing subscribers hold these exact ids/limits/prices — they are
+  // NOT touched by the ladder and are no longer sold (sellable: false).
+  {
     id: "workspace",
     name: "Workspace",
     tagline: "One complete business OS — website, booking, CRM & chatbot",
     type: "paid",
+    sellable: false,
     price: 49,
     yearlyPrice: 0,
     stripePriceId: WORKSPACE_PRICE_ID,
@@ -147,6 +309,7 @@ export const PLANS: Plan[] = [
       maxOrgs: 1,
       maxLandingPages: -1,
       includedWorkspaces: 1,
+      maxSubAccounts: 0,
       crm: true,
       booking: true,
       intake: true,
@@ -163,15 +326,17 @@ export const PLANS: Plan[] = [
     metered: { contacts: null, agentRuns: null },
   },
   {
-    // 2026-06-22 pricing reconciliation: the "agency" tier is now the
+    // 2026-06-22 pricing reconciliation: the "agency" tier was the
     // SINGLE offered plan — $29/mo flat, UNLIMITED workspaces, no
-    // per-workspace overage. (The id stays "agency" so legacy
-    // subscriptions + the data-driven webhook tier-resolver keep
-    // resolving; a future cleanup can rename it to "flat".)
+    // per-workspace overage. 2026-07-08: grandfathered — existing
+    // subscribers keep this exact tier; new checkout never sells it.
+    // (The id stays "agency" so legacy subscriptions + the data-driven
+    // webhook tier-resolver keep resolving.)
     id: "agency",
     name: "SeldonFrame",
     tagline: "$29/mo · unlimited workspaces · cancel anytime",
     type: "paid",
+    sellable: false,
     price: 29,
     yearlyPrice: 0,
     stripePriceId: AGENCY_BASE_PRICE_ID,
@@ -184,6 +349,7 @@ export const PLANS: Plan[] = [
       maxOrgs: -1,
       maxLandingPages: -1,
       includedWorkspaces: -1,
+      maxSubAccounts: -1,
       crm: true,
       booking: true,
       intake: true,

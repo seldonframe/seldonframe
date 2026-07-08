@@ -8,6 +8,10 @@
 
 import {
   BUILDER_PRICE_ID,
+  MANAGED_PRICE_ID,
+  AGENCY_STARTER_PRICE_ID,
+  AGENCY_GROWTH_PRICE_ID,
+  AGENCY_SCALE_PRICE_ID,
   WORKSPACE_PRICE_ID,
   AGENCY_BASE_PRICE_ID,
   GROWTH_BASE_PRICE_ID,
@@ -20,10 +24,11 @@ import type { BillingTier } from "./features";
 
 /** Resolve the org's tier from a list of Stripe price ids on the
  *  subscription. Scans for the "highest" base price found:
- *    agency > workspace > builder > inactive
- *  Legacy price ids resolve to workspace (Growth/Cloud Starter) or
- *  agency (Scale/Cloud Pro/Cloud Agency). Overage/metered prices are
- *  ignored — they ride along with a base. */
+ *    agency_scale > agency_growth > agency_starter > agency (grandfathered)
+ *      > managed > workspace (grandfathered) > builder > inactive
+ *  Legacy price ids resolve to their grandfathered tier (workspace /
+ *  agency). Overage/metered prices are ignored — they ride along with
+ *  a base. */
 export function resolveTierFromPriceIds(priceIds: (string | null | undefined)[]): BillingTier {
   const set = new Set(
     priceIds.filter((p): p is string => typeof p === "string" && p.length > 0)
@@ -31,7 +36,12 @@ export function resolveTierFromPriceIds(priceIds: (string | null | undefined)[])
 
   if (set.size === 0) return "inactive";
 
-  // Agency takes precedence (heaviest tier).
+  if (set.has(AGENCY_SCALE_PRICE_ID)) return "agency_scale";
+  if (set.has(AGENCY_GROWTH_PRICE_ID)) return "agency_growth";
+  if (set.has(AGENCY_STARTER_PRICE_ID)) return "agency_starter";
+
+  // Grandfathered agency ($29-flat) + legacy Scale-family take precedence
+  // over managed/workspace (heaviest of the legacy/grandfathered group).
   if (
     set.has(AGENCY_BASE_PRICE_ID) ||
     set.has(SCALE_BASE_PRICE_ID) ||
@@ -40,6 +50,8 @@ export function resolveTierFromPriceIds(priceIds: (string | null | undefined)[])
   ) {
     return "agency";
   }
+
+  if (set.has(MANAGED_PRICE_ID)) return "managed";
 
   if (
     set.has(WORKSPACE_PRICE_ID) ||
