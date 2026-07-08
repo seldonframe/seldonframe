@@ -20,6 +20,7 @@ import {
   currentPeriodStartUtc,
   getAgencyUsageRollup,
   formatUsageLine,
+  usageByOrgId,
   type UsageRollupDeps,
 } from "@/lib/billing/usage-rollup";
 
@@ -175,9 +176,26 @@ describe("getAgencyUsageRollup — mapping + totals", () => {
   });
 });
 
+describe("usageByOrgId — O(1) lookup map for the client-cards page (no N+1)", () => {
+  test("builds a Map keyed by orgId from perOrg rows", () => {
+    const rollup = {
+      perOrg: [
+        { orgId: ORG_A, conversations: 1, tokensIn: 10, tokensOut: 5, estCostCents: 1, voiceSpendCents: 0 },
+        { orgId: ORG_B, conversations: 2, tokensIn: 20, tokensOut: 10, estCostCents: 2, voiceSpendCents: 0 },
+      ],
+      totals: { conversations: 3, tokensIn: 30, tokensOut: 15, estCostCents: 3, voiceSpendCents: 0 },
+    };
+    const map = usageByOrgId(rollup);
+    assert.equal(map.get(ORG_A)?.conversations, 1);
+    assert.equal(map.get(ORG_B)?.conversations, 2);
+    assert.equal(map.get("unknown-org"), undefined);
+  });
+});
+
 describe("formatUsageLine — the pinned copy (spec D2)", () => {
   test("includes conversations, tokens, and the word 'estimated' with the provider-billing disclaimer", () => {
     const line = formatUsageLine({
+      orgId: ORG_A,
       conversations: 12,
       tokensIn: 4000,
       tokensOut: 1500,
@@ -193,6 +211,7 @@ describe("formatUsageLine — the pinned copy (spec D2)", () => {
 
   test("zero-usage row still reads cleanly (no NaN / undefined)", () => {
     const line = formatUsageLine({
+      orgId: ORG_A,
       conversations: 0,
       tokensIn: 0,
       tokensOut: 0,
@@ -206,6 +225,7 @@ describe("formatUsageLine — the pinned copy (spec D2)", () => {
 
   test("nonzero voice spend appends a separate voice line, also labeled estimated", () => {
     const line = formatUsageLine({
+      orgId: ORG_A,
       conversations: 5,
       tokensIn: 100,
       tokensOut: 50,

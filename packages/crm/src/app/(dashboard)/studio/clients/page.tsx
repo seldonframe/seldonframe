@@ -31,7 +31,7 @@
 
 import Link from "next/link";
 import { Users, Phone, Bot, Wallet, Tag, ArrowRight } from "lucide-react";
-import { getOrgId } from "@/lib/auth/helpers";
+import { getOrgId, getCurrentUser } from "@/lib/auth/helpers";
 import {
   listDeployments,
   groupDeploymentsByClient,
@@ -47,8 +47,10 @@ import {
   resolveAgentTrigger,
   triggerLabel,
 } from "@/lib/agents/triggers/agent-trigger";
+import { getAgencyUsageRollup, usageByOrgId } from "@/lib/billing/usage-rollup";
 import { StudioTabs } from "../studio-tabs";
 import { DeploymentStatusBadge } from "./status-badge";
+import { ClientUsagePanel, UsageTotalsTile } from "./usage-panel";
 import {
   ActivateForm,
   ActivateOutboundButton,
@@ -89,6 +91,18 @@ export default async function StudioClientsPage({
 
   // Portfolio totals for the KPI strip — pure folds over the grouped clients.
   const totals = summarizeClientTotals(clients);
+
+  // Per-sub-account usage meter (2026-07-08, D1/D3): ONE grouped rollup query
+  // for the whole book, keyed by the agency OWNER's userId (not orgId — the
+  // counted-sub-account rule keys off partner_agencies.owner_user_id). Never
+  // blocks the page: a signed-in operator with no user record (synthetic
+  // admin-token/operator-portal sessions) simply sees no usage panel.
+  const currentUser = await getCurrentUser();
+  const usageRollup = currentUser?.id
+    ? await getAgencyUsageRollup(currentUser.id)
+    : { perOrg: [], totals: { conversations: 0, tokensIn: 0, tokensOut: 0, estCostCents: 0, voiceSpendCents: 0 } };
+  const usageByOrg = usageByOrgId(usageRollup);
+  const hasUsage = usageRollup.perOrg.length > 0;
 
   return (
     <section className="animate-page-enter space-y-6">
@@ -145,8 +159,8 @@ export default async function StudioClientsPage({
         </article>
       ) : (
         <>
-          {/* ── Portfolio KPI strip: Clients · Total MRR · Active agents ── */}
-          <div className="grid grid-cols-1 gap-3 sm:grid-cols-3">
+          {/* ── Portfolio KPI strip: Clients · Total MRR · Active agents (+ Usage) ── */}
+          <div className={`grid grid-cols-1 gap-3 sm:grid-cols-3 ${hasUsage ? "lg:grid-cols-4" : ""}`}>
             <ClientKpiTile
               label="Clients"
               value={totals.clientCount.toLocaleString("en-US")}
@@ -165,6 +179,7 @@ export default async function StudioClientsPage({
               icon={<Bot className="size-[22px]" />}
               tone="neutral"
             />
+            {hasUsage && <UsageTotalsTile totals={usageRollup.totals} />}
           </div>
 
           <div className="space-y-4">
@@ -386,6 +401,10 @@ export default async function StudioClientsPage({
                       );
                     })}
                   </ul>
+
+                  {/* Per-sub-account usage meter (D3) — the client's rolled-up AI
+                      usage this month, omitted when unprovisioned/zero-activity. */}
+                  <ClientUsagePanel row={client.clientOrgId ? usageByOrg.get(client.clientOrgId) : undefined} />
 
                   {/* ── Card footer: Deploy another agent + Open client. The
                       grouped client now carries its workspace slug (joined from

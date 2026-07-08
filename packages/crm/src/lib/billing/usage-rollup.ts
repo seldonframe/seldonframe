@@ -244,6 +244,13 @@ export async function getAgencyUsageRollup(
   return { perOrg, totals };
 }
 
+/** O(1) lookup map keyed by orgId — lets the client-cards page (D3) read
+ *  each card's usage row without re-querying per client. The rollup is loaded
+ *  ONCE for the whole page (getAgencyUsageRollup); this just indexes it. */
+export function usageByOrgId(rollup: UsageRollup): Map<string, OrgUsageRow> {
+  return new Map(rollup.perOrg.map((row) => [row.orgId, row]));
+}
+
 function formatCents(cents: number): string {
   return `$${(cents / 100).toFixed(2)}`;
 }
