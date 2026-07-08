@@ -6,9 +6,13 @@
 // SF_AUTOPAY_CONSOLE is off (mirrors the nav tab gating in layout.tsx).
 //
 // Auth: requirePortalSessionForOrg — the SAME session-scoping every other
-// portal page uses. getPortalBillingData is scoped by BOTH orgId AND
-// contactId (lib/payments/portal-billing.ts), so a client can never see
-// another org's or another contact's payment rows.
+// portal page uses. getPortalBillingData resolves the shared retainer join
+// (lib/payments/retainer.ts::resolveRetainerLinkForClientOrg) from the
+// session's CLIENT org id to the AGENCY org + agency-side contact that
+// actually owns the payment_records/customFields.billing rows (both are
+// written under the agency org — see lib/proposals/create-deal-on-acceptance.ts
+// and lib/payments/retainer.ts's insertPaymentRecordReal). No retainer link
+// for this client org -> empty state, never a cross-org fallback.
 
 import { notFound } from "next/navigation";
 import { requirePortalSessionForOrg } from "@/lib/portal/auth";
@@ -43,7 +47,7 @@ export default async function CustomerBillingPage({
   }
 
   const session = await requirePortalSessionForOrg(orgSlug);
-  const { payments, card } = await getPortalBillingData({ orgId: session.orgId, contactId: session.contact.id });
+  const { payments, card } = await getPortalBillingData(session.orgId);
 
   return (
     <div className="space-y-5">

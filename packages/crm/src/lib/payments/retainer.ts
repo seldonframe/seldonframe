@@ -21,7 +21,7 @@
 //     A throw here would break the shared Connect webhook route for every
 //     other event type in the same request.
 
-import { and, desc, eq, ilike } from "drizzle-orm";
+import { and, desc, eq, ilike, sql } from "drizzle-orm";
 import StripeClient from "stripe";
 import type Stripe from "stripe";
 import { db } from "@/db";
@@ -68,6 +68,11 @@ export type RetainerCycleDecision =
       amountCents: number;
       currency: string;
       hostedInvoiceUrl: string | null;
+      /** true when amount_paid is LESS than the invoice total — a partial
+       *  payment (e.g. a proration credit ate part of the cycle, or a
+       *  partially-applied balance). Surfaced so the agency's revenue
+       *  picture isn't silently wrong about a short payment. */
+      partial: boolean;
     }
   | { action: "skip"; reason: string };
 
@@ -95,14 +100,25 @@ export function decideRetainerCycleFromInvoiceEvent(event: Stripe.Event): Retain
   const hostedInvoiceUrl = invoice.hosted_invoice_url ?? null;
 
   if (event.type === "invoice.paid") {
+    // Prefer amount_paid ONLY when it's actually positive — a zero/absent
+    // amount_paid on a "paid" invoice (a degenerate shape, but Stripe's
+    // fields are all optional) falls back to total rather than silently
+    // recording $0 for a real cycle. When amount_paid IS positive but LESS
+    // than total, that's a genuine partial payment — record the amount
+    // actually collected but flag it so the revenue picture stays honest.
+    const total = invoice.total ?? 0;
+    const amountPaid = invoice.amount_paid ?? 0;
+    const amountCents = amountPaid > 0 ? amountPaid : total;
+    const partial = amountPaid > 0 && amountPaid < total;
     return {
       action: "record",
       subscriptionId,
       stripeInvoiceId,
       status: "completed",
-      amountCents: invoice.amount_paid ?? invoice.total ?? 0,
+      amountCents,
       currency,
       hostedInvoiceUrl,
+      partial,
     };
   }
 
@@ -115,15 +131,34 @@ export function decideRetainerCycleFromInvoiceEvent(event: Stripe.Event): Retain
     amountCents: invoice.amount_due ?? invoice.total ?? 0,
     currency,
     hostedInvoiceUrl,
+    partial: false,
   };
 }
 
 // ── DI'd apply layer — mirrors lib/build/wallet-webhook-apply.ts's shape ────
 
+/** The minimal existing-row shape needed to decide idempotent-vs-recovery. */
+export type ExistingPaymentRecordRow = { id: string; status: string; metadata: Record<string, unknown> };
+
+/** An outstanding (unresolved) failed row for a SIBLING invoice id on the
+ *  same subscription — Stripe sometimes issues a brand-new invoice id for a
+ *  retried/replacement cycle rather than re-firing the original one. */
+export type OutstandingFailedSiblingRow = { id: string; stripeInvoiceId: string; metadata: Record<string, unknown> };
+
 export type RetainerInvoiceCycleDeps = {
   /** Look up an existing payment_records row by sourceId (the stripeInvoiceId)
-   *  — the idempotency check. Null → no existing row. */
-  findExistingBySourceId: (sourceId: string) => Promise<{ id: string } | null>;
+   *  — the idempotency check. Null → no existing row. Carries status+metadata
+   *  so the caller can tell "already recorded, nothing to do" apart from
+   *  "recorded as FAILED, this invoice.paid is a RECOVERY". */
+  findExistingBySourceId: (sourceId: string) => Promise<ExistingPaymentRecordRow | null>;
+  /** Find an OUTSTANDING (status:"failed", not yet resolvedByLaterPayment)
+   *  payment_records row for this subscription whose stripeInvoiceId is
+   *  DIFFERENT from the one on the incoming event — the sibling-invoice
+   *  recovery case. Null → none. */
+  findOutstandingFailedForSubscription: (
+    subscriptionId: string,
+    excludingStripeInvoiceId: string,
+  ) => Promise<OutstandingFailedSiblingRow | null>;
   /** Resolve the agency org + contact that own this subscription, via the
    *  proposal it was created from. Null → unknown subscription (fail-soft skip). */
   resolveProposalBySubscriptionId: (
@@ -132,17 +167,33 @@ export type RetainerInvoiceCycleDeps = {
   /** Insert the payment_records row. Any row shape the caller decides — kept
    *  loose here so the DI fake can assert exact field values in tests. */
   insertPaymentRecord: (row: Record<string, unknown>) => Promise<void>;
+  /** Patch an existing payment_records row by id — used for BOTH the
+   *  same-invoice recovery flip (failed -> completed) and stamping
+   *  resolvedByLaterPayment on an outstanding sibling row. */
+  updatePaymentRecord: (id: string, patch: Record<string, unknown>) => Promise<void>;
 };
 
 export type RetainerInvoiceCycleResult =
   | { outcome: "recorded" }
+  | { outcome: "recovered" }
   | { outcome: "already_recorded" }
   | { outcome: "skipped"; reason: string };
 
 /** Apply the pure decision against real (or DI'd) storage. Fail-soft
  *  throughout: any dependency throwing is caught and degrades to `skipped`
  *  rather than propagating — a bookkeeping failure must never break the
- *  shared Connect webhook route for other event types in the same delivery. */
+ *  shared Connect webhook route for other event types in the same delivery.
+ *
+ *  RECOVERY (money-severity review fix, BLOCKING #2): Stripe's smart
+ *  retries mean a client who fixed their card gets re-billed successfully —
+ *  but that success can arrive as EITHER (a) invoice.paid re-fired for the
+ *  SAME invoice id whose row we already recorded as "failed", or (b) a
+ *  BRAND-NEW invoice id for the same subscription while an outstanding
+ *  failed row (different invoice id) still sits unresolved. Both cases must
+ *  stamp `metadata.resolvedByLaterPayment = true` on the failed row so the
+ *  dunning cron (dunning.ts's `resolved_by_later_payment` guard) stops
+ *  emailing a client who already paid. Without this, dunning notifies
+ *  forever. */
 export async function applyRetainerInvoiceCycle(
   event: Stripe.Event,
   deps: RetainerInvoiceCycleDeps,
@@ -155,6 +206,24 @@ export async function applyRetainerInvoiceCycle(
 
     const existing = await deps.findExistingBySourceId(decision.stripeInvoiceId);
     if (existing) {
+      // RECOVERY (same invoice id): a previously-FAILED row now has a
+      // invoice.paid delivered for the SAME stripeInvoiceId — Stripe's smart
+      // retry succeeded. Flip it to completed; never insert a second row.
+      if (decision.action === "record" && decision.status === "completed" && existing.status === "failed") {
+        const amountDollars = (decision.amountCents / 100).toFixed(2);
+        await deps.updatePaymentRecord(existing.id, {
+          status: "completed",
+          amount: amountDollars,
+          metadata: {
+            ...existing.metadata,
+            resolvedByLaterPayment: true,
+            paidAt: new Date().toISOString(),
+            hostedInvoiceUrl: decision.hostedInvoiceUrl,
+            ...(decision.partial ? { partial: true } : {}),
+          },
+        });
+        return { outcome: "recovered" };
+      }
       return { outcome: "already_recorded" };
     }
 
@@ -176,6 +245,9 @@ export async function applyRetainerInvoiceCycle(
     if (decision.status === "failed") {
       metadata.dunning = { failedAt: new Date().toISOString(), notifyStage: 0 };
     }
+    if (decision.status === "completed" && decision.partial) {
+      metadata.partial = true;
+    }
 
     await deps.insertPaymentRecord({
       orgId: resolved.agencyOrgId,
@@ -191,6 +263,19 @@ export async function applyRetainerInvoiceCycle(
       metadata,
     });
 
+    // RECOVERY (sibling invoice id): this NEW invoice recorded successfully —
+    // if an OUTSTANDING failed row exists for a DIFFERENT invoice id on the
+    // same subscription, Stripe issued a replacement invoice rather than
+    // re-firing the original. Stamp the sibling so dunning stops chasing it.
+    if (decision.status === "completed") {
+      const sibling = await deps.findOutstandingFailedForSubscription(decision.subscriptionId, decision.stripeInvoiceId);
+      if (sibling) {
+        await deps.updatePaymentRecord(sibling.id, {
+          metadata: { ...sibling.metadata, resolvedByLaterPayment: true, resolvedAt: new Date().toISOString() },
+        });
+      }
+    }
+
     return { outcome: "recorded" };
   } catch (err) {
     logEvent("retainer_cycle_apply_failed", {
@@ -202,13 +287,45 @@ export async function applyRetainerInvoiceCycle(
 
 // ── Production deps — real DB reads/writes, wired by the webhook route ──────
 
-async function findExistingBySourceIdReal(sourceId: string): Promise<{ id: string } | null> {
+async function findExistingBySourceIdReal(sourceId: string): Promise<ExistingPaymentRecordRow | null> {
   const [row] = await db
-    .select({ id: paymentRecords.id })
+    .select({ id: paymentRecords.id, status: paymentRecords.status, metadata: paymentRecords.metadata })
     .from(paymentRecords)
     .where(and(eq(paymentRecords.sourceBlock, "retainer"), eq(paymentRecords.sourceId, sourceId)))
     .limit(1);
-  return row ?? null;
+  if (!row) return null;
+  return { id: row.id, status: row.status, metadata: (row.metadata as Record<string, unknown>) ?? {} };
+}
+
+/** Find an OUTSTANDING (status:"failed", not yet resolvedByLaterPayment)
+ *  retainer row for this subscription whose sourceId (stripeInvoiceId) is
+ *  DIFFERENT from the one on the incoming event. The subscription id lives
+ *  in metadata.subscriptionId (there's no dedicated column on
+ *  payment_records) — matched via a bound jsonb ->> text comparison, never
+ *  sql.raw interpolation. */
+async function findOutstandingFailedForSubscriptionReal(
+  subscriptionId: string,
+  excludingStripeInvoiceId: string,
+): Promise<OutstandingFailedSiblingRow | null> {
+  const rows = await db
+    .select({ id: paymentRecords.id, sourceId: paymentRecords.sourceId, metadata: paymentRecords.metadata })
+    .from(paymentRecords)
+    .where(
+      and(
+        eq(paymentRecords.sourceBlock, "retainer"),
+        eq(paymentRecords.status, "failed"),
+        sql`${paymentRecords.metadata} ->> 'subscriptionId' = ${subscriptionId}`,
+      ),
+    )
+    .orderBy(desc(paymentRecords.createdAt));
+
+  for (const row of rows) {
+    if (!row.sourceId || row.sourceId === excludingStripeInvoiceId) continue;
+    const metadata = (row.metadata as Record<string, unknown>) ?? {};
+    if (metadata.resolvedByLaterPayment === true) continue;
+    return { id: row.id, stripeInvoiceId: row.sourceId, metadata };
+  }
+  return null;
 }
 
 /** Resolve the agency org + contact for a subscription id via the proposal it
@@ -247,11 +364,20 @@ async function insertPaymentRecordReal(row: Record<string, unknown>): Promise<vo
   await db.insert(paymentRecords).values(row as typeof paymentRecords.$inferInsert);
 }
 
+async function updatePaymentRecordReal(id: string, patch: Record<string, unknown>): Promise<void> {
+  await db
+    .update(paymentRecords)
+    .set({ ...(patch as Partial<typeof paymentRecords.$inferInsert>), updatedAt: new Date() })
+    .where(eq(paymentRecords.id, id));
+}
+
 export function defaultRetainerInvoiceCycleDeps(): RetainerInvoiceCycleDeps {
   return {
     findExistingBySourceId: findExistingBySourceIdReal,
+    findOutstandingFailedForSubscription: findOutstandingFailedForSubscriptionReal,
     resolveProposalBySubscriptionId: resolveProposalBySubscriptionIdReal,
     insertPaymentRecord: insertPaymentRecordReal,
+    updatePaymentRecord: updatePaymentRecordReal,
   };
 }
 
@@ -495,6 +621,96 @@ async function findActiveSubscriptionReal(clientOrgId: string): Promise<{ stripe
     .limit(1);
   if (!row?.stripeSubscriptionId) return null;
   return { stripeSubscriptionId: row.stripeSubscriptionId };
+}
+
+// ── The shared retainer join (money-severity review fix, BLOCKING #1) ──────
+//
+// payment_records + contacts.customFields.billing are written under the
+// AGENCY org (createDealOnAcceptance / insertPaymentRecordReal above), but
+// the CLIENT PORTAL session's orgId is the CLIENT org — the same
+// previewWorkspaceId join key findActiveSubscriptionReal already uses.
+// resolveRetainerLinkForClientOrg is the ONE place that resolves
+// clientOrgId -> {agencyOrgId, contactId, stripeCustomerId}; portal-billing's
+// history, card, and update-card reads MUST all go through this (never
+// re-derive the join independently — that's what caused the bug).
+
+export type RetainerLinkDeps = {
+  /** Find the client org's retainer proposal (the previewWorkspaceId join —
+   *  see createProposalRowReal). Null → no retainer ever attached for this
+   *  client org (empty state, never a throw, never a cross-org fallback). */
+  findProposalByClientOrgId: (
+    clientOrgId: string,
+  ) => Promise<{ agencyOrgId: string; prospectEmail: string | null; stripeCustomerId: string | null } | null>;
+  /** Resolve the AGENCY-SIDE contact for this email — the SAME
+   *  case-insensitive, agency-org-scoped lookup createDealOnAcceptance and
+   *  resolveProposalBySubscriptionIdReal use. Null → no contact resolved. */
+  resolveContactForAgency: (agencyOrgId: string, email: string) => Promise<{ id: string } | null>;
+};
+
+export type RetainerLink = {
+  agencyOrgId: string;
+  contactId: string | null;
+  stripeCustomerId: string | null;
+};
+
+/** clientOrgId -> {agencyOrgId, contactId, stripeCustomerId}. Null when no
+ *  retainer proposal exists for this client org — an empty state, NEVER
+ *  cross-org leakage (a client org with no matching proposal resolves
+ *  nothing, full stop; there is no fallback to "any" proposal). */
+export async function resolveRetainerLinkForClientOrg(
+  clientOrgId: string,
+  deps: RetainerLinkDeps,
+): Promise<RetainerLink | null> {
+  const proposal = await deps.findProposalByClientOrgId(clientOrgId);
+  if (!proposal) return null;
+
+  let contactId: string | null = null;
+  const email = proposal.prospectEmail?.trim().toLowerCase();
+  if (email) {
+    const contact = await deps.resolveContactForAgency(proposal.agencyOrgId, email);
+    contactId = contact?.id ?? null;
+  }
+
+  return { agencyOrgId: proposal.agencyOrgId, contactId, stripeCustomerId: proposal.stripeCustomerId };
+}
+
+async function findProposalByClientOrgIdReal(
+  clientOrgId: string,
+): Promise<{ agencyOrgId: string; prospectEmail: string | null; stripeCustomerId: string | null } | null> {
+  const [row] = await db
+    .select({
+      agencyOrgId: proposals.agencyOrgId,
+      prospectEmail: proposals.prospectEmail,
+      stripeCustomerId: proposals.stripeCustomerId,
+    })
+    .from(proposals)
+    .where(eq(proposals.previewWorkspaceId, clientOrgId))
+    .orderBy(desc(proposals.createdAt))
+    .limit(1);
+  return row ?? null;
+}
+
+async function resolveContactForAgencyReal(agencyOrgId: string, email: string): Promise<{ id: string } | null> {
+  const [row] = await db
+    .select({ id: contacts.id })
+    .from(contacts)
+    .where(and(eq(contacts.orgId, agencyOrgId), ilike(contacts.email, email)))
+    .limit(1);
+  return row ?? null;
+}
+
+export function defaultRetainerLinkDeps(): RetainerLinkDeps {
+  return {
+    findProposalByClientOrgId: findProposalByClientOrgIdReal,
+    resolveContactForAgency: resolveContactForAgencyReal,
+  };
+}
+
+/** Production entry point — used by lib/payments/portal-billing.ts and
+ *  lib/payments/portal-billing-actions.ts so history, card, and
+ *  update-card all resolve the SAME agency-side org+contact. */
+export async function getRetainerLinkForClientOrg(clientOrgId: string): Promise<RetainerLink | null> {
+  return resolveRetainerLinkForClientOrg(clientOrgId, defaultRetainerLinkDeps());
 }
 
 // ── D4 — client-card retainer status. Pure: derived from the ALREADY-STORED
