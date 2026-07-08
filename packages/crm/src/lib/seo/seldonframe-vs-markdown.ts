@@ -13,6 +13,7 @@ import {
 } from "@/lib/seo/alternative-pages";
 import { getExtras, SF_PROS, SF_CONS, SWITCH_STEPS, DEMO_HREF } from "@/lib/seo/alternative-pages-extras";
 import { composeSeldonframeVsFaq, composeSeldonframeVsIntro } from "@/components/seo/seldonframe-vs-page";
+import { emphasizeMd } from "@/lib/seo/emphasize";
 
 const BASE = "https://seldonframe.com";
 
@@ -26,6 +27,13 @@ export function renderSeldonframeVsMarkdown(c: Competitor): string {
   L.push(`> ${c.heroSub}`);
   L.push("");
   L.push(`Last updated: ${LAST_UPDATED}. HTML version: ${BASE}/compare/seldonframe-vs-${c.slug}`);
+  L.push("");
+  L.push(`## The short version`);
+  L.push("");
+  L.push(`- **${c.name} pricing:** ${emphasizeMd(c.them.pricingModel)}`);
+  L.push(`- **SeldonFrame pricing:** ${emphasizeMd("$29/mo flat, unlimited workspaces, first workspace free forever")}`);
+  L.push(`- **Pick ${c.name} if:** ${emphasizeMd(x.chooseThem[0])}`);
+  L.push(`- **Pick SeldonFrame if:** ${emphasizeMd(x.chooseSf[0])}`);
   L.push("");
   L.push(`## SeldonFrame vs ${c.name}: what you need to know`);
   L.push("");
@@ -42,7 +50,7 @@ export function renderSeldonframeVsMarkdown(c: Competitor): string {
   L.push(`| Feature | SeldonFrame | ${c.name} |`);
   L.push("|---|---|---|");
   for (const row of COMPARISON_LABELS) {
-    L.push(`| ${row.label} | ${SF_COLUMN[row.key]} | ${c.them[row.key]} |`);
+    L.push(`| ${row.label} | ${emphasizeMd(SF_COLUMN[row.key])} | ${emphasizeMd(c.them[row.key])} |`);
   }
   L.push("");
   L.push(`## Where ${c.name} wins`);

@@ -76,6 +76,64 @@ function scoreLabel(score: number, total: number): { label: string; color: strin
   return { label: "Not compliant", color: RED };
 }
 
+/** The 4 stations of the "road to compliant texting", each mapped to the
+ *  question ids that determine its color. A station is green only if every
+ *  mapped question is answered "yes"; red if any mapped question is
+ *  answered "no"; amber for "unsure" or a mix; neutral if unanswered. */
+const STATIONS: { emoji: string; label: string; questionIds: string[] }[] = [
+  { emoji: "🏢", label: "Register your business (Brand)", questionIds: ["brand", "ein"] },
+  { emoji: "📋", label: "Register what you send (Campaign)", questionIds: ["local10dlc", "campaign", "prohibitedContent", "monitoring"] },
+  { emoji: "✍️", label: "Get permission first (Opt-in)", questionIds: ["optin", "optinLanguage"] },
+  { emoji: "🛑", label: "Honor STOP & HELP", questionIds: ["stopHelp"] },
+];
+
+const NEUTRAL = "rgba(34,29,23,0.25)";
+
+function stationColor(questionIds: string[], answers: Record<string, Answer>): string {
+  const answered = questionIds.filter((id) => answers[id] !== undefined && answers[id] !== null);
+  if (answered.length === 0) return NEUTRAL;
+  if (answered.length < questionIds.length) return AMBER; // partially answered — treat as at-risk
+  if (answered.some((id) => answers[id] === "no")) return RED;
+  if (answered.some((id) => answers[id] === "unsure")) return AMBER;
+  return GREEN;
+}
+
+function Ladder({ answers }: { answers: Record<string, Answer> }): ReactElement {
+  const colors = STATIONS.map((s) => stationColor(s.questionIds, answers));
+  return (
+    <div
+      role="img"
+      aria-label={`Road to compliant texting: ${STATIONS.map((s, i) => `${s.label} — ${colors[i] === GREEN ? "good" : colors[i] === RED ? "needs work" : colors[i] === AMBER ? "at risk" : "not answered"}`).join("; ")}.`}
+      style={{ display: "flex", flexWrap: "wrap", alignItems: "stretch", gap: 8, marginBottom: 24 }}
+    >
+      {STATIONS.map((s, i) => (
+        <div key={s.label} style={{ display: "flex", alignItems: "center", gap: 8 }}>
+          <div
+            style={{
+              display: "flex",
+              flexDirection: "column",
+              gap: 4,
+              border: `2px solid ${colors[i]}`,
+              borderRadius: 12,
+              padding: "10px 14px",
+              background: colors[i] === NEUTRAL ? "#fff" : `${colors[i]}1A`,
+              minWidth: 150,
+            }}
+          >
+            <span style={{ fontSize: 18 }}>{s.emoji}</span>
+            <span style={{ fontSize: 13, fontWeight: 700, color: INK, lineHeight: 1.3 }}>{s.label}</span>
+          </div>
+          {i < STATIONS.length - 1 && (
+            <span aria-hidden="true" style={{ color: "rgba(34,29,23,0.35)", fontWeight: 800, fontSize: 16 }}>
+              →
+            </span>
+          )}
+        </div>
+      ))}
+    </div>
+  );
+}
+
 export function A2p10dlcChecker(): ReactElement {
   const [answers, setAnswers] = useState<Record<string, Answer>>({});
   const [submitted, setSubmitted] = useState(false);
@@ -149,6 +207,8 @@ export function A2p10dlcChecker(): ReactElement {
 
       {submitted && (
         <div style={{ marginTop: 28, borderTop: `1px solid ${INK10}`, paddingTop: 24 }}>
+          <Ladder answers={answers} />
+
           <div style={{ display: "flex", alignItems: "baseline", gap: 12, flexWrap: "wrap" }}>
             <span style={{ fontSize: 13, fontWeight: 700, letterSpacing: "0.06em", textTransform: "uppercase", color: "rgba(34,29,23,0.55)" }}>
               Readiness

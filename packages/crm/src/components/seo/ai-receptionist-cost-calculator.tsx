@@ -43,6 +43,8 @@ export function AiReceptionistCostCalculator(): ReactElement {
     { label: "SeldonFrame (flat)", value: SELDONFRAME_FLAT, tone: GREEN },
   ];
   const maxValue = Math.max(...bars.map((b) => b.value), 1);
+  const cheapest = bars.reduce((a, b) => (b.value < a.value ? b : a), bars[0]);
+  const monthlySavings = Math.max(0, humanCost - SELDONFRAME_FLAT);
 
   return (
     <div style={{ border: `1px solid ${INK10}`, borderRadius: 20, background: "rgba(255,255,255,0.6)", padding: "28px 28px" }}>
@@ -103,27 +105,64 @@ export function AiReceptionistCostCalculator(): ReactElement {
         <div style={{ fontSize: 12, fontWeight: 700, letterSpacing: "0.06em", textTransform: "uppercase", color: "rgba(34,29,23,0.55)", marginBottom: 14 }}>
           Estimated monthly cost
         </div>
-        <div style={{ display: "grid", gap: 12 }}>
-          {bars.map((b) => (
-            <div key={b.label}>
-              <div style={{ display: "flex", justifyContent: "space-between", fontSize: 14, fontWeight: 700, marginBottom: 4 }}>
-                <span>{b.label}</span>
-                <span style={{ color: b.tone }}>{money(b.value)}/mo</span>
+        <div style={{ display: "grid", gap: 14 }} role="img" aria-label={bars.map((b) => `${b.label}: ${money(b.value)} per month`).join(", ")}>
+          {bars.map((b) => {
+            const isCheapest = b.label === cheapest.label;
+            const widthPct = Math.max(8, (b.value / maxValue) * 100);
+            return (
+              <div key={b.label}>
+                <div style={{ display: "flex", justifyContent: "space-between", fontSize: 14, fontWeight: 700, marginBottom: 4 }}>
+                  <span>
+                    {b.label} {isCheapest && <span style={{ color: GREEN, fontSize: 12 }}>— cheapest</span>}
+                  </span>
+                </div>
+                <div style={{ position: "relative", height: 30, borderRadius: 8, background: "rgba(34,29,23,0.06)", overflow: "hidden" }}>
+                  <div
+                    style={{
+                      height: "100%",
+                      width: `${widthPct}%`,
+                      background: b.tone,
+                      borderRadius: 8,
+                      display: "flex",
+                      alignItems: "center",
+                      justifyContent: "flex-end",
+                      paddingRight: 10,
+                      boxSizing: "border-box",
+                      border: isCheapest ? `2px solid ${INK}` : "none",
+                    }}
+                  >
+                    {widthPct > 22 && (
+                      <span style={{ color: "#fff", fontWeight: 800, fontSize: 13 }}>{money(b.value)}/mo</span>
+                    )}
+                  </div>
+                  {widthPct <= 22 && (
+                    <span
+                      style={{
+                        position: "absolute",
+                        left: `calc(${widthPct}% + 8px)`,
+                        top: "50%",
+                        transform: "translateY(-50%)",
+                        fontWeight: 800,
+                        fontSize: 13,
+                        color: b.tone,
+                        whiteSpace: "nowrap",
+                      }}
+                    >
+                      {money(b.value)}/mo
+                    </span>
+                  )}
+                </div>
               </div>
-              <div style={{ height: 12, borderRadius: 6, background: "rgba(34,29,23,0.06)", overflow: "hidden" }}>
-                <div
-                  style={{
-                    height: "100%",
-                    width: `${Math.max(3, (b.value / maxValue) * 100)}%`,
-                    background: b.tone,
-                    borderRadius: 6,
-                  }}
-                />
-              </div>
-            </div>
-          ))}
+            );
+          })}
         </div>
       </div>
+
+      {monthlySavings > 0 && (
+        <p style={{ margin: "16px 0 0", fontSize: 14.5, fontWeight: 700, color: GREEN }}>
+          You&apos;d save ~{money(monthlySavings)}/mo vs a human receptionist.
+        </p>
+      )}
 
       <div style={{ marginTop: 22, fontSize: 12.5, color: "rgba(34,29,23,0.6)", lineHeight: 1.6 }}>
         <p style={{ margin: "0 0 6px" }}>

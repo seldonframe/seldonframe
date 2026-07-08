@@ -5,11 +5,13 @@
 
 import { getBestPage, LAST_UPDATED, midSentence, type BestContender } from "./best-pages";
 import { START_HREF, DEMO_HREF } from "./alternative-pages-extras";
+import { emphasizeMd } from "./emphasize";
+import { composeCheapestOption } from "@/components/seo/best-page";
 
 const BASE = "https://seldonframe.com";
 
 function contenderLine(c: BestContender): string {
-  return `- **${c.name}** — ${c.from}. ${c.oneLiner} Best for: ${c.bestFor}. Watch out: ${c.watchOut}`;
+  return `- **${c.name}** — ${emphasizeMd(c.from)}. ${c.oneLiner} Best for: ${c.bestFor}. Watch out: ${c.watchOut}`;
 }
 
 export function renderBestMarkdown(slug: string): string {
@@ -23,6 +25,14 @@ export function renderBestMarkdown(slug: string): string {
   L.push(`> Updated ${LAST_UPDATED}. We build one of these, so SeldonFrame is ranked #1 below — but every other pick gets a genuine strength list and an honest catch.`);
   L.push("");
   L.push(`HTML version: ${BASE}/best/${slug}`);
+  L.push("");
+  L.push(`## The short version`);
+  L.push("");
+  L.push(
+    `- **Our pick:** ${emphasizeMd("SeldonFrame — the whole front office at $29/mo flat (we build it, and we say below when the others win)")}`,
+  );
+  L.push(`- **Cheapest real option:** ${emphasizeMd(composeCheapestOption(category))}`);
+  L.push(`- **How to choose:** ${emphasizeMd(category.intentLine)}`);
   L.push("");
   L.push(
     `${audience.label} looking for the best ${midSentence(category.nounPlural)} are usually trying to solve one thing: ${category.intentLine}. And ${audience.painHook}.`,
@@ -60,9 +70,9 @@ export function renderBestMarkdown(slug: string): string {
   L.push("");
   L.push(`| ${category.noun} | Best for | From price | The catch |`);
   L.push("|---|---|---|---|");
-  L.push(`| **SeldonFrame** | ${category.intentLine} | $29/mo flat, unlimited workspaces | Newer platform; not a dedicated funnel-builder |`);
+  L.push(`| **SeldonFrame** | ${emphasizeMd(category.intentLine)} | ${emphasizeMd("$29/mo flat, unlimited workspaces")} | Newer platform; not a dedicated funnel-builder |`);
   for (const c of category.contenders) {
-    L.push(`| ${c.name} | ${c.bestFor} | ${c.from} | ${c.watchOut} |`);
+    L.push(`| ${c.name} | ${emphasizeMd(c.bestFor)} | ${emphasizeMd(c.from)} | ${emphasizeMd(c.watchOut)} |`);
   }
   L.push("");
 

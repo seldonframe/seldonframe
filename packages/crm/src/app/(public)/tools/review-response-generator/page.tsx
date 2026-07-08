@@ -9,6 +9,12 @@ import { MarketplaceStyles } from "@/components/marketplace/marketplace-styles";
 import { MKT } from "@/components/marketplace/marketplace-data";
 import { ReviewResponseGenerator } from "@/components/seo/review-response-generator";
 
+/** FAQ answers use a few <strong> tags for readability; JSON-LD wants plain
+ *  text, so strip tags before embedding in the schema. */
+function stripHtml(s: string): string {
+  return s.replace(/<[^>]+>/g, "");
+}
+
 const TITLE = "Google Review Response Generator — free, no signup";
 const DESCRIPTION =
   "Free Google review response generator: pick a star rating and scenario, get a well-written response you can copy and post — no AI, no signup, just genuinely good templates.";
@@ -23,27 +29,27 @@ export const metadata: Metadata = {
 const FAQ = [
   {
     q: "Should I respond to every Google review?",
-    a: "Yes — responding to both positive and negative reviews signals to future customers (and to Google's ranking algorithm) that your business is attentive. Negative reviews with a thoughtful public response often build more trust than having no negative reviews at all.",
+    a: "Yes. Responding to both good and bad reviews shows future customers — and Google's ranking algorithm — that you're paying attention. A thoughtful reply to a negative review often builds <strong>more</strong> trust than having no negative reviews at all.",
   },
   {
     q: "How fast should I respond to a negative review?",
-    a: "Within 24-48 hours is a good target. A prompt, calm response shows other readers the issue was taken seriously, and gives the reviewer a chance to update their review once it's resolved.",
+    a: "Aim for <strong>24-48 hours</strong>. A quick, calm response shows other readers you took it seriously, and gives the reviewer a chance to update their review once it's fixed.",
   },
   {
     q: "Should I argue with an unfair review in my response?",
-    a: "No — arguing publicly rarely changes the reviewer's mind and often looks worse to everyone else reading it. Apologize for the experience without admitting specific fault, and move the conversation offline (phone or email) to resolve details.",
+    a: "No. Arguing in public rarely changes the reviewer's mind and looks bad to everyone else reading it. Say sorry for the experience without admitting fault, then move the conversation to phone or email.",
   },
   {
     q: "What if the review is fake or about the wrong business?",
-    a: "Respond politely and factually: note that you couldn't find a matching visit in your records, and invite them to reach out directly to clarify. You can also flag the review to Google for removal if it clearly violates their policies.",
+    a: "Stay polite and factual: say you couldn't find a matching visit in your records, and invite them to reach out directly. You can also flag the review to Google if it clearly breaks their rules.",
   },
   {
     q: "Does this tool use AI to write responses?",
-    a: "No — every response comes from hand-written templates chosen based on your star rating, scenario, and tone. Nothing is sent to a server or AI model; it all happens in your browser.",
+    a: "No. Every response comes from <strong>hand-written templates</strong> picked based on your star rating, scenario, and tone. Nothing is sent to a server or AI model — it all happens in your browser.",
   },
   {
     q: "Can I edit the generated response?",
-    a: "Yes, and you should — treat these as a strong starting draft. Add specifics about what happened, then copy and paste into Google.",
+    a: "Yes, and you should. Treat it as a strong first draft. Add specifics about what happened, then copy and paste it into Google.",
   },
 ];
 
@@ -51,7 +57,7 @@ export default function ReviewResponseGeneratorPage(): ReactElement {
   const faqLd = {
     "@context": "https://schema.org",
     "@type": "FAQPage",
-    mainEntity: FAQ.map((f) => ({ "@type": "Question", name: f.q, acceptedAnswer: { "@type": "Answer", text: f.a } })),
+    mainEntity: FAQ.map((f) => ({ "@type": "Question", name: f.q, acceptedAnswer: { "@type": "Answer", text: stripHtml(f.a) } })),
   };
   return (
     <div className="sf-mkt" style={{ minHeight: "100vh", background: MKT.paper, color: MKT.ink, fontFamily: MKT.fontSans, overflowX: "hidden" }}>
@@ -70,27 +76,27 @@ export default function ReviewResponseGeneratorPage(): ReactElement {
           Google Review Response Generator
         </h1>
         <p style={{ margin: "14px 0 26px", fontSize: 17, lineHeight: 1.55, color: "rgba(34,29,23,0.7)", maxWidth: 660 }}>
-          Pick a star rating, a scenario, and a tone — get a genuinely well-written response you can copy, tweak, and
+          Pick a star rating, a scenario, and a tone. Get a genuinely well-written response you can copy, tweak, and
           post. No AI, no signup.
         </p>
         <ReviewResponseGenerator />
 
         <section style={{ padding: "40px 0 0" }}>
           <h2 style={{ margin: "0 0 14px", fontSize: 24, fontWeight: 800, letterSpacing: "-0.02em" }}>How it works</h2>
-          <p style={{ margin: "0 0 10px", fontSize: 15, lineHeight: 1.65, color: "rgba(34,29,23,0.72)" }}>
-            Every star rating and scenario combination has multiple hand-written response variants, each following
-            best-practice guidance: thank genuinely for positive reviews, and for complaints — apologize for the
-            experience without admitting specific liability, move the conversation offline, and never argue publicly.
-            Click "Regenerate" to see another variant.
-          </p>
+          <ul style={{ margin: 0, paddingLeft: 20, fontSize: 15, lineHeight: 1.7, color: "rgba(34,29,23,0.72)" }}>
+            <li>Every rating and scenario has several <strong>hand-written</strong> response variants</li>
+            <li>Good reviews get a genuine thank-you</li>
+            <li>Complaints get an apology without admitting fault, a move to take the talk offline, and never an argument</li>
+            <li>Click "Regenerate" to see another variant</li>
+          </ul>
         </section>
 
         <section style={{ padding: "20px 0 0" }}>
           <h2 style={{ margin: "0 0 14px", fontSize: 24, fontWeight: 800, letterSpacing: "-0.02em" }}>Why it matters</h2>
           <p style={{ margin: "0 0 10px", fontSize: 15, lineHeight: 1.65, color: "rgba(34,29,23,0.72)" }}>
-            Most business owners freeze up on negative reviews — either ignoring them or firing back defensively, both
-            of which cost trust with future customers reading the thread. A calm, professional response takes the sting
-            out and often matters more to prospective customers than the original complaint.
+            Most owners freeze up on negative reviews. They either ignore them or fire back defensively — both cost
+            trust with future customers reading the thread. A <strong>calm, professional reply</strong> takes the sting
+            out, and often matters more to buyers than the original complaint.
           </p>
         </section>
 
@@ -99,7 +105,7 @@ export default function ReviewResponseGeneratorPage(): ReactElement {
           {FAQ.map((f) => (
             <details key={f.q} style={{ border: `1px solid ${MKT.ink10}`, borderRadius: 12, padding: "14px 18px", marginBottom: 10, background: "rgba(255,255,255,0.55)" }}>
               <summary style={{ fontWeight: 700, fontSize: 15.5, cursor: "pointer" }}>{f.q}</summary>
-              <p style={{ margin: "10px 0 2px", fontSize: 14.5, lineHeight: 1.6, color: "rgba(34,29,23,0.72)" }}>{f.a}</p>
+              <p style={{ margin: "10px 0 2px", fontSize: 14.5, lineHeight: 1.6, color: "rgba(34,29,23,0.72)" }} dangerouslySetInnerHTML={{ __html: f.a }} />
             </details>
           ))}
           <p style={{ margin: "22px 0 0", fontSize: 14.5, lineHeight: 1.6, color: "rgba(34,29,23,0.65)" }}>

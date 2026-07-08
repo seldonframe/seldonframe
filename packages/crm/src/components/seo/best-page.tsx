@@ -12,6 +12,8 @@ import { MarketplaceNav, MarketplaceFooter } from "@/components/marketplace/mark
 import { MarketplaceStyles } from "@/components/marketplace/marketplace-styles";
 import { MKT } from "@/components/marketplace/marketplace-data";
 import { MarkdownPointer } from "@/components/seo/markdown-pointer";
+import { TldrBox } from "@/components/seo/tldr-box";
+import { emphasize } from "@/lib/seo/emphasize";
 import {
   BEST_PAGES,
   LAST_UPDATED,
@@ -32,6 +34,20 @@ const CATEGORY_ALTERNATIVE_LINK: Partial<Record<string, string>> = {
   "ai-receptionist": "goodcall",
   "website-builder": "durable",
 };
+
+/** Compose the "cheapest real option" TL;DR fact: prefer a contender whose
+ *  `from` string mentions "free" (labeled honestly as "has a free plan"),
+ *  else fall back to the first contender's `from` line (the registry lists
+ *  contenders in a stable, already-considered order — never-lies: this reads
+ *  the string, it never invents a price). Pure + exported for unit tests. */
+export function composeCheapestOption(category: BestCategory): string {
+  const freeContender = category.contenders.find((c) => /free/i.test(c.from));
+  if (freeContender) {
+    return `${freeContender.name} — ${freeContender.from} (has a free plan)`;
+  }
+  const cheapest = category.contenders[0];
+  return `${cheapest.name} — ${cheapest.from}`;
+}
 
 export function BestPage({ slug }: { slug: string }): ReactElement {
   const { category, audience } = getBestPage(slug);
@@ -118,6 +134,13 @@ export function BestPage({ slug }: { slug: string }): ReactElement {
           <p style={{ margin: "12px 0 0", fontSize: 14.5, lineHeight: 1.6, color: "rgba(34,29,23,0.6)", maxWidth: 720 }}>
             {`We build one of these, so we put ourselves first below — but every other pick here gets a genuine strength list and a real, honest catch. We're not going to pretend the others don't work.`}
           </p>
+          <TldrBox
+            items={[
+              { icon: "🏆", label: "Our pick", text: "SeldonFrame — the whole front office at $29/mo flat (we build it, and we say below when the others win)" },
+              { icon: "💰", label: "Cheapest real option", text: composeCheapestOption(category) },
+              { icon: "🔍", label: "How to choose", text: category.intentLine },
+            ]}
+          />
         </header>
 
         {/* ── #1 SELDONFRAME CARD ── */}
@@ -215,9 +238,9 @@ export function BestPage({ slug }: { slug: string }): ReactElement {
                 {category.contenders.map((c) => (
                   <tr key={c.key}>
                     <td style={{ ...TD, fontWeight: 700 }}>{c.name}</td>
-                    <td style={{ ...TD, color: "rgba(34,29,23,0.66)" }}>{c.bestFor}</td>
-                    <td style={{ ...TD, color: "rgba(34,29,23,0.66)" }}>{c.from}</td>
-                    <td style={{ ...TD, color: "rgba(34,29,23,0.66)" }}>{c.watchOut}</td>
+                    <td style={{ ...TD, color: "rgba(34,29,23,0.66)" }}>{emphasize(c.bestFor)}</td>
+                    <td style={{ ...TD, color: "rgba(34,29,23,0.66)" }}>{emphasize(c.from)}</td>
+                    <td style={{ ...TD, color: "rgba(34,29,23,0.66)" }}>{emphasize(c.watchOut)}</td>
                   </tr>
                 ))}
               </tbody>
@@ -331,7 +354,7 @@ function ContenderCard({
       <div style={{ display: "flex", alignItems: "baseline", gap: 10, flexWrap: "wrap" }}>
         <span style={{ fontSize: 13, fontWeight: 800, color: "rgba(34,29,23,0.4)" }}>{`#${rank}`}</span>
         <h3 style={{ margin: 0, fontSize: 18, fontWeight: 800 }}>{contender.name}</h3>
-        <span style={{ fontSize: 13.5, fontWeight: 700, color: "rgba(34,29,23,0.55)" }}>{contender.from}</span>
+        <span style={{ fontSize: 13.5, fontWeight: 700, color: "rgba(34,29,23,0.55)" }}>{emphasize(contender.from)}</span>
       </div>
       <p style={{ margin: "8px 0 0", fontSize: 14.5, lineHeight: 1.6, color: "rgba(34,29,23,0.72)" }}>{contender.oneLiner}</p>
       <p style={{ margin: "8px 0 0", fontSize: 13.5, lineHeight: 1.55, color: "rgba(34,29,23,0.6)" }}>

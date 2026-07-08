@@ -9,6 +9,8 @@ import { useState, type ReactElement, type CSSProperties } from "react";
 const INK = "#221D17";
 const GREEN = "#00897B";
 const INK10 = "rgba(34,29,23,0.10)";
+const AMBER = "#B8860B";
+const RED = "#C0392B";
 
 function money(n: number): string {
   return n.toLocaleString("en-US", { style: "currency", currency: "USD", maximumFractionDigits: 0 });
@@ -23,6 +25,15 @@ export function MissedCallCalculator(): ReactElement {
   const lostMonthly = Math.round(missedPerWeek * 4.33 * (closeRate / 100) * jobValue);
   const lostYearly = lostMonthly * 12;
   const recoveredMonthly = Math.round(lostMonthly * 0.8); // answered ≠ 100% saved; be conservative.
+
+  // Money-leak funnel: calls you get (proxy = missed calls scaled up so the
+  // "missed" bar always reads as a slice of it) → calls you miss → $ lost.
+  // All three widths are relative to the largest bar so the shrink is honest
+  // at any input combination, not hardcoded ratios.
+  const callsPerMonth = Math.round(missedPerWeek * 4.33);
+  const totalCallsProxy = Math.max(callsPerMonth * 2, callsPerMonth + 1); // assume at least half your calls go answered
+  const funnelMax = totalCallsProxy;
+  const barWidth = (v: number) => `${Math.max(6, Math.round((v / funnelMax) * 100))}%`;
 
   return (
     <div style={{ border: `1px solid ${INK10}`, borderRadius: 20, background: "rgba(255,255,255,0.6)", padding: "28px 28px" }}>
@@ -64,6 +75,20 @@ export function MissedCallCalculator(): ReactElement {
         <Stat label="Lost revenue / year" value={money(lostYearly)} tone="red" />
         <Stat label="Recoverable with an AI receptionist*" value={`~${money(recoveredMonthly)}/mo`} tone="green" />
       </div>
+
+      <div
+        role="img"
+        aria-label={`Money-leak funnel: about ${totalCallsProxy} calls a month, ${callsPerMonth} of them missed, worth about ${money(lostMonthly)} in lost revenue every month.`}
+        style={{ marginTop: 26, display: "grid", gap: 10 }}
+      >
+        <FunnelBar emoji="📞" label="Calls you get" value={`~${totalCallsProxy}/mo`} width={barWidth(totalCallsProxy)} color={GREEN} />
+        <FunnelBar emoji="📵" label="Calls you miss" value={`~${callsPerMonth}/mo`} width={barWidth(callsPerMonth)} color={AMBER} />
+        <FunnelBar emoji="💸" label="Money walking away" value={`${money(lostMonthly)}/mo`} width={barWidth(Math.max(callsPerMonth * 0.35, funnelMax * 0.08))} color={RED} />
+      </div>
+      <p style={{ margin: "14px 0 0", fontSize: 14.5, fontWeight: 700, color: GREEN }}>
+        An AI receptionist answers every one of these.
+      </p>
+
       <p style={{ margin: "16px 0 0", fontSize: 12.5, color: "rgba(34,29,23,0.55)", lineHeight: 1.5 }}>
         *Assumes ~80% of missed calls get answered, qualified and booked or texted back by an AI receptionist that picks up
         24/7. SeldonFrame is $29/mo flat — at these numbers it pays for itself with{" "}
@@ -124,6 +149,34 @@ function Slider({
         aria-label={label}
       />
     </label>
+  );
+}
+
+function FunnelBar({
+  emoji,
+  label,
+  value,
+  width,
+  color,
+}: {
+  emoji: string;
+  label: string;
+  value: string;
+  width: string;
+  color: string;
+}): ReactElement {
+  return (
+    <div>
+      <div style={{ display: "flex", justifyContent: "space-between", fontSize: 13.5, fontWeight: 700, marginBottom: 4 }}>
+        <span>
+          {emoji} {label}
+        </span>
+        <span style={{ color }}>{value}</span>
+      </div>
+      <div style={{ height: 18, borderRadius: 8, background: "rgba(34,29,23,0.06)", overflow: "hidden" }}>
+        <div style={{ height: "100%", width, background: color, borderRadius: 8, transition: "width 0.2s ease" }} />
+      </div>
+    </div>
   );
 }
 

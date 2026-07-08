@@ -9,6 +9,12 @@ import { MarketplaceStyles } from "@/components/marketplace/marketplace-styles";
 import { MKT } from "@/components/marketplace/marketplace-data";
 import { AiReceptionistCostCalculator } from "@/components/seo/ai-receptionist-cost-calculator";
 
+/** FAQ answers use a few <strong> tags for readability; JSON-LD wants plain
+ *  text, so strip tags before embedding in the schema. */
+function stripHtml(s: string): string {
+  return s.replace(/<[^>]+>/g, "");
+}
+
 const TITLE = "AI Receptionist Cost Calculator — compare vs. human & answering service";
 const DESCRIPTION =
   "Free calculator: compare the real monthly cost of a human receptionist, a live answering service, a per-minute AI phone service, and a flat-rate AI receptionist — based on your own call volume.";
@@ -23,23 +29,23 @@ export const metadata: Metadata = {
 const FAQ = [
   {
     q: "How much does an AI receptionist cost compared to a human receptionist?",
-    a: "A part-time human receptionist typically runs $700-$2,900+/month depending on hours and wage. Per-minute AI phone services usually land between $0.10-$0.50/minute, which scales with call volume. Flat-rate platforms decouple cost from volume entirely.",
+    a: "A part-time human receptionist usually costs <strong>$700-$2,900+/month</strong>. Per-minute AI phone services usually cost <strong>$0.10-$0.50/minute</strong> — the more calls you get, the more you pay. Flat-rate platforms cost the same no matter how many calls come in.",
   },
   {
     q: "AI receptionist vs answering service — which is cheaper?",
-    a: "Live answering services typically charge $1-$3 per call, which adds up fast at higher volumes. A per-minute AI service instead charges by call length. A flat-rate AI receptionist charges neither per call nor per minute — cost stays the same regardless of volume.",
+    a: "Live answering services usually charge <strong>$1-$3 per call</strong>, which adds up fast. A per-minute AI service charges by call length instead. A flat-rate AI receptionist charges neither per call nor per minute — the price never changes.",
   },
   {
     q: "What hidden costs should I watch for?",
-    a: "Overage fees past a plan's included minutes, setup/onboarding fees, per-seat charges for multiple locations, and rate increases tied to call volume are the most common hidden costs in both answering services and metered AI plans.",
+    a: "Watch for these: <strong>overage fees</strong> once you use up your included minutes, <strong>setup fees</strong>, <strong>per-seat charges</strong> for multiple locations, and <strong>rate hikes</strong> as your call volume grows.",
   },
   {
     q: "Is a cheaper option ever a worse deal?",
-    a: "Yes — cost per call means nothing if calls go unanswered or mishandled. A missed call that would have booked a job often costs far more than any of the options above. Weigh answer rate and booking accuracy alongside price.",
+    a: "Yes. A cheap price means nothing if calls go unanswered or handled badly. One missed job often costs more than any of these options. Look at answer rate and booking accuracy too, not just price.",
   },
   {
     q: "How does SeldonFrame's pricing work?",
-    a: "SeldonFrame is $29/month flat for the platform. You connect your own AI provider and Twilio account, so usage is billed to you directly at raw provider rates — typically a few cents per minute — instead of a markup layered on top.",
+    a: "SeldonFrame is <strong>$29/month flat</strong> for the platform. You connect your own AI provider and Twilio account, so you pay them directly at their raw cost — usually a few cents per minute — with no markup on top.",
   },
 ];
 
@@ -47,7 +53,7 @@ export default function AiReceptionistCostCalculatorPage(): ReactElement {
   const faqLd = {
     "@context": "https://schema.org",
     "@type": "FAQPage",
-    mainEntity: FAQ.map((f) => ({ "@type": "Question", name: f.q, acceptedAnswer: { "@type": "Answer", text: f.a } })),
+    mainEntity: FAQ.map((f) => ({ "@type": "Question", name: f.q, acceptedAnswer: { "@type": "Answer", text: stripHtml(f.a) } })),
   };
   return (
     <div className="sf-mkt" style={{ minHeight: "100vh", background: MKT.paper, color: MKT.ink, fontFamily: MKT.fontSans, overflowX: "hidden" }}>
@@ -66,27 +72,34 @@ export default function AiReceptionistCostCalculatorPage(): ReactElement {
           AI Receptionist Cost Calculator
         </h1>
         <p style={{ margin: "14px 0 26px", fontSize: 17, lineHeight: 1.55, color: "rgba(34,29,23,0.7)", maxWidth: 660 }}>
-          Human receptionist, live answering service, per-minute AI, or flat-rate AI — plug in your call volume and see
-          what each option actually costs per month.
+          Human receptionist, answering service, per-minute AI, or flat-rate AI. Enter your call volume and see what each
+          one really costs you per month.
         </p>
         <AiReceptionistCostCalculator />
 
         <section style={{ padding: "40px 0 0" }}>
           <h2 style={{ margin: "0 0 14px", fontSize: 24, fontWeight: 800, letterSpacing: "-0.02em" }}>How it works</h2>
           <p style={{ margin: "0 0 10px", fontSize: 15, lineHeight: 1.65, color: "rgba(34,29,23,0.72)" }}>
-            This calculator estimates four common ways businesses handle inbound calls, using your own call volume and
-            average call length: a human receptionist's coverage-hour cost, a live answering service billed per call, an
-            AI phone service billed per minute, and a flat-rate platform. The goal is an apples-to-apples monthly number
-            you can compare directly.
+            This calculator compares four ways to handle inbound calls, using your own call volume and average call
+            length:
+          </p>
+          <ul style={{ margin: "0 0 10px", paddingLeft: 20, fontSize: 15, lineHeight: 1.7, color: "rgba(34,29,23,0.72)" }}>
+            <li>A <strong>human receptionist&apos;s</strong> hourly cost, based on the coverage hours your call volume needs</li>
+            <li>A <strong>live answering service</strong>, billed per call</li>
+            <li>A <strong>per-minute AI service</strong>, billed by call length</li>
+            <li>A <strong>flat-rate platform</strong>, priced the same every month</li>
+          </ul>
+          <p style={{ margin: 0, fontSize: 15, lineHeight: 1.65, color: "rgba(34,29,23,0.72)" }}>
+            The result is one apples-to-apples monthly number for each option.
           </p>
         </section>
 
         <section style={{ padding: "20px 0 0" }}>
           <h2 style={{ margin: "0 0 14px", fontSize: 24, fontWeight: 800, letterSpacing: "-0.02em" }}>Why it matters</h2>
           <p style={{ margin: "0 0 10px", fontSize: 15, lineHeight: 1.65, color: "rgba(34,29,23,0.72)" }}>
-            Per-call and per-minute pricing both scale with your success — the busier you get, the more you pay, which
-            makes budgeting unpredictable. A flat monthly rate means your phone-answering cost doesn't change whether you
-            get 50 calls or 500, which matters most for growing service businesses.
+            Per-call and per-minute pricing both grow <strong>with your success</strong> — the busier you get, the more
+            you pay. That makes budgeting hard. A <strong>flat monthly rate</strong> costs the same whether you get 50
+            calls or 500, which matters most as your business grows.
           </p>
         </section>
 
@@ -95,7 +108,7 @@ export default function AiReceptionistCostCalculatorPage(): ReactElement {
           {FAQ.map((f) => (
             <details key={f.q} style={{ border: `1px solid ${MKT.ink10}`, borderRadius: 12, padding: "14px 18px", marginBottom: 10, background: "rgba(255,255,255,0.55)" }}>
               <summary style={{ fontWeight: 700, fontSize: 15.5, cursor: "pointer" }}>{f.q}</summary>
-              <p style={{ margin: "10px 0 2px", fontSize: 14.5, lineHeight: 1.6, color: "rgba(34,29,23,0.72)" }}>{f.a}</p>
+              <p style={{ margin: "10px 0 2px", fontSize: 14.5, lineHeight: 1.6, color: "rgba(34,29,23,0.72)" }} dangerouslySetInnerHTML={{ __html: f.a }} />
             </details>
           ))}
           <p style={{ margin: "22px 0 0", fontSize: 14.5, lineHeight: 1.6, color: "rgba(34,29,23,0.65)" }}>

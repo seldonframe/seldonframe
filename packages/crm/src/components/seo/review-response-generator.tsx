@@ -152,6 +152,70 @@ function buildKey(rating: number, scenario: Scenario, tone: Tone): TemplateKey {
   return `low:quality:${tone}` as TemplateKey;
 }
 
+const STEPS: { emoji: string; label: string }[] = [
+  { emoji: "1️⃣", label: "Pick the stars" },
+  { emoji: "2️⃣", label: "Pick what happened" },
+  { emoji: "3️⃣", label: "Copy your reply" },
+];
+
+function StepStrip(): ReactElement {
+  return (
+    <div
+      role="img"
+      aria-label="Three steps: pick the stars, pick what happened, copy your reply."
+      style={{ display: "flex", flexWrap: "wrap", alignItems: "center", gap: 8, marginBottom: 24 }}
+    >
+      {STEPS.map((s, i) => (
+        <div key={s.label} style={{ display: "flex", alignItems: "center", gap: 8 }}>
+          <div
+            style={{
+              display: "flex",
+              alignItems: "center",
+              gap: 8,
+              border: `1px solid ${INK10}`,
+              borderRadius: 12,
+              padding: "10px 14px",
+              background: "#fff",
+              fontSize: 13.5,
+              fontWeight: 700,
+              color: INK,
+            }}
+          >
+            <span style={{ fontSize: 16 }}>{s.emoji}</span>
+            <span>{s.label}</span>
+          </div>
+          {i < STEPS.length - 1 && (
+            <span aria-hidden="true" style={{ color: GREEN, fontWeight: 800, fontSize: 16 }}>
+              →
+            </span>
+          )}
+        </div>
+      ))}
+    </div>
+  );
+}
+
+function GoldenRulesBox(): ReactElement {
+  return (
+    <div
+      role="note"
+      aria-label="Golden rules: stay calm, say sorry once, take it offline, never argue."
+      style={{
+        marginTop: 12,
+        border: `1px solid ${INK10}`,
+        borderRadius: 12,
+        padding: "12px 16px",
+        background: "rgba(184,134,11,0.08)",
+        fontSize: 13,
+        lineHeight: 1.6,
+        color: INK,
+      }}
+    >
+      <strong>Golden rules:</strong> Stay calm · Say sorry once · Take it offline · Never argue
+    </div>
+  );
+}
+
 export function ReviewResponseGenerator(): ReactElement {
   const [rating, setRating] = useState(5);
   const [scenario, setScenario] = useState<Scenario>("great");
@@ -198,6 +262,8 @@ export function ReviewResponseGenerator(): ReactElement {
 
   return (
     <div style={{ border: `1px solid ${INK10}`, borderRadius: 20, background: "rgba(255,255,255,0.6)", padding: "28px 28px" }}>
+      <StepStrip />
+
       <div style={{ display: "grid", gap: 20 }}>
         <div>
           <div style={{ fontWeight: 700, fontSize: 15, marginBottom: 8 }}>Star rating</div>
@@ -239,6 +305,7 @@ export function ReviewResponseGenerator(): ReactElement {
               </option>
             ))}
           </select>
+          {rating <= 2 && <GoldenRulesBox />}
         </label>
 
         <div style={{ display: "grid", gap: 20, gridTemplateColumns: "repeat(auto-fit, minmax(200px, 1fr))" }}>

@@ -10,6 +10,8 @@ import { MarketplaceNav, MarketplaceFooter } from "@/components/marketplace/mark
 import { MarketplaceStyles } from "@/components/marketplace/marketplace-styles";
 import { MKT } from "@/components/marketplace/marketplace-data";
 import { MarkdownPointer } from "@/components/seo/markdown-pointer";
+import { TldrBox } from "@/components/seo/tldr-box";
+import { emphasize } from "@/lib/seo/emphasize";
 import { COMPARISON_LABELS, SF_COLUMN, LAST_UPDATED, type Competitor, type AltFaqItem } from "@/lib/seo/alternative-pages";
 import { getExtras, START_HREF, DEMO_HREF, type VsPair, vsSlug } from "@/lib/seo/alternative-pages-extras";
 
@@ -85,6 +87,14 @@ export function VsPage({ pair, a, b }: { pair: VsPair; a: Competitor; b: Competi
             {`${a.name} vs ${b.name}: What You Need to Know`}
           </h1>
           <p style={{ margin: "16px 0 0", fontSize: 18, lineHeight: 1.55, color: "rgba(34,29,23,0.7)", maxWidth: 700 }}>{pair.angle}</p>
+          <TldrBox
+            items={[
+              { icon: "💰", label: `${a.name} pricing`, text: a.them.pricingModel },
+              { icon: "💰", label: `${b.name} pricing`, text: b.them.pricingModel },
+              { icon: "🤝", label: "The real trade-off", text: pair.angle },
+              { icon: "🚪", label: "The third option", text: "SeldonFrame ships the whole front office at $29/mo flat — see below" },
+            ]}
+          />
         </header>
 
         {/* the two contenders */}
@@ -130,9 +140,9 @@ export function VsPage({ pair, a, b }: { pair: VsPair; a: Competitor; b: Competi
                 {COMPARISON_LABELS.map((row) => (
                   <tr key={row.key}>
                     <td style={{ ...TD, fontWeight: 700 }}>{row.label}</td>
-                    <td style={{ ...TD, color: "rgba(34,29,23,0.66)" }}>{a.them[row.key]}</td>
-                    <td style={{ ...TD, color: "rgba(34,29,23,0.66)" }}>{b.them[row.key]}</td>
-                    <td style={{ ...TD, background: "rgba(0,137,123,0.05)", color: "rgba(34,29,23,0.85)", fontWeight: 500 }}>{SF_COLUMN[row.key]}</td>
+                    <td style={{ ...TD, color: "rgba(34,29,23,0.66)" }}>{emphasize(a.them[row.key])}</td>
+                    <td style={{ ...TD, color: "rgba(34,29,23,0.66)" }}>{emphasize(b.them[row.key])}</td>
+                    <td style={{ ...TD, background: "rgba(0,137,123,0.05)", color: "rgba(34,29,23,0.85)", fontWeight: 500 }}>{emphasize(SF_COLUMN[row.key])}</td>
                   </tr>
                 ))}
               </tbody>

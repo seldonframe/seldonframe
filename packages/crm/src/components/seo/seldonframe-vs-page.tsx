@@ -16,6 +16,9 @@ import { MarketplaceNav, MarketplaceFooter } from "@/components/marketplace/mark
 import { MarketplaceStyles } from "@/components/marketplace/marketplace-styles";
 import { MKT } from "@/components/marketplace/marketplace-data";
 import { MarkdownPointer } from "@/components/seo/markdown-pointer";
+import { TldrBox } from "@/components/seo/tldr-box";
+import { FrontOfficeFlow } from "@/components/seo/front-office-flow";
+import { emphasize } from "@/lib/seo/emphasize";
 import {
   COMPETITORS,
   COMPARISON_LABELS,
@@ -132,12 +135,20 @@ export function SeldonFrameVsPage({ competitor }: { competitor: Competitor }): R
         <section style={{ padding: "34px 0 8px" }}>
           {composeSeldonframeVsIntro(c).map((para, i) => (
             <p key={i} style={{ margin: "0 0 16px", fontSize: 16.5, lineHeight: 1.65, color: "rgba(34,29,23,0.78)", maxWidth: 760 }}>
-              {para}
+              {emphasize(para)}
             </p>
           ))}
           <p style={{ margin: 0, fontSize: 14.5, lineHeight: 1.6, color: "rgba(34,29,23,0.55)", maxWidth: 760, fontStyle: "italic" }}>
             {`We make SeldonFrame, so read this comparison with that in mind — but we've tried to be specific about where ${c.name} genuinely wins below, not just where it doesn't.`}
           </p>
+          <TldrBox
+            items={[
+              { icon: "💰", label: `${c.name} pricing`, text: c.them.pricingModel },
+              { icon: "💰", label: "SeldonFrame pricing", text: "$29/mo flat, unlimited workspaces, first workspace free forever" },
+              { icon: "👍", label: `Pick ${c.name} if`, text: x.chooseThem[0] },
+              { icon: "🏆", label: "Pick SeldonFrame if", text: x.chooseSf[0] },
+            ]}
+          />
         </section>
 
         {/* ── THE TWO CONTENDERS ── */}
@@ -214,15 +225,16 @@ export function SeldonFrameVsPage({ competitor }: { competitor: Competitor }): R
                   <tr key={row.key}>
                     <td style={{ ...TD, fontWeight: 700 }}>{row.label}</td>
                     <td style={{ ...TD, background: "rgba(0,137,123,0.05)", color: "rgba(34,29,23,0.85)", fontWeight: 500 }}>
-                      {SF_COLUMN[row.key]}
+                      {emphasize(SF_COLUMN[row.key])}
                     </td>
-                    <td style={{ ...TD, color: "rgba(34,29,23,0.66)" }}>{c.them[row.key]}</td>
+                    <td style={{ ...TD, color: "rgba(34,29,23,0.66)" }}>{emphasize(c.them[row.key])}</td>
                   </tr>
                 ))}
               </tbody>
             </table>
           </div>
           <CtaRow />
+          <FrontOfficeFlow competitorName={c.name} competitorCategory={c.category} />
         </section>
 
         {/* ── WHERE THEY WIN ── */}
@@ -232,7 +244,7 @@ export function SeldonFrameVsPage({ competitor }: { competitor: Competitor }): R
             {x.pros.map((p) => (
               <li key={p} style={LI}>
                 <span style={{ color: "rgba(34,29,23,0.5)", fontWeight: 800, marginRight: 8 }}>+</span>
-                {p}
+                {emphasize(p)}
               </li>
             ))}
           </ul>
@@ -395,7 +407,7 @@ function ProsConsCard({ title, pros, cons, highlight }: { title: string; pros: s
         {pros.map((p) => (
           <li key={p} style={LI}>
             <span style={{ color: MKT.green, fontWeight: 800, marginRight: 8 }}>+</span>
-            {p}
+            {emphasize(p)}
           </li>
         ))}
       </ul>
@@ -404,7 +416,7 @@ function ProsConsCard({ title, pros, cons, highlight }: { title: string; pros: s
         {cons.map((p) => (
           <li key={p} style={LI}>
             <span style={{ color: "#C0392B", fontWeight: 800, marginRight: 8 }}>−</span>
-            {p}
+            {emphasize(p)}
           </li>
         ))}
       </ul>

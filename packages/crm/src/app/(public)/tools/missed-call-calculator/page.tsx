@@ -9,6 +9,12 @@ import { MarketplaceStyles } from "@/components/marketplace/marketplace-styles";
 import { MKT } from "@/components/marketplace/marketplace-data";
 import { MissedCallCalculator } from "@/components/seo/missed-call-calculator";
 
+/** FAQ answers use a few <strong> tags for readability; JSON-LD wants plain
+ *  text, so strip tags before embedding in the schema. */
+function stripHtml(s: string): string {
+  return s.replace(/<[^>]+>/g, "");
+}
+
 const TITLE = "Missed Call Cost Calculator — how much revenue are missed calls costing you?";
 const DESCRIPTION =
   "Free calculator: estimate the monthly revenue your business loses to missed calls, from your call volume, close rate and average job value — and what an AI receptionist recovers.";
@@ -23,15 +29,15 @@ export const metadata: Metadata = {
 const FAQ = [
   {
     q: "How much does a missed call actually cost a service business?",
-    a: "Multiply your close rate by your average job value: a business that closes 30% of callers on $400 jobs loses about $120 in expected revenue every time the phone rings out. Industry studies consistently find a large share of callers won't leave a voicemail and simply call the next company.",
+    a: "Multiply your close rate by your job value. Close <strong>30%</strong> of callers on <strong>$400</strong> jobs? You lose about <strong>$120</strong> every time the phone rings out. Most callers won't leave a voicemail — they just call the next company.",
   },
   {
     q: "What percentage of missed callers call a competitor instead?",
-    a: "Most callers who reach voicemail don't leave a message — they move down the search results. That's why speed-to-lead (answering instantly, or texting back within a minute) recovers so much revenue: you catch the buyer before the next dial.",
+    a: "Most callers who hit voicemail hang up and keep searching. That's why speed matters: answering instantly, or texting back within a minute, catches the buyer before they dial the next company.",
   },
   {
     q: "How does an AI receptionist recover this revenue?",
-    a: "It answers every call 24/7, qualifies the caller, checks real availability and books the job directly into your calendar and CRM — and when a call can't be answered, it texts the caller back instantly so the conversation continues before they call a competitor.",
+    a: "It answers every call, <strong>24/7</strong>. It asks the right questions, checks real availability, and books the job into your calendar and CRM. If it can't answer, it texts the caller back right away — so they don't call a competitor.",
   },
 ];
 
@@ -39,7 +45,7 @@ export default function MissedCallCalculatorPage(): ReactElement {
   const faqLd = {
     "@context": "https://schema.org",
     "@type": "FAQPage",
-    mainEntity: FAQ.map((f) => ({ "@type": "Question", name: f.q, acceptedAnswer: { "@type": "Answer", text: f.a } })),
+    mainEntity: FAQ.map((f) => ({ "@type": "Question", name: f.q, acceptedAnswer: { "@type": "Answer", text: stripHtml(f.a) } })),
   };
   return (
     <div className="sf-mkt" style={{ minHeight: "100vh", background: MKT.paper, color: MKT.ink, fontFamily: MKT.fontSans, overflowX: "hidden" }}>
@@ -58,8 +64,8 @@ export default function MissedCallCalculatorPage(): ReactElement {
           Missed Call Cost Calculator
         </h1>
         <p style={{ margin: "14px 0 26px", fontSize: 17, lineHeight: 1.55, color: "rgba(34,29,23,0.7)", maxWidth: 660 }}>
-          Every unanswered ring is a buyer choosing between leaving a voicemail and calling your competitor. Slide your real
-          numbers below to see what missed calls cost your business — most owners underestimate it by a lot.
+          Every missed call is a customer who might call someone else. Move the sliders below to see how much that costs
+          you — most owners are surprised by the number.
         </p>
         <MissedCallCalculator />
         <section style={{ padding: "40px 0 0" }}>
@@ -67,7 +73,7 @@ export default function MissedCallCalculatorPage(): ReactElement {
           {FAQ.map((f) => (
             <details key={f.q} style={{ border: `1px solid ${MKT.ink10}`, borderRadius: 12, padding: "14px 18px", marginBottom: 10, background: "rgba(255,255,255,0.55)" }}>
               <summary style={{ fontWeight: 700, fontSize: 15.5, cursor: "pointer" }}>{f.q}</summary>
-              <p style={{ margin: "10px 0 2px", fontSize: 14.5, lineHeight: 1.6, color: "rgba(34,29,23,0.72)" }}>{f.a}</p>
+              <p style={{ margin: "10px 0 2px", fontSize: 14.5, lineHeight: 1.6, color: "rgba(34,29,23,0.72)" }} dangerouslySetInnerHTML={{ __html: f.a }} />
             </details>
           ))}
           <p style={{ margin: "22px 0 0", fontSize: 14.5, lineHeight: 1.6, color: "rgba(34,29,23,0.65)" }}>

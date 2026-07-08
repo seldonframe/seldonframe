@@ -31,6 +31,49 @@ function looksLikeUrl(input: string): boolean {
   return /^https?:\/\//i.test(input.trim());
 }
 
+const STEPS: { emoji: string; label: string }[] = [
+  { emoji: "1️⃣", label: "Make your link (10 seconds)" },
+  { emoji: "2️⃣", label: "Print the QR code" },
+  { emoji: "3️⃣", label: "Customers scan it and leave a ⭐⭐⭐⭐⭐" },
+];
+
+function StepStrip(): ReactElement {
+  return (
+    <div
+      role="img"
+      aria-label="Three steps: make your link in ten seconds, print the QR code, customers scan it and leave a five-star review."
+      style={{ display: "flex", flexWrap: "wrap", alignItems: "center", gap: 8, marginBottom: 24 }}
+    >
+      {STEPS.map((s, i) => (
+        <div key={s.label} style={{ display: "flex", alignItems: "center", gap: 8 }}>
+          <div
+            style={{
+              display: "flex",
+              alignItems: "center",
+              gap: 8,
+              border: `1px solid ${INK10}`,
+              borderRadius: 12,
+              padding: "10px 14px",
+              background: "#fff",
+              fontSize: 13.5,
+              fontWeight: 700,
+              color: INK,
+            }}
+          >
+            <span style={{ fontSize: 16 }}>{s.emoji}</span>
+            <span>{s.label}</span>
+          </div>
+          {i < STEPS.length - 1 && (
+            <span aria-hidden="true" style={{ color: GREEN, fontWeight: 800, fontSize: 16 }}>
+              →
+            </span>
+          )}
+        </div>
+      ))}
+    </div>
+  );
+}
+
 export function GoogleReviewLinkGenerator(): ReactElement {
   const [input, setInput] = useState("");
   const [showHelp, setShowHelp] = useState(false);
@@ -91,6 +134,8 @@ export function GoogleReviewLinkGenerator(): ReactElement {
 
   return (
     <div style={{ border: `1px solid ${INK10}`, borderRadius: 20, background: "rgba(255,255,255,0.6)", padding: "28px 28px" }}>
+      <StepStrip />
+
       <label style={{ display: "block" }}>
         <span style={{ fontWeight: 700, fontSize: 15 }}>Google Place ID or Maps URL</span>
         <div style={{ fontSize: 12.5, color: "rgba(34,29,23,0.55)", margin: "2px 0 10px" }}>
