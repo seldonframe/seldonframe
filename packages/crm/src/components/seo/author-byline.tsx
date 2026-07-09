@@ -9,6 +9,7 @@ export const AUTHOR = {
   name: "Maxime Houle",
   role: "Founder, SeldonFrame",
   url: "https://www.seldonframe.com",
+  image: "https://www.seldonframe.com/brand/maxime-houle.png",
   sameAs: ["https://x.com/seldonframe", "https://github.com/seldonframe"],
 } as const;
 
@@ -19,6 +20,7 @@ export function authorPersonLd(): Record<string, unknown> {
     name: AUTHOR.name,
     jobTitle: AUTHOR.role,
     url: AUTHOR.url,
+    image: AUTHOR.image,
     sameAs: [...AUTHOR.sameAs],
   };
 }
@@ -64,24 +66,14 @@ const WRAP: CSSProperties = {
 export function AuthorByline({ checked }: { checked: string }): ReactElement {
   return (
     <div style={WRAP}>
-      <span
-        aria-hidden
-        style={{
-          width: 26,
-          height: 26,
-          borderRadius: "50%",
-          background: "#00897B",
-          color: "#F6F2EA",
-          display: "inline-flex",
-          alignItems: "center",
-          justifyContent: "center",
-          fontSize: 12,
-          fontWeight: 800,
-          flex: "0 0 auto",
-        }}
-      >
-        MH
-      </span>
+      {/* eslint-disable-next-line @next/next/no-img-element -- 26px avatar; next/image is overkill for a static brand asset */}
+      <img
+        src="/brand/maxime-houle.png"
+        alt={AUTHOR.name}
+        width={26}
+        height={26}
+        style={{ width: 26, height: 26, borderRadius: "50%", objectFit: "cover", flex: "0 0 auto" }}
+      />
       <span>
         Reviewed by <strong style={{ color: "rgba(34,29,23,0.8)" }}>{AUTHOR.name}</strong>, {AUTHOR.role}. I build one
         of these tools — every ranking here says when the others win. Facts checked {checked}.

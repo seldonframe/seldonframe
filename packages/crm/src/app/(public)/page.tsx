@@ -107,7 +107,11 @@ export default async function PublicHomePage() {
                 url: "https://www.seldonframe.com",
                 logo: "https://www.seldonframe.com/brand/og-image.png",
                 description: POSITIONING_ONE_LINER,
-                founder: { "@type": "Person", name: "Maxime Houle" },
+                founder: {
+                  "@type": "Person",
+                  name: "Maxime Houle",
+                  image: "https://www.seldonframe.com/brand/maxime-houle.png",
+                },
                 sameAs: [
                   "https://x.com/seldonframe",
                   "https://github.com/seldonframe",
