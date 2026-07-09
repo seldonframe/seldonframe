@@ -12,6 +12,8 @@ import { MKT } from "@/components/marketplace/marketplace-data";
 import { MarkdownPointer } from "@/components/seo/markdown-pointer";
 import { TldrBox } from "@/components/seo/tldr-box";
 import { PricingSourceLine } from "@/components/seo/alternative-page";
+import { AuthorByline, articleLd } from "@/components/seo/author-byline";
+import { monthYearToIso } from "@/lib/seo/month-iso";
 import { emphasize } from "@/lib/seo/emphasize";
 import { COMPARISON_LABELS, SF_COLUMN, LAST_UPDATED, type Competitor, type AltFaqItem } from "@/lib/seo/alternative-pages";
 import { getExtras, START_HREF, DEMO_HREF, type VsPair, vsSlug } from "@/lib/seo/alternative-pages-extras";
@@ -54,6 +56,13 @@ export function VsPage({ pair, a, b }: { pair: VsPair; a: Competitor; b: Competi
       acceptedAnswer: { "@type": "Answer", text: item.a },
     })),
   };
+  const h1 = `${a.name} vs ${b.name}: What You Need to Know`;
+  const articleJsonLd = articleLd({
+    headline: h1,
+    description: pair.angle,
+    canonicalPath: `/compare/${vsSlug(pair)}`,
+    dateModified: monthYearToIso(LAST_UPDATED),
+  });
 
   return (
     <div
@@ -69,6 +78,7 @@ export function VsPage({ pair, a, b }: { pair: VsPair; a: Competitor; b: Competi
       `}</style>
       <MarkdownPointer href={`/compare/${vsSlug(pair)}.md`} />
       <script type="application/ld+json" dangerouslySetInnerHTML={{ __html: JSON.stringify(faqLd) }} />
+      <script type="application/ld+json" dangerouslySetInnerHTML={{ __html: JSON.stringify(articleJsonLd) }} />
       <MarketplaceNav />
 
       <main style={{ maxWidth: 960, margin: "0 auto", padding: "26px 32px 70px", width: "100%" }}>
@@ -85,9 +95,10 @@ export function VsPage({ pair, a, b }: { pair: VsPair; a: Competitor; b: Competi
             {`Head to head · updated ${LAST_UPDATED}`}
           </div>
           <h1 className="sf-vs-h1" style={{ margin: 0, fontSize: 40, fontWeight: 800, letterSpacing: "-0.03em", lineHeight: 1.08, maxWidth: 780 }}>
-            {`${a.name} vs ${b.name}: What You Need to Know`}
+            {h1}
           </h1>
           <p style={{ margin: "16px 0 0", fontSize: 18, lineHeight: 1.55, color: "rgba(34,29,23,0.7)", maxWidth: 700 }}>{pair.angle}</p>
+          <AuthorByline checked={LAST_UPDATED} />
           <TldrBox
             items={[
               { icon: "💰", label: `${a.name} pricing`, text: a.them.pricingModel },

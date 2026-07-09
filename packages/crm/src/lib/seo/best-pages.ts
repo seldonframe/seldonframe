@@ -44,6 +44,11 @@ export type BestContender = {
   watchOut: string;
   /** One sentence tailoring the contender to a specific audience group. */
   fitNotes?: Partial<Record<AudienceGroup, string>>;
+  /** The vendor's own public pricing/product page — https only. Powers the
+   *  per-contender "(source)" outbound link (citable-listicle spec §5). When a
+   *  competitor also exists in competitor-pricing.ts, this MUST match that
+   *  entry's pricingUrl verbatim (same-fact single-source-of-truth). */
+  sourceUrl?: string;
 };
 
 export type BestAudience = {
@@ -195,6 +200,7 @@ const BOOKING_CONTENDERS: BestContender[] = [
     bestFor: "Solo professionals and teams booking 1:1 meetings",
     strengths: ["Free plan actually works, not just a demo", "Connects to tons of calendars and video apps", "Very easy to set up"],
     watchOut: "It's just a scheduling link, not a full business system — no CRM, no customer records, no form before the booking.",
+    sourceUrl: "https://calendly.com/pricing",
   },
   {
     key: "acuity",
@@ -205,6 +211,7 @@ const BOOKING_CONTENDERS: BestContender[] = [
     strengths: ["Forms built right into booking", "Handles classes and package deals", "Works closely with Squarespace"],
     watchOut: "It has no website or CRM of its own — you have to connect it to whatever site and contact system you already use.",
     fitNotes: { beauty: "A common choice for solo stylists, but it's just a booking box, not a full salon system." },
+    sourceUrl: "https://acuityscheduling.com/pricing.php",
   },
   {
     key: "square-appointments",
@@ -214,6 +221,7 @@ const BOOKING_CONTENDERS: BestContender[] = [
     bestFor: "Businesses already running Square for payments and checkout",
     strengths: ["Free plan for one location", "Payments and checkout built in", "Familiar, clean design"],
     watchOut: "The free plan only covers one staff member, and it's most useful if you already use Square for payments.",
+    sourceUrl: "https://squareup.com/us/en/appointments/pricing",
   },
   {
     key: "vagaro",
@@ -224,6 +232,7 @@ const BOOKING_CONTENDERS: BestContender[] = [
     strengths: ["Built for the industry (memberships, retail, staff pay)", "Listed in its own marketplace so new clients can find you", "Tracks client history and sells retail products at checkout"],
     watchOut: "The design feels older next to newer tools, and the price climbs fast once you add staff and marketing extras.",
     fitNotes: { beauty: "Made for this industry, but your booking box will always look like Vagaro's, not your own site." },
+    sourceUrl: "https://www.vagaro.com/pro/pricing",
   },
   {
     key: "housecall-pro",
@@ -234,6 +243,7 @@ const BOOKING_CONTENDERS: BestContender[] = [
     strengths: ["Built for sending crews out and tracking jobs", "Invoices and payments included", "Strong tools made for trades work"],
     watchOut: "It's priced and built for running a crew, not a simple public booking page — too much for a solo operator.",
     fitNotes: { trades: "About as close to a standard as it gets for multi-truck companies, but more than most solo trades need." },
+    sourceUrl: "https://www.housecallpro.com/pricing/",
   },
   {
     key: "cal-com",
@@ -243,6 +253,7 @@ const BOOKING_CONTENDERS: BestContender[] = [
     bestFor: "Technical teams wanting an open, self-hostable scheduling layer",
     strengths: ["Completely open-source and self-hostable", "Built for developers to customize deeply", "You keep full control of your data"],
     watchOut: "Running it yourself means you're the tech support; the paid team plan adds up, and it still has no CRM or website.",
+    sourceUrl: "https://cal.com/pricing",
   },
 ];
 
@@ -267,6 +278,7 @@ export const BEST_CATEGORIES: BestCategory[] = [
         bestFor: "Agencies running funnels, email campaigns and multi-client pipelines",
         strengths: ["A huge set of features (funnels, courses, pipelines)", "Agencies can resell it under their own brand", "A large library of ready-made templates"],
         watchOut: "The AI is a paid extra, not part of the base plan, and costs add up per client — people say it takes 2–4 weeks to really learn.",
+        sourceUrl: "https://www.gohighlevel.com/pricing",
       },
       {
         key: "hubspot",
@@ -276,6 +288,7 @@ export const BEST_CATEGORIES: BestCategory[] = [
         bestFor: "Businesses planning to scale into enterprise-grade marketing and reporting",
         strengths: ["Some of the best reports and CRM detail around", "The free plan is actually usable to start", "Connects to a huge number of other tools"],
         watchOut: "Jumping from Starter to Professional costs about 40 times more, plus a required ~$3,000 setup fee at that level.",
+        sourceUrl: "https://www.hubspot.com/pricing/marketing",
       },
       {
         key: "zoho",
@@ -285,6 +298,7 @@ export const BEST_CATEGORIES: BestCategory[] = [
         bestFor: "Budget-conscious teams wanting deep customization without enterprise pricing",
         strengths: ["Great value for the price per seat", "Lets you customize a lot and build your own workflows", "Includes a Zia AI helper on higher plans"],
         watchOut: "To get the real value you have to combine several Zoho apps together — it's a toolkit, not a ready-to-go front office.",
+        sourceUrl: "https://www.zoho.com/crm/zohocrm-pricing.html",
       },
       {
         key: "keap",
@@ -294,6 +308,7 @@ export const BEST_CATEGORIES: BestCategory[] = [
         bestFor: "Established small businesses wanting mature sales automation",
         strengths: ["Well-built marketing automation", "Invoices and payments built in", "A long history of onboarding and coaching customers"],
         watchOut: "It costs about 3 times more than GoHighLevel's starting price, and features are slowly being folded into Thryv over time.",
+        sourceUrl: "https://keap.com/pricing",
       },
       {
         key: "pipedrive",
@@ -303,6 +318,7 @@ export const BEST_CATEGORIES: BestCategory[] = [
         bestFor: "Sales-driven teams that want a clean, pipeline-first interface",
         strengths: ["A clean screen built around deal stages", "Quick for a sales team to learn", "A solid mobile app"],
         watchOut: "It's a sales pipeline tool first — no website, booking calendar or receptionist behind it; AI features cost extra.",
+        sourceUrl: "https://www.pipedrive.com/en/pricing",
       },
       {
         key: "jobber",
@@ -313,6 +329,7 @@ export const BEST_CATEGORIES: BestCategory[] = [
         strengths: ["Built specifically for how trades work", "Quotes, scheduling and invoices all in one place", "A hub where customers can help themselves"],
         watchOut: "It's a job-management tool, not a lead-capture front office — no AI receptionist or website builder.",
         fitNotes: { trades: "The closest trades-specific option, but it assumes the lead already called you — it won't answer the phone." },
+        sourceUrl: "https://www.getjobber.com/pricing/",
       },
     ],
     faq: [
@@ -348,6 +365,7 @@ export const BEST_CATEGORIES: BestCategory[] = [
         bestFor: "Businesses wanting full visual control over every pixel of their site",
         strengths: ["A massive library of templates and apps", "Full freedom to drag and drop your own design", "An AI option that builds a starter site for you (Wix ADI)"],
         watchOut: "Drag-and-drop freedom means the design is on you — a badly put-together Wix site looks like a badly put-together Wix site.",
+        sourceUrl: "https://www.wix.com/plans",
       },
       {
         key: "squarespace",
@@ -357,6 +375,7 @@ export const BEST_CATEGORIES: BestCategory[] = [
         bestFor: "Businesses that want a beautiful site fast without much customization",
         strengths: ["Templates that consistently look polished", "Good built-in blog and online store tools", "Owns Acuity, so booking connects easily"],
         watchOut: "You can't customize much beyond the template system, and there's no CRM or lead-capture behind the site.",
+        sourceUrl: "https://www.squarespace.com/pricing",
       },
       {
         key: "durable",
@@ -366,6 +385,7 @@ export const BEST_CATEGORIES: BestCategory[] = [
         bestFor: "Solo operators who need a web presence up this week",
         strengths: ["Genuinely fast to generate", "The free plan is usable, not just a demo", "Comes with a light CRM and invoicing"],
         watchOut: "It has no AI phone answering at all — \"AI\" here just means a chat box and written content, and sites can look similar to each other.",
+        sourceUrl: "https://durable.com/pricing",
       },
       {
         key: "wordpress",
@@ -375,6 +395,7 @@ export const BEST_CATEGORIES: BestCategory[] = [
         bestFor: "Content-heavy sites and users wanting the largest plugin ecosystem",
         strengths: ["A huge library of plugins and themes", "Full ownership if you host it yourself", "Some of the best tools for blog and content SEO"],
         watchOut: "Hosting WordPress yourself means you (or a developer) are in charge of security, updates and hosting — real ongoing work.",
+        sourceUrl: "https://wordpress.com/pricing/",
       },
       {
         key: "godaddy",
@@ -384,6 +405,7 @@ export const BEST_CATEGORIES: BestCategory[] = [
         bestFor: "Businesses that already bought their domain through GoDaddy",
         strengths: ["The cheapest starting price on this list", "Domain, site and email all bundled together", "Simple enough for a first-timer"],
         watchOut: "Design freedom and features are the most limited here — it's built for simplicity, not for growing later.",
+        sourceUrl: "https://www.godaddy.com/websites/website-builder",
       },
     ],
     faq: [
@@ -469,6 +491,7 @@ export const BEST_CATEGORIES: BestCategory[] = [
         bestFor: "Agencies already deep in GoHighLevel's funnel and CRM ecosystem",
         strengths: ["Connects directly to GHL's CRM and pipelines", "Backed by GHL's large library of templates", "Agencies can resell it under their own brand"],
         watchOut: "It's an extra bolted onto a $97–$497/mo base plan, with per-minute phone costs stacking on top of both.",
+        sourceUrl: "https://www.gohighlevel.com/pricing",
       },
       {
         key: "podium-ai",
@@ -478,6 +501,7 @@ export const BEST_CATEGORIES: BestCategory[] = [
         bestFor: "Multi-location businesses already investing in Podium's reviews and messaging suite",
         strengths: ["Built as its own AI product, not bolted on", "A deep set of review-generation tools", "A well-known name among local businesses"],
         watchOut: "There's no public price — you have to talk to sales, and outside reports put real bills at $800–$1,200/mo for multiple locations.",
+        sourceUrl: "https://www.podium.com/pricing",
       },
       {
         key: "goodcall",
@@ -487,6 +511,7 @@ export const BEST_CATEGORIES: BestCategory[] = [
         bestFor: "Single-location businesses with high repeat-caller volume and simple FAQs",
         strengths: ["Simple, predictable price with unlimited minutes", "Quick, no-code setup", "Reliable for simple, FAQ-style calls"],
         watchOut: "Going over your caller count costs $0.50 per extra caller, and reviewers say longer, multi-step conversations are its weak spot.",
+        sourceUrl: "https://www.goodcall.com/pricing",
       },
       {
         key: "smith-ai",
@@ -496,6 +521,7 @@ export const BEST_CATEGORIES: BestCategory[] = [
         bestFor: "Professional services wanting a human voice on complex or sensitive calls",
         strengths: ["Genuinely smooth conversations with a human in the loop", "A good fit for sensitive calls (legal, medical)", "24/7 coverage without hiring staff"],
         watchOut: "The bill grows with your call volume forever, and the pricing page is just a contact-sales form, not a price list.",
+        sourceUrl: "https://smith.ai/pricing/ai-receptionist",
       },
       {
         key: "my-ai-front-desk",
@@ -505,6 +531,7 @@ export const BEST_CATEGORIES: BestCategory[] = [
         bestFor: "Single-location businesses wanting the cheapest possible receptionist add-on",
         strengths: ["A low starting price", "Covers phone calls, texting and chat", "Quick to set up"],
         watchOut: "The $99/mo plan includes only about 200 voice minutes (roughly 40 calls) before you pay overage credits, and the brand is mid-rename to \"Frontdesk.\"",
+        sourceUrl: "https://www.myaifrontdesk.com/pricing",
       },
     ],
     faq: [
@@ -540,6 +567,7 @@ export const BEST_CATEGORIES: BestCategory[] = [
         bestFor: "Businesses wanting a polished, high-conversion form experience",
         strengths: ["Some of the smoothest form design around", "Strong branching logic", "Connects to a wide range of tools"],
         watchOut: "Response limits are tight on cheaper plans, and there's no CRM behind it — submissions still need somewhere to go.",
+        sourceUrl: "https://www.typeform.com/pricing/",
       },
       {
         key: "jotform",
@@ -549,6 +577,7 @@ export const BEST_CATEGORIES: BestCategory[] = [
         bestFor: "Businesses wanting a huge template library without paying up front",
         strengths: ["A free plan that actually works", "A huge library of templates", "Built-in payment collection"],
         watchOut: "The screen feels cluttered next to newer tools, and the free plan caps submissions and storage.",
+        sourceUrl: "https://www.jotform.com/pricing/",
       },
       {
         key: "google-forms",
@@ -558,6 +587,7 @@ export const BEST_CATEGORIES: BestCategory[] = [
         bestFor: "Anyone who just needs a simple free form with zero setup",
         strengths: ["Completely free", "Nothing to learn", "Exports straight to Google Sheets"],
         watchOut: "Very basic design, almost no branching logic, and definitely no CRM or automatic follow-up behind it.",
+        sourceUrl: "https://workspace.google.com/products/forms/",
       },
       {
         key: "gravity-forms",
@@ -567,6 +597,7 @@ export const BEST_CATEGORIES: BestCategory[] = [
         bestFor: "WordPress sites wanting deep form-to-workflow automation",
         strengths: ["Works deeply with WordPress and its plugins", "Powerful conditional logic", "A yearly price instead of per-person pricing"],
         watchOut: "It needs a WordPress site to run on, and setup leans more toward developers than plug-and-play.",
+        sourceUrl: "https://www.gravityforms.com/pricing/",
       },
       {
         key: "formstack",
@@ -576,6 +607,7 @@ export const BEST_CATEGORIES: BestCategory[] = [
         bestFor: "Larger teams needing forms tied into approval workflows and documents",
         strengths: ["Strong approval-workflow automation", "Add-ons that generate documents", "Plans built to meet HIPAA rules"],
         watchOut: "It's priced and built for bigger operations — too much, and too expensive, for a single intake form.",
+        sourceUrl: "https://www.formstack.com/pricing",
       },
     ],
     faq: [

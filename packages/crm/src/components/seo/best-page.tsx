@@ -15,6 +15,7 @@ import { MarkdownPointer } from "@/components/seo/markdown-pointer";
 import { TldrBox } from "@/components/seo/tldr-box";
 import { LiteYoutube } from "@/components/seo/lite-youtube";
 import { BuildWidget } from "@/components/seo/build-widget";
+import { AuthorByline, articleLd } from "@/components/seo/author-byline";
 import { isWebUngatedBuildOn } from "@/lib/web-build/policy";
 import { emphasize } from "@/lib/seo/emphasize";
 import {
@@ -50,6 +51,48 @@ export function composeCheapestOption(category: BestCategory): string {
   }
   const cheapest = category.contenders[0];
   return `${cheapest.name} — ${cheapest.from}`;
+}
+
+// Single source of truth lives in lib/seo/month-iso.ts (shared with the
+// comparison/pricing templates); imported for local use and re-exported for
+// the spec's existing import path.
+import { monthYearToIso } from "@/lib/seo/month-iso";
+export { monthYearToIso };
+
+/** The quotable "quick-answer picks" list — deliberately no pitch language,
+ *  just name + honest one-line reason, safe for an AI answer engine to lift
+ *  verbatim. Pure + exported for the Markdown twin to reuse. */
+export function composeQuickPicks(category: BestCategory, audience: BestAudience): string[] {
+  const lines = [`SeldonFrame — best overall for ${midSentence(audience.label)}`];
+  for (const c of category.contenders) {
+    const shortBestFor = c.bestFor.charAt(0).toLowerCase() + c.bestFor.slice(1);
+    lines.push(`${c.name} — best for ${shortBestFor}`);
+  }
+  return lines;
+}
+
+type DecisionLine = { name: string; chooseIf: string; skipIf: string };
+
+/** The "choose X if… / skip it if…" decision framework — composed entirely
+ *  from existing registry fields (bestFor/strengths/watchOut), no new prose
+ *  fields needed. Pure + exported for the Markdown twin to reuse. */
+export function composeDecisionFramework(category: BestCategory, audience: BestAudience): DecisionLine[] {
+  const lines: DecisionLine[] = [
+    {
+      name: "SeldonFrame",
+      chooseIf: `you want the whole front office — website, CRM, booking and an AI receptionist — for ${midSentence(audience.label)}`,
+      skipIf: "you specifically need a dedicated funnel-builder, or you want a platform with a longer track record",
+    },
+  ];
+  for (const c of category.contenders) {
+    const shortBestFor = c.bestFor.charAt(0).toLowerCase() + c.bestFor.slice(1);
+    lines.push({
+      name: c.name,
+      chooseIf: shortBestFor,
+      skipIf: c.watchOut,
+    });
+  }
+  return lines;
 }
 
 export function BestPage({ slug }: { slug: string }): ReactElement {
@@ -110,6 +153,15 @@ export function BestPage({ slug }: { slug: string }): ReactElement {
   const alternativeSlug = CATEGORY_ALTERNATIVE_LINK[category.slug];
   const alternative = alternativeSlug ? getCompetitor(alternativeSlug) : null;
 
+  const quickPicks = composeQuickPicks(category, audience);
+  const decisionFramework = composeDecisionFramework(category, audience);
+  const articleLdData = articleLd({
+    headline: h1,
+    description: `${category.contenders.length + 1} ${category.nounPlural} for ${audience.label}, ranked honestly — pricing verified from each vendor's public pricing page.`,
+    canonicalPath: `/best/${slug}`,
+    dateModified: monthYearToIso(LAST_UPDATED),
+  });
+
   return (
     <div
       className="sf-mkt sf-bestpage"
@@ -120,6 +172,7 @@ export function BestPage({ slug }: { slug: string }): ReactElement {
       <MarkdownPointer href={`/best/${slug}.md`} />
       <script type="application/ld+json" dangerouslySetInnerHTML={{ __html: JSON.stringify(itemListLd) }} />
       <script type="application/ld+json" dangerouslySetInnerHTML={{ __html: JSON.stringify(faqLd) }} />
+      <script type="application/ld+json" dangerouslySetInnerHTML={{ __html: JSON.stringify(articleLdData) }} />
       {videoLd && <script type="application/ld+json" dangerouslySetInnerHTML={{ __html: JSON.stringify(videoLd) }} />}
       <MarketplaceNav />
 
@@ -141,7 +194,8 @@ export function BestPage({ slug }: { slug: string }): ReactElement {
           <div style={{ fontSize: 12, fontWeight: 600, letterSpacing: "0.12em", textTransform: "uppercase", color: MKT.green, marginBottom: 12 }}>
             {`Best ${category.nounPlural} · updated ${LAST_UPDATED}`}
           </div>
-          <h1 className="sf-best-h1" style={{ margin: 0, fontSize: 40, fontWeight: 800, letterSpacing: "-0.03em", lineHeight: 1.08, maxWidth: 780 }}>
+          <AuthorByline checked={LAST_UPDATED} />
+          <h1 className="sf-best-h1" style={{ margin: "14px 0 0", fontSize: 40, fontWeight: 800, letterSpacing: "-0.03em", lineHeight: 1.08, maxWidth: 780 }}>
             {h1}
           </h1>
           <p style={{ margin: "16px 0 0", fontSize: 17.5, lineHeight: 1.6, color: "rgba(34,29,23,0.75)", maxWidth: 720 }}>
@@ -159,6 +213,35 @@ export function BestPage({ slug }: { slug: string }): ReactElement {
             ]}
           />
         </header>
+
+        {/* ── QUICK-ANSWER PICKS (deliberately quotable — no pitch language) ── */}
+        <section style={{ padding: "26px 0 8px" }}>
+          <h2 style={{ ...H2, fontSize: 20 }}>Our picks at a glance:</h2>
+          <ol style={{ margin: "14px 0 0", padding: "0 0 0 22px", fontSize: 15.5, lineHeight: 1.75, color: "rgba(34,29,23,0.8)" }}>
+            {quickPicks.map((line) => (
+              <li key={line}>{emphasize(line)}</li>
+            ))}
+          </ol>
+        </section>
+
+        {/* ── METHODOLOGY ── */}
+        <section
+          style={{
+            margin: "22px 0 0",
+            border: `1px solid ${MKT.ink10}`,
+            borderRadius: 14,
+            padding: "18px 22px",
+            background: "rgba(255,255,255,0.4)",
+          }}
+        >
+          <h3 style={{ margin: 0, fontSize: 15, fontWeight: 800, letterSpacing: "-0.01em" }}>How we ranked these</h3>
+          <ul style={{ margin: "10px 0 0", padding: "0 0 0 18px", fontSize: 13.5, lineHeight: 1.6, color: "rgba(34,29,23,0.68)" }}>
+            <li>{`Pricing verified from each vendor's own public pricing page as of ${LAST_UPDATED}.`}</li>
+            <li>{`We build SeldonFrame and rank it #1 for the front-office job — the honest catch on every other pick is listed too, so you can disagree.`}</li>
+            <li>{`Rankings weigh fit for ${midSentence(audience.label)} over raw feature count.`}</li>
+            <li>No vendor paid for placement on this page.</li>
+          </ul>
+        </section>
 
         {/* ── #1 SELDONFRAME CARD ── */}
         <section style={{ padding: "30px 0 8px" }}>
@@ -277,6 +360,23 @@ export function BestPage({ slug }: { slug: string }): ReactElement {
           </section>
         )}
 
+        {/* ── DECISION FRAMEWORK ── */}
+        <section style={{ padding: "38px 0 8px" }}>
+          <h2 style={H2}>{`Choose the right ${category.noun} for you`}</h2>
+          <div style={{ display: "flex", flexDirection: "column", gap: 10, marginTop: 18 }}>
+            {decisionFramework.map((d) => (
+              <div key={d.name} style={{ border: `1px solid ${MKT.ink10}`, borderRadius: 12, padding: "14px 18px", background: "rgba(255,255,255,0.5)" }}>
+                <p style={{ margin: 0, fontSize: 14, lineHeight: 1.6, color: "rgba(34,29,23,0.78)" }}>
+                  <strong>{`Choose ${d.name} if`}</strong> {emphasize(d.chooseIf)}.
+                </p>
+                <p style={{ margin: "6px 0 0", fontSize: 14, lineHeight: 1.6, color: "rgba(34,29,23,0.6)" }}>
+                  <strong>Skip it if</strong> {emphasize(d.skipIf)}
+                </p>
+              </div>
+            ))}
+          </div>
+        </section>
+
         {/* ── FAQ ── */}
         <section style={{ padding: "38px 0 8px" }}>
           <h2 style={{ ...H2, marginBottom: 14 }}>Frequently asked questions</h2>
@@ -373,7 +473,23 @@ function ContenderCard({
       <div style={{ display: "flex", alignItems: "baseline", gap: 10, flexWrap: "wrap" }}>
         <span style={{ fontSize: 13, fontWeight: 800, color: "rgba(34,29,23,0.4)" }}>{`#${rank}`}</span>
         <h3 style={{ margin: 0, fontSize: 18, fontWeight: 800 }}>{contender.name}</h3>
-        <span style={{ fontSize: 13.5, fontWeight: 700, color: "rgba(34,29,23,0.55)" }}>{emphasize(contender.from)}</span>
+        <span style={{ fontSize: 13.5, fontWeight: 700, color: "rgba(34,29,23,0.55)" }}>
+          {emphasize(contender.from)}
+          {contender.sourceUrl && (
+            <>
+              {" "}
+              <a
+                href={contender.sourceUrl}
+                rel="nofollow noopener"
+                target="_blank"
+                className="sf-link"
+                style={{ fontSize: 12, fontWeight: 600, color: "rgba(34,29,23,0.4)", textDecoration: "underline" }}
+              >
+                (source)
+              </a>
+            </>
+          )}
+        </span>
       </div>
       <p style={{ margin: "8px 0 0", fontSize: 14.5, lineHeight: 1.6, color: "rgba(34,29,23,0.72)" }}>{contender.oneLiner}</p>
       <p style={{ margin: "8px 0 0", fontSize: 13.5, lineHeight: 1.55, color: "rgba(34,29,23,0.6)" }}>

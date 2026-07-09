@@ -27,6 +27,8 @@ export function renderAlternativeMarkdown(c: Competitor): string {
   L.push("");
   L.push(`Last updated: ${LAST_UPDATED}. HTML version: ${BASE}/alternative-to-${c.slug}`);
   L.push("");
+  L.push(`Reviewed by Maxime Houle, Founder, SeldonFrame — facts checked ${LAST_UPDATED}.`);
+  L.push("");
   L.push(`## The short version`);
   L.push("");
   L.push(`- **${c.name} pricing:** ${emphasizeMd(c.them.pricingModel)}`);
@@ -106,6 +108,8 @@ export function renderVsMarkdown(pair: VsPair, a: Competitor, b: Competitor): st
   L.push(`> ${pair.angle}`);
   L.push("");
   L.push(`HTML version: ${BASE}/compare/${pair.a}-vs-${pair.b}`);
+  L.push("");
+  L.push(`Reviewed by Maxime Houle, Founder, SeldonFrame — facts checked ${LAST_UPDATED}.`);
   L.push("");
   L.push(`## The short version`);
   L.push("");

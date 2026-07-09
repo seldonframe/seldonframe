@@ -18,6 +18,8 @@ import { MarkdownPointer } from "@/components/seo/markdown-pointer";
 import { TldrBox } from "@/components/seo/tldr-box";
 import { FrontOfficeFlow } from "@/components/seo/front-office-flow";
 import { BuildWidget } from "@/components/seo/build-widget";
+import { AuthorByline, articleLd } from "@/components/seo/author-byline";
+import { monthYearToIso } from "@/lib/seo/month-iso";
 import { isWebUngatedBuildOn } from "@/lib/web-build/policy";
 import { emphasize } from "@/lib/seo/emphasize";
 import {
@@ -84,6 +86,12 @@ export function AlternativePage({ competitor }: { competitor: Competitor }): Rea
     offers: { "@type": "Offer", price: "29", priceCurrency: "USD" },
     provider: { "@type": "Organization", name: "SeldonFrame", url: "https://seldonframe.com" },
   };
+  const articleJsonLd = articleLd({
+    headline: h1,
+    description: c.heroSub,
+    canonicalPath: `/alternative-to-${c.slug}`,
+    dateModified: monthYearToIso(LAST_UPDATED),
+  });
 
   return (
     <div
@@ -95,6 +103,7 @@ export function AlternativePage({ competitor }: { competitor: Competitor }): Rea
       <MarkdownPointer href={`/alternative-to-${c.slug}.md`} />
       <script type="application/ld+json" dangerouslySetInnerHTML={{ __html: JSON.stringify(softwareLd) }} />
       <script type="application/ld+json" dangerouslySetInnerHTML={{ __html: JSON.stringify(faqLd) }} />
+      <script type="application/ld+json" dangerouslySetInnerHTML={{ __html: JSON.stringify(articleJsonLd) }} />
       <MarketplaceNav />
 
       <main style={{ maxWidth: 960, margin: "0 auto", padding: "26px 32px 70px", width: "100%" }}>
@@ -126,6 +135,7 @@ export function AlternativePage({ competitor }: { competitor: Competitor }): Rea
                 {`Last updated: ${LAST_UPDATED}`}
               </span>
             </div>
+            <AuthorByline checked={LAST_UPDATED} />
           </div>
           <VersusCard name={c.name} />
         </header>

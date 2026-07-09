@@ -19,6 +19,7 @@ import {
   type AudienceGroup,
 } from "../../../src/lib/seo/best-pages";
 import { renderBestMarkdown } from "../../../src/lib/seo/best-markdown";
+import { monthYearToIso } from "../../../src/components/seo/best-page";
 
 const AUDIENCE_GROUPS: ReadonlySet<AudienceGroup> = new Set(["trades", "beauty", "medical", "construction", "general"]);
 
@@ -181,4 +182,42 @@ test("no stray undefined/null leaks into any rendered markdown", () => {
     const md = renderBestMarkdown(slug);
     assert.ok(!/\bundefined\b|\bnull\b/.test(md), `${slug}: leaked undefined/null into markdown`);
   }
+});
+
+// ─── citable-listicle architecture additions ───────────────────────────────
+
+test("every contender sourceUrl, when present, is https and has no spaces", () => {
+  for (const category of BEST_CATEGORIES) {
+    for (const c of category.contenders) {
+      if (!c.sourceUrl) continue;
+      assert.ok(c.sourceUrl.startsWith("https://"), `${category.slug}/${c.key}: sourceUrl must be https://, got "${c.sourceUrl}"`);
+      assert.ok(!/\s/.test(c.sourceUrl), `${category.slug}/${c.key}: sourceUrl contains whitespace: "${c.sourceUrl}"`);
+    }
+  }
+});
+
+test("monthYearToIso handles all 12 months and rejects garbage", () => {
+  assert.equal(monthYearToIso("January 2026"), "2026-01-01");
+  assert.equal(monthYearToIso("February 2026"), "2026-02-01");
+  assert.equal(monthYearToIso("March 2026"), "2026-03-01");
+  assert.equal(monthYearToIso("April 2026"), "2026-04-01");
+  assert.equal(monthYearToIso("May 2026"), "2026-05-01");
+  assert.equal(monthYearToIso("June 2026"), "2026-06-01");
+  assert.equal(monthYearToIso("July 2026"), "2026-07-01");
+  assert.equal(monthYearToIso("August 2026"), "2026-08-01");
+  assert.equal(monthYearToIso("September 2026"), "2026-09-01");
+  assert.equal(monthYearToIso("October 2026"), "2026-10-01");
+  assert.equal(monthYearToIso("November 2026"), "2026-11-01");
+  assert.equal(monthYearToIso("December 2026"), "2026-12-01");
+  assert.throws(() => monthYearToIso("not a date"), /unrecognized/);
+  assert.throws(() => monthYearToIso("Julember 2026"), /unrecognized/);
+  assert.throws(() => monthYearToIso("2026"), /unrecognized/);
+  assert.throws(() => monthYearToIso(""), /unrecognized/);
+});
+
+test("renderBestMarkdown for a sample slug contains the quick-picks and methodology sections", () => {
+  const md = renderBestMarkdown("crm-for-small-business");
+  assert.match(md, /## Our picks at a glance/);
+  assert.match(md, /## How we ranked/);
+  assert.match(md, /Reviewed by Maxime Houle, Founder, SeldonFrame/);
 });

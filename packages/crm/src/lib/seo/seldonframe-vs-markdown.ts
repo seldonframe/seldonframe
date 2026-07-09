@@ -28,6 +28,8 @@ export function renderSeldonframeVsMarkdown(c: Competitor): string {
   L.push("");
   L.push(`Last updated: ${LAST_UPDATED}. HTML version: ${BASE}/compare/seldonframe-vs-${c.slug}`);
   L.push("");
+  L.push(`Reviewed by Maxime Houle, Founder, SeldonFrame — facts checked ${LAST_UPDATED}.`);
+  L.push("");
   L.push(`## The short version`);
   L.push("");
   L.push(`- **${c.name} pricing:** ${emphasizeMd(c.them.pricingModel)}`);

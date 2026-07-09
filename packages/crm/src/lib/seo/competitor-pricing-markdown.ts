@@ -19,6 +19,8 @@ export function renderCompetitorPricingMarkdown(slug: string): string {
   L.push("");
   L.push(`Last checked: ${p.verified}. HTML version: ${BASE}/${p.slug}-pricing`);
   L.push("");
+  L.push(`Reviewed by Maxime Houle, Founder, SeldonFrame — facts checked ${p.verified}.`);
+  L.push("");
   L.push(`## The short version`);
   L.push("");
   L.push(`- **Starts at:** ${emphasizeMd(startsAt(p))}`);

@@ -20,6 +20,8 @@ import { TldrBox } from "@/components/seo/tldr-box";
 import { FrontOfficeFlow } from "@/components/seo/front-office-flow";
 import { PricingSourceLine } from "@/components/seo/alternative-page";
 import { BuildWidget } from "@/components/seo/build-widget";
+import { AuthorByline, articleLd } from "@/components/seo/author-byline";
+import { monthYearToIso } from "@/lib/seo/month-iso";
 import { isWebUngatedBuildOn } from "@/lib/web-build/policy";
 import { emphasize } from "@/lib/seo/emphasize";
 import {
@@ -97,6 +99,12 @@ export function SeldonFrameVsPage({ competitor }: { competitor: Competitor }): R
     offers: { "@type": "Offer", price: "29", priceCurrency: "USD" },
     provider: { "@type": "Organization", name: "SeldonFrame", url: "https://seldonframe.com" },
   };
+  const articleJsonLd = articleLd({
+    headline: h1,
+    description: c.heroSub,
+    canonicalPath: `/compare/seldonframe-vs-${c.slug}`,
+    dateModified: monthYearToIso(LAST_UPDATED),
+  });
 
   return (
     <div
@@ -108,6 +116,7 @@ export function SeldonFrameVsPage({ competitor }: { competitor: Competitor }): R
       <MarkdownPointer href={`/compare/seldonframe-vs-${c.slug}.md`} />
       <script type="application/ld+json" dangerouslySetInnerHTML={{ __html: JSON.stringify(softwareLd) }} />
       <script type="application/ld+json" dangerouslySetInnerHTML={{ __html: JSON.stringify(faqLd) }} />
+      <script type="application/ld+json" dangerouslySetInnerHTML={{ __html: JSON.stringify(articleJsonLd) }} />
       <MarketplaceNav />
 
       <main style={{ maxWidth: 960, margin: "0 auto", padding: "26px 32px 70px", width: "100%" }}>
@@ -132,6 +141,7 @@ export function SeldonFrameVsPage({ competitor }: { competitor: Competitor }): R
             {h1}
           </h1>
           <p style={{ margin: "16px 0 0", fontSize: 18.5, lineHeight: 1.5, color: "rgba(34,29,23,0.7)", maxWidth: 700 }}>{c.heroSub}</p>
+          <AuthorByline checked={LAST_UPDATED} />
         </header>
 
         {/* ── HONEST INTRO (composed for the vs family — see composeSeldonframeVsIntro) ── */}

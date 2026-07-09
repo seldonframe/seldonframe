@@ -16,6 +16,8 @@ import { MarketplaceStyles } from "@/components/marketplace/marketplace-styles";
 import { MKT } from "@/components/marketplace/marketplace-data";
 import { MarkdownPointer } from "@/components/seo/markdown-pointer";
 import { TldrBox } from "@/components/seo/tldr-box";
+import { AuthorByline, articleLd } from "@/components/seo/author-byline";
+import { monthYearToIso } from "@/lib/seo/month-iso";
 import { emphasize } from "@/lib/seo/emphasize";
 import { getCompetitorPricing, PRICING, type CompetitorPricing } from "@/lib/seo/competitor-pricing";
 import { getCompetitor } from "@/lib/seo/alternative-pages";
@@ -64,6 +66,13 @@ export function CompetitorPricingPage({ slug }: { slug: string }): ReactElement 
       acceptedAnswer: { "@type": "Answer", text: item.a },
     })),
   };
+  const h1 = `${c.name} Pricing (2026): What You'll Actually Pay`;
+  const articleJsonLd = articleLd({
+    headline: h1,
+    description: c.heroSub,
+    canonicalPath: `/${p.slug}-pricing`,
+    dateModified: monthYearToIso(p.verified),
+  });
 
   return (
     <div
@@ -74,6 +83,7 @@ export function CompetitorPricingPage({ slug }: { slug: string }): ReactElement 
       <PricingPageStyles />
       <MarkdownPointer href={`/${p.slug}-pricing.md`} />
       <script type="application/ld+json" dangerouslySetInnerHTML={{ __html: JSON.stringify(faqLd) }} />
+      <script type="application/ld+json" dangerouslySetInnerHTML={{ __html: JSON.stringify(articleJsonLd) }} />
       <MarketplaceNav />
 
       <main style={{ maxWidth: 960, margin: "0 auto", padding: "26px 32px 70px", width: "100%" }}>
@@ -95,11 +105,12 @@ export function CompetitorPricingPage({ slug }: { slug: string }): ReactElement 
             {`Pricing breakdown · checked ${p.verified}`}
           </div>
           <h1 className="sf-pricing-h1" style={{ margin: 0, fontSize: 40, fontWeight: 800, letterSpacing: "-0.03em", lineHeight: 1.08, maxWidth: 800 }}>
-            {`${c.name} Pricing (2026): What You'll Actually Pay`}
+            {h1}
           </h1>
           <p style={{ margin: "16px 0 0", fontSize: 18, lineHeight: 1.5, color: "rgba(34,29,23,0.7)", maxWidth: 700 }}>
             {c.heroSub}
           </p>
+          <AuthorByline checked={p.verified} />
         </header>
 
         {/* ── TL;DR ── */}

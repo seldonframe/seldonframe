@@ -6,12 +6,13 @@
 import { getBestPage, LAST_UPDATED, midSentence, type BestContender } from "./best-pages";
 import { START_HREF, DEMO_HREF } from "./alternative-pages-extras";
 import { emphasizeMd } from "./emphasize";
-import { composeCheapestOption } from "@/components/seo/best-page";
+import { composeCheapestOption, composeQuickPicks } from "@/components/seo/best-page";
 
 const BASE = "https://www.seldonframe.com";
 
 function contenderLine(c: BestContender): string {
-  return `- **${c.name}** — ${emphasizeMd(c.from)}. ${c.oneLiner} Best for: ${c.bestFor}. Watch out: ${c.watchOut}`;
+  const source = c.sourceUrl ? ` Source: ${c.sourceUrl}` : "";
+  return `- **${c.name}** — ${emphasizeMd(c.from)}. ${c.oneLiner} Best for: ${c.bestFor}. Watch out: ${c.watchOut}${source}`;
 }
 
 export function renderBestMarkdown(slug: string): string {
@@ -26,10 +27,25 @@ export function renderBestMarkdown(slug: string): string {
   L.push("");
   L.push(`HTML version: ${BASE}/best/${slug}`);
   L.push("");
+  L.push(`Reviewed by Maxime Houle, Founder, SeldonFrame`);
+  L.push("");
   if (page.videoId) {
     L.push(`▶ Watch: [${h1}](https://www.youtube.com/watch?v=${page.videoId})`);
     L.push("");
   }
+  L.push(`## Our picks at a glance`);
+  L.push("");
+  composeQuickPicks(category, audience).forEach((line, i) => {
+    L.push(`${i + 1}. ${emphasizeMd(line)}`);
+  });
+  L.push("");
+  L.push(`## How we ranked`);
+  L.push("");
+  L.push(`- Pricing verified from each vendor's own public pricing page as of ${LAST_UPDATED}.`);
+  L.push(`- We build SeldonFrame and rank it #1 for the front-office job — the honest catch on every other pick is listed too, so you can disagree.`);
+  L.push(`- Rankings weigh fit for ${midSentence(audience.label)} over raw feature count.`);
+  L.push(`- No vendor paid for placement on this page.`);
+  L.push("");
   L.push(`## The short version`);
   L.push("");
   L.push(

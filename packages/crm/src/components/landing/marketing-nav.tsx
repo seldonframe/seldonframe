@@ -11,11 +11,41 @@
 
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import Link from "next/link";
+
+/** The four money hubs — nav-level internal links so crawlers reach the SEO
+ *  tree from every marketing page, not only via the footer. Rendered ALWAYS
+ *  (CSS-hidden when closed) so the links exist in the SSR HTML — per the
+ *  lessons.md rule: client-only conditional renders hide content from
+ *  crawlers/LLMs. */
+const RESOURCE_LINKS = [
+  { href: "/alternatives", label: "Compare & pricing breakdowns" },
+  { href: "/best", label: "Best-of guides" },
+  { href: "/tools", label: "Free tools" },
+  { href: "/ai-agents", label: "AI agent library" },
+] as const;
 
 export function MarketingNav() {
   const [solid, setSolid] = useState(false);
+  const [resourcesOpen, setResourcesOpen] = useState(false);
+  const resourcesRef = useRef<HTMLDivElement | null>(null);
+
+  useEffect(() => {
+    if (!resourcesOpen) return;
+    const onDown = (e: MouseEvent) => {
+      if (resourcesRef.current && !resourcesRef.current.contains(e.target as Node)) setResourcesOpen(false);
+    };
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key === "Escape") setResourcesOpen(false);
+    };
+    document.addEventListener("mousedown", onDown);
+    document.addEventListener("keydown", onKey);
+    return () => {
+      document.removeEventListener("mousedown", onDown);
+      document.removeEventListener("keydown", onKey);
+    };
+  }, [resourcesOpen]);
 
   useEffect(() => {
     const onScroll = () => setSolid(window.scrollY > 60);
@@ -62,8 +92,40 @@ export function MarketingNav() {
           <span>SeldonFrame</span>
         </Link>
 
-        {/* Right cluster — subtle Log in + one primary CTA */}
+        {/* Right cluster — Resources dropdown + subtle Log in + one primary CTA */}
         <div className="inline-flex items-center gap-2 md:gap-3">
+          <div ref={resourcesRef} className="relative hidden md:block">
+            <button
+              type="button"
+              aria-expanded={resourcesOpen}
+              aria-haspopup="true"
+              onClick={() => setResourcesOpen((v) => !v)}
+              className="inline-flex h-[34px] items-center gap-1 whitespace-nowrap rounded-full px-3 text-[13.5px] font-medium text-[#6E665A] transition-colors hover:text-[#221D17]"
+            >
+              Resources
+              <svg width="10" height="10" viewBox="0 0 10 10" aria-hidden className={`transition-transform ${resourcesOpen ? "rotate-180" : ""}`}>
+                <path d="M1 3l4 4 4-4" stroke="currentColor" strokeWidth="1.5" fill="none" strokeLinecap="round" strokeLinejoin="round" />
+              </svg>
+            </button>
+            {/* Always rendered; CSS-hidden when closed so crawlers see the links. */}
+            <div
+              className={`absolute right-0 top-[calc(100%+8px)] w-60 rounded-2xl border border-[rgba(34,29,23,.10)] bg-[#FFFDFA] p-2 shadow-[0_8px_30px_rgba(34,29,23,.12)] transition-[opacity,transform] duration-150 ${
+                resourcesOpen ? "visible translate-y-0 opacity-100" : "invisible -translate-y-1 opacity-0 pointer-events-none"
+              }`}
+            >
+              {RESOURCE_LINKS.map((l) => (
+                <Link
+                  key={l.href}
+                  href={l.href}
+                  tabIndex={resourcesOpen ? 0 : -1}
+                  onClick={() => setResourcesOpen(false)}
+                  className="block rounded-xl px-3 py-2 text-[13.5px] font-medium text-[#443E35] transition-colors hover:bg-[rgba(0,137,123,.07)] hover:text-[#221D17]"
+                >
+                  {l.label}
+                </Link>
+              ))}
+            </div>
+          </div>
           <Link
             href="/login"
             className="hidden h-[34px] items-center whitespace-nowrap rounded-full border border-[rgba(34,29,23,.18)] bg-transparent px-4 text-[13.5px] font-medium text-[#6E665A] transition-colors hover:border-[rgba(34,29,23,.28)] hover:text-[#221D17] sm:inline-flex"
