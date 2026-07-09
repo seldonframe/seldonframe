@@ -11,6 +11,7 @@ import { AGENT_JOBS, VERTICALS } from "@/lib/seo/agent-pages";
 import { COMPETITORS, getCompetitor } from "@/lib/seo/alternative-pages";
 import { VS_PAIRS, vsSlug } from "@/lib/seo/alternative-pages-extras";
 import { BEST_PAGES, bestSlug, getBestPage, midSentence } from "@/lib/seo/best-pages";
+import { allGuideSlugs, getGuide } from "@/lib/seo/guides";
 import { siteBaseUrl } from "@/app/sitemap";
 import { loadStorefrontCatalog } from "@/lib/marketplace/load-storefront";
 import { logMarkdownFetch } from "@/lib/marketplace/md-analytics";
@@ -164,6 +165,14 @@ export async function GET(req: Request): Promise<Response> {
   lines.push(
     `- [Agency Margin Calculator](${base}/tools/agency-margin-calculator): retainer minus tool stack minus labor — your real margin per client.`,
   );
+  lines.push("");
+
+  lines.push("## Guides (practical, sourced articles)");
+  lines.push("");
+  for (const slug of allGuideSlugs()) {
+    const g = getGuide(slug);
+    lines.push(`- [${g.title}](${base}/guides/${slug}): ${g.description}`);
+  }
   lines.push("");
 
   lines.push("## Pages");
