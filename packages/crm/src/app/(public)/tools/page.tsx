@@ -15,6 +15,36 @@ export const metadata: Metadata = {
 
 const TOOLS = [
   {
+    href: "/tools/ai-visibility-checker",
+    name: "AI Visibility Checker",
+    blurb: "Can ChatGPT recommend your business? Grade your AI visibility and get the exact prompts to test it yourself.",
+  },
+  {
+    href: "/tools/speed-to-lead-calculator",
+    name: "Speed-to-Lead Calculator",
+    blurb: "See the revenue slow lead follow-up costs you — and what replying in under 5 minutes recovers.",
+  },
+  {
+    href: "/tools/no-show-cost-calculator",
+    name: "No-Show Cost Calculator",
+    blurb: "Estimate what no-shows cost your practice each month — and what automated reminders and AI confirmations recover.",
+  },
+  {
+    href: "/tools/ai-receptionist-script-generator",
+    name: "AI Receptionist Script Generator",
+    blurb: "Generate a complete AI receptionist call script for your business — greeting, questions, booking, after-hours. Copy it free.",
+  },
+  {
+    href: "/tools/service-business-faq-generator",
+    name: "Service Business FAQ Generator",
+    blurb: "Generate a ready-to-use customer FAQ for your service business — and your AI agent's knowledge base. Copy free.",
+  },
+  {
+    href: "/tools/booking-friction-grader",
+    name: "Booking Friction Grader",
+    blurb: "Answer 8 questions to score how easy you make it to book — and get the specific fixes losing you appointments.",
+  },
+  {
     href: "/tools/missed-call-calculator",
     name: "Missed Call Cost Calculator",
     blurb: "Estimate the monthly revenue missed calls cost your business — and what an AI receptionist recovers.",
