@@ -114,6 +114,24 @@ export async function GET(req: Request): Promise<Response> {
   lines.push("## Free tools");
   lines.push("");
   lines.push(
+    `- [Speed-to-Lead Calculator](${base}/tools/speed-to-lead-calculator): estimate the revenue slow lead follow-up costs, and what replying in under 5 minutes recovers.`,
+  );
+  lines.push(
+    `- [No-Show Cost Calculator](${base}/tools/no-show-cost-calculator): estimate the revenue no-shows cost a booking-heavy business, and what automated reminders recover.`,
+  );
+  lines.push(
+    `- [AI Receptionist Script Generator](${base}/tools/ai-receptionist-script-generator): generate a complete AI receptionist call script for any business — greeting, questions, booking, after-hours.`,
+  );
+  lines.push(
+    `- [Service Business FAQ Generator](${base}/tools/service-business-faq-generator): generate a ready customer FAQ (and AI-agent knowledge base) for a service business.`,
+  );
+  lines.push(
+    `- [Booking Friction Grader](${base}/tools/booking-friction-grader): score how easy you make it to book and get the specific fixes losing you appointments.`,
+  );
+  lines.push(
+    `- [AI Visibility Checker](${base}/tools/ai-visibility-checker): grade whether ChatGPT and Google's AI can recommend your business, plus the exact prompts to test it yourself.`,
+  );
+  lines.push(
     `- [Missed Call Cost Calculator](${base}/tools/missed-call-calculator): estimate the revenue missed calls cost a service business.`,
   );
   lines.push(

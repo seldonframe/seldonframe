@@ -149,6 +149,12 @@ export default async function sitemap(): Promise<MetadataRoute.Sitemap> {
   // Free tools.
   entries.push({ url: `${base}/tools`, lastModified: now, changeFrequency: "monthly", priority: 0.7 });
   for (const tool of [
+    "speed-to-lead-calculator",
+    "no-show-cost-calculator",
+    "ai-receptionist-script-generator",
+    "service-business-faq-generator",
+    "booking-friction-grader",
+    "ai-visibility-checker",
     "missed-call-calculator",
     "google-review-link-generator",
     "ai-receptionist-cost-calculator",
