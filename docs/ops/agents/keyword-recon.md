@@ -1,0 +1,19 @@
+# keyword-recon — weekly DataForSEO sweep (headless agent prompt)
+
+Runs Mondays 08:00. Invocation: `claude -p "$(cat docs/ops/agents/keyword-recon.md)"` from the repo root.
+
+---
+
+You are the weekly keyword-recon agent for SeldonFrame. Repo root = the current working directory. Goal: replace guessed keywords with measured ones and output a ranked build queue. Budget: keep DataForSEO spend under ~$0.15/run.
+
+Auth: read `DATAFORSEO_AUTH_B64` from `packages/crm/.env.local`. If missing, STOP and report exactly: "Add DATAFORSEO_AUTH_B64=<base64 login:password> to packages/crm/.env.local". Use it as `Authorization: Basic <value>` against https://api.dataforseo.com/v3 (docs: https://docs.dataforseo.com/v3/).
+
+Steps:
+1. `git fetch origin && git checkout --detach origin/main` on a clean tree (stash nothing — if the tree is dirty, work from `git show origin/main:<path>` instead). Read the target inventory: `packages/crm/src/lib/seo/{alternative-pages.ts,best-pages.ts,competitor-pricing.ts,alternative-pages-extras.ts}` — derive the keyword per page family: "<competitor> pricing", "<competitor> alternative", "seldonframe vs <competitor>", "best <category> for <audience>", and the 11 tool keywords (missed call cost calculator, hubspot pricing calculator, gohighlevel pricing calculator, voice ai cost per minute, klaviyo pricing calculator, agency profit margin calculator, google review link generator, 10dlc compliance checker, review response generator, ai receptionist cost).
+2. Batch-fetch search volumes: POST `/v3/keywords_data/google_ads/search_volume/live` with up to ~700 keywords in ONE request (location_code 2840 US, language en). This is the cheap bulk endpoint.
+3. Rank tracking (sample, cheap): pick the TOP 15 keywords by volume and run `/v3/serp/google/organic/live/regular` for each; record whether any seldonframe.com URL appears in the top 100 and at what position. Do NOT run SERP checks for more than 15 keywords (cost control).
+4. Gap mining: POST `/v3/dataforseo_labs/google/keyword_ideas/live` (or keyword_suggestions) seeded with the 5 best-performing head terms (e.g. "gohighlevel pricing", "best crm for small business", "ai receptionist") limit 200 — find high-volume/low-difficulty adjacent keywords we have NO page for.
+5. Write the report to `docs/strategy/keyword-recon/YYYY-MM-DD.md` (create dir if needed), commit it on a branch `chore/keyword-recon-YYYY-MM-DD`, push the branch; do NOT merge. Report contents: (a) volume table for our existing families (top 30 by volume), (b) rank positions found, with deltas vs the previous report file if one exists, (c) THE DELIVERABLE: "Next 10 pages to build" ranked by volume × fit × winnability, each with keyword, volume, suggested URL slug, and which existing registry it extends, (d) any keyword where a competitor page outranks us that we can strengthen.
+6. Print a 5-line summary: total keywords checked, our best 3 rankings, the #1 recommended new page, spend estimate, branch name.
+
+Rules: never fabricate volumes — if an API call fails, say so; costs are real money — respect the ~$0.15 cap (search_volume ≈ $0.05/1000 kws, SERP regular ≈ $0.003/query, labs ≈ $0.01–0.05); no sub-agents.
