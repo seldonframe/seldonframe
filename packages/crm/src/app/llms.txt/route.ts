@@ -165,6 +165,15 @@ export async function GET(req: Request): Promise<Response> {
   lines.push(
     `- [Agency Margin Calculator](${base}/tools/agency-margin-calculator): retainer minus tool stack minus labor — your real margin per client.`,
   );
+  lines.push(
+    `- [AI Website Generator](${base}/tools/ai-website-generator): paste your Google Business Profile or describe your business, and get a real hosted website, booking page, intake form and CRM in about 3 minutes.`,
+  );
+  lines.push(
+    `- [Free Booking Page](${base}/tools/free-booking-page): a real online booking page on your own subdomain, with appointment types, an intake form and CRM sync, live in about 3 minutes.`,
+  );
+  lines.push(
+    `- [Local Business Website Grader](${base}/tools/website-grader): score your website on the 7 things that win local jobs, with a prioritized fix list.`,
+  );
   lines.push("");
 
   lines.push("## Guides (practical, sourced articles)");

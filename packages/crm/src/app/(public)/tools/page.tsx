@@ -99,6 +99,21 @@ const TOOLS = [
     name: "Claude Project Brief Generator",
     blurb: "Generate the complete standing-instructions block (role, tasks, tone, never-list) for a Claude Project — ready to paste.",
   },
+  {
+    href: "/tools/ai-website-generator",
+    name: "AI Website Generator",
+    blurb: "Paste your Google Business Profile or describe your business — get a real hosted website, booking page, intake form and CRM in 3 minutes. Free.",
+  },
+  {
+    href: "/tools/free-booking-page",
+    name: "Free Booking Page",
+    blurb: "A real online booking page on your own subdomain — appointment types, intake form, and CRM sync. Live in 3 minutes, free.",
+  },
+  {
+    href: "/tools/website-grader",
+    name: "Local Business Website Grader",
+    blurb: "Score your website on the 7 things that actually win local jobs — speed, booking, trust signals, and more.",
+  },
 ];
 
 export default function ToolsHubPage(): ReactElement {

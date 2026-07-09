@@ -53,6 +53,8 @@ const COLUMNS: readonly Column[] = [
   {
     heading: "Free tools",
     links: [
+      { label: "AI Website Generator", href: "/tools/ai-website-generator" },
+      { label: "Free Booking Page", href: "/tools/free-booking-page" },
       { label: "Missed Call Calculator", href: "/tools/missed-call-calculator" },
       { label: "HubSpot Pricing Calculator", href: "/tools/hubspot-pricing-calculator" },
       { label: "GoHighLevel Cost Calculator", href: "/tools/gohighlevel-cost-calculator" },

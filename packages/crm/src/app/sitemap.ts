@@ -167,6 +167,9 @@ export default async function sitemap(): Promise<MetadataRoute.Sitemap> {
     "voice-ai-cost-calculator",
     "klaviyo-cost-calculator",
     "agency-margin-calculator",
+    "ai-website-generator",
+    "free-booking-page",
+    "website-grader",
   ]) {
     entries.push({
       url: `${base}/tools/${tool}`,
