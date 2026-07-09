@@ -8,11 +8,15 @@ Security stance (differs from levelsio's "hobby server, no important stuff"
 because this touches the production company repo):
 
 - **Tailscale-only.** Hetzner firewall: zero inbound rules. Nothing listens publicly.
-- **Deploy key, not your PAT.** The box pushes via a repo-scoped SSH deploy key.
-  A GitHub ruleset requires PRs on `main`, so an unattended agent can push
-  branches but only a human merges.
+- **Machine user, not your PAT — and NOT a deploy key.** The box pushes as a
+  dedicated non-admin GitHub account (`seldonframe-devbox`, Write role). A
+  GitHub ruleset requires PRs on `main`, so an unattended agent can push
+  branches but only a human merges. ⚠️ Learned 2026-07-09 the hard way: **deploy
+  keys silently BYPASS rulesets** ("Bypassed rule violations" — they aren't
+  even eligible bypass actors), so a write deploy key CAN push protected main.
+  Machine users are governed like any user; the rejection is real and tested.
 - **No crown-jewel secrets on the box.** Stripe/Twilio/Neon-prod/Vercel tokens
-  stay in Vercel. The box gets: the deploy key, `DATAFORSEO_AUTH_B64`, and your
+  stay in Vercel. The box gets: the machine user's SSH key, `DATAFORSEO_AUTH_B64`, and your
   Claude login. That's the whole list.
 
 Total time: ~30 minutes. Steps 1–2 from any browser; the rest from a terminal
@@ -68,12 +72,12 @@ npm install -g @anthropic-ai/claude-code
 claude   # → log in with the Claude MAX subscription (browser link flow), then exit
 ```
 
-## 4. Repo access: deploy key + PR-required ruleset (10 min)
+## 4. Repo access: machine user + PR-required ruleset (15 min)
 
 **On the box:**
 
 ```bash
-ssh-keygen -t ed25519 -f ~/.ssh/seldonframe_deploy -N "" -C "devbox-deploy"
+ssh-keygen -t ed25519 -f ~/.ssh/seldonframe_deploy -N "" -C "devbox-bot"
 cat ~/.ssh/seldonframe_deploy.pub
 cat >> ~/.ssh/config <<'EOF'
 Host github.com
@@ -82,16 +86,26 @@ Host github.com
 EOF
 ```
 
-**On GitHub (repo `seldonframe/seldonframe`):**
+**On GitHub:**
 
-1. Settings → Deploy keys → Add: paste the pubkey, **check "Allow write access"**.
-2. Settings → Rules → Rulesets → New branch ruleset:
+1. **Create the machine user** (a human must do this — GitHub ToS allows a
+   single machine user, forbids bot-registered accounts): new account, e.g.
+   `seldonframe-devbox` with a devbox@ email alias.
+2. As an org admin: repo Settings → Collaborators → **invite the machine user
+   with the Write role** (NOT admin — Write users can't bypass rulesets).
+   Accept the invite from the machine user's account.
+3. Logged in AS the machine user: Settings → SSH and GPG keys → New SSH key →
+   paste the pubkey from above. (This is a USER key on the bot account — not a
+   repo deploy key; see the warning in the security stance.)
+4. Settings → Rules → Rulesets → New branch ruleset:
    - Name `protect-main`, Enforcement **Active**, Target branch: Include `main`.
    - Rules: ✅ **Require a pull request before merging** (0 approvals is fine —
      the point is a human click, not review theater).
-   - Bypass list: add **your user** (Repository admin role works too) — your own
-     desktop sessions keep pushing main exactly as today; the deploy key is NOT
-     on the bypass list, so the box physically cannot push main.
+   - Bypass list: add **Repository admin** — your own sessions keep pushing
+     main exactly as today; the machine user has Write, not admin, so the box
+     genuinely cannot (expected error: `GH013 ... Changes must be made through
+     a pull request`).
+5. Leave the org's `deploy_keys_enabled_for_repositories` setting **disabled**.
 
 **Back on the box:**
 
@@ -100,9 +114,17 @@ git clone git@github.com:seldonframe/seldonframe.git ~/seldonframe
 cd ~/seldonframe
 pnpm install                      # full install — several minutes first time
 
+# 4 GB swapfile FIRST — next build peaks past ~7 GB and gets OOM-killed
+# (exit 137) on the 8 GB box without it. Learned 2026-07-09.
+fallocate -l 4G /swapfile && chmod 600 /swapfile && mkswap /swapfile && swapon /swapfile
+echo '/swapfile none swap sw 0 0' >> /etc/fstab
+
 # the payoff: the REAL build gate, locally, for the first time
 cd packages/crm && pnpm build     # bash check-use-server + next build
 ```
+
+Expect `ssh -T git@github.com` to greet you as the machine user
+(`Hi seldonframe-devbox!`), not the repo.
 
 If `pnpm build` is green here, every future merge can be gated on a real
 `next build` instead of trusting the Vercel preview.
@@ -135,13 +157,17 @@ cat > ~/agents/run-agent.sh <<'EOF'
 #!/usr/bin/env bash
 # Usage: run-agent.sh <name>   (name = docs/ops/agents/<name>.md)
 set -euo pipefail
+# Claude Code refuses --dangerously-skip-permissions as root unless IS_SANDBOX
+# is set. Deliberately relaxed on this dedicated, secret-free, main-protected box.
+export IS_SANDBOX=1
 NAME="$1"
 REPO="$HOME/seldonframe"
 LOG="$HOME/agents/logs/${NAME}-$(date +%F-%H%M).log"
 cd "$REPO"
 git fetch origin --quiet && git checkout --quiet --detach origin/main
+# --model sonnet: recon/refresh work is volume-tier; do not burn Opus on it.
 claude -p "$(cat "docs/ops/agents/${NAME}.md")" \
-  --dangerously-skip-permissions \
+  --model sonnet --dangerously-skip-permissions \
   >> "$LOG" 2>&1
 tail -5 "$LOG"
 EOF
@@ -196,7 +222,7 @@ Smoke one immediately:
 
 - [ ] `ssh root@seldonframe-devbox` works from the phone with public IP access removed (Hetzner firewall shows 0 inbound rules)
 - [ ] `cd ~/seldonframe/packages/crm && pnpm build` → green (the real build gate)
-- [ ] `git push origin HEAD:main` from the box → **rejected by ruleset** (this failing is success)
+- [ ] `git push origin HEAD:main` from the box → **rejected** with `GH013 ... pull request` and NO "Bypassed" in the output (this failing is success; a "Bypassed rule violations" success means you used a deploy key — go back to step 4)
 - [ ] `git push origin HEAD:refs/heads/test-devbox` → works; delete the branch after
 - [ ] `~/agents/run-agent.sh reddit-recon` → produces a queue branch; log in `~/agents/logs/`
 - [ ] Desktop scheduled tasks paused
@@ -208,7 +234,8 @@ Smoke one immediately:
 - Claude Code: `npm update -g @anthropic-ai/claude-code` monthly (or when a run
   complains); `claude doctor` if anything is odd.
 - Disk: `pnpm store prune` + `rm -rf ~/agents/logs/*.log` older than a month.
-- Rotate the deploy key if the box is ever compromised: delete it in GitHub →
-  generate a new one. Nothing else on the box needs rotating (no other secrets).
+- Rotate if the box is ever compromised: delete the SSH key from the machine
+  user's account (and/or revoke its repo access) → generate a new one. Nothing
+  else on the box needs rotating (no other secrets).
 - The box is cattle: `docs/ops/hetzner-devbox.md` (this file) rebuilds it from
   zero in 30 minutes.
