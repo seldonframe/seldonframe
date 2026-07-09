@@ -625,6 +625,88 @@ export const BEST_CATEGORIES: BestCategory[] = [
       },
     ],
   },
+  {
+    slug: "ai-agent",
+    noun: "AI agent",
+    nounPlural: "AI agents",
+    intentLine: "one AI worker that actually does the job — answers customers, books the work and updates records — instead of just chatting back",
+    sfPitch:
+      "SeldonFrame builds you an AI agent that works the whole front office: it answers on the phone, website chat, SMS and email with one brain, checks your real calendar and books the job, then writes every conversation back to the CRM. You describe the business in plain English and it's built in about 3 minutes, bound to your own tools and running on your own AI keys at cost — all at $29/mo flat. Most tools on this list do one channel or one job; this is the agent built for the gap between \"a customer reached out\" and \"someone followed up.\"",
+    freeAngle:
+      "There's no genuinely free AI agent that runs a front office — every option here (SeldonFrame included) has a real cost, because AI thinking and phone minutes both cost money to run. The honest free answer is SeldonFrame's build-before-you-pay flow: the whole workspace, agent included, builds and can be tested free before you ever enter a card. Sintra, Tidio and Zapier all have free or low tiers, but each caps usage tightly enough that a busy month pushes you onto a paid plan fast.",
+    contenders: [
+      {
+        key: "sintra",
+        name: "Sintra AI",
+        from: "from ~$39/mo; the all-12 bundle is listed at ~$97/mo",
+        oneLiner: "A pack of role-based AI \"employees\" — social, support, email, SEO, sales — that you chat with to knock out marketing and admin busywork.",
+        bestFor: "Solo owners and micro-teams wanting a cheap, broad set of AI helpers for content and admin",
+        strengths: ["A low entry price for a lot of surface area", "Twelve ready-made personas with templates", "A plain chat interface with no technical setup"],
+        watchOut: "Every plan is capped at 250 credits a month, so heavy use hits the ceiling quickly, and the lowest monthly prices are teaser rates that need a long prepay commitment to unlock.",
+        sourceUrl: "https://sintra.ai/pricing",
+        fitNotes: {
+          general: "Good for the marketing-and-admin side of a small business, but it won't answer your phone or book a job — it's an assistant, not a front-desk agent.",
+        },
+      },
+      {
+        key: "tidio-lyro",
+        name: "Tidio (Lyro AI)",
+        from: "free plan (50 one-time Lyro chats); the Lyro add-on is from ~$39/mo",
+        oneLiner: "A live-chat and helpdesk tool whose \"Lyro\" AI agent auto-answers customer-service questions on your website.",
+        bestFor: "Small e-commerce and service sites wanting affordable website chat plus a bolt-on AI for common questions",
+        strengths: ["A real free tier to start on", "Fast website setup", "Lyro is conversation-metered, so light users pay little"],
+        watchOut: "Lyro is a separate paid add-on on top of the base Tidio plan, the free conversations are a one-time allowance rather than monthly, and the conversation caps make costs climb with volume.",
+        sourceUrl: "https://www.tidio.com/pricing/",
+        fitNotes: {
+          general: "Solid for website chat, but it lives on your site — it won't handle phone calls or push bookings into a calendar on its own.",
+        },
+      },
+      {
+        key: "zapier-agents",
+        name: "Zapier Agents",
+        from: "free tier; the Agents add-on is reported from ~$20/mo on top of a base Zapier plan (paid from ~$20/mo)",
+        oneLiner: "AI agents that live inside Zapier and take actions across your 6,000+ connected apps to run multi-step workflows.",
+        bestFor: "Owners and ops people already on Zapier who want agents that trigger real actions across their app stack",
+        strengths: ["Unmatched breadth of app integrations", "Agents actually execute steps, not just chat", "Builds on familiar Zapier automation"],
+        watchOut: "Pricing stacks an Agents add-on onto a base plan plus task-usage billing, so the true monthly cost is easy to underestimate, and the standalone Agents price isn't stated cleanly — confirm current terms before committing.",
+        sourceUrl: "https://zapier.com/pricing",
+      },
+      {
+        key: "intercom-fin",
+        name: "Intercom Fin",
+        from: "usage-based, from ~$0.99 per resolved conversation (50/mo minimum) + Intercom seats from ~$29/seat/mo",
+        oneLiner: "An AI support agent that autonomously answers customer questions and resolves tickets across chat, email and help desk.",
+        bestFor: "Support teams with real ticket volume — especially existing Intercom customers — wanting proven, outcome-priced deflection",
+        strengths: ["You pay mainly for successful outcomes", "Strong published resolution rates (~40-50%)", "A mature, well-integrated support platform"],
+        watchOut: "The bill scales directly with volume and can be hard to predict, an \"outcome\" is billed more broadly than a clean resolution, and you pay Intercom seat fees on top of the per-outcome cost.",
+        sourceUrl: "https://fin.ai/pricing",
+      },
+      {
+        key: "agentforce",
+        name: "Salesforce Agentforce",
+        from: "listed at ~$2 per conversation, or usage credits at ~$0.10/action; per-user editions run far higher — effectively quote-gated",
+        oneLiner: "Salesforce's platform for building autonomous AI agents that act on your CRM data across sales, service and marketing.",
+        bestFor: "Mid-market and enterprise teams already deep in Salesforce that want agents wired straight into their CRM",
+        strengths: ["Deep native Salesforce CRM and data integration", "Several pricing models to fit different uses", "Enterprise-grade governance and scale"],
+        watchOut: "It's genuinely enterprise software, not a small-business tool — pricing is split across three-plus models that can't all coexist in one org, so any real deployment needs a sales conversation and a big budget.",
+        sourceUrl: "https://www.salesforce.com/agentforce/pricing/",
+      },
+    ],
+    faq: [
+      {
+        q: "What's the difference between an AI agent and an AI chatbot?",
+        a: "A chatbot answers questions; an agent takes actions. The line that matters for a small business is whether the tool can actually do the next step — check a real calendar and book the slot, create the CRM record, send the follow-up — or whether it just replies and leaves the doing to you.",
+      },
+      {
+        q: "Do I need a technical person to set up an AI agent?",
+        a: "Not with the small-business tools on this list — Sintra, Tidio and SeldonFrame are built for non-technical owners. The enterprise options (Agentforce, and the more advanced Zapier setups) reward someone comfortable wiring up data and actions.",
+      },
+      {
+        q: "Will an AI agent's cost stay predictable?",
+        a: "It depends on the pricing model. Usage-based tools (per resolution, per conversation, per minute, per action) can spike in a busy month, while flat-rate tools trade that risk for a fixed bill. If predictability matters, favor a flat price or set hard usage caps before you turn one loose.",
+      },
+    ],
+  },
 ];
 
 export function getBestCategory(slug: string): BestCategory {
@@ -644,6 +726,7 @@ export const BEST_PAGES: BestPage[] = [
   { category: "booking-app", audience: "small-business" },
   { category: "booking-system", audience: "beauty-businesses" },
   { category: "ai-receptionist", audience: "small-business" },
+  { category: "ai-agent", audience: "small-business" },
   { category: "crm", audience: "plumbers" },
   { category: "booking-system", audience: "med-spas" },
   { category: "website-builder", audience: "hvac" },
