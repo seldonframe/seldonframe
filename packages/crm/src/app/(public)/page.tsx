@@ -91,6 +91,40 @@ export default async function PublicHomePage() {
     // Newsreader italic. Matches seldonstudio.com aesthetic with
     // SeldonFrame green (#00897B) instead of clay accent.
     <div className="min-h-screen bg-[#F6F2EA] text-[#221D17] selection:bg-[#00897B]/20 selection:text-[#00897B]">
+      {/* Entity anchor: Organization + WebSite JSON-LD. Every other page's
+          Article/SoftwareApplication schema hangs off this org identity, and
+          sameAs ties the entity to the real X/GitHub profiles for E-E-A-T. */}
+      <script
+        type="application/ld+json"
+        dangerouslySetInnerHTML={{
+          __html: JSON.stringify({
+            "@context": "https://schema.org",
+            "@graph": [
+              {
+                "@type": "Organization",
+                "@id": "https://www.seldonframe.com/#org",
+                name: "SeldonFrame",
+                url: "https://www.seldonframe.com",
+                logo: "https://www.seldonframe.com/brand/og-image.png",
+                description: POSITIONING_ONE_LINER,
+                founder: { "@type": "Person", name: "Maxime Houle" },
+                sameAs: [
+                  "https://x.com/seldonframe",
+                  "https://github.com/seldonframe",
+                  "https://linkedin.com/company/seldonframe",
+                ],
+              },
+              {
+                "@type": "WebSite",
+                "@id": "https://www.seldonframe.com/#website",
+                name: "SeldonFrame",
+                url: "https://www.seldonframe.com",
+                publisher: { "@id": "https://www.seldonframe.com/#org" },
+              },
+            ],
+          }),
+        }}
+      />
       <MarketingNav />
       <main id="main-content">
         {/* Positioning v2 ladder (2026-06-22) — one idea per section:
