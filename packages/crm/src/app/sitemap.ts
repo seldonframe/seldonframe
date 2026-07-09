@@ -16,6 +16,7 @@ import { AGENT_JOBS, allJobVerticalPairs } from "@/lib/seo/agent-pages";
 import { COMPETITORS } from "@/lib/seo/alternative-pages";
 import { VS_PAIRS, vsSlug } from "@/lib/seo/alternative-pages-extras";
 import { allBestSlugs } from "@/lib/seo/best-pages";
+import { allGuideSlugs } from "@/lib/seo/guides";
 import { allPricingSlugs } from "@/lib/seo/competitor-pricing";
 import { listMarketplaceAgentsFromDb } from "@/lib/marketplace/agent-listings";
 import { MARKETPLACE_SEED } from "@/components/marketplace/marketplace-seed";
@@ -173,6 +174,12 @@ export default async function sitemap(): Promise<MetadataRoute.Sitemap> {
       changeFrequency: "monthly",
       priority: 0.7,
     });
+  }
+
+  // Guides (long-form articles / content engine).
+  entries.push({ url: `${base}/guides`, lastModified: now, changeFrequency: "weekly", priority: 0.7 });
+  for (const slug of allGuideSlugs()) {
+    entries.push({ url: `${base}/guides/${slug}`, lastModified: now, changeFrequency: "monthly", priority: 0.6 });
   }
 
   return entries;

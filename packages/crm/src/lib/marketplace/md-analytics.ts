@@ -38,7 +38,8 @@ export type MarkdownSurface =
   | "compare_page" // /compare/<a>-vs-<b>.md  (head-to-head twin)
   | "sf_vs_page" // /compare/seldonframe-vs-<slug>.md  (SeldonFrame head-to-head twin)
   | "pricing_page" // /<slug>-pricing.md  (competitor pricing breakdown twin)
-  | "best_page"; // /best/<category>-for-<audience>.md  (best-of listicle twin)
+  | "best_page" // /best/<category>-for-<audience>.md  (best-of listicle twin)
+  | "guide"; // /guides/<slug>.md  (long-form article twin)
 
 /**
  * How the Markdown was requested:
