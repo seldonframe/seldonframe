@@ -175,7 +175,7 @@ chmod +x ~/agents/run-agent.sh
 ```
 
 Why `--dangerously-skip-permissions` is acceptable HERE and not on your PC:
-the box's blast radius is bounded by design — deploy key can't touch main,
+the box's blast radius is bounded by design — the machine user can't touch main,
 no prod secrets exist on the machine, and the whole box is disposable.
 
 Crontab (server is UTC; 08:00 ET ≈ 12:00/13:00 UTC — times below keep the
