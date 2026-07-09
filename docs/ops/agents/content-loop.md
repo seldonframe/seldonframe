@@ -18,6 +18,9 @@ You are the weekly content-loop agent for SeldonFrame. Repo root = the current w
 - DataForSEO spend under ~$0.20/run.
 - No sub-agents.
 
+## Step 0 — Commissioned queue (check FIRST)
+Read `docs/ops/agents/content-queue.md`. Any entry with `status: queued` is a strategic commission: it bypasses Step 1's keyword-volume threshold but MUST pass every drafting rule (Step 3) and the full quality gate (Step 4) — commissions get no quality exemption. Max 2 commissioned pieces per run; they count toward the 15-article cap. After publishing one, flip its `status:` to `shipped: <date> <slug>` in the same PR. Then continue to Step 1 for the researched remainder.
+
 ## Step 1 — Research (measure, don't guess)
 Auth: `DATAFORSEO_AUTH_B64` from `packages/crm/.env.local`, as `Authorization: Basic <value>` against https://api.dataforseo.com/v3. Prefer reusing the latest `docs/strategy/keyword-recon/*.md` build queue if fresh (< 8 days). Otherwise seed `/v3/dataforseo_labs/google/keyword_ideas/live` from the existing tool + cluster topics (speed-to-lead, no-shows, AI receptionist, service FAQ, online booking, AI visibility/GEO) and the query patterns (LEARNED 2026-07-09 run 1: bias hard toward genuinely informational how-to/why/cost-question phrasings — category terms like *X software for small business* keep landing on intent the /best pages already own; the easy informational keywords are saturated at 34 guides, so go a level deeper into specific operational questions): `how to…`, `how do I…`, `best X for Y`, `alternative to…`, `why…`. Keep only terms with real volume AND attainable difficulty for a young domain. Never fabricate a volume — if a call fails, say so and work from the keyword-recon queue.
 
