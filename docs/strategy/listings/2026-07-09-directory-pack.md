@@ -1,3 +1,5 @@
+> **UPDATE 2026-07-09 (post-submission attempt):** OpenAlternative.co now paywalls listing finalization (packages from $97, featured is a $197/mo subscription) — the free queue this pack described is gone. DECISION: skip; do not pay. selfh.st submitted the same night. AlternativeTo account created (submit after the ~1-week cooldown). SaaSHub still pending.
+
 # Directory Submission Pack — 2026-07-09
 
 Research + paste-ready copy for listing SeldonFrame on open-source / software directories.
