@@ -48,7 +48,14 @@ If the gate is green: commit on `chore/content-loop-YYYY-MM-DD`, push, `gh pr cr
 ## Step 6 — Run manifest (auditability, since there's no email)
 Write `docs/strategy/content-loop/YYYY-MM-DD.md` (create dir if needed) and commit it in the same PR: the keywords researched, what published (slug, target keyword, volume, cluster, sources), what was DROPPED and why, the merge commit SHA, and the IndexNow result. This file IS the record — Max reviews it in git and can `git revert` any weak article.
 
-## Step 7 — Summary
-Print ~6 lines: candidates researched, articles published (with slugs), articles dropped, build/gate status, merge SHA, next-week note. If a precondition or the circuit breaker stopped you, say exactly what unblocks the next run.
+## Step 7 — Recap email (Max's review channel)
+Send a recap via Resend on EVERY run — published, circuit-broken, or precondition-stopped (silence is the only failure mode Max can't see). Read `RESEND_SENDING_KEY` from `packages/crm/.env.local` (sending-only key; if missing, skip this step and say so in the summary) and POST https://api.resend.com/emails with `Authorization: Bearer <key>`:
+- from: `SeldonFrame <welcome@seldonframe.com>` · to: `maximehoule100@gmail.com`
+- subject: `content-loop <date>: <N> published / <M> dropped` (or `CIRCUIT BREAKER` / `STOPPED: <precondition>`)
+- html body, skimmable: (1) **What published** — each article as a link `https://www.seldonframe.com/guides/<slug>` with its target keyword, monthly volume, and cluster; (2) **The research behind it** — which keyword source (fresh keyword-recon queue vs live DataForSEO seed), candidates considered, and the top sources cited; (3) **What was dropped and why** (always show this section — the quality gate earning its keep is the trust signal); (4) merge SHA + a link to the run manifest on GitHub (`https://github.com/seldonframe/seldonframe/blob/main/docs/strategy/content-loop/<date>.md`); (5) one line on next week's plan.
+Keep it honest: the email must match the manifest exactly — never round up.
+
+## Step 8 — Summary
+Print ~6 lines: candidates researched, articles published (with slugs), articles dropped, build/gate status, merge SHA, email sent yes/no, next-week note. If a precondition or the circuit breaker stopped you, say exactly what unblocks the next run.
 
 Rules: honest > voluminous; the domain's health beats this week's count. Respect every hard cap. Never fabricate data. Quality gate is sacred — when in doubt, drop the article.

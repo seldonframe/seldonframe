@@ -16,8 +16,10 @@ because this touches the production company repo):
   even eligible bypass actors), so a write deploy key CAN push protected main.
   Machine users are governed like any user; the rejection is real and tested.
 - **No crown-jewel secrets on the box.** Stripe/Twilio/Neon-prod/Vercel tokens
-  stay in Vercel. The box gets: the machine user's SSH key, `DATAFORSEO_AUTH_B64`, and your
-  Claude login. That's the whole list.
+  stay in Vercel. The box gets: the machine user's SSH key + gh token,
+  `DATAFORSEO_AUTH_B64`, a SENDING-ONLY Resend key (`RESEND_SENDING_KEY` —
+  recap emails; revocable, cannot read the account), and your Claude login.
+  That's the whole list.
 
 Total time: ~30 minutes. Steps 1–2 from any browser; the rest from a terminal
 (or paste this file into a fresh Claude session on the box and let it drive).
