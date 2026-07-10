@@ -45,6 +45,10 @@ import { guide as whatIsGenerativeEngineOptimization } from "./what-is-generativ
 import { guide as isYourWebsiteLosingYouJobs } from "./is-your-website-losing-you-jobs";
 import { guide as howToMakeAWebsiteForAServiceBusiness } from "./how-to-make-a-website-for-a-service-business";
 import { guide as onlineBookingOptionsForServiceBusinesses } from "./online-booking-options-for-service-businesses";
+import { guide as howToGetMoreGoogleReviews } from "./how-to-get-more-google-reviews";
+import { guide as howToRespondToANegativeReview } from "./how-to-respond-to-a-negative-review";
+import { guide as missedCallTextBack } from "./missed-call-text-back";
+import { guide as onePersonCompanyOs } from "./one-person-company-os";
 
 export { LAST_UPDATED };
 export type { Guide, GuideCluster, GuideSection, GuideFaq, GuideSource, GuideIntent } from "./types";
@@ -57,6 +61,8 @@ export const CLUSTER_LABELS: Record<GuideCluster, string> = {
   "service-faq": "FAQs & customer questions",
   booking: "Online booking",
   "ai-visibility": "AI visibility & GEO",
+  reviews: "Reviews & reputation",
+  "ai-agents": "Running your business with AI agents",
 };
 
 export const GUIDES: Guide[] = [
@@ -98,6 +104,10 @@ export const GUIDES: Guide[] = [
   isYourWebsiteLosingYouJobs,
   howToMakeAWebsiteForAServiceBusiness,
   onlineBookingOptionsForServiceBusinesses,
+  howToGetMoreGoogleReviews,
+  howToRespondToANegativeReview,
+  missedCallTextBack,
+  onePersonCompanyOs,
 ];
 
 export function getGuide(slug: string): Guide {
