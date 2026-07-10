@@ -9,21 +9,18 @@ import assert from "node:assert/strict";
 
 import {
   authorizeRecordingSubmission,
+  isAllowedRecordingPathname,
   isValidRecordingBlobUrl,
-} from "@/app/api/v1/recordings/recording/route";
-import { resolveSessionCreateGate } from "@/app/api/v1/recordings/session/route";
+  resolveSessionCreateGate,
+  resolveUploadGrant,
+} from "@/lib/recordings/route-guards";
 import { MAX_RECORDINGS_PER_SESSION, RECORDING_SESSIONS_PER_DAY_PER_IP } from "@/lib/recordings/policy";
+import { IMAGE_MAX_BYTES } from "@/lib/page-blocks/images";
+import { VIDEO_MAX_BYTES } from "@/lib/media/resolve-url";
 
-// NOTE: upload/route.ts's pure helpers (isAllowedRecordingPathname,
-// resolveUploadGrant) are deliberately NOT imported/tested here — that file
-// imports `@vercel/blob/client`, which is a package.json dependency but is
-// not present under this worktree's node_modules junction (pre-existing
-// environment gap, same as the untested sibling
-// api/v1/workspace/media/upload/route.ts — no spec in this repo imports
-// that route file directly, for the same reason). Importing it would fail
-// module resolution at test-collection time, not at the assertion. The
-// plan's Step 1 only requires covering the recording route's rejections;
-// see the compile-agent-route note in wave-c-report.md for the deviation.
+// All pure guards live in lib/recordings/route-guards.ts — route.ts files may
+// only export handlers + segment config (Next build-time route validation),
+// and keeping the guards blob-import-free is what makes them testable here.
 
 const SESSION_ID = "11111111-1111-4111-8111-111111111111";
 const OTHER_SESSION_ID = "22222222-2222-4222-8222-222222222222";
@@ -181,6 +178,43 @@ describe("resolveSessionCreateGate", () => {
       RECORDING_SESSIONS_PER_DAY_PER_IP,
     );
     assert.deepEqual(out, { kind: "rate_limited" });
+  });
+});
+
+// ── resolveUploadGrant — anonymous grant is jpeg/webm ONLY ───────────────────
+// (security-review finding: the workspace media route's wider image list —
+// svg, gif, png — must never apply to anonymous /record uploads; SVG on a
+// public URL is a stored-XSS surface.)
+
+describe("resolveUploadGrant", () => {
+  test("image/jpeg → granted at IMAGE_MAX_BYTES, pinned to jpeg only", () => {
+    const grant = resolveUploadGrant({ contentType: "image/jpeg" });
+    assert.deepEqual(grant, { allowedContentTypes: ["image/jpeg"], maximumSizeInBytes: IMAGE_MAX_BYTES });
+  });
+
+  test("video/webm → granted at VIDEO_MAX_BYTES", () => {
+    const grant = resolveUploadGrant({ contentType: "video/webm" });
+    assert.deepEqual(grant, { allowedContentTypes: ["video/webm"], maximumSizeInBytes: VIDEO_MAX_BYTES });
+  });
+
+  test("script-bearing / other image formats are all rejected", () => {
+    for (const contentType of ["image/svg+xml", "image/gif", "image/png", "image/webp", "text/html", "video/mp4", ""]) {
+      assert.equal(resolveUploadGrant({ contentType }), null, `expected null for ${contentType || "(empty)"}`);
+    }
+  });
+});
+
+// ── isAllowedRecordingPathname ───────────────────────────────────────────────
+
+describe("isAllowedRecordingPathname", () => {
+  test("accepts own-session prefix (with or without leading slash)", () => {
+    assert.equal(isAllowedRecordingPathname(`recordings/${SESSION_ID}/frame-1.jpg`, SESSION_ID), true);
+    assert.equal(isAllowedRecordingPathname(`/recordings/${SESSION_ID}/frame-1.jpg`, SESSION_ID), true);
+  });
+
+  test("rejects another session's prefix and non-recordings paths", () => {
+    assert.equal(isAllowedRecordingPathname(`recordings/${OTHER_SESSION_ID}/frame-1.jpg`, SESSION_ID), false);
+    assert.equal(isAllowedRecordingPathname(`avatars/${SESSION_ID}/x.jpg`, SESSION_ID), false);
   });
 });
 

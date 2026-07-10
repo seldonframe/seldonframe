@@ -13,83 +13,15 @@
 // host or a real DB.
 
 import { NextResponse } from "next/server";
-import { z } from "zod";
 import { db } from "@/db";
-import { isRecordToAgentOn, MAX_FRAMES_PER_RECORDING, MAX_RECORDINGS_PER_SESSION } from "@/lib/recordings/policy";
-import { TranscriptSegmentSchema } from "@/lib/recordings/trace-schema";
+import { isRecordToAgentOn } from "@/lib/recordings/policy";
+import { authorizeRecordingSubmission } from "@/lib/recordings/route-guards";
 import { findSessionByToken, insertRecording } from "@/lib/recordings/session-store";
 
+// Route files may only export handlers + segment config (Next build-time
+// route validation) — all pure helpers live in lib/recordings/route-guards.ts.
 export const dynamic = "force-dynamic";
 export const runtime = "nodejs";
-
-const BLOB_HOST_SUFFIX = ".public.blob.vercel-storage.com";
-
-/** Host must end in the Vercel Blob public-store suffix AND the pathname
- *  must live under this session's own `recordings/<sessionId>/` prefix.
- *  Malformed URLs (throws in `new URL`) are rejected, never thrown through. */
-export function isValidRecordingBlobUrl(url: string, sessionId: string): boolean {
-  let parsed: URL;
-  try {
-    parsed = new URL(url);
-  } catch {
-    return false;
-  }
-  if (!parsed.hostname.endsWith(BLOB_HOST_SUFFIX)) {
-    return false;
-  }
-  const pathname = parsed.pathname.replace(/^\//, "");
-  return pathname.startsWith(`recordings/${sessionId}/`);
-}
-
-export const RecordingBodySchema = z.object({
-  slotIndex: z.number().int().min(0).max(MAX_RECORDINGS_PER_SESSION - 1),
-  label: z.string().nullable().optional(),
-  transcript: z.array(TranscriptSegmentSchema),
-  frameBlobUrls: z.array(z.string()).max(MAX_FRAMES_PER_RECORDING),
-  videoBlobUrl: z.string().nullable().optional(),
-});
-export type RecordingBody = z.infer<typeof RecordingBodySchema>;
-
-export type RecordingAuthzResult =
-  | { kind: "ok"; sessionId: string; body: RecordingBody }
-  | { kind: "unauthorized" }
-  | { kind: "bad_request"; message: string };
-
-/**
- * Pure-shaped authorization + validation for a recording submission: bearer
- * lookup is DI'd via `lookupSession` (never a raw db handle) so the authz
- * test exercises every rejection path with a fake callback, no DB stub
- * needed (mirrors resolveWebBuildGate's DI-callback style).
- */
-export async function authorizeRecordingSubmission(params: {
-  rawToken: string | null;
-  body: unknown;
-  lookupSession: (rawToken: string) => Promise<{ id: string } | null>;
-}): Promise<RecordingAuthzResult> {
-  if (!params.rawToken) {
-    return { kind: "unauthorized" };
-  }
-  const session = await params.lookupSession(params.rawToken);
-  if (!session) {
-    return { kind: "unauthorized" };
-  }
-
-  const parsed = RecordingBodySchema.safeParse(params.body);
-  if (!parsed.success) {
-    return { kind: "bad_request", message: parsed.error.message };
-  }
-
-  for (const url of parsed.data.frameBlobUrls) {
-    if (!isValidRecordingBlobUrl(url, session.id)) {
-      return { kind: "bad_request", message: `frame blob url not allowed: ${url}` };
-    }
-  }
-  if (parsed.data.videoBlobUrl && !isValidRecordingBlobUrl(parsed.data.videoBlobUrl, session.id)) {
-    return { kind: "bad_request", message: `video blob url not allowed: ${parsed.data.videoBlobUrl}` };
-  }
-
-  return { kind: "ok", sessionId: session.id, body: parsed.data };
-}
 
 function extractBearerToken(request: Request): string | null {
   const header = request.headers.get("authorization");

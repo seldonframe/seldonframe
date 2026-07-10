@@ -13,39 +13,17 @@
 
 import { NextResponse } from "next/server";
 import { db } from "@/db";
-import { isRecordToAgentOn, RECORDING_SESSIONS_PER_DAY_PER_IP } from "@/lib/recordings/policy";
+import { RECORDING_SESSIONS_PER_DAY_PER_IP } from "@/lib/recordings/policy";
+import { resolveSessionCreateGate } from "@/lib/recordings/route-guards";
 import { hashIp, hashSessionToken, mintSessionToken, resolveTokenSecret } from "@/lib/recordings/session-token";
 import { countSessionsForIp, createSession } from "@/lib/recordings/session-store";
 
+// Route files may only export handlers + segment config (Next build-time
+// route validation) — all pure helpers live in lib/recordings/route-guards.ts.
 export const dynamic = "force-dynamic";
 export const runtime = "nodejs";
 
 const RATE_WINDOW_MS = 24 * 60 * 60 * 1000;
-
-export type SessionCreateGateResult =
-  | { kind: "not_found" }
-  | { kind: "rate_limited" }
-  | { kind: "ok" };
-
-/**
- * Pure gate helper — flag check first (unconditional 404 regardless of
- * rate), then the count check. Exported so the unit test can pin all three
- * outcomes without a real DB (mirrors resolveWebBuildGate).
- */
-export async function resolveSessionCreateGate(
-  env: { SF_RECORD_TO_AGENT?: string | undefined },
-  countExisting: () => Promise<number>,
-  limit: number,
-): Promise<SessionCreateGateResult> {
-  if (!isRecordToAgentOn(env)) {
-    return { kind: "not_found" };
-  }
-  const count = await countExisting();
-  if (count >= limit) {
-    return { kind: "rate_limited" };
-  }
-  return { kind: "ok" };
-}
 
 /** Same first-hop-of-x-forwarded-for idiom as the web-build stream route. */
 function getClientIp(request: Request): string {

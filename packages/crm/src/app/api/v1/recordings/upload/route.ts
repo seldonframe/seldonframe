@@ -28,39 +28,15 @@ import { NextResponse } from "next/server";
 
 import { db } from "@/db";
 import { isRecordToAgentOn } from "@/lib/recordings/policy";
+import { isAllowedRecordingPathname, resolveUploadGrant } from "@/lib/recordings/route-guards";
 import { findSessionByToken } from "@/lib/recordings/session-store";
-import { ALLOWED_IMAGE_CONTENT_TYPES, IMAGE_MAX_BYTES } from "@/lib/page-blocks/images";
-import { VIDEO_MAX_BYTES } from "@/lib/media/resolve-url";
 
+// Route files may only export handlers + segment config (Next build-time
+// route validation) — the grant/pathname helpers live in
+// lib/recordings/route-guards.ts, which also keeps them testable (this file's
+// @vercel/blob import doesn't resolve under the worktree junction).
 export const dynamic = "force-dynamic";
 export const runtime = "nodejs";
-
-const ALLOWED_VIDEO_CONTENT_TYPE = "video/webm";
-
-/** pathname must live under this session's own `recordings/<sessionId>/`
- *  prefix — same shape as recording/route.ts's isValidRecordingBlobUrl, but
- *  operating on the bare pathname handleUpload hands us (no host to check
- *  here; Blob itself owns the host). */
-export function isAllowedRecordingPathname(pathname: string, sessionId: string): boolean {
-  const normalized = pathname.replace(/^\//, "");
-  return normalized.startsWith(`recordings/${sessionId}/`);
-}
-
-/** Pure grant resolution for a given content type — null when the type
- *  isn't one of the two the /record flow ever produces. Exported so the
- *  authz test pins both accepted types and the rejection without touching
- *  Blob or a real DB. */
-export function resolveUploadGrant(params: {
-  contentType: string;
-}): { allowedContentTypes: string[]; maximumSizeInBytes: number } | null {
-  if ((ALLOWED_IMAGE_CONTENT_TYPES as readonly string[]).includes(params.contentType)) {
-    return { allowedContentTypes: [params.contentType], maximumSizeInBytes: IMAGE_MAX_BYTES };
-  }
-  if (params.contentType === ALLOWED_VIDEO_CONTENT_TYPE) {
-    return { allowedContentTypes: [ALLOWED_VIDEO_CONTENT_TYPE], maximumSizeInBytes: VIDEO_MAX_BYTES };
-  }
-  return null;
-}
 
 function parseClientPayload(clientPayload: string | null): { token: string; contentType: string } {
   if (!clientPayload) {
