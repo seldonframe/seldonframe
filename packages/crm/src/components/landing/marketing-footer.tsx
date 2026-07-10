@@ -53,6 +53,7 @@ const COLUMNS: readonly Column[] = [
   {
     heading: "Free tools",
     links: [
+      { label: "CRM Pricing Index", href: "/charts/crm-pricing-index" },
       { label: "AI Website Generator", href: "/tools/ai-website-generator" },
       { label: "Free Booking Page", href: "/tools/free-booking-page" },
       { label: "Missed Call Calculator", href: "/tools/missed-call-calculator" },

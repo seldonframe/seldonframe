@@ -176,6 +176,16 @@ export async function GET(req: Request): Promise<Response> {
   );
   lines.push("");
 
+  // Live charts — the interactive, re-verified data pages.
+  lines.push("## Live charts");
+  lines.push("");
+  lines.push(`- [All charts](${base}/charts): interactive, re-verified data on AI front offices for local business.`);
+  lines.push(`- [The CRM Pricing Index](${base}/charts/crm-pricing-index): real CRM cost vs business size, re-verified monthly.`);
+  lines.push(`- [AI Front-Office Trends](${base}/charts/ai-front-office-trends): where every trend in local-business AI is on its curve — the founder's subjective map.`);
+  lines.push(`- [Missed-Revenue Decay](${base}/charts/missed-revenue-decay): what slow follow-up costs, minute by minute, by industry.`);
+  lines.push(`- [The AI Recommendation Index](${base}/charts/ai-recommendation-index): which software brands AI engines actually recommend — monthly snapshot.`);
+  lines.push("");
+
   lines.push("## Guides (practical, sourced articles)");
   lines.push("");
   for (const slug of allGuideSlugs()) {

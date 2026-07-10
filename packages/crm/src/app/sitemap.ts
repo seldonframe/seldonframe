@@ -185,5 +185,11 @@ export default async function sitemap(): Promise<MetadataRoute.Sitemap> {
     entries.push({ url: `${base}/guides/${slug}`, lastModified: now, changeFrequency: "monthly", priority: 0.6 });
   }
 
+  // Interactive data charts (/charts hub + the 4 flagship pages).
+  entries.push({ url: `${base}/charts`, lastModified: now, changeFrequency: "weekly", priority: 0.8 });
+  for (const slug of ["crm-pricing-index", "ai-front-office-trends", "missed-revenue-decay", "ai-recommendation-index"]) {
+    entries.push({ url: `${base}/charts/${slug}`, lastModified: now, changeFrequency: "monthly", priority: 0.8 });
+  }
+
   return entries;
 }
