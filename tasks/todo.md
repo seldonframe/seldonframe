@@ -43,10 +43,18 @@ the primary-source-only stats page (survey-based pricing-data page needs data co
       smma-to-ai-agency · what-is-byok-ai · voice-ai-reseller-programs · client-portals slug)
 - [x] Wire registry (26 imports + entries) + 26 .md twin routes + flip 2 queue commissions to shipped
 - [x] guides.spec.ts 558/558 green · typecheck 434 = baseline, 0 in touched files
-- [ ] 3 parallel reviewer subagents (adversarial content gate) → apply fixes
-- [ ] Commit, push, PR, merge (Max-authorized), IndexNow ping all 32 new URLs
-- [ ] Post-deploy live smoke (sample URLs 200 + sentinel)
-- [ ] Memory + strategy-doc updates
+- [x] 3 parallel reviewer subagents: 23/26 SHIP, 3 fixes applied, 0 kills; 2 of 3 "blocking"
+      flags disproven by my own re-verification (BrightLocal 97%/85%/2026 literal on page;
+      "AppExchange is now AgentExchange" is Salesforce's own banner) — verify the reviewer too
+- [x] PR #48 opened + MERGED (CI failure set diffed identical to main's pre-existing red);
+      IndexNow pinged all 32 URLs (HTTP 200)
+- [x] Post-deploy live smoke: SMOKE PASS 9/9 routes (deployed sha 3c980ac63, hub cluster label,
+      sitemap entries, md twin content-type, FAQPage JSON-LD)
+- [x] Memory + strategy-doc updates
+
+**Review:** All waves 1-7 live (32 guides). Wave 8 + survey-stats page correctly withheld
+(never-lies gates). Follow-ups queued in the strategy doc: /sell hub · marketplace-listing
+JSON-LD hardening · demand→supply cross-links · vendor-rate quarterly refresh.
 
 ### Task — Retainer sibling-recovery period narrowing (2026-07-08, money-review follow-up, worktree hungry-jang-c20e73)
 
