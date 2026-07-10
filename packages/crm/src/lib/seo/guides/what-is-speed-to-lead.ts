@@ -15,19 +15,36 @@ export const guide: Guide = {
   sections: [
     {
       h2: "What speed-to-lead actually means",
-      body: "Speed-to-lead (sometimes called lead response time) is the elapsed time between a prospect's first contact — a phone call, form fill, text, or DM — and your first genuine response to them. Not an autoresponder saying \"we got your message,\" but a real reply that moves things forward: answering the question, asking a qualifying one, or offering a time to talk.\n\nIt matters because a new lead is rarely talking only to you. Someone with a burst pipe or a same-day appointment need is usually reaching out to two or three businesses at once, and tends to go with whoever responds first and makes it easiest to move forward.",
+      body: "*Speed-to-lead* (sometimes called lead response time) is the elapsed time between a prospect's first contact — a phone call, form fill, text, or DM — and your **first genuine response** to them.\n\nNot an autoresponder saying \"we got your message.\" A real reply that moves things forward: answering the question, asking a qualifying one, or offering a time to talk.\n\nIt matters because a new lead is rarely talking only to you. Someone with a burst pipe or a same-day appointment need is usually reaching out to two or three businesses at once.\n\nThey tend to go with **whoever responds first** and makes it easiest to move forward.",
+      callout: {
+        kind: "analogy",
+        text: "Speed-to-lead is the race to pick up the phone when three plumbers just got the same \"burst pipe\" text. The company that answers first isn't necessarily the best one — just the one that got there before the customer stopped waiting.",
+      },
     },
     {
       h2: "Why the first five minutes matter so much",
-      body: "The best-known research on this is a Harvard Business Review study of thousands of US companies, which found that firms trying to contact leads within an hour were far more likely to have a meaningful conversation than those that waited longer — and that the odds dropped sharply as time passed.\n\nThe practical takeaway that stuck is the \"5-minute rule\": responding within about five minutes, while the person is still on your website or still holding their phone, dramatically raises your chance of connecting. Wait hours and you're often calling someone who has already moved on — or already booked with a competitor. The exact numbers vary by industry and source, but the direction is consistent everywhere it's been measured.",
+      body: "The best-known research on this is a Harvard Business Review study of thousands of US companies. It found that firms trying to contact leads within an hour were far more likely to have a meaningful conversation than those that waited longer — and that the odds dropped sharply as time passed.\n\nThe practical takeaway that stuck is the **\"5-minute rule\"**: responding within about five minutes, while the person is still on your website or still holding their phone, dramatically raises your chance of connecting.\n\nWait hours and you're often calling someone who has already moved on — or already booked with a competitor. The exact numbers vary by industry and source, but the **direction is consistent everywhere it's been measured**.",
+      diagram: {
+        type: "flow",
+        title: "What happens after a lead reaches out",
+        steps: [
+          { label: "Lead reaches out", sub: "call, form, text, or DM" },
+          { label: "Minutes pass", sub: "the window where interest is highest" },
+          { label: "A competitor answers first", sub: "if you haven't yet" },
+        ],
+      },
     },
     {
       h2: "What slow response quietly costs you",
-      body: "Slow speed-to-lead doesn't show up as a line item, which is why it's easy to ignore. It shows up as leads that \"went quiet,\" quotes that never got a reply, and a close rate that's lower than it should be — all blamed on the leads being \"tire-kickers\" rather than on the delay.\n\nThe math is simple: if you close a healthy share of leads you reach quickly but only reach a fraction of the ones you get to slowly, most of your lost revenue is hiding in the gap between \"someone reached out\" and \"someone followed up.\" Our speed-to-lead calculator lets you put a rough dollar figure on that gap for your own numbers.",
+      body: "Slow speed-to-lead doesn't show up as a line item, which is why it's easy to ignore. It shows up as leads that \"went quiet,\" quotes that never got a reply, and a close rate that's lower than it should be.\n\nAll of that tends to get blamed on the leads being \"tire-kickers\" rather than on the delay.\n\nThe math is simple: if you close a healthy share of leads you reach quickly but only reach a fraction of the ones you get to slowly, **most of your lost revenue is hiding in the gap** between \"someone reached out\" and \"someone followed up.\"\n\nOur [speed-to-lead calculator](/tools/speed-to-lead-calculator) lets you put a rough dollar figure on that gap for your own numbers.",
     },
     {
       h2: "How to actually respond faster",
-      body: "A few things reliably shrink response time: route every channel (calls, forms, texts, chat) into one place so nothing sits unseen; reply first and qualify second, since a fast \"happy to help — what's going on?\" beats a slow, perfect answer; and cover the after-hours and on-a-job gaps where most slow responses actually happen.\n\nThe most durable fix is to not depend on a human being free the moment a lead arrives. An AI agent that answers instantly, 24/7 — on the phone, website chat, or text — asks the qualifying questions and books the appointment before the lead moves on, then hands you a warm, already-captured contact.",
+      body: "A few things reliably shrink response time. **Route every channel** — calls, forms, texts, chat — into one place so nothing sits unseen.\n\nReply first and qualify second, since a fast \"happy to help — what's going on?\" beats a slow, perfect answer. And cover the **after-hours and on-a-job gaps**, where most slow responses actually happen.\n\nThe most durable fix is to not depend on a human being free the moment a lead arrives. An [AI receptionist](/ai-agents/ai-receptionist) that answers instantly, 24/7 — on the phone, website chat, or text — asks the qualifying questions and books the appointment before the lead moves on.\n\nThen it hands you a **warm, already-captured contact**.",
+      callout: {
+        kind: "tip",
+        text: "If you only fix one thing, fix the after-hours and mid-job gaps first — that's usually where the biggest chunk of slow responses is hiding, not the hours you're already sitting at a desk.",
+      },
     },
   ],
   faq: [

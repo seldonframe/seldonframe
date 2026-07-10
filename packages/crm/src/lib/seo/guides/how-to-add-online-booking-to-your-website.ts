@@ -14,19 +14,45 @@ export const guide: Guide = {
   sections: [
     {
       h2: "You don't need a new website",
-      body: "The most common reason small businesses put off online booking is the belief that it requires a website overhaul. It doesn't. A booking tool handles the calendar, the time slots, and the confirmations; your job is just to point customers at it from wherever they already find you.\n\nThat \"pointing\" can be as light as a link. You don't have to touch your site's design, hosting, or structure to add a working booking flow — and if you don't even have a website, a standalone booking link still works on its own from your Google Business Profile, social media, or a text.",
+      body: "Small businesses often put off online booking because they think it means a website overhaul. It doesn't.\n\nA booking tool handles the calendar, the time slots, and the confirmations. Your job is just to **point customers at it** from wherever they already find you.\n\nThat \"pointing\" can be as light as a link. You don't have to touch your site's design, hosting, or structure to add a working booking flow.\n\nAnd if you don't even have a website yet, a **standalone booking link still works on its own** — from your Google Business Profile, social media, or a text.",
     },
     {
       h2: "Three ways to add it",
-      body: "There are three common approaches, from simplest to most integrated. The first is a booking link: your tool gives you a URL, and you attach it to a button or menu item. Clicking it opens the booking page. This takes minutes and works on any website builder.\n\nThe second is an embedded widget: you paste a small snippet of code the tool provides, and the calendar appears directly inside one of your existing pages, so customers never leave your site. The third is a dedicated booking page on your own domain that hosts the flow. Most small businesses are well served by the link or the widget; the dedicated page is worth it mainly if booking is central to how you get customers.",
+      body: "There are three common approaches, from simplest to most integrated.\n\nThe first is a **booking link**: your tool gives you a URL, and you attach it to a button or menu item. Clicking it opens the booking page. This takes minutes and works on any website builder.\n\nThe second is an **embedded widget**: you paste a small snippet of code the tool provides, and the calendar appears directly inside one of your existing pages. Customers never leave your site.\n\nThe third is a **dedicated booking page** on your own domain that hosts the whole flow. Most small businesses are well served by the link or the widget — the dedicated page is worth it mainly if booking is central to how you get customers.",
+      callout: {
+        kind: "analogy",
+        text: "An embedded *widget* is a TV mounted into your wall versus a booking link, which is more like handing someone a remote to a TV in the next room — both show the same show, but one never makes them leave the couch.",
+      },
+      diagram: {
+        type: "compare",
+        title: "Booking link vs. embedded widget",
+        left: {
+          heading: "Booking link",
+          items: ["Minutes to set up", "Works on any site builder", "Opens on the tool's own page"],
+        },
+        right: {
+          heading: "Embedded widget",
+          items: ["A short code snippet", "Calendar shows inside your page", "Customer never leaves your site"],
+        },
+      },
     },
     {
       h2: "Put the button where people already look",
-      body: "Where you place the booking button matters as much as having one. The reliable spots are the ones people already look for action: a prominent button in your header or navigation, a clear call-to-action near the top of your homepage, and a repeat of it on your services and contact pages. If someone has to scroll and hunt for how to book, some of them won't.\n\nUse plain, action-first wording — \"Book online\" or \"Book an appointment\" — rather than something clever. And make sure the button is just as reachable on a phone as on a desktop, since that's where most people will tap it. On mobile, keep it visible without pinching or scrolling past a wall of other content.",
+      body: "Where you place the booking button matters as much as having one.\n\nThe reliable spots are the ones people already check for action: a prominent button in your header or navigation, a clear call-to-action near the top of your homepage, and a repeat of it on your services and contact pages.\n\nIf someone has to scroll and hunt for how to book, **some of them just won't**.\n\nUse plain, action-first wording — \"Book online\" or \"Book an appointment\" — rather than something clever. And make sure the button is just as reachable on a phone as on a desktop, since that's where most people will tap it.\n\nOn mobile, keep it visible without pinching or scrolling past a wall of other content. See [how to let customers book online](/guides/how-to-let-customers-book-online) for more on the flow itself, not just the button.",
     },
     {
       h2: "Make sure it loads fast on a phone",
-      body: "A booking button only helps if the page behind it actually loads before the customer loses patience. This is where a heavy widget on a slow page can quietly undercut everything else. Google has reported that 53% of mobile visitors leave a page that doesn't load within about three seconds — a small delay is enough to cost you the booking you worked to earn.\n\nSo after you add booking, test the flow on your own phone on a normal connection and time it. If the widget makes the page crawl, a lightweight booking link that opens a fast, purpose-built page can convert better than an embedded calendar that bogs down your site. Once it's live, walk the whole flow as a customer would — our booking friction grader steps through it and flags the specific points, including slow or clunky mobile screens, where people are most likely to give up.",
+      body: "A booking button only helps if the page behind it actually loads before the customer loses patience.\n\nThis is where a heavy widget on a slow page can quietly undercut everything else. Google has reported that **53% of mobile visitors leave a page** that doesn't load within about three seconds — a small delay is enough to cost you the booking you worked to earn.\n\nSo after you add booking, test the flow on your own phone on a normal connection and time it.\n\nIf the widget makes the page crawl, a **lightweight booking link that opens a fast, purpose-built page** can convert better than an embedded calendar that bogs down your site.\n\nOnce it's live, walk the whole flow as a customer would. Our [booking friction grader](/tools/booking-friction-grader) steps through it and flags the specific points — including slow or clunky mobile screens — where people are most likely to give up.",
+      diagram: {
+        type: "flow",
+        title: "Test the flow like a customer would",
+        steps: [
+          { label: "Add the button or widget" },
+          { label: "Open it on your own phone", sub: "normal connection, not wifi" },
+          { label: "Time the load" },
+          { label: "Fix or swap if it's slow" },
+        ],
+      },
     },
   ],
   faq: [

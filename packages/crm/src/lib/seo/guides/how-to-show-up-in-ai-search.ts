@@ -15,25 +15,59 @@ export const guide: Guide = {
   sections: [
     {
       h2: "How AI search decides what to cite",
-      body: "Most AI search features work by retrieving relevant web content and then summarizing it — a technique often called retrieval-augmented generation, or grounding. Google describes exactly this for its AI features and adds that AI Overviews and AI Mode may use a \"query fan-out\" approach, issuing several related searches across subtopics before composing an answer. That means your content can surface for questions you never targeted directly, as long as it's the best match for one of those sub-searches.\n\nThe key consequence: to be cited, you first have to be retrievable. If a page isn't crawlable, indexed, and reasonably ranked for the underlying query, it can't become a source. This is why \"showing up in AI search\" starts with the same fundamentals as showing up in regular search.",
+      body: "Most AI search features work the same basic way. They **retrieve relevant web content**, then summarize it. This is often called *retrieval-augmented generation*, or grounding.\n\nGoogle confirms this is how its AI features work. It adds that AI Overviews and AI Mode may use a *query fan-out* — firing off several related searches across subtopics before writing one answer.\n\nThat means your page can get cited for a question you never targeted directly. It just has to be the best match for one of those sub-searches.\n\nHere's the key consequence: **to be cited, you first have to be retrievable.** If a page isn't crawlable, indexed, and reasonably well ranked for the underlying query, it can't become a source.\n\nThat's why showing up in AI search starts with the same fundamentals as showing up in regular search.",
+      callout: {
+        kind: "analogy",
+        text: "*Grounding* is a reporter who won't print a claim without checking it against a real document first — the model isn't just recalling facts from memory, it's pulling up your page and reading from it before it answers.",
+      },
+      diagram: {
+        type: "flow",
+        title: "How a page becomes a cited source",
+        steps: [
+          { label: "Page gets indexed", sub: "crawlable & ranked for the query" },
+          { label: "AI fires a query fan-out", sub: "several related searches, one topic" },
+          { label: "Best-matching content retrieved" },
+          { label: "Answer written & sources cited" },
+        ],
+      },
     },
     {
       h2: "The fundamentals that actually move the needle",
-      body: "Google's guidance on its generative AI features is refreshingly blunt: optimizing for AI search is optimizing for the search experience, and thus still SEO. It points to the usual foundation — make sure your pages are indexable and crawlable, meet technical requirements, load well, and avoid duplicate content — and stresses creating content that is genuinely unique, useful, and non-commodity rather than a rehash of what's already out there.\n\nNotably, Google explicitly says several popular \"AI optimization\" tactics are unnecessary for its features: you don't need an llms.txt file, special AI-only schema, content \"chunking,\" or AI-specific rewrites. For a local or service business, it recommends practical, verifiable steps like maintaining a Google Business Profile and, for products, Merchant Center. In short, the boring fundamentals are the strategy.",
+      body: "Google's guidance on this is blunt: optimizing for AI search **is still SEO**. It runs on the same ranking systems as regular search.\n\nThe foundation is the usual one. Make sure your pages are **indexable and crawlable**, meet the basic technical requirements, and load fast.\n\nAvoid duplicate content. Write things that are genuinely **unique and useful** — not a rehash of what's already out there.\n\nGoogle is explicit about what you *don't* need: no llms.txt file, no special AI-only schema, no content \"chunking,\" no AI-specific rewrites.\n\nFor a local or service business, its actual advice is boring and verifiable: keep a **Google Business Profile** current, and a Merchant Center feed if you sell products.\n\nIn short, the boring fundamentals are the strategy.",
+      diagram: {
+        type: "compare",
+        title: "What Google says vs. what's actually required",
+        left: {
+          heading: "Not required for AI features",
+          items: ["An llms.txt file", "Special AI-only schema", "Content \"chunking\"", "AI-specific rewrites"],
+        },
+        right: {
+          heading: "What actually helps",
+          items: ["Crawlable, indexable pages", "Fast, technically solid site", "Unique, useful content", "Current Google Business Profile"],
+        },
+      },
     },
     {
       h2: "Write in a way models can quote",
-      body: "Beyond the fundamentals, there's a real difference between content a model can cite cleanly and content it can't. Pages that answer a specific question directly, near the top, in plain language — and back claims with credible sources or concrete detail — give a summarizing model something safe to lift. The original academic GEO research found that adding relevant statistics, citations, and authoritative quotes measurably improved a source's visibility inside a generative engine in controlled tests.\n\nTreat that as a helpful direction, not a magic formula. These are essentially the habits of good, trustworthy writing: be specific, be accurate, be the clearest available answer. What you're avoiding is thin, vague, keyword-stuffed content that a model has no reason to trust or quote.",
+      body: "Beyond the fundamentals, some content is just easier for a model to cite cleanly than other content.\n\nPages that answer a specific question **directly, near the top, in plain language** give a summarizing model something safe to lift.\n\nBack claims with **credible sources or concrete detail**. The original academic research on this, called *GEO* (short for [Generative Engine Optimization](/guides/what-is-generative-engine-optimization)), found that adding relevant statistics, citations, and authoritative quotes **measurably improved visibility** inside a generative engine, in controlled tests.\n\nTreat that as a helpful direction, not a magic formula. It's really just the habits of good, trustworthy writing: be specific, be accurate, be the clearest answer available.\n\nWhat you're avoiding is thin, vague, keyword-stuffed content. A model has no real reason to trust or quote that.",
+      callout: {
+        kind: "analogy",
+        text: "A GEO-optimized page is a well-sourced encyclopedia entry sitting next to a rambling blog post — when a model has to pick which one to quote, the one with real numbers and citations wins.",
+      },
     },
     {
       h2: "Measure it instead of guessing",
-      body: "Because AI answers vary between engines, change frequently, and can't be guaranteed, the sane approach is to measure rather than assume. Periodically ask the major engines the questions a customer would ask in your category and location, and note whether you appear and whether the details are correct. It's common to find you're missing entirely, or that an engine states something outdated about you.\n\nOur AI visibility checker gives you that snapshot quickly — how AI assistants currently describe your business, so you can fix inaccuracies and see where you're absent. From there, keep expectations grounded: you're improving your odds and correcting errors, not buying placement. Anyone promising guaranteed AI-search rankings is selling certainty these systems don't provide.",
+      body: "AI answers vary between engines, change often, and can't be guaranteed. So the sane move is to **measure, not assume**.\n\nAsk the major engines the questions a customer would actually ask, in your category and location. Note whether you show up, and whether the details are right.\n\nIt's common to find you're **missing entirely** — or that an engine states something **outdated** about your business.\n\nOur [AI visibility checker](/tools/ai-visibility-checker) gives you that snapshot fast: how AI assistants currently describe your business, so you can fix errors and see where you're absent.\n\nFrom there, keep expectations grounded. You're **improving your odds and correcting errors** — not buying placement.\n\nAnyone promising guaranteed AI-search rankings is selling certainty these systems **don't provide**.",
+      callout: {
+        kind: "tip",
+        text: "Test the same question in more than one engine, not just one. They don't cite the same sources — a business can show up cleanly in one and be missing entirely from another.",
+      },
     },
   ],
   faq: [
     {
       q: "Is showing up in AI search different from regular SEO?",
-      a: "Mostly it's the same foundation. Google says optimizing for its generative AI features is still SEO, built on its normal ranking systems. AI search adds emphasis on being clearly quotable and accurate, but if you're not crawlable, indexed, and useful, you can't be retrieved and cited in the first place.",
+      a: "Mostly it's the same foundation. Google says optimizing for its generative AI features **is still SEO**, built on its normal ranking systems. AI search adds emphasis on being clearly quotable and accurate, but if you're not crawlable, indexed, and useful, you can't be retrieved and cited in the first place.",
     },
     {
       q: "Do I need special schema or an llms.txt file to show up in AI search?",
