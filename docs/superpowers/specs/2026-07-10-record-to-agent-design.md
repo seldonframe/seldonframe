@@ -198,5 +198,14 @@ Interface drift discovered during the build, vs. this design/the implementation 
   submitted WITHOUT `approve: true` as a 409 conflict (not a silent pass-through) — a recapped
   session is not yet compilable without the explicit approval this route performs, and an
   `approved` session proceeds regardless of the `approve` flag (idempotent retry).
+- **Live-test fix 1 — authed users compile in place, no `/signup` hop.** Live logs showed an
+  already-signed-in visitor clicking the recap's claim CTA got 307'd by `/signup` straight to
+  `/dashboard` (dropping `callbackUrl`), so `compile-agent` never ran. `record/page.tsx` now
+  resolves `auth()` server-side (mirroring `claim-build/page.tsx`'s check; yields `null` for an
+  anonymous visitor rather than throwing) and passes a new `isAuthed: boolean` prop into
+  `RecordClient`. The recap panel renders a "Compile my agent" button (same `handleCompileAgent`
+  flow via a new `handleCompileNow` that dispatches `APPROVED` then calls it) instead of the
+  `/signup` link when `isAuthed` is true; the reducer and its `claimed` semantics are untouched —
+  only which CTA is shown changes.
 - No other interface (types, exported function signatures, route paths, DB columns) drifted from
   the plan.

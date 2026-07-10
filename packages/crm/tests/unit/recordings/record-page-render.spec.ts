@@ -19,9 +19,9 @@ import { renderToString } from "react-dom/server";
 import { RecordClient } from "../../../src/app/(public)/record/record-client";
 import { MAX_RECORDINGS_PER_SESSION } from "../../../src/lib/recordings/policy";
 
-function renderInitial(): string {
+function renderInitial(isAuthed = false): string {
   return renderToString(
-    React.createElement(RecordClient, { claimedSessionId: null, claimed: false }),
+    React.createElement(RecordClient, { claimedSessionId: null, claimed: false, isAuthed }),
   );
 }
 
@@ -29,6 +29,12 @@ describe("<RecordClient> — initial landing-phase render", () => {
   test("renders without crashing", () => {
     assert.doesNotThrow(() => {
       renderInitial();
+    });
+  });
+
+  test("renders without crashing when isAuthed is true", () => {
+    assert.doesNotThrow(() => {
+      renderInitial(true);
     });
   });
 

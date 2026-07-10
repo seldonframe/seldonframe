@@ -14,6 +14,7 @@
 
 import { notFound } from "next/navigation";
 import type { Metadata } from "next";
+import { auth } from "@/auth";
 import { isRecordToAgentOn } from "@/lib/recordings/policy";
 import { RecordClient } from "./record-client";
 
@@ -29,10 +30,20 @@ export default async function RecordPage({
 }) {
   if (!isRecordToAgentOn({ SF_RECORD_TO_AGENT: process.env.SF_RECORD_TO_AGENT })) notFound();
   const params = await searchParams;
+
+  // 2026-07-10 — live-test fix: an already-signed-in visitor clicking the
+  // claim CTA was hopped through /signup, which 307's a signed-in user
+  // straight to /dashboard (dropping the callbackUrl) instead of running
+  // compile-agent. Mirrors claim-build/page.tsx's server-side auth() check
+  // — must not throw for an anonymous visitor, just yield a null session.
+  const session = await auth();
+  const isAuthed = Boolean(session?.user?.id);
+
   return (
     <RecordClient
       claimedSessionId={typeof params.session === "string" ? params.session : null}
       claimed={params.claimed === "1"}
+      isAuthed={isAuthed}
     />
   );
 }

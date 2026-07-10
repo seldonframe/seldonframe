@@ -84,9 +84,11 @@ const TIER_LABEL: Record<CoverageTier, string> = {
 export function RecordClient({
   claimedSessionId,
   claimed,
+  isAuthed,
 }: {
   claimedSessionId: string | null;
   claimed: boolean;
+  isAuthed: boolean;
 }) {
   const [state, dispatch] = useReducer(recorderReducer, undefined, initialRecorderState);
   const [message, setMessage] = useState<string | null>(null);
@@ -324,6 +326,15 @@ export function RecordClient({
     }
   }
 
+  // 2026-07-10 — live-test fix: an already-signed-in visitor never needs the
+  // /signup hop (their session already exists, and this session's bearer
+  // token is still in memory), so approve-and-compile can run in place. Same
+  // handleCompileAgent flow the "approved" phase button already used.
+  async function handleCompileNow() {
+    dispatch({ type: "APPROVED" });
+    await handleCompileAgent();
+  }
+
   const claimHref =
     "/signup?callbackUrl=" +
     encodeURIComponent(`/record?session=${state.sessionId ?? ""}&claimed=1`);
@@ -535,7 +546,18 @@ export function RecordClient({
                 </div>
               </div>
 
-              {state.phase === "recap" ? (
+              {state.phase === "recap" && isAuthed ? (
+                <button
+                  type="button"
+                  disabled={compiling}
+                  onClick={() => void handleCompileNow()}
+                  className="mt-1 inline-flex items-center justify-center gap-2.5 rounded-full bg-[#14B8A6] px-5 py-3 text-[14px] font-[600] text-[#0B0F0E] disabled:opacity-50"
+                >
+                  {compiling ? "Compiling..." : "Looks right — compile my agent"}
+                </button>
+              ) : null}
+
+              {state.phase === "recap" && !isAuthed ? (
                 <a
                   href={claimHref}
                   onClick={() => dispatch({ type: "APPROVED" })}
