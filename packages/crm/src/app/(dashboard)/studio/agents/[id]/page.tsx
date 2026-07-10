@@ -23,6 +23,8 @@ import {
 import { resolveAgentTrigger } from "@/lib/agents/triggers/agent-trigger";
 import { getSellerListingContextAction } from "@/lib/marketplace/seller-actions";
 import { VETTED_CONNECTORS } from "@/lib/agents/mcp/connectors";
+import { findSessionByTemplateId } from "@/lib/recordings/session-store";
+import type { FlowModel } from "@/lib/recordings/trace-schema";
 import type { AgentBlueprint } from "@/db/schema";
 import { AgentTemplateEditor } from "./editor-client";
 import { ListOnMarketplace } from "./list-on-marketplace";
@@ -87,6 +89,32 @@ export default async function AgentTemplatePage({
   const sellerConnect = listingCtx.ok ? listingCtx.connect : { ready: false, pending: false };
   const builderName = orgRow[0]?.name ?? "A SeldonFrame builder";
 
+  // "Born from your recording" provenance panel — only the templates
+  // compiled via /record set recordingSessions.agentTemplateId, so this is
+  // null (and the panel renders nothing) for every ordinary template.
+  const recordingSession = await findSessionByTemplateId(db, template.id);
+  const recordingProvenance = recordingSession
+    ? (() => {
+        const flowModel = recordingSession.flowModel as FlowModel | null;
+        const coverage = flowModel?.coverage ?? [];
+        const automatable = coverage.filter((c) => c.tier === "green").length;
+        const needsApproval = coverage.filter((c) => c.tier === "yellow").length;
+        const staysWithYou = coverage.filter((c) => c.tier === "red").length;
+        const interviewLog = Array.isArray(recordingSession.interviewLog)
+          ? (recordingSession.interviewLog as unknown[])
+          : [];
+        return {
+          goal: flowModel?.goal ?? null,
+          stepCount: flowModel?.steps.length ?? 0,
+          automatable,
+          needsApproval,
+          staysWithYou,
+          clarifications: Math.floor(interviewLog.length / 2),
+          openQuestions: (recordingSession.openQuestions as string[] | null) ?? [],
+        };
+      })()
+    : null;
+
   return (
     <section className="animate-page-enter">
       {/* ── Sticky header (Claude Design, direction A) ──────────────────────
@@ -129,6 +157,41 @@ export default async function AgentTemplatePage({
 
       {/* The calm scroll body — one breathing document of grouped sections. */}
       <div className="mx-auto max-w-3xl space-y-2 pt-6 pb-24">
+        {recordingProvenance ? (
+          <div className="mb-4 rounded-lg border border-border/70 bg-muted/30 p-4">
+            <h2 className="text-sm font-semibold tracking-tight text-foreground">
+              Born from your recording
+            </h2>
+            {recordingProvenance.goal ? (
+              <p className="mt-1 text-sm leading-relaxed text-muted-foreground">
+                {recordingProvenance.goal}
+              </p>
+            ) : null}
+            <p className="mt-2 text-xs text-muted-foreground">
+              {recordingProvenance.stepCount} step
+              {recordingProvenance.stepCount === 1 ? "" : "s"} ·{" "}
+              {recordingProvenance.automatable} automatable /{" "}
+              {recordingProvenance.needsApproval} need approval /{" "}
+              {recordingProvenance.staysWithYou} stay with you
+              {recordingProvenance.clarifications > 0
+                ? ` · ${recordingProvenance.clarifications} operator clarification${
+                    recordingProvenance.clarifications === 1 ? "" : "s"
+                  }`
+                : ""}
+            </p>
+            {recordingProvenance.openQuestions.length > 0 ? (
+              <div className="mt-2">
+                <p className="text-xs font-medium text-muted-foreground">Still open:</p>
+                <ul className="mt-1 list-disc space-y-0.5 pl-4 text-xs text-muted-foreground">
+                  {recordingProvenance.openQuestions.map((q, i) => (
+                    <li key={i}>{q}</li>
+                  ))}
+                </ul>
+              </div>
+            ) : null}
+          </div>
+        ) : null}
+
         <p className="max-w-2xl text-sm leading-relaxed text-muted-foreground">
           {formatTemplateType(template.type)} template. Configure it once here,
           test it in the sandbox, then deploy it to as many clients as you like.

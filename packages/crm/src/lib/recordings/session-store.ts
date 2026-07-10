@@ -73,6 +73,23 @@ export async function listRecordingsForSession(
     .orderBy(asc(workflowRecordings.slotIndex));
 }
 
+/** The recording session that produced a given compiled agent template
+ *  (recordingSessions.agentTemplateId is set by compile-agent on approval —
+ *  see app/api/v1/recordings/compile-agent/route.ts). Returns null when the
+ *  template wasn't born from a recording (the overwhelmingly common case),
+ *  so the "Born from your recording" provenance panel renders nothing. */
+export async function findSessionByTemplateId(
+  db: Dbi,
+  templateId: string,
+): Promise<RecordingSession | null> {
+  const rows = await db
+    .select()
+    .from(recordingSessions)
+    .where(eq(recordingSessions.agentTemplateId, templateId))
+    .limit(1);
+  return rows[0] ?? null;
+}
+
 export async function insertRecording(
   db: Dbi,
   args: {
