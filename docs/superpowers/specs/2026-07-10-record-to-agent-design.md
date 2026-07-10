@@ -246,5 +246,24 @@ Interface drift discovered during the build, vs. this design/the implementation 
   coverage-tier counts, operator-clarification count (`interviewLog.length / 2`), remaining open
   questions — only when a session matches; renders nothing for every ordinary (non-recorded)
   template, so there's zero visual/behavioral change to the existing editor for those.
+- **Live-test fix 7 (wave 4) — authed bypass + env-overridable anonymous cap.**
+  `resolveSessionCreateGate` gained a 4th, optional `options: { isAuthed?: boolean }` param
+  (backward-compatible — every existing 3-arg call site/test is untouched): when `isAuthed` is
+  true, the anonymous per-IP count check (`countExisting`) is skipped entirely, so a founder (or
+  any signed-in operator) testing their own flow never trips the cap meant to bound anonymous
+  abuse; the flag check still applies unconditionally regardless of auth. `POST
+  /api/v1/recordings/session` now resolves `auth()` server-side (same null-safe idiom as
+  `record/page.tsx`) and passes `isAuthed`. The anonymous cap itself is now env-overridable via a
+  new `resolveRecordingSessionsPerDay(env)` in `policy.ts` (`SF_RECORD_SESSIONS_PER_DAY`), mirroring
+  `resolveWebBuildRateLimit`'s exact contract — falls back to the compiled
+  `RECORDING_SESSIONS_PER_DAY_PER_IP` (3) on absent/invalid/non-positive values.
+- **Live-test fix 8 (wave 4) — "Start fresh" affordance.** A restored session (localStorage or the
+  post-claim return) had no way back to a clean slate. `record-client.tsx` now renders a quiet
+  "Start fresh" text button above the recording slots whenever `state.sessionId` is non-null
+  (absent on the initial landing-phase render, per the updated render smoke test); it
+  confirm-guards via `window.confirm` only when `state.flowModel` is non-null (a bare fresh session
+  with no recap yet needs no confirmation), then calls the existing `clearStoredSession()` and
+  `window.location.assign("/record")` for a clean remount that mints a brand-new session
+  server-side.
 - No other interface (types, exported function signatures, route paths, DB columns) drifted from
   the plan.

@@ -55,4 +55,9 @@ describe("<RecordClient> — initial landing-phase render", () => {
     assert.match(html, /Show Seldon how you work/);
     assert.match(html, /aria-label="Recording slots"/);
   });
+
+  test('"Start fresh" is absent when no session exists yet (landing phase)', () => {
+    const html = renderInitial();
+    assert.doesNotMatch(html, /Start fresh/);
+  });
 });

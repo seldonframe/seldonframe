@@ -349,6 +349,24 @@ export function RecordClient({
     "/signup?callbackUrl=" +
     encodeURIComponent(`/record?session=${state.sessionId ?? ""}&claimed=1`);
 
+  // 2026-07-10 — live-test fix: a restored session (via localStorage or the
+  // post-claim return) had no way back to a clean slate — the founder's own
+  // testing kept landing back on an old session. Clearing the stored session
+  // and reloading `/record` mints a brand-new one server-side, same path a
+  // first-time visitor takes.
+  function handleStartFresh() {
+    if (
+      state.flowModel &&
+      !window.confirm(
+        "Start over? Your current recap stays saved on your compiled agent, but this page will start a new session.",
+      )
+    ) {
+      return;
+    }
+    clearStoredSession();
+    window.location.assign("/record");
+  }
+
   return (
     <main className="min-h-screen bg-[#0B0F0E] px-5 py-10 text-[#E7E5DE] md:px-8 md:py-16">
       <div className="mx-auto flex w-full max-w-[1100px] flex-col gap-8">
@@ -373,6 +391,17 @@ export function RecordClient({
 
         <div className="flex flex-col gap-6 lg:flex-row">
           <section aria-label="Recording slots" className="flex flex-1 flex-col gap-3">
+            {state.sessionId ? (
+              <div className="flex justify-end">
+                <button
+                  type="button"
+                  onClick={handleStartFresh}
+                  className="text-[12.5px] text-[#6B7280] underline-offset-2 hover:text-[#9CA3AF] hover:underline"
+                >
+                  Start fresh
+                </button>
+              </div>
+            ) : null}
             {state.slots.map((slot) => {
               const isActive = state.activeSlot === slot.slotIndex;
               const canStart = state.activeSlot === null && slot.status === "empty";
