@@ -62,7 +62,7 @@ function getSpeechRecognitionCtor(): SpeechRecognitionCtor | null {
   return w.SpeechRecognition ?? w.webkitSpeechRecognition ?? null;
 }
 
-function downscaleEdge(width: number, height: number, maxEdgePx: number): { width: number; height: number } {
+export function downscaleEdge(width: number, height: number, maxEdgePx: number): { width: number; height: number } {
   const longEdge = Math.max(width, height);
   if (longEdge <= maxEdgePx) return { width, height };
   const scale = maxEdgePx / longEdge;
@@ -72,7 +72,7 @@ function downscaleEdge(width: number, height: number, maxEdgePx: number): { widt
 /** Grabs one downscaled JPEG keyframe from a live video element via an
  *  offscreen canvas. Returns null if the video has no dimensions yet
  *  (e.g. capture just started) — callers skip that tick rather than crash. */
-async function grabFrame(
+export async function grabFrame(
   video: HTMLVideoElement,
   maxEdgePx: number,
 ): Promise<Blob | null> {
