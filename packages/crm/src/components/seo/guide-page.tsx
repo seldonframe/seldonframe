@@ -91,6 +91,26 @@ export function GuidePage({ slug }: { slug: string }): ReactElement {
             </div>
           </div>
 
+          {/* Demand->supply cross-promo — only for the agency-heavy GoHighLevel cluster. */}
+          {g.cluster === "gohighlevel" && (
+            <div style={{ marginTop: 28, border: `1px solid ${MKT.ink10}`, borderRadius: 16, padding: "24px 26px", background: "rgba(255,255,255,0.6)" }}>
+              <div style={{ fontSize: 18, fontWeight: 800, letterSpacing: "-0.01em" }}>Run an agency? Sell AI agents instead of renting software</div>
+              <p style={{ margin: "8px 0 16px", fontSize: 15, lineHeight: 1.6, color: "rgba(34,29,23,0.7)" }}>
+                Agencies reading GoHighLevel comparisons are often really pricing an agency stack. The other side of that
+                decision is selling AI agents to clients at a flat platform cost instead of per-sub-account fees — this
+                site's builder library covers pricing, white-labeling, and where to sell.
+              </p>
+              <div style={{ display: "flex", flexWrap: "wrap", gap: 12 }}>
+                <Link href="/sell" className="sf-link" style={{ background: MKT.ink, color: "#F6F2EA", padding: "12px 24px", borderRadius: 12, fontWeight: 700, fontSize: 15, textDecoration: "none" }}>
+                  Selling AI agents: the guides
+                </Link>
+                <Link href="/guides/white-label-ai-agents" className="sf-link" style={{ border: `1.5px solid ${MKT.ink10}`, color: MKT.ink, padding: "11px 22px", borderRadius: 12, fontWeight: 700, fontSize: 15, textDecoration: "none", background: "rgba(255,255,255,0.5)" }}>
+                  White-label AI agents
+                </Link>
+              </div>
+            </div>
+          )}
+
           <section style={{ marginTop: 40 }}>
             <h2 style={{ margin: "0 0 14px", fontSize: 23, fontWeight: 800, letterSpacing: "-0.02em" }}>Frequently asked questions</h2>
             {g.faq.map((f) => (
