@@ -96,6 +96,16 @@ draft in `docs/strategy/x-articles/YYYY-MM-DD-<slug>.md`. Rules:
    to bold / italicize / underline in the editor, cover image, and where each
    inline image goes) plus CREATIVE blocks per the post rules above (GENERATED
    cards rendered to docs/strategy/x-creatives/, CAPTURE specs for receipts).
+8. **3 supporting tweets per article** (in the same file, SUPPORTING TWEETS
+   section, paste-ready): these are quote-reposts OF the article across the
+   week — each takes a DIFFERENT door in: one number hook, one scar/insight
+   line, one contrarian or value take. Never three rewordings of the title.
+   Spacing note per tweet (e.g. "day 2 evening", "day 4 morning").
+9. **Cadence: 5 articles/week, each anchored to a real build from the week** —
+   the session logs, docs/learnings/, and the loops Max pastes into Claude Code
+   daily are all legitimate build material. If a receipt (number, timing, cost)
+   isn't in the material, mark it `[FILL: what's needed]` for Max — never
+   invent a receipt to complete an article.
 
 ## Cadence memory
 Track (top of the drafts file) which formats ran recently — rotate; the receipt

@@ -116,4 +116,33 @@ The Monday email started this week. Next: a monthly receipt post with the Perfor
    in the honest-limits section next to the baseline confession. Plainness is
    the receipt — do not beautify any capture.
 
+## SUPPORTING TWEETS (quote-reposts of this article across the week)
+
+**T1 — number hook (day 2, morning):**
+```
+𝟱𝟬 𝗯𝗼𝗼𝗸𝗺𝗮𝗿𝗸𝘀 → 𝟭𝟭 𝗽𝗮𝘁𝘁𝗲𝗿𝗻𝘀.
+
+The doomscrolling I was ashamed of turned out to be years of content research sitting in a list I never opened.
+
+Full build in the article ↓
+```
+
+**T2 — scar (day 4, evening):**
+```
+My last post about my own product: 89 impressions.
+
+A post I bookmarked the same week: 7.5 million.
+
+I published my worst number on purpose — it's the baseline the whole machine has to beat. Receipts in the article ↓
+```
+
+**T3 — contrarian (day 6, midday):**
+```
+Every content guru sells you patterns.
+
+Patterns are a commodity — I just published mine for free, evidence attached.
+
+The moat is the inventory: real things you shipped, real numbers, and a feedback table that overrides borrowed taste with earned taste.
+```
+
 Pick your edit pass, then post as an X Article. Log the Performance row when it's live.
