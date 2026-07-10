@@ -4,9 +4,15 @@ Target: X Article (Premium+) · ~1,600 words
 
 ---
 
-# Everyone writes content for people BUYING AI agents. So we shipped 32 guides for the people selling them.
+# How to sell AI agents: nobody wrote the guides, so 7 agent waves shipped 32 of them in 2 days
 
-### One planning session, seven agent waves, two days — and the moment my reviewer agent accused my writer agent of fabricating a statistic it had actually verified.
+### Everyone writes for the people buying agents. This is the build for the people selling them — including the moment my reviewer agent accused my writer of fabricating a statistic it had actually verified.
+
+<!-- Title alternates:
+  A (keyword-first, search): the one above
+  B (X feed, scar-first): "My QA agent accused my writer agent of lying. The build that followed shipped 32 guides."
+  C (contrast): "300 pages for buyers. Zero for sellers. Two days later: 32 guides." -->
+
 
 Here's a gap hiding in plain sight: search for advice on *buying* AI automation and you'll drown in it. Search for how to *sell* an AI agent — how to price it, where to list it, what marketplace fees actually run, how to white-label one build across ten clients — and it goes quiet fast.
 

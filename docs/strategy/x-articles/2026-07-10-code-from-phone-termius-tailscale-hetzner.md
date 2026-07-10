@@ -5,9 +5,15 @@ Target: X Article (Premium+) · ~1,550 words
 
 ---
 
-# Claude Code from your phone: the Termius + Tailscale + Hetzner setup
+# Claude Code from your phone: ship real work with Termius + Tailscale + Hetzner, no laptop
 
-### My laptop stopped being the bottleneck. The agent works on a $5 server, and my phone is just the window I check on it through.
+### The agent lives on a [FILL: €X/mo] server with zero open ports. My phone is just the window I check on it through.
+
+<!-- Title alternates:
+  A (keyword-first, search): the one above
+  B (X feed, contrarian): "I stopped carrying a laptop. The agent works; my phone watches."
+  C (protagonist/levelsio nod): "The levelsio way, one command: Claude Code on a Hetzner box you reach from anywhere" -->
+
 
 I saw levelsio vibecode an LLM-over-DNS server in 15 minutes and thought the interesting part was the speed. It wasn't. The interesting part was *where* — on a remote box he could reach from anywhere.
 

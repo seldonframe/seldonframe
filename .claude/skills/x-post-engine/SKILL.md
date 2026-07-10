@@ -84,8 +84,11 @@ draft in `docs/strategy/x-articles/YYYY-MM-DD-<slug>.md`. Rules:
 3. Vault Patterns apply to the hook, the section openers, and every number
    (one number with context per point). Plain words, spoken rhythm, short
    paragraphs (X Articles render wide — 2-3 sentences per paragraph max).
-4. **Keyword-first title when one exists** (X Articles rank in Google like
-   posts do); subtitle carries the contrast.
+4. **Title = the article's best number or contradiction in the first six
+   words**; keyword up front when one exists (X Articles rank in Google);
+   subtitle carries the second-best hook. Always provide 3 alternates in a
+   comment under the title: A search-first (keyword leads), B feed-first
+   (number or scar leads), C contrarian one-liner. Max picks per surface.
 5. End with one line pointing at SeldonFrame only if the article earned it —
    the build IS the pitch; never bolt on a CTA.
 6. Word count 1,500-2,000. Under 1,200 = make it a post instead; over 2,400 =

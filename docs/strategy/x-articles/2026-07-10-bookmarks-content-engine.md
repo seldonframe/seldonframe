@@ -5,9 +5,15 @@ pull output + screenshot of the vault Patterns section (both named in the text)
 
 ---
 
-# I turned my X bookmarks into a content engine with Claude Code
+# 50 bookmarks → 11 patterns: Claude Code turned my doomscrolling into a content engine
 
-### 50 bookmarks in, 11 patterns out, and a Monday-morning email that writes my drafts from what actually performs. One markdown file, $0 in tools.
+### One markdown file, $0 in tools, and a Monday email that drafts my posts from what actually performs — including my own flops.
+
+<!-- Title alternates (pick per surface):
+  A (X feed, number-first): the one above
+  B (search-first): "Claude Code content engine: how my X bookmarks write my drafts"
+  C (contrarian): "My procrastination is now my content strategy. Here's the machine." -->
+
 
 My last post about my own product got 89 impressions.
 
