@@ -217,5 +217,34 @@ Interface drift discovered during the build, vs. this design/the implementation 
   whose action text mentioned "X drafts / tweets" spuriously matched the `postiz` catalog entry
   bound to the action text. `coverStep` now tries `findToolsByKeywords(step.app)` alone first; only
   when the app alone yields no match does it fall back to the previous `"<app> <action>"` search.
+- **Live-test fix 4 (wave 3) — compiled identity comes from the FlowModel, not the starter it fell
+  through to.** `flowModelToBundle` classified `model.goal` via `heuristicIntent` and let
+  `assembleAgentBundle`'s starter blueprint name/description win outright — a goal like "Forward
+  SeldonFrame Weekly Emails to Personal Gmail" matches no parse-intent keyword and silently
+  produced an agent template named "AI Phone Receptionist". Fixed by overriding
+  `bundle.name = model.title` / `bundle.description = model.goal` right after
+  `assembleAgentBundle` in `compile-agent.ts`; archetype/trigger stay starter-derived (trigger
+  inference from the recording is a named follow-up, not this fix).
+- **Live-test fix 5 (wave 3) — `interviewTurn` now merges answers into the FlowModel.** The route
+  told the operator "I'll update the flow" but `interviewTurn` only ever returned
+  `{reply, openQuestions}` — a never-lies violation, since no answer ever reached what
+  `compile-agent` compiled. `interviewTurn` now returns
+  `{ok: true, reply, model: FlowModel, openQuestions} | {ok: false, error}`; the LLM's `model` is
+  Zod-gated with a single retry-on-validation-error (mirroring `merge-traces.ts`'s pattern exactly,
+  the retry firing only on a bad `model` — a bad/missing `reply` still fails immediately, no
+  retry, same as before this fix), `recordingsSeen` is always force-preserved from the input model,
+  and coverage is always recomputed post-merge via `coverFlowModel` rather than trusted from the
+  LLM. `POST /api/v1/recordings/interview` persists the updated model to
+  `recordingSessions.flow_model` (full-column update, same convention as `compile-trace`) and
+  returns it as `flow_model`; a new `MODEL_UPDATED` reducer action swaps
+  `flowModel`/`coverage`/`openQuestions` without touching `slots`/`phase`, dispatched from
+  `record-client.tsx` whenever the interview response carries a `flow_model`.
+- **Live-test fix 6 (wave 3) — "Born from your recording" provenance panel.** A new
+  `findSessionByTemplateId(db, templateId)` store fn (`session-store.ts`) looks up the
+  `recording_sessions` row whose `agent_template_id` matches the open template (set by
+  `compile-agent` on approval). `studio/agents/[id]/page.tsx` renders a panel — goal, step/
+  coverage-tier counts, operator-clarification count (`interviewLog.length / 2`), remaining open
+  questions — only when a session matches; renders nothing for every ordinary (non-recorded)
+  template, so there's zero visual/behavioral change to the existing editor for those.
 - No other interface (types, exported function signatures, route paths, DB columns) drifted from
   the plan.
