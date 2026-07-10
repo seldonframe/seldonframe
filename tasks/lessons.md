@@ -2013,3 +2013,25 @@ C4 close-out with empirical SLICE 11 data.
 - Concurrent-session repo: verify refs at USE time not plan time (fetch immediately before push; a surprise file in your diff = re-inspect the refs), keep work rebase-able as ONE commit, and never switch branches/build in a worktree a subagent is currently verifying in (tainted its run; had to message it to re-run). See docs/learnings/2026-07-08-shipping-to-a-moving-main.md. 2026-07-08.
 
 - **2026-07-09 — implementer must never delegate into a shared worktree.** An implementer spawned its own background child for the whole assignment, then reported "waiting" and stopped; resuming the parent created TWO agents editing the same worktree concurrently (races reconciled by luck + specs). Prevention: every implementer dispatch prompt now includes "do the work yourself; do not spawn sub-agents"; if an agent reports it is waiting on its own child, treat the report as invalid and resume with explicit do-it-yourself orders. Related: the run-agent.sh flock fix (same class — one working tree, one writer).
+
+---
+
+## L-31 — App Router route.ts files may export ONLY handlers + segment config; tsc passes, next build fails
+
+- **Trigger:** Record-to-agent Wave C exported pure authz helpers
+  (`resolveSessionCreateGate`, `authorizeRecordingSubmission`,
+  `resolveUploadGrant`) from route.ts files so specs could import them —
+  mirroring how lib modules do it. `tsc --noEmit` was clean; Next's
+  build-time route type validation ("X is not a valid Route export field")
+  would have failed the Vercel build. Zero route files on main had the
+  pattern — it was invented in-branch. Caught by the controller before
+  merge; same failure class as the RSC client-fn-from-server gotcha
+  (build/runtime-only, invisible to tsc).
+- **Rule:** a `route.ts` may export only HTTP-method handlers
+  (GET/POST/...) and segment config (`dynamic`, `runtime`, etc.). Every
+  pure helper a route and its spec share goes in a lib module (e.g.
+  `lib/recordings/route-guards.ts`) imported by both. Bonus: keeping the
+  lib module free of build-brittle imports (`@vercel/blob`,
+  `@anthropic-ai/sdk`) is what makes the helpers spec-testable under the
+  worktree junction at all. Add "grep `^export` on new route.ts files" to
+  any verify pass that includes new API routes.
