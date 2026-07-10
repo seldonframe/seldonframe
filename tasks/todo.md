@@ -56,6 +56,16 @@ the primary-source-only stats page (survey-based pricing-data page needs data co
 (never-lies gates). Follow-ups queued in the strategy doc: /sell hub · marketplace-listing
 JSON-LD hardening · demand→supply cross-links · vendor-rate quarterly refresh.
 
+### Task — Supply-side follow-up slices (2026-07-10, Max-directed, branch feat/supply-follow-ups)
+
+Max: "do this" on the 4 queued slices + fix the discoverability gap (cluster not in footer/nav).
+
+- [ ] /sell hub page (kw "sell ai agents") + sitemap entry + footer links (Sell AI agents → /sell, Guides → /guides)
+- [ ] Marketplace listing hardening: BreadcrumbList JSON-LD + related sell-agents guides block + "Sell yours" CTA on /marketplace/[slug]
+- [ ] Demand→supply cross-link: cluster-keyed block in guide-page.tsx (gohighlevel cluster → /sell) + /agencies link into the cluster
+- [ ] Quarterly vendor-rate-refresh: docs/ops/agents/vendor-rate-refresh.md (copy seo-price-refresh pattern) + scheduled task
+- [ ] Gate: tsc delta + relevant specs + reviewer pass → PR → merge (authorized) → smoke + IndexNow /sell
+
 ### Task — Retainer sibling-recovery period narrowing (2026-07-08, money-review follow-up, worktree hungry-jang-c20e73)
 
 Fix from the autopay-console money review: `findOutstandingFailedForSubscriptionReal` matched ANY

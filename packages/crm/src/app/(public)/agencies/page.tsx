@@ -9,6 +9,7 @@
 // app/(marketing)/pricing-public/page.tsx.
 
 import type { Metadata } from "next";
+import Link from "next/link";
 import { MarketingNav } from "@/components/landing/marketing-nav";
 import { MarketingAgencyMath } from "@/components/landing/marketing-agency-math";
 import { MarketingFooter } from "@/components/landing/marketing-footer";
@@ -25,6 +26,37 @@ export default function AgenciesPage() {
       <MarketingNav />
       <main id="main-content" className="pt-[100px]">
         <MarketingAgencyMath />
+
+        {/* Guides for agency builders — cross-links into the supply-side content library. */}
+        <section aria-label="Guides for agency builders" className="border-t border-[rgba(34,29,23,.08)] px-5 py-16 md:px-8 lg:px-12">
+          <div className="mx-auto max-w-[1120px]">
+            <h2 className="text-[13px] font-[600] uppercase tracking-[0.09em] text-[rgba(34,29,23,.55)]">
+              Guides for agency builders
+            </h2>
+            <ul className="mt-4 flex flex-col flex-wrap gap-x-8 gap-y-2.5 md:flex-row">
+              <li>
+                <Link href="/sell" className="text-[14.5px] font-[600] text-[#00897B] underline-offset-4 hover:underline">
+                  Sell AI agents: the complete playbook
+                </Link>
+              </li>
+              <li>
+                <Link href="/guides/ai-agency-pricing-models" className="text-[14.5px] font-[600] text-[#00897B] underline-offset-4 hover:underline">
+                  AI agency pricing models
+                </Link>
+              </li>
+              <li>
+                <Link href="/guides/white-label-ai-agents" className="text-[14.5px] font-[600] text-[#00897B] underline-offset-4 hover:underline">
+                  White-label AI agents
+                </Link>
+              </li>
+              <li>
+                <Link href="/guides/what-to-include-in-an-ai-front-office-package" className="text-[14.5px] font-[600] text-[#00897B] underline-offset-4 hover:underline">
+                  What goes in an AI front-office package
+                </Link>
+              </li>
+            </ul>
+          </div>
+        </section>
       </main>
       <MarketingFooter />
     </div>
