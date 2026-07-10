@@ -17,7 +17,7 @@ Strategic commissions the weekly content-loop must publish ahead of its research
 
 ## 3. Sell-agents Wave 2a — how to sell AI agents to local businesses
 
-- **status:** queued
+- **status:** shipped: 2026-07-10 how-to-sell-ai-agents-to-local-businesses (shipped directly in the waves-2-7 batch, not via the weekly loop)
 - **commissioned:** 2026-07-10 (by Max, via the marketplace supply-side plan — `docs/strategy/2026-07-10-marketplace-supply-content.md`)
 - **slug:** `how-to-sell-ai-agents-to-local-businesses`
 - **working title:** "How to Sell AI Agents to Local Businesses (Scripts, Demos, and the One-Booked-Job Close)"
@@ -28,7 +28,7 @@ Strategic commissions the weekly content-loop must publish ahead of its research
 
 ## 4. Sell-agents Wave 2b — white label AI agents (category page)
 
-- **status:** queued
+- **status:** shipped: 2026-07-10 white-label-ai-agents (shipped directly in the waves-2-7 batch, not via the weekly loop)
 - **commissioned:** 2026-07-10 (by Max, via the marketplace supply-side plan)
 - **slug:** `white-label-ai-agents`
 - **working title:** "White Label AI Agents: How Agencies Resell One Build to Many Clients (2026 Guide)"

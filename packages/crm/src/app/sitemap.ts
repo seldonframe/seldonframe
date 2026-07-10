@@ -72,6 +72,14 @@ export default async function sitemap(): Promise<MetadataRoute.Sitemap> {
     });
   }
 
+  // The sell-agents hub (targets "sell ai agents").
+  entries.push({
+    url: `${base}/sell`,
+    lastModified: now,
+    changeFrequency: "weekly",
+    priority: 0.8,
+  });
+
   // Marketplace browse + listings (so the cross-links resolve for crawlers).
   entries.push({
     url: `${base}/marketplace`,

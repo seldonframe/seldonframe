@@ -18,6 +18,7 @@ const COLUMNS: readonly Column[] = [
       { label: "Features", href: "#modules" },
       { label: "Pricing", href: "#pricing" },
       { label: "Marketplace", href: "/marketplace" },
+      { label: "Sell AI agents", href: "/sell" },
       { label: "For agencies", href: "/agencies" },
       { label: "Changelog", href: "https://github.com/seldonframe/crm/releases", external: true },
     ],
@@ -26,6 +27,7 @@ const COLUMNS: readonly Column[] = [
     heading: "Resources",
     links: [
       { label: "Docs", href: "/docs" },
+      { label: "Guides", href: "/guides" },
       { label: "MCP / Claude Code", href: "https://github.com/seldonframe/crm#claude-code-mcp", external: true },
       { label: "API", href: "/docs" },
       { label: "Live demos", href: "#demos" },

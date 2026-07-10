@@ -197,6 +197,7 @@ export async function GET(req: Request): Promise<Response> {
   lines.push("## Pages");
   lines.push("");
   lines.push(`- [Agent Marketplace](${base}/marketplace): browse and install vetted agents, or rent them over MCP.`);
+  lines.push(`- [Sell AI agents](${base}/sell): the four ways to sell an agent you build — direct, white-label, marketplace, or rent via MCP.`);
   lines.push(`- [AI agent library](${base}/ai-agents): every stat-backed agent answer page.`);
   lines.push(`- [Pricing](${base}/pricing): plans and what a workspace costs.`);
   lines.push(

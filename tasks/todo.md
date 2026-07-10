@@ -28,7 +28,49 @@ Reuses the /guides content engine (registry + md twin + spec gate). Approved by 
       multipliers · OpenAI payout %s — all stated qualitatively or hedged instead).
 - [x] Gate: guides.spec.ts 402/402 green · typecheck 434 errors = env baseline (zod/@testing-library
       resolution), zero in touched files
-- [x] Commit, push, open PR (human merge gate — Max merges)
+- [x] Commit, push, open PR (human merge gate — Max merges): PR #47
+      (github.com/seldonframe/seldonframe/pull/47); after merge: IndexNow ping the 6 /guides URLs
+
+### Task — Supply-side content Waves 2-7 + publish-all (2026-07-10, Max-directed, branch feat/seo-supply-waves-2-7)
+
+Max: "do all the waves and merge to main and publish them all". Wave 1 (PR #47) MERGED. Honesty
+carve-outs held: Wave 8 case studies NOT written (gated on real closed clients); Wave 7 reduced to
+the primary-source-only stats page (survey-based pricing-data page needs data collection first).
+
+- [x] Merge PR #47 (CI failures verified pre-existing on main — same booking-availability tests;
+      spawned a fix-main-CI background task chip)
+- [x] Draft 26 articles via parallel writer subagents (all sources WebFetch-verified; re-cuts:
+      smma-to-ai-agency · what-is-byok-ai · voice-ai-reseller-programs · client-portals slug)
+- [x] Wire registry (26 imports + entries) + 26 .md twin routes + flip 2 queue commissions to shipped
+- [x] guides.spec.ts 558/558 green · typecheck 434 = baseline, 0 in touched files
+- [x] 3 parallel reviewer subagents: 23/26 SHIP, 3 fixes applied, 0 kills; 2 of 3 "blocking"
+      flags disproven by my own re-verification (BrightLocal 97%/85%/2026 literal on page;
+      "AppExchange is now AgentExchange" is Salesforce's own banner) — verify the reviewer too
+- [x] PR #48 opened + MERGED (CI failure set diffed identical to main's pre-existing red);
+      IndexNow pinged all 32 URLs (HTTP 200)
+- [x] Post-deploy live smoke: SMOKE PASS 9/9 routes (deployed sha 3c980ac63, hub cluster label,
+      sitemap entries, md twin content-type, FAQPage JSON-LD)
+- [x] Memory + strategy-doc updates
+
+**Review:** All waves 1-7 live (32 guides). Wave 8 + survey-stats page correctly withheld
+(never-lies gates). Follow-ups queued in the strategy doc: /sell hub · marketplace-listing
+JSON-LD hardening · demand→supply cross-links · vendor-rate quarterly refresh.
+
+### Task — Supply-side follow-up slices (2026-07-10, Max-directed, branch feat/supply-follow-ups)
+
+Max: "do this" on the 4 queued slices + fix the discoverability gap (cluster not in footer/nav).
+
+- [x] /sell hub page (kw "sell ai agents") + sitemap + llms.txt + footer links (Sell AI agents → /sell, Guides → /guides)
+- [x] Marketplace listing hardening: BreadcrumbList JSON-LD + guides block + "Sell yours" CTA (live+seed safe)
+- [x] Demand→supply cross-link: gohighlevel-cluster-gated block in guide-page.tsx + /agencies guides row
+- [x] Quarterly vendor-rate-refresh: docs/ops/agents/vendor-rate-refresh.md + scheduled task (1st of Jan/Apr/Jul/Oct 09:30, next Oct 1)
+- [x] Gate: reviewer SHIP 0-blocking (2 nits applied: GMV taper wording → canonical · agencies anchors → next/link) ·
+      guides.spec 558/558 · tsc 0 in touched (51 = baseline) · PR #52 MERGED (CI failure set = main's, diffed) ·
+      SMOKE PASS 8/8 incl. negative cluster-gating check · IndexNow pinged /sell + hubs
+
+**Review:** discoverability gap closed — the cluster is now reachable via footer (Sell AI agents · Guides),
+/sell hub, /agencies, and every marketplace listing. Deeper Zapier-play remainder (per-listing keyword slugs +
+listing FAQ fields = data-model change) left as its own slice.
 
 ### Task — Retainer sibling-recovery period narrowing (2026-07-08, money-review follow-up, worktree hungry-jang-c20e73)
 

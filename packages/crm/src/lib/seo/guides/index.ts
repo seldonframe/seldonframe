@@ -73,6 +73,32 @@ import { guide as aiAgentBusinessIdeas } from "./ai-agent-business-ideas";
 import { guide as howToStartAnAiAutomationAgency } from "./how-to-start-an-ai-automation-agency";
 import { guide as bestAiAgentMarketplaces } from "./best-ai-agent-marketplaces";
 import { guide as whatIsAnMcpMarketplace } from "./what-is-an-mcp-marketplace";
+import { guide as howToSellAiAgentsToLocalBusinesses } from "./how-to-sell-ai-agents-to-local-businesses";
+import { guide as whiteLabelAiAgents } from "./white-label-ai-agents";
+import { guide as howToBuildAndSellAnAiReceptionist } from "./how-to-build-and-sell-an-ai-receptionist";
+import { guide as howToBuildAMissedCallTextBackAgent } from "./how-to-build-a-missed-call-text-back-agent";
+import { guide as howToBuildAndSellASpeedToLeadAgent } from "./how-to-build-and-sell-a-speed-to-lead-agent";
+import { guide as howToBuildAReviewRequestAgent } from "./how-to-build-a-review-request-agent";
+import { guide as howToBuildAndSellAnAiBookingAgent } from "./how-to-build-and-sell-an-ai-booking-agent";
+import { guide as howToBuildAWebsiteChatbotForClients } from "./how-to-build-a-website-chatbot-for-clients";
+import { guide as howToBuildAnAiLeadQualifier } from "./how-to-build-an-ai-lead-qualifier";
+import { guide as howToBuildAnAfterHoursAnsweringAgent } from "./how-to-build-an-after-hours-answering-agent";
+import { guide as aiAgencyPricingModels } from "./ai-agency-pricing-models";
+import { guide as howToGetAiAgencyClients } from "./how-to-get-ai-agency-clients";
+import { guide as productizedAiServices } from "./productized-ai-services";
+import { guide as clientPortalsForAiAgencies } from "./client-portals-for-ai-agencies";
+import { guide as smmaToAiAgency } from "./smma-to-ai-agency";
+import { guide as whatToIncludeInAnAiFrontOfficePackage } from "./what-to-include-in-an-ai-front-office-package";
+import { guide as gptStoreAlternativeForDevelopers } from "./gpt-store-alternative-for-developers";
+import { guide as whereToSellAiAgents } from "./where-to-sell-ai-agents";
+import { guide as sellingAiServicesOnFiverrVsOwningYourAgent } from "./selling-ai-services-on-fiverr-vs-owning-your-agent";
+import { guide as aiMarketplaceFeesCompared } from "./ai-marketplace-fees-compared";
+import { guide as voiceAiResellerPrograms } from "./voice-ai-reseller-programs";
+import { guide as howToRentOutAnAiAgentViaMcp } from "./how-to-rent-out-an-ai-agent-via-mcp";
+import { guide as whatIsByokAi } from "./what-is-byok-ai";
+import { guide as howDoAiAgentsGetPaid } from "./how-do-ai-agents-get-paid";
+import { guide as howToMakeAnAiAgentReliable } from "./how-to-make-an-ai-agent-reliable";
+import { guide as aiAgentStatistics } from "./ai-agent-statistics";
 
 export { LAST_UPDATED };
 export type { Guide, GuideCluster, GuideSection, GuideFaq, GuideSource, GuideIntent } from "./types";
@@ -158,6 +184,32 @@ export const GUIDES: Guide[] = [
   howToStartAnAiAutomationAgency,
   bestAiAgentMarketplaces,
   whatIsAnMcpMarketplace,
+  howToSellAiAgentsToLocalBusinesses,
+  whiteLabelAiAgents,
+  howToBuildAndSellAnAiReceptionist,
+  howToBuildAMissedCallTextBackAgent,
+  howToBuildAndSellASpeedToLeadAgent,
+  howToBuildAReviewRequestAgent,
+  howToBuildAndSellAnAiBookingAgent,
+  howToBuildAWebsiteChatbotForClients,
+  howToBuildAnAiLeadQualifier,
+  howToBuildAnAfterHoursAnsweringAgent,
+  aiAgencyPricingModels,
+  howToGetAiAgencyClients,
+  productizedAiServices,
+  clientPortalsForAiAgencies,
+  smmaToAiAgency,
+  whatToIncludeInAnAiFrontOfficePackage,
+  gptStoreAlternativeForDevelopers,
+  whereToSellAiAgents,
+  sellingAiServicesOnFiverrVsOwningYourAgent,
+  aiMarketplaceFeesCompared,
+  voiceAiResellerPrograms,
+  howToRentOutAnAiAgentViaMcp,
+  whatIsByokAi,
+  howDoAiAgentsGetPaid,
+  howToMakeAnAiAgentReliable,
+  aiAgentStatistics,
 ];
 
 export function getGuide(slug: string): Guide {
