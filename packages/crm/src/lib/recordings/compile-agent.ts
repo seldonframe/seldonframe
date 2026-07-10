@@ -11,6 +11,7 @@
 import { heuristicIntent } from "@/lib/agents/generate/parse-intent";
 import { assembleAgentBundle, type AgentBundle } from "@/lib/agents/generate/agent-bundle";
 import type { ConnectorBinding } from "@/lib/agents/mcp/connectors";
+import type { AgentTrigger } from "@/lib/agents/triggers/agent-trigger";
 import type { EvalScenario } from "@/lib/agents/evals/eval-types";
 import { coverFlowModel } from "@/lib/recordings/coverage";
 import type { CoverageEntry, CoverageTier, FlowModel, WorkflowStep, WorkflowTrace } from "@/lib/recordings/trace-schema";
@@ -173,6 +174,83 @@ export function deriveEvalScenarios(
   });
 }
 
+// ─── inferTriggerFromModel ───────────────────────────────────────────────────
+
+/** All the text worth scanning for a workflow-shape signal: the goal plus
+ *  every step's app/action/intent, lowercased and joined. Kept as one string
+ *  so the keyword checks below are simple `.includes()` calls. */
+function modelTextCorpus(model: FlowModel): string {
+  const stepText = model.steps
+    .map((step) => `${step.app} ${step.action} ${step.intent}`)
+    .join(" ");
+  return `${model.goal} ${model.apps.join(" ")} ${stepText}`.toLowerCase();
+}
+
+/**
+ * Infer what should FIRE a from-recording agent, from the recorded workflow
+ * itself — a compiled recording is never the receptionist starter's inbound
+ * voice/chat default (Task: "compiled blueprint carries only flow-relevant
+ * primitives"). Pure heuristic, checked in this order (first match wins):
+ *   1. an email app (gmail/outlook) is named anywhere → inbound email (the
+ *      recording IS the operator's inbox workflow);
+ *   2. the goal/steps talk about a recurring cadence (schedule/daily/weekly/
+ *      every morning) → a daily 9am schedule, email channel (the operator
+ *      gets the run's output by email — no one to reply to inline);
+ *   3. the goal/steps mention SMS/text message → inbound sms;
+ *   4. otherwise → inbound chat (the safe default — a copilot-style agent
+ *      the operator can talk to inline, same shape the compile-agent route
+ *      already exposes at /studio/agents/:id).
+ * Never throws; always returns a valid AgentTrigger.
+ */
+export function inferTriggerFromModel(model: FlowModel): AgentTrigger {
+  const corpus = modelTextCorpus(model);
+
+  if (corpus.includes("gmail") || corpus.includes("outlook") || corpus.includes("email")) {
+    return { kind: "inbound", channel: "email" };
+  }
+
+  if (
+    corpus.includes("schedule") ||
+    corpus.includes("daily") ||
+    corpus.includes("weekly") ||
+    corpus.includes("every morning")
+  ) {
+    return { kind: "schedule", cron: "0 9 * * *", channel: "email" };
+  }
+
+  if (corpus.includes("sms") || corpus.includes("text message")) {
+    return { kind: "inbound", channel: "sms" };
+  }
+
+  return { kind: "inbound", channel: "chat" };
+}
+
+// ─── from-recording capability filter ───────────────────────────────────────
+
+/** Always kept regardless of the recorded workflow — every compiled agent
+ *  needs a safe exit to a human. */
+const ALWAYS_KEPT_CAPABILITY = "escalate_to_human";
+
+/**
+ * Strip the starter's booking-receptionist tools (look_up_availability,
+ * book_appointment, take_message, get_quote_range, ...) from a from-recording
+ * agent's capabilities — they're receptionist-starter noise, not something
+ * the recorded workflow asked for. Keeps `escalate_to_human` unconditionally,
+ * plus any capability whose name appears (case-insensitive substring) in some
+ * step's app or action text — i.e. a capability the recording itself implies.
+ */
+function filterCapabilitiesForModel(caps: string[] | undefined, model: FlowModel): string[] {
+  const stepHaystacks = model.steps.map((step) => `${step.app} ${step.action}`.toLowerCase());
+  const kept = new Set<string>([ALWAYS_KEPT_CAPABILITY]);
+  for (const cap of caps ?? []) {
+    const needle = cap.toLowerCase();
+    if (stepHaystacks.some((haystack) => haystack.includes(needle))) {
+      kept.add(cap);
+    }
+  }
+  return Array.from(kept);
+}
+
 // ─── flowModelToBundle ───────────────────────────────────────────────────────
 
 /**
@@ -229,6 +307,20 @@ export function flowModelToBundle(params: {
   // out of scope here (trigger inference is a named follow-up).
   bundle.name = model.title;
   bundle.description = model.goal;
+
+  // Trigger/greeting/faq/capabilities/pricing all come from the receptionist
+  // starter heuristicIntent fell through to — none of it is relevant to a
+  // from-recording workflow agent (see plan Task "from-recording bundles
+  // stop inheriting receptionist starter primitives"). Override every one of
+  // them with something derived from the recording itself.
+  bundle.blueprint.trigger = inferTriggerFromModel(model);
+  bundle.blueprint.greeting = `Hi — I'm your "${model.title}" agent. Tell me what you need, or say "run it" to start.`;
+  bundle.blueprint.faq = [];
+  bundle.blueprint.capabilities = filterCapabilitiesForModel(bundle.blueprint.capabilities, model);
+  bundle.blueprint.quoteRanges = undefined;
+  bundle.blueprint.pricingFacts = undefined;
+  bundle.blueprint.missedCallTextBack = undefined;
+  bundle.blueprint.reviewUrl = undefined;
 
   const greenToolkits = model.coverage
     .filter((c) => c.tier === "green" && c.toolkit)

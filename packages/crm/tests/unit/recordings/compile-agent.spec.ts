@@ -8,6 +8,7 @@ import {
   deriveEvalScenarios,
   flowModelToBundle,
   flowModelToSkillMd,
+  inferTriggerFromModel,
 } from "@/lib/recordings/compile-agent";
 import type { CoverageEntry, FlowModel, WorkflowStep, WorkflowTrace } from "@/lib/recordings/trace-schema";
 
@@ -193,5 +194,102 @@ describe("flowModelToBundle", () => {
     assert.equal(bundle.name, model.title);
     assert.notEqual(bundle.name, "AI Phone Receptionist");
     assert.equal(bundle.description, model.goal);
+  });
+
+  const BOOKING_CAPABILITIES = [
+    "look_up_availability",
+    "book_appointment",
+    "find_my_existing_appointment",
+    "reschedule_appointment",
+    "cancel_appointment",
+    "take_message",
+    "get_quote_range",
+  ];
+
+  test("Gmail-forwarding recording compiles an inbound-email trigger, not the receptionist starter's inbound voice/chat + booking tools", () => {
+    const model = baseModel({
+      title: "Forward SeldonFrame Weekly Emails to Personal Gmail",
+      goal: "Forward SeldonFrame Weekly Emails to Personal Gmail",
+      steps: [
+        step(0, { app: "gmail", action: "forward matching email to personal gmail" }),
+      ],
+      apps: ["gmail"],
+    });
+    const { bundle } = flowModelToBundle({
+      model,
+      recordings: [{ label: "Happy path", trace: baseTrace() }],
+    });
+
+    assert.deepEqual(bundle.blueprint.trigger, { kind: "inbound", channel: "email" });
+    assert.match(bundle.blueprint.greeting ?? "", new RegExp(model.title));
+    assert.doesNotMatch(bundle.blueprint.greeting ?? "", /calling/i);
+    assert.deepEqual(bundle.blueprint.faq, []);
+    for (const cap of BOOKING_CAPABILITIES) {
+      assert.ok(
+        !bundle.blueprint.capabilities?.includes(cap),
+        `expected capabilities to NOT include starter booking tool "${cap}"`,
+      );
+    }
+    assert.ok(bundle.blueprint.capabilities?.includes("escalate_to_human"));
+    assert.equal(bundle.blueprint.quoteRanges, undefined);
+    assert.equal(bundle.blueprint.pricingFacts, undefined);
+    assert.equal(bundle.blueprint.missedCallTextBack, undefined);
+    assert.equal(bundle.blueprint.reviewUrl, undefined);
+  });
+
+  test("a schedule-flavored recording compiles a daily schedule trigger", () => {
+    const model = baseModel({
+      title: "Daily sales recap",
+      goal: "Post a daily recap of yesterday's sales every morning",
+      steps: [step(0, { app: "slack", action: "post the recap" })],
+      apps: ["slack"],
+    });
+    const { bundle } = flowModelToBundle({
+      model,
+      recordings: [{ label: "Happy path", trace: baseTrace() }],
+    });
+    assert.deepEqual(bundle.blueprint.trigger, {
+      kind: "schedule",
+      cron: "0 9 * * *",
+      channel: "email",
+    });
+  });
+});
+
+describe("inferTriggerFromModel", () => {
+  test("gmail/outlook/email mentioned anywhere -> inbound email", () => {
+    const model = baseModel({
+      goal: "Forward matching Outlook emails",
+      steps: [step(0, { app: "outlook", action: "forward the email" })],
+    });
+    assert.deepEqual(inferTriggerFromModel(model), { kind: "inbound", channel: "email" });
+  });
+
+  test("recurring-cadence wording -> schedule trigger, 9am daily, email channel", () => {
+    const model = baseModel({
+      goal: "Post a weekly summary",
+      steps: [step(0, { app: "slack", action: "post the summary" })],
+    });
+    assert.deepEqual(inferTriggerFromModel(model), {
+      kind: "schedule",
+      cron: "0 9 * * *",
+      channel: "email",
+    });
+  });
+
+  test("sms/text-message wording -> inbound sms", () => {
+    const model = baseModel({
+      goal: "Reply to text messages from customers",
+      steps: [step(0, { app: "twilio", action: "send an sms reply" })],
+    });
+    assert.deepEqual(inferTriggerFromModel(model), { kind: "inbound", channel: "sms" });
+  });
+
+  test("no matching keywords -> inbound chat (the safe default)", () => {
+    const model = baseModel({
+      goal: "Log a new customer into QuickBooks",
+      steps: [step(0, { app: "QuickBooks Desktop", action: "create the customer record" })],
+    });
+    assert.deepEqual(inferTriggerFromModel(model), { kind: "inbound", channel: "chat" });
   });
 });

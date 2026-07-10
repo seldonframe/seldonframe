@@ -177,6 +177,30 @@ Interface drift discovered during the build, vs. this design/the implementation 
   has its own tiny `bindingForToolkit(toolkit)` that builds a `ConnectorBinding` directly from the
   coverage entry's already-resolved toolkit string (`"postiz"` → vetted, anything else → composio),
   with a comment pointing back at `bindingForEntry` as the shape it mirrors.
+- **Live-test round 3, fix wave 5, FIX 1 — interview optimistic UI.** `recorder-machine.ts`'s
+  single `INTERVIEW_TURN` action (appended both the user and Seldon turns together, only once the
+  reply arrived) is replaced by `INTERVIEW_USER_SENT { user }` (appends the user turn immediately)
+  and `INTERVIEW_REPLY { seldon, openQuestions }` (appends the Seldon turn once the round-trip
+  completes). `record-client.tsx` dispatches `INTERVIEW_USER_SENT` and clears the input before the
+  `fetch`, tracks an `interviewPending` flag that disables the input/Send button and renders a
+  muted "Seldon is updating the flow…" line, and on failure renders an inline retry line
+  (`handleInterviewRetry`, keyed off a `lastInterviewMessage` ref) that resends the SAME text
+  without re-appending the user's already-visible turn.
+- **Live-test round 3, fix wave 5, FIX 2 — from-recording bundles stop inheriting receptionist
+  starter primitives.** `flowModelToBundle` no longer leaves `heuristicIntent`'s starter fallback
+  (`ai-phone-receptionist` for any unrecognized goal) fully intact: it now overrides
+  `blueprint.trigger` with a new pure `inferTriggerFromModel(model)` (keyword heuristic over the
+  goal + every step's app/action/intent — email app mention → inbound email, a recurring-cadence
+  phrase → daily 9am schedule/email, sms/text-message wording → inbound sms, else inbound chat —
+  first match wins, same shape as `heuristicIntent`'s own priority-ordered keyword tables),
+  `blueprint.greeting` with a goal-derived one-liner naming the compiled workflow, `blueprint.faq`
+  to `[]`, and `blueprint.capabilities` via a new `filterCapabilitiesForModel` that keeps only
+  `escalate_to_human` plus any starter capability whose name is a substring of some step's
+  `app`/`action` text (in practice this always strips the receptionist starter's booking tools —
+  `look_up_availability`/`book_appointment`/`take_message`/`get_quote_range`/etc — since a recorded
+  workflow's step text never literally contains those tool-id strings).
+  `quoteRanges`/`pricingFacts`/`missedCallTextBack`/`reviewUrl` are all cleared to `undefined` —
+  none of them apply to a from-recording workflow agent.
 - **Post-review fix (B-1) — `GET /api/v1/recordings/session` + `REHYDRATED`.** The final
   cross-wave review found the post-claim compile step UI-unreachable: the `/signup` return
   dispatched only `SESSION_READY`, which resets `phase` to `"capturing"` with `flowModel: null`,
