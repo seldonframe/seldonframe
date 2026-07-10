@@ -79,13 +79,22 @@ short paragraphs, 16-year-old reading level with "kind of like…" analogies —
 world-class standalone value. Architecture: engine upgrade (markdown-lite + typed diagram
 primitives + callouts + favicon logos) then batch rewrite of all 74 guides. Facts frozen.
 
-- [ ] PR A — engine: types (diagram/callout/markdown-lite) · guide-page.tsx inline renderer +
-      guide-diagrams.tsx SVG set (CSS-animated, reduced-motion safe) · sources-row favicons ·
-      FAQ JSON-LD markdown-strip · guide-markdown.ts twin degradation · spec-test extensions ·
-      2 exemplar guides upgraded · content-loop.md style contract
-- [ ] PR B — rewrite all 74 guides in batches (simplify, shorten, bold/italic, analogies,
-      1-2 diagrams each; facts/hedges/sources verbatim) + fact-drift reviewer gate per batch
-- [ ] Gates: guides.spec green · tsc delta · reviewer SHIP · merge · smoke + vision pass
+- [x] PR A (#55, MERGED): engine — markdown-lite React-node parser (guide-inline.ts pure module) ·
+      guide-diagrams.tsx (5 SVG primitives, CSS-animated, reduced-motion safe) · callout boxes ·
+      sources-row favicons · JSON-LD/meta strip · twin degradation · spec 834 tests · 2 exemplars ·
+      style contract in content-loop.md. Reviewer SHIP + 4 hardening fixes applied.
+- [x] PR B (#56, MERGED): ALL 90 remaining guides rewritten by parallel subagents (92 total incl.
+      exemplars). 3 fact-drift reviewers (numeric-fingerprint multisets + close reads): 90/90
+      sources byte-identical, 0 magnitude drift, 0 hedge drops; 1 blocking fixed (self-contradicting
+      seat-fee chart → consistent $97 series) + nested-markup + invented-quantity NITs fixed.
+- [x] Gates: guides.spec 834/834 · tsc 51=baseline · CI failure-diff = main's pre-existing red ·
+      live verify: <strong>/callouts/flow-SVGs/favicons confirmed in production HTML · vision pass
+      on full-page desktop+mobile captures (typography/diagrams/callouts/mobile all clean; smoke
+      agent's "no <strong>" claim disproven by direct curl — it grepped the RSC payload)
+
+**Review:** whole guide estate (92 pages) now renders diagrams, analogies, short readable prose;
+GEO surface (md twins) degrades everything to text; facts provably frozen. Future guides inherit
+the style via the content-loop contract.
 
 ### Task — Retainer sibling-recovery period narrowing (2026-07-08, money-review follow-up, worktree hungry-jang-c20e73)
 
