@@ -154,6 +154,10 @@ export function RecordClient({
             flowModel: data.flow_model,
             openQuestions: data.open_questions,
             slots: data.slots.map((s) => ({ slotIndex: s.slot_index, label: s.label, status: s.status })),
+            // Only trust ?claimed=1 for the session it was minted for — a
+            // stale localStorage pair from a different session must not skip
+            // its own recap.
+            claimed: claimed && (claimedSessionId === null || claimedSessionId === stored.sessionId),
           });
         })
         .catch(() => {

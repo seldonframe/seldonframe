@@ -60,6 +60,15 @@ export type RecorderAction =
       flowModel: FlowModel | null;
       openQuestions: string[];
       slots: RehydratedSlot[];
+      /** True on the authenticated return from the claim redirect
+       *  (?claimed=1). A recapped session then lands in phase "approved" —
+       *  the operator already clicked approve pre-claim (that dispatch died
+       *  with the page navigation), and rendering "recap" again would show
+       *  the claim CTA and loop them back through /signup forever (B-1). The
+       *  server-side recapped→approved transition still happens in
+       *  compile-agent's approve:true — this only picks which button shows.
+       *  Absent = false (an ordinary un-claimed refresh). */
+      claimed?: boolean;
     }
   | { type: "START_RECORDING"; slotIndex: number }
   | { type: "STOP_RECORDING"; slotIndex: number }
@@ -150,7 +159,7 @@ export function recorderReducer(state: RecorderState, action: RecorderAction): R
       const phase: RecorderState["phase"] =
         hasFlowModel &&
         (action.status === "recapped" || action.status === "approved" || action.status === "compiled")
-          ? action.status === "recapped"
+          ? action.status === "recapped" && !action.claimed
             ? "recap"
             : "approved"
           : "capturing";

@@ -193,6 +193,38 @@ describe("REHYDRATED", () => {
     });
     assert.equal(next.coverage.length, 1);
   });
+
+  // B-1 regression: the authed post-claim return must land where the
+  // "Compile my agent" button renders (phase "approved"), never back on the
+  // claim CTA (phase "recap") — that loops the operator through /signup
+  // forever.
+  test("status 'recapped' + flowModel + claimed → phase approved (post-claim return)", () => {
+    const next = recorderReducer(initialRecorderState(), {
+      type: "REHYDRATED",
+      sessionId: "s",
+      token: "t",
+      status: "recapped",
+      flowModel: fixtureFlowModel(),
+      openQuestions: [],
+      slots: [],
+      claimed: true,
+    });
+    assert.equal(next.phase, "approved");
+  });
+
+  test("claimed does NOT rescue a session with no flowModel → still capturing", () => {
+    const next = recorderReducer(initialRecorderState(), {
+      type: "REHYDRATED",
+      sessionId: "s",
+      token: "t",
+      status: "recapped",
+      flowModel: null,
+      openQuestions: [],
+      slots: [],
+      claimed: true,
+    });
+    assert.equal(next.phase, "capturing");
+  });
 });
 
 describe("START_RECORDING", () => {
