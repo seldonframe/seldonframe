@@ -136,3 +136,51 @@ Trace/flow Zod schemas ~10+ edges → ~200 prod / ~650 test; compiler+merge+cove
 machine + composition 0.94x) / ~450 test; compile-agent + eval derivation ~300 prod / ~400 test;
 migration + spike + docs ~300. **Total ≈ 2,200 prod + 2,500 test ≈ 4,700 LOC.** Stop-and-reassess
 if a slice runs >15% over its line.
+
+## 9. As-built deltas
+
+Interface drift discovered during the build, vs. this design/the implementation plan:
+
+- **`route-guards.ts` extraction (security review, Wave D).** Next's build-time route-export
+  validation rejects any non-handler/non-segment-config export from a `route.ts` file ("X is not
+  a valid Route export field") — tsc never catches it, only `next build` does. Every pure
+  authz/gate helper (`authorizeRecordingSubmission`, `isValidRecordingBlobUrl`,
+  `resolveSessionCreateGate`, `resolveUploadGrant`, `isAllowedRecordingPathname`, and this wave's
+  `resolveCompileAgentGate`) therefore lives in `lib/recordings/route-guards.ts`, not inline in the
+  route files, and the authz specs import from there. This module is also kept free of
+  `@vercel/blob` imports so it resolves under the worktree's node_modules junction.
+- **jpeg-only anonymous upload grant (security review, Wave D).** `resolveUploadGrant` only ever
+  grants `image/jpeg` (keyframes) or `video/webm` — never the workspace media route's wider image
+  allowlist (svg/gif/png/webp). Anonymous, unauthenticated visitors write these blobs to a public
+  URL; an SVG (script-bearing) upload there would be a stored-XSS surface, so the anonymous path
+  is deliberately narrower than the authed dashboard upload route it otherwise mirrors.
+- **`compile-trace` response now includes `flow_model`.** The route previously returned
+  `{trace, whatChanged, openQuestions, coverage}` and `record-client.tsx`'s `handleStop`
+  reconstructed the client-visible FlowModel by hand from the previous state + those fields. The
+  response now also carries `flow_model` — the exact, persisted, merged FlowModel the route just
+  wrote to `recordingSessions.flow_model` — and `handleStop` uses it directly. Source of truth
+  lives in one place (the DB row via the route's response), not reconstructed client-side.
+- **React.createElement smoke-test note (Wave D).** `record-page-render.spec.ts`'s renderToString
+  harness constructs the client component via `React.createElement` rather than JSX (the test file
+  is plain `.ts`, not `.tsx`) — noted here so a future reader isn't surprised by the harness shape;
+  no behavior difference from a JSX-authored smoke test.
+- **Task 11 (`compile-agent.ts`) — `parseIntent` is `heuristicIntent`.** The plan's prose named a
+  `parseIntent` import; the real export in `lib/agents/generate/parse-intent.ts` is
+  `heuristicIntent` (sync, pure, always-complete) plus the async, LLM-DI'd `parseAgentIntent`.
+  `flowModelToBundle` calls `heuristicIntent(model.goal)` directly — this whole module stays
+  synchronous, deterministic, and LLM-free by design (per the plan's own framing of
+  `deriveEvalScenarios` as "deterministic, no LLM"; the same now applies to the bundle assembly).
+- **Task 11 — connector binding bypasses `bindToolsForIntent`/`bindingForEntry`.** `bindingForEntry`
+  (`bind-tools.ts:64`) isn't exported, and `bindToolIds` indexes the catalog by its `id` field —
+  which for a Composio entry like `googlesheets` differs from the `toolkitSlug` (`googledrive`)
+  that `coverage.ts` actually stores on a green `CoverageEntry.toolkit`. `compile-agent.ts` instead
+  has its own tiny `bindingForToolkit(toolkit)` that builds a `ConnectorBinding` directly from the
+  coverage entry's already-resolved toolkit string (`"postiz"` → vetted, anything else → composio),
+  with a comment pointing back at `bindingForEntry` as the shape it mirrors.
+- **Task 12 — `resolveCompileAgentGate`'s `approve` semantics.** The plan only said `approve: true`
+  "transitions recapped→approved first". The gate additionally treats a `recapped` session
+  submitted WITHOUT `approve: true` as a 409 conflict (not a silent pass-through) — a recapped
+  session is not yet compilable without the explicit approval this route performs, and an
+  `approved` session proceeds regardless of the `approve` flag (idempotent retry).
+- No other interface (types, exported function signatures, route paths, DB columns) drifted from
+  the plan.
