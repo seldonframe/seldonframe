@@ -29,7 +29,7 @@
     "tsx": "node scripts/run-tsx.js"
   },
   "devDependencies": {
-    "turbo": "^2.5.6"
+    "turbo": "^2.10.4"
   },
   "packageManager": "pnpm@10.18.1"
 }
