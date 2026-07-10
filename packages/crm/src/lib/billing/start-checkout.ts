@@ -56,10 +56,15 @@ export async function startCheckout(input: StartCheckoutInput): Promise<StartChe
     | null;
 
   if (!response.ok) {
+    // contract:throw-ok: browser-side helper — the sole caller
+    // (upgrade-modal's upgrade()) try/catches and renders the message
+    // via setError; the throw IS the structured error channel here.
     throw new Error(payload?.error ?? `checkout failed: ${response.status}`);
   }
 
   if (!payload?.url) {
+    // contract:throw-ok: same as above — caught by upgrade-modal and
+    // rendered as an inline error state.
     throw new Error("checkout response missing url");
   }
 

@@ -194,6 +194,9 @@ if (resendApiKey) {
 
         if (!response.ok) {
           const detail = await response.text().catch(() => "<no-body>");
+          // contract:throw-ok: NextAuth catches provider errors and routes to
+          // its error page. Swallowing here would show "check your inbox" for
+          // an email that was never sent — the never-lies violation.
           throw new Error(
             `Failed to send sign-in email (${response.status}): ${detail.slice(0, 200)}`,
           );
