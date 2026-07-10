@@ -197,3 +197,10 @@ export * from "./url-extraction-cache";
 // source. See docs/superpowers/specs/2026-07-06-dream-loop-design.md +
 // lib/vision/persist-reflection.ts / collect-reflections.ts.
 export * from "./agent-reflection-events";
+
+// 2026-07-10 — Record-to-agent (migration 0067): recording_sessions +
+// workflow_recordings. Anonymous, bearer-token-authed rows that collect
+// screen recordings, compile a FlowModel, and (post-claim) an
+// agent_templates draft. Inert behind SF_RECORD_TO_AGENT. See
+// docs/superpowers/specs/2026-07-10-record-to-agent-design.md.
+export * from "./recordings";
