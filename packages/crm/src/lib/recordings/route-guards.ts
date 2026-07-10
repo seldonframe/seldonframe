@@ -182,6 +182,11 @@ export async function resolveSessionFetchGate(params: {
 // these blobs are written by ANONYMOUS visitors, and script-bearing formats on
 // a public URL are a stored-XSS surface.
 export const ALLOWED_IMAGE_CONTENT_TYPE = "image/jpeg";
+// webm (live desktop capture) + mp4/quicktime (phone OS recorders — the
+// mobile upload path). All inert media types: none can carry script on a
+// public URL the way svg/gif can, and Whisper accepts all three.
+export const ALLOWED_VIDEO_CONTENT_TYPES = ["video/webm", "video/mp4", "video/quicktime"] as const;
+/** @deprecated kept for any straggling import — prefer ALLOWED_VIDEO_CONTENT_TYPES. */
 export const ALLOWED_VIDEO_CONTENT_TYPE = "video/webm";
 
 /** pathname must live under this session's own `recordings/<sessionId>/`
@@ -201,8 +206,8 @@ export function resolveUploadGrant(params: {
   if (params.contentType === ALLOWED_IMAGE_CONTENT_TYPE) {
     return { allowedContentTypes: [ALLOWED_IMAGE_CONTENT_TYPE], maximumSizeInBytes: IMAGE_MAX_BYTES };
   }
-  if (params.contentType === ALLOWED_VIDEO_CONTENT_TYPE) {
-    return { allowedContentTypes: [ALLOWED_VIDEO_CONTENT_TYPE], maximumSizeInBytes: VIDEO_MAX_BYTES };
+  if ((ALLOWED_VIDEO_CONTENT_TYPES as readonly string[]).includes(params.contentType)) {
+    return { allowedContentTypes: [params.contentType], maximumSizeInBytes: VIDEO_MAX_BYTES };
   }
   return null;
 }

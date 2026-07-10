@@ -276,7 +276,7 @@ describe("resolveUploadGrant", () => {
   });
 
   test("script-bearing / other image formats are all rejected", () => {
-    for (const contentType of ["image/svg+xml", "image/gif", "image/png", "image/webp", "text/html", "video/mp4", ""]) {
+    for (const contentType of ["image/svg+xml", "image/gif", "image/png", "image/webp", "text/html", "video/x-msvideo", ""]) {
       assert.equal(resolveUploadGrant({ contentType }), null, `expected null for ${contentType || "(empty)"}`);
     }
   });
@@ -356,3 +356,15 @@ describe("isAllowedRecordingPathname", () => {
   });
 });
 
+
+// Mobile uploads: phone OS recorders produce mp4 (Android) / quicktime (iOS)
+// — inert media types, granted at the video cap so the raw artifact (and the
+// Whisper transcription path) survives the mobile upload flow.
+describe("resolveUploadGrant — mobile video types", () => {
+  test("video/mp4 and video/quicktime → granted at VIDEO_MAX_BYTES", () => {
+    for (const contentType of ["video/mp4", "video/quicktime"]) {
+      const grant = resolveUploadGrant({ contentType });
+      assert.deepEqual(grant, { allowedContentTypes: [contentType], maximumSizeInBytes: VIDEO_MAX_BYTES }, contentType);
+    }
+  });
+});

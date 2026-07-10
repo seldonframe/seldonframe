@@ -264,10 +264,15 @@ export function RecordClient({
 
     let videoBlobUrl: string | null = null;
     if (video) {
-      const videoResult = await upload(`recordings/${sessionId}/video-${slotIndex}.webm`, video, {
+      // Live capture produces webm; uploaded files keep their real type
+      // (mp4 on Android, quicktime/.mov on iOS) — the grant accepts all
+      // three, and Whisper needs the true content type to transcribe.
+      const videoType = video.type && video.type.startsWith("video/") ? video.type : "video/webm";
+      const ext = videoType === "video/mp4" ? "mp4" : videoType === "video/quicktime" ? "mov" : "webm";
+      const videoResult = await upload(`recordings/${sessionId}/video-${slotIndex}.${ext}`, video, {
         access: "public",
         handleUploadUrl: "/api/v1/recordings/upload",
-        clientPayload: JSON.stringify({ token, contentType: "video/webm" }),
+        clientPayload: JSON.stringify({ token, contentType: videoType }),
       });
       videoBlobUrl = videoResult.url;
     }
