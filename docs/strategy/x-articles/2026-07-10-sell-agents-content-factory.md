@@ -66,6 +66,18 @@ What's next
 
 The queue file says Wave 8 is gated. So next is the unglamorous part: close ten deals, then write the case studies that are currently forbidden. The factory did its job. Now I have to do mine.
 
+Want the factory? Steal the prompt.
+
+Give this to your coding agent, word for word. Copy everything between the lines.
+
+----------------------------------------
+
+Run a content production line with me as the only human. 1) First, planning session: I give you my topic area, you propose 40 articles in 8 coherent clusters, each with an intent statement, a target keyword, and this hard rule — every number must come from a primary source you fetch live, or it gets cut. I approve the plan before anything gets written. 2) Then run waves of 5 or 6 articles: one agent writes, then a DIFFERENT agent reviews adversarially — checking sources, tone drift, and cluster fit. The writer never reviews its own work. 3) When the reviewer claims a fabricated statistic, don't auto-edit: show me the claim and the primary source side by side, because reviewers pattern-match and sometimes the writer was right. 4) I make every merge call. 5) Anything requiring proof I don't have yet — case studies, testimonials — goes in a gated wave that stays empty until the proof exists. Never invent a customer.
+
+----------------------------------------
+
+Agents do volume. You do verdicts. That split is the entire trick.
+
 The guides are free at seldonframe.com/guides, the "Building & selling AI agents" cluster. If you build agents for clients, that's your section of the store.
 
 ===== END ARTICLE BODY =====
@@ -88,10 +100,12 @@ acting on its verdict" · "The machine ships guides. It can't ship proof."
 Italic: "buying" / "sell" (opening contrast) · "before" (fetched the source live
 before citing it) · the closing seldonframe.com paragraph.
 
-Cover image (5:2, GENERATED): stat card "32 guides · 7 waves · 2 days" — build the
-HTML at 1500x600 and render: node scripts/x-creative-shot.mjs <html> --size 1500x600.
-Style option per bookmark corpus: workflow-diagram style (plan → waves → merge → live)
-with the real guide titles embedded.
+Cover image / CONCEPT DIAGRAM (5:2, GENERATED, RENDERED): diagram-factory-line.png —
+the production line (ME plan → agent write → different agent review → ME merge →
+32 live) with the verify-the-verifier loop-back and the gated Wave 8 box. Doubles
+as cover. Place a second copy after "Then the waves ran" if the editor allows.
+
+Bold the line "Want the factory? Steal the prompt."
 
 Inline images (all 5:2 crops):
 1. CAPTURE — seldonframe.com/guides, the "Building & selling AI agents" cluster,

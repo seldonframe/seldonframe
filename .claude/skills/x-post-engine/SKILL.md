@@ -120,12 +120,29 @@ draft in `docs/strategy/x-articles/YYYY-MM-DD-<slug>.md`. Rules:
    to bold / italicize / underline in the editor, cover image, and where each
    inline image goes) plus CREATIVE blocks per the post rules above (GENERATED
    cards rendered to docs/strategy/x-creatives/, CAPTURE specs for receipts).
-8. **3 supporting tweets per article** (in the same file, SUPPORTING TWEETS
+8. **Concept visual (the sauce, drawn):** every article gets 1-2 GENERATED
+   diagrams that let a reader grasp the core mechanism from the image alone —
+   flowchart of the loop, stack diagram, production line. Rules: (a) REAL
+   specifics embedded (actual file names, numbers, tool names) — a generic
+   boxes-and-arrows chart is AI slop and forbidden; (b) pass the rebuild test:
+   someone could reconstruct the system from the diagram; (c) @themaxthule on
+   the card — screenshots travel without attribution otherwise; (d) 5:2 via
+   x-creative-shot.mjs --size 1500x600; (e) place it right after the section
+   that explains the mechanism. Corpus evidence: the 5-ads workflow diagram
+   with real artifacts did 1.1k likes / 901 replies — the diagram WAS the post.
+9. **Steal-this-prompt block:** near the end of the body (before the closing),
+   a plain-text prompt the reader can paste into their own LLM/agent to
+   reproduce the build, delimited by "Copy everything between the lines" lines.
+   Must be honestly runnable — test-shaped, concrete, no pseudo-prompt filler
+   (never-lies applies to giveaways). This converts readers into repliers
+   ("it worked") and is the never-taxes distribution mechanic: give the sauce,
+   sell the platform.
+10. **3 supporting tweets per article** (in the same file, SUPPORTING TWEETS
    section, paste-ready): these are quote-reposts OF the article across the
    week — each takes a DIFFERENT door in: one number hook, one scar/insight
    line, one contrarian or value take. Never three rewordings of the title.
    Spacing note per tweet (e.g. "day 2 evening", "day 4 morning").
-9. **Cadence: 5 articles/week, each anchored to a real build from the week** —
+11. **Cadence: 5 articles/week, each anchored to a real build from the week** —
    the session logs, docs/learnings/, and the loops Max pastes into Claude Code
    daily are all legitimate build material. If a receipt (number, timing, cost)
    isn't in the material, mark it `[FILL: what's needed]` for Max — never

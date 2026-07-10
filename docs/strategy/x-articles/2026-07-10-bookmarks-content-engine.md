@@ -82,6 +82,18 @@ What's next
 
 The Monday email started this week. Next up: a monthly receipt post, same Performance table screenshot every month, numbers moving or not moving in public. If the loop works, the proof will be a table I can't edit after the fact. If it doesn't, that table becomes the scar post. And scar posts, my corpus tells me, perform.
 
+Want this loop? Steal the prompt.
+
+Give this to your coding agent, word for word. Copy everything between the lines.
+
+----------------------------------------
+
+Build me a personal X content engine. 1) Pull my X bookmarks via the API: bookmarks need OAuth 2.0 user context with PKCE and the bookmark.read scope, so write a zero-dependency script with a localhost callback that caches the refresh token; app-only tokens will 403. 2) Append them to one markdown file called the vault with three sections: Patterns (max 20 lines, each rule with evidence), Performance (a table of MY posts with impressions at 1 week), Corpus (raw bookmarks with metrics). 3) For each bookmark, distill one line: hook mechanic, format, why it worked. Structure only, never voice. 4) Weekly, read Patterns plus what I shipped that week and draft 2 to 3 posts for my review. Never post anything yourself. 5) When I tell you what I posted, log the numbers in Performance and let them override the borrowed patterns over time.
+
+----------------------------------------
+
+That's the whole machine. Your bookmarks are already the dataset. Mine took 15 minutes to wire.
+
 I'm building SeldonFrame, an open platform where one conversation with an agent becomes a client's whole front office. Website, CRM, booking, intake. This content engine is the same thesis at smaller scale: thin harness, one source of truth, loops that feed themselves. The 18-year-old with the roofing site was the market telling me I'm on time.
 
 ===== END ARTICLE BODY =====
@@ -103,9 +115,15 @@ never touched a key." · "Patterns are a commodity" · "The machine is not the r
 Italic: Patterns / Performance / Corpus (where each is defined) · "why" in
 "figures out why each one performed" · the closing SeldonFrame paragraph.
 
-Cover image (5:2, GENERATED): rebuild the 50→11 card at 1500x600 —
-node scripts/x-creative-shot.mjs docs/strategy/x-creatives/2026-07-10/article-cover-50-11.html --size 1500x600
-(reuse draft2-vault-loop-card.html layout, wider spacing).
+Cover image (5:2, GENERATED, RENDERED): article-cover-50-11.png (3000x1200).
+
+CONCEPT DIAGRAM (5:2, GENERATED, RENDERED): diagram-vault-loop.png — the full
+loop with feedback arrow and the 89-impressions baseline. Place after "The idea
+in one sentence" section. This is the screenshot-and-save asset.
+
+Style the steal-this-prompt block: the two divider lines + prompt text go in a
+single-spaced block (X editor: no special styling needed, the dividers carry it);
+bold the line "Want this loop? Steal the prompt."
 
 Inline images (all 5:2 crops):
 1. CAPTURE — terminal after the pull command, wide crop. After "Fifteen minutes" paragraph.

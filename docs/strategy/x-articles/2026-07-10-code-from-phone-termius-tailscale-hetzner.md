@@ -63,6 +63,18 @@ What's next
 
 This setup just became part of a bigger machine. My content loop, the bookmark vault, the weekly drafts, runs on schedules now, and the phone means I review and steer it from anywhere. The desk is turning into the place I do deep review. Not the place work happens.
 
+Want this setup? Steal the prompt.
+
+Give this to your coding agent, word for word. Copy everything between the lines.
+
+----------------------------------------
+
+Set up remote agent coding I can drive from my phone. 1) Provision the smallest Hetzner cloud server, Ubuntu. 2) Install Tailscale on it and walk me through installing it on my phone, then set the Hetzner firewall to zero inbound rules — Tailscale's mesh is the only door. Confirm SSH only works over the tailnet. 3) Install tmux and my AI coding CLI on the box under my existing subscription, and clone my repo with a deploy key scoped to that repo only, nothing else. 4) Create a tmux session that survives disconnects and show me the exact one-line command to reattach from Termius on my phone. 5) Walk me through revoking the phone from the Tailscale admin panel, so I know the stolen-phone drill before I need it. Explain each step as you go — I want to understand my own infrastructure.
+
+----------------------------------------
+
+That's the whole thing. The hardest part is realizing there is no hard part left.
+
 If you build with agents and still can't leave your desk, the tools have outrun your setup.
 
 ===== END ARTICLE BODY =====
@@ -86,6 +98,13 @@ the whole ritual."
 Cover image (5:2, CAPTURE): your phone in hand or on a table, Termius open with a
 live Claude Code tmux session visible, wide 5:2 crop. The realness IS the cover —
 do not generate this one.
+
+CONCEPT DIAGRAM (5:2, GENERATED, RENDERED): diagram-phone-stack.png — phone →
+Tailscale mesh → Hetzner box (tmux · Claude Code · repo), "0 open ports" and the
+stolen-phone line. Place after "The stack, and why each piece" section. The
+screenshot-and-save asset.
+
+Bold the line "Want this setup? Steal the prompt."
 
 Inline images (all 5:2 crops):
 1. CAPTURE — Termius session, Claude Code mid-task (blur any secrets in scrollback).
