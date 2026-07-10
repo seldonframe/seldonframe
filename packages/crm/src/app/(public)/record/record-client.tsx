@@ -196,28 +196,20 @@ export function RecordClient({
         whatChanged: string[];
         openQuestions: string[];
         coverage: CoverageEntry[];
+        flow_model: FlowModel;
       };
 
-      // The session's persisted flowModel already includes coverage (the
-      // compile-trace route writes it that way) — refetch it isn't exposed
-      // by this route's response as a full FlowModel today, so we build the
-      // client-visible model from what the response DOES give us plus the
-      // previous model, falling back to treating the response's own shape
-      // as authoritative for what changed/coverage/open questions.
-      const nextModel: FlowModel | null = state.flowModel
-        ? { ...state.flowModel, coverage: traced.coverage, openQuestions: traced.openQuestions }
-        : (traced.trace as FlowModel | null);
-
-      if (nextModel) {
-        dispatch({
-          type: "TRACED",
-          slotIndex,
-          flowModel: { ...nextModel, coverage: traced.coverage },
-          coverage: traced.coverage,
-          whatChanged: traced.whatChanged,
-          openQuestions: traced.openQuestions,
-        });
-      }
+      // flow_model is the session's own persisted, merged FlowModel (the
+      // source of truth) — use it directly instead of reconstructing it
+      // client-side from trace/coverage/openQuestions.
+      dispatch({
+        type: "TRACED",
+        slotIndex,
+        flowModel: traced.flow_model,
+        coverage: traced.coverage,
+        whatChanged: traced.whatChanged,
+        openQuestions: traced.openQuestions,
+      });
     } catch (err) {
       dispatch({
         type: "SLOT_FAILED",

@@ -150,3 +150,60 @@ export function resolveUploadGrant(params: {
   }
   return null;
 }
+
+// ─── compile-agent (post-claim) authz gate ─────────────────────────────────
+
+/** The only session statuses `compile-agent` may act on: 'recapped' (the
+ *  approve:true transition below moves it to 'approved') or already
+ *  'approved' (a retry / the operator re-hits compile). Any other status
+ *  (recording / compiled / abandoned) is a 409 conflict. */
+const COMPILABLE_STATUSES = new Set(["recapped", "approved"]);
+
+export type CompileAgentGateResult =
+  | { kind: "not_found" }
+  | { kind: "unauthorized" }
+  | { kind: "conflict" }
+  | { kind: "ok"; shouldApprove: boolean };
+
+/**
+ * Pure-shaped authorization for POST /api/v1/recordings/compile-agent. Auth
+ * is BOTH the session bearer token AND an authenticated operator
+ * (getOrgId()) — a caller needs to be signed in AND hold the exact
+ * session's bearer (proving they're the one who recorded it), never
+ * either alone. `session` and `orgId` are DI'd (never a raw db handle /
+ * getOrgId() call) so the authz test exercises every rejection path with
+ * plain fakes, mirroring authorizeRecordingSubmission / resolveSessionCreateGate.
+ */
+export function resolveCompileAgentGate(params: {
+  env: { SF_RECORD_TO_AGENT?: string | undefined };
+  orgId: string | null;
+  rawToken: string | null;
+  sessionIdFromBody: string;
+  session: { id: string; status: string } | null;
+  approve: boolean;
+}): CompileAgentGateResult {
+  if (!isRecordToAgentOn(params.env)) {
+    return { kind: "not_found" };
+  }
+  if (!params.orgId) {
+    return { kind: "unauthorized" };
+  }
+  if (
+    !params.rawToken ||
+    !params.session ||
+    params.session.id !== params.sessionIdFromBody
+  ) {
+    return { kind: "unauthorized" };
+  }
+  if (!COMPILABLE_STATUSES.has(params.session.status)) {
+    return { kind: "conflict" };
+  }
+  // 'recapped' MUST arrive with approve:true to proceed (that's the one
+  // transition this route performs); a recapped session without approval
+  // is not yet compilable. 'approved' proceeds regardless of `approve`
+  // (a retry / re-hit of compile with approve omitted is still valid).
+  if (params.session.status === "recapped" && !params.approve) {
+    return { kind: "conflict" };
+  }
+  return { kind: "ok", shouldApprove: params.session.status === "recapped" };
+}

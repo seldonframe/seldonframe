@@ -149,5 +149,11 @@ export async function POST(request: Request): Promise<Response> {
     whatChanged: mergeResult.whatChanged,
     openQuestions: mergeResult.openQuestions,
     coverage,
+    // The persisted, merged FlowModel — the SOURCE OF TRUTH for the
+    // session (same object just written to recordingSessions.flowModel
+    // above). Returned so the client never has to reconstruct it from
+    // trace/coverage/openQuestions itself (see record-client.tsx's
+    // handleStop, which used to do exactly that).
+    flow_model: modelWithCoverage,
   });
 }
