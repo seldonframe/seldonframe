@@ -15,6 +15,28 @@ Strategic commissions the weekly content-loop must publish ahead of its research
 - **relatedTool:** `/tools/ai-visibility-checker`. Body links: /charts/ai-recommendation-index, faq-schema-for-local-seo guide.
 - **never-lies notes:** no invented "AI traffic %" stats — cite only sources verified per the standard rules; our own methodology page is a citable source for our claims about our own practice.
 
+## 3. Sell-agents Wave 2a — how to sell AI agents to local businesses
+
+- **status:** queued
+- **commissioned:** 2026-07-10 (by Max, via the marketplace supply-side plan — `docs/strategy/2026-07-10-marketplace-supply-content.md`)
+- **slug:** `how-to-sell-ai-agents-to-local-businesses`
+- **working title:** "How to Sell AI Agents to Local Businesses (Scripts, Demos, and the One-Booked-Job Close)"
+- **cluster:** `sell-agents` · **relatedTool:** `/tools/missed-call-calculator` · **relatedBest:** `/marketplace`
+- **target intent:** "sell ai agents to local businesses" / "how to sell ai to small business" / "ai agent sales pitch".
+- **the piece:** the tactical companion to the `how-to-make-money-selling-ai-agents` pillar (Wave 1). (1) why local/service businesses are the beachhead (phone-driven demand, provable pain); (2) prospecting: call their number after hours, grade their website, find the missed-call gap — demo ON THEIR business, not a generic deck; (3) the pitch structure: pain → proof → one-booked-job ROI anchor; (4) objection handling ("already have an answering service" / "worried the AI will lie to customers" → the guardrails/read-back answer / "we're too small"); (5) close + onboard in the same week; (6) retention via a monthly proof report. FAQ ≥4.
+- **never-lies notes:** no invented close rates or income claims; any missed-call/lead-response stat must verify to a primary source or be stated qualitatively. Dedupe against the pillar — this page is the FIELD manual, the pillar is the business-model map.
+
+## 4. Sell-agents Wave 2b — white label AI agents (category page)
+
+- **status:** queued
+- **commissioned:** 2026-07-10 (by Max, via the marketplace supply-side plan)
+- **slug:** `white-label-ai-agents`
+- **working title:** "White Label AI Agents: How Agencies Resell One Build to Many Clients (2026 Guide)"
+- **cluster:** `sell-agents` · **relatedTool:** `/tools/agency-margin-calculator` · **relatedBest:** `/agencies`
+- **target intent:** "white label ai agents" / "white label ai agent platform" / "resell ai agents".
+- **the piece:** category-intent explainer + honest vendor landscape. (1) what white-labeling an agent actually means (template=product, deployment=tenant-config; branding, domains, client portals); (2) the economics (build once, deploy many; margin math); (3) what to evaluate in a platform (per-client isolation, your branding end-to-end, who owns the client relationship, flat vs per-seat pricing, BYOK); (4) honest vendor list — verify each with WebFetch (Stammer, Synthflow/Vapi white-label programs, GHL SaaS-mode as the incumbent pattern, SeldonFrame disclosed as ours); (5) pitfalls (per-sub-account taxes, lock-in, agents that lie under your brand). FAQ ≥4.
+- **never-lies notes:** competitor claims only from their own live pages via WebFetch; no fee/percentage from memory. MUST dedupe against `white-label-ai-front-office-without-agency-pro` (GHL-angle, already live) — this is the platform-agnostic category page; cross-link, don't overlap.
+
 ## 1. The one-person-company-OS pillar page
 
 - **status:** shipped: 2026-07-10 one-person-company-os

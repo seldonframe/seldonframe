@@ -67,6 +67,12 @@ import { guide as howToPriceAnAiReceptionistService } from "./how-to-price-an-ai
 import { guide as runClientAiOnYourOwnKeys } from "./run-client-ai-on-your-own-keys";
 import { guide as gohighlevelSaasModeVsFlatPricing } from "./gohighlevel-saas-mode-vs-flat-pricing";
 import { guide as whiteLabelAiFrontOfficeWithoutAgencyPro } from "./white-label-ai-front-office-without-agency-pro";
+import { guide as howToMakeMoneySellingAiAgents } from "./how-to-make-money-selling-ai-agents";
+import { guide as howMuchToChargeForAnAiAgent } from "./how-much-to-charge-for-an-ai-agent";
+import { guide as aiAgentBusinessIdeas } from "./ai-agent-business-ideas";
+import { guide as howToStartAnAiAutomationAgency } from "./how-to-start-an-ai-automation-agency";
+import { guide as bestAiAgentMarketplaces } from "./best-ai-agent-marketplaces";
+import { guide as whatIsAnMcpMarketplace } from "./what-is-an-mcp-marketplace";
 
 export { LAST_UPDATED };
 export type { Guide, GuideCluster, GuideSection, GuideFaq, GuideSource, GuideIntent } from "./types";
@@ -82,6 +88,7 @@ export const CLUSTER_LABELS: Record<GuideCluster, string> = {
   reviews: "Reviews & reputation",
   "ai-agents": "Running your business with AI agents",
   gohighlevel: "GoHighLevel alternatives & pricing",
+  "sell-agents": "Building & selling AI agents",
 };
 
 export const GUIDES: Guide[] = [
@@ -145,6 +152,12 @@ export const GUIDES: Guide[] = [
   runClientAiOnYourOwnKeys,
   gohighlevelSaasModeVsFlatPricing,
   whiteLabelAiFrontOfficeWithoutAgencyPro,
+  howToMakeMoneySellingAiAgents,
+  howMuchToChargeForAnAiAgent,
+  aiAgentBusinessIdeas,
+  howToStartAnAiAutomationAgency,
+  bestAiAgentMarketplaces,
+  whatIsAnMcpMarketplace,
 ];
 
 export function getGuide(slug: string): Guide {
