@@ -1,96 +1,102 @@
-# X Article draft — 2026-07-10 (2 of 3)
+# X Article draft — 2026-07-10 (2 of 3) · REWRITTEN v2 (paste-clean, verbal)
 Format: value post at essay length · Keyword: Claude Code from your phone
-Target: X Article (Premium+) · ~1,550 words
 [FILL] markers = your real receipts — fill before posting, never estimate.
 
----
+Title alternates (pick per surface):
+  A (search-first, current): Claude Code from your phone: ship real work with Termius + Tailscale + Hetzner, no laptop
+  B (feed, contrarian): I stopped carrying a laptop. The agent works; my phone watches.
+  C (levelsio nod): The levelsio way, one command: Claude Code on a Hetzner box you reach from anywhere
 
-# Claude Code from your phone: ship real work with Termius + Tailscale + Hetzner, no laptop
+===== ARTICLE BODY (paste everything between these lines) =====
 
-### The agent lives on a [FILL: €X/mo] server with zero open ports. My phone is just the window I check on it through.
+Claude Code from your phone: ship real work with Termius + Tailscale + Hetzner, no laptop
 
-<!-- Title alternates:
-  A (keyword-first, search): the one above
-  B (X feed, contrarian): "I stopped carrying a laptop. The agent works; my phone watches."
-  C (protagonist/levelsio nod): "The levelsio way, one command: Claude Code on a Hetzner box you reach from anywhere" -->
+The agent lives on a [FILL: €X/mo] server with zero open ports. My phone is just the window I check on it through.
 
+I watched levelsio vibecode an entire DNS server in 15 minutes and I thought the impressive part was the speed. It wasn't. The impressive part was where. On a remote box he could reach from anywhere.
 
-I saw levelsio vibecode an LLM-over-DNS server in 15 minutes and thought the interesting part was the speed. It wasn't. The interesting part was *where* — on a remote box he could reach from anywhere.
+Then someone in my bookmarks wrapped that whole idea into one command. A Hetzner box running your AI coding agent on your own subscription. Tailscale only. Nothing inbound. And it clicked for me: the era of "I'll do it when I'm back at my desk" is just over.
 
-Then someone in my bookmarks wrapped that whole idea into one command — a Hetzner box running your AI CLI on your own subscription, Tailscale-only, nothing inbound — and I realized the era of "I'll do it when I'm back at my desk" is just over.
+So I set it up. Here's the whole stack, why each piece is there, and what shipping from a phone actually feels like.
 
-So I set it up. Here's the whole stack, why each piece, and what it actually feels like to ship from a phone.
+The stack, and why each piece
 
-## The stack, and why each piece
+Hetzner is the box. A small cloud server, [FILL: your instance type and €/mo], is genuinely enough, because the heavy lifting happens on Anthropic's side. Claude Code on the server is a coordinator, not a compiler. You're paying for a persistent place where the agent lives. Not for compute.
 
-**Hetzner: the box.** A small cloud server — [FILL: your instance type and €/mo] — is enough, because the heavy lifting happens on Anthropic's side. Claude Code on the server is a coordinator, not a compiler. You're paying for a persistent place where the agent lives, not for compute.
+Tailscale is the door. This is the piece people skip and then regret. It puts the server and my phone on a private mesh network, so the Hetzner firewall stays completely empty. Nothing inbound. No exposed SSH port. No bot swarm hammering port 22 an hour after boot. The server simply doesn't exist except for devices I own. Setup was one install on each end and signing in twice. [FILL: minutes it took you]
 
-**Tailscale: the door.** This is the piece people skip and regret. Tailscale puts the server and your phone on a private mesh network. The Hetzner firewall stays completely empty — nothing inbound, no exposed SSH port, no fail2ban theater, no bot swarm hammering port 22 within an hour of boot. The server is unreachable except from devices you own. Setup is one install command on each end and signing in twice. [FILL: minutes it took you]
+Termius is the window. An SSH client on the phone that doesn't fight you. Persistent sessions, real shortcuts, snippets for the commands I type daily.
 
-**Termius: the window.** An SSH client on the phone that doesn't fight you: persistent sessions, real keyboard shortcuts, snippets for the commands you type daily. iOS or Android, works the same.
+tmux is the memory. The one non-negotiable. Claude Code runs inside a tmux session on the server, so when my phone sleeps, or the elevator kills my signal, or I just put it back in my pocket, the agent keeps working. I reattach an hour later and read what happened while I was gone. tmux attach is the whole ritual.
 
-**tmux: the memory.** The one non-negotiable. Claude Code runs inside a tmux session on the server, so when your phone sleeps, the elevator kills signal, or you just put it back in your pocket — the agent keeps working. You reattach an hour later and read what happened while you were gone. `tmux attach` is the whole ritual.
+And Claude Code is the worker. Runs on the server under my existing subscription. Same skills, same tools, same repo access as my desk setup. Because it IS my setup. I just moved it somewhere that never sleeps.
 
-**Claude Code: the worker.** Runs on the server under your existing subscription. Same skills, same MCP servers, same repo access as your desk setup, because it IS your setup — you just moved it somewhere that never sleeps.
+What it actually feels like
 
-## What it actually feels like
+The mental shift is bigger than the technical one. Coding from a phone sounds miserable because you're imagining typing code on glass. You're not. You're typing sentences.
 
-The mental shift is bigger than the technical one. Coding from a phone sounds miserable because you're imagining *typing code* on glass. You're not. You're typing sentences.
+A real moment from this week: I'm away from my desk, I open Termius, attach to tmux, and type "run the bookmark pull, distill the new entries, draft this week's posts." Then I put the phone away. The agent doesn't need me hovering. It needs me for the two or three judgment calls it can't make alone, and honestly, those fit on a phone screen better than a diff ever will.
 
-A real session from this week: I'm away from my desk, I open Termius, attach to tmux, and type "run the bookmark pull, distill the new entries, and draft this week's posts." Then I put the phone away. The agent doesn't need me hovering — it needs me to make the two or three judgment calls it can't, and those fit on a phone screen better than a diff ever will.
-
-The rhythm becomes: fire instruction → pocket → check in ten minutes → make the call → pocket. It's closer to managing than typing, which is what working with agents already was — the phone just makes it honest.
+The rhythm becomes: fire the instruction, pocket, check in ten minutes, make the call, pocket again. It's closer to managing than typing. Which is what working with agents already was. The phone just makes it honest.
 
 [FILL: one real moment — where you were the first time you shipped something real from the phone, and what it was]
 
-## The security shape, because someone will ask
+The security shape, because someone will ask
 
-The box has no open ports. Not "SSH on a weird port" — none. Tailscale's WireGuard mesh is the only way in, and it authenticates devices, not passwords. If my phone is stolen, I revoke the device from the Tailscale admin panel and the thief has a brick pointed at nothing.
+The box has no open ports. Not "SSH on a weird port." None. Tailscale's mesh is the only way in, and it authenticates devices, not passwords. If my phone gets stolen, I revoke the device from the admin panel and the thief is holding a brick pointed at nothing.
 
-The agent has exactly the credentials the repo needs and nothing else. It can't reach my bank, my email, or my cloud console, because none of that lives on the box. Blast radius is one git repo that's backed up anyway.
+The agent has exactly the credentials the repo needs and nothing else. It can't reach my bank, my email, or my cloud console, because none of that lives on the box. Worst case, the blast radius is one git repo that's backed up anyway.
 
-Could I harden further? Sure. But "empty firewall + device mesh + minimal credentials" already beats the laptop I used to carry through airports.
+Could I harden it further? Sure. But empty firewall plus device mesh plus minimal credentials already beats the laptop I used to carry through airports.
 
-## What I don't know yet, honestly
+What I don't know yet, honestly
 
-**The phone review problem is real.** Reading a 40-file diff on a 6-inch screen doesn't work. I approve *direction* from the phone; anything that needs line-by-line review waits for a real screen. Pretending otherwise would just mean rubber-stamping — and an agent with a rubber stamp is how you ship a disaster.
+The phone review problem is real. Reading a 40-file diff on a 6-inch screen doesn't work, and I'm not going to pretend it does. From the phone I approve direction. Anything that needs line-by-line review waits for a real screen. The alternative is rubber-stamping, and an agent with a rubber stamp is how you ship a disaster.
 
-**Costs are small but not zero.** The box runs 24/7 whether I use it or not. [FILL: actual monthly all-in]. Against what it replaced — a laptop I felt chained to — I'll take it, but I've only run this for [FILL: days/weeks], so ask me about the bill in three months.
+Costs are small but not zero. The box runs around the clock whether I use it or not. [FILL: actual monthly all-in]. Against what it replaced, a laptop I felt chained to, I'll take it. But I've only run this for [FILL: days/weeks], so ask me about the bill in three months.
 
-**Signal dependence.** tmux means dropped connections don't kill work, but starting anything new from a dead zone is still impossible. The setup removes the desk, not the network.
+Signal dependence stays. tmux means a dropped connection doesn't kill work, but starting anything new from a dead zone is still impossible. This setup removes the desk, not the network.
 
-**I haven't stress-tested recovery.** If Hetzner eats the box tomorrow, my repos are on remotes and the setup is an hour to rebuild — in theory. I haven't rehearsed it. That's on the list, and until I've done the drill I'm not claiming the resilience story.
+And I haven't stress-tested recovery. If Hetzner eats the box tomorrow, my repos are on remotes and the rebuild is an hour. In theory. I haven't rehearsed it, and until I run that drill I'm not claiming the resilience story.
 
-## What's next
+What's next
 
-The setup is now part of a bigger experiment: my content loop (the bookmark vault, the weekly drafts) runs on schedules, and the phone means I can review and steer it from anywhere. The desk is becoming the place I do deep review, not the place work happens.
+This setup just became part of a bigger machine. My content loop, the bookmark vault, the weekly drafts, runs on schedules now, and the phone means I review and steer it from anywhere. The desk is turning into the place I do deep review. Not the place work happens.
 
 If you build with agents and still can't leave your desk, the tools have outrun your setup.
 
----
+===== END ARTICLE BODY =====
 
 ## FORMATTING MAP (X Article editor)
 
-**Cover image:** CAPTURE — your phone home screen or Termius session showing a live
-tmux Claude Code session (crop status bar). The realness IS the cover. Do not generate.
+Style as HEADINGS (these exact plain lines in the body):
+- The stack, and why each piece
+- What it actually feels like
+- The security shape, because someone will ask
+- What I don't know yet, honestly
+- What's next
 
-**Bold:** "the era of 'I'll do it when I'm back at my desk' is just over" · "nothing
-inbound" · "You're typing sentences." · "It's closer to managing than typing" ·
+Bold: "the era of 'I'll do it when I'm back at my desk' is just over" · "Nothing
+inbound." · "You're typing sentences." · "It's closer to managing than typing." ·
 "the tools have outrun your setup"
 
-**Italic:** *where* (para 2) · *direction* (phone review problem) · the tmux ritual
-line "`tmux attach` is the whole ritual."
+Italic: "where" (para 2) · "direction" (phone review problem) · "tmux attach is
+the whole ritual."
 
-**Inline images:**
-1. CAPTURE — Termius on your phone, attached tmux session with Claude Code mid-task.
-   After "What it actually feels like" intro. (Blur any repo secrets in scrollback.)
-2. CAPTURE — Tailscale admin panel showing the two devices (server + phone), machine
-   names visible. After the security section's first paragraph.
-3. CAPTURE — Hetzner firewall page showing zero inbound rules. Next to "no open ports".
+Cover image (5:2, CAPTURE): your phone in hand or on a table, Termius open with a
+live Claude Code tmux session visible, wide 5:2 crop. The realness IS the cover —
+do not generate this one.
 
-## SUPPORTING TWEETS (quote-reposts of this article across the week)
+Inline images (all 5:2 crops):
+1. CAPTURE — Termius session, Claude Code mid-task (blur any secrets in scrollback).
+   After "What it actually feels like" heading.
+2. CAPTURE — Tailscale admin panel, the two devices visible. After the security
+   section's first paragraph.
+3. CAPTURE — Hetzner firewall page, zero inbound rules. Next to "no open ports".
 
-**T1 — number hook (day 2, morning):**
+## SUPPORTING TWEETS (unchanged)
+
+T1 · number · day 2 AM:
 ```
 My whole dev machine is a [FILL: €X/mo] server and the phone already in my pocket.
 
@@ -99,7 +105,7 @@ No open ports. No laptop. The agent works; I make the calls from wherever I am.
 Full setup in the article ↓
 ```
 
-**T2 — insight (day 4, evening):**
+T2 · insight · day 4 PM:
 ```
 Coding from your phone sounds miserable because you imagine typing code on glass.
 
@@ -108,7 +114,7 @@ You're not. 𝗬𝗼𝘂'𝗿𝗲 𝘁𝘆𝗽𝗶𝗻𝗴 𝘀𝗲𝗻𝘁𝗲�
 The agent needs judgment calls, not keystrokes. Those fit on a phone.
 ```
 
-**T3 — contrarian (day 6, midday):**
+T3 · contrarian · day 6 midday:
 ```
 Unpopular: the desk is becoming the place you REVIEW work, not where work happens.
 

@@ -30,6 +30,12 @@ tags it. Bookmark on X as you scroll = zero-cost capture.
 10. **Self-surprise build log**: "I thought this must be hard — vibecoded in 15 minutes" + a runnable command (@levelsio) — credibility through the artifact, not the claim.
 11. **Anti-pattern for us**: income-porn persona posts ("girl makes $9,000/mo by the pool") pull millions of views but poison trust. SF sells *never-lies* — keep the specificity, skip the get-rich frame.
 
+Creative patterns (from corpus media — image inspiration):
+12. **Document-as-image** — a real-looking typeset page (Karpathy CLAUDE.md field-notes shot, 1050 likes): borrowed academic authority, dense, zoomable; the artifact IS the creative.
+13. **Workflow diagram with real artifacts embedded** — soft background, dashed flow arrows, actual outputs as nodes, $ payoff at the end (@spect3ral 5-ads flow, 1.1k likes/901 replies).
+14. **Vertical phone-screenshot receipt** — 932x2020 portrait of the actual working screen (@0xMassi pocketdev, 559 likes): mobile-native realness.
+15. **X Article images render 5:2** — build covers/inline images at 1500x600 (`x-creative-shot.mjs --size 1500x600`); in-feed posts stay 16:9.
+
 ## Performance (our own posts — the compounding half of the loop)
 
 <!-- One row per posted draft: date · format · keyword? · link · impressions @1wk

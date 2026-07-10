@@ -1,0 +1,49 @@
+<!doctype html>
+<html>
+<head>
+<meta charset="utf-8">
+<style>
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+  body { background: #333; }
+  .card {
+    position: absolute; top: 0; left: 0;
+    width: 1500px; height: 600px;
+    background: radial-gradient(1400px 900px at 18% 0%, #12121c 0%, #0a0a0f 60%);
+    color: #ececf1;
+    font-family: "Segoe UI", -apple-system, Inter, sans-serif;
+    padding: 60px 90px;
+    display: flex; flex-direction: column; justify-content: space-between;
+    overflow: hidden;
+  }
+  .card::after { content: ""; position: absolute; inset: 0; border: 1px solid rgba(255,255,255,0.07); }
+  .kicker { font-size: 21px; letter-spacing: 0.18em; text-transform: uppercase; color: #8b8b9e; font-weight: 600; }
+  .row { display: flex; align-items: baseline; gap: 36px; }
+  .stat { font-size: 104px; font-weight: 750; line-height: 1.02; letter-spacing: -0.02em; color: #fff; white-space: nowrap; }
+  .stat .accent { color: #7c7cf3; }
+  .sub { font-size: 30px; color: #b9b9c7; font-weight: 400; max-width: 520px; line-height: 1.3; }
+  .loop { display: flex; align-items: center; gap: 16px; font-size: 24px; color: #8b8b9e; font-weight: 500; }
+  .loop .step { color: #d6d6e0; } .loop .arrow { color: #4a4a5c; } .loop .live { color: #7c7cf3; }
+  .brand { font-size: 21px; color: #5c5c6e; font-weight: 600; }
+  .foot { display: flex; justify-content: space-between; align-items: baseline; }
+</style>
+</head>
+<body>
+  <div class="card">
+    <div class="kicker">The bookmark vault · week 1</div>
+    <div class="row">
+      <div class="stat">50 bookmarks → <span class="accent">11 patterns</span></div>
+    </div>
+    <div class="sub">my doomscrolling, distilled into a drafting engine</div>
+    <div class="foot">
+      <div class="loop">
+        <span class="step">bookmark</span><span class="arrow">→</span>
+        <span class="step">distill</span><span class="arrow">→</span>
+        <span class="step">draft</span><span class="arrow">→</span>
+        <span class="step">post</span><span class="arrow">→</span>
+        <span class="live">measure</span>
+      </div>
+      <div class="brand">@themaxthule</div>
+    </div>
+  </div>
+</body>
+</html>

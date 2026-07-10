@@ -1,9 +1,11 @@
 #!/usr/bin/env node
-// x-creative-shot — render a 1200x675 HTML creative card to PNG via headless Chrome.
-// Usage: node scripts/x-creative-shot.mjs docs/strategy/x-creatives/YYYY-MM-DD/card.html
-// Writes card.png next to the HTML at 2x scale (2400x1350). Used by the weekly
-// x-vault loop for GENERATED creatives (concept/stat/quote cards only — never
-// fake receipts; see x-post-engine skill, creative rules).
+// x-creative-shot — render an HTML creative card to PNG via headless Chrome.
+// Usage: node scripts/x-creative-shot.mjs <card.html> [--size WxH]
+//   default --size 1200x675 (16:9, in-feed posts)
+//   X Article covers/inline images: --size 1500x600 (5:2 — X's article render ratio)
+// Writes card.png next to the HTML at 2x scale. The HTML's .card element must
+// match the given size. GENERATED concept/stat/quote cards only — never fake
+// receipts; see x-post-engine skill, creative rules.
 
 import { execFileSync } from 'node:child_process';
 import { existsSync } from 'node:fs';
@@ -24,13 +26,17 @@ if (!htmlPath.endsWith('.html') || !existsSync(htmlPath)) {
   process.exit(1);
 }
 const pngPath = htmlPath.replace(/\.html$/, '.png');
+const sizeIdx = process.argv.indexOf('--size');
+const size = sizeIdx !== -1 ? process.argv[sizeIdx + 1] : '1200x675';
+const [w, h] = size.split('x').map(Number);
+if (!w || !h) { console.error(`Bad --size "${size}" — expected WxH like 1500x600`); process.exit(1); }
 
 // --headless=new is required; legacy --headless silently writes nothing on current Chrome.
 execFileSync(chrome, [
   '--headless=new', '--disable-gpu', '--hide-scrollbars',
-  '--force-device-scale-factor=2', '--window-size=1200,675',
+  '--force-device-scale-factor=2', `--window-size=${w},${h}`,
   `--screenshot=${pngPath}`, pathToFileURL(htmlPath).href,
 ], { stdio: 'inherit' });
 
 if (!existsSync(pngPath)) { console.error('Render failed — no PNG written'); process.exit(1); }
-console.log(`Rendered ${pngPath} (2400x1350)`);
+console.log(`Rendered ${pngPath} (${w * 2}x${h * 2})`);
