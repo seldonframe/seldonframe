@@ -263,6 +263,18 @@ Interface drift discovered during the build, vs. this design/the implementation 
   returns it as `flow_model`; a new `MODEL_UPDATED` reducer action swaps
   `flowModel`/`coverage`/`openQuestions` without touching `slots`/`phase`, dispatched from
   `record-client.tsx` whenever the interview response carries a `flow_model`.
+- **Mobile-P2 — server-side transcription (Whisper), typed summary stays the fallback.** New
+  `lib/recordings/transcribe.ts` (`transcribeVideoUrl`, never throws) re-validates the video blob
+  URL against the exact `recordings/<sessionId>/` prefix (mirrors `fetch-frames.ts`'s defense in
+  depth), enforces the 25MB OpenAI audio-API cap via `Content-Length` before ever reading the body,
+  and POSTs to `https://api.openai.com/v1/audio/transcriptions` (`whisper-1`, `verbose_json`, same
+  `OPENAI_API_KEY` env var the voice receptionist uses). `compile-trace/route.ts` calls it only when
+  `recording.videoBlobUrl` is set, `OPENAI_API_KEY` is configured, AND the stored transcript is
+  "effectively empty" per the new `isTranscriptEffectivelyEmpty` predicate (0 segments, or exactly 1
+  segment under 30 chars — the shape the typed-summary fallback always writes); on success the
+  richer transcript is persisted to the recording row and fed into `compileTrace` in place of the
+  original; on `ok:false` the route proceeds with whatever transcript already existed — fail-soft by
+  construction, never blocks compile.
 - **Live-test fix 6 (wave 3) — "Born from your recording" provenance panel.** A new
   `findSessionByTemplateId(db, templateId)` store fn (`session-store.ts`) looks up the
   `recording_sessions` row whose `agent_template_id` matches the open template (set by

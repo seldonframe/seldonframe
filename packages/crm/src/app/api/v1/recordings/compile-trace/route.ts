@@ -22,6 +22,7 @@ import { recordingSessions, workflowRecordings } from "@/db/schema/recordings";
 import { isRecordToAgentOn } from "@/lib/recordings/policy";
 import { findSessionByToken } from "@/lib/recordings/session-store";
 import { fetchFramesAsBase64 } from "@/lib/recordings/fetch-frames";
+import { transcribeVideoUrl, isTranscriptEffectivelyEmpty } from "@/lib/recordings/transcribe";
 import { compileTrace } from "@/lib/recordings/trace-compiler";
 import { mergeIntoFlowModel } from "@/lib/recordings/merge-traces";
 import { coverFlowModel } from "@/lib/recordings/coverage";
@@ -113,7 +114,30 @@ export async function POST(request: Request): Promise<Response> {
     );
   }
 
-  const transcript = Array.isArray(recording.transcript) ? (recording.transcript as TranscriptSegment[]) : [];
+  let transcript = Array.isArray(recording.transcript) ? (recording.transcript as TranscriptSegment[]) : [];
+
+  // Best-effort server-side transcription: only attempted when the stored
+  // transcript is effectively empty (no narration, or just the typed-summary
+  // fallback) AND a video was actually uploaded AND we have an OpenAI key.
+  // Fail-soft by construction — transcribeVideoUrl never throws, and on
+  // ok:false we simply proceed with whatever transcript already exists. The
+  // typed summary stays the fallback; this only ever upgrades it.
+  const openAiKey = process.env.OPENAI_API_KEY?.trim();
+  if (recording.videoBlobUrl && openAiKey && isTranscriptEffectivelyEmpty(transcript)) {
+    const transcribed = await transcribeVideoUrl({
+      videoUrl: recording.videoBlobUrl,
+      apiKey: openAiKey,
+      sessionId: session.id,
+    });
+    if (transcribed.ok) {
+      transcript = transcribed.transcript;
+      await db
+        .update(workflowRecordings)
+        .set({ transcript: transcribed.transcript })
+        .where(eq(workflowRecordings.id, recordingId));
+    }
+  }
+
   const traceResult = await compileTrace({ frames, transcript, label: recording.label, llm });
   if (!traceResult.ok) {
     await db.update(workflowRecordings).set({ status: "failed" }).where(eq(workflowRecordings.id, recordingId));
