@@ -701,104 +701,114 @@ export default async function DashboardPage({
       : null;
 
     return (
-      <main className="animate-page-enter flex-1 overflow-auto w-full p-4 sm:p-6 md:p-8">
-        <div className="mx-auto max-w-2xl py-10 sm:py-16">
-          <div className="space-y-6 sm:space-y-8">
-            <p className="text-sm text-muted-foreground">{greeting} 👋</p>
+      // Top-aligned, full-width — the (dashboard) layout column already pads
+      // (px/py 4→8), so no extra padding or vertical centering here (the old
+      // max-w-2xl + py-16 wrapper pushed the win ladder below the fold). On
+      // lg the ladder sits in a right column so all 4 steps are visible
+      // without scrolling; flag-off (ladderState null) the hero spans full
+      // width via the conditional grid class.
+      <main
+        className={`animate-page-enter space-y-5 sm:space-y-6 ${
+          ladderState
+            ? "lg:grid lg:grid-cols-[minmax(0,1fr)_minmax(0,26rem)] lg:items-start lg:gap-10 lg:space-y-0"
+            : ""
+        }`}
+      >
+        <div className="space-y-4 sm:space-y-5">
+          <p className="text-sm text-muted-foreground">{greeting} 👋</p>
 
-            <h1 className="text-3xl font-semibold leading-[1.1] tracking-tight sm:text-4xl lg:text-[2.75rem]">
-              <span className="text-foreground">{activeWorkspace.name}</span>{" "}
-              <span className="text-primary">is live.</span>
-            </h1>
+          <h1 className="text-3xl font-semibold leading-[1.1] tracking-tight sm:text-4xl">
+            <span className="text-foreground">{activeWorkspace.name}</span>{" "}
+            <span className="text-primary">is live.</span>
+          </h1>
 
-            <p className="text-base text-muted-foreground sm:text-lg">
-              Your website, booking page, intake form, and AI chatbot are
-              already built and published at{" "}
-              <span className="font-medium text-foreground">
-                {activeWorkspace.slug}.{WORKSPACE_BASE_DOMAIN}
-              </span>
-              .
-            </p>
+          <p className="text-base text-muted-foreground sm:text-lg">
+            Your website, booking page, intake form, and AI chatbot are
+            already built and published at{" "}
+            <span className="font-medium text-foreground">
+              {activeWorkspace.slug}.{WORKSPACE_BASE_DOMAIN}
+            </span>
+            .
+          </p>
 
-            <div className="flex flex-wrap items-center gap-3 pt-2">
-              <a
-                href={urls.home}
-                target="_blank"
-                rel="noreferrer noopener"
-                className="inline-flex h-11 items-center justify-center rounded-xl bg-primary px-5 text-sm font-semibold text-primary-foreground shadow-(--shadow-sm) transition-colors hover:bg-primary/90"
-              >
-                View your website →
-              </a>
-            </div>
+          <div className="flex flex-wrap items-center gap-3 pt-1">
+            <a
+              href={urls.home}
+              target="_blank"
+              rel="noreferrer noopener"
+              className="inline-flex h-11 items-center justify-center rounded-xl bg-primary px-5 text-sm font-semibold text-primary-foreground shadow-(--shadow-sm) transition-colors hover:bg-primary/90"
+            >
+              View your website →
+            </a>
+          </div>
 
-            <div className="mt-8 grid gap-3 sm:grid-cols-3">
-              <a
-                href={publicBookingUrl ?? urls.home}
-                target="_blank"
-                rel="noreferrer noopener"
-                className="rounded-2xl border border-border/70 bg-card/40 p-4 transition-colors hover:bg-card/70"
-              >
-                <p className="text-sm font-medium text-foreground">Booking page</p>
-                <p className="mt-1 text-xs text-muted-foreground">
-                  See how customers schedule with you.
-                </p>
-              </a>
-              <a
-                href={publicIntakeUrl ?? urls.home}
-                target="_blank"
-                rel="noreferrer noopener"
-                className="rounded-2xl border border-border/70 bg-card/40 p-4 transition-colors hover:bg-card/70"
-              >
-                <p className="text-sm font-medium text-foreground">Intake form</p>
-                <p className="mt-1 text-xs text-muted-foreground">
-                  See how leads submit their details.
-                </p>
-              </a>
-              <a
-                href={urls.home}
-                target="_blank"
-                rel="noreferrer noopener"
-                className="rounded-2xl border border-border/70 bg-card/40 p-4 transition-colors hover:bg-card/70"
-              >
-                <p className="text-sm font-medium text-foreground">Try your AI receptionist</p>
-                <p className="mt-1 text-xs text-muted-foreground">
-                  Chat with the bubble on your live site.
-                </p>
-              </a>
-            </div>
-
-            {/* Tertiary link — keeps the agency-builder path discoverable
-                for owners who also want to build workspaces for others. */}
-            <div className="border-t border-border/60 pt-6">
-              <p className="text-xs text-muted-foreground">
-                <Link
-                  href="/clients/new"
-                  className="font-medium text-primary underline underline-offset-4 hover:text-primary/80"
-                >
-                  Add another client workspace →
-                </Link>
+          <div className="grid gap-3 pt-2 sm:grid-cols-3">
+            <a
+              href={publicBookingUrl ?? urls.home}
+              target="_blank"
+              rel="noreferrer noopener"
+              className="rounded-2xl border border-border/70 bg-card/40 p-4 transition-colors hover:bg-card/70"
+            >
+              <p className="text-sm font-medium text-foreground">Booking page</p>
+              <p className="mt-1 text-xs text-muted-foreground">
+                See how customers schedule with you.
               </p>
-            </div>
+            </a>
+            <a
+              href={publicIntakeUrl ?? urls.home}
+              target="_blank"
+              rel="noreferrer noopener"
+              className="rounded-2xl border border-border/70 bg-card/40 p-4 transition-colors hover:bg-card/70"
+            >
+              <p className="text-sm font-medium text-foreground">Intake form</p>
+              <p className="mt-1 text-xs text-muted-foreground">
+                See how leads submit their details.
+              </p>
+            </a>
+            <a
+              href={urls.home}
+              target="_blank"
+              rel="noreferrer noopener"
+              className="rounded-2xl border border-border/70 bg-card/40 p-4 transition-colors hover:bg-card/70"
+            >
+              <p className="text-sm font-medium text-foreground">Try your AI receptionist</p>
+              <p className="mt-1 text-xs text-muted-foreground">
+                Chat with the bubble on your live site.
+              </p>
+            </a>
+          </div>
 
-            {/* 2026-07-04 — Task 7 win-ladder card. Only rendered when
-                SF_WIN_LADDER is on; ladderState is null flag-off so this
-                whole block is a no-op then. */}
-            {ladderState ? (
-              <>
-                <LadderAutoRefresh />
-                <WinLadder
-                  state={ladderState}
-                  hrefs={{
-                    bookingUrl: publicBookingUrl ?? urls.home,
-                    ...ladderHrefs,
-                  }}
-                  shareSlot={shareSlot}
-                  agentPicksSlot={agentPicksSlot}
-                />
-              </>
-            ) : null}
+          {/* Tertiary link — keeps the agency-builder path discoverable
+              for owners who also want to build workspaces for others. */}
+          <div className="border-t border-border/60 pt-5">
+            <p className="text-xs text-muted-foreground">
+              <Link
+                href="/clients/new"
+                className="font-medium text-primary underline underline-offset-4 hover:text-primary/80"
+              >
+                Add another client workspace →
+              </Link>
+            </p>
           </div>
         </div>
+
+        {/* 2026-07-04 — Task 7 win-ladder card. Only rendered when
+            SF_WIN_LADDER is on; ladderState is null flag-off so this
+            whole block is a no-op then. */}
+        {ladderState ? (
+          <div>
+            <LadderAutoRefresh />
+            <WinLadder
+              state={ladderState}
+              hrefs={{
+                bookingUrl: publicBookingUrl ?? urls.home,
+                ...ladderHrefs,
+              }}
+              shareSlot={shareSlot}
+              agentPicksSlot={agentPicksSlot}
+            />
+          </div>
+        ) : null}
       </main>
     );
   }
