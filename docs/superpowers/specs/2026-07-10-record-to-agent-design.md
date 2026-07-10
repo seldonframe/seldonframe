@@ -207,5 +207,10 @@ Interface drift discovered during the build, vs. this design/the implementation 
   flow via a new `handleCompileNow` that dispatches `APPROVED` then calls it) instead of the
   `/signup` link when `isAuthed` is true; the reducer and its `claimed` semantics are untouched —
   only which CTA is shown changes.
+- **Live-test fix 2 — post-compile success links the compiled agent, not `/dashboard`.** The
+  compile-success panel previously linked `/dashboard`, stranding the operator one more click away
+  from what they just built. It now links `/studio/agents/${template_id}` (the existing template
+  editor route, deep-linked by the id `compile-agent` already returns) with copy "Open your agent"
+  plus an honest "it's a draft — run its evals and test it before publishing" line.
 - No other interface (types, exported function signatures, route paths, DB columns) drifted from
   the plan.

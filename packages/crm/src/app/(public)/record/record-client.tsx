@@ -579,12 +579,19 @@ export function RecordClient({
               ) : null}
 
               {compiledTemplateId ? (
-                <a
-                  href="/dashboard"
-                  className="mt-1 inline-flex items-center justify-center gap-2.5 rounded-full bg-[#1F2B24] px-5 py-3 text-[14px] font-[600] text-[#F5F4F0]"
-                >
-                  Your agent draft is ready — go to dashboard
-                </a>
+                <div className="mt-1 flex flex-col gap-2">
+                  <p className="text-[13.5px] font-[600] text-[#F5F4F0]">Your agent is compiled</p>
+                  <a
+                    href={`/studio/agents/${compiledTemplateId}`}
+                    className="inline-flex items-center justify-center gap-2.5 rounded-full bg-[#14B8A6] px-5 py-3 text-[14px] font-[600] text-[#0B0F0E]"
+                  >
+                    Open your agent
+                  </a>
+                  <p className="text-[12px] text-[#9CA3AF]">
+                    It was compiled from your recording — run its evals and test it before
+                    publishing. It&apos;s a draft.
+                  </p>
+                </div>
               ) : null}
             </section>
           ) : null}
