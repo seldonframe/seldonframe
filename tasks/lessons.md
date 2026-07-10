@@ -2035,3 +2035,20 @@ C4 close-out with empirical SLICE 11 data.
   `@anthropic-ai/sdk`) is what makes the helpers spec-testable under the
   worktree junction at all. Add "grep `^export` on new route.ts files" to
   any verify pass that includes new API routes.
+
+---
+
+## L-32 — /signup 307s an already-authed user to /dashboard, DROPPING callbackUrl — never route signed-in users through signup
+
+- **Trigger:** record-to-agent's claim CTA linked every user to
+  `/signup?callbackUrl=/record?claimed=1`. First live test: Max was already
+  signed in; /signup 307'd him straight to /dashboard, the callbackUrl was
+  discarded, compile-agent never ran, and he was stranded hunting for an
+  agent that didn't exist. Vercel logs made it obvious (GET /signup → 307 →
+  GET /dashboard, zero compile-agent calls).
+- **Rule:** any public funnel with a signup hop must branch on auth FIRST:
+  the page resolves `auth()` server-side (null-safe for anonymous — mirror
+  claim-build/page.tsx) and signed-in users take the direct action in place;
+  only anonymous users get the /signup?callbackUrl=… link. Corollary for
+  testing: the funnel's "new user" happy path and the "existing user" path
+  are DIFFERENT paths — smoke both before calling a claim flow done.
