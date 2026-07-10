@@ -29,6 +29,13 @@ import { resolveBookingPolicy } from "../../../../src/lib/agents/booking/booking
 // 2026-07-01 is a Wednesday → weekday 3.
 const TEST_DATE = "2026-07-01";
 
+// Frozen clock injected via deps.now. generateCandidateSlots drops any slot
+// earlier than now + leadTimeHours, so a real-clock `now` makes these frozen
+// fixtures rot: the suite started failing the moment the calendar passed the
+// fixture dates (broke main CI 2026-07-10). Always keep FROZEN_NOW before
+// every fixture date above/below.
+const FROZEN_NOW = () => new Date("2026-06-28T00:00:00.000Z");
+
 /** A book_external ctx whose policy is 09:00–11:00, 60-min, Wed-only, UTC.
  *  Candidates for TEST_DATE: 09:00 and 10:00 (11:00 wouldn't fit a 60-min slot). */
 function ctxWithPolicy(
@@ -74,6 +81,7 @@ describe("look_up_availability honors the booking policy window ∩ free/busy", 
         backendWithWindows([{ start: `${TEST_DATE}T10:00:00.000Z`, end: `${TEST_DATE}T11:00:00.000Z` }]),
       // not reached on the book_external happy path, but provide a safe default
       listSlots: async () => ({ slots: [], durationMinutes: 60 }),
+      now: FROZEN_NOW,
     };
     const res = (await lookUpAvailability.execute(
       { date: TEST_DATE },
@@ -96,6 +104,7 @@ describe("look_up_availability honors the booking policy window ∩ free/busy", 
       resolveBackend: () =>
         backendWithWindows([{ start: `${TEST_DATE}T00:00:00.000Z`, end: `${TEST_DATE}T23:59:59.000Z` }]),
       listSlots: async () => ({ slots: [], durationMinutes: 60 }),
+      now: FROZEN_NOW,
     };
     const res = (await lookUpAvailability.execute(
       { date: TEST_DATE },
@@ -112,6 +121,7 @@ describe("look_up_availability honors the booking policy window ∩ free/busy", 
       resolveBackend: () =>
         backendWithWindows([{ start: `${TEST_DATE}T09:00:00.000Z`, end: `${TEST_DATE}T11:00:00.000Z` }]),
       listSlots: async () => ({ slots: [], durationMinutes: 60 }),
+      now: FROZEN_NOW,
     };
     const res = (await lookUpAvailability.execute(
       { date: TEST_DATE },
@@ -183,6 +193,7 @@ describe("look_up_availability walks forward across days (book_external)", () =>
       ],
     }),
     listSlots: async () => ({ slots: [], durationMinutes: 60 }),
+    now: FROZEN_NOW,
   };
 
   test("an in-policy Friday returns same-day slots (all on the Friday)", async () => {
