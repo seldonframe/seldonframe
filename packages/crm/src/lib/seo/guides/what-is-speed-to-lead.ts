@@ -10,6 +10,7 @@ export const guide: Guide = {
   cluster: "speed-to-lead",
   relatedTool: "/tools/speed-to-lead-calculator",
   relatedBest: "/ai-agents/ai-receptionist",
+  relatedChart: { href: "/charts/missed-revenue-decay", label: "See the decay curve behind this math in the Lead Decay Curve" },
   dek: "Speed-to-lead is the time between a potential customer reaching out and you actually responding. It's one of the few growth levers that costs nothing to pull and quietly decides how many of your leads ever become customers.",
   sections: [
     {

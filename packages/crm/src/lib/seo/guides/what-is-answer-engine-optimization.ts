@@ -10,6 +10,7 @@ export const guide: Guide = {
   cluster: "ai-visibility",
   relatedTool: "/tools/ai-visibility-checker",
   relatedBest: "/best/ai-agent-for-small-business",
+  relatedChart: { href: "/charts/ai-recommendation-index", label: "See what AI recommends across 10 buyer questions in the AI Recommendation Index" },
   dek: "Answer engine optimization (AEO) is the practice of structuring and writing content so that AI-powered answer engines — ChatGPT, Perplexity, Google's AI Overviews, voice assistants — can understand it, trust it, and quote it directly. Where classic SEO fights for a ranked link, AEO tries to be the answer itself. It's a real and increasingly discussed idea, though, like the rest of this space, it's still emerging and easy to oversell.",
   sections: [
     {

@@ -249,6 +249,12 @@ export function SeldonFrameVsPage({ competitor }: { competitor: Competitor }): R
           <CtaRow />
           <FrontOfficeFlow competitorName={c.name} competitorCategory={c.category} />
           <PricingSourceLine name={c.name} url={c.pricingSourceUrl} />
+          <p style={{ margin: "10px 0 0", fontSize: 13, lineHeight: 1.6, color: "rgba(34,29,23,0.55)" }}>
+            {`See how ${c.name} stacks up against 24 other platforms on the `}
+            <Link href="/charts/crm-pricing-index" className="sf-link" style={{ color: MKT.green, fontWeight: 600, textDecoration: "underline" }}>
+              interactive CRM Pricing Index →
+            </Link>
+          </p>
         </section>
 
         {/* ── WHERE THEY WIN ── */}

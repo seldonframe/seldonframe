@@ -85,7 +85,8 @@ export default function MissedCallCalculatorPage(): ReactElement {
           <p style={{ margin: "22px 0 0", fontSize: 14.5, lineHeight: 1.6, color: "rgba(34,29,23,0.65)" }}>
             Related: <Link href="/ai-agents/ai-receptionist" className="sf-link" style={{ color: MKT.green, fontWeight: 700 }}>the AI receptionist</Link>{" "}
             that answers these calls, or see <Link href="/alternatives" className="sf-link" style={{ color: MKT.green, fontWeight: 700 }}>how SeldonFrame compares</Link>{" "}
-            to the tools you're evaluating.
+            to the tools you're evaluating. See the{" "}
+            <Link href="/charts/missed-revenue-decay" className="sf-link" style={{ color: MKT.green, fontWeight: 700 }}>decay curve behind this math →</Link>
           </p>
         </section>
       </main>

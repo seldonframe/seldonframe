@@ -10,6 +10,7 @@ export const guide: Guide = {
   cluster: "speed-to-lead",
   relatedTool: "/tools/speed-to-lead-calculator",
   relatedBest: "/ai-agents/ai-receptionist",
+  relatedChart: { href: "/charts/missed-revenue-decay", label: "See the decay curve behind this math in the Lead Decay Curve" },
   dek: "Average lead response time is how long a typical business takes to reply after someone reaches out. It's one of the most quoted numbers in sales — and one of the shakiest, because the figures vary wildly by study, industry, and year. Here's what the research actually supports, and what to aim for regardless of the average.",
   sections: [
     {

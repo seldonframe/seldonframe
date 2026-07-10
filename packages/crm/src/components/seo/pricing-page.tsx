@@ -154,6 +154,10 @@ export function CompetitorPricingPage({ slug }: { slug: string }): ReactElement 
           <h2 style={H2}>What stacks on top</h2>
           <p style={{ margin: "10px 0 20px", fontSize: 15.5, color: "rgba(34,29,23,0.6)", maxWidth: 760 }}>
             The plan price is rarely the whole story. Here&apos;s every add-on and meter that adds to the sticker price.
+            {" "}See how {c.name} compares against 24 other platforms on the interactive{" "}
+            <Link href="/charts/crm-pricing-index" className="sf-link" style={{ color: MKT.green, fontWeight: 600, textDecoration: "underline" }}>
+              CRM Pricing Index →
+            </Link>
           </p>
           <div style={{ display: "flex", flexDirection: "column", gap: 12, maxWidth: 760 }}>
             {p.stacks.map((s) => (

@@ -10,6 +10,7 @@ export const guide: Guide = {
   cluster: "ai-visibility",
   relatedTool: "/tools/ai-visibility-checker",
   relatedBest: "/best/ai-agent-for-small-business",
+  relatedChart: { href: "/charts/ai-recommendation-index", label: "See what AI recommends across 10 buyer questions in the AI Recommendation Index" },
   dek: "Local SEO is the well-established craft of ranking in Google's local results — the map pack and \"near me\" searches. GEO, generative engine optimization, is the newer, hazier effort to get cited inside AI answers like ChatGPT and AI Overviews. They're often framed as rivals. In practice, for a local business, they share most of the same foundation — and the differences matter less than the overlap.",
   sections: [
     {

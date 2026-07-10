@@ -85,7 +85,8 @@ export default function SpeedToLeadCalculatorPage(): ReactElement {
           <p style={{ margin: "22px 0 0", fontSize: 14.5, lineHeight: 1.6, color: "rgba(34,29,23,0.65)" }}>
             Related: the <Link href="/ai-agents/ai-receptionist" className="sf-link" style={{ color: MKT.green, fontWeight: 700 }}>AI receptionist</Link>{" "}
             that answers instantly, the <Link href="/tools/missed-call-calculator" className="sf-link" style={{ color: MKT.green, fontWeight: 700 }}>missed-call cost calculator</Link>,{" "}
-            or <Link href="/alternatives" className="sf-link" style={{ color: MKT.green, fontWeight: 700 }}>how SeldonFrame compares</Link>.
+            or <Link href="/alternatives" className="sf-link" style={{ color: MKT.green, fontWeight: 700 }}>how SeldonFrame compares</Link>. See the{" "}
+            <Link href="/charts/missed-revenue-decay" className="sf-link" style={{ color: MKT.green, fontWeight: 700 }}>decay curve behind this math →</Link>
           </p>
         </section>
       </main>

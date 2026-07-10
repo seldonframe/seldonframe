@@ -194,6 +194,12 @@ export function AlternativePage({ competitor }: { competitor: Competitor }): Rea
           <CtaRow />
           <FrontOfficeFlow competitorName={c.name} competitorCategory={c.category} />
           <PricingSourceLine name={c.name} url={c.pricingSourceUrl} />
+          <p style={{ margin: "10px 0 0", fontSize: 13, lineHeight: 1.6, color: "rgba(34,29,23,0.55)" }}>
+            {`Want to see ${c.name} against the rest of the market? `}
+            <Link href="/charts/crm-pricing-index" className="sf-link" style={{ color: MKT.green, fontWeight: 600, textDecoration: "underline" }}>
+              Explore the CRM Pricing Index →
+            </Link>
+          </p>
         </section>
 
         {/* ── PROS & CONS ── */}

@@ -10,6 +10,7 @@ export const guide: Guide = {
   cluster: "ai-agents",
   relatedTool: "/tools/claude-project-brief-generator",
   relatedBest: "/marketplace",
+  relatedChart: { href: "/charts/ai-recommendation-index", label: "See which platforms AI actually recommends in the AI Recommendation Index" },
   dek: "A wave of solo founders and agency owners is talking about running a real company — sales, content, ops, support — with a stack of AI agents instead of a payroll. Strip away the hype and there's a genuinely useful operating model underneath. Here's what it actually is, and what it takes to run.",
   sections: [
     {

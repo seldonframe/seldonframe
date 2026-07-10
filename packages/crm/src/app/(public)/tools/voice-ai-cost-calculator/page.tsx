@@ -140,7 +140,10 @@ export default function VoiceAiCostCalculatorPage(): ReactElement {
             <Link href="/compare/seldonframe-vs-vapi" className="sf-link" style={{ color: MKT.green, fontWeight: 700 }}>
               SeldonFrame vs Vapi
             </Link>
-            .
+            . Zoom out: see the full market on one chart —{" "}
+            <Link href="/charts/crm-pricing-index" className="sf-link" style={{ color: MKT.green, fontWeight: 700 }}>
+              CRM Pricing Index →
+            </Link>
           </p>
         </section>
 

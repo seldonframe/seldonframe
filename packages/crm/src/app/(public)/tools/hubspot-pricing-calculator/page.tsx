@@ -139,7 +139,10 @@ export default function HubspotPricingCalculatorPage(): ReactElement {
             <Link href="/compare/seldonframe-vs-hubspot" className="sf-link" style={{ color: MKT.green, fontWeight: 700 }}>
               SeldonFrame vs HubSpot
             </Link>
-            .
+            . Zoom out: see the full market on one chart —{" "}
+            <Link href="/charts/crm-pricing-index" className="sf-link" style={{ color: MKT.green, fontWeight: 700 }}>
+              CRM Pricing Index →
+            </Link>
           </p>
         </section>
 

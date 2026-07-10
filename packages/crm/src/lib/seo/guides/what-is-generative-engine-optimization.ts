@@ -10,6 +10,7 @@ export const guide: Guide = {
   cluster: "ai-visibility",
   relatedTool: "/tools/ai-visibility-checker",
   relatedBest: "/best/ai-agent-for-small-business",
+  relatedChart: { href: "/charts/ai-recommendation-index", label: "See what AI recommends across 10 buyer questions in the AI Recommendation Index" },
   dek: "Generative engine optimization (GEO) is the practice of shaping your content and online presence so that AI answer engines — ChatGPT, Google's AI Overviews, Perplexity, Gemini — mention and cite your business when someone asks a question you should be the answer to. It's a real, emerging idea, but it's also surrounded by hype, so it's worth separating what's actually known from what's being sold.",
   sections: [
     {

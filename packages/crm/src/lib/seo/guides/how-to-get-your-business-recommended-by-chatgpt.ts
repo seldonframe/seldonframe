@@ -10,6 +10,7 @@ export const guide: Guide = {
   cluster: "ai-visibility",
   relatedTool: "/tools/ai-visibility-checker",
   relatedBest: "/best/ai-agent-for-small-business",
+  relatedChart: { href: "/charts/ai-recommendation-index", label: "See the industry-wide version: what AI recommends across 10 buyer questions" },
   dek: "More people now ask ChatGPT things like \"who's a good plumber near me\" or \"best bookkeeper for a small restaurant.\" There is no ad slot and no submission form that puts you in those answers. But you can understand how ChatGPT sources businesses and make yourself far more likely to be the one it names — without falling for the tricks being sold as shortcuts.",
   sections: [
     {

@@ -116,6 +116,10 @@ export default function BookingFrictionGraderPage(): ReactElement {
             <Link href="/best/booking-system-for-small-business" className="sf-link" style={{ color: MKT.green, fontWeight: 700 }}>
               the best booking system for small business
             </Link>
+            . If the whole site — not just booking — needs a check, try the{" "}
+            <Link href="/tools/website-grader" className="sf-link" style={{ color: MKT.green, fontWeight: 700 }}>
+              website grader
+            </Link>
             .
           </p>
         </section>

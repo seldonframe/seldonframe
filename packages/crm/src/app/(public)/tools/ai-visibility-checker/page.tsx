@@ -117,6 +117,14 @@ export default function AiVisibilityCheckerPage(): ReactElement {
             <Link href="/best/ai-agent-for-small-business" className="sf-link" style={{ color: MKT.green, fontWeight: 700 }}>
               best AI agent for small business
             </Link>
+            . Want the industry-wide version of this? See what AI recommends across 10 buyer questions on the{" "}
+            <Link href="/charts/ai-recommendation-index" className="sf-link" style={{ color: MKT.green, fontWeight: 700 }}>
+              AI Recommendation Index
+            </Link>
+            . And if it's your whole site that needs a check, try the{" "}
+            <Link href="/tools/website-grader" className="sf-link" style={{ color: MKT.green, fontWeight: 700 }}>
+              website grader
+            </Link>
             .
           </p>
         </section>

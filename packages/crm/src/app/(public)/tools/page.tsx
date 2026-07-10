@@ -126,6 +126,12 @@ export default function ToolsHubPage(): ReactElement {
         <p style={{ margin: "14px 0 0", fontSize: 17, lineHeight: 1.55, color: "rgba(34,29,23,0.7)", maxWidth: 640 }}>
           Free calculators for local service businesses and the agencies that serve them. No signup required.
         </p>
+        <p style={{ margin: "10px 0 0", fontSize: 14, lineHeight: 1.6, color: "rgba(34,29,23,0.6)", maxWidth: 640 }}>
+          Prefer the big picture?{" "}
+          <Link href="/charts" className="sf-link" style={{ color: MKT.green, fontWeight: 700 }}>
+            Explore our live charts →
+          </Link>
+        </p>
         <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fill, minmax(280px, 1fr))", gap: 14, marginTop: 30 }}>
           {TOOLS.map((t) => (
             <Link key={t.href} href={t.href} className="sf-link" style={{ border: `1px solid ${MKT.ink10}`, borderRadius: 14, padding: "20px 22px", textDecoration: "none", color: MKT.ink, background: "rgba(255,255,255,0.55)", display: "block" }}>

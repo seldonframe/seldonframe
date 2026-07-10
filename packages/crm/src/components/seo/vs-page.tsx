@@ -164,6 +164,12 @@ export function VsPage({ pair, a, b }: { pair: VsPair; a: Competitor; b: Competi
             <PricingSourceLine name={a.name} url={a.pricingSourceUrl} />
             <PricingSourceLine name={b.name} url={b.pricingSourceUrl} />
           </div>
+          <p style={{ margin: "10px 0 0", fontSize: 13, lineHeight: 1.6, color: "rgba(34,29,23,0.55)" }}>
+            {`Zoom out and see both against 23 other platforms on the `}
+            <Link href="/charts/crm-pricing-index" className="sf-link" style={{ color: MKT.green, fontWeight: 600, textDecoration: "underline" }}>
+              interactive CRM Pricing Index →
+            </Link>
+          </p>
         </section>
 
         {/* the honest take strip */}

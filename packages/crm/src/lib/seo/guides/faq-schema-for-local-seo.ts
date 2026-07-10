@@ -10,6 +10,7 @@ export const guide: Guide = {
   cluster: "service-faq",
   relatedTool: "/tools/service-business-faq-generator",
   relatedBest: "/best/ai-agent-for-small-business",
+  relatedChart: { href: "/charts/ai-recommendation-index", label: "See what AI recommends across 10 buyer questions in the AI Recommendation Index" },
   dek: "FAQ schema was once a reliable way to grab extra space in Google's results. That's largely over. Here's what actually happened, what FAQPage markup still does for a local service business, and why the FAQ content itself matters more than the code around it.",
   sections: [
     {

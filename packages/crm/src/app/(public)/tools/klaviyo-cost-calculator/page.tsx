@@ -139,7 +139,10 @@ export default function KlaviyoCostCalculatorPage(): ReactElement {
             <Link href="/compare/seldonframe-vs-klaviyo" className="sf-link" style={{ color: MKT.green, fontWeight: 700 }}>
               SeldonFrame vs Klaviyo
             </Link>
-            .
+            . Zoom out: see the full market on one chart —{" "}
+            <Link href="/charts/crm-pricing-index" className="sf-link" style={{ color: MKT.green, fontWeight: 700 }}>
+              CRM Pricing Index →
+            </Link>
           </p>
         </section>
 

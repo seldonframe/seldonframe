@@ -10,6 +10,7 @@ export const guide: Guide = {
   cluster: "ai-visibility",
   relatedTool: "/tools/ai-visibility-checker",
   relatedBest: "/best/ai-agent-for-small-business",
+  relatedChart: { href: "/charts/ai-recommendation-index", label: "See what AI recommends across 10 buyer questions in the AI Recommendation Index" },
   dek: "AI search — Google's AI Overviews and AI Mode, ChatGPT, Gemini, Perplexity — answers a question directly and cites a handful of sources instead of showing ten links. Showing up means being one of those cited sources. The good news: most of what works is well-understood SEO plus being genuinely credible. The honest news: no one can guarantee a spot, and much of the \"AI search\" advice online is unproven.",
   sections: [
     {

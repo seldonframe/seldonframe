@@ -39,6 +39,7 @@ export function renderGuideMarkdown(slug: string): string {
   L.push("## Try it");
   L.push("");
   L.push(`- Related free tool: ${BASE}${g.relatedTool}`);
+  if (g.relatedChart) L.push(`- ${g.relatedChart.label}: ${BASE}${g.relatedChart.href}`);
   if (g.relatedBest) L.push(`- Go deeper: ${BASE}${g.relatedBest}`);
   L.push(`- Build your AI front office free (about 3 minutes): ${BASE}/signup`);
   L.push("");

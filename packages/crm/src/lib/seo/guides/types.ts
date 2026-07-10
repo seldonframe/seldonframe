@@ -46,6 +46,9 @@ export type Guide = {
   relatedTool: string;
   /** Optional deeper link, e.g. "/best/ai-agent-for-small-business" or an /ai-agents page. */
   relatedBest?: string;
+  /** Optional link to a /charts data page whose story backs this guide's claims,
+   *  e.g. "/charts/missed-revenue-decay" or "/charts/ai-recommendation-index". */
+  relatedChart?: { href: string; label: string };
   /** One-paragraph intro rendered under the H1. */
   dek: string;
   /** >=3 body sections. */

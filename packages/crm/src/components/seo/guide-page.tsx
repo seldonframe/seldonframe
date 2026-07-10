@@ -116,8 +116,18 @@ export function GuidePage({ slug }: { slug: string }): ReactElement {
             </section>
           )}
 
-          {g.relatedBest && (
+          {g.relatedChart && (
             <p style={{ margin: "28px 0 0", fontSize: 14.5, lineHeight: 1.6, color: "rgba(34,29,23,0.65)" }}>
+              See the data behind this:{" "}
+              <Link href={g.relatedChart.href} className="sf-link" style={{ color: MKT.green, fontWeight: 700 }}>
+                {g.relatedChart.label}
+              </Link>
+              .
+            </p>
+          )}
+
+          {g.relatedBest && (
+            <p style={{ margin: "12px 0 0", fontSize: 14.5, lineHeight: 1.6, color: "rgba(34,29,23,0.65)" }}>
               Related: <Link href={g.relatedBest} className="sf-link" style={{ color: MKT.green, fontWeight: 700 }}>go deeper</Link>, or browse{" "}
               <Link href="/guides" className="sf-link" style={{ color: MKT.green, fontWeight: 700 }}>all guides</Link>.
             </p>

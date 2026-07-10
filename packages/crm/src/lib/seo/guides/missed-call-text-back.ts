@@ -10,6 +10,7 @@ export const guide: Guide = {
   cluster: "speed-to-lead",
   relatedTool: "/tools/missed-call-calculator",
   relatedBest: "/ai-agents/ai-receptionist",
+  relatedChart: { href: "/charts/missed-revenue-decay", label: "See the decay curve behind missed-call cost in the Lead Decay Curve" },
   dek: "A missed call doesn't have to be a dead end. A missed-call text-back sends an automatic text the moment a call goes unanswered — turning a ring that nobody picked up into a conversation the caller can keep having.",
   sections: [
     {
