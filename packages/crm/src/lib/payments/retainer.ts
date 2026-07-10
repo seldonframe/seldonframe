@@ -29,6 +29,8 @@ import { contacts, paymentRecords, proposals, stripeConnections, subscriptions }
 import { logEvent } from "@/lib/observability/log";
 import { buildCheckoutSessionParams } from "@/lib/proposals/checkout";
 import { createProposal } from "@/lib/proposals/create";
+import { getOrgSubscription } from "@/lib/billing/subscription";
+import { normalizeTierId, type BillingTier } from "@/lib/billing/features";
 
 // ── the subscription id off an Invoice — mirrors
 // lib/marketplace/billing/webhook-handler.ts's invoiceSubscriptionId (the
@@ -462,6 +464,12 @@ export type CreateRetainerCheckoutDeps = {
   /** The AGENCY's (builderOrgId's) active connected account, if any. Null →
    *  no Stripe call is ever made (D6 money-safety: inert without a connection). */
   getActiveConnection: (builderOrgId: string) => Promise<{ stripeAccountId: string } | null>;
+  /** 2026-07-10 — resolve the builder (agency) org's subscription tier, so
+   *  the reused buildCheckoutSessionParams applies the tier-scoped GMV fee
+   *  (0% on agency tiers, 2% on solo) instead of always defaulting to 2%.
+   *  Optional — omitted in existing tests/callers falls back to the real
+   *  resolver via defaultCreateRetainerCheckoutDeps. */
+  resolveSellerTier?: (builderOrgId: string) => Promise<BillingTier>;
   /** Create the proposal row the checkout session's metadata points at —
    *  reuses the SAME proposals table the /start live-sell flow uses, so the
    *  Connect webhook's existing checkout.session.completed + cycle-recording
@@ -496,6 +504,10 @@ export async function createClientRetainerCheckout(
 
   const proposal = await deps.createProposalRow(input);
 
+  const sellerTier = deps.resolveSellerTier
+    ? await deps.resolveSellerTier(input.builderOrgId)
+    : undefined;
+
   const params = buildCheckoutSessionParams({
     proposalId: proposal.id,
     previewWorkspaceId: null,
@@ -505,6 +517,7 @@ export async function createClientRetainerCheckout(
     setupFeeCents: input.setupFeeCents,
     signedToken: proposal.signedToken,
     baseUrl: deps.baseUrl,
+    sellerTier,
   });
 
   let session: { id: string; url: string | null };
@@ -569,9 +582,15 @@ function getStripeClientReal(): Stripe | null {
   return new StripeClient(secretKey, { apiVersion: "2025-08-27.basil" });
 }
 
+async function resolveSellerTierReal(builderOrgId: string): Promise<BillingTier> {
+  const subscription = await getOrgSubscription(builderOrgId);
+  return normalizeTierId(subscription.tier ?? null);
+}
+
 export function defaultCreateRetainerCheckoutDeps(): CreateRetainerCheckoutDeps {
   return {
     getActiveConnection: getActiveConnectionReal,
+    resolveSellerTier: resolveSellerTierReal,
     createProposalRow: createProposalRowReal,
     createCheckoutSession: async (params, options) => {
       const stripe = getStripeClientReal();

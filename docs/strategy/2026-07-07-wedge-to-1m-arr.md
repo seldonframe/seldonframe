@@ -24,6 +24,15 @@ tax your work" intact. The wedge's pricing shape survived contact with
 implementation nearly unchanged; the only delta is the agency ladder's lower
 on-ramp, which strictly improves the §6 rung-4 design-partner motion.
 
+> **DECIDED 2026-07-10 (Max):** the no-agency-GMV position above is now the
+> shipped fee structure — flat **2% GMV on solo tiers ($29/$49) only when SF
+> is the sales channel · 0% on agency tiers ($99+)** · marketplace 5%
+> unchanged · the 5→3→2 declining ladder retired. The 2% doubles as the
+> upgrade escalator: crossover ≈ **$3.5k/mo GMV** (2% × $3.5k = $70 = the
+> $29→$99 gap), i.e. the fee self-liquidates into agency-tier MRR right when
+> a builder becomes an agency. Decided before SF_AUTOPAY_CONSOLE flipped, so
+> no customer ever experiences an agency-side fee.
+
 **Distribution went from "no distribution asset" (§3 path A's fatal flaw) to a
 running machine.** Built and LIVE as of tonight — the five-channel system:
 

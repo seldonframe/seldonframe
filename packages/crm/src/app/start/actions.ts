@@ -20,6 +20,8 @@ import { getStripeClient } from "@/lib/proposals/stripe-connect";
 import { buildChangePlan } from "@/lib/onboarding/change-plan";
 import { applyChangePlan } from "@/lib/onboarding/execute-change-plan";
 import { logEvent } from "@/lib/observability/log";
+import { getOrgSubscription } from "@/lib/billing/subscription";
+import { normalizeTierId } from "@/lib/billing/features";
 
 // ─── constants ────────────────────────────────────────────────────────────────
 
@@ -154,6 +156,12 @@ export async function createLiveSellCheckoutAction(
     generatedHtml: `<p>Live-sell checkout for ${input.prospectName}. $${(monthlyPriceCents / 100).toFixed(0)}/mo.</p>`,
   });
 
+  // 2026-07-10 — GMV fee is tier-scoped: 0% on agency tiers, 2% on solo.
+  // Resolve the SELLING (agency) org's subscription tier via the existing
+  // billing subscription helper (same one hasFeature/getOrgFeatures use).
+  const sellerSubscription = await getOrgSubscription(agencyOrgId);
+  const sellerTier = normalizeTierId(sellerSubscription.tier ?? null);
+
   // Build standard checkout params, then adapt for Embedded Checkout
   // by replacing success_url/cancel_url with return_url and adding ui_mode.
   const baseParams = buildCheckoutSessionParams({
@@ -165,6 +173,7 @@ export async function createLiveSellCheckoutAction(
     setupFeeCents,
     signedToken: proposal.signedToken,
     baseUrl,
+    sellerTier,
   });
 
   // Remove hosted-mode-only fields; add embedded-mode fields.

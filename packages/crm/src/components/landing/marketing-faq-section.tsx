@@ -35,7 +35,7 @@ const FAQS: readonly FaqItem[] = [
   {
     question: "How much is it?",
     answer:
-      "$29/mo flat, unlimited workspaces, cancel anytime. Plus 2% only on what you sell through SeldonFrame (payments, proposals, packages) — sell anywhere else and we take nothing.",
+      "$29/mo flat, unlimited workspaces, cancel anytime. Plus 2% only on what you sell through SeldonFrame (payments, proposals, packages) — sell anywhere else and we take nothing. Agency tiers ($99+) pay no GMV fee — 0% on everything you bill your clients.",
   },
   {
     question: "Is it free to start?",

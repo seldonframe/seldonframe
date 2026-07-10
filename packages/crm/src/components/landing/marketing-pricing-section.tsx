@@ -170,6 +170,11 @@ export function LandingMarketingPricingSection({
               You keep 98% of every dollar we help you collect — and 100% of everything else.
             </p>
 
+            <p className="mt-4 text-[13.5px] leading-[1.55] text-[#6E665A]">
+              On agency tiers ($99+) there&rsquo;s no fee at all — 0%. Processing more than
+              ~$3,500/mo through SeldonFrame? The agency tier already saves you money.
+            </p>
+
             <p className="mt-auto pt-5 text-[12.5px] leading-[1.5] text-[#6E665A]">
               No metered AI bills. No per-workspace tax. You only ever pay more when you&rsquo;re
               already making more.

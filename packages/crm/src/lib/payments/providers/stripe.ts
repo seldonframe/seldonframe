@@ -3,9 +3,11 @@ import Stripe from "stripe";
 import { db } from "@/db";
 import { stripeConnections } from "@/db/schema";
 import {
-  GMV_FEE_PERCENT,
   computeInvoiceApplicationFeeCents,
+  gmvFeePercentForTier,
 } from "@/lib/billing/gmv";
+import { getOrgSubscription } from "@/lib/billing/subscription";
+import { normalizeTierId } from "@/lib/billing/features";
 import {
   PaymentProviderError,
   type CancelSubscriptionInput,
@@ -34,6 +36,32 @@ function getStripeClient() {
     client = new Stripe(secretKey, { apiVersion: "2025-08-27.basil" });
   }
   return client;
+}
+
+// 2026-07-10 — tier-scoped GMV fee (same decision as lib/proposals/checkout.ts):
+// 0% on agency tiers ($99+, incl. legacy grandfathered "agency"), 2% on solo
+// tiers (builder/managed) — an invoice or subscription created here is a
+// direct charge on the SMB's OWN connected account, so the fee is the
+// platform's cut of the SMB's revenue, not the platform $29. Resolves the
+// SELLING org's tier via the same existing getOrgSubscription +
+// normalizeTierId pair every other GMV call site uses (no new query
+// pattern).
+//
+// PATTERN NOTE (matches lib/billing/features.ts's hasFeature): optional
+// `deps.getOrgSubscription` seam so tests can inject a fake subscription
+// reader without touching the DB (tsx's CJS interop makes node:test's
+// mock.method unreliable here — see tests/unit/billing/has-feature.spec.ts).
+// Production callers omit `deps` and get the real DB-backed reader.
+export async function resolveSellerFeePercent(
+  orgId: string,
+  deps: {
+    getOrgSubscription?: (orgId: string | null | undefined) => Promise<{ tier?: string | null }>;
+  } = {}
+): Promise<number> {
+  const getSubscription = deps.getOrgSubscription ?? getOrgSubscription;
+  const subscription = await getSubscription(orgId);
+  const tier = normalizeTierId(subscription.tier ?? null);
+  return gmvFeePercentForTier(tier);
 }
 
 async function requireConnectedAccount(orgId: string) {
@@ -131,17 +159,23 @@ export const stripeProvider: PaymentProvider = {
       );
     }
 
-    // 2026-06-22 — 2% GMV application fee on the SMB's OWN sale. This
+    // 2026-06-22 — GMV application fee on the SMB's OWN sale. This
     // invoice is created on the SMB's connected account (stripeAccount),
     // so the fee is the platform's cut of the SMB's revenue — NOT the
     // platform $29. Sum the same per-item amount the loop above charged,
     // then ONLY set application_fee_amount when > 0 (Stripe rejects a 0
     // amount on some invoice shapes).
+    // 2026-07-10 — tier-scoped: 0% on agency tiers ($99+), 2% on solo.
+    // computeInvoiceApplicationFeeCents is fixed at GMV_FEE_PERCENT (2%),
+    // so an agency-tier seller (feePercent 0) skips it entirely — the
+    // field is OMITTED, never set to 0.
     const totalCents = input.items.reduce(
       (sum, it) => sum + Math.round(it.unitAmount * (it.quantity ?? 1) * 100),
       0
     );
-    const applicationFeeCents = computeInvoiceApplicationFeeCents(totalCents);
+    const sellerFeePercent = await resolveSellerFeePercent(input.orgId);
+    const applicationFeeCents =
+      sellerFeePercent > 0 ? computeInvoiceApplicationFeeCents(totalCents) : 0;
 
     const invoice = await stripe.invoices.create(
       {
@@ -221,15 +255,20 @@ export const stripeProvider: PaymentProvider = {
       metadata: { seldonframe_contact_id: input.contactId ?? "" },
     });
 
+    // 2026-06-22 — GMV application fee on the SMB's OWN recurring sale.
+    // Created on the SMB's connected account (stripeAccount) → the
+    // platform's cut of the SMB's revenue, NOT the platform $29.
+    // 2026-07-10 — tier-scoped: 0% on agency tiers ($99+), 2% on solo —
+    // application_fee_percent is OMITTED entirely (not set to 0; Stripe
+    // rejects 0 on some account types) when the seller is on an agency tier.
+    const sellerFeePercent = await resolveSellerFeePercent(input.orgId);
+
     const subscription = await stripe.subscriptions.create(
       {
         customer: customer.id,
         items: [{ price: input.priceId }],
         trial_period_days: input.trialDays,
-        // 2026-06-22 — 2% GMV application fee on the SMB's OWN recurring
-        // sale. Created on the SMB's connected account (stripeAccount) →
-        // the platform's cut of the SMB's revenue, NOT the platform $29.
-        application_fee_percent: GMV_FEE_PERCENT,
+        ...(sellerFeePercent > 0 ? { application_fee_percent: sellerFeePercent } : {}),
         metadata: {
           seldonframe_org_id: input.orgId,
           seldonframe_contact_id: input.contactId ?? "",

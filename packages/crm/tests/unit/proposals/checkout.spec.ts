@@ -50,6 +50,27 @@ describe("buildCheckoutSessionParams", () => {
     assert.equal(params.subscription_data?.application_fee_percent, 2);
   });
 
+  // 2026-07-10 — tier-scoped GMV decision: 0% on agency tiers, 2% on solo.
+  test("sellerTier: agency_starter -> application_fee_percent is OMITTED (0%)", () => {
+    const params = buildCheckoutSessionParams({ ...input, sellerTier: "agency_starter" });
+    assert.equal(params.subscription_data?.application_fee_percent, undefined);
+  });
+
+  test("sellerTier: agency (legacy grandfathered) -> application_fee_percent is OMITTED (0%)", () => {
+    const params = buildCheckoutSessionParams({ ...input, sellerTier: "agency" });
+    assert.equal(params.subscription_data?.application_fee_percent, undefined);
+  });
+
+  test("sellerTier: builder -> application_fee_percent is 2", () => {
+    const params = buildCheckoutSessionParams({ ...input, sellerTier: "builder" });
+    assert.equal(params.subscription_data?.application_fee_percent, 2);
+  });
+
+  test("sellerTier omitted -> defaults to 2 (pre-solo)", () => {
+    const params = buildCheckoutSessionParams(input);
+    assert.equal(params.subscription_data?.application_fee_percent, 2);
+  });
+
   test("sets success_url + cancel_url back to /p/[token]", () => {
     const params = buildCheckoutSessionParams(input);
     assert.ok(
