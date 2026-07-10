@@ -35,7 +35,10 @@ describe("renderHomeMarkdown()", () => {
     const md = renderHomeMarkdown();
     assert.match(md, /60 seconds/);
     assert.match(md, /\$29\/mo/);
-    assert.match(md, /14-day free trial/);
+    // Trial-based pricing was removed 2026-07-05; the live PROOF facts
+    // front-load "free to build" + flat pricing + no lock-in instead.
+    assert.match(md, /Build it free/);
+    assert.match(md, /Cancel anytime/);
     // Named capabilities the homepage ships — concrete specifics, not metadata.
     assert.match(md, /AI receptionist/);
     assert.match(md, /Missed-call text-back/);

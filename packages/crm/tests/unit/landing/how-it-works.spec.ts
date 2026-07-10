@@ -50,15 +50,16 @@ describe("LandingHowItWorksSection — 3-step layout", () => {
   });
 
   test("all 3 step screenshots are a11y-correct (decorative or descriptive)", () => {
-    // Week 5: screenshots are 1x1 placeholders → marked decorative
-    // (alt="" + role="presentation") so screen readers don't announce
-    // content that isn't shown. Week 6 (Phase 9) swaps in real
-    // captures and restores non-empty alt text. Test accepts either
-    // shape so the assertion survives both states.
+    // Real captures are wired up for all 3 steps now (step 1 uses the
+    // sign-in screenshot at /marketing/sign-in.png, steps 2-3 use
+    // /marketing/how-it-works/*) — match on the shared /marketing/
+    // prefix so the count reflects however many step images the live
+    // component renders, rather than hardcoding a path segment that
+    // only matched 2 of the 3 steps.
     const result = LandingHowItWorksSection();
     const imgs = flatten(result).filter((el) => {
       const p = el.props as { src?: string } | undefined;
-      return typeof p?.src === "string" && p.src.startsWith("/marketing/how-it-works");
+      return typeof p?.src === "string" && p.src.startsWith("/marketing/");
     });
     assert.equal(imgs.length, 3);
     for (const img of imgs) {

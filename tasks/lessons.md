@@ -2263,3 +2263,6 @@ C4 close-out with empirical SLICE 11 data.
   later `pop` land on someone else's stash). Cheapest of all when the specs
   don't import your changed files: prove isolation by grepping the failing
   specs' imports against your diff, and skip the baseline run entirely.
+
+- **2026-07-10 — read the error, not the test name, before "updating stale tests."** 16 of ~30 CI failures briefed as "stale UI expectations" were `document is not defined` — a DOM bootstrap (tests/setup-dom.ts) existed but was never wired into the CI runner, so the fix was `import "../../setup-dom"` first-line in the affected specs, not assertion rewrites. Classify by error type (ReferenceError/MODULE_NOT_FOUND = harness bug; AssertionError value-diff = candidate stale expectation, confirm intent via git/in-code comments first). See docs/learnings/2026-07-10-diagnose-before-updating-tests.md.
+- **2026-07-10 — an invariant captured after the event it guards cannot fail.** Snapshotting registry keys at module top to detect import-time leakage is tautological when the import happens above the snapshot; assert named absence (leak) + named presence (baselines) instead, and litmus-test every invariant with "what code change makes this fire?" See docs/learnings/2026-07-10-guard-assertions-that-cannot-fail.md.
