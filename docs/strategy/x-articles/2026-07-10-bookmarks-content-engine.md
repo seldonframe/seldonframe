@@ -85,4 +85,35 @@ The Monday email started this week. Next: a monthly receipt post with the Perfor
 
 ---
 
+## FORMATTING MAP (apply in the X Article editor — real rich text, no Unicode)
+
+**Cover image:** GENERATED — `docs/strategy/x-creatives/2026-07-10/draft2-vault-loop-card.png`
+(the 50→11 card; doubles as the article cover, consistent with the short post if both run).
+
+**Bold** these lines/phrases (and nothing else):
+- "My last post about my own product got 89 impressions." (opening line)
+- "structure is learnable" (end of para 2)
+- "one markdown file and one script in my repo" (in "The idea in one sentence")
+- "Fifteen minutes, and I never touched a key."
+- "Patterns are a commodity" (in "The loop that runs without me")
+- "The machine is not the result." (honest-limits section)
+
+**Italicize:**
+- *Patterns* / *Performance* / *Corpus* (the three section names where defined)
+- "why" in "works out *why* each one performed"
+- the closing SeldonFrame paragraph (entire block, as a signature note)
+
+**Underline:** nothing. (Underline reads as a link on the web; skip it.)
+
+**Inline images, in order:**
+1. CAPTURE — real terminal after `node scripts/x-bookmarks-pull.mjs` (command +
+   "Authorized as @themaxthule" + "Appended N new bookmark(s)" visible, crop to
+   terminal). Place after the paragraph ending "I never touched a key."
+2. CAPTURE — the Patterns section of docs/strategy/x-vault.md in your editor
+   (the 11 numbered lines, dark theme). Place after "What 50 bookmarks actually
+   taught me" intro line.
+3. CAPTURE — the Performance table showing the single 89-impressions row. Place
+   in the honest-limits section next to the baseline confession. Plainness is
+   the receipt — do not beautify any capture.
+
 Pick your edit pass, then post as an X Article. Log the Performance row when it's live.

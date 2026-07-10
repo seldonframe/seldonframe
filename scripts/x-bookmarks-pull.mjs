@@ -175,14 +175,23 @@ async function pull(maxCount) {
     const params = new URLSearchParams({
       max_results: String(Math.min(100, maxCount - tweets.length < 10 ? 10 : maxCount - tweets.length)),
       // note_tweet = full text of long-form posts (the plain text field truncates at ~280)
-      'tweet.fields': 'created_at,public_metrics,author_id,note_tweet',
-      expansions: 'author_id',
+      'tweet.fields': 'created_at,public_metrics,author_id,note_tweet,attachments',
+      expansions: 'author_id,attachments.media_keys',
       'user.fields': 'username',
+      // media urls let the weekly distill LOOK at what creatives perform
+      'media.fields': 'type,url,preview_image_url',
     });
     if (nextToken) params.set('pagination_token', nextToken);
     const page = await api(`/users/${cache.user_id}/bookmarks?${params}`, cache.access_token);
     const users = Object.fromEntries((page.includes?.users ?? []).map((u) => [u.id, u.username]));
-    for (const t of page.data ?? []) tweets.push({ ...t, username: users[t.author_id] ?? 'unknown' });
+    const media = Object.fromEntries((page.includes?.media ?? []).map((m) => [m.media_key, m]));
+    for (const t of page.data ?? []) {
+      const mediaUrls = (t.attachments?.media_keys ?? [])
+        .map((k) => media[k])
+        .filter(Boolean)
+        .map((m) => `${m.type}: ${m.url ?? m.preview_image_url ?? '(no url)'}`);
+      tweets.push({ ...t, username: users[t.author_id] ?? 'unknown', mediaUrls });
+    }
     nextToken = page.meta?.next_token;
     if (!nextToken || !(page.data ?? []).length) break;
   }
@@ -201,6 +210,7 @@ async function pull(maxCount) {
     return [
       `### ${date} · @${t.username} · https://x.com/${t.username}/status/${t.id}`,
       quoted,
+      ...(t.mediaUrls?.length ? [`- media: ${t.mediaUrls.join(' · ')}`] : []),
       `- metrics: ${m.like_count ?? '?'} likes · ${m.retweet_count ?? '?'} reposts · ${m.reply_count ?? '?'} replies · ${m.impression_count ?? '?'} views`,
       `- format: `,
       `- why it worked: `,
