@@ -49,6 +49,24 @@ import { guide as howToGetMoreGoogleReviews } from "./how-to-get-more-google-rev
 import { guide as howToRespondToANegativeReview } from "./how-to-respond-to-a-negative-review";
 import { guide as missedCallTextBack } from "./missed-call-text-back";
 import { guide as onePersonCompanyOs } from "./one-person-company-os";
+import { guide as howMuchDoesGohighlevelCost } from "./how-much-does-gohighlevel-cost";
+import { guide as gohighlevelPricingPlansExplained } from "./gohighlevel-pricing-plans-explained";
+import { guide as hiddenGohighlevelFees } from "./hidden-gohighlevel-fees";
+import { guide as isGohighlevelAiEmployeeWorthIt } from "./is-gohighlevel-ai-employee-worth-it";
+import { guide as bestGohighlevelAlternatives } from "./best-gohighlevel-alternatives";
+import { guide as gohighlevelVsSeldonframe } from "./gohighlevel-vs-seldonframe";
+import { guide as bestGohighlevelAlternativeForSolopreneurs } from "./best-gohighlevel-alternative-for-solopreneurs";
+import { guide as gohighlevelVsHubspot } from "./gohighlevel-vs-hubspot";
+import { guide as whyAgenciesLeaveGohighlevel } from "./why-agencies-leave-gohighlevel";
+import { guide as isGohighlevelWorthItForSmallBusiness } from "./is-gohighlevel-worth-it-for-small-business";
+import { guide as isGohighlevelHardToLearn } from "./is-gohighlevel-hard-to-learn";
+import { guide as doINeedGohighlevel } from "./do-i-need-gohighlevel";
+import { guide as howToSwitchFromGohighlevel } from "./how-to-switch-from-gohighlevel";
+import { guide as howToReplaceGohighlevel } from "./how-to-replace-gohighlevel";
+import { guide as howToPriceAnAiReceptionistService } from "./how-to-price-an-ai-receptionist-service";
+import { guide as runClientAiOnYourOwnKeys } from "./run-client-ai-on-your-own-keys";
+import { guide as gohighlevelSaasModeVsFlatPricing } from "./gohighlevel-saas-mode-vs-flat-pricing";
+import { guide as whiteLabelAiFrontOfficeWithoutAgencyPro } from "./white-label-ai-front-office-without-agency-pro";
 
 export { LAST_UPDATED };
 export type { Guide, GuideCluster, GuideSection, GuideFaq, GuideSource, GuideIntent } from "./types";
@@ -63,6 +81,7 @@ export const CLUSTER_LABELS: Record<GuideCluster, string> = {
   "ai-visibility": "AI visibility & GEO",
   reviews: "Reviews & reputation",
   "ai-agents": "Running your business with AI agents",
+  gohighlevel: "GoHighLevel alternatives & pricing",
 };
 
 export const GUIDES: Guide[] = [
@@ -108,6 +127,24 @@ export const GUIDES: Guide[] = [
   howToRespondToANegativeReview,
   missedCallTextBack,
   onePersonCompanyOs,
+  howMuchDoesGohighlevelCost,
+  gohighlevelPricingPlansExplained,
+  hiddenGohighlevelFees,
+  isGohighlevelAiEmployeeWorthIt,
+  bestGohighlevelAlternatives,
+  gohighlevelVsSeldonframe,
+  bestGohighlevelAlternativeForSolopreneurs,
+  gohighlevelVsHubspot,
+  whyAgenciesLeaveGohighlevel,
+  isGohighlevelWorthItForSmallBusiness,
+  isGohighlevelHardToLearn,
+  doINeedGohighlevel,
+  howToSwitchFromGohighlevel,
+  howToReplaceGohighlevel,
+  howToPriceAnAiReceptionistService,
+  runClientAiOnYourOwnKeys,
+  gohighlevelSaasModeVsFlatPricing,
+  whiteLabelAiFrontOfficeWithoutAgencyPro,
 ];
 
 export function getGuide(slug: string): Guide {
