@@ -72,6 +72,21 @@ Max: "do this" on the 4 queued slices + fix the discoverability gap (cluster not
 /sell hub, /agencies, and every marketplace listing. Deeper Zapier-play remainder (per-listing keyword slugs +
 listing FAQ fields = data-model change) left as its own slice.
 
+### Task — Guides visual + readability engine (2026-07-10, Max-directed, branch feat/guides-visual-engine)
+
+Max: guides are walls of text → add SVG diagrams/animations, real vendor logos, bold/italic,
+short paragraphs, 16-year-old reading level with "kind of like…" analogies — SEO/GEO preserved,
+world-class standalone value. Architecture: engine upgrade (markdown-lite + typed diagram
+primitives + callouts + favicon logos) then batch rewrite of all 74 guides. Facts frozen.
+
+- [ ] PR A — engine: types (diagram/callout/markdown-lite) · guide-page.tsx inline renderer +
+      guide-diagrams.tsx SVG set (CSS-animated, reduced-motion safe) · sources-row favicons ·
+      FAQ JSON-LD markdown-strip · guide-markdown.ts twin degradation · spec-test extensions ·
+      2 exemplar guides upgraded · content-loop.md style contract
+- [ ] PR B — rewrite all 74 guides in batches (simplify, shorten, bold/italic, analogies,
+      1-2 diagrams each; facts/hedges/sources verbatim) + fact-drift reviewer gate per batch
+- [ ] Gates: guides.spec green · tsc delta · reviewer SHIP · merge · smoke + vision pass
+
 ### Task — Retainer sibling-recovery period narrowing (2026-07-08, money-review follow-up, worktree hungry-jang-c20e73)
 
 Fix from the autopay-console money review: `findOutstandingFailedForSubscriptionReal` matched ANY

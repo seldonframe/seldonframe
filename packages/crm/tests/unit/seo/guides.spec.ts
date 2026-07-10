@@ -16,6 +16,7 @@ import {
   type GuideCluster,
 } from "../../../src/lib/seo/guides";
 import { renderGuideMarkdown } from "../../../src/lib/seo/guide-markdown";
+import { stripInlineMarkup } from "../../../src/lib/seo/guide-inline";
 
 const CLUSTERS: ReadonlySet<GuideCluster> = new Set(Object.keys(CLUSTER_LABELS) as GuideCluster[]);
 
@@ -63,6 +64,64 @@ for (const g of GUIDES) {
       assert.ok(s.h2.trim().length > 0, "empty h2");
       assert.ok(s.body.trim().length > 40, `section '${s.h2}' body too short`);
       assert.ok(!/<[a-z][^>]*>/i.test(s.body), `section '${s.h2}' contains raw HTML`);
+      // markdown-lite balance sanity: "**" must appear an even number of times per body.
+      const boldMarkers = (s.body.match(/\*\*/g) ?? []).length;
+      assert.equal(boldMarkers % 2, 0, `section '${s.h2}' has unclosed ** bold markers`);
+      // single-asterisk parity: after removing **bold** spans, any remaining
+      // "*" (from *italic*) must also come in matched pairs, never a lone one.
+      const withoutBold = s.body.replace(/\*\*[^*]+\*\*/g, "");
+      const singleAsterisks = (withoutBold.match(/\*/g) ?? []).length;
+      assert.equal(singleAsterisks % 2, 0, `section '${s.h2}' has an unclosed * italic marker`);
+    }
+  });
+
+  test(`guide '${g.slug}' stripInlineMarkup removes every markdown-lite token`, () => {
+    const strings: string[] = [
+      g.title,
+      g.description,
+      g.dek,
+      ...g.sections.map((s) => s.body),
+      ...g.faq.flatMap((f) => [f.q, f.a]),
+    ];
+    for (const raw of strings) {
+      const stripped = stripInlineMarkup(raw);
+      assert.ok(!stripped.includes("**"), `stripInlineMarkup left "**" behind: "${stripped.slice(0, 80)}"`);
+      assert.ok(!stripped.includes("]("), `stripInlineMarkup left "](" behind: "${stripped.slice(0, 80)}"`);
+      assert.ok(!/\*/.test(stripped), `stripInlineMarkup left a lone "*" behind: "${stripped.slice(0, 80)}"`);
+    }
+  });
+
+  test(`guide '${g.slug}' diagrams (if any) have non-empty labels + valid values`, () => {
+    for (const s of g.sections) {
+      if (!s.diagram) continue;
+      const d = s.diagram;
+      if (d.type === "flow" || d.type === "stack") {
+        const items = d.type === "flow" ? d.steps : d.layers;
+        assert.ok(items.length > 0, `${s.h2}: diagram has no items`);
+        for (const item of items) assert.ok(item.label.trim().length > 0, `${s.h2}: diagram item has empty label`);
+      }
+      if (d.type === "loop") {
+        assert.ok(d.steps.length > 0, `${s.h2}: loop has no steps`);
+        for (const step of d.steps) assert.ok(step.trim().length > 0, `${s.h2}: loop step has empty label`);
+      }
+      if (d.type === "compare") {
+        assert.ok(d.left.items.length >= 1, `${s.h2}: compare left has no items`);
+        assert.ok(d.right.items.length >= 1, `${s.h2}: compare right has no items`);
+      }
+      if (d.type === "bars") {
+        assert.ok(d.items.length > 0, `${s.h2}: bars has no items`);
+        for (const item of d.items) {
+          assert.ok(Number.isFinite(item.value) && item.value > 0, `${s.h2}: bar '${item.label}' value not finite/positive`);
+          assert.ok(item.display.trim().length > 0, `${s.h2}: bar '${item.label}' has empty display`);
+        }
+      }
+    }
+  });
+
+  test(`guide '${g.slug}' callouts (if any) have non-empty text`, () => {
+    for (const s of g.sections) {
+      if (!s.callout) continue;
+      assert.ok(s.callout.text.trim().length > 0, `${s.h2}: callout has empty text`);
     }
   });
 

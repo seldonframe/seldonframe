@@ -37,6 +37,16 @@ Sitemap + llms.txt auto-derive — do not touch them.
 
 **never-lies (non-negotiable):** every factual/statistical claim is hedged or backed by a real entry in `sources`. Verify each source URL with WebFetch before citing it — if it doesn't resolve or doesn't say what you claim, drop the claim. NEVER fabricate a URL, a statistic, or a study. Plain-paragraph bodies, no raw HTML. Each article: ≥3 sections, ≥2 FAQ, ≥1 verified https source.
 
+**Style contract (2026-07-10):** applies to every new guide from this point on.
+- Paragraphs ≤3 sentences — split anything longer.
+- Write at roughly a 16-year-old reading level: short sentences, everyday words. Facts, numbers, hedges, and attributions are FROZEN — simplify wording, never soften or strengthen a claim.
+- Markdown-lite only, inside `body`/`dek`/FAQ answers: `**bold**` 3-5 load-bearing phrases per section (sparingly), `*italic*` jargon on first use. Still no raw HTML, ever.
+- One `callout: { kind: "analogy" | "tip" | "warning", text }` per niche concept, phrased "kind of like…" for analogies.
+- 1-2 `diagram`s per guide, picked from the 5 typed primitives in `guides/types.ts`: `flow` (left→right steps), `loop` (a repeating cycle), `compare` (two-column pros/cons or before/after), `bars` (a labeled magnitude comparison — only from numbers already stated in the article), `stack` (top-down layers). Attach via `section.diagram`.
+- Never use a bare `*` in prose (write `×`) — a stray asterisk becomes italics.
+- Analogy callout text must NOT itself start with "kind of like" — the label already says it.
+- Sources/hedges/never-lies rules above are unchanged — the style contract only touches presentation.
+
 ## Step 4 — Quality gate (the safety net — be adversarial)
 For each drafted article, run a self-critique pass and DROP (don't ship) any that fail: (a) a claim that can't be cited; (b) thin/generic filler that doesn't answer the query better than page 1 already does; (c) duplicate intent; (d) reads as machine-spun. Then run the mechanical gate:
 ```
