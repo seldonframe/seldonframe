@@ -25,6 +25,19 @@ const EMIT_RESULT_TOOL = {
   },
 };
 
+// Local shape instead of importing Anthropic.ToolUseBlock (mirrors
+// lib/ai/engine.ts's isToolUseBlock pattern) so this file's typing doesn't
+// depend on the SDK's exact content-block union.
+type ToolUseBlock = { type: "tool_use"; id: string; name: string; input: unknown };
+
+function isToolUseBlock(value: unknown): value is ToolUseBlock {
+  if (!value || typeof value !== "object") {
+    return false;
+  }
+  const block = value as Record<string, unknown>;
+  return block.type === "tool_use" && typeof block.id === "string" && typeof block.name === "string";
+}
+
 function toAnthropicContent(user: TraceLlmRequest["user"]) {
   return user.map((part) => {
     if (part.type === "text") {
@@ -65,9 +78,7 @@ export function makeAnthropicTraceLlm(params: { apiKey: string }): TraceLlm {
       tool_choice: { type: "tool", name: EMIT_RESULT_TOOL.name },
     });
 
-    const toolUse = response.content.find(
-      (block): block is Anthropic.ToolUseBlock => block.type === "tool_use",
-    );
+    const toolUse = (response.content as unknown[]).find(isToolUseBlock);
 
     if (!toolUse) {
       throw new Error("Trace LLM response did not contain a tool_use block");
