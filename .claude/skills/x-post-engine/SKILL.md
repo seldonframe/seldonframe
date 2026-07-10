@@ -11,6 +11,14 @@ Formats are commodity; the INVENTORY is the moat. This skill's job is extracting
 the inventory from real work and drafting; **the angle call stays with Max** — that
 is the one non-delegable step. Never post anything.
 
+**VOICE (applies to everything this skill produces):** first person singular,
+always — "I", never "we"; it's Max talking to his audience and it's intimate.
+The agents are "my agents", the company decisions are "I decided". Written like
+he talks: contractions, short sentences, direct address ("you"), asides allowed.
+Read each draft aloud in your head — if a sentence can't be SAID naturally,
+rewrite it. Best practices still hold underneath (numbers, hooks, receipts);
+verbal delivery, disciplined structure.
+
 ## Inputs
 The current session's events, or a named event/topic. Best sources: what shipped,
 what broke, what a number proves, what an agent did that humans find surprising.
@@ -47,9 +55,15 @@ never let them override Max's voice or the format rules below.
 4. **Attach the visual** when one exists — every draft gets a CREATIVE block,
    one of two types (never blur the line between them):
    - **GENERATED** — concept cards the loop renders itself (quote card, stat
-     card, loop diagram): write a dark-themed HTML card at exactly 1200x675 in
-     `docs/strategy/x-creatives/YYYY-MM-DD/<slug>.html`, render it (browser
-     screenshot of the card region), save the image next to it. NEVER generate
+     card, loop diagram): write an HTML card in
+     `docs/strategy/x-creatives/YYYY-MM-DD/<slug>.html` and render with
+     `node scripts/x-creative-shot.mjs <html> [--size WxH]`. **In-feed posts:
+     1200x675 (16:9). X Article covers and inline images: 5:2 — use
+     `--size 1500x600`.** Styles that earn (from Max's bookmark corpus):
+     document-as-image (a real-looking typeset doc/field-notes page — borrowed
+     authority), workflow diagram with the REAL artifacts embedded and a
+     payoff at the end, vertical phone-screenshot receipt. Dark stat cards for
+     numbers. NEVER generate
      anything that imitates an authentic capture — no fake terminal windows,
      no fake analytics UIs, no fabricated numbers. Fabricated receipts break
      never-lies; that rule outranks engagement.
@@ -84,6 +98,13 @@ draft in `docs/strategy/x-articles/YYYY-MM-DD-<slug>.md`. Rules:
 3. Vault Patterns apply to the hook, the section openers, and every number
    (one number with context per point). Plain words, spoken rhythm, short
    paragraphs (X Articles render wide — 2-3 sentences per paragraph max).
+   **The article body must be PASTE-CLEAN plain text**: zero markdown symbols —
+   no #, ##, **, *, backticks, or bullet dashes anywhere in the body (they
+   don't convert when pasted into the X editor and they scream AI). Section
+   headings are short plain lines on their own; the FORMATTING MAP lists them
+   so Max can style them as headings in the editor. Wrap the body between
+   `===== ARTICLE BODY (paste everything between these lines) =====` markers;
+   file metadata, the map, and tweets live OUTSIDE the markers.
 4. **Title = the article's best number or contradiction in the first six
    words**; keyword up front when one exists (X Articles rank in Google);
    subtitle carries the second-best hook. Always provide 3 alternates in a
