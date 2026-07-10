@@ -33,6 +33,9 @@ Per lead: **link** · posted-when · verbatim pain quote (trimmed ≤2 sentences
 ## Step 5 — Local log
 Append the same content to `~/agents/logs/leads-recon/YYYY-MM-DD.md` on this box (create dirs as needed). Do NOT commit logs to the repo — the email + local log are the record.
 
+## Step 5b — Quotes library (feeds content-loop)
+Any swept post with a vivid, verbatim, publicly-posted quote expressing a pain SeldonFrame's content covers (missed calls, no-shows, GHL pricing, receptionist costs, booking friction, AI-agent DIY fatigue) — INCLUDING posts that failed lead-qualification (stale, unreachable) — append to `~/agents/quotes-library.md` as: `- "<exact quote, trimmed>" — u/<author> on r/<sub> (or HN handle), <date>, <permalink> · topic: <cluster>`. Rules: exact words only, never trimmed to change meaning, public posts only, ≤3 per day, skip anything with personal/identifying details beyond the username. This library gives articles real practitioner voice (the experience signal AI engines reward) — quality over volume.
+
 ## Step 6 — Summary
 Print ~5 lines: lenses swept, candidates seen, leads kept, email sent yes/no, anything that would unblock a better run tomorrow.
 

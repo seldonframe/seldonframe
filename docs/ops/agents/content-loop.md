@@ -33,6 +33,8 @@ For each chosen article, create `packages/crm/src/lib/seo/guides/<slug>.ts` expo
 - create the twin route `packages/crm/src/app/guides/<slug>.md/route.ts` (copy an existing one, swap the slug).
 Sitemap + llms.txt auto-derive — do not touch them.
 
+**Practitioner quotes (optional, high-value):** check `~/agents/quotes-library.md` (harvested daily by leads-recon). Where a quote GENUINELY fits an article's topic, weave in 1–2 as "what real owners say" — exact words, attributed (u/name on r/sub), linked to the permalink, dated. Never alter a quote, never use one to claim something its author didn't mean, max 2 per article, skip entirely when nothing fits. Real practitioner voice is the experience signal AI engines reward — but a forced quote reads as decoration and fails the machine-spun check.
+
 **never-lies (non-negotiable):** every factual/statistical claim is hedged or backed by a real entry in `sources`. Verify each source URL with WebFetch before citing it — if it doesn't resolve or doesn't say what you claim, drop the claim. NEVER fabricate a URL, a statistic, or a study. Plain-paragraph bodies, no raw HTML. Each article: ≥3 sections, ≥2 FAQ, ≥1 verified https source.
 
 ## Step 4 — Quality gate (the safety net — be adversarial)

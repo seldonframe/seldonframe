@@ -4,6 +4,17 @@ Strategic commissions the weekly content-loop must publish ahead of its research
 
 ---
 
+## 2. Is GEO legit? (the practitioner's answer)
+
+- **status:** queued
+- **commissioned:** 2026-07-09 (by Max)
+- **slug:** `is-geo-legit`
+- **working title:** "Is GEO (Generative Engine Optimization) Legit, or Just SEO Rebranded? A Practitioner's Answer"
+- **why:** the exact question dominating r/GrowthHacking and marketing forums right now; skeptics and sellers are both loud, nobody answers from a measured-practice seat. We run a 500+ page GEO estate with instrumentation — we can answer with receipts.
+- **the piece:** honest thesis: GEO is ~90% SEO with a citation-shaped scoring function — and the 10% that differs (citability, .md/agent-readable surfaces, verified freshness, experience quotes, entity schema) is real and measurable. What we actually do and why (md twins, llms.txt, sources rows, verified dates, author entity); what the sellers oversell (em-dash scrubbing, "AI detection proofing", magic-prompt hacks); how to measure (cite /charts/ai-recommendation-index as our own public evidence — including that our own brand is currently absent from AI answers, which is what makes the measurement trustworthy); a plain do-this list for a small business or agency.
+- **relatedTool:** `/tools/ai-visibility-checker`. Body links: /charts/ai-recommendation-index, faq-schema-for-local-seo guide.
+- **never-lies notes:** no invented "AI traffic %" stats — cite only sources verified per the standard rules; our own methodology page is a citable source for our claims about our own practice.
+
 ## 1. The one-person-company-OS pillar page
 
 - **status:** shipped: 2026-07-10 one-person-company-os
