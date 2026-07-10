@@ -300,8 +300,18 @@ export function RecordClient({
         body: JSON.stringify({ message: text }),
       });
       if (!res.ok) throw new Error(`interview_failed:${res.status}`);
-      const data = (await res.json()) as { reply: string; open_questions: string[] };
+      const data = (await res.json()) as {
+        reply: string;
+        open_questions: string[];
+        flow_model?: FlowModel;
+      };
       dispatch({ type: "INTERVIEW_TURN", user: text, seldon: data.reply, openQuestions: data.open_questions });
+      // The interview turn also merges answers into the FlowModel server-side
+      // (never-lies: what Seldon says it learned must be what compiles) — if
+      // the response carries the updated model, refresh the recap with it.
+      if (data.flow_model) {
+        dispatch({ type: "MODEL_UPDATED", flowModel: data.flow_model, openQuestions: data.open_questions });
+      }
     } catch (err) {
       setMessage(err instanceof Error ? err.message : "Could not send that message.");
     }

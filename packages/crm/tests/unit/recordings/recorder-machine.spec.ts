@@ -441,6 +441,46 @@ describe("INTERVIEW_TURN", () => {
   });
 });
 
+describe("MODEL_UPDATED", () => {
+  test("swaps flowModel/coverage/openQuestions from the interview's merged model", () => {
+    const state: RecorderState = {
+      ...initialRecorderState(),
+      phase: "recap",
+      flowModel: fixtureFlowModel(),
+      coverage: [],
+      openQuestions: ["old question"],
+    };
+    const updatedModel = fixtureFlowModel({
+      constants: ["always cc the office manager"],
+      coverage: [{ stepIndex: 0, tier: "green", toolkit: "gmail", reason: "matched gmail" }],
+    });
+    const next = recorderReducer(state, {
+      type: "MODEL_UPDATED",
+      flowModel: updatedModel,
+      openQuestions: [],
+    });
+    assert.equal(next.flowModel, updatedModel);
+    assert.deepEqual(next.coverage, updatedModel.coverage);
+    assert.deepEqual(next.openQuestions, []);
+  });
+
+  test("preserves phase and slots — this is not a new recording", () => {
+    const state: RecorderState = {
+      ...initialRecorderState(),
+      phase: "approved",
+      flowModel: fixtureFlowModel(),
+    };
+    const slotsBefore = state.slots;
+    const next = recorderReducer(state, {
+      type: "MODEL_UPDATED",
+      flowModel: fixtureFlowModel({ goal: "an updated goal" }),
+      openQuestions: [],
+    });
+    assert.equal(next.phase, "approved");
+    assert.equal(next.slots, slotsBefore);
+  });
+});
+
 describe("GO_RECAP", () => {
   test("moves phase to recap", () => {
     const state = initialRecorderState();

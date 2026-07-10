@@ -84,6 +84,7 @@ export type RecorderAction =
   | { type: "SLOT_FAILED"; slotIndex: number; error: string }
   | { type: "SET_LABEL"; slotIndex: number; label: string }
   | { type: "INTERVIEW_TURN"; user: string; seldon: string; openQuestions: string[] }
+  | { type: "MODEL_UPDATED"; flowModel: FlowModel; openQuestions: string[] }
   | { type: "GO_RECAP" }
   | { type: "APPROVED" };
 
@@ -240,6 +241,18 @@ export function recorderReducer(state: RecorderState, action: RecorderAction): R
           { role: "user", text: action.user },
           { role: "seldon", text: action.seldon },
         ],
+        openQuestions: action.openQuestions,
+      };
+
+    // The interview merged an answer into the FlowModel — swap
+    // flowModel/coverage/openQuestions so the recap reflects what Seldon
+    // just said it learned, WITHOUT touching slots or phase (this is not a
+    // new recording — nothing about slot progress changed).
+    case "MODEL_UPDATED":
+      return {
+        ...state,
+        flowModel: action.flowModel,
+        coverage: action.flowModel.coverage,
         openQuestions: action.openQuestions,
       };
 

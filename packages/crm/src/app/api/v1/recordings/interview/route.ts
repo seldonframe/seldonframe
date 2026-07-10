@@ -89,14 +89,26 @@ export async function POST(request: Request): Promise<Response> {
     { role: "seldon", text: result.reply },
   ];
 
+  // Persist the updated FlowModel too (full-column update, same as
+  // compile-trace's write to recordingSessions.flowModel) — otherwise
+  // Seldon's "I'll update the flow" reply never actually reaches what
+  // compile-agent reads, a never-lies violation.
   await db
     .update(recordingSessions)
     .set({
       interviewLog: sql`COALESCE(${recordingSessions.interviewLog}, '[]'::jsonb) || ${JSON.stringify(newTurns)}::jsonb`,
+      flowModel: result.model,
       openQuestions: result.openQuestions,
       updatedAt: new Date(),
     })
     .where(eq(recordingSessions.id, session.id));
 
-  return NextResponse.json({ reply: result.reply, open_questions: result.openQuestions });
+  return NextResponse.json({
+    reply: result.reply,
+    open_questions: result.openQuestions,
+    // The persisted, updated FlowModel — so the client can refresh its
+    // recap without reconstructing it (same convention as compile-trace's
+    // flow_model field).
+    flow_model: result.model,
+  });
 }
