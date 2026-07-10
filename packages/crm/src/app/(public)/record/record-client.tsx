@@ -57,6 +57,18 @@ function writeStoredSession(session: StoredSession): void {
   }
 }
 
+/** Drops a stale stored {sessionId, token} pair (GET /session 401/404'd —
+ *  unknown token, rotated secret, or expired session) so the next mount
+ *  doesn't keep retrying it and instead mints a fresh session. */
+function clearStoredSession(): void {
+  if (typeof window === "undefined") return;
+  try {
+    window.localStorage.removeItem(STORAGE_KEY);
+  } catch {
+    // Non-fatal — worst case the stale pair is retried and fails again.
+  }
+}
+
 const TIER_COLOR: Record<CoverageTier, string> = {
   green: "#22C55E",
   yellow: "#EAB308",
@@ -84,32 +96,76 @@ export function RecordClient({
   const [compiledTemplateId, setCompiledTemplateId] = useState<string | null>(null);
   const captureHandles = useRef<Record<number, CaptureHandle>>({});
 
-  // Mint (or restore) the anonymous recording session on first mount.
+  // Restore (or mint) the anonymous recording session on first mount.
+  //
+  // A stored {sessionId, token} pair covers two cases the same way: the
+  // post-claim return from /signup AND an ordinary page refresh mid-capture.
+  // Either way, all React state (phase/flowModel/coverage/interview) only
+  // ever lived in memory, so it's re-fetched from the persisted session row
+  // via GET /session rather than assumed from a bare SESSION_READY (which
+  // would silently drop back to phase "capturing" with flowModel null — see
+  // final-review B-1). A 401/404 on that GET means the stored pair is stale
+  // (cleared/rotated/expired secret), so it's cleared and we fall back to
+  // minting a fresh session exactly as before.
   useEffect(() => {
-    if (claimed && claimedSessionId) {
-      const stored = readStoredSession();
-      if (stored && stored.sessionId === claimedSessionId) {
-        dispatch({ type: "SESSION_READY", sessionId: stored.sessionId, token: stored.token });
-        return;
-      }
-    }
     if (state.sessionId) return;
 
+    const stored = readStoredSession();
     let cancelled = false;
-    fetch("/api/v1/recordings/session", { method: "POST" })
-      .then(async (res) => {
-        if (!res.ok) throw new Error(`session_create_failed:${res.status}`);
-        return (await res.json()) as { session_id: string; token: string };
+
+    function mintFreshSession() {
+      fetch("/api/v1/recordings/session", { method: "POST" })
+        .then(async (res) => {
+          if (!res.ok) throw new Error(`session_create_failed:${res.status}`);
+          return (await res.json()) as { session_id: string; token: string };
+        })
+        .then((data) => {
+          if (cancelled) return;
+          writeStoredSession({ sessionId: data.session_id, token: data.token });
+          dispatch({ type: "SESSION_READY", sessionId: data.session_id, token: data.token });
+        })
+        .catch((err) => {
+          if (cancelled) return;
+          setMessage(err instanceof Error ? err.message : "Could not start a recording session.");
+        });
+    }
+
+    if (stored) {
+      fetch("/api/v1/recordings/session", {
+        headers: { Authorization: `Bearer ${stored.token}` },
       })
-      .then((data) => {
-        if (cancelled) return;
-        writeStoredSession({ sessionId: data.session_id, token: data.token });
-        dispatch({ type: "SESSION_READY", sessionId: data.session_id, token: data.token });
-      })
-      .catch((err) => {
-        if (cancelled) return;
-        setMessage(err instanceof Error ? err.message : "Could not start a recording session.");
-      });
+        .then(async (res) => {
+          if (!res.ok) throw new Error(`session_fetch_failed:${res.status}`);
+          return (await res.json()) as {
+            session_id: string;
+            status: string;
+            flow_model: FlowModel | null;
+            open_questions: string[];
+            slots: Array<{ slot_index: number; label: string | null; status: "traced" | "failed" | "uploaded" }>;
+          };
+        })
+        .then((data) => {
+          if (cancelled) return;
+          dispatch({
+            type: "REHYDRATED",
+            sessionId: stored.sessionId,
+            token: stored.token,
+            status: data.status,
+            flowModel: data.flow_model,
+            openQuestions: data.open_questions,
+            slots: data.slots.map((s) => ({ slotIndex: s.slot_index, label: s.label, status: s.status })),
+          });
+        })
+        .catch(() => {
+          if (cancelled) return;
+          // Stale/invalid stored pair (401/404/network error) — clear it and
+          // fall back to the fresh-mint path exactly as if none existed.
+          clearStoredSession();
+          mintFreshSession();
+        });
+    } else {
+      mintFreshSession();
+    }
 
     return () => {
       cancelled = true;

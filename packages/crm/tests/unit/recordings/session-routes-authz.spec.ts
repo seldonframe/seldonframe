@@ -9,9 +9,11 @@ import assert from "node:assert/strict";
 
 import {
   authorizeRecordingSubmission,
+  extractBearerToken,
   isAllowedRecordingPathname,
   isValidRecordingBlobUrl,
   resolveSessionCreateGate,
+  resolveSessionFetchGate,
   resolveUploadGrant,
 } from "@/lib/recordings/route-guards";
 import { MAX_RECORDINGS_PER_SESSION, RECORDING_SESSIONS_PER_DAY_PER_IP } from "@/lib/recordings/policy";
@@ -201,6 +203,66 @@ describe("resolveUploadGrant", () => {
     for (const contentType of ["image/svg+xml", "image/gif", "image/png", "image/webp", "text/html", "video/mp4", ""]) {
       assert.equal(resolveUploadGrant({ contentType }), null, `expected null for ${contentType || "(empty)"}`);
     }
+  });
+});
+
+// ── extractBearerToken ───────────────────────────────────────────────────────
+
+describe("extractBearerToken", () => {
+  test("extracts the token from a well-formed header", () => {
+    assert.equal(extractBearerToken("Bearer abc123"), "abc123");
+  });
+
+  test("null header → null", () => {
+    assert.equal(extractBearerToken(null), null);
+  });
+
+  test("missing 'Bearer ' prefix → null", () => {
+    assert.equal(extractBearerToken("abc123"), null);
+  });
+
+  test("'Bearer ' with only whitespace after → null", () => {
+    assert.equal(extractBearerToken("Bearer    "), null);
+  });
+});
+
+// ── resolveSessionFetchGate (GET /session rehydration) ──────────────────────
+
+describe("resolveSessionFetchGate", () => {
+  test("flag off → not_found regardless of token", async () => {
+    const out = await resolveSessionFetchGate({
+      env: {},
+      rawToken: "good-token",
+      lookupSession: async () => ({ id: SESSION_ID }),
+    });
+    assert.deepEqual(out, { kind: "not_found" });
+  });
+
+  test("flag on + no token → unauthorized", async () => {
+    const out = await resolveSessionFetchGate({
+      env: { SF_RECORD_TO_AGENT: "1" },
+      rawToken: null,
+      lookupSession: async () => ({ id: SESSION_ID }),
+    });
+    assert.deepEqual(out, { kind: "unauthorized" });
+  });
+
+  test("flag on + bad/unknown token (lookup misses) → unauthorized", async () => {
+    const out = await resolveSessionFetchGate({
+      env: { SF_RECORD_TO_AGENT: "1" },
+      rawToken: "bad-token",
+      lookupSession: async () => null,
+    });
+    assert.deepEqual(out, { kind: "unauthorized" });
+  });
+
+  test("flag on + valid token → ok with sessionId", async () => {
+    const out = await resolveSessionFetchGate({
+      env: { SF_RECORD_TO_AGENT: "1" },
+      rawToken: "good-token",
+      lookupSession: async () => ({ id: SESSION_ID }),
+    });
+    assert.deepEqual(out, { kind: "ok", sessionId: SESSION_ID });
   });
 });
 

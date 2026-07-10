@@ -177,6 +177,22 @@ Interface drift discovered during the build, vs. this design/the implementation 
   has its own tiny `bindingForToolkit(toolkit)` that builds a `ConnectorBinding` directly from the
   coverage entry's already-resolved toolkit string (`"postiz"` → vetted, anything else → composio),
   with a comment pointing back at `bindingForEntry` as the shape it mirrors.
+- **Post-review fix (B-1) — `GET /api/v1/recordings/session` + `REHYDRATED`.** The final
+  cross-wave review found the post-claim compile step UI-unreachable: the `/signup` return
+  dispatched only `SESSION_READY`, which resets `phase` to `"capturing"` with `flowModel: null`,
+  so the recap panel and "Compile my agent" button (gated on `phase` "recap"/"approved") could
+  never render, and there was no way to re-fetch persisted session state. Fixed by adding a
+  bearer-authed `GET` handler to `session/route.ts` (flag-gated 404 like its `POST`, authz via the
+  new `resolveSessionFetchGate` + shared `extractBearerToken` in `route-guards.ts`) returning
+  `{session_id, status, flow_model, open_questions, slots}` (slots from the new
+  `listRecordingsForSession` store fn), a new `REHYDRATED` action on the recorder reducer that maps
+  session status → phase (`recapped`→`recap`, `approved`/`compiled`→`approved`, else `capturing`)
+  and slot rows → `SlotStatus` (`traced`→`traced`, `failed`→`failed` with a re-record error,
+  `uploaded`→`empty` since there's no in-flight process left to resume), and a `record-client.tsx`
+  mount effect that calls the GET for ANY stored `{sessionId, token}` pair (not just the claimed
+  return — this also incidentally fixes N-1's silent-orphan case, since a stale/mismatched pair now
+  gets validated against the server instead of assumed) and falls back to minting a fresh session
+  on 401/404.
 - **Task 12 — `resolveCompileAgentGate`'s `approve` semantics.** The plan only said `approve: true`
   "transitions recapped→approved first". The gate additionally treats a `recapped` session
   submitted WITHOUT `approve: true` as a 409 conflict (not a silent pass-through) — a recapped

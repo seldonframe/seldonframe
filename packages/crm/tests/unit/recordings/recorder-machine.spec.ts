@@ -75,6 +75,126 @@ describe("SESSION_READY", () => {
   });
 });
 
+describe("REHYDRATED", () => {
+  test("status 'recapped' + flowModel → phase recap, sessionId/token set", () => {
+    const state = initialRecorderState();
+    const next = recorderReducer(state, {
+      type: "REHYDRATED",
+      sessionId: "sess-r",
+      token: "tok-r",
+      status: "recapped",
+      flowModel: fixtureFlowModel(),
+      openQuestions: ["what if it fails?"],
+      slots: [],
+    });
+    assert.equal(next.sessionId, "sess-r");
+    assert.equal(next.token, "tok-r");
+    assert.equal(next.phase, "recap");
+    assert.ok(next.flowModel);
+    assert.deepEqual(next.openQuestions, ["what if it fails?"]);
+  });
+
+  test("status 'approved' + flowModel → phase approved", () => {
+    const next = recorderReducer(initialRecorderState(), {
+      type: "REHYDRATED",
+      sessionId: "s",
+      token: "t",
+      status: "approved",
+      flowModel: fixtureFlowModel(),
+      openQuestions: [],
+      slots: [],
+    });
+    assert.equal(next.phase, "approved");
+  });
+
+  test("status 'compiled' + flowModel → phase approved", () => {
+    const next = recorderReducer(initialRecorderState(), {
+      type: "REHYDRATED",
+      sessionId: "s",
+      token: "t",
+      status: "compiled",
+      flowModel: fixtureFlowModel(),
+      openQuestions: [],
+      slots: [],
+    });
+    assert.equal(next.phase, "approved");
+  });
+
+  test("no flowModel → phase capturing regardless of status", () => {
+    const next = recorderReducer(initialRecorderState(), {
+      type: "REHYDRATED",
+      sessionId: "s",
+      token: "t",
+      status: "recapped",
+      flowModel: null,
+      openQuestions: [],
+      slots: [],
+    });
+    assert.equal(next.phase, "capturing");
+    assert.equal(next.flowModel, null);
+  });
+
+  test("status 'recording' + no flowModel → phase capturing", () => {
+    const next = recorderReducer(initialRecorderState(), {
+      type: "REHYDRATED",
+      sessionId: "s",
+      token: "t",
+      status: "recording",
+      flowModel: null,
+      openQuestions: [],
+      slots: [],
+    });
+    assert.equal(next.phase, "capturing");
+  });
+
+  test("maps slot rows: traced stays traced, failed gets a re-record error, uploaded (stale) resets to empty", () => {
+    const next = recorderReducer(initialRecorderState(), {
+      type: "REHYDRATED",
+      sessionId: "s",
+      token: "t",
+      status: "recapped",
+      flowModel: fixtureFlowModel(),
+      openQuestions: [],
+      slots: [
+        { slotIndex: 0, label: "Happy path", status: "traced" },
+        { slotIndex: 1, label: "Edge case 1", status: "failed" },
+        { slotIndex: 2, label: "Edge case 2", status: "uploaded" },
+      ],
+    });
+    assert.equal(next.slots[0].status, "traced");
+    assert.equal(next.slots[0].label, "Happy path");
+    assert.equal(next.slots[0].error, undefined);
+
+    assert.equal(next.slots[1].status, "failed");
+    assert.equal(next.slots[1].label, "Edge case 1");
+    assert.equal(next.slots[1].error, "compile failed — re-record");
+
+    assert.equal(next.slots[2].status, "empty");
+    assert.equal(next.slots[2].label, "Edge case 2");
+    assert.equal(next.slots[2].error, undefined);
+
+    // slots not present in the rehydration payload are left untouched
+    assert.equal(next.slots[3].status, "empty");
+    assert.equal(next.slots[3].label, null);
+  });
+
+  test("coverage is derived from flowModel.coverage", () => {
+    const model = fixtureFlowModel({
+      coverage: [{ stepIndex: 0, tier: "green", toolkit: "gmail", reason: "matched gmail" }],
+    });
+    const next = recorderReducer(initialRecorderState(), {
+      type: "REHYDRATED",
+      sessionId: "s",
+      token: "t",
+      status: "recapped",
+      flowModel: model,
+      openQuestions: [],
+      slots: [],
+    });
+    assert.equal(next.coverage.length, 1);
+  });
+});
+
 describe("START_RECORDING", () => {
   test("sets the target slot to recording + activeSlot", () => {
     const state = recorderReducer(initialRecorderState(), {

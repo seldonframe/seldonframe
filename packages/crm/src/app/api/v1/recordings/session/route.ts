@@ -10,13 +10,28 @@
 //
 // The raw bearer token is returned to the client exactly once in this
 // response and never persisted (session-token.ts: only its hash is stored).
+//
+// GET /api/v1/recordings/session — rehydrates a session the client already
+// holds {sessionId, token} for: bearer-authed (Authorization header, same
+// token this session was minted with), flag-gated 404 like the POST above.
+// This is what makes the post-claim /signup return (and an ordinary page
+// refresh) able to restore flowModel/coverage/openQuestions/slot state that
+// otherwise only ever lived in the React tree in memory (see B-1 in the
+// final cross-wave review: without this endpoint the recap/compile UI was
+// permanently unreachable after the claim redirect).
 
 import { NextResponse } from "next/server";
 import { db } from "@/db";
 import { RECORDING_SESSIONS_PER_DAY_PER_IP } from "@/lib/recordings/policy";
-import { resolveSessionCreateGate } from "@/lib/recordings/route-guards";
+import { extractBearerToken, resolveSessionCreateGate, resolveSessionFetchGate } from "@/lib/recordings/route-guards";
 import { hashIp, hashSessionToken, mintSessionToken, resolveTokenSecret } from "@/lib/recordings/session-token";
-import { countSessionsForIp, createSession } from "@/lib/recordings/session-store";
+import {
+  countSessionsForIp,
+  createSession,
+  findSessionByToken,
+  listRecordingsForSession,
+} from "@/lib/recordings/session-store";
+import type { FlowModel } from "@/lib/recordings/trace-schema";
 
 // Route files may only export handlers + segment config (Next build-time
 // route validation) — all pure helpers live in lib/recordings/route-guards.ts.
@@ -64,4 +79,49 @@ export async function POST(request: Request): Promise<Response> {
   const { id } = await createSession(db, { ipHash, tokenHash });
 
   return NextResponse.json({ session_id: id, token: raw });
+}
+
+export async function GET(request: Request): Promise<Response> {
+  const env = { SF_RECORD_TO_AGENT: process.env.SF_RECORD_TO_AGENT };
+  const tokenEnv = { AUTH_SECRET: process.env.AUTH_SECRET, NEXTAUTH_SECRET: process.env.NEXTAUTH_SECRET };
+  const rawToken = extractBearerToken(request.headers.get("authorization"));
+
+  const gate = await resolveSessionFetchGate({
+    env,
+    rawToken,
+    lookupSession: async (token) => {
+      const session = await findSessionByToken(db, token, tokenEnv);
+      return session ? { id: session.id } : null;
+    },
+  });
+
+  if (gate.kind === "not_found") {
+    return new Response(null, { status: 404 });
+  }
+  if (gate.kind === "unauthorized") {
+    return NextResponse.json({ error: "unauthorized" }, { status: 401 });
+  }
+
+  // gate.kind === "ok" — re-fetch the row itself (resolveSessionFetchGate's
+  // DI callback only proves ownership; the response body needs the full row).
+  const session = await findSessionByToken(db, rawToken!, tokenEnv);
+  if (!session) {
+    // Vanishingly unlikely (deleted between the gate's lookup and here), but
+    // never assume — treat exactly like any other lookup miss.
+    return NextResponse.json({ error: "unauthorized" }, { status: 401 });
+  }
+
+  const recordings = await listRecordingsForSession(db, session.id);
+
+  return NextResponse.json({
+    session_id: session.id,
+    status: session.status,
+    flow_model: (session.flowModel as FlowModel | null) ?? null,
+    open_questions: (session.openQuestions as string[] | null) ?? [],
+    slots: recordings.map((r) => ({
+      slot_index: r.slotIndex,
+      label: r.label,
+      status: r.status,
+    })),
+  });
 }

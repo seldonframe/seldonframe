@@ -3,12 +3,13 @@
 // pass a minimal structural fake instead of a real Postgres connection —
 // same convention as lib/web-build/extraction-cache-store.ts.
 
-import { and, eq, gte } from "drizzle-orm";
+import { and, asc, eq, gte } from "drizzle-orm";
 import { db as defaultDb } from "@/db";
 import {
   recordingSessions,
   workflowRecordings,
   type RecordingSession,
+  type WorkflowRecording,
 } from "@/db/schema/recordings";
 import { hashSessionToken, resolveTokenSecret, type TokenSecretEnv } from "./session-token";
 import type { TranscriptSegment } from "./trace-schema";
@@ -56,6 +57,20 @@ export async function countSessionsForIp(
     .from(recordingSessions)
     .where(and(eq(recordingSessions.ipHash, ipHash), gte(recordingSessions.createdAt, new Date(sinceMs))));
   return rows.length;
+}
+
+/** All workflow_recordings rows for a session, ordered by slotIndex — used
+ *  to rehydrate the GET /session response's `slots` array on a page reload
+ *  (fresh mint or the post-claim return), never for compile itself. */
+export async function listRecordingsForSession(
+  db: Dbi,
+  sessionId: string,
+): Promise<WorkflowRecording[]> {
+  return db
+    .select()
+    .from(workflowRecordings)
+    .where(eq(workflowRecordings.sessionId, sessionId))
+    .orderBy(asc(workflowRecordings.slotIndex));
 }
 
 export async function insertRecording(

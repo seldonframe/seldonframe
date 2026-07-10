@@ -44,8 +44,23 @@ export type RecorderState = {
   phase: "landing" | "capturing" | "recap" | "approved";
 };
 
+export type RehydratedSlot = {
+  slotIndex: number;
+  label: string | null;
+  status: "traced" | "failed" | "uploaded";
+};
+
 export type RecorderAction =
   | { type: "SESSION_READY"; sessionId: string; token: string }
+  | {
+      type: "REHYDRATED";
+      sessionId: string;
+      token: string;
+      status: string;
+      flowModel: FlowModel | null;
+      openQuestions: string[];
+      slots: RehydratedSlot[];
+    }
   | { type: "START_RECORDING"; slotIndex: number }
   | { type: "STOP_RECORDING"; slotIndex: number }
   | { type: "UPLOADED"; slotIndex: number }
@@ -107,6 +122,50 @@ export function recorderReducer(state: RecorderState, action: RecorderAction): R
         token: action.token,
         phase: "capturing",
       };
+
+    case "REHYDRATED": {
+      const bySlotIndex = new Map(action.slots.map((s) => [s.slotIndex, s]));
+      const slots = state.slots.map((slot) => {
+        const row = bySlotIndex.get(slot.slotIndex);
+        if (!row) return slot;
+        if (row.status === "traced") {
+          return { ...slot, label: row.label, status: "traced" as SlotStatus, error: undefined };
+        }
+        if (row.status === "failed") {
+          return {
+            ...slot,
+            label: row.label,
+            status: "failed" as SlotStatus,
+            error: "compile failed — re-record",
+          };
+        }
+        // 'uploaded' on a rehydrated (stale) session is not the in-flight
+        // "compiling" it once was — there's no process left to resume, so
+        // it goes back to "empty" (keeping the label) rather than a status
+        // this reducer can never move out of.
+        return { ...slot, label: row.label, status: "empty" as SlotStatus, error: undefined };
+      });
+
+      const hasFlowModel = action.flowModel !== null;
+      const phase: RecorderState["phase"] =
+        hasFlowModel &&
+        (action.status === "recapped" || action.status === "approved" || action.status === "compiled")
+          ? action.status === "recapped"
+            ? "recap"
+            : "approved"
+          : "capturing";
+
+      return {
+        ...state,
+        sessionId: action.sessionId,
+        token: action.token,
+        slots,
+        flowModel: action.flowModel,
+        coverage: action.flowModel?.coverage ?? [],
+        openQuestions: action.openQuestions,
+        phase,
+      };
+    }
 
     case "START_RECORDING": {
       if (!isInRange(action.slotIndex)) return state;

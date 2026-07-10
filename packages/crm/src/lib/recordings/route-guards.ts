@@ -22,6 +22,18 @@ import { TranscriptSegmentSchema } from "@/lib/recordings/trace-schema";
 import { IMAGE_MAX_BYTES } from "@/lib/page-blocks/images";
 import { VIDEO_MAX_BYTES } from "@/lib/media/resolve-url";
 
+// ─── shared bearer-token extraction ─────────────────────────────────────────
+
+/** Same idiom every recordings route uses: `Authorization: Bearer <token>`,
+ *  trimmed, empty-after-trim treated as absent. Pure (takes the raw header
+ *  value, never a Request) so it lives here alongside the other route
+ *  helpers and is directly unit-testable. */
+export function extractBearerToken(headerValue: string | null): string | null {
+  if (!headerValue?.startsWith("Bearer ")) return null;
+  const token = headerValue.slice("Bearer ".length).trim();
+  return token.length > 0 ? token : null;
+}
+
 // ─── session creation gate ──────────────────────────────────────────────────
 
 export type SessionCreateGateResult =
@@ -118,6 +130,40 @@ export async function authorizeRecordingSubmission(params: {
   }
 
   return { kind: "ok", sessionId: session.id, body: parsed.data };
+}
+
+// ─── session fetch (rehydration) authz ─────────────────────────────────────
+
+export type SessionFetchGateResult =
+  | { kind: "not_found" }
+  | { kind: "unauthorized" }
+  | { kind: "ok"; sessionId: string };
+
+/**
+ * Pure-shaped authorization for GET /api/v1/recordings/session — this is the
+ * rehydration read the client makes on mount (fresh reload AND the
+ * post-claim return) to recover flowModel/openQuestions/slot state that only
+ * ever lived in memory. Flag check first (same 404-first shape as every
+ * other gate here), then the same bearer-token-owns-the-session check as
+ * authorizeRecordingSubmission. `lookupSession` is DI'd so the authz test
+ * exercises every rejection path with a plain fake, no DB stub needed.
+ */
+export async function resolveSessionFetchGate(params: {
+  env: { SF_RECORD_TO_AGENT?: string | undefined };
+  rawToken: string | null;
+  lookupSession: (rawToken: string) => Promise<{ id: string } | null>;
+}): Promise<SessionFetchGateResult> {
+  if (!isRecordToAgentOn(params.env)) {
+    return { kind: "not_found" };
+  }
+  if (!params.rawToken) {
+    return { kind: "unauthorized" };
+  }
+  const session = await params.lookupSession(params.rawToken);
+  if (!session) {
+    return { kind: "unauthorized" };
+  }
+  return { kind: "ok", sessionId: session.id };
 }
 
 // ─── anonymous upload grant ─────────────────────────────────────────────────
