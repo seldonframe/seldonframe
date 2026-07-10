@@ -287,6 +287,47 @@ describe("STOP_RECORDING", () => {
   });
 });
 
+describe("FILE_PICKED", () => {
+  test("sets the target slot to uploading + activeSlot (no live-capture 'recording' hop)", () => {
+    const state = recorderReducer(initialRecorderState(), {
+      type: "SESSION_READY",
+      sessionId: "s",
+      token: "t",
+    });
+    const next = recorderReducer(state, { type: "FILE_PICKED", slotIndex: 0 });
+    assert.equal(next.slots[0].status, "uploading");
+    assert.equal(next.activeSlot, 0);
+  });
+
+  test("clears any prior error on the slot", () => {
+    let state = initialRecorderState();
+    state = recorderReducer(state, { type: "SLOT_FAILED", slotIndex: 0, error: "boom" });
+    const next = recorderReducer(state, { type: "FILE_PICKED", slotIndex: 0 });
+    assert.equal(next.slots[0].error, undefined);
+  });
+
+  test("no-op (same state) when another slot is already busy", () => {
+    const started = recorderReducer(initialRecorderState(), {
+      type: "START_RECORDING",
+      slotIndex: 0,
+    });
+    const next = recorderReducer(started, { type: "FILE_PICKED", slotIndex: 1 });
+    assert.equal(next, started);
+    assert.equal(next.slots[1].status, "empty");
+  });
+
+  test("out-of-range slotIndex is a no-op", () => {
+    const state = initialRecorderState();
+    const next = recorderReducer(state, {
+      type: "FILE_PICKED",
+      slotIndex: MAX_RECORDINGS_PER_SESSION,
+    });
+    assert.equal(next, state);
+    const negative = recorderReducer(state, { type: "FILE_PICKED", slotIndex: -1 });
+    assert.equal(negative, state);
+  });
+});
+
 describe("UPLOADED", () => {
   test("moves the slot to compiling", () => {
     let state = initialRecorderState();

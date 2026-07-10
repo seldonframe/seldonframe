@@ -301,5 +301,34 @@ Interface drift discovered during the build, vs. this design/the implementation 
   with no recap yet needs no confirmation), then calls the existing `clearStoredSession()` and
   `window.location.assign("/record")` for a clean remount that mints a brand-new session
   server-side.
+- **Mobile-P1 — upload-a-recording variant.** New `capture-file.ts` (`sampleTimestamps` pure/
+  fully-unit-tested; `extractFromVideoFile` browser-only, seeks a hidden `<video>` per timestamp
+  with a 5s per-seek timeout that skips rather than hangs, reuses `capture.ts`'s now-exported
+  `downscaleEdge`/`grabFrame`). Reducer gained one action, `FILE_PICKED { slotIndex }`, mapping the
+  slot straight to `"uploading"` (skipping the live-capture `"recording"` hop — there's no capture
+  in progress for an already-recorded file), same busy-guard/range-guard/error-clear semantics as
+  `START_RECORDING`. `record-client.tsx`: every slot's action row gained a secondary `<label>`
+  file-input affordance ("or upload a recording"); a client-only feature-detect
+  (`navigator.mediaDevices?.getDisplayMedia`, default `true` on the SSR pass so the existing render
+  smoke test is undisturbed, flipped post-mount in a `useEffect`) makes it the ONLY, primary
+  ("Upload a screen recording") action when `getDisplayMedia` is absent, with a one-line hint
+  pointing at the phone's OS recorder. Because uploads have no live transcript, a picked file first
+  sits in local `pendingUpload` state gating a required "describe what you did" textarea (reusing
+  the same `fallbackText` state live-capture's no-speech fallback already writes) — only on submit
+  does `FILE_PICKED` fire and extraction/upload begin; this is a UI-local gate, not a new slot
+  status, since the plan capped the reducer surface at one new action. The upload+compile tail
+  (frame blob upload, optional video blob upload, `POST recording`, `POST compile-trace`, `TRACED`
+  dispatch) was extracted out of `handleStop` into a shared `finalizeRecording()` helper — this is
+  the second occurrence of that exact sequence, so extracting now (rather than a third copy-paste)
+  avoids drift between the live-capture and upload paths. One difference from live-capture's video
+  upload: `resolveUploadGrant`/`route-guards.ts` only ever grants `video/webm` (out of scope here —
+  "no server/API changes" per the task), so an uploaded video attachment is only forwarded when
+  `file.size <= VIDEO_MAX_BYTES` AND `file.type === "video/webm"`; a non-webm phone recording (e.g.
+  iOS `.mov`/`.mp4`) still contributes its extracted frames + typed summary, just not the raw video
+  — same fail-soft posture as an oversized live-capture video, flagged as an open risk below rather
+  than silently widening the server's content-type allowlist. Responsive pass: the two-column
+  layout's breakpoint changed from `lg:` (1024px) to an arbitrary `min-[900px]:` variant per the
+  task's ~900px spec; Record/Stop/upload-label tap targets bumped from `h-9` (36px) to `h-11`
+  (44px).
 - No other interface (types, exported function signatures, route paths, DB columns) drifted from
   the plan.

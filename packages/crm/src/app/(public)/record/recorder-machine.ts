@@ -71,6 +71,11 @@ export type RecorderAction =
       claimed?: boolean;
     }
   | { type: "START_RECORDING"; slotIndex: number }
+  // Uploaded-recording path (mobile: no getDisplayMedia, phones use the OS
+  // recorder then upload the file here) — moves straight to "uploading",
+  // skipping the live-capture "recording" hop, since there's no in-progress
+  // capture to represent.
+  | { type: "FILE_PICKED"; slotIndex: number }
   | { type: "STOP_RECORDING"; slotIndex: number }
   | { type: "UPLOADED"; slotIndex: number }
   | {
@@ -190,6 +195,18 @@ export function recorderReducer(state: RecorderState, action: RecorderAction): R
       const next = replaceSlot(state, action.slotIndex, (slot) => ({
         ...slot,
         status: "recording",
+        error: undefined,
+      }));
+      return { ...next, activeSlot: action.slotIndex };
+    }
+
+    case "FILE_PICKED": {
+      if (!isInRange(action.slotIndex)) return state;
+      const anyBusy = state.slots.some((slot) => BUSY_STATUSES.has(slot.status));
+      if (anyBusy) return state;
+      const next = replaceSlot(state, action.slotIndex, (slot) => ({
+        ...slot,
+        status: "uploading",
         error: undefined,
       }));
       return { ...next, activeSlot: action.slotIndex };

@@ -18,16 +18,23 @@
 // back on return from /signup when the page loads with ?claimed=1.
 "use client";
 
-import { useEffect, useReducer, useRef, useState } from "react";
+import { useEffect, useReducer, useRef, useState, type ChangeEvent } from "react";
 import { upload } from "@vercel/blob/client";
 import { initialRecorderState, recorderReducer } from "./recorder-machine";
 import { startCapture, type CaptureHandle } from "./capture";
+import { extractFromVideoFile } from "./capture-file";
 import {
   MAX_FRAME_EDGE_PX,
   MAX_FRAMES_PER_RECORDING,
   MAX_RECORDING_SECONDS,
 } from "@/lib/recordings/policy";
-import type { CoverageEntry, CoverageTier, FlowModel } from "@/lib/recordings/trace-schema";
+import { VIDEO_MAX_BYTES } from "@/lib/media/resolve-url";
+import type {
+  CoverageEntry,
+  CoverageTier,
+  FlowModel,
+  TranscriptSegment,
+} from "@/lib/recordings/trace-schema";
 
 const STORAGE_KEY = "sf-record-session";
 
@@ -100,6 +107,25 @@ export function RecordClient({
   const [compiling, setCompiling] = useState(false);
   const [compiledTemplateId, setCompiledTemplateId] = useState<string | null>(null);
   const captureHandles = useRef<Record<number, CaptureHandle>>({});
+
+  // Mobile browsers have no getDisplayMedia — phones use the OS's built-in
+  // screen recorder, then upload the file here. Default to `true` so the
+  // server-rendered markup (no `navigator` on the server) shows the
+  // desktop-style Record button, matching the existing render-smoke test;
+  // the real feature-detect only runs client-side, post-mount, and flips
+  // this to `false` on browsers that genuinely lack the API.
+  const [supportsScreenCapture, setSupportsScreenCapture] = useState(true);
+  useEffect(() => {
+    setSupportsScreenCapture(typeof navigator.mediaDevices?.getDisplayMedia === "function");
+  }, []);
+
+  // Upload-a-recording path: a file is picked but not yet processed until
+  // the operator supplies the required summary (there's no live transcript
+  // for an uploaded file, so the "describe what you did" textarea — the
+  // same one live-capture falls back to when Web Speech is unavailable —
+  // is mandatory here instead of optional).
+  const [pendingUpload, setPendingUpload] = useState<Record<number, File>>({});
+  const [uploadProgress, setUploadProgress] = useState<Record<number, { done: number; total: number }>>({});
 
   // Restore (or mint) the anonymous recording session on first mount.
   //
@@ -209,6 +235,83 @@ export function RecordClient({
     }
   }
 
+  // Shared upload+compile tail for BOTH capture paths (live screen-record and
+  // uploaded-file): uploads frames (and the video, when provided) as blobs,
+  // saves the recording, then compiles its trace. Extracted here because
+  // handleFilePicked below is the second occurrence of this exact sequence
+  // (live-capture's handleStop was the first) — copy-pasting a third time
+  // would just invite drift between the two paths.
+  async function finalizeRecording(params: {
+    slotIndex: number;
+    frames: Blob[];
+    transcript: TranscriptSegment[];
+    video: Blob | null;
+  }): Promise<void> {
+    const { slotIndex, frames, transcript, video } = params;
+    if (!state.sessionId || !state.token) return;
+    const sessionId = state.sessionId;
+    const token = state.token;
+
+    const frameBlobUrls: string[] = [];
+    for (const [i, frame] of frames.entries()) {
+      const blobResult = await upload(`recordings/${sessionId}/frame-${slotIndex}-${i}.jpg`, frame, {
+        access: "public",
+        handleUploadUrl: "/api/v1/recordings/upload",
+        clientPayload: JSON.stringify({ token, contentType: "image/jpeg" }),
+      });
+      frameBlobUrls.push(blobResult.url);
+    }
+
+    let videoBlobUrl: string | null = null;
+    if (video) {
+      const videoResult = await upload(`recordings/${sessionId}/video-${slotIndex}.webm`, video, {
+        access: "public",
+        handleUploadUrl: "/api/v1/recordings/upload",
+        clientPayload: JSON.stringify({ token, contentType: "video/webm" }),
+      });
+      videoBlobUrl = videoResult.url;
+    }
+
+    const recordingRes = await fetch("/api/v1/recordings/recording", {
+      method: "POST",
+      headers: { "Content-Type": "application/json", Authorization: `Bearer ${token}` },
+      body: JSON.stringify({ slotIndex, transcript, frameBlobUrls, videoBlobUrl }),
+    });
+    if (!recordingRes.ok) throw new Error(`recording_save_failed:${recordingRes.status}`);
+    const { recording_id: recordingId } = (await recordingRes.json()) as { recording_id: string };
+
+    dispatch({ type: "UPLOADED", slotIndex });
+
+    const traceRes = await fetch("/api/v1/recordings/compile-trace", {
+      method: "POST",
+      headers: { "Content-Type": "application/json", Authorization: `Bearer ${token}` },
+      body: JSON.stringify({ recording_id: recordingId }),
+    });
+    if (!traceRes.ok) {
+      const body = await traceRes.json().catch(() => ({}) as { error?: string });
+      throw new Error(body.error ?? `compile_trace_failed:${traceRes.status}`);
+    }
+    const traced = (await traceRes.json()) as {
+      trace: unknown;
+      whatChanged: string[];
+      openQuestions: string[];
+      coverage: CoverageEntry[];
+      flow_model: FlowModel;
+    };
+
+    // flow_model is the session's own persisted, merged FlowModel (the
+    // source of truth) — use it directly instead of reconstructing it
+    // client-side from trace/coverage/openQuestions.
+    dispatch({
+      type: "TRACED",
+      slotIndex,
+      flowModel: traced.flow_model,
+      coverage: traced.coverage,
+      whatChanged: traced.whatChanged,
+      openQuestions: traced.openQuestions,
+    });
+  }
+
   async function handleStop(slotIndex: number) {
     const handle = captureHandles.current[slotIndex];
     if (!handle || !state.sessionId || !state.token) return;
@@ -225,69 +328,72 @@ export function RecordClient({
             ? [{ atMs: 0, text: fallbackText[slotIndex] }]
             : [];
 
-      const frameBlobUrls: string[] = [];
-      for (const [i, frame] of result.frames.entries()) {
-        const blobResult = await upload(`recordings/${state.sessionId}/frame-${slotIndex}-${i}.jpg`, frame, {
-          access: "public",
-          handleUploadUrl: "/api/v1/recordings/upload",
-          clientPayload: JSON.stringify({ token: state.token, contentType: "image/jpeg" }),
-        });
-        frameBlobUrls.push(blobResult.url);
-      }
-
-      let videoBlobUrl: string | null = null;
-      if (result.video) {
-        const videoResult = await upload(`recordings/${state.sessionId}/video-${slotIndex}.webm`, result.video, {
-          access: "public",
-          handleUploadUrl: "/api/v1/recordings/upload",
-          clientPayload: JSON.stringify({ token: state.token, contentType: "video/webm" }),
-        });
-        videoBlobUrl = videoResult.url;
-      }
-
-      const recordingRes = await fetch("/api/v1/recordings/recording", {
-        method: "POST",
-        headers: { "Content-Type": "application/json", Authorization: `Bearer ${state.token}` },
-        body: JSON.stringify({ slotIndex, transcript, frameBlobUrls, videoBlobUrl }),
-      });
-      if (!recordingRes.ok) throw new Error(`recording_save_failed:${recordingRes.status}`);
-      const { recording_id: recordingId } = (await recordingRes.json()) as { recording_id: string };
-
-      dispatch({ type: "UPLOADED", slotIndex });
-
-      const traceRes = await fetch("/api/v1/recordings/compile-trace", {
-        method: "POST",
-        headers: { "Content-Type": "application/json", Authorization: `Bearer ${state.token}` },
-        body: JSON.stringify({ recording_id: recordingId }),
-      });
-      if (!traceRes.ok) {
-        const body = await traceRes.json().catch(() => ({}) as { error?: string });
-        throw new Error(body.error ?? `compile_trace_failed:${traceRes.status}`);
-      }
-      const traced = (await traceRes.json()) as {
-        trace: unknown;
-        whatChanged: string[];
-        openQuestions: string[];
-        coverage: CoverageEntry[];
-        flow_model: FlowModel;
-      };
-
-      // flow_model is the session's own persisted, merged FlowModel (the
-      // source of truth) — use it directly instead of reconstructing it
-      // client-side from trace/coverage/openQuestions.
-      dispatch({
-        type: "TRACED",
-        slotIndex,
-        flowModel: traced.flow_model,
-        coverage: traced.coverage,
-        whatChanged: traced.whatChanged,
-        openQuestions: traced.openQuestions,
-      });
+      await finalizeRecording({ slotIndex, frames: result.frames, transcript, video: result.video });
     } catch (err) {
       dispatch({
         type: "SLOT_FAILED",
         slotIndex,
         error: err instanceof Error ? err.message : "Recording failed to process.",
+      });
+    }
+  }
+
+  function handleFileChange(slotIndex: number, e: ChangeEvent<HTMLInputElement>) {
+    const file = e.target.files?.[0] ?? null;
+    // Reset so picking the SAME file twice still fires onChange next time.
+    e.target.value = "";
+    if (!file) return;
+    setPendingUpload((prev) => ({ ...prev, [slotIndex]: file }));
+  }
+
+  function cancelPendingUpload(slotIndex: number) {
+    setPendingUpload((prev) => {
+      const next = { ...prev };
+      delete next[slotIndex];
+      return next;
+    });
+  }
+
+  // Uploaded-recording path: an already-recorded video file, no live
+  // transcript (Web Speech never ran against it) — the summary the operator
+  // typed into the required textarea IS the transcript, encoded the same
+  // way live-capture's own no-speech fallback encodes it (a single segment
+  // at atMs 0).
+  async function handleFilePicked(slotIndex: number, file: File) {
+    if (!state.sessionId || !state.token) return;
+    dispatch({ type: "FILE_PICKED", slotIndex });
+
+    try {
+      const { frames } = await extractFromVideoFile(file, {
+        maxFrames: MAX_FRAMES_PER_RECORDING,
+        maxEdgePx: MAX_FRAME_EDGE_PX,
+        onProgress: (done, total) =>
+          setUploadProgress((prev) => ({ ...prev, [slotIndex]: { done, total } })),
+      });
+
+      const transcript: TranscriptSegment[] = fallbackText[slotIndex]
+        ? [{ atMs: 0, text: fallbackText[slotIndex] }]
+        : [];
+
+      // The recordings routes only accept video/webm (route-guards.ts); a
+      // non-webm upload (e.g. iOS .mov/.mp4) still contributes its frames —
+      // only the raw video attachment is skipped when it wouldn't be
+      // accepted or is over the size cap, same fail-soft posture as an
+      // oversized live-capture video.
+      const video = file.size <= VIDEO_MAX_BYTES && file.type === "video/webm" ? file : null;
+
+      await finalizeRecording({ slotIndex, frames, transcript, video });
+    } catch (err) {
+      dispatch({
+        type: "SLOT_FAILED",
+        slotIndex,
+        error: err instanceof Error ? err.message : "Recording failed to process.",
+      });
+    } finally {
+      setUploadProgress((prev) => {
+        const next = { ...prev };
+        delete next[slotIndex];
+        return next;
       });
     }
   }
@@ -415,7 +521,9 @@ export function RecordClient({
           ) : null}
         </header>
 
-        <div className="flex flex-col gap-6 lg:flex-row">
+        {/* Stacks to one column below ~900px (slots above, recap below) —
+            the two-column layout only kicks in once there's room for both. */}
+        <div className="flex flex-col gap-6 min-[900px]:flex-row">
           <section aria-label="Recording slots" className="flex flex-1 flex-col gap-3">
             {state.sessionId ? (
               <div className="flex justify-end">
@@ -457,13 +565,13 @@ export function RecordClient({
                     <p className="mt-2 text-[12.5px] text-[#EF4444]">{slot.error}</p>
                   ) : null}
 
-                  <div className="mt-3 flex items-center gap-2.5">
-                    {slot.status === "empty" ? (
+                  <div className="mt-3 flex flex-wrap items-center gap-2.5">
+                    {slot.status === "empty" && supportsScreenCapture ? (
                       <button
                         type="button"
                         disabled={!canStart || !state.sessionId}
                         onClick={() => handleStart(slot.slotIndex)}
-                        className="inline-flex h-9 items-center justify-center rounded-full bg-[#14B8A6] px-4 text-[13px] font-[600] text-[#0B0F0E] disabled:cursor-not-allowed disabled:opacity-40"
+                        className="inline-flex h-11 items-center justify-center rounded-full bg-[#14B8A6] px-4 text-[13px] font-[600] text-[#0B0F0E] disabled:cursor-not-allowed disabled:opacity-40"
                       >
                         Record
                       </button>
@@ -472,12 +580,35 @@ export function RecordClient({
                       <button
                         type="button"
                         onClick={() => handleStop(slot.slotIndex)}
-                        className="inline-flex h-9 items-center justify-center rounded-full border border-[#EF4444] px-4 text-[13px] font-[600] text-[#EF4444]"
+                        className="inline-flex h-11 items-center justify-center rounded-full border border-[#EF4444] px-4 text-[13px] font-[600] text-[#EF4444]"
                       >
                         Stop
                       </button>
                     ) : null}
+                    {slot.status === "empty" && !pendingUpload[slot.slotIndex] ? (
+                      <label
+                        className={
+                          supportsScreenCapture
+                            ? "inline-flex h-11 cursor-pointer items-center text-[12.5px] text-[#9CA3AF] underline-offset-2 hover:text-[#E7E5DE] hover:underline"
+                            : "inline-flex h-11 cursor-pointer items-center justify-center rounded-full bg-[#14B8A6] px-4 text-[13px] font-[600] text-[#0B0F0E]"
+                        }
+                      >
+                        {supportsScreenCapture ? "or upload a recording" : "Upload a screen recording"}
+                        <input
+                          type="file"
+                          accept="video/*"
+                          className="sr-only"
+                          onChange={(e) => handleFileChange(slot.slotIndex, e)}
+                        />
+                      </label>
+                    ) : null}
                   </div>
+
+                  {!supportsScreenCapture && slot.status === "empty" && !pendingUpload[slot.slotIndex] ? (
+                    <p className="mt-2 text-[12px] text-[#9CA3AF]">
+                      Record your screen with your phone&apos;s built-in recorder, then upload it here.
+                    </p>
+                  ) : null}
 
                   {isActive && slot.status === "recording" ? (
                     <textarea
@@ -488,6 +619,48 @@ export function RecordClient({
                       placeholder="Describe what you did (used if your browser can't transcribe speech)"
                       className="mt-3 h-16 w-full resize-none rounded-[10px] border border-[rgba(231,229,222,.12)] bg-transparent p-2.5 text-[13px] text-[#E7E5DE] outline-none placeholder:text-[#6B7280]"
                     />
+                  ) : null}
+
+                  {slot.status === "empty" && pendingUpload[slot.slotIndex] ? (
+                    <div className="mt-3 flex flex-col gap-2">
+                      <textarea
+                        value={fallbackText[slot.slotIndex] ?? ""}
+                        onChange={(e) =>
+                          setFallbackText((prev) => ({ ...prev, [slot.slotIndex]: e.target.value }))
+                        }
+                        placeholder="Describe what you did in this recording (required — uploaded files have no live transcript)"
+                        className="h-16 w-full resize-none rounded-[10px] border border-[rgba(231,229,222,.12)] bg-transparent p-2.5 text-[13px] text-[#E7E5DE] outline-none placeholder:text-[#6B7280]"
+                      />
+                      <div className="flex items-center gap-3">
+                        <button
+                          type="button"
+                          disabled={!fallbackText[slot.slotIndex]?.trim()}
+                          onClick={() => {
+                            const file = pendingUpload[slot.slotIndex];
+                            if (!file) return;
+                            cancelPendingUpload(slot.slotIndex);
+                            void handleFilePicked(slot.slotIndex, file);
+                          }}
+                          className="inline-flex h-11 items-center justify-center rounded-full bg-[#14B8A6] px-4 text-[13px] font-[600] text-[#0B0F0E] disabled:cursor-not-allowed disabled:opacity-40"
+                        >
+                          Process recording
+                        </button>
+                        <button
+                          type="button"
+                          onClick={() => cancelPendingUpload(slot.slotIndex)}
+                          className="text-[12.5px] text-[#6B7280] hover:text-[#9CA3AF]"
+                        >
+                          Cancel
+                        </button>
+                      </div>
+                    </div>
+                  ) : null}
+
+                  {slot.status === "uploading" && uploadProgress[slot.slotIndex] ? (
+                    <p className="mt-2 text-[12.5px] text-[#9CA3AF]">
+                      Reading your recording&hellip; {uploadProgress[slot.slotIndex]!.done}/
+                      {uploadProgress[slot.slotIndex]!.total}
+                    </p>
                   ) : null}
 
                   {slot.whatChanged && slot.whatChanged.length > 0 ? (

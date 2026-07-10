@@ -60,4 +60,10 @@ describe("<RecordClient> — initial landing-phase render", () => {
     const html = renderInitial();
     assert.doesNotMatch(html, /Start fresh/);
   });
+
+  test("upload-a-recording affordance renders on every slot (initial SSR state assumes desktop)", () => {
+    const html = renderInitial();
+    const uploadAffordanceCount = (html.match(/or upload a recording/g) ?? []).length;
+    assert.equal(uploadAffordanceCount, MAX_RECORDINGS_PER_SESSION);
+  });
 });
