@@ -1,0 +1,43 @@
+<!doctype html>
+<html><head><meta charset="utf-8"><style>
+  * { margin:0; padding:0; box-sizing:border-box; }
+  body { background:#333; }
+  .card { position:absolute; top:0; left:0; width:1500px; height:600px;
+    background:radial-gradient(1400px 900px at 18% 0%, #12121c 0%, #0a0a0f 60%);
+    color:#ececf1; font-family:"Segoe UI",-apple-system,sans-serif; padding:52px 70px;
+    display:flex; flex-direction:column; justify-content:space-between; overflow:hidden; }
+  .card::after { content:""; position:absolute; inset:0; border:1px solid rgba(255,255,255,0.07); }
+  .kicker { font-size:20px; letter-spacing:0.16em; text-transform:uppercase; color:#8b8b9e; font-weight:600; }
+  .flow { display:flex; align-items:stretch; gap:14px; margin-top:8px; }
+  .node { background:#15151f; border:1px solid #2a2a3a; border-radius:12px; padding:18px 20px; flex:1; }
+  .node .t { font-size:21px; font-weight:700; color:#fff; margin-bottom:6px; }
+  .node .d { font-size:16px; color:#9a9aac; line-height:1.4; font-family:ui-monospace,Consolas,monospace; }
+  .node.hub { border-color:#7c7cf3; background:#16162a; flex:1.35; }
+  .node.hub .t { color:#a5a5f7; }
+  .node.human { border-style:dashed; }
+  .arr { display:flex; align-items:center; font-size:26px; color:#4a4a5c; }
+  .feedback { display:flex; align-items:center; gap:12px; margin-top:14px; color:#7c7cf3; font-size:18px; font-weight:600; }
+  .feedback .line { flex:1; border-top:2px dashed #3d3d5c; position:relative; }
+  .feedback .line::before { content:"◀"; position:absolute; left:-2px; top:-12px; color:#7c7cf3; font-size:16px; }
+  .foot { display:flex; justify-content:space-between; align-items:baseline; }
+  .note { font-size:18px; color:#8b8b9e; } .note b { color:#d6d6e0; }
+  .brand { font-size:20px; color:#5c5c6e; font-weight:600; }
+</style></head>
+<body><div class="card">
+  <div class="kicker">The content engine — one file, one script, one loop</div>
+  <div>
+    <div class="flow">
+      <div class="node human"><div class="t">bookmark</div><div class="d">me, doomscrolling<br>50 so far</div></div>
+      <div class="arr">→</div>
+      <div class="node"><div class="t">pull</div><div class="d">x-bookmarks-pull.mjs<br>X API · weekly</div></div>
+      <div class="arr">→</div>
+      <div class="node hub"><div class="t">the vault</div><div class="d">x-vault.md<br>11 patterns · corpus · my numbers</div></div>
+      <div class="arr">→</div>
+      <div class="node"><div class="t">draft</div><div class="d">agent, Monday 8am<br>patterns + my receipts</div></div>
+      <div class="arr">→</div>
+      <div class="node human"><div class="t">post</div><div class="d">me — angle call<br>never automated</div></div>
+    </div>
+    <div class="feedback"><div class="line"></div><div>impressions @ 1 week feed back into the vault — the loop learns MY account</div></div>
+  </div>
+  <div class="foot"><div class="note">baseline to beat: <b>89 impressions</b> (my worst post, published on purpose)</div><div class="brand">@themaxthule</div></div>
+</div></body></html>

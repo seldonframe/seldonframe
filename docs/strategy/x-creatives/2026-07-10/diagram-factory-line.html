@@ -1,0 +1,46 @@
+<!doctype html>
+<html><head><meta charset="utf-8"><style>
+  * { margin:0; padding:0; box-sizing:border-box; }
+  body { background:#333; }
+  .card { position:absolute; top:0; left:0; width:1500px; height:600px;
+    background:radial-gradient(1400px 900px at 18% 0%, #12121c 0%, #0a0a0f 60%);
+    color:#ececf1; font-family:"Segoe UI",-apple-system,sans-serif; padding:50px 70px;
+    display:flex; flex-direction:column; justify-content:space-between; overflow:hidden; }
+  .card::after { content:""; position:absolute; inset:0; border:1px solid rgba(255,255,255,0.07); }
+  .kicker { font-size:20px; letter-spacing:0.16em; text-transform:uppercase; color:#8b8b9e; font-weight:600; }
+  .flow { display:flex; align-items:stretch; gap:14px; margin-top:6px; }
+  .node { background:#15151f; border:1px solid #2a2a3a; border-radius:12px; padding:16px 18px; flex:1; position:relative; }
+  .node .who { font-size:14px; letter-spacing:0.1em; text-transform:uppercase; font-weight:700; margin-bottom:6px; }
+  .human .who { color:#e8b04b; } .agent .who { color:#7c7cf3; }
+  .node .t { font-size:21px; font-weight:700; color:#fff; margin-bottom:5px; }
+  .node .d { font-size:15px; color:#9a9aac; line-height:1.4; }
+  .arr { display:flex; align-items:center; font-size:24px; color:#4a4a5c; }
+  .verify { display:flex; align-items:center; gap:12px; margin-top:12px; color:#e8b04b; font-size:17px; font-weight:600; }
+  .verify .line { width:46%; border-top:2px dashed #5c4a2a; position:relative; margin-left:27%; }
+  .verify .line::before { content:"◀"; position:absolute; left:-2px; top:-11px; color:#e8b04b; font-size:14px; }
+  .gated { margin-top:12px; display:flex; align-items:center; gap:14px; }
+  .gatebox { border:1px dashed #3a3a4a; border-radius:10px; padding:10px 16px; color:#6b6b80; font-size:16px; }
+  .gatebox b { color:#9a9aac; }
+  .foot { display:flex; justify-content:space-between; align-items:baseline; }
+  .note { font-size:17px; color:#8b8b9e; } .note b { color:#d6d6e0; }
+  .brand { font-size:20px; color:#5c5c6e; font-weight:600; }
+</style></head>
+<body><div class="card">
+  <div class="kicker">The content factory — agents do volume, I do verdicts</div>
+  <div>
+    <div class="flow">
+      <div class="node human"><div class="who">me</div><div class="t">plan</div><div class="d">40 articles · 8 waves<br>sources required</div></div>
+      <div class="arr">→</div>
+      <div class="node agent"><div class="who">agent</div><div class="t">write</div><div class="d">fetches primary<br>sources live</div></div>
+      <div class="arr">→</div>
+      <div class="node agent"><div class="who">different agent</div><div class="t">review</div><div class="d">adversarial — never<br>grades its own homework</div></div>
+      <div class="arr">→</div>
+      <div class="node human"><div class="who">me</div><div class="t">merge call</div><div class="d">minutes per wave,<br>all judgment</div></div>
+      <div class="arr">→</div>
+      <div class="node"><div class="who" style="color:#5ec97f">live</div><div class="t">32 guides</div><div class="d">7 waves · 2 days<br>every claim sourced</div></div>
+    </div>
+    <div class="verify"><div class="line"></div><div>verify the verifier — when review claims a fake stat, I check the source, not the confidence</div></div>
+    <div class="gated"><div class="gatebox"><b>Wave 8: case studies — GATED</b> until 10 real closes exist. No imaginary plumber named Dave.</div></div>
+  </div>
+  <div class="foot"><div class="note">the machine ships guides. <b>it can't ship proof.</b></div><div class="brand">@themaxthule</div></div>
+</div></body></html>
