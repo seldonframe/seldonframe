@@ -15,6 +15,11 @@ is the one non-delegable step. Never post anything.
 The current session's events, or a named event/topic. Best sources: what shipped,
 what broke, what a number proves, what an agent did that humans find surprising.
 
+Before drafting, read the **Patterns** section of `docs/strategy/x-vault.md` if it
+exists (only Patterns — the corpus below it is raw evidence, skip it). Patterns are
+market-validated structure (hooks, pacing, number use); apply them to the framing,
+never let them override Max's voice or the format rules below.
+
 ## Produce (append to `docs/strategy/x-drafts/YYYY-MM-DD.md`)
 
 2-3 drafts, each tagged with its format + the target keyword. Rules per draft:
