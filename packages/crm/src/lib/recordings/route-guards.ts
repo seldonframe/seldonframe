@@ -45,14 +45,24 @@ export type SessionCreateGateResult =
  * Flag check first (unconditional 404 regardless of rate), then the count
  * check. `countExisting` is a DI callback so the unit test pins all three
  * outcomes without a real DB (mirrors resolveWebBuildGate).
+ *
+ * `options.isAuthed` (2026-07-10 live-test fix): a signed-in caller skips the
+ * anonymous per-IP count check entirely — the cap exists to bound anonymous
+ * abuse, not to block a founder (or any authed operator) testing their own
+ * flow. The flag check still applies unconditionally: an authed caller with
+ * the flag off still gets `not_found`, never a bypass of the gate itself.
  */
 export async function resolveSessionCreateGate(
   env: { SF_RECORD_TO_AGENT?: string | undefined },
   countExisting: () => Promise<number>,
   limit: number,
+  options?: { isAuthed?: boolean },
 ): Promise<SessionCreateGateResult> {
   if (!isRecordToAgentOn(env)) {
     return { kind: "not_found" };
+  }
+  if (options?.isAuthed) {
+    return { kind: "ok" };
   }
   const count = await countExisting();
   if (count >= limit) {

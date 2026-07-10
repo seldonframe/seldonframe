@@ -21,8 +21,9 @@
 // permanently unreachable after the claim redirect).
 
 import { NextResponse } from "next/server";
+import { auth } from "@/auth";
 import { db } from "@/db";
-import { RECORDING_SESSIONS_PER_DAY_PER_IP } from "@/lib/recordings/policy";
+import { resolveRecordingSessionsPerDay } from "@/lib/recordings/policy";
 import { extractBearerToken, resolveSessionCreateGate, resolveSessionFetchGate } from "@/lib/recordings/route-guards";
 import { hashIp, hashSessionToken, mintSessionToken, resolveTokenSecret } from "@/lib/recordings/session-token";
 import {
@@ -49,17 +50,24 @@ function getClientIp(request: Request): string {
 
 export async function POST(request: Request): Promise<Response> {
   const tokenEnv = { AUTH_SECRET: process.env.AUTH_SECRET, NEXTAUTH_SECRET: process.env.NEXTAUTH_SECRET };
+  // 2026-07-10 live-test fix: a signed-in caller (the founder testing their
+  // own flow, or any authed operator) bypasses the anonymous per-IP cap
+  // entirely — auth() never throws for a signed-out visitor, just yields a
+  // null session, same null-safe idiom as record/page.tsx.
+  const session = await auth();
+  const isAuthed = Boolean(session?.user?.id);
   const gate = await resolveSessionCreateGate(
     { SF_RECORD_TO_AGENT: process.env.SF_RECORD_TO_AGENT },
     async () => {
-      // Only ever evaluated when the flag is on — secret resolution happens
-      // here, not before the flag check, so a flag-off deployment never
-      // needs AUTH_SECRET set to 404 correctly.
+      // Only ever evaluated when the flag is on AND the caller is anonymous —
+      // secret resolution happens here, not before the flag check, so a
+      // flag-off deployment never needs AUTH_SECRET set to 404 correctly.
       const secret = resolveTokenSecret(tokenEnv);
       const ipHash = hashIp(getClientIp(request), secret);
       return countSessionsForIp(db, ipHash, Date.now() - RATE_WINDOW_MS);
     },
-    RECORDING_SESSIONS_PER_DAY_PER_IP,
+    resolveRecordingSessionsPerDay({ SF_RECORD_SESSIONS_PER_DAY: process.env.SF_RECORD_SESSIONS_PER_DAY }),
+    { isAuthed },
   );
 
   if (gate.kind === "not_found") {

@@ -16,7 +16,11 @@ import {
   resolveSessionFetchGate,
   resolveUploadGrant,
 } from "@/lib/recordings/route-guards";
-import { MAX_RECORDINGS_PER_SESSION, RECORDING_SESSIONS_PER_DAY_PER_IP } from "@/lib/recordings/policy";
+import {
+  MAX_RECORDINGS_PER_SESSION,
+  RECORDING_SESSIONS_PER_DAY_PER_IP,
+  resolveRecordingSessionsPerDay,
+} from "@/lib/recordings/policy";
 import { IMAGE_MAX_BYTES } from "@/lib/page-blocks/images";
 import { VIDEO_MAX_BYTES } from "@/lib/media/resolve-url";
 
@@ -180,6 +184,78 @@ describe("resolveSessionCreateGate", () => {
       RECORDING_SESSIONS_PER_DAY_PER_IP,
     );
     assert.deepEqual(out, { kind: "rate_limited" });
+  });
+
+  // 2026-07-10 live-test fix: authed callers bypass the anonymous cap.
+  test("flag on + authed + over limit → ok (authed bypass skips the count check)", async () => {
+    let countCalled = false;
+    const out = await resolveSessionCreateGate(
+      { SF_RECORD_TO_AGENT: "1" },
+      async () => {
+        countCalled = true;
+        return RECORDING_SESSIONS_PER_DAY_PER_IP + 100;
+      },
+      RECORDING_SESSIONS_PER_DAY_PER_IP,
+      { isAuthed: true },
+    );
+    assert.deepEqual(out, { kind: "ok" });
+    assert.equal(countCalled, false, "authed bypass must skip countExisting entirely");
+  });
+
+  test("flag off + authed → still not_found (flag check applies regardless of auth)", async () => {
+    const out = await resolveSessionCreateGate(
+      {},
+      async () => 0,
+      RECORDING_SESSIONS_PER_DAY_PER_IP,
+      { isAuthed: true },
+    );
+    assert.deepEqual(out, { kind: "not_found" });
+  });
+
+  test("flag on + anonymous (isAuthed: false) + over limit → rate_limited (unchanged)", async () => {
+    const out = await resolveSessionCreateGate(
+      { SF_RECORD_TO_AGENT: "1" },
+      async () => RECORDING_SESSIONS_PER_DAY_PER_IP,
+      RECORDING_SESSIONS_PER_DAY_PER_IP,
+      { isAuthed: false },
+    );
+    assert.deepEqual(out, { kind: "rate_limited" });
+  });
+});
+
+// ── resolveRecordingSessionsPerDay ───────────────────────────────────────────
+// Mirrors resolveWebBuildRateLimit's contract (lib/web-build/policy.ts):
+// env-overridable, falls back to the compiled default on absent/invalid/
+// non-positive values so a typo'd env can never open an unlimited lane.
+
+describe("resolveRecordingSessionsPerDay", () => {
+  test("absent env → falls back to compiled default (3)", () => {
+    assert.equal(resolveRecordingSessionsPerDay({}), RECORDING_SESSIONS_PER_DAY_PER_IP);
+  });
+
+  test("\"20\" → 20", () => {
+    assert.equal(resolveRecordingSessionsPerDay({ SF_RECORD_SESSIONS_PER_DAY: "20" }), 20);
+  });
+
+  test("\"0\" → falls back to default", () => {
+    assert.equal(
+      resolveRecordingSessionsPerDay({ SF_RECORD_SESSIONS_PER_DAY: "0" }),
+      RECORDING_SESSIONS_PER_DAY_PER_IP,
+    );
+  });
+
+  test("\"-1\" → falls back to default", () => {
+    assert.equal(
+      resolveRecordingSessionsPerDay({ SF_RECORD_SESSIONS_PER_DAY: "-1" }),
+      RECORDING_SESSIONS_PER_DAY_PER_IP,
+    );
+  });
+
+  test("\"abc\" → falls back to default", () => {
+    assert.equal(
+      resolveRecordingSessionsPerDay({ SF_RECORD_SESSIONS_PER_DAY: "abc" }),
+      RECORDING_SESSIONS_PER_DAY_PER_IP,
+    );
   });
 });
 

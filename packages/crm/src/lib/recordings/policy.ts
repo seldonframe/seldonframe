@@ -10,6 +10,26 @@ export function isRecordToAgentOn(env: {
 
 /** Anonymous recording-session creation cap per IP per 24h. */
 export const RECORDING_SESSIONS_PER_DAY_PER_IP = 3;
+
+/**
+ * Per-IP daily recording-session cap, env-overridable (2026-07-10 live-test
+ * fix: the founder's own testing was tripping the anonymous cap). Mirrors
+ * resolveWebBuildRateLimit's contract exactly: `SF_RECORD_SESSIONS_PER_DAY`
+ * lets ops raise/lower the cap without a code change; falls back to the
+ * compiled RECORDING_SESSIONS_PER_DAY_PER_IP (3) on absent/invalid/
+ * non-positive values, so a typo'd env can never open an unlimited lane.
+ */
+export function resolveRecordingSessionsPerDay(env: {
+  SF_RECORD_SESSIONS_PER_DAY?: string | undefined;
+}): number {
+  const raw = env.SF_RECORD_SESSIONS_PER_DAY?.trim();
+  if (!raw) return RECORDING_SESSIONS_PER_DAY_PER_IP;
+  const parsed = Number.parseInt(raw, 10);
+  if (!Number.isFinite(parsed) || parsed <= 0 || String(parsed) !== raw) {
+    return RECORDING_SESSIONS_PER_DAY_PER_IP;
+  }
+  return parsed;
+}
 /** Max recordings (slots) an operator can capture within one session. */
 export const MAX_RECORDINGS_PER_SESSION = 6;
 /** Auto-stop capture after this many seconds. */
