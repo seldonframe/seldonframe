@@ -99,7 +99,7 @@ function extractBearerToken(request: Request): string | null {
 }
 
 export async function POST(request: Request): Promise<Response> {
-  if (!isRecordToAgentOn(process.env)) {
+  if (!isRecordToAgentOn({ SF_RECORD_TO_AGENT: process.env.SF_RECORD_TO_AGENT })) {
     return new Response(null, { status: 404 });
   }
 
@@ -111,11 +111,12 @@ export async function POST(request: Request): Promise<Response> {
     return NextResponse.json({ error: "invalid_body" }, { status: 400 });
   }
 
+  const tokenEnv = { AUTH_SECRET: process.env.AUTH_SECRET, NEXTAUTH_SECRET: process.env.NEXTAUTH_SECRET };
   const authz = await authorizeRecordingSubmission({
     rawToken,
     body,
     lookupSession: async (token) => {
-      const session = await findSessionByToken(db, token, process.env);
+      const session = await findSessionByToken(db, token, tokenEnv);
       return session ? { id: session.id } : null;
     },
   });

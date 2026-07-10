@@ -55,13 +55,14 @@ function getClientIp(request: Request): string {
 }
 
 export async function POST(request: Request): Promise<Response> {
+  const tokenEnv = { AUTH_SECRET: process.env.AUTH_SECRET, NEXTAUTH_SECRET: process.env.NEXTAUTH_SECRET };
   const gate = await resolveSessionCreateGate(
     { SF_RECORD_TO_AGENT: process.env.SF_RECORD_TO_AGENT },
     async () => {
       // Only ever evaluated when the flag is on — secret resolution happens
       // here, not before the flag check, so a flag-off deployment never
       // needs AUTH_SECRET set to 404 correctly.
-      const secret = resolveTokenSecret(process.env);
+      const secret = resolveTokenSecret(tokenEnv);
       const ipHash = hashIp(getClientIp(request), secret);
       return countSessionsForIp(db, ipHash, Date.now() - RATE_WINDOW_MS);
     },
@@ -78,7 +79,7 @@ export async function POST(request: Request): Promise<Response> {
     );
   }
 
-  const secret = resolveTokenSecret(process.env);
+  const secret = resolveTokenSecret(tokenEnv);
   const ipHash = hashIp(getClientIp(request), secret);
   const { raw } = mintSessionToken();
   const tokenHash = hashSessionToken(raw, secret);

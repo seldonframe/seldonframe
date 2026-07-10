@@ -83,17 +83,18 @@ function parseClientPayload(clientPayload: string | null): { token: string; cont
 }
 
 export async function POST(request: Request): Promise<Response> {
-  if (!isRecordToAgentOn(process.env)) {
+  if (!isRecordToAgentOn({ SF_RECORD_TO_AGENT: process.env.SF_RECORD_TO_AGENT })) {
     return new Response(null, { status: 404 });
   }
 
   const body = (await request.json()) as HandleUploadBody;
+  const tokenEnv = { AUTH_SECRET: process.env.AUTH_SECRET, NEXTAUTH_SECRET: process.env.NEXTAUTH_SECRET };
 
   try {
     const jsonResponse = await handleUpload({
       body,
       request,
-      onBeforeGenerateToken: async (pathname, clientPayload) => {
+      onBeforeGenerateToken: async (pathname: string, clientPayload: string | null) => {
         // Auth: the recording SESSION BEARER TOKEN only — never getOrgId(),
         // never an orgId out of the body/clientPayload. A signed-in
         // dashboard session has nothing to do with this route.
@@ -101,7 +102,7 @@ export async function POST(request: Request): Promise<Response> {
           typeof clientPayload === "string" ? clientPayload : null,
         );
 
-        const session = await findSessionByToken(db, token, process.env);
+        const session = await findSessionByToken(db, token, tokenEnv);
         if (!session) {
           throw new Error("Unauthorized: invalid session token");
         }
