@@ -60,11 +60,17 @@ JSON-LD hardening · demand→supply cross-links · vendor-rate quarterly refres
 
 Max: "do this" on the 4 queued slices + fix the discoverability gap (cluster not in footer/nav).
 
-- [ ] /sell hub page (kw "sell ai agents") + sitemap entry + footer links (Sell AI agents → /sell, Guides → /guides)
-- [ ] Marketplace listing hardening: BreadcrumbList JSON-LD + related sell-agents guides block + "Sell yours" CTA on /marketplace/[slug]
-- [ ] Demand→supply cross-link: cluster-keyed block in guide-page.tsx (gohighlevel cluster → /sell) + /agencies link into the cluster
-- [ ] Quarterly vendor-rate-refresh: docs/ops/agents/vendor-rate-refresh.md (copy seo-price-refresh pattern) + scheduled task
-- [ ] Gate: tsc delta + relevant specs + reviewer pass → PR → merge (authorized) → smoke + IndexNow /sell
+- [x] /sell hub page (kw "sell ai agents") + sitemap + llms.txt + footer links (Sell AI agents → /sell, Guides → /guides)
+- [x] Marketplace listing hardening: BreadcrumbList JSON-LD + guides block + "Sell yours" CTA (live+seed safe)
+- [x] Demand→supply cross-link: gohighlevel-cluster-gated block in guide-page.tsx + /agencies guides row
+- [x] Quarterly vendor-rate-refresh: docs/ops/agents/vendor-rate-refresh.md + scheduled task (1st of Jan/Apr/Jul/Oct 09:30, next Oct 1)
+- [x] Gate: reviewer SHIP 0-blocking (2 nits applied: GMV taper wording → canonical · agencies anchors → next/link) ·
+      guides.spec 558/558 · tsc 0 in touched (51 = baseline) · PR #52 MERGED (CI failure set = main's, diffed) ·
+      SMOKE PASS 8/8 incl. negative cluster-gating check · IndexNow pinged /sell + hubs
+
+**Review:** discoverability gap closed — the cluster is now reachable via footer (Sell AI agents · Guides),
+/sell hub, /agencies, and every marketplace listing. Deeper Zapier-play remainder (per-listing keyword slugs +
+listing FAQ fields = data-model change) left as its own slice.
 
 ### Task — Retainer sibling-recovery period narrowing (2026-07-08, money-review follow-up, worktree hungry-jang-c20e73)
 
