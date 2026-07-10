@@ -50,6 +50,7 @@ describe("interviewTurn", () => {
       assert.equal(result.reply, "Good question — fall back to the phone number.");
       assert.deepEqual(result.openQuestions, ["Anything else?"]);
       assert.equal(result.model.title, model.title);
+      assert.equal(result.applied, true);
     }
   });
 
@@ -123,6 +124,7 @@ describe("interviewTurn", () => {
       // coverage is recomputed after the merge, not passed through verbatim —
       // one entry per step.
       assert.equal(result.model.coverage.length, result.model.steps.length);
+      assert.equal(result.applied, true);
     }
   });
 
@@ -141,13 +143,33 @@ describe("interviewTurn", () => {
     assert.match(retryText, /VALIDATION_ERROR/);
   });
 
-  test("malformed model persists after retry → ok:false", async () => {
+  test("merge fails twice but a reply was produced → 200-path result, applied:false, model unchanged, honest reply", async () => {
     const model = fakeModel();
     const { llm } = queueLlm([
       { reply: "oops", model: { title: "" }, openQuestions: [] },
       { reply: "still oops", model: { title: "" }, openQuestions: [] },
     ]);
     const result = await interviewTurn({ model, interviewLog: [], message: "hi", llm });
+    assert.equal(result.ok, true);
+    if (result.ok) {
+      assert.equal(result.applied, false);
+      assert.deepEqual(result.model, model);
+      assert.deepEqual(result.openQuestions, model.openQuestions);
+      assert.match(result.reply, /couldn't apply|could not|rephrase/i);
+    }
+  });
+
+  test("the llm call itself fails outright (no usable reply on either attempt) → ok:false unchanged", async () => {
+    const { llm } = queueLlm([{ oops: true }, { oops: true }]);
+    const result = await interviewTurn({ model: fakeModel(), interviewLog: [], message: "hi", llm });
     assert.equal(result.ok, false);
   });
 });
+
+// ## As-built deltas
+// - 2026-07-10: interviewTurn no longer returns ok:false when the model-merge
+//   fails FlowModelSchema validation on both attempts but a reply was
+//   produced — it now returns `ok: true, applied: false` with an honest
+//   "couldn't apply that" reply and the INPUT model/openQuestions unchanged,
+//   so a long/ambiguous answer fails soft instead of losing the turn to a
+//   422. `ok: false` is now reserved for the no-usable-reply-at-all case.

@@ -9,8 +9,11 @@ import { coverFlowModel } from "./coverage";
 
 export type InterviewTurn = { role: "user" | "seldon"; text: string };
 
+const INTERVIEW_APPLY_FAILED_REPLY =
+  "I wasn't able to fully apply that to the workflow — could you rephrase it, or answer one question at a time?";
+
 export type InterviewTurnResult =
-  | { ok: true; reply: string; model: FlowModel; openQuestions: string[] }
+  | { ok: true; reply: string; model: FlowModel; openQuestions: string[]; applied: boolean }
   | { ok: false; error: string };
 
 const INTERVIEW_MAX_TOKENS = 800;
@@ -64,7 +67,9 @@ function asStringArray(value: unknown): string[] {
   return Array.isArray(value) ? value.filter((v): v is string => typeof v === "string") : [];
 }
 
-type ValidatedTurn = { ok: true; reply: string; model: FlowModel; openQuestions: string[] } | { ok: false; error: string; retryable: boolean };
+type ValidatedTurn =
+  | { ok: true; reply: string; model: FlowModel; openQuestions: string[] }
+  | { ok: false; error: string; retryable: boolean; reply?: string };
 
 /**
  * Validates one LLM response for a turn. Two distinct failure modes:
@@ -90,7 +95,7 @@ function validateInterviewResponse(response: unknown, inputModel: FlowModel): Va
   };
   const parsed = FlowModelSchema.safeParse(modelCandidate);
   if (!parsed.success) {
-    return { ok: false, error: parsed.error.message, retryable: true };
+    return { ok: false, error: parsed.error.message, retryable: true, reply: response.reply };
   }
 
   const model: FlowModel = { ...parsed.data, coverage: coverFlowModel(parsed.data) };
@@ -114,6 +119,13 @@ function validateInterviewResponse(response: unknown, inputModel: FlowModel): Va
  * force-preserved from the caller's input model (never trusted from the
  * LLM), and coverage is always recomputed from the validated model — never
  * passed through from the LLM's response.
+ *
+ * If the model-merge still fails FlowModelSchema validation after the
+ * retry, this fails soft rather than dropping the turn: it returns
+ * `ok: true, applied: false` with an honest "couldn't apply that" reply and
+ * the INPUT model/openQuestions unchanged, so the operator's turn is never
+ * lost to a 422 and the flow is never half-merged. `ok: false` is reserved
+ * for the case where the LLM call itself produced no usable reply at all.
  */
 export async function interviewTurn(params: {
   model: FlowModel;
@@ -129,7 +141,10 @@ export async function interviewTurn(params: {
     maxTokens: INTERVIEW_MAX_TOKENS,
   });
   const firstValidated = validateInterviewResponse(firstAttempt, params.model);
-  if (firstValidated.ok || !firstValidated.retryable) {
+  if (firstValidated.ok) {
+    return { ...firstValidated, applied: true };
+  }
+  if (!firstValidated.retryable) {
     return firstValidated;
   }
 
@@ -144,7 +159,23 @@ export async function interviewTurn(params: {
   });
   const retryValidated = validateInterviewResponse(retryAttempt, params.model);
   if (retryValidated.ok) {
-    return retryValidated;
+    return { ...retryValidated, applied: true };
+  }
+
+  // The reply itself came through fine on at least one attempt but the
+  // model-merge failed FlowModelSchema validation twice — fail soft instead
+  // of a 422: tell the operator honestly that their answer wasn't applied,
+  // and hand back the INPUT model/openQuestions unchanged (never a
+  // half-merged or invented model). Only the true no-reply-at-all case
+  // (the LLM response was unusable on both attempts) stays ok:false.
+  if (retryValidated.retryable) {
+    return {
+      ok: true,
+      reply: INTERVIEW_APPLY_FAILED_REPLY,
+      model: params.model,
+      openQuestions: params.model.openQuestions,
+      applied: false,
+    };
   }
 
   return { ok: false, error: `Interview turn failed validation after retry: ${retryValidated.error}` };

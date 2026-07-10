@@ -92,12 +92,15 @@ export async function POST(request: Request): Promise<Response> {
   // Persist the updated FlowModel too (full-column update, same as
   // compile-trace's write to recordingSessions.flowModel) — otherwise
   // Seldon's "I'll update the flow" reply never actually reaches what
-  // compile-agent reads, a never-lies violation.
+  // compile-agent reads, a never-lies violation. When the model-merge
+  // couldn't be applied (result.applied === false), `result.model` is the
+  // unchanged INPUT model, so this write is a harmless no-op for flowModel —
+  // it still records the interview turn itself.
   await db
     .update(recordingSessions)
     .set({
       interviewLog: sql`COALESCE(${recordingSessions.interviewLog}, '[]'::jsonb) || ${JSON.stringify(newTurns)}::jsonb`,
-      flowModel: result.model,
+      ...(result.applied ? { flowModel: result.model } : {}),
       openQuestions: result.openQuestions,
       updatedAt: new Date(),
     })
