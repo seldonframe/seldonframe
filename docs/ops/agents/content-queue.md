@@ -6,7 +6,7 @@ Strategic commissions the weekly content-loop must publish ahead of its research
 
 ## 1. The one-person-company-OS pillar page
 
-- **status:** queued
+- **status:** shipped: 2026-07-10 one-person-company-os
 - **commissioned:** 2026-07-09 (by Max)
 - **slug:** `one-person-company-os`
 - **working title:** "The One-Person Company OS: How to Run a Real Business With AI Agents (Without Hiring)"
