@@ -7,6 +7,29 @@ with a checkable plan, gets ticked off as it ships, and ends with a review block
 
 ## In flight
 
+### Task — Supply-side content Wave 1: marketplace offer side (2026-07-10, branch feat/seo-supply-wave-1)
+
+Seed the builder/seller ("offer side") SEO/GEO cluster so /marketplace and /build rank for
+builder-intent queries ("sell AI agents", "AI automation agency", "AI agent marketplace").
+Reuses the /guides content engine (registry + md twin + spec gate). Approved by Max in chat.
+
+- [x] Branch `feat/seo-supply-wave-1` off origin/main
+- [x] Add `sell-agents` cluster to guides types.ts + CLUSTER_LABELS
+- [x] Draft 6 Wave-1 guides (subagents, one per article, never-lies sources verified):
+      how-to-make-money-selling-ai-agents (pillar) · how-much-to-charge-for-an-ai-agent ·
+      ai-agent-business-ideas · how-to-start-an-ai-automation-agency ·
+      best-ai-agent-marketplaces · what-is-an-mcp-marketplace
+- [x] Wire index.ts imports + GUIDES entries + 6 `.md` twin routes
+- [x] Strategy doc docs/strategy/2026-07-10-marketplace-supply-content.md (best practices + full 40-article queue + waves)
+- [x] Queue Wave-2 commissions in docs/ops/agents/content-queue.md (entries 3+4, behind is-geo-legit)
+- [x] Adversarial quality-gate review (reviewer subagent): 6/6 SHIP, 0 blocking; 2 source-URL
+      nits fixed (GHL /pricing · canonical Anthropic pricing path). Unverifiable stats were
+      dropped by writers at draft time (BLS 403 · Upwork/Fiverr fee pages 403 · HBR paywalled
+      multipliers · OpenAI payout %s — all stated qualitatively or hedged instead).
+- [x] Gate: guides.spec.ts 402/402 green · typecheck 434 errors = env baseline (zod/@testing-library
+      resolution), zero in touched files
+- [x] Commit, push, open PR (human merge gate — Max merges)
+
 ### Task — Retainer sibling-recovery period narrowing (2026-07-08, money-review follow-up, worktree hungry-jang-c20e73)
 
 Fix from the autopay-console money review: `findOutstandingFailedForSubscriptionReal` matched ANY

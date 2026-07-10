@@ -18,7 +18,8 @@ export type GuideCluster =
   | "ai-visibility"
   | "reviews"
   | "ai-agents"
-  | "gohighlevel";
+  | "gohighlevel"
+  | "sell-agents";
 
 export type GuideIntent = "informational" | "commercial" | "transactional";
 
