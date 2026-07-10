@@ -28,7 +28,25 @@ Reuses the /guides content engine (registry + md twin + spec gate). Approved by 
       multipliers · OpenAI payout %s — all stated qualitatively or hedged instead).
 - [x] Gate: guides.spec.ts 402/402 green · typecheck 434 errors = env baseline (zod/@testing-library
       resolution), zero in touched files
-- [x] Commit, push, open PR (human merge gate — Max merges)
+- [x] Commit, push, open PR (human merge gate — Max merges): PR #47
+      (github.com/seldonframe/seldonframe/pull/47); after merge: IndexNow ping the 6 /guides URLs
+
+### Task — Supply-side content Waves 2-7 + publish-all (2026-07-10, Max-directed, branch feat/seo-supply-waves-2-7)
+
+Max: "do all the waves and merge to main and publish them all". Wave 1 (PR #47) MERGED. Honesty
+carve-outs held: Wave 8 case studies NOT written (gated on real closed clients); Wave 7 reduced to
+the primary-source-only stats page (survey-based pricing-data page needs data collection first).
+
+- [x] Merge PR #47 (CI failures verified pre-existing on main — same booking-availability tests;
+      spawned a fix-main-CI background task chip)
+- [x] Draft 26 articles via parallel writer subagents (all sources WebFetch-verified; re-cuts:
+      smma-to-ai-agency · what-is-byok-ai · voice-ai-reseller-programs · client-portals slug)
+- [x] Wire registry (26 imports + entries) + 26 .md twin routes + flip 2 queue commissions to shipped
+- [x] guides.spec.ts 558/558 green · typecheck 434 = baseline, 0 in touched files
+- [ ] 3 parallel reviewer subagents (adversarial content gate) → apply fixes
+- [ ] Commit, push, PR, merge (Max-authorized), IndexNow ping all 32 new URLs
+- [ ] Post-deploy live smoke (sample URLs 200 + sentinel)
+- [ ] Memory + strategy-doc updates
 
 ### Task — Retainer sibling-recovery period narrowing (2026-07-08, money-review follow-up, worktree hungry-jang-c20e73)
 

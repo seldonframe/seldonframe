@@ -127,4 +127,16 @@ Each: pain → build walkthrough (link the live template) → pricing → pitch 
 
 ## Review log
 - 2026-07-10: Wave 1 drafted (6 articles, subagent-written, maker≠checker gate run), cluster
-  `sell-agents` added, strategy doc + Wave-2 commissions landed. PR opened off main.
+  `sell-agents` added, strategy doc + Wave-2 commissions landed. PR #47 MERGED same day.
+- 2026-07-10 (second batch, Max-directed "do all the waves"): Waves 2-7 drafted as 26 articles on
+  `feat/seo-supply-waves-2-7` — Wave 2 (2, queue commissions flipped to shipped) · Wave 3 (8
+  build-and-sell; shipped without the live-template gate per Max's direction — articles link the
+  calculators, NOT nonexistent templates) · Wave 4 (6 agency; from-gohighlevel angle re-cut to
+  smma-to-ai-agency to avoid the GHL demand-page collision; portals slug = client-portals-for-
+  ai-agencies) · Wave 5 (5; stammer-vs replaced by voice-ai-reseller-programs — /compare +
+  /alternative-to already own the stammer pair) · Wave 6 (4; byok-economics re-cut to what-is-byok-ai
+  — run-client-ai-on-your-own-keys owns the GHL-BYOK intent) · Wave 7 REDUCED to 1
+  (ai-agent-statistics, primary-source-only; the survey-based pricing-data page is IMPOSSIBLE
+  honestly without collecting data first — still queued behind a data-collection follow-up).
+  **Wave 8 NOT written:** case studies remain gated on real closed clients (never-lies) — the
+  10-close proof sprint unlocks it.
