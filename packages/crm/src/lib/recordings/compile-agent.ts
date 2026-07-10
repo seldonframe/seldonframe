@@ -221,6 +221,14 @@ export function flowModelToBundle(params: {
   const intent = heuristicIntent(model.goal);
   const bundle = assembleAgentBundle(intent);
   bundle.blueprint.customSkillMd = flowModelToSkillMd(model);
+  // The compiled agent's identity is the recorded workflow, never the
+  // starter blueprint heuristicIntent fell through to on an unrecognized
+  // goal (e.g. "Forward SeldonFrame Weekly Emails to Personal Gmail" — no
+  // parse-intent keyword match → the receptionist starter's name/description
+  // would otherwise silently win). Archetype/trigger stay starter-derived —
+  // out of scope here (trigger inference is a named follow-up).
+  bundle.name = model.title;
+  bundle.description = model.goal;
 
   const greenToolkits = model.coverage
     .filter((c) => c.tier === "green" && c.toolkit)

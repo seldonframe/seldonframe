@@ -176,4 +176,22 @@ describe("flowModelToBundle", () => {
     assert.equal(scenarios.length, 1);
     assert.ok(warnings.some((w) => /log payment 1/.test(w)));
   });
+
+  test("identity comes from the flow model, not the starter it fell through to", () => {
+    // "Forward SeldonFrame Weekly Emails to Personal Gmail" matches no
+    // parse-intent keyword, so heuristicIntent falls through to the
+    // receptionist starter — whose name/description must NOT win.
+    const model = baseModel({
+      title: "Forward SeldonFrame Weekly Emails to Personal Gmail",
+      goal: "Forward SeldonFrame Weekly Emails to Personal Gmail",
+    });
+    const { bundle } = flowModelToBundle({
+      model,
+      recordings: [{ label: "Happy path", trace: baseTrace() }],
+    });
+
+    assert.equal(bundle.name, model.title);
+    assert.notEqual(bundle.name, "AI Phone Receptionist");
+    assert.equal(bundle.description, model.goal);
+  });
 });
