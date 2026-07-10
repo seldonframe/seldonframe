@@ -20,7 +20,7 @@
 
 import { useEffect, useReducer, useRef, useState, type ChangeEvent } from "react";
 import { upload } from "@vercel/blob/client";
-import { initialRecorderState, recorderReducer } from "./recorder-machine";
+import { initialRecorderState, pickFirstEmptySlot, recorderReducer } from "./recorder-machine";
 import { startCapture, type CaptureHandle } from "./capture";
 import { extractFromVideoFile } from "./capture-file";
 import {
@@ -29,6 +29,10 @@ import {
   MAX_RECORDING_SECONDS,
 } from "@/lib/recordings/policy";
 import { VIDEO_MAX_BYTES } from "@/lib/media/resolve-url";
+import {
+  SHARE_CACHE_NAME,
+  STAGED_RECORDING_CACHE_KEY,
+} from "@/lib/recordings/share-target";
 import type {
   CoverageEntry,
   CoverageTier,
@@ -92,13 +96,20 @@ export function RecordClient({
   claimedSessionId,
   claimed,
   isAuthed,
+  sharedFlag = null,
 }: {
   claimedSessionId: string | null;
   claimed: boolean;
   isAuthed: boolean;
+  /** Set from the /record?shared=... query param: "1" when record-sw.js
+   *  staged a shared file in CacheStorage and redirected here, "miss" when
+   *  the no-service-worker fallback route (share-target/route.ts) redirected
+   *  here instead, null on an ordinary page load. */
+  sharedFlag?: "1" | "miss" | null;
 }) {
   const [state, dispatch] = useReducer(recorderReducer, undefined, initialRecorderState);
   const [message, setMessage] = useState<string | null>(null);
+  const [sharedNotice, setSharedNotice] = useState<string | null>(null);
   const [interviewInput, setInterviewInput] = useState("");
   const [interviewPending, setInterviewPending] = useState(false);
   const [interviewError, setInterviewError] = useState<string | null>(null);
@@ -126,6 +137,77 @@ export function RecordClient({
   // is mandatory here instead of optional).
   const [pendingUpload, setPendingUpload] = useState<Record<number, File>>({});
   const [uploadProgress, setUploadProgress] = useState<Record<number, { done: number; total: number }>>({});
+
+  // Register the Web Share Target worker (record-sw.js) — a separate,
+  // minimal worker from the portal PWA's sw.js (that one is deliberately
+  // scoped to /portal/<orgSlug>/, see its own header; this repo keeps that
+  // scope untouched). Registered here, from the /record client only, so no
+  // other surface ever picks it up.
+  //
+  // Scope math: a worker served from a root-level script (/record-sw.js)
+  // defaults to controlling everything at or below "/" — a
+  // `Service-Worker-Allowed` response header is only needed to WIDEN a
+  // worker's scope past its script's own directory, never to narrow it.
+  // "/record" is a subpath of that default "/" scope, so requesting it
+  // explicitly here works with no extra header and keeps the worker from
+  // ever being asked to control anything outside /record in the first
+  // place (on top of the fetch handler's own pathname guard).
+  useEffect(() => {
+    if (typeof navigator === "undefined" || !("serviceWorker" in navigator)) return;
+    navigator.serviceWorker.register("/record-sw.js", { scope: "/record" }).catch(() => {
+      // Registration failures (unsupported browser, insecure context in
+      // local dev) are non-fatal — share-target/route.ts's server-side
+      // fallback still handles the share intent if the OS ever POSTs there
+      // directly without a controlling worker.
+    });
+  }, []);
+
+  // Web Share Target landing: read the file record-sw.js staged in
+  // CacheStorage (see share-target.ts for the shared cache name/key) and
+  // feed it into the SAME pendingUpload flow a manual file picker uses
+  // (handleFileChange below) — the required-summary textarea still gates
+  // processing, exactly as it does for a manually picked file. Runs once
+  // per page load (sharedHandledRef), independent of session-mint timing —
+  // slots exist from the initial reducer state regardless of whether the
+  // session has finished minting yet.
+  const sharedHandledRef = useRef(false);
+  useEffect(() => {
+    if (sharedHandledRef.current) return;
+
+    if (sharedFlag === "miss") {
+      sharedHandledRef.current = true;
+      setSharedNotice("Couldn't find the shared recording — upload it below.");
+      return;
+    }
+    if (sharedFlag !== "1") return;
+    if (typeof window === "undefined" || !("caches" in window)) return;
+    sharedHandledRef.current = true;
+
+    (async () => {
+      try {
+        const cache = await window.caches.open(SHARE_CACHE_NAME);
+        const cached = await cache.match(STAGED_RECORDING_CACHE_KEY);
+        if (!cached) {
+          setSharedNotice("Couldn't find the shared recording — upload it below.");
+          return;
+        }
+        await cache.delete(STAGED_RECORDING_CACHE_KEY);
+        const blob = await cached.blob();
+        const contentType = cached.headers.get("Content-Type") || blob.type || "video/mp4";
+        const file = new File([blob], "shared-recording", { type: contentType });
+
+        const slotIndex = pickFirstEmptySlot(state);
+        if (slotIndex === null) {
+          setSharedNotice("All recording slots are full — clear one to use the shared recording.");
+          return;
+        }
+        setPendingUpload((prev) => ({ ...prev, [slotIndex]: file }));
+      } catch {
+        setSharedNotice("Couldn't find the shared recording — upload it below.");
+      }
+    })();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [sharedFlag]);
 
   // Restore (or mint) the anonymous recording session on first mount.
   //
@@ -523,6 +605,9 @@ export function RecordClient({
             <p role="alert" className="mt-3 text-[13px] text-[#EF4444]">
               {message}
             </p>
+          ) : null}
+          {sharedNotice ? (
+            <p className="mt-3 text-[13px] text-[#9CA3AF]">{sharedNotice}</p>
           ) : null}
         </header>
 

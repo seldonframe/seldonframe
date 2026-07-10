@@ -9,6 +9,7 @@ import assert from "node:assert/strict";
 
 import {
   initialRecorderState,
+  pickFirstEmptySlot,
   recorderReducer,
   type RecorderState,
 } from "../../../src/app/(public)/record/recorder-machine";
@@ -583,5 +584,28 @@ describe("happy-path sequence", () => {
     assert.equal(state.slots[0].label, "Happy path");
     assert.ok(state.flowModel);
     assert.equal(state.coverage.length, 1);
+  });
+});
+
+describe("pickFirstEmptySlot", () => {
+  test("returns slot 0 on a fresh state (every slot empty)", () => {
+    const state = initialRecorderState();
+    assert.equal(pickFirstEmptySlot(state), 0);
+  });
+
+  test("skips occupied slots and returns the first still-empty one", () => {
+    let state = initialRecorderState();
+    state = recorderReducer(state, { type: "SESSION_READY", sessionId: "sess-1", token: "tok" });
+    state = recorderReducer(state, { type: "START_RECORDING", slotIndex: 0 });
+    assert.equal(pickFirstEmptySlot(state), 1);
+  });
+
+  test("returns null when every slot is occupied", () => {
+    let state = initialRecorderState();
+    state = recorderReducer(state, { type: "SESSION_READY", sessionId: "sess-1", token: "tok" });
+    for (const slot of state.slots) {
+      state = { ...state, slots: state.slots.map((s) => (s.slotIndex === slot.slotIndex ? { ...s, status: "traced" } : s)) };
+    }
+    assert.equal(pickFirstEmptySlot(state), null);
   });
 });

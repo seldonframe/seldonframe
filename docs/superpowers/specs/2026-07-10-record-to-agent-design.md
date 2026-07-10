@@ -332,3 +332,20 @@ Interface drift discovered during the build, vs. this design/the implementation 
   (44px).
 - No other interface (types, exported function signatures, route paths, DB columns) drifted from
   the plan.
+- **Mobile-P3 — Web Share Target.** Android's Share sheet can now send a screen recording straight
+  into `/record`: `manifest.ts` gained a `share_target` entry (cast through `unknown` since
+  `MetadataRoute.Manifest` doesn't type it) pointing at `POST /record/share-target`; a new, separate
+  `public/record-sw.js` (never merged into the portal PWA's `sw.js`, which stays scoped to
+  `/portal/<orgSlug>/`) intercepts exactly that POST, stages the shared file in CacheStorage (key
+  `STAGED_RECORDING_CACHE_KEY` from the new `src/lib/recordings/share-target.ts`, which the worker
+  duplicates by hand since it can't `import` a TS module), and 303-redirects to `/record?shared=1`
+  — this keeps the file off the network entirely, since Vercel functions cap POST bodies at ~4.5MB
+  and screen recordings routinely exceed that. `record-client.tsx` registers the worker (root-script
+  default scope covers `/record` without a `Service-Worker-Allowed` header) and, on `?shared=1`,
+  reads the staged file back out via `pickFirstEmptySlot` (new pure helper on `recorder-machine.ts`)
+  into the SAME `pendingUpload` gate a manual file pick uses — the required-summary textarea still
+  fires before `FILE_PICKED`/`finalizeRecording` run. A new `(public)/record/share-target/route.ts`
+  handles the no-service-worker case (flag-gated 404 like every other `/record` route) by
+  redirecting to `/record?shared=miss` WITHOUT ever reading the request body, so an oversized share
+  degrades to the client's "couldn't find the shared recording — upload it below" message instead
+  of a 413.

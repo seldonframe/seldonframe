@@ -26,7 +26,7 @@ export const metadata: Metadata = {
 export default async function RecordPage({
   searchParams,
 }: {
-  searchParams: Promise<{ session?: string; claimed?: string }>;
+  searchParams: Promise<{ session?: string; claimed?: string; shared?: string }>;
 }) {
   if (!isRecordToAgentOn({ SF_RECORD_TO_AGENT: process.env.SF_RECORD_TO_AGENT })) notFound();
   const params = await searchParams;
@@ -44,6 +44,7 @@ export default async function RecordPage({
       claimedSessionId={typeof params.session === "string" ? params.session : null}
       claimed={params.claimed === "1"}
       isAuthed={isAuthed}
+      sharedFlag={params.shared === "1" ? "1" : params.shared === "miss" ? "miss" : null}
     />
   );
 }

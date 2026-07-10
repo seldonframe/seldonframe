@@ -105,6 +105,15 @@ function isInRange(slotIndex: number): boolean {
   return Number.isInteger(slotIndex) && slotIndex >= 0 && slotIndex < MAX_RECORDINGS_PER_SESSION;
 }
 
+/** First slot with status "empty", or null if every slot is occupied. Used
+ *  by the Web Share Target flow (record-client.tsx) to decide which slot a
+ *  shared recording lands in — the same "first empty slot" rule the
+ *  operator would land on manually via the Record/Upload buttons. */
+export function pickFirstEmptySlot(state: RecorderState): number | null {
+  const slot = state.slots.find((s) => s.status === "empty");
+  return slot ? slot.slotIndex : null;
+}
+
 export function initialRecorderState(): RecorderState {
   return {
     sessionId: null,
