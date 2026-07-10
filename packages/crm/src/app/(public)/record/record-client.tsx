@@ -185,6 +185,14 @@ export function RecordClient({
         maxSeconds: MAX_RECORDING_SECONDS,
         maxFrames: MAX_FRAMES_PER_RECORDING,
         maxEdgePx: MAX_FRAME_EDGE_PX,
+        // The browser's native "Stop sharing" bar (or the max-length cap)
+        // ends the capture without our Stop button — run the exact same
+        // finalize→upload→compile flow. handleStop is safe to double-fire:
+        // the handle is deleted on the first pass, so a simultaneous button
+        // click no-ops.
+        onEnded: () => {
+          void handleStop(slotIndex);
+        },
       });
       captureHandles.current[slotIndex] = handle;
     } catch (err) {

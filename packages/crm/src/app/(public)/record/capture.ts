@@ -32,6 +32,14 @@ export type StartCaptureOptions = {
   maxFrames: number;
   maxEdgePx: number;
   onTick?: (elapsedMs: number) => void;
+  /** Fired ONCE when the capture ends outside the app's own Stop button —
+   *  the user clicked the browser's native "Stop sharing" bar (the display
+   *  track's `ended` event) or the maxSeconds auto-stop fired. The client
+   *  must respond by running its normal stop flow (`handle.stop()` still
+   *  resolves with the full CaptureResult). Without this hook the app never
+   *  learns the share ended and the recording is stranded — the exact bug
+   *  from the first live test. */
+  onEnded?: () => void;
 };
 
 type SpeechRecognitionCtor = new () => SpeechRecognitionLike;
@@ -139,7 +147,6 @@ export async function startCapture(opts: StartCaptureOptions): Promise<CaptureHa
     }
   }
 
-  let stopped = false;
   let frameTimer: ReturnType<typeof setInterval> | null = null;
   let tickTimer: ReturnType<typeof setInterval> | null = null;
   let autoStopTimer: ReturnType<typeof setTimeout> | null = null;
@@ -156,11 +163,13 @@ export async function startCapture(opts: StartCaptureOptions): Promise<CaptureHa
     for (const track of recordedTracks) track.stop();
   }
 
-  async function stop(): Promise<CaptureResult> {
-    if (stopped) {
-      return { frames, transcript, video: null, durationMs: Date.now() - startedAt };
-    }
-    stopped = true;
+  // Single-flight: every caller of stop() gets the SAME CaptureResult. The
+  // previous early-return-on-stopped fabricated a second result with
+  // `video: null`, silently discarding the webm whenever the auto-stop (or
+  // the ended-notification path) raced the client's own stop call.
+  let stopPromise: Promise<CaptureResult> | null = null;
+
+  async function doStop(): Promise<CaptureResult> {
     await teardown();
 
     const video = await new Promise<Blob | null>((resolve) => {
@@ -173,6 +182,37 @@ export async function startCapture(opts: StartCaptureOptions): Promise<CaptureHa
     });
 
     return { frames, transcript, video, durationMs: Date.now() - startedAt };
+  }
+
+  function stop(): Promise<CaptureResult> {
+    if (!stopPromise) stopPromise = doStop();
+    return stopPromise;
+  }
+
+  // The share can end WITHOUT the app's Stop button: the browser's native
+  // "Stop sharing" bar ends the display track, and the maxSeconds cap fires
+  // here. Either way, notify the client exactly once so its normal stop flow
+  // (upload + compile) runs; if no onEnded was provided, stop internally so
+  // timers/tracks never leak.
+  let endedNotified = false;
+  function notifyEnded(): void {
+    if (endedNotified || stopPromise) return;
+    endedNotified = true;
+    if (opts.onEnded) {
+      opts.onEnded();
+    } else {
+      void stop();
+    }
+  }
+
+  const displayTrack = screenStream.getVideoTracks()[0];
+  if (displayTrack?.readyState === "ended") {
+    // Share was killed while we were still awaiting the mic prompt — the
+    // 'ended' event predates our listener. Defer one macrotask so the caller
+    // has received (and stored) the handle before its stop flow runs.
+    setTimeout(notifyEnded, 0);
+  } else {
+    displayTrack?.addEventListener("ended", notifyEnded);
   }
 
   // 1 fps keyframes, capped at opts.maxFrames total.
@@ -190,7 +230,7 @@ export async function startCapture(opts: StartCaptureOptions): Promise<CaptureHa
   }
 
   autoStopTimer = setTimeout(() => {
-    void stop();
+    notifyEnded();
   }, opts.maxSeconds * 1000);
 
   return { stop };
