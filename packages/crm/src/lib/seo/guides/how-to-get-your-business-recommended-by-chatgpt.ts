@@ -15,19 +15,49 @@ export const guide: Guide = {
   sections: [
     {
       h2: "How ChatGPT actually finds businesses",
-      body: "It helps to separate two things ChatGPT does. When it answers purely from its training data, it's drawing on a fixed snapshot of the web from months earlier — so a brand-new business may simply not exist to it. When it uses its search feature, it retrieves live web results, then summarizes and cites them with links.\n\nAccording to OpenAI's own documentation, ChatGPT search pulls from web sources, including its own crawler (OAI-SearchBot) and, through OpenAI's partnership with Microsoft, the Bing search index. The practical implication: whether the web thinks your business exists, and whether you're indexed and findable, directly shapes whether ChatGPT can mention you at all. If you're invisible to search engines, you're usually invisible to ChatGPT too.",
+      body: "It helps to separate **two things** ChatGPT does.\n\nWhen it answers purely from its training data, it's drawing on a fixed snapshot of the web from months earlier. A brand-new business may simply not exist to it yet.\n\nWhen it uses its search feature instead, it retrieves live web results, then summarizes and *cites* them with links.\n\nAccording to OpenAI's own documentation, ChatGPT search pulls from web sources, including its own crawler (OAI-SearchBot) and, through OpenAI's partnership with Microsoft, the Bing search index.\n\nThe practical implication: **whether the web thinks your business exists**, and whether you're indexed and findable, directly shapes whether ChatGPT can mention you at all. If you're invisible to search engines, you're usually invisible to ChatGPT too. (See [what generative engine optimization actually means](/guides/what-is-generative-engine-optimization) for the broader picture.)",
+      callout: {
+        kind: "analogy",
+        text: "A citation is a footnote in a school essay: it points to where the claim came from, so the reader can check it. When ChatGPT search cites your site, it's telling the user \"here's my source\" — which is exactly why being a source it can find and trust matters so much.",
+      },
+      diagram: {
+        type: "compare",
+        title: "Two different ChatGPT answers",
+        left: {
+          heading: "Answering from training data",
+          items: ["Fixed snapshot from months earlier", "No live lookup", "New businesses may not exist to it"],
+        },
+        right: {
+          heading: "Answering with search on",
+          items: ["Retrieves live web results", "Summarizes and cites sources", "Needs you to be indexed and findable"],
+        },
+      },
     },
     {
       h2: "Why search visibility still matters (especially Bing)",
-      body: "Because ChatGPT search leans on the Bing index, ordinary search visibility isn't optional. One analysis by the agency Seer Interactive found that around 87 percent of the citations in OpenAI's SearchGPT matched Bing's top organic results — a much higher overlap than with Google. Worth noting: the researchers describe this as a limited, directional study of roughly 100 queries, not a settled law, so treat the exact number as a signal rather than a guarantee.\n\nStill, the direction is clear and actionable. Making sure your site is indexed in Bing (via Bing Webmaster Tools), not just Google, is one of the few concrete, verifiable things you can do. Combined with a complete Google Business Profile and accurate listings, it gives the answer engines real, current material to draw on.",
+      body: "Because ChatGPT search leans on the Bing index, **ordinary search visibility isn't optional**.\n\nOne analysis by the agency Seer Interactive found that around 87 percent of the citations in OpenAI's SearchGPT matched Bing's top organic results — a much higher overlap than with Google.\n\nWorth noting: the researchers describe this as a limited, directional study of roughly 100 queries, not a settled law. Treat the exact number as a signal rather than a guarantee.\n\nStill, the direction is clear and actionable. Making sure your site is indexed in Bing (via Bing Webmaster Tools), not just Google, is one of the few concrete, verifiable things you can do.\n\nCombined with a **complete Google Business Profile** and accurate listings, it gives the answer engines real, current material to draw on.",
     },
     {
       h2: "Be the business that's easy to recommend",
-      body: "A model recommends what it can describe confidently. That means your name, category, location, services, and hours should be accurate and consistent everywhere they appear — your website, Google Business Profile, directories, and review sites. Contradictory or outdated information makes a model hesitant to name you, or worse, causes it to state something wrong about you.\n\nReviews and third-party mentions matter here too. Generative engines lean toward businesses that others talk about, so genuine reviews, local press, and being listed in reputable directories all give a model reasons to surface you. There's no schema trick that substitutes for actually being a well-regarded, clearly-described business online.",
+      body: "A model recommends what it can describe confidently.\n\nThat means your name, category, location, services, and hours should be **accurate and consistent** everywhere they appear — your website, Google Business Profile, directories, and review sites.\n\nContradictory or outdated information makes a model hesitant to name you. Worse, it can cause the model to state something wrong about you.\n\nReviews and third-party mentions matter here too. Generative engines lean toward businesses that **others talk about**, so genuine reviews, local press, and being listed in reputable directories all give a model reasons to surface you.\n\nThere's no schema trick that substitutes for actually being a well-regarded, clearly-described business online.",
+      callout: {
+        kind: "tip",
+        text: "Copy-paste your name, address, and hours instead of retyping them on each listing — a single typo repeated across directories is how a phantom location or a wrong closing time ends up in an AI answer.",
+      },
     },
     {
       h2: "Check what ChatGPT says about you today",
-      body: "Before optimizing anything, find out where you stand. Ask ChatGPT — with search on and off — about your category in your city and see whether you're mentioned, and ask it directly about your business to see whether the details are right. It's common to find you're absent, or that the model repeats an old address or a service you dropped.\n\nOur AI visibility checker automates that first look: it shows how AI assistants currently describe your business so you know exactly what to fix. Be realistic, though — you cannot force or pay your way into ChatGPT's recommendations, and anyone promising guaranteed placement is selling something these systems don't offer. The honest path is to be genuinely findable, accurate, and worth recommending, then recheck over time.",
+      body: "Before optimizing anything, find out where you stand.\n\nAsk ChatGPT — with search on and off — about your category in your city and see whether you're mentioned. Then ask it directly about your business to see whether the details are right.\n\nIt's common to find you're absent, or that the model repeats an old address or a service you dropped.\n\nOur [AI visibility checker](/tools/ai-visibility-checker) automates that first look: it shows how AI assistants currently describe your business so you know exactly what to fix.\n\nBe realistic, though: **you cannot force or pay** your way into ChatGPT's recommendations, and anyone promising guaranteed placement is selling something these systems don't offer.\n\nThe honest path is to be genuinely findable, accurate, and worth recommending, then recheck over time. (More step-by-step tactics live in [how to show up in AI search](/guides/how-to-show-up-in-ai-search).)",
+      diagram: {
+        type: "flow",
+        title: "The honest check-and-fix loop",
+        steps: [
+          { label: "Ask with search off", sub: "what does training data say?" },
+          { label: "Ask with search on", sub: "what does it cite today?" },
+          { label: "Compare to reality", sub: "name, hours, services, location" },
+          { label: "Fix the wrong listing", sub: "then recheck later" },
+        ],
+      },
     },
   ],
   faq: [
