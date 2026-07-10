@@ -212,5 +212,10 @@ Interface drift discovered during the build, vs. this design/the implementation 
   from what they just built. It now links `/studio/agents/${template_id}` (the existing template
   editor route, deep-linked by the id `compile-agent` already returns) with copy "Open your agent"
   plus an honest "it's a draft — run its evals and test it before publishing" line.
+- **Live-test fix 3 — coverage matches on `step.app` before falling back to action text.**
+  `coverStep` fed `"<app> <action>"` into `findToolsByKeywords` as one string, so a Gmail step
+  whose action text mentioned "X drafts / tweets" spuriously matched the `postiz` catalog entry
+  bound to the action text. `coverStep` now tries `findToolsByKeywords(step.app)` alone first; only
+  when the app alone yields no match does it fall back to the previous `"<app> <action>"` search.
 - No other interface (types, exported function signatures, route paths, DB columns) drifted from
   the plan.

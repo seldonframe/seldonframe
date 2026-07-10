@@ -40,7 +40,13 @@ function isApiShapedAction(action: string): boolean {
 }
 
 function coverStep(step: WorkflowStep): CoverageEntry {
-  const matches = findToolsByKeywords(`${step.app} ${step.action}`);
+  // App-first, action-text second: matching on the combined "<app> <action>"
+  // string let an action's incidental wording (e.g. a Gmail step whose text
+  // happens to mention "X drafts / tweets") outvote the step's actual app
+  // and bind the wrong toolkit (postiz instead of gmail). Try the app alone
+  // first — only fall back to the combined text when the app alone misses.
+  const appMatches = findToolsByKeywords(step.app);
+  const matches = appMatches.length > 0 ? appMatches : findToolsByKeywords(`${step.app} ${step.action}`);
   const match = matches[0];
 
   if (match) {
