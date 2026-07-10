@@ -83,7 +83,13 @@ export type RecorderAction =
     }
   | { type: "SLOT_FAILED"; slotIndex: number; error: string }
   | { type: "SET_LABEL"; slotIndex: number; label: string }
-  | { type: "INTERVIEW_TURN"; user: string; seldon: string; openQuestions: string[] }
+  // Split from the old single INTERVIEW_TURN so the user's sent message
+  // renders immediately, before the (slow) LLM reply comes back — see plan
+  // Task "interview optimistic UI". USER_SENT appends only the user turn;
+  // REPLY appends the seldon turn + refreshes openQuestions once the
+  // response arrives.
+  | { type: "INTERVIEW_USER_SENT"; user: string }
+  | { type: "INTERVIEW_REPLY"; seldon: string; openQuestions: string[] }
   | { type: "MODEL_UPDATED"; flowModel: FlowModel; openQuestions: string[] }
   | { type: "GO_RECAP" }
   | { type: "APPROVED" };
@@ -233,14 +239,16 @@ export function recorderReducer(state: RecorderState, action: RecorderAction): R
       return replaceSlot(state, action.slotIndex, (slot) => ({ ...slot, label: action.label }));
     }
 
-    case "INTERVIEW_TURN":
+    case "INTERVIEW_USER_SENT":
       return {
         ...state,
-        interview: [
-          ...state.interview,
-          { role: "user", text: action.user },
-          { role: "seldon", text: action.seldon },
-        ],
+        interview: [...state.interview, { role: "user", text: action.user }],
+      };
+
+    case "INTERVIEW_REPLY":
+      return {
+        ...state,
+        interview: [...state.interview, { role: "seldon", text: action.seldon }],
         openQuestions: action.openQuestions,
       };
 

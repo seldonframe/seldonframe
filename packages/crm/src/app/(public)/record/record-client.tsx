@@ -93,6 +93,9 @@ export function RecordClient({
   const [state, dispatch] = useReducer(recorderReducer, undefined, initialRecorderState);
   const [message, setMessage] = useState<string | null>(null);
   const [interviewInput, setInterviewInput] = useState("");
+  const [interviewPending, setInterviewPending] = useState(false);
+  const [interviewError, setInterviewError] = useState<string | null>(null);
+  const lastInterviewMessage = useRef<string | null>(null);
   const [fallbackText, setFallbackText] = useState<Record<number, string>>({});
   const [compiling, setCompiling] = useState(false);
   const [compiledTemplateId, setCompiledTemplateId] = useState<string | null>(null);
@@ -289,10 +292,15 @@ export function RecordClient({
     }
   }
 
-  async function handleInterviewSend() {
-    const text = interviewInput.trim();
-    if (!text || !state.token) return;
-    setInterviewInput("");
+  // Interview replies merge the FlowModel server-side, which is a slower LLM
+  // call — the operator's own message must render the instant they hit Send
+  // (INTERVIEW_USER_SENT), not wait behind that round-trip. `sendText` is
+  // split out from the click handler so a failed turn can be retried without
+  // re-appending the user's message (it's already in state.interview).
+  async function sendInterviewMessage(text: string) {
+    if (!state.token) return;
+    setInterviewPending(true);
+    setInterviewError(null);
     try {
       const res = await fetch("/api/v1/recordings/interview", {
         method: "POST",
@@ -305,16 +313,34 @@ export function RecordClient({
         open_questions: string[];
         flow_model?: FlowModel;
       };
-      dispatch({ type: "INTERVIEW_TURN", user: text, seldon: data.reply, openQuestions: data.open_questions });
+      dispatch({ type: "INTERVIEW_REPLY", seldon: data.reply, openQuestions: data.open_questions });
       // The interview turn also merges answers into the FlowModel server-side
       // (never-lies: what Seldon says it learned must be what compiles) — if
       // the response carries the updated model, refresh the recap with it.
       if (data.flow_model) {
         dispatch({ type: "MODEL_UPDATED", flowModel: data.flow_model, openQuestions: data.open_questions });
       }
+      lastInterviewMessage.current = null;
     } catch (err) {
-      setMessage(err instanceof Error ? err.message : "Could not send that message.");
+      setInterviewError(err instanceof Error ? err.message : "Could not send that message.");
+    } finally {
+      setInterviewPending(false);
     }
+  }
+
+  async function handleInterviewSend() {
+    const text = interviewInput.trim();
+    if (!text || !state.token || interviewPending) return;
+    setInterviewInput("");
+    lastInterviewMessage.current = text;
+    dispatch({ type: "INTERVIEW_USER_SENT", user: text });
+    await sendInterviewMessage(text);
+  }
+
+  async function handleInterviewRetry() {
+    const text = lastInterviewMessage.current;
+    if (!text || interviewPending) return;
+    await sendInterviewMessage(text);
   }
 
   async function handleCompileAgent() {
@@ -560,11 +586,27 @@ export function RecordClient({
                       {turn.text}
                     </p>
                   ))}
+                  {interviewPending ? (
+                    <p className="text-[13px] italic text-[#6B7280]">Seldon is updating the flow&hellip;</p>
+                  ) : null}
+                  {interviewError ? (
+                    <p role="alert" className="text-[13px] text-[#EF4444]">
+                      {interviewError}{" "}
+                      <button
+                        type="button"
+                        onClick={() => void handleInterviewRetry()}
+                        className="underline underline-offset-2 hover:text-[#F5F4F0]"
+                      >
+                        Retry
+                      </button>
+                    </p>
+                  ) : null}
                 </div>
                 <div className="flex gap-2">
                   <input
                     type="text"
                     value={interviewInput}
+                    disabled={interviewPending}
                     onChange={(e) => setInterviewInput(e.target.value)}
                     onKeyDown={(e) => {
                       if (e.key === "Enter") {
@@ -573,12 +615,13 @@ export function RecordClient({
                       }
                     }}
                     placeholder="Answer an open question or add detail..."
-                    className="flex-1 rounded-[10px] border border-[rgba(231,229,222,.12)] bg-transparent px-3 py-2 text-[13px] text-[#E7E5DE] outline-none placeholder:text-[#6B7280]"
+                    className="flex-1 rounded-[10px] border border-[rgba(231,229,222,.12)] bg-transparent px-3 py-2 text-[13px] text-[#E7E5DE] outline-none placeholder:text-[#6B7280] disabled:opacity-50"
                   />
                   <button
                     type="button"
+                    disabled={interviewPending}
                     onClick={() => void handleInterviewSend()}
-                    className="rounded-[10px] bg-[#14B8A6] px-3 py-2 text-[13px] font-[600] text-[#0B0F0E]"
+                    className="rounded-[10px] bg-[#14B8A6] px-3 py-2 text-[13px] font-[600] text-[#0B0F0E] disabled:cursor-not-allowed disabled:opacity-50"
                   >
                     Send
                   </button>

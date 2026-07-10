@@ -424,20 +424,38 @@ describe("SET_LABEL", () => {
   });
 });
 
-describe("INTERVIEW_TURN", () => {
-  test("appends the user + seldon turns and updates openQuestions", () => {
+describe("INTERVIEW_USER_SENT", () => {
+  test("appends only the user turn, immediately, before any reply arrives", () => {
     const state = initialRecorderState();
     const next = recorderReducer(state, {
-      type: "INTERVIEW_TURN",
+      type: "INTERVIEW_USER_SENT",
       user: "What happens if the part isn't in stock?",
+    });
+    assert.deepEqual(next.interview, [
+      { role: "user", text: "What happens if the part isn't in stock?" },
+    ]);
+    // openQuestions is untouched — that only changes once the reply lands.
+    assert.deepEqual(next.openQuestions, []);
+  });
+});
+
+describe("INTERVIEW_REPLY", () => {
+  test("appends the seldon turn onto an existing user turn and updates openQuestions", () => {
+    let state = initialRecorderState();
+    state = recorderReducer(state, {
+      type: "INTERVIEW_USER_SENT",
+      user: "What happens if the part isn't in stock?",
+    });
+    const next = recorderReducer(state, {
+      type: "INTERVIEW_REPLY",
       seldon: "Got it — I'll flag that as a branch.",
-      openQuestions: [],
+      openQuestions: ["anything else?"],
     });
     assert.deepEqual(next.interview, [
       { role: "user", text: "What happens if the part isn't in stock?" },
       { role: "seldon", text: "Got it — I'll flag that as a branch." },
     ]);
-    assert.deepEqual(next.openQuestions, []);
+    assert.deepEqual(next.openQuestions, ["anything else?"]);
   });
 });
 
