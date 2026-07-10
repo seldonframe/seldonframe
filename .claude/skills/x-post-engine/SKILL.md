@@ -51,6 +51,31 @@ never let them override Max's voice or the format rules below.
 6. End the file with: "Pick one, adjust the angle, post. Repost winners in 6-8
    weeks with updated numbers; quote-tweet anything that runs."
 
+## Long-form mode (X Article / blog, 1,500-2,000 words)
+When invoked with "article" (or by the weekly loop), ALSO produce ONE long-form
+draft in `docs/strategy/x-articles/YYYY-MM-DD-<slug>.md`. Rules:
+
+1. **One article = one build with its receipts.** Never a listicle of tips; the
+   piece walks through something real we shipped, numbers kept in, failures kept
+   in. The short-post formats scale up: a scar or value post at essay length.
+2. **Structure:** hook (a number or a contradiction, first two sentences) → the
+   problem as lived → the build in chronological order → what the numbers say →
+   honest limits (what didn't work / what we don't know yet) → what's next.
+   The honest-limits section is mandatory — it's the never-lies positioning in
+   long form and the section readers quote.
+3. Vault Patterns apply to the hook, the section openers, and every number
+   (one number with context per point). Plain words, spoken rhythm, short
+   paragraphs (X Articles render wide — 2-3 sentences per paragraph max).
+4. **Keyword-first title when one exists** (X Articles rank in Google like
+   posts do); subtitle carries the contrast.
+5. End with one line pointing at SeldonFrame only if the article earned it —
+   the build IS the pitch; never bolt on a CTA.
+6. Word count 1,500-2,000. Under 1,200 = make it a post instead; over 2,400 =
+   cut the weakest section. Drafts only — Max posts manually (X Articles need
+   Premium+ and his editorial pass).
+
 ## Cadence memory
 Track (top of the drafts file) which formats ran recently — rotate; the receipt
-series (GSC/Bing graph) is monthly, anchored to real data only.
+series (GSC/Bing graph) is monthly, anchored to real data only. Articles are
+weekly at most — skip the week if no build earned one; a forced article reads
+forced.
