@@ -15,6 +15,7 @@ import type { AgentTrigger } from "@/lib/agents/triggers/agent-trigger";
 import type { EvalScenario } from "@/lib/agents/evals/eval-types";
 import { coverFlowModel } from "@/lib/recordings/coverage";
 import type { CoverageEntry, CoverageTier, FlowModel, WorkflowStep, WorkflowTrace } from "@/lib/recordings/trace-schema";
+import { defaultToolsForToolkits } from "@/lib/integrations/composio/catalog";
 
 const CUSTOM_SKILL_MD_MAX_CHARS = 8000;
 const SCENARIO_ARRAY_CAP = 6;
@@ -304,12 +305,33 @@ function filterCapabilitiesForModel(caps: string[] | undefined, model: FlowModel
  * already the final slug/id a binding needs), so no catalog lookup is
  * needed: "postiz" is the one vetted id in the catalog, everything else is
  * a Composio toolkit slug. Mirrors bindingForEntry's two shapes exactly.
+ *
+ * SELF-DESCRIBING, unlike the hand-bound/generate-time "provisional" shapes
+ * elsewhere (bind.ts, bind-tools.ts, composio-resolver.ts) which leave
+ * `enabledTools: []` to be filled by a later discovery/picker step: a
+ * compiled-from-recording agent has NO such follow-up step — this binding
+ * IS the resting state the agent runs with immediately. An empty allowlist
+ * here means the model has zero real tools no matter what it's connected
+ * to (the 2026-07-11 incident: a supervised run whose only bound tool was
+ * exactly this empty-allowlist composio binding could never take a real
+ * action). So we seed the curated default tool list for the toolkit
+ * up front — resolveComposioBinding's contract (empty enabledTools → zero
+ * tools) is intentionally left unchanged elsewhere, since the Studio editor
+ * lets an operator explicitly disable every tool for a connector by
+ * clearing this same array; that's a real "off" state we must not
+ * override generically. Scoping the default to construction time, here,
+ * avoids re-enabling an operator's explicit disable.
  */
 function bindingForToolkit(toolkit: string): ConnectorBinding {
   if (toolkit === "postiz") {
     return { id: "postiz", kind: "vetted", serviceName: "postiz", enabledTools: [] };
   }
-  return { id: toolkit, kind: "composio", enabledToolkits: [toolkit], enabledTools: [] };
+  return {
+    id: toolkit,
+    kind: "composio",
+    enabledToolkits: [toolkit],
+    enabledTools: defaultToolsForToolkits([toolkit]),
+  };
 }
 
 function dedupeConnectors(connectors: ConnectorBinding[]): ConnectorBinding[] {
