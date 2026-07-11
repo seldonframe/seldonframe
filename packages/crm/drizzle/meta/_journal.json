@@ -316,6 +316,13 @@
       "when": 1783300000000,
       "tag": "0067_record_to_agent",
       "breakpoints": true
+    },
+    {
+      "idx": 45,
+      "version": "7",
+      "when": 1783400000000,
+      "tag": "0068_agent_lifecycle",
+      "breakpoints": true
     }
   ]
 }

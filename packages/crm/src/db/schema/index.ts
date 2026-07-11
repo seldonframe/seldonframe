@@ -204,3 +204,10 @@ export * from "./agent-reflection-events";
 // agent_templates draft. Inert behind SF_RECORD_TO_AGENT. See
 // docs/superpowers/specs/2026-07-10-record-to-agent-design.md.
 export * from "./recordings";
+
+// 2026-07-11 — Agent lifecycle slice (migration 0068): supervised_runs (one
+// real-tool, supervised run of a template — Stage 04 "Run") +
+// recording_sessions.answered_questions (Stage 01 "Learned" Q&A record).
+// Additive. Inert behind SF_AGENT_LIFECYCLE. See
+// docs/superpowers/specs/2026-07-11-agent-lifecycle-design.md.
+export * from "./agent-lifecycle";

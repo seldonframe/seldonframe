@@ -24,6 +24,17 @@ export type RecordingSessionStatus =
   | "compiled"
   | "abandoned";
 
+/** One answered Q&A pair from the recap/continue-the-interview chat — the
+ *  Learned stage's "Q&A record" (agent lifecycle slice, migration 0068).
+ *  `question` is null for a direct (non-decomposed) merge, where the
+ *  operator's message answered the open-questions set as a whole rather than
+ *  one named question. */
+export type AnsweredQuestion = {
+  question: string | null;
+  answer: string;
+  answeredAt: string;
+};
+
 export const recordingSessions = pgTable(
   "recording_sessions",
   {
@@ -38,6 +49,11 @@ export const recordingSessions = pgTable(
     openQuestions: jsonb("open_questions"),
     interviewLog: jsonb("interview_log"),
     derivedScenarios: jsonb("derived_scenarios"),
+    /** Answered Q&A pairs (agent lifecycle slice, migration 0068) — appended
+     *  additively via `||` (never a read-modify-write clobber) whenever a
+     *  merge applies, both from the pre-claim /record interview route and
+     *  the post-claim continueInterviewAction. */
+    answeredQuestions: jsonb("answered_questions").$type<AnsweredQuestion[]>(),
     agentTemplateId: uuid("agent_template_id"),
     createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
     updatedAt: timestamp("updated_at", { withTimezone: true }).notNull().defaultNow(),
