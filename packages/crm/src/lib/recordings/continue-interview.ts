@@ -24,6 +24,7 @@ import type { RecordingSession } from "@/db/schema/recordings";
 import { interviewTurn, type InterviewTurn } from "./interview";
 import { flowModelToBundle } from "./compile-agent";
 import type { FlowModel, TraceLlm, WorkflowTrace } from "./trace-schema";
+import type { ConnectorBinding } from "@/lib/agents/mcp/connectors";
 
 export type ContinueInterviewResult =
   | { ok: true; reply: string; applied: boolean; openQuestions: string[] }
@@ -58,6 +59,18 @@ export type ContinueInterviewDeps = {
     reply: string;
     answeredPairs: PersistableAnswer[];
   }) => Promise<void>;
+  /**
+   * Widen any never-discovered composio binding's `enabledTools` on the
+   * recompiled connectors before they're persisted (composio live tool
+   * discovery, 2026-07-11 slice) — catalog defaults, then live discovery for
+   * non-catalog toolkits. Defaults to identity so every existing caller/spec
+   * (and any deps object that doesn't set it) behaves exactly as before.
+   * Real impl (closing over orgId → fillComposioBindingTools) is wired in the
+   * thin "use server" wrapper (lib/agent-templates/interview-actions.ts).
+   */
+  fillConnectors?: (
+    connectors: ConnectorBinding[] | undefined,
+  ) => Promise<ConnectorBinding[] | undefined>;
 };
 
 /**
@@ -94,6 +107,11 @@ export async function continueInterviewCore(
 
   const recordings = await deps.listTracedRecordings(session.id);
   const { bundle } = flowModelToBundle({ model: result.model, recordings });
+
+  const fillConnectors = deps.fillConnectors ?? (async (c) => c);
+  bundle.blueprint.connectors = await fillConnectors(
+    bundle.blueprint.connectors as ConnectorBinding[] | undefined,
+  );
 
   const updated = await deps.updateTemplate({
     id: input.templateId,

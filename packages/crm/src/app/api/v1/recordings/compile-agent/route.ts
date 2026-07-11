@@ -28,6 +28,7 @@ import { findSessionByToken } from "@/lib/recordings/session-store";
 import { flowModelToBundle } from "@/lib/recordings/compile-agent";
 import type { FlowModel, WorkflowTrace } from "@/lib/recordings/trace-schema";
 import { getOrgId } from "@/lib/auth/helpers";
+import { fillComposioBindingTools } from "@/lib/integrations/composio/discover-tools";
 import {
   createAgentTemplate,
   updateAgentTemplate,
@@ -109,6 +110,14 @@ export async function POST(request: Request): Promise<Response> {
     .map((r) => ({ label: r.label, trace: r.trace as WorkflowTrace }));
 
   const { bundle, scenarios, warnings } = flowModelToBundle({ model: flowModel, recordings });
+
+  // Widen any never-discovered composio binding's enabledTools with real
+  // tools before the first persist — catalog defaults, then live discovery
+  // for non-catalog toolkits (youtube, synthflow_ai, …). Never throws (T1
+  // contract) — no new failure mode is introduced here.
+  bundle.blueprint.connectors = (
+    await fillComposioBindingTools(orgId!, bundle.blueprint.connectors)
+  ).connectors;
 
   const template = await createAgentTemplate({
     builderOrgId: orgId!,
