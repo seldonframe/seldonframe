@@ -323,6 +323,13 @@
       "when": 1783400000000,
       "tag": "0068_agent_lifecycle",
       "breakpoints": true
+    },
+    {
+      "idx": 46,
+      "version": "7",
+      "when": 1783500000000,
+      "tag": "0069_supervised_runs_one_running",
+      "breakpoints": true
     }
   ]
 }

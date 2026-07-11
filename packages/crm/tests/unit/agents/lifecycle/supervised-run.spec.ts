@@ -5,6 +5,7 @@ import {
   runSupervised,
   buildKickoffMessage,
   resolveRunningRunGuard,
+  isUniqueViolationError,
   STALE_RUNNING_MS,
 } from "@/lib/agents/lifecycle/supervised-run";
 import type { SupervisedRunActionEvent } from "@/db/schema/agent-lifecycle";
@@ -110,6 +111,34 @@ describe("runSupervised", () => {
     assert.deepEqual(result, { ok: false, error: "already_running" });
   });
 
+  // ── F2 (Wave 1 review) — TOCTOU backstop: a unique-violation on the
+  // createRun insert (the friendly hasRunningRun check raced and lost) maps
+  // onto the same already_running result, by error CODE never by message.
+
+  test("createRun throwing a 23505 unique-violation -> already_running, never propagates", async () => {
+    const { deps } = baseDeps({
+      createRun: async () => {
+        const err = new Error("duplicate key value violates unique constraint") as Error & { code?: string };
+        err.code = "23505";
+        throw err;
+      },
+    });
+    const result = await runSupervised(deps, { orgId: ORG_ID, templateId: TEMPLATE_ID, kickoffMessage: "run it" });
+    assert.deepEqual(result, { ok: false, error: "already_running" });
+  });
+
+  test("createRun throwing an UNRELATED error still propagates (not swallowed as already_running)", async () => {
+    const { deps } = baseDeps({
+      createRun: async () => {
+        throw new Error("connection reset");
+      },
+    });
+    await assert.rejects(
+      runSupervised(deps, { orgId: ORG_ID, templateId: TEMPLATE_ID, kickoffMessage: "run it" }),
+      /connection reset/,
+    );
+  });
+
   test("runTurn itself throwing is caught — the run still finishes as failed, never propagates", async () => {
     const { deps, finished } = baseDeps({
       runTurn: async () => {
@@ -158,6 +187,30 @@ describe("resolveRunningRunGuard", () => {
     const decision = resolveRunningRunGuard({ id: "run-9", startedAt }, NOW);
     assert.equal(decision.blocks, false);
     if (!decision.blocks) assert.equal(decision.staleRunId, "run-9");
+  });
+});
+
+describe("isUniqueViolationError", () => {
+  test("true for a Postgres 23505 error object", () => {
+    const err = new Error("dup") as Error & { code?: string };
+    err.code = "23505";
+    assert.equal(isUniqueViolationError(err), true);
+  });
+
+  test("false for a different PG code", () => {
+    const err = new Error("fk violation") as Error & { code?: string };
+    err.code = "23503";
+    assert.equal(isUniqueViolationError(err), false);
+  });
+
+  test("false for an error whose MESSAGE merely mentions 'duplicate'/'unique' but has no code — code-only, never message sniffing", () => {
+    assert.equal(isUniqueViolationError(new Error("duplicate key value violates unique constraint")), false);
+  });
+
+  test("false for null/undefined/non-object", () => {
+    assert.equal(isUniqueViolationError(null), false);
+    assert.equal(isUniqueViolationError(undefined), false);
+    assert.equal(isUniqueViolationError("nope"), false);
   });
 });
 

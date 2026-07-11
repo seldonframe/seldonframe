@@ -94,6 +94,22 @@ export type SupervisedRunResult =
   | { ok: false; error: "already_running" };
 
 /**
+ * True iff `err` is a Postgres unique-constraint violation (code 23505).
+ * F2, Wave 1 review — the friendly app-level `hasRunningRun` check has a
+ * TOCTOU window (two concurrent "Run it once" clicks can both pass the
+ * check before either insert lands); `supervised_runs_one_running_per_
+ * template` (migration 0069) closes it at the DB layer. This maps THAT
+ * constraint's insert failure onto the same `already_running` result the
+ * friendly check returns — a code check, never a message string-match
+ * (mirrors message-trigger-storage-drizzle.ts's isUniqueViolation).
+ */
+export function isUniqueViolationError(err: unknown): boolean {
+  if (typeof err !== "object" || err === null) return false;
+  const code = (err as { code?: string }).code;
+  return code === "23505";
+}
+
+/**
  * The kickoff message that starts a supervised run — a plain-text turn that
  * stands in for whatever would actually fire this template live. For a
  * schedule trigger it's the SAME semantic shape `runDueScheduledAgents`
@@ -138,7 +154,20 @@ export async function runSupervised(
   const alreadyRunning = await deps.hasRunningRun({ orgId: input.orgId, templateId: input.templateId });
   if (alreadyRunning) return { ok: false, error: "already_running" };
 
-  const { id: runId } = await deps.createRun({ orgId: input.orgId, templateId: input.templateId });
+  // F2, Wave 1 review — the check above is the friendly, low-latency path;
+  // it has a TOCTOU window (two concurrent clicks can both pass it before
+  // either insert lands). `supervised_runs_one_running_per_template`
+  // (migration 0069) is the correctness backstop: a second concurrent
+  // insert violates that partial unique index, and we map ITS error
+  // (by code, never by message) onto the same already_running result.
+  let created: { id: string };
+  try {
+    created = await deps.createRun({ orgId: input.orgId, templateId: input.templateId });
+  } catch (err) {
+    if (isUniqueViolationError(err)) return { ok: false, error: "already_running" };
+    throw err;
+  }
+  const runId = created.id;
 
   const actionLog: SupervisedRunActionEvent[] = [];
   const onToolEvent = (event: SupervisedRunActionEvent) => {
