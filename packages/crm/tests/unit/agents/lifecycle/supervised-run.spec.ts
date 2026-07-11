@@ -1,7 +1,12 @@
 import { describe, test } from "node:test";
 import assert from "node:assert/strict";
 
-import { runSupervised, buildKickoffMessage } from "@/lib/agents/lifecycle/supervised-run";
+import {
+  runSupervised,
+  buildKickoffMessage,
+  resolveRunningRunGuard,
+  STALE_RUNNING_MS,
+} from "@/lib/agents/lifecycle/supervised-run";
 import type { SupervisedRunActionEvent } from "@/db/schema/agent-lifecycle";
 
 const ORG_ID = "org-1";
@@ -115,5 +120,59 @@ describe("runSupervised", () => {
     assert.equal(result.ok, true);
     if (result.ok) assert.equal(result.status, "failed");
     assert.equal(finished[0].status, "failed");
+  });
+});
+
+// ─── F1 (Wave 1 review) — stranded `running` row can't brick the Run button ──
+
+describe("resolveRunningRunGuard", () => {
+  const NOW = new Date("2026-07-11T12:00:00.000Z");
+
+  test("no running row -> never blocks, nothing to reconcile", () => {
+    assert.deepEqual(resolveRunningRunGuard(null, NOW), { blocks: false, staleRunId: null });
+  });
+
+  test("a fresh running row (well under STALE_RUNNING_MS) still blocks", () => {
+    const startedAt = new Date(NOW.getTime() - 60_000); // 1 minute old
+    assert.deepEqual(resolveRunningRunGuard({ id: "run-1", startedAt }, NOW), { blocks: true });
+  });
+
+  test("a running row exactly at the stale threshold no longer blocks (strict <, not <=)", () => {
+    const startedAt = new Date(NOW.getTime() - STALE_RUNNING_MS);
+    assert.deepEqual(resolveRunningRunGuard({ id: "run-1", startedAt }, NOW), {
+      blocks: false,
+      staleRunId: "run-1",
+    });
+  });
+
+  test("a running row older than STALE_RUNNING_MS does NOT block, and is flagged for reconciliation", () => {
+    const startedAt = new Date(NOW.getTime() - STALE_RUNNING_MS - 1);
+    assert.deepEqual(resolveRunningRunGuard({ id: "run-1", startedAt }, NOW), {
+      blocks: false,
+      staleRunId: "run-1",
+    });
+  });
+
+  test("a very old running row (hours) does NOT block", () => {
+    const startedAt = new Date(NOW.getTime() - 3 * 60 * 60 * 1000);
+    const decision = resolveRunningRunGuard({ id: "run-9", startedAt }, NOW);
+    assert.equal(decision.blocks, false);
+    if (!decision.blocks) assert.equal(decision.staleRunId, "run-9");
+  });
+});
+
+describe("DEFAULT_TIMEOUT_MS (app-side run timeout)", () => {
+  test("stays below a 60s platform function ceiling with margin (Wave 1 review, F1)", async () => {
+    // Exercised indirectly via buildKickoffMessage's neighbor export contract:
+    // runSupervised's own default timeout path is covered by the "hard
+    // timeout" test above via DI; here we just pin the constant's value so a
+    // future edit can't silently drift back above the platform ceiling.
+    const { deps } = baseDeps({
+      runWithTimeout: async (fn, timeoutMs) => {
+        assert.equal(timeoutMs, 55_000, "the DEFAULT_TIMEOUT_MS the action relies on must be 55s");
+        return fn();
+      },
+    });
+    await runSupervised(deps, { orgId: ORG_ID, templateId: TEMPLATE_ID, kickoffMessage: "run it" });
   });
 });

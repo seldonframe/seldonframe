@@ -33,7 +33,12 @@ import { assertWritable } from "@/lib/demo/server";
 import { getAIClient } from "@/lib/ai/client";
 import { resolveStudioBuildGate, NEEDS_BYOK_MESSAGE } from "./studio-build-gate";
 import { runStatelessAgentTurn, type StatelessToolEvent } from "@/lib/agents/stateless-turn";
-import { runSupervised, buildKickoffMessage, type SupervisedRunDeps } from "@/lib/agents/lifecycle/supervised-run";
+import {
+  runSupervised,
+  buildKickoffMessage,
+  resolveRunningRunGuard,
+  type SupervisedRunDeps,
+} from "@/lib/agents/lifecycle/supervised-run";
 import { resolveAgentTrigger } from "@/lib/agents/triggers/agent-trigger";
 
 export type StartSupervisedRunResult =
@@ -54,9 +59,17 @@ function toActionEvent(now: () => Date, event: StatelessToolEvent): SupervisedRu
   return { at: now().toISOString(), tool: event.tool, line: event.line, status };
 }
 
+/**
+ * True iff a FRESH `running` row exists for this org+template. A `running`
+ * row older than `STALE_RUNNING_MS` (F1, Wave 1 review) is presumed
+ * stranded — the platform killed the function before `finishRun` ever
+ * wrote — so it is ignored by the guard AND lazily reconciled to `failed`
+ * (org-scoped, same code path) rather than permanently bricking the "Run
+ * it once" button.
+ */
 async function hasRunningRunReal(args: { orgId: string; templateId: string }): Promise<boolean> {
   const [row] = await db
-    .select({ id: supervisedRuns.id })
+    .select({ id: supervisedRuns.id, startedAt: supervisedRuns.startedAt })
     .from(supervisedRuns)
     .where(
       and(
@@ -66,7 +79,23 @@ async function hasRunningRunReal(args: { orgId: string; templateId: string }): P
       ),
     )
     .limit(1);
-  return Boolean(row);
+
+  const decision = resolveRunningRunGuard(row ?? null, new Date());
+  if (decision.blocks) return true;
+
+  if (decision.staleRunId) {
+    await db
+      .update(supervisedRuns)
+      .set({ status: "failed", summary: "timed out (stale)", finishedAt: new Date() })
+      .where(
+        and(
+          eq(supervisedRuns.id, decision.staleRunId),
+          eq(supervisedRuns.orgId, args.orgId),
+          eq(supervisedRuns.status, "running"),
+        ),
+      );
+  }
+  return false;
 }
 
 async function createRunReal(args: { orgId: string; templateId: string }): Promise<{ id: string }> {

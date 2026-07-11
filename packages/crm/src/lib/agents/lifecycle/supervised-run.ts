@@ -14,10 +14,43 @@
 import type { SupervisedRunActionEvent } from "@/db/schema/agent-lifecycle";
 import type { AgentTrigger } from "@/lib/agents/triggers/agent-trigger";
 
-/** Default hard timeout for one supervised run — long enough for a
- *  multi-tool-call turn, short enough that a wedged run doesn't strand the
- *  "Run it once" button in `running` forever. */
-const DEFAULT_TIMEOUT_MS = 120_000;
+/** Default hard timeout for one supervised run. MUST stay comfortably below
+ *  the platform's own function timeout (Vercel's default/Pro ceiling is
+ *  60s for a standard Fluid/Serverless function) — if the app-side timeout
+ *  is longer than the platform's, the PLATFORM kills the invocation first,
+ *  `finishRun` never runs, and the `supervised_runs` row is stranded at
+ *  `running` forever (Wave 1 review, F1). 55s leaves a 5s margin inside a
+ *  60s platform ceiling for `finishRun`'s own write to land. */
+const DEFAULT_TIMEOUT_MS = 55_000;
+
+/** A `running` row older than this is presumed stranded — the platform
+ *  killed the function before the app-side timeout (above) or `finishRun`
+ *  ever ran. `resolveRunningRunGuard` (below) uses this so a stranded row
+ *  can never permanently brick the "Run it once" button. */
+export const STALE_RUNNING_MS = 10 * 60 * 1000; // 10 minutes
+
+export type RunningRunGuardDecision =
+  | { blocks: true }
+  | { blocks: false; staleRunId: string | null };
+
+/**
+ * Pure decision core for the one-run-per-template guard's staleness check
+ * (Wave 1 fix wave, F1). A running row younger than `STALE_RUNNING_MS`
+ * still blocks a new start (today's behavior, unchanged). An OLDER running
+ * row is presumed stranded — never actually finished because the platform
+ * killed the function before `finishRun` wrote — so it does NOT block, and
+ * its id is returned so the caller can lazily reconcile it to `failed`
+ * (org-scoped) in the same code path. No row at all -> never blocks.
+ */
+export function resolveRunningRunGuard(
+  row: { id: string; startedAt: Date } | null,
+  now: Date,
+): RunningRunGuardDecision {
+  if (!row) return { blocks: false, staleRunId: null };
+  const ageMs = now.getTime() - row.startedAt.getTime();
+  if (ageMs < STALE_RUNNING_MS) return { blocks: true };
+  return { blocks: false, staleRunId: row.id };
+}
 
 export type SupervisedRunTurnResult = { ok: true; reply: string } | { ok: false; reason: string };
 
