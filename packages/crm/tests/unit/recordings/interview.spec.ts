@@ -1,7 +1,7 @@
 import { describe, test } from "node:test";
 import assert from "node:assert/strict";
 
-import { interviewTurn } from "@/lib/recordings/interview";
+import { interviewTurn, decomposeAnswers } from "@/lib/recordings/interview";
 import type { FlowModel, TraceLlm } from "@/lib/recordings/trace-schema";
 
 function fakeModel(): FlowModel {
@@ -163,6 +163,153 @@ describe("interviewTurn", () => {
     const { llm } = queueLlm([{ oops: true }, { oops: true }]);
     const result = await interviewTurn({ model: fakeModel(), interviewLog: [], message: "hi", llm });
     assert.equal(result.ok, false);
+  });
+
+  // ─── interview-merge decomposition (agent lifecycle slice) ────────────────
+
+  function twoQuestionModel(): FlowModel {
+    return { ...fakeModel(), openQuestions: ["What if the client has no email?", "Who approves the invoice?"] };
+  }
+
+  test("single open question → no decompose call — exactly one llm call, direct path unchanged", async () => {
+    const model = fakeModel(); // one open question
+    const { llm, requests } = queueLlm([{ reply: "ok", model, openQuestions: [] }]);
+    const result = await interviewTurn({ model, interviewLog: [], message: "fall back to the phone", llm });
+    assert.equal(result.ok, true);
+    assert.equal(requests.length, 1);
+  });
+
+  test("multi-answer message with >=2 open questions decomposes into 2 sequential per-pair merges, both applied", async () => {
+    const model = twoQuestionModel();
+    const merged1: FlowModel = { ...model, constants: ["fall back to the phone"] };
+    const merged2: FlowModel = { ...merged1, variables: ["invoice approver: office manager"] };
+    const { llm, requests } = queueLlm([
+      // 1. decompose
+      {
+        pairs: [
+          { question: "What if the client has no email?", answer: "fall back to the phone" },
+          { question: "Who approves the invoice?", answer: "the office manager" },
+        ],
+      },
+      // 2. merge pair 1
+      { reply: "Got it — falling back to the phone.", model: merged1, openQuestions: ["Who approves the invoice?"] },
+      // 3. merge pair 2
+      { reply: "Got it — the office manager approves.", model: merged2, openQuestions: [] },
+    ]);
+    const result = await interviewTurn({
+      model,
+      interviewLog: [],
+      message: "No email? Call them. Invoices are approved by the office manager.",
+      llm,
+    });
+    assert.equal(requests.length, 3);
+    assert.equal(result.ok, true);
+    if (result.ok) {
+      assert.equal(result.applied, true);
+      assert.deepEqual(result.model.constants, merged2.constants);
+      assert.deepEqual(result.model.variables, merged2.variables);
+      assert.deepEqual(result.openQuestions, []);
+      assert.equal(result.appliedPairs?.length, 2);
+      assert.match(result.reply, /no email/i);
+      assert.match(result.reply, /approves the invoice/i);
+    }
+  });
+
+  test("pair 2's merge fails twice → pair 1 still applied, honest partial reply naming what didn't apply", async () => {
+    const model = twoQuestionModel();
+    const merged1: FlowModel = { ...model, constants: ["fall back to the phone"] };
+    const { llm, requests } = queueLlm([
+      // 1. decompose
+      {
+        pairs: [
+          { question: "What if the client has no email?", answer: "fall back to the phone" },
+          { question: "Who approves the invoice?", answer: "the office manager" },
+        ],
+      },
+      // 2. merge pair 1 — succeeds
+      { reply: "Got it — falling back to the phone.", model: merged1, openQuestions: ["Who approves the invoice?"] },
+      // 3+4. merge pair 2 — fails both attempts (malformed model both times)
+      { reply: "oops", model: { title: "" }, openQuestions: [] },
+      { reply: "still oops", model: { title: "" }, openQuestions: [] },
+    ]);
+    const result = await interviewTurn({
+      model,
+      interviewLog: [],
+      message: "No email? Call them. Invoices are approved by the office manager.",
+      llm,
+    });
+    assert.equal(requests.length, 4);
+    assert.equal(result.ok, true);
+    if (result.ok) {
+      assert.equal(result.applied, true); // at least one pair applied
+      assert.deepEqual(result.model.constants, merged1.constants);
+      assert.equal(result.appliedPairs?.length, 1);
+      assert.equal(result.appliedPairs?.[0]?.answer, "fall back to the phone");
+      assert.match(result.reply, /couldn't apply|could not|rephrase|approves the invoice/i);
+    }
+  });
+
+  test("decompose returns null (malformed) → falls back to the existing direct path unchanged", async () => {
+    const model = twoQuestionModel();
+    const { llm, requests } = queueLlm([
+      // 1. decompose — malformed, no 'pairs' array
+      { oops: true },
+      // 2. direct-path merge (unchanged behavior)
+      { reply: "ok", model, openQuestions: [] },
+    ]);
+    const result = await interviewTurn({ model, interviewLog: [], message: "some answer", llm });
+    assert.equal(requests.length, 2);
+    assert.equal(result.ok, true);
+    if (result.ok) assert.equal(result.reply, "ok");
+  });
+
+  test("decompose returns fewer than 2 pairs → falls back to the existing direct path unchanged", async () => {
+    const model = twoQuestionModel();
+    const { llm, requests } = queueLlm([
+      // 1. decompose — only 1 pair, below the >=2 threshold
+      { pairs: [{ question: "What if the client has no email?", answer: "fall back to the phone" }] },
+      // 2. direct-path merge
+      { reply: "ok", model, openQuestions: [] },
+    ]);
+    const result = await interviewTurn({ model, interviewLog: [], message: "fall back to the phone", llm });
+    assert.equal(requests.length, 2);
+    assert.equal(result.ok, true);
+  });
+});
+
+// ── decomposeAnswers ─────────────────────────────────────────────────────────
+
+describe("decomposeAnswers", () => {
+  test("happy path: one llm call, returns the parsed pairs", async () => {
+    const { llm, requests } = queueLlm([
+      { pairs: [{ question: "Q1?", answer: "A1" }, { question: "Q2?", answer: "A2" }] },
+    ]);
+    const result = await decomposeAnswers(
+      { llm },
+      { message: "A1. Also A2.", openQuestions: ["Q1?", "Q2?"] },
+    );
+    assert.equal(requests.length, 1);
+    assert.deepEqual(result, { pairs: [{ question: "Q1?", answer: "A1" }, { question: "Q2?", answer: "A2" }] });
+  });
+
+  test("malformed response (no pairs array) → null, never throws", async () => {
+    const { llm } = queueLlm([{ oops: true }]);
+    const result = await decomposeAnswers({ llm }, { message: "hi", openQuestions: ["Q1?", "Q2?"] });
+    assert.equal(result, null);
+  });
+
+  test("non-object response → null", async () => {
+    const { llm } = queueLlm(["just a string"]);
+    const result = await decomposeAnswers({ llm }, { message: "hi", openQuestions: ["Q1?", "Q2?"] });
+    assert.equal(result, null);
+  });
+
+  test("llm throws → null, never propagates", async () => {
+    const llm: TraceLlm = async () => {
+      throw new Error("network down");
+    };
+    const result = await decomposeAnswers({ llm }, { message: "hi", openQuestions: ["Q1?", "Q2?"] });
+    assert.equal(result, null);
   });
 });
 
