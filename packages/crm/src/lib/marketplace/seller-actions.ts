@@ -48,8 +48,9 @@ import { getLatestEvalRun, listEvalRunsForSubject } from "@/lib/agents/evals/eva
 import { buildTrustStats } from "@/lib/marketplace/trust-stats";
 import { applyTastePreferencesUpdate } from "@/lib/marketplace/taste/apply-taste-preferences";
 import { isAgentLifecycleEnabled } from "@/lib/agents/lifecycle/policy";
-import { lifecycleGate, resolvePublishGate } from "@/lib/agents/lifecycle/gate";
+import { lifecycleGate, resolvePublishGate, type LifecycleGateDeps } from "@/lib/agents/lifecycle/gate";
 import { supervisedRuns } from "@/db/schema/agent-lifecycle";
+import type { AgentTemplate } from "@/db/schema/agent-templates";
 
 // ─── types returned to the client ────────────────────────────────────────────
 
@@ -239,6 +240,58 @@ async function copyThroughTrustStats(args: { orgId: string; templateId: string; 
   }
 }
 
+/** Injectable seam for `resolvePublishGuard` — DI so the wiring below (F4,
+ *  Wave 1 review) is directly unit-testable without a live DB/session.
+ *  Production wires the real getOrgId/getCurrentUser/db lookups
+ *  unchanged; this is a pure extraction of publishOrUpdateAgentListingAction's
+ *  existing preamble, not a behavior change. */
+export type ResolvePublishGuardDeps = {
+  getOrgId: () => Promise<string | null | undefined>;
+  getCurrentUser: () => Promise<{ id: string } | null | undefined>;
+  loadTemplate: (args: { templateId: string; orgId: string }) => Promise<AgentTemplate | null>;
+  lifecycleGateDeps: LifecycleGateDeps;
+  isLifecycleEnabled: boolean;
+};
+
+export type PublishGuardResult =
+  | { ok: true; orgId: string; template: AgentTemplate }
+  | { ok: false; error: "unauthorized" | "invalid" | "template_not_found" }
+  | { ok: false; error: "lifecycle_gate"; missing: string[] };
+
+/**
+ * Auth + org-guard + agent-lifecycle publish gate — the preamble
+ * `publishOrUpdateAgentListingAction` runs BEFORE any listing write. Extracted
+ * as its own DI'd function (F4, Wave 1 review) so the gate wiring is directly
+ * testable: flag on + gate missing → `{ok:false, error:"lifecycle_gate"}`
+ * (checked before the template's org-guard even completes any write — there
+ * is no write path in this function at all); flag on + gate satisfied →
+ * `{ok:true, ...}`; flag off → `{ok:true, ...}` regardless of the gate.
+ */
+export async function resolvePublishGuard(
+  deps: ResolvePublishGuardDeps,
+  input: { templateId: string },
+): Promise<PublishGuardResult> {
+  const orgId = await deps.getOrgId();
+  const user = await deps.getCurrentUser();
+  if (!user?.id || !orgId) return { ok: false, error: "unauthorized" };
+
+  const templateId = String(input.templateId ?? "").trim();
+  if (!templateId) return { ok: false, error: "invalid" };
+
+  const template = await deps.loadTemplate({ templateId, orgId });
+  if (!template) return { ok: false, error: "template_not_found" };
+
+  if (deps.isLifecycleEnabled) {
+    const gate = await lifecycleGate(deps.lifecycleGateDeps, { orgId, templateId });
+    const publishGate = resolvePublishGate({ enabled: true, missing: gate.missing });
+    if (publishGate.blocked) {
+      return { ok: false, error: "lifecycle_gate", missing: gate.missing };
+    }
+  }
+
+  return { ok: true, orgId, template };
+}
+
 // ─── actions ─────────────────────────────────────────────────────────────────
 
 /**
@@ -304,36 +357,33 @@ export async function publishOrUpdateAgentListingAction(input: {
 }): Promise<PublishResult> {
   assertWritable();
 
-  const orgId = await getOrgId();
-  const user = await getCurrentUser();
-  if (!user?.id || !orgId) return { ok: false, error: "unauthorized" };
-
-  const templateId = String(input.templateId ?? "").trim();
-  if (!templateId) return { ok: false, error: "invalid" };
-
-  const [template] = await db
-    .select()
-    .from(agentTemplates)
-    .where(and(eq(agentTemplates.id, templateId), eq(agentTemplates.builderOrgId, orgId)))
-    .limit(1);
-  if (!template) return { ok: false, error: "template_not_found" };
-
-  // Agent lifecycle gate (2026-07-11) — dark-ship behind SF_AGENT_LIFECYCLE:
-  // a template may only publish/republish once it has BOTH a passing eval
-  // run and a completed supervised run. Checked BEFORE any write (never a
-  // partial listing left behind by a gate that rejects after the fact).
-  // Flag off ⇒ resolvePublishGate never blocks ⇒ zero behavior change.
-  const lifecycleEnabled = isAgentLifecycleEnabled({ SF_AGENT_LIFECYCLE: process.env.SF_AGENT_LIFECYCLE });
-  if (lifecycleEnabled) {
-    const gate = await lifecycleGate(
-      { getLatestEvalRun, hasSucceededSupervisedRun: hasSucceededSupervisedRunForTemplate },
-      { orgId, templateId },
-    );
-    const publishGate = resolvePublishGate({ enabled: lifecycleEnabled, missing: gate.missing });
-    if (publishGate.blocked) {
-      return { ok: false, error: "lifecycle_gate", missing: gate.missing };
-    }
-  }
+  // Auth + org-guard + agent-lifecycle publish gate (2026-07-11 — dark-ship
+  // behind SF_AGENT_LIFECYCLE): a template may only publish/republish once
+  // it has BOTH a passing eval run and a completed supervised run. Checked
+  // BEFORE any write below (never a partial listing left behind by a gate
+  // that rejects after the fact). Flag off ⇒ never blocks ⇒ zero behavior
+  // change. Extracted to resolvePublishGuard (F4, Wave 1 review) so this
+  // wiring is directly unit-tested without a live DB.
+  const guard = await resolvePublishGuard(
+    {
+      getOrgId,
+      getCurrentUser,
+      loadTemplate: async ({ templateId, orgId }) => {
+        const [row] = await db
+          .select()
+          .from(agentTemplates)
+          .where(and(eq(agentTemplates.id, templateId), eq(agentTemplates.builderOrgId, orgId)))
+          .limit(1);
+        return row ?? null;
+      },
+      lifecycleGateDeps: { getLatestEvalRun, hasSucceededSupervisedRun: hasSucceededSupervisedRunForTemplate },
+      isLifecycleEnabled: isAgentLifecycleEnabled({ SF_AGENT_LIFECYCLE: process.env.SF_AGENT_LIFECYCLE }),
+    },
+    { templateId: input.templateId },
+  );
+  if (!guard.ok) return guard;
+  const { orgId, template } = guard;
+  const templateId = template.id;
 
   // Resolve + validate the pricing model. Default 'onetime' keeps the legacy
   // path (priceCents) working byte-for-byte when callers omit priceModel.
