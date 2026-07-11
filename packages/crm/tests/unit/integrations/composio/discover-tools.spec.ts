@@ -20,6 +20,7 @@ import {
   TOOLKIT_DISCOVERY_TOOL_CAP,
   pickDiscoverySubset,
   fillComposioBindingTools,
+  fillBlueprintConnectorsForPersist,
   type ToolkitToolLister,
 } from "../../../../src/lib/integrations/composio/discover-tools";
 import {
@@ -282,6 +283,31 @@ describe("fillComposioBindingTools — mixed, caps, isolation, multi-binding", (
     const lister: ToolkitToolLister = async () => [schema("YOUTUBE_LIST_VIDEOS")];
     const result = await fillComposioBindingTools("org1", [b1, b2], { listToolkitTools: lister });
     assert.deepEqual(result.connectors.map((c) => c.id), ["gmail", "youtube"]);
+  });
+});
+
+describe("fillBlueprintConnectorsForPersist — the generate defaultCreate seam", () => {
+  test("widens a catalog composio binding on the blueprint via fillComposioBindingTools", async () => {
+    const blueprint = {
+      greeting: "hi",
+      connectors: [
+        { id: "gmail", kind: "composio", enabledToolkits: ["gmail"], enabledTools: [] } as ConnectorBinding,
+      ],
+    };
+    // Catalog toolkit — the fill resolves purely from catalog defaults, no
+    // live lister is invoked, so this never touches the network/DB.
+    const result = await fillBlueprintConnectorsForPersist("org1", blueprint);
+    const filled = result.connectors?.[0] as Extract<ConnectorBinding, { kind: "composio" }>;
+    assert.ok(filled.enabledTools.length > 0);
+    assert.equal(result.greeting, "hi", "other blueprint fields pass through untouched");
+    assertValidBinding(filled);
+  });
+
+  test("no connectors on the blueprint -> passthrough, no throw", async () => {
+    const blueprint = { greeting: "hi" };
+    const result = await fillBlueprintConnectorsForPersist("org1", blueprint);
+    assert.equal(result.greeting, "hi");
+    assert.deepEqual(result.connectors, []);
   });
 });
 

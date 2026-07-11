@@ -242,3 +242,22 @@ export async function fillComposioBindingTools(
 
   return { connectors: out, changed };
 }
+
+/**
+ * Persist-seam convenience: fill a blueprint's `connectors` in place of a
+ * fresh copy — the one-line call both generate `defaultCreate` seams
+ * (lib/agents/generate/actions.ts + app/api/v1/agents/generate/route.ts) make
+ * before their `updateAgentTemplate` write. Extracted here (rather than
+ * inlined in each near-duplicate `defaultCreate`, which are DB-bound and not
+ * independently unit-testable) so THIS is the unit-tested seam; both
+ * `defaultCreate`s stay one-line callers. Non-mutating: returns a new object
+ * with `connectors` replaced by the filled array (`changed:false` still
+ * yields a fresh shallow copy — cheap, and keeps the return type simple).
+ * Never throws (delegates entirely to `fillComposioBindingTools`).
+ */
+export async function fillBlueprintConnectorsForPersist<
+  T extends { connectors?: ConnectorBinding[] },
+>(orgId: string, blueprint: T): Promise<T> {
+  const { connectors } = await fillComposioBindingTools(orgId, blueprint.connectors);
+  return { ...blueprint, connectors };
+}
