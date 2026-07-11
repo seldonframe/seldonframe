@@ -292,4 +292,55 @@ describe("inferTriggerFromModel", () => {
     });
     assert.deepEqual(inferTriggerFromModel(model), { kind: "inbound", channel: "chat" });
   });
+
+  // ── inbox-watch refinement (agent lifecycle slice) ────────────────────────
+  // An email app + watch-semantics ("check my inbox", "watch for new email")
+  // is a recurring cadence the operator can't self-serve as an inbound-email
+  // trigger (no email surface wired for a from-recording template) — it
+  // should compile to an hourly schedule instead, checked BEFORE the plain
+  // email-inbound branch.
+
+  test("gmail-forwarding-style corpus ('check my inbox ... forward ...') -> hourly schedule, not inbound email", () => {
+    const model = baseModel({
+      goal: "Check my Gmail inbox every hour and forward matching emails",
+      steps: [step(0, { app: "gmail", action: "check inbox for matching emails" })],
+    });
+    assert.deepEqual(inferTriggerFromModel(model), {
+      kind: "schedule",
+      cron: "0 * * * *",
+      channel: "email",
+    });
+  });
+
+  test("plain 'reply to emails' support flow (no watch-semantics) -> still inbound email", () => {
+    const model = baseModel({
+      goal: "Reply to customer emails in Gmail with the order status",
+      steps: [step(0, { app: "gmail", action: "reply with order status" })],
+    });
+    assert.deepEqual(inferTriggerFromModel(model), { kind: "inbound", channel: "email" });
+  });
+
+  test("'monitor the inbox for new orders' -> hourly schedule", () => {
+    const model = baseModel({
+      goal: "Monitor the inbox for new orders and log them",
+      steps: [step(0, { app: "outlook", action: "monitor for new orders" })],
+    });
+    assert.deepEqual(inferTriggerFromModel(model), {
+      kind: "schedule",
+      cron: "0 * * * *",
+      channel: "email",
+    });
+  });
+
+  test("no email app at all + 'every morning' wording -> still the existing daily 9am schedule branch, not inbox-watch", () => {
+    const model = baseModel({
+      goal: "Post a daily recap every morning",
+      steps: [step(0, { app: "slack", action: "post the recap" })],
+    });
+    assert.deepEqual(inferTriggerFromModel(model), {
+      kind: "schedule",
+      cron: "0 9 * * *",
+      channel: "email",
+    });
+  });
 });

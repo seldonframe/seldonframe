@@ -186,18 +186,46 @@ function modelTextCorpus(model: FlowModel): string {
   return `${model.goal} ${model.apps.join(" ")} ${stepText}`.toLowerCase();
 }
 
+/** Email-app keywords the inbox-watch check scans for (agent lifecycle
+ *  slice) — table-driven so the branch reads as a fact list, not
+ *  string-literal soup. */
+const EMAIL_APP_KEYWORDS = ["gmail", "outlook", "email"] as const;
+
+/** Watch-semantics keywords: the operator's recording is a recurring
+ *  "check the inbox" cadence, not a one-off reply-to-this-email flow. Kept
+ *  separate from EMAIL_APP_KEYWORDS so the inbox-watch check reads as
+ *  "an email app AND watch-semantics", never either alone. */
+const INBOX_WATCH_KEYWORDS = [
+  "watch",
+  "check",
+  "monitor",
+  "incoming",
+  "new email",
+  "inbox",
+  "every ",
+  "each morning",
+  "daily",
+] as const;
+
 /**
  * Infer what should FIRE a from-recording agent, from the recorded workflow
  * itself — a compiled recording is never the receptionist starter's inbound
  * voice/chat default (Task: "compiled blueprint carries only flow-relevant
  * primitives"). Pure heuristic, checked in this order (first match wins):
- *   1. an email app (gmail/outlook) is named anywhere → inbound email (the
- *      recording IS the operator's inbox workflow);
- *   2. the goal/steps talk about a recurring cadence (schedule/daily/weekly/
+ *   1. an email app is named anywhere AND the goal/steps carry
+ *      watch-semantics ("check my inbox", "watch for new email", "monitor
+ *      the inbox", a recurring "daily"/"every "/"each morning" cadence) →
+ *      an HOURLY schedule, email channel. An inbox-watch recording has no
+ *      self-serve inbound-email surface to fire it (no email address for a
+ *      customer to write to) — polling the inbox on a schedule is the only
+ *      thing it can actually run as.
+ *   2. an email app (gmail/outlook) is named anywhere → inbound email (the
+ *      recording IS the operator's inbox workflow, replying inline);
+ *   3. the goal/steps talk about a recurring cadence (schedule/daily/weekly/
  *      every morning) → a daily 9am schedule, email channel (the operator
  *      gets the run's output by email — no one to reply to inline);
- *   3. the goal/steps mention SMS/text message → inbound sms;
- *   4. otherwise → inbound chat (the safe default — a copilot-style agent
+ *   4. the goal/steps mention SMS/text message → inbound sms;
+ *   5. otherwise → inbound chat (the safe default — a copilot-style agent
  *      the operator can talk to inline, same shape the compile-agent route
  *      already exposes at /studio/agents/:id).
  * Never throws; always returns a valid AgentTrigger.
@@ -205,7 +233,13 @@ function modelTextCorpus(model: FlowModel): string {
 export function inferTriggerFromModel(model: FlowModel): AgentTrigger {
   const corpus = modelTextCorpus(model);
 
-  if (corpus.includes("gmail") || corpus.includes("outlook") || corpus.includes("email")) {
+  const hasEmailApp = EMAIL_APP_KEYWORDS.some((kw) => corpus.includes(kw));
+  const hasWatchSemantics = INBOX_WATCH_KEYWORDS.some((kw) => corpus.includes(kw));
+  if (hasEmailApp && hasWatchSemantics) {
+    return { kind: "schedule", cron: "0 * * * *", channel: "email" };
+  }
+
+  if (hasEmailApp) {
     return { kind: "inbound", channel: "email" };
   }
 
