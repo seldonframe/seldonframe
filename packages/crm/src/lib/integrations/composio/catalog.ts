@@ -99,8 +99,11 @@ export const COMPOSIO_TOOLKIT_SLUGS: readonly string[] = COMPOSIO_TOOLKITS.map(
  * runtime wraps EXACTLY the binding's `enabledTools` by name (no live discovery
  * in the binding path), so when a builder enables a toolkit in Studio we seed a
  * small, sensible set of the most useful actions for that app. This is
- * intentionally conservative (a handful per toolkit) and can be widened later by
- * live discovery; the operator can also trim it in the picker.
+ * intentionally conservative (a handful per toolkit); ANY other Composio
+ * toolkit (not in this curated list) is widened by live discovery instead —
+ * see lib/integrations/composio/discover-tools.ts (composio live-tool-
+ * discovery slice, 2026-07-11). The operator can also trim either source in
+ * the picker.
  *
  * Slugs are the well-known Composio action tools for each toolkit. Unknown/typo'd
  * slugs are simply inert at runtime (resolveComposioBinding wraps by name; a name
