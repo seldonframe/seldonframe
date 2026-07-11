@@ -304,7 +304,7 @@ describe("fillBlueprintConnectorsForPersist — the generate defaultCreate seam"
   });
 
   test("no connectors on the blueprint -> passthrough, no throw", async () => {
-    const blueprint = { greeting: "hi" };
+    const blueprint: { greeting: string; connectors?: ConnectorBinding[] } = { greeting: "hi" };
     const result = await fillBlueprintConnectorsForPersist("org1", blueprint);
     assert.equal(result.greeting, "hi");
     assert.deepEqual(result.connectors, []);

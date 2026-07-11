@@ -15,6 +15,8 @@ import { getOrgId, getCurrentUser } from "@/lib/auth/helpers";
 import { assertWritable } from "@/lib/demo/server";
 import { createConnectLink } from "@/lib/integrations/composio/client";
 import { getComposioToolkit } from "@/lib/integrations/composio/catalog";
+import { requiredToolkitSlugs } from "@/app/(dashboard)/studio/agents/[id]/lifecycle/connected-toolkits";
+import type { AgentBlueprint } from "@/db/schema/agents";
 
 export type ConnectLifecycleToolkitResult =
   | { ok: true; redirectUrl: string }
@@ -31,13 +33,20 @@ const APP_ORIGIN =
  *  set-booking-policy.spec.ts / seller-actions.ts's resolvePublishGuard.
  *  Production wires the real getOrgId/getCurrentUser/db lookup/
  *  createConnectLink; no behavior change. */
+/** A loaded template's identity + its own composio toolkit allowlist
+ *  (composio live-tool-discovery slice, 2026-07-11) — the widened allowlist
+ *  source: catalog ∪ THIS template's own bound toolkits. */
+export type LoadedLifecycleTemplate = { id: string; composioToolkits: string[] };
+
 export type ConnectLifecycleToolkitDeps = {
   getOrgId: () => Promise<string | null | undefined>;
   getCurrentUser: () => Promise<{ id: string } | null | undefined>;
   /** Org-guarded template lookup — same pattern as every other template
    *  action (e.g. startSupervisedRunAction): id AND builderOrgId must
-   *  match, so a foreign templateId resolves to null. */
-  loadTemplate: (args: { templateId: string; orgId: string }) => Promise<{ id: string } | null>;
+   *  match, so a foreign templateId resolves to null. Also returns the
+   *  template's own composio toolkit slugs so the operator can connect a
+   *  non-catalog toolkit their OWN agent binds (never an arbitrary slug). */
+  loadTemplate: (args: { templateId: string; orgId: string }) => Promise<LoadedLifecycleTemplate | null>;
   createConnectLink: typeof createConnectLink;
 };
 
@@ -47,11 +56,16 @@ function defaultConnectLifecycleToolkitDeps(): ConnectLifecycleToolkitDeps {
     getCurrentUser,
     loadTemplate: async ({ templateId, orgId }) => {
       const [row] = await db
-        .select({ id: agentTemplates.id })
+        .select({ id: agentTemplates.id, blueprint: agentTemplates.blueprint })
         .from(agentTemplates)
         .where(and(eq(agentTemplates.id, templateId), eq(agentTemplates.builderOrgId, orgId)))
         .limit(1);
-      return row ?? null;
+      if (!row) return null;
+      const blueprint = row.blueprint as AgentBlueprint | null;
+      return {
+        id: row.id,
+        composioToolkits: requiredToolkitSlugs(blueprint?.connectors ?? null),
+      };
     },
     createConnectLink,
   };
@@ -63,8 +77,10 @@ function defaultConnectLifecycleToolkitDeps(): ConnectLifecycleToolkitDeps {
  * on completion. Org-guarded on BOTH the session (getOrgId) AND the
  * template (F8, Wave 2 review — a templateId belonging to another org now
  * resolves to `template_not_found`, no link minted, BEFORE the toolkit's
- * catalog check even matters); the toolkit must be in the curated catalog
- * (same allowlist /integrations enforces) so an arbitrary slug can never be
+ * allowlist check even matters); the toolkit must be in the curated catalog
+ * OR one of THIS template's own bound composio toolkits (composio
+ * live-tool-discovery slice, 2026-07-11 — widened from catalog-only so a
+ * youtube-only agent can connect youtube) so an arbitrary slug can never be
  * forced through the authorize call.
  */
 export async function connectLifecycleToolkitAction(
@@ -82,7 +98,9 @@ export async function connectLifecycleToolkitAction(
   const template = await deps.loadTemplate({ templateId, orgId });
   if (!template) return { ok: false, error: "template_not_found" };
 
-  if (!getComposioToolkit(input.toolkit)) {
+  const requestedToolkit = String(input.toolkit ?? "").trim().toLowerCase();
+  const isOwnToolkit = template.composioToolkits.includes(requestedToolkit);
+  if (!getComposioToolkit(input.toolkit) && !isOwnToolkit) {
     return { ok: false, error: "unknown_toolkit" };
   }
 

@@ -156,9 +156,10 @@ function toSessionInfo(session: {
 }
 
 /**
- * List the catalog toolkits with their connection state for this workspace.
- * Filters Composio's full toolkit list down to the curated catalog. Returns []
- * when the workspace has no key.
+ * List the catalog toolkits (plus any `opts.extraToolkits` — a template's own
+ * non-catalog composio toolkits, composio live-tool-discovery slice
+ * 2026-07-11) with their connection state for this workspace. Returns [] when
+ * the workspace has no key.
  */
 export async function listConnections(
   orgId: string,
@@ -168,17 +169,30 @@ export async function listConnections(
     /** The Composio ENTITY (user_id) to scope to — the deployment id. When set,
      *  connections are listed under this id, bypassing the org-level cache. */
     entityUserId?: string | null;
+    /** Additional (non-catalog) toolkit slugs to request/report status for —
+     *  e.g. a youtube-only agent's required toolkit. Deduped onto the catalog
+     *  list for both the entity and org session-create paths, and admitted
+     *  into the mapped result alongside the catalog. */
+    extraToolkits?: string[];
   },
 ): Promise<ToolkitConnection[]> {
   const composio =
     opts?.client !== undefined ? opts.client : await composioForOrg(orgId);
   if (!composio) return [];
 
+  const extraToolkits = (opts?.extraToolkits ?? [])
+    .map((s) => s.trim().toLowerCase())
+    .filter((s) => s.length > 0);
+  const requestedToolkits = Array.from(
+    new Set([...COMPOSIO_TOOLKIT_SLUGS, ...extraToolkits]),
+  );
+  const extraAllowed = new Set(extraToolkits);
+
   let session: Awaited<ReturnType<Composio["create"]>>;
   if (opts?.entityUserId) {
     // Entity-scoped: always create fresh under the entity id, never the org
     // cache (the callback verifies against THIS deployment entity's accounts).
-    session = await composio.create(opts.entityUserId, { toolkits: [...COMPOSIO_TOOLKIT_SLUGS] });
+    session = await composio.create(opts.entityUserId, { toolkits: requestedToolkits });
   } else {
     const cachedId = await getSecretValue({
       workspaceId: orgId,
@@ -190,20 +204,23 @@ export async function listConnections(
       try {
         session = await composio.use(cachedId);
       } catch {
-        session = await composio.create(orgId, { toolkits: [...COMPOSIO_TOOLKIT_SLUGS] });
+        session = await composio.create(orgId, { toolkits: requestedToolkits });
         await persistSessionId(orgId, session.sessionId, opts?.actorUserId);
       }
     } else {
-      session = await composio.create(orgId, { toolkits: [...COMPOSIO_TOOLKIT_SLUGS] });
+      session = await composio.create(orgId, { toolkits: requestedToolkits });
       await persistSessionId(orgId, session.sessionId, opts?.actorUserId);
     }
   }
 
   const details = await session.toolkits();
-  return mapToolkitConnections(details.items ?? []);
+  return mapToolkitConnections(details.items ?? [], extraAllowed);
 }
 
-/** Pure mapping: Composio toolkit items → catalog-filtered ToolkitConnection[]. */
+/** Pure mapping: Composio toolkit items → catalog-filtered ToolkitConnection[].
+ *  `extraAllowed` (composio live-tool-discovery slice, 2026-07-11) admits
+ *  additional non-catalog slugs — a template's own required toolkits — so a
+ *  youtube-only agent's connection status is reported too. */
 export function mapToolkitConnections(
   items: Array<{
     slug: string;
@@ -214,9 +231,10 @@ export function mapToolkitConnections(
       connectedAccount?: { id: string } | null;
     } | null;
   }>,
+  extraAllowed?: ReadonlySet<string>,
 ): ToolkitConnection[] {
   return items
-    .filter((it) => isCatalogToolkit(it.slug))
+    .filter((it) => isCatalogToolkit(it.slug) || (extraAllowed?.has(it.slug.trim().toLowerCase()) ?? false))
     .map((it) => ({
       slug: it.slug,
       name: it.name,
@@ -243,7 +261,14 @@ export async function createConnectLink(
     entityUserId?: string | null;
   },
 ): Promise<{ redirectUrl: string | null }> {
-  const session = await ensureSession(orgId, [...COMPOSIO_TOOLKIT_SLUGS], opts);
+  // Include the requested toolkit in the session's toolkit list (deduped —
+  // harmless when it's already a catalog slug) so a non-catalog toolkit's
+  // consent (composio live-tool-discovery slice, 2026-07-11) lands under a
+  // session that actually knows about it.
+  const sessionToolkits = Array.from(
+    new Set([...COMPOSIO_TOOLKIT_SLUGS, toolkit.trim().toLowerCase()]),
+  );
+  const session = await ensureSession(orgId, sessionToolkits, opts);
   if (!session) return { redirectUrl: null };
 
   const composio =

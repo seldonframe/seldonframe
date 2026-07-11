@@ -25,12 +25,17 @@ describe("requiredToolkitSlugs", () => {
     assert.deepEqual(requiredToolkitSlugs([]), []);
   });
 
-  test("composio bindings contribute their toolkits, deduped + catalog-filtered", () => {
+  test("composio bindings contribute their toolkits, normalized + deduped", () => {
     const connectors: ConnectorBinding[] = [
-      composioBinding(["gmail", "gmail", "not-a-real-toolkit"]),
+      composioBinding(["gmail", "GMAIL", " gmail "]),
       composioBinding(["slack"]),
     ];
     assert.deepEqual(requiredToolkitSlugs(connectors), ["gmail", "slack"]);
+  });
+
+  test("a NON-catalog toolkit still contributes (a youtube-only agent must never render 'Nothing to connect')", () => {
+    const connectors: ConnectorBinding[] = [composioBinding(["youtube", "synthflow_ai"])];
+    assert.deepEqual(requiredToolkitSlugs(connectors), ["youtube", "synthflow_ai"]);
   });
 
   test("vetted/byo bindings never contribute (no toolkits field)", () => {

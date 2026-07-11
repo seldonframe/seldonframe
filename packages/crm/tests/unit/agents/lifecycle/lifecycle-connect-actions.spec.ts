@@ -24,7 +24,7 @@ function baseDeps(over: Partial<ConnectLifecycleToolkitDeps> = {}): ConnectLifec
   return {
     getOrgId: async () => ORG_ID,
     getCurrentUser: async () => ({ id: "user-1" }),
-    loadTemplate: async () => ({ id: TEMPLATE_ID }),
+    loadTemplate: async () => ({ id: TEMPLATE_ID, composioToolkits: [] }),
     createConnectLink: (async () => ({ redirectUrl: "https://connect.composio.dev/abc" })) as ConnectLifecycleToolkitDeps["createConnectLink"],
     ...over,
   };
@@ -96,6 +96,32 @@ describe("connectLifecycleToolkitAction", () => {
     );
     assert.deepEqual(result, { ok: false, error: "unknown_toolkit" });
     assert.equal(linkMinted, false);
+  });
+
+  test("non-catalog toolkit NOT bound on the template -> unknown_toolkit (widened allowlist still rejects an arbitrary slug)", async () => {
+    let linkMinted = false;
+    const result = await connectLifecycleToolkitAction(
+      { templateId: TEMPLATE_ID, toolkit: "youtube" },
+      baseDeps({
+        loadTemplate: async () => ({ id: TEMPLATE_ID, composioToolkits: ["synthflow_ai"] }),
+        createConnectLink: (async () => {
+          linkMinted = true;
+          return { redirectUrl: "https://connect.composio.dev/abc" };
+        }) as ConnectLifecycleToolkitDeps["createConnectLink"],
+      }),
+    );
+    assert.deepEqual(result, { ok: false, error: "unknown_toolkit" });
+    assert.equal(linkMinted, false);
+  });
+
+  test("non-catalog toolkit BOUND on the template -> proceeds to createConnectLink (composio live-tool-discovery slice)", async () => {
+    const result = await connectLifecycleToolkitAction(
+      { templateId: TEMPLATE_ID, toolkit: "youtube" },
+      baseDeps({
+        loadTemplate: async () => ({ id: TEMPLATE_ID, composioToolkits: ["youtube"] }),
+      }),
+    );
+    assert.deepEqual(result, { ok: true, redirectUrl: "https://connect.composio.dev/abc" });
   });
 
   test("happy path: own template + known toolkit -> mints the redirect link", async () => {
