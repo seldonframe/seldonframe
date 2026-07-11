@@ -91,18 +91,18 @@ describe("deriveRunVerdict", () => {
     assert.equal(deriveRunVerdict({ actionLog: [okEvent("a")], plannedCount: 0 }), "1 action completed");
   });
 
-  test("with a plan -> 'N of M actions completed'", () => {
+  test("with a plan -> 'N actions completed (M planned)' — never an N-of-M ratio", () => {
     assert.equal(
       deriveRunVerdict({ actionLog: [okEvent("a"), errorEvent("b")], plannedCount: 3 }),
-      "1 of 3 actions completed",
+      "1 action completed (3 planned)",
     );
   });
 
   test("only failed events count as zero completed", () => {
-    assert.equal(deriveRunVerdict({ actionLog: [errorEvent("a")], plannedCount: 2 }), "0 of 2 actions completed");
+    assert.equal(deriveRunVerdict({ actionLog: [errorEvent("a")], plannedCount: 2 }), "0 actions completed (2 planned)");
   });
 
   test("singular plan count", () => {
-    assert.equal(deriveRunVerdict({ actionLog: [okEvent("a")], plannedCount: 1 }), "1 of 1 action completed");
+    assert.equal(deriveRunVerdict({ actionLog: [okEvent("a")], plannedCount: 1 }), "1 action completed (1 planned)");
   });
 });

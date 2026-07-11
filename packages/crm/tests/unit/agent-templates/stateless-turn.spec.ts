@@ -510,6 +510,12 @@ describe("extractToolProof", () => {
   test("a huge string in an id-shaped field is not treated as a proof (guards against smuggling a body through an id field)", () => {
     assert.equal(extractToolProof({ id: "x".repeat(200) }), undefined);
   });
+
+  test("an email address or whitespace-bearing string in an id-shaped field is rejected (guards against PII/free-text smuggled through an id field)", () => {
+    assert.equal(extractToolProof({ id: "person@example.com" }), undefined);
+    assert.equal(extractToolProof({ messageId: "hello world" }), undefined);
+    assert.equal(extractToolProof({ record_id: "ok-123" }), "ok-123");
+  });
 });
 
 // ─── 4. model error ──────────────────────────────────────────────────────────

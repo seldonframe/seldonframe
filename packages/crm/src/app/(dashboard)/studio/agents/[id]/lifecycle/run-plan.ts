@@ -78,9 +78,11 @@ export function derivePlannedActions(args: {
  * The computed verdict line — replaces the old ok/fail-only summary. Counts
  * REAL completed actions (actionLog entries with status:"ok") — matches
  * runSupervised's own >=1-ok-action definition of "succeeded" exactly, so
- * the ladder and this line can never disagree. Appends "of N expected" only
- * when a plan exists (plannedCount > 0); a tool-free/no-plan run just states
- * the count. Pure; never throws.
+ * the ladder and this line can never disagree. Appends "(N planned)" only
+ * when a plan exists (plannedCount > 0) — stated as CONTEXT, never as an
+ * "N of M" ratio, since a run can legitimately complete more or fewer
+ * actions than the plan enumerated (the old "N of M" phrasing implied a
+ * shortfall that wasn't real). Pure; never throws.
  */
 export function deriveRunVerdict(args: {
   actionLog: SupervisedRunActionEvent[];
@@ -89,7 +91,7 @@ export function deriveRunVerdict(args: {
   const completed = args.actionLog.filter((event) => event.status === "ok").length;
   const noun = (n: number) => (n === 1 ? "action" : "actions");
   if (args.plannedCount > 0) {
-    return `${completed} of ${args.plannedCount} ${noun(args.plannedCount)} completed`;
+    return `${completed} ${noun(completed)} completed (${args.plannedCount} planned)`;
   }
   return `${completed} ${noun(completed)} completed`;
 }

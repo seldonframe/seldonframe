@@ -168,7 +168,16 @@ export function extractToolProof(output: unknown): string | undefined {
   const record = output as Record<string, unknown>;
   for (const field of PROOF_FIELD_NAMES) {
     const value = record[field];
-    if (typeof value === "string" && value.trim().length > 0 && value.length <= MAX_PROOF_LENGTH) {
+    if (
+      typeof value === "string" &&
+      value.trim().length > 0 &&
+      value.length <= MAX_PROOF_LENGTH &&
+      // An id-named field carrying an email address or embedded whitespace
+      // is smuggling PII/free text through an "id" field, not a real short
+      // id — reject it rather than surface it in the operator-visible log.
+      !value.includes("@") &&
+      !/\s/.test(value)
+    ) {
       return value.trim();
     }
   }
