@@ -197,7 +197,16 @@ const EMAIL_APP_KEYWORDS = ["gmail", "outlook", "email"] as const;
  *  "an email app AND watch-semantics", never either alone. */
 const INBOX_WATCH_KEYWORDS = [
   "watch",
-  "check",
+  // PHRASE-level, never bare "check" (Wave 1 review, F5): a bare "check"
+  // matches "check the customer's email and reply" — a one-off email-reply
+  // flow with no recurring cadence at all — and misclassifies it as an
+  // hourly schedule. Only these inbox-specific phrasings signal a watch
+  // cadence.
+  "check inbox",
+  "check my inbox",
+  "check email",
+  "check my email",
+  "check the inbox",
   "monitor",
   "incoming",
   "new email",

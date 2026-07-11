@@ -320,6 +320,20 @@ describe("inferTriggerFromModel", () => {
     assert.deepEqual(inferTriggerFromModel(model), { kind: "inbound", channel: "email" });
   });
 
+  // Wave 1 review, F5: bare "check" over-matched INBOX_WATCH_KEYWORDS — a
+  // one-off "check the customer's email and reply" flow (no recurring
+  // cadence at all) was misclassified as an hourly inbox-watch schedule
+  // instead of the inbound-email default. Only PHRASE-level "check ..."
+  // entries should trip the watch-semantics branch.
+
+  test("'check the customer's email and reply' (email-reply flow, bare 'check' + 'reply') -> still inbound email, NOT a schedule", () => {
+    const model = baseModel({
+      goal: "Check the customer's email and reply with the order status",
+      steps: [step(0, { app: "gmail", action: "check the customer's email and reply" })],
+    });
+    assert.deepEqual(inferTriggerFromModel(model), { kind: "inbound", channel: "email" });
+  });
+
   test("'monitor the inbox for new orders' -> hourly schedule", () => {
     const model = baseModel({
       goal: "Monitor the inbox for new orders and log them",
