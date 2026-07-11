@@ -22,6 +22,7 @@ import assert from "node:assert/strict";
 
 import {
   runStatelessAgentTurn,
+  toolFailureGloss,
   type RunStatelessAgentTurnInput,
 } from "../../../src/lib/agents/stateless-turn";
 import type { AgentBlueprint } from "../../../src/db/schema/agents";
@@ -409,6 +410,28 @@ describe("runStatelessAgentTurn — onToolEvent DI hook", () => {
     ]);
     const result = await runStatelessAgentTurn(baseInput({ client: fake.client }));
     assert.equal(result.ok, true);
+  });
+});
+
+// ─── 3c. toolFailureGloss (Wave 1 review, F3) ─────────────────────────────────
+//
+// The onToolEvent `line` for a THROWN tool-execution failure must be a
+// fixed, secret-safe gloss — never the raw Error.message, which a caller
+// (the supervised run's durable action_log) persists verbatim. The raw
+// message is only fed back to the LLM via the non-persisted tool_result
+// content, unaffected by this change.
+
+describe("toolFailureGloss", () => {
+  test("is a fixed gloss containing only the tool name — no raw error detail", () => {
+    assert.equal(toolFailureGloss("gmail__send"), "gmail__send failed");
+  });
+
+  test("never echoes secret-shaped detail even if a caller tried to pass it in", () => {
+    // The function's signature takes only a tool name — there is no
+    // parameter through which a raw message/secret could leak into the
+    // gloss. This test pins that contract so a future edit can't
+    // reintroduce a second (message) argument without this test failing.
+    assert.equal(toolFailureGloss.length, 1);
   });
 });
 

@@ -112,6 +112,21 @@ export type RunStatelessAgentTurnInput = {
   onToolEvent?: (event: StatelessToolEvent) => void;
 };
 
+/**
+ * Fixed, secret-safe gloss for a failed tool call — used ONLY for the
+ * `onToolEvent` line (which a caller like the supervised-run action log
+ * (lib/agents/lifecycle/supervised-run.ts) PERSISTS durably). The raw
+ * `Error.message` from a thrown tool execution can carry a connector's raw
+ * response body, a stack fragment, or worse — a secret — so it must never
+ * reach a durable, operator-visible log (Wave 1 review, F3: "summarized,
+ * never secrets"). The detailed message still flows to the LLM via the
+ * `tool_result` content below (non-persisted, used only to help the model
+ * recover mid-turn).
+ */
+export function toolFailureGloss(toolName: string): string {
+  return `${toolName} failed`;
+}
+
 /** Fires `onToolEvent` if provided, swallowing any error the callback
  *  throws — a logging/observability bug must never break a live agent
  *  turn's tool dispatch loop. */
@@ -338,6 +353,12 @@ export async function runStatelessAgentTurn(
         emitToolEvent(input.onToolEvent, { tool: tu.name, phase: "result", ok: true, line: `${tu.name} succeeded.` });
       } catch (err) {
         const message = err instanceof Error ? err.message : String(err);
+        // The raw `message` stays ONLY in this non-persisted tool_result
+        // content — it's fed back to the LLM within THIS turn to help it
+        // recover, and is never itself written to a durable store. The
+        // onToolEvent `line` below, which a caller may persist (e.g. the
+        // supervised run's durable action_log), gets the fixed gloss
+        // instead (Wave 1 review, F3 — "summarized, never secrets").
         toolResultsForThisIter.push({
           type: "tool_result",
           tool_use_id: tu.id,
@@ -348,7 +369,7 @@ export async function runStatelessAgentTurn(
           tool: tu.name,
           phase: "result",
           ok: false,
-          line: `${tu.name} failed: ${message}`,
+          line: toolFailureGloss(tu.name),
         });
       }
     }
