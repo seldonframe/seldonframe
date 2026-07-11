@@ -2052,3 +2052,38 @@ C4 close-out with empirical SLICE 11 data.
   only anonymous users get the /signup?callbackUrl=… link. Corollary for
   testing: the funnel's "new user" happy path and the "existing user" path
   are DIFFERENT paths — smoke both before calling a claim flow done.
+
+## L-33 — A success verdict derived from "the turn completed" is a lie waiting to happen
+
+- **Trigger:** Prod supervised run 32a12952: agent replied "I can't actually execute
+  the workflow steps," action_log=[], status='succeeded' — verdict was `outcome.ok`
+  (LLM turn returned) not observable end state. Second incident same day (48e7fcc0):
+  the run DID act, but the result type never carried `actionLog` and the reducer
+  hardcoded `summary:null` — the UI showed "Succeeded — no summary" + zero log lines
+  while the DB row held 4 events. Max concluded (reasonably) nothing worked, twice.
+- **Rule:** (1) Any "succeeded" on an agent action surface must be COMPUTED from the
+  observable record (≥1 ok tool action; read-back where the effect is external),
+  never from "the code/turn ran" — same class as the SeldonChat vision_check rule.
+  (2) The UI renders EVIDENCE (plan → actions w/ proof ids → agent words, subordinate),
+  never a bare verdict badge; a verdict without its evidence pipe intact is
+  indistinguishable from a lie. Trace result types end-to-end: the durable row, the
+  action return, and the client props must carry the SAME evidence fields.
+  (3) Diagnose these with a direct prod-row read (Neon MCP on the run table) — the
+  DB told the truth both times when the UI didn't.
+
+## L-34 — Empty-allowlist authoring + tests that enshrine the bug
+
+- **Trigger:** Composio bindings authored with `enabledTools: []` resolve to ZERO
+  tools (resolver iterates only the allowlist; empty-means-disabled is load-bearing
+  for the editor toggle, so the resolver can't default). SEVEN authoring instances
+  existed (compile-agent, bind-tools, composio-resolver, agent-bundle + specs);
+  worse, the canonical tests/unit suite ASSERTED the empty allowlist as expected —
+  the green bar had locked the bug in.
+- **Rule:** (1) When a list field means "allowlist," empty-at-authoring is a silent
+  zero-capability bug — seed defaults at EVERY authoring site (never in the resolver
+  when empty-means-disabled is a real contract) and grep ALL writers of the shape in
+  one pass (the slug='home' lesson, third occurrence of the class). (2) When fixing
+  a bug class, audit the TESTS for assertions that encode the buggy behavior — flip
+  them with the fix or the next green bar re-certifies the lie. (3) Co-located spec
+  files vs the canonical tests/unit tree: check where the repo's suite actually
+  lives BEFORE writing the first test of a session.
