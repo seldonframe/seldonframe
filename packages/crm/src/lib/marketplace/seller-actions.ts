@@ -47,6 +47,9 @@ import {
 import { getLatestEvalRun, listEvalRunsForSubject } from "@/lib/agents/evals/eval-runs-store";
 import { buildTrustStats } from "@/lib/marketplace/trust-stats";
 import { applyTastePreferencesUpdate } from "@/lib/marketplace/taste/apply-taste-preferences";
+import { isAgentLifecycleEnabled } from "@/lib/agents/lifecycle/policy";
+import { lifecycleGate, resolvePublishGate } from "@/lib/agents/lifecycle/gate";
+import { supervisedRuns } from "@/db/schema/agent-lifecycle";
 
 // ─── types returned to the client ────────────────────────────────────────────
 
@@ -81,7 +84,28 @@ export type SellerConnectStatus = {
 type PublishResult =
   | { ok: true; slug: string; isPublished: boolean }
   | { ok: false; error: "needs_connect"; slug: string }
+  | { ok: false; error: "lifecycle_gate"; missing: string[] }
   | { ok: false; error: "unauthorized" | "template_not_found" | "invalid" };
+
+/** Real `hasSucceededSupervisedRun` for the lifecycle gate — org+template
+ *  scoped (security invariant: org-scope every query). */
+async function hasSucceededSupervisedRunForTemplate(args: {
+  orgId: string;
+  templateId: string;
+}): Promise<boolean> {
+  const [row] = await db
+    .select({ id: supervisedRuns.id })
+    .from(supervisedRuns)
+    .where(
+      and(
+        eq(supervisedRuns.orgId, args.orgId),
+        eq(supervisedRuns.templateId, args.templateId),
+        eq(supervisedRuns.status, "succeeded"),
+      ),
+    )
+    .limit(1);
+  return Boolean(row);
+}
 
 // ─── helpers ─────────────────────────────────────────────────────────────────
 
@@ -293,6 +317,23 @@ export async function publishOrUpdateAgentListingAction(input: {
     .where(and(eq(agentTemplates.id, templateId), eq(agentTemplates.builderOrgId, orgId)))
     .limit(1);
   if (!template) return { ok: false, error: "template_not_found" };
+
+  // Agent lifecycle gate (2026-07-11) — dark-ship behind SF_AGENT_LIFECYCLE:
+  // a template may only publish/republish once it has BOTH a passing eval
+  // run and a completed supervised run. Checked BEFORE any write (never a
+  // partial listing left behind by a gate that rejects after the fact).
+  // Flag off ⇒ resolvePublishGate never blocks ⇒ zero behavior change.
+  const lifecycleEnabled = isAgentLifecycleEnabled({ SF_AGENT_LIFECYCLE: process.env.SF_AGENT_LIFECYCLE });
+  if (lifecycleEnabled) {
+    const gate = await lifecycleGate(
+      { getLatestEvalRun, hasSucceededSupervisedRun: hasSucceededSupervisedRunForTemplate },
+      { orgId, templateId },
+    );
+    const publishGate = resolvePublishGate({ enabled: lifecycleEnabled, missing: gate.missing });
+    if (publishGate.blocked) {
+      return { ok: false, error: "lifecycle_gate", missing: gate.missing };
+    }
+  }
 
   // Resolve + validate the pricing model. Default 'onetime' keeps the legacy
   // path (priceCents) working byte-for-byte when callers omit priceModel.

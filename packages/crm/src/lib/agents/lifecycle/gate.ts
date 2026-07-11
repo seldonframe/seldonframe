@@ -55,3 +55,15 @@ export async function lifecycleGate(
 
   return { evalPass, supervisedRun, missing };
 }
+
+/**
+ * The pure "should this marketplace publish attempt be BLOCKED" decision —
+ * consumed by publishOrUpdateAgentListingAction. Flag off ⇒ never blocks
+ * (dark-ship: SF_AGENT_LIFECYCLE !== "1" is byte-for-byte zero behavior
+ * change). Flag on ⇒ blocks exactly when `lifecycleGate` reports anything
+ * missing. Extracted + tested standalone (mirrors resolveListingPublishState
+ * in pricing-model.ts — the same file's Stripe Connect gate).
+ */
+export function resolvePublishGate(args: { enabled: boolean; missing: string[] }): { blocked: boolean } {
+  return { blocked: args.enabled && args.missing.length > 0 };
+}

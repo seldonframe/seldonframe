@@ -1,7 +1,7 @@
 import { describe, test } from "node:test";
 import assert from "node:assert/strict";
 
-import { lifecycleGate, EVAL_PASS_THRESHOLD } from "@/lib/agents/lifecycle/gate";
+import { lifecycleGate, EVAL_PASS_THRESHOLD, resolvePublishGate } from "@/lib/agents/lifecycle/gate";
 import type { EvalRun } from "@/db/schema/eval-runs";
 
 const ORG_ID = "org-1";
@@ -109,5 +109,21 @@ describe("lifecycleGate", () => {
       { orgId: ORG_ID, templateId: TEMPLATE_ID },
     );
     assert.deepEqual(result.missing, ["eval_pass", "supervised_run"]);
+  });
+});
+
+describe("resolvePublishGate", () => {
+  test("flag off → never blocks, regardless of missing (dark-ship, zero behavior change)", () => {
+    assert.deepEqual(resolvePublishGate({ enabled: false, missing: ["eval_pass", "supervised_run"] }), {
+      blocked: false,
+    });
+  });
+
+  test("flag on + nothing missing → not blocked", () => {
+    assert.deepEqual(resolvePublishGate({ enabled: true, missing: [] }), { blocked: false });
+  });
+
+  test("flag on + something missing → blocked", () => {
+    assert.deepEqual(resolvePublishGate({ enabled: true, missing: ["supervised_run"] }), { blocked: true });
   });
 });
