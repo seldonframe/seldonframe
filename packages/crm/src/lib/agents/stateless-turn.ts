@@ -60,6 +60,20 @@ export type StatelessToolCall = {
   input: Record<string, unknown>;
 };
 
+/** One tool-dispatch event, fired at call-start and again at its result
+ *  (agent lifecycle slice, T5 — the supervised run's live action log DI
+ *  seam). `line` is a short, ALREADY-SUMMARIZED human line (tool name plus a
+ *  plain-language gloss) — never the raw input/output payload, so a caller
+ *  persisting these (e.g. supervised_runs.action_log) can never leak a
+ *  secret or a raw tool result. */
+export type StatelessToolEvent = {
+  tool: string;
+  phase: "start" | "result";
+  /** Present only on phase:"result" — whether the call succeeded. */
+  ok?: boolean;
+  line: string;
+};
+
 export type RunStatelessAgentTurnInput = {
   /** Workspace identity — passed into ToolExecuteContext so read-only tools
    *  (availability) resolve against the right workspace. */
@@ -90,7 +104,28 @@ export type RunStatelessAgentTurnInput = {
   modelOverride?: string;
   /** Replaces the default 1024 output cap when set. */
   maxTokensOverride?: number;
+  /** Optional DI hook (agent lifecycle slice, T5) — invoked at each tool
+   *  call's start and again at its result, inside the existing dispatch
+   *  loop. Default no-op: every existing caller is byte-for-byte
+   *  unaffected. Never throws into the loop — a callback error is caught
+   *  and swallowed so a logging bug can never break a live agent turn. */
+  onToolEvent?: (event: StatelessToolEvent) => void;
 };
+
+/** Fires `onToolEvent` if provided, swallowing any error the callback
+ *  throws — a logging/observability bug must never break a live agent
+ *  turn's tool dispatch loop. */
+function emitToolEvent(
+  onToolEvent: ((event: StatelessToolEvent) => void) | undefined,
+  event: StatelessToolEvent,
+): void {
+  if (!onToolEvent) return;
+  try {
+    onToolEvent(event);
+  } catch {
+    // Never let a callback failure affect the turn loop.
+  }
+}
 
 export type RunStatelessAgentTurnResult =
   | { ok: true; reply: string; toolCalls: StatelessToolCall[] }
@@ -244,6 +279,7 @@ export async function runStatelessAgentTurn(
         name: tu.name,
         input: (tu.input as Record<string, unknown>) ?? {},
       });
+      emitToolEvent(input.onToolEvent, { tool: tu.name, phase: "start", line: `Calling ${tu.name}…` });
       // Resolve across the built tool set (natives + any wrapped MCP tools),
       // matching production's dispatch. Native-only templates resolve exactly as
       // the prior findTool lookup did.
@@ -255,6 +291,12 @@ export async function runStatelessAgentTurn(
           content: `Error: unknown tool ${tu.name}`,
           is_error: true,
         });
+        emitToolEvent(input.onToolEvent, {
+          tool: tu.name,
+          phase: "result",
+          ok: false,
+          line: `${tu.name} failed: unknown tool`,
+        });
         continue;
       }
       const parsed = tool.inputSchema.safeParse(tu.input);
@@ -264,6 +306,12 @@ export async function runStatelessAgentTurn(
           tool_use_id: tu.id,
           content: `Error: ${parsed.error.message}`,
           is_error: true,
+        });
+        emitToolEvent(input.onToolEvent, {
+          tool: tu.name,
+          phase: "result",
+          ok: false,
+          line: `${tu.name} failed: invalid input`,
         });
         continue;
       }
@@ -287,12 +335,20 @@ export async function runStatelessAgentTurn(
           tool_use_id: tu.id,
           content: JSON.stringify(output ?? null),
         });
+        emitToolEvent(input.onToolEvent, { tool: tu.name, phase: "result", ok: true, line: `${tu.name} succeeded.` });
       } catch (err) {
+        const message = err instanceof Error ? err.message : String(err);
         toolResultsForThisIter.push({
           type: "tool_result",
           tool_use_id: tu.id,
-          content: `Error: ${err instanceof Error ? err.message : String(err)}`,
+          content: `Error: ${message}`,
           is_error: true,
+        });
+        emitToolEvent(input.onToolEvent, {
+          tool: tu.name,
+          phase: "result",
+          ok: false,
+          line: `${tu.name} failed: ${message}`,
         });
       }
     }

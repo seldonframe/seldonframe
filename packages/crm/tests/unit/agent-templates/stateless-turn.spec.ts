@@ -325,6 +325,93 @@ describe("runStatelessAgentTurn — tool-call loop in testMode", () => {
   });
 });
 
+// ─── 3b. onToolEvent DI hook (agent lifecycle slice, T5) ──────────────────────
+//
+// Supervised runs (lib/agents/lifecycle/supervised-run.ts) need a live action
+// log — this DI hook is the seam: an optional callback invoked at tool
+// call-start and again at its result, default no-op so every existing caller
+// (including every test above) is byte-for-byte unaffected.
+
+describe("runStatelessAgentTurn — onToolEvent DI hook", () => {
+  test("fires 'start' then 'result' (ok:true) for a successful tool call", async () => {
+    const fake = makeFakeClient([
+      {
+        content: [
+          {
+            type: "tool_use",
+            id: "tu_1",
+            name: "book_appointment",
+            input: {
+              fullName: "Jane Doe",
+              phone: "+15551234567",
+              slotIso: "2026-06-25T16:00:00Z",
+              confirmed: true,
+            },
+          },
+        ],
+        stop_reason: "tool_use",
+      },
+      { content: [{ type: "text", text: "You're all set." }], stop_reason: "end_turn" },
+    ]);
+
+    const events: Array<{ tool: string; phase: string; ok?: boolean; line: string }> = [];
+    const result = await runStatelessAgentTurn(
+      baseInput({
+        client: fake.client,
+        messages: [{ role: "user", content: "Book me for the 25th." }],
+        onToolEvent: (e) => events.push(e),
+      }),
+    );
+    assert.equal(result.ok, true);
+    assert.equal(events.length, 2);
+    assert.equal(events[0].tool, "book_appointment");
+    assert.equal(events[0].phase, "start");
+    assert.equal(events[1].tool, "book_appointment");
+    assert.equal(events[1].phase, "result");
+    assert.equal(events[1].ok, true);
+  });
+
+  test("fires 'result' with ok:false for an unknown tool", async () => {
+    const fake = makeFakeClient([
+      {
+        content: [{ type: "tool_use", id: "tu_x", name: "not_a_real_tool", input: {} }],
+        stop_reason: "tool_use",
+      },
+      { content: [{ type: "text", text: "hm" }], stop_reason: "end_turn" },
+    ]);
+    const events: Array<{ tool: string; phase: string; ok?: boolean }> = [];
+    await runStatelessAgentTurn(
+      baseInput({ client: fake.client, onToolEvent: (e) => events.push(e) }),
+    );
+    const resultEvent = events.find((e) => e.phase === "result");
+    assert.equal(resultEvent?.ok, false);
+  });
+
+  test("no onToolEvent provided → default no-op, behavior unchanged", async () => {
+    const fake = makeFakeClient([
+      {
+        content: [
+          {
+            type: "tool_use",
+            id: "tu_1",
+            name: "book_appointment",
+            input: {
+              fullName: "Jane Doe",
+              phone: "+15551234567",
+              slotIso: "2026-06-25T16:00:00Z",
+              confirmed: true,
+            },
+          },
+        ],
+        stop_reason: "tool_use",
+      },
+      { content: [{ type: "text", text: "ok" }], stop_reason: "end_turn" },
+    ]);
+    const result = await runStatelessAgentTurn(baseInput({ client: fake.client }));
+    assert.equal(result.ok, true);
+  });
+});
+
 // ─── 4. model error ──────────────────────────────────────────────────────────
 
 describe("runStatelessAgentTurn — model error", () => {
