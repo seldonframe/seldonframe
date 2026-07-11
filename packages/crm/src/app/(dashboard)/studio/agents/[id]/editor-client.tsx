@@ -124,6 +124,13 @@ type Props = {
   allCapabilities: string[];
   /** The shipped vetted connectors (id + label + secret service) for the Add form. */
   vettedConnectors: VettedConnectorOption[];
+  /** T4 (page restructure) — when true, the script.md editor renders
+   *  COLLAPSED by default (a header row: name + char count + "Show full
+   *  script" expander) instead of the always-open textarea. Only the
+   *  lifecycle-ladder page (SF_AGENT_LIFECYCLE) passes this; the flag-off
+   *  editor page never sets it, so its render stays byte-for-byte identical
+   *  to before. */
+  collapsibleScript?: boolean;
 };
 
 // ─── trigger picker options (unified agent model P1) ────────────────────────
@@ -247,6 +254,10 @@ export function AgentTemplateEditor(props: Props) {
   const [customSkillMd, setCustomSkillMd] = useState(
     props.initialBlueprint.customSkillMd,
   );
+  // T4 — collapsed by default ONLY when the caller opts in (collapsibleScript);
+  // the flag-off editor page never passes it, so `scriptExpanded` starts (and
+  // stays, since nothing ever flips it) true there — same always-open render.
+  const [scriptExpanded, setScriptExpanded] = useState(!props.collapsibleScript);
   const [voice, setVoice] = useState(props.initialBlueprint.voice);
   const [capabilities, setCapabilities] = useState<string[]>(
     props.initialBlueprint.capabilities,
@@ -575,7 +586,8 @@ export function AgentTemplateEditor(props: Props) {
           </label>
           <p className="mb-3 text-xs text-muted-foreground">{c.scriptHelp}</p>
           <div className="overflow-hidden rounded-xl border bg-card shadow-(--shadow-xs)">
-            {/* chrome bar */}
+            {/* chrome bar — always visible; doubles as the collapsed header
+                row (name + char count + expander) when collapsibleScript. */}
             <div className="flex items-center gap-2.5 border-b border-border/70 bg-muted/40 px-3.5 py-2.5">
               <FileCode2
                 className="size-3.5 text-muted-foreground"
@@ -590,47 +602,60 @@ export function AgentTemplateEditor(props: Props) {
               <span className="ml-auto font-mono text-[11px] text-muted-foreground">
                 {customSkillMd.length.toLocaleString()} chars
               </span>
+              {props.collapsibleScript ? (
+                <button
+                  type="button"
+                  onClick={() => setScriptExpanded((v) => !v)}
+                  className="crm-button-secondary h-6 shrink-0 px-2 text-[11px]"
+                >
+                  {scriptExpanded ? "Hide script" : "Show full script"}
+                </button>
+              ) : null}
             </div>
-            <textarea
-              id="agent-script"
-              value={customSkillMd}
-              onChange={(e) => setCustomSkillMd(e.target.value)}
-              spellCheck={false}
-              rows={16}
-              className="block min-h-[300px] w-full resize-y border-0 bg-muted/20 px-5 py-4 font-mono text-[13px] leading-7 text-foreground focus:outline-none"
-              placeholder={c.scriptPlaceholder}
-            />
-            {/* Refine footer — AI-assisted iteration over the whole config. */}
-            <div className="flex items-center gap-2.5 border-t border-border/70 bg-card px-3 py-2.5">
-              <span
-                className="inline-flex size-8 shrink-0 items-center justify-center rounded-lg bg-primary/10 text-primary"
-                aria-hidden
-              >
-                <Sparkles className="size-4" />
-              </span>
-              <input
-                type="text"
-                value={refinePrompt}
-                onChange={(e) => setRefinePrompt(e.target.value)}
-                onKeyDown={(e) => {
-                  if (e.key === "Enter" && !isRefining) refine();
-                }}
-                disabled={isRefining}
-                placeholder="Refine in plain language — e.g. add an FAQ about emergency service"
-                className="h-9 min-w-0 flex-1 border-0 bg-transparent px-1 text-sm text-foreground focus:outline-none disabled:opacity-60"
-              />
-              <button
-                type="button"
-                onClick={refine}
-                disabled={isRefining}
-                className="crm-button-secondary inline-flex h-9 shrink-0 items-center gap-1.5 px-4 text-sm"
-              >
-                <Sparkles
-                  className={`size-4 ${isRefining ? "animate-pulse" : ""}`}
+            {scriptExpanded ? (
+              <>
+                <textarea
+                  id="agent-script"
+                  value={customSkillMd}
+                  onChange={(e) => setCustomSkillMd(e.target.value)}
+                  spellCheck={false}
+                  rows={16}
+                  className="block min-h-[300px] w-full resize-y border-0 bg-muted/20 px-5 py-4 font-mono text-[13px] leading-7 text-foreground focus:outline-none"
+                  placeholder={c.scriptPlaceholder}
                 />
-                {isRefining ? REFINE_STATUS_MESSAGES[refineStatusIdx] : "Refine"}
-              </button>
-            </div>
+                {/* Refine footer — AI-assisted iteration over the whole config. */}
+                <div className="flex items-center gap-2.5 border-t border-border/70 bg-card px-3 py-2.5">
+                  <span
+                    className="inline-flex size-8 shrink-0 items-center justify-center rounded-lg bg-primary/10 text-primary"
+                    aria-hidden
+                  >
+                    <Sparkles className="size-4" />
+                  </span>
+                  <input
+                    type="text"
+                    value={refinePrompt}
+                    onChange={(e) => setRefinePrompt(e.target.value)}
+                    onKeyDown={(e) => {
+                      if (e.key === "Enter" && !isRefining) refine();
+                    }}
+                    disabled={isRefining}
+                    placeholder="Refine in plain language — e.g. add an FAQ about emergency service"
+                    className="h-9 min-w-0 flex-1 border-0 bg-transparent px-1 text-sm text-foreground focus:outline-none disabled:opacity-60"
+                  />
+                  <button
+                    type="button"
+                    onClick={refine}
+                    disabled={isRefining}
+                    className="crm-button-secondary inline-flex h-9 shrink-0 items-center gap-1.5 px-4 text-sm"
+                  >
+                    <Sparkles
+                      className={`size-4 ${isRefining ? "animate-pulse" : ""}`}
+                    />
+                    {isRefining ? REFINE_STATUS_MESSAGES[refineStatusIdx] : "Refine"}
+                  </button>
+                </div>
+              </>
+            ) : null}
           </div>
           {refined && (
             <p className="mt-2 text-xs text-emerald-700 dark:text-emerald-400">

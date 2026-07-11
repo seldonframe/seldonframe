@@ -63,3 +63,63 @@ export function deriveLifecycleStages(input: LifecycleStageInput): LifecycleStag
     { id: "sell", step: "05", title: "Sell", complete: input.hasDeploymentOrListing },
   ];
 }
+
+// ─── T4: one-stage-open accordion — pure render logic ──────────────────────
+//
+// The page restructure (Max: "page way too long") turns the ladder chips
+// into the accordion's nav: clicking a chip opens that stage and collapses
+// every other stage to a one-line summary row. These two pure functions are
+// the render logic behind that — no React, no I/O, directly unit-testable.
+
+/** Which stage opens by default when the page loads: the FIRST incomplete
+ *  stage (the thing the operator most likely needs to do next), or the
+ *  LAST stage (Sell) once every stage is complete — there's nothing left
+ *  to finish, so the natural next move (sell it) is what's shown open. */
+export function defaultOpenStageId(stages: LifecycleStage[]): LifecycleStageId {
+  const firstIncomplete = stages.find((s) => !s.complete);
+  if (firstIncomplete) return firstIncomplete.id;
+  return stages[stages.length - 1].id;
+}
+
+/** The data a collapsed stage's one-line summary is derived from — every
+ *  field is already loaded by the page for the rail/gate, nothing new. */
+export type LifecycleStageSummaryInput = {
+  requiredToolkitCount: number;
+  connectedToolkitCount: number;
+  /** 0-100, or null when no eval run has ever completed for this template. */
+  evalPassRate: number | null;
+  supervisedRunStatus: "succeeded" | "failed" | "running" | null;
+  hasDeploymentOrListing: boolean;
+  hasRecording: boolean;
+};
+
+/** The one-line "key fact" shown on each stage's collapsed summary row
+ *  (e.g. "Gmail connected" / "evals 100%" / "last run failed"). Pure;
+ *  never throws. */
+export function deriveLifecycleStageSummaries(
+  input: LifecycleStageSummaryInput,
+): Record<LifecycleStageId, string> {
+  const connected =
+    input.requiredToolkitCount <= 0
+      ? "No apps required"
+      : input.connectedToolkitCount >= input.requiredToolkitCount
+        ? "All apps connected"
+        : `${input.connectedToolkitCount}/${input.requiredToolkitCount} apps connected`;
+
+  const run =
+    input.supervisedRunStatus === "succeeded"
+      ? "Last run succeeded"
+      : input.supervisedRunStatus === "failed"
+        ? "Last run failed"
+        : input.supervisedRunStatus === "running"
+          ? "Run in progress"
+          : "Not run yet";
+
+  return {
+    learned: input.hasRecording ? "Learned from your recording" : "Built from your description",
+    verified: input.evalPassRate == null ? "Not run yet" : `evals ${input.evalPassRate}%`,
+    connected,
+    run,
+    sell: input.hasDeploymentOrListing ? "Live" : "Not deployed yet",
+  };
+}

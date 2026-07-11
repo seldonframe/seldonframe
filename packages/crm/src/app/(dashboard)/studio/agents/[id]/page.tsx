@@ -6,6 +6,7 @@
 // saveAgentTemplateBlueprintAction. The header offers Test (the sandboxed chat
 // panel, task 1.2) + Deploy (the deploy-to-client flow). The eval gate is 1.3.
 
+import type { ReactNode } from "react";
 import { notFound } from "next/navigation";
 import Link from "next/link";
 import { and, desc, eq } from "drizzle-orm";
@@ -42,9 +43,15 @@ import { supervisedRuns, type SupervisedRun } from "@/db/schema/agent-lifecycle"
 import { composioForOrg, listConnections } from "@/lib/integrations/composio/client";
 import { getComposioToolkit } from "@/lib/integrations/composio/catalog";
 import { listDeployments } from "@/lib/deployments/store";
-import { deriveLifecycleStages } from "./lifecycle/stage-derivation";
+import {
+  deriveLifecycleStages,
+  defaultOpenStageId,
+  deriveLifecycleStageSummaries,
+  type LifecycleStageId,
+} from "./lifecycle/stage-derivation";
 import { requiredToolkitSlugs, countConnectedRequiredToolkits } from "./lifecycle/connected-toolkits";
-import { LifecycleRail, LifecycleStageCard } from "./lifecycle/ladder";
+import { AgentLifecycleAccordion } from "./lifecycle/agent-lifecycle-accordion";
+import { Collapsible } from "./lifecycle/collapsible";
 import { LearnedStage } from "./lifecycle/learned-stage";
 import { VerifiedStage } from "./lifecycle/verified-stage";
 import { ConnectedStage, type RequiredToolkitView } from "./lifecycle/connected-stage";
@@ -344,7 +351,7 @@ export default async function AgentTemplatePage({
   const requiredToolkits = requiredToolkitSlugs(blueprint.connectors);
   const composioConfigured =
     requiredToolkits.length > 0 ? (await composioForOrg(orgId)) !== null : true;
-  const [gate, connections, latestRun, deployments] = await Promise.all([
+  const [gate, connections, latestRun, deployments, latestEvalRun] = await Promise.all([
     lifecycleGate(
       { getLatestEvalRun, hasSucceededSupervisedRun: hasSucceededSupervisedRunForTemplate },
       { orgId, templateId: template.id },
@@ -352,6 +359,9 @@ export default async function AgentTemplatePage({
     requiredToolkits.length > 0 && composioConfigured ? listConnections(orgId) : Promise.resolve([]),
     findLatestSupervisedRun(orgId, template.id),
     listDeployments(orgId),
+    // T4 — the Verified stage's collapsed summary wants the actual pass
+    // RATE ("evals 100%"), not just the gate's pass/fail boolean.
+    getLatestEvalRun({ orgId, subjectKind: "template", subjectId: template.id }),
   ]);
 
   // listConnections already returns the mapped ToolkitConnection[] shape —
@@ -389,116 +399,105 @@ export default async function AgentTemplatePage({
     | { question: string | null; answer: string; answeredAt: string }[]
     | null) ?? [];
 
+  const summaries = deriveLifecycleStageSummaries({
+    requiredToolkitCount: requiredToolkits.length,
+    connectedToolkitCount: connectedCount,
+    evalPassRate: latestEvalRun ? latestEvalRun.passRate : null,
+    supervisedRunStatus: latestRun ? (latestRun.status as "running" | "succeeded" | "failed") : null,
+    hasDeploymentOrListing,
+    hasRecording: Boolean(recordingProvenance),
+  });
+
+  const descriptions: Record<LifecycleStageId, string> = {
+    learned: "What Seldon learned from your recording, and how to keep teaching it.",
+    verified: "Your recordings are the test.",
+    connected: "The apps this agent needs, connected.",
+    run: "Run it once — watch every action.",
+    sell: "For myself, on the marketplace, or to a client.",
+  };
+
+  const editor = (
+    <AgentTemplateEditor
+      templateId={template.id}
+      surface={surface}
+      isNew={isNew}
+      initialTrigger={trigger}
+      initialBlueprint={{
+        greeting: blueprint.greeting ?? "",
+        customSkillMd: blueprint.customSkillMd ?? "",
+        voice: blueprint.voice ?? DEFAULT_VOICE_RECEPTIONIST_VOICE,
+        capabilities: blueprint.capabilities ?? [...allCapabilities],
+        faq: (blueprint.faq ?? []).map((f) => ({ q: f.q, a: f.a })),
+        quoteRanges: (blueprint.quoteRanges ?? []).map((r) => ({
+          service: r.service,
+          low: r.low,
+          high: r.high,
+        })),
+        connectors: blueprint.connectors ?? [],
+        guardrails: blueprint.guardrails ?? null,
+        verify: blueprint.verify ?? null,
+      }}
+      allCapabilities={allCapabilities}
+      vettedConnectors={VETTED_CONNECTORS.map((c) => ({
+        id: c.id,
+        label: c.label,
+        secretService: c.secretService,
+      }))}
+      collapsibleScript
+    />
+  );
+
+  const bodies: Record<LifecycleStageId, ReactNode> = {
+    learned: (
+      <>
+        <LearnedStage
+          templateId={template.id}
+          hasRecording={Boolean(recordingProvenance)}
+          provenance={recordingProvenance}
+          initialAnsweredQuestions={answeredQuestions}
+          initialOpenQuestions={recordingProvenance?.openQuestions ?? []}
+        />
+        {/* T4 — the old 01-04 editor sections (When it runs / What it says
+            & does / Tools / Quality), moved off the top-level page and
+            folded in here, collapsed by default. */}
+        <Collapsible label="Configure the agent" defaultOpen={false}>
+          {editor}
+        </Collapsible>
+      </>
+    ),
+    verified: <VerifiedStage templateId={template.id} scenarios={derivedScenarios} />,
+    connected: (
+      <ConnectedStage
+        templateId={template.id}
+        toolkits={requiredToolkitViews}
+        composioConfigured={composioConfigured}
+      />
+    ),
+    run: <RunStage templateId={template.id} initialLastRun={latestRun} />,
+    sell: (
+      <SellStage
+        templateId={template.id}
+        templateName={template.name}
+        agentType={template.type}
+        builderName={builderName}
+        initialListing={sellerListing}
+        initialConnect={sellerConnect}
+        evalPass={gate.evalPass}
+        supervisedRunSucceeded={gate.supervisedRun}
+      />
+    ),
+  };
+
   return (
-    <section className="sf-lifecycle animate-page-enter">
-      <div className="sticky top-0 z-10 -mx-4 mb-2 border-b border-border/70 bg-background/90 px-4 py-3 backdrop-blur-xl sm:-mx-6 sm:px-6 lg:-mx-8 lg:px-8">
-        <div className="flex flex-wrap items-center gap-x-3 gap-y-2">
-          <Link
-            href="/studio/agents"
-            aria-label="Back to Agents"
-            className="crm-topbar-icon-btn size-9 shrink-0"
-          >
-            <ArrowLeft className="size-4" />
-          </Link>
-          <div className="flex min-w-0 items-center gap-2">
-            <Link
-              href="/studio/agents"
-              className="shrink-0 text-xs text-muted-foreground hover:text-foreground"
-            >
-              Agents
-            </Link>
-            <span aria-hidden className="text-xs text-muted-foreground">
-              /
-            </span>
-            <h1 className="truncate text-base font-semibold tracking-tight text-foreground sm:text-[17px]">
-              {template.name}
-            </h1>
-            <TemplateStatusBadge status={template.status} />
-          </div>
-        </div>
-        <div className="mt-3">
-          <LifecycleRail stages={stages} />
-        </div>
-      </div>
-
-      <div className="mx-auto max-w-3xl space-y-4 pt-6 pb-24">
-        <p className="max-w-2xl text-sm leading-relaxed text-muted-foreground">
-          {formatTemplateType(template.type)} template — walk it through Learned,
-          Verified, Connected, Run, then Sell.
-        </p>
-
-        <div className="pt-6">
-          <AgentTemplateEditor
-            templateId={template.id}
-            surface={surface}
-            isNew={isNew}
-            initialTrigger={trigger}
-            initialBlueprint={{
-              greeting: blueprint.greeting ?? "",
-              customSkillMd: blueprint.customSkillMd ?? "",
-              voice: blueprint.voice ?? DEFAULT_VOICE_RECEPTIONIST_VOICE,
-              capabilities: blueprint.capabilities ?? [...allCapabilities],
-              faq: (blueprint.faq ?? []).map((f) => ({ q: f.q, a: f.a })),
-              quoteRanges: (blueprint.quoteRanges ?? []).map((r) => ({
-                service: r.service,
-                low: r.low,
-                high: r.high,
-              })),
-              connectors: blueprint.connectors ?? [],
-              guardrails: blueprint.guardrails ?? null,
-              verify: blueprint.verify ?? null,
-            }}
-            allCapabilities={allCapabilities}
-            vettedConnectors={VETTED_CONNECTORS.map((c) => ({
-              id: c.id,
-              label: c.label,
-              secretService: c.secretService,
-            }))}
-          />
-        </div>
-
-        <LifecycleStageCard
-          stage={stages[0]}
-          description="What Seldon learned from your recording, and how to keep teaching it."
-        >
-          <LearnedStage
-            templateId={template.id}
-            hasRecording={Boolean(recordingProvenance)}
-            provenance={recordingProvenance}
-            initialAnsweredQuestions={answeredQuestions}
-            initialOpenQuestions={recordingProvenance?.openQuestions ?? []}
-          />
-        </LifecycleStageCard>
-
-        <LifecycleStageCard stage={stages[1]} description="Your recordings are the test.">
-          <VerifiedStage templateId={template.id} scenarios={derivedScenarios} />
-        </LifecycleStageCard>
-
-        <LifecycleStageCard stage={stages[2]} description="The apps this agent needs, connected.">
-          <ConnectedStage
-            templateId={template.id}
-            toolkits={requiredToolkitViews}
-            composioConfigured={composioConfigured}
-          />
-        </LifecycleStageCard>
-
-        <LifecycleStageCard stage={stages[3]} description="Run it once — watch every action.">
-          <RunStage templateId={template.id} initialLastRun={latestRun} />
-        </LifecycleStageCard>
-
-        <LifecycleStageCard stage={stages[4]} description="For myself, on the marketplace, or to a client.">
-          <SellStage
-            templateId={template.id}
-            templateName={template.name}
-            agentType={template.type}
-            builderName={builderName}
-            initialListing={sellerListing}
-            initialConnect={sellerConnect}
-            evalPass={gate.evalPass}
-            supervisedRunSucceeded={gate.supervisedRun}
-          />
-        </LifecycleStageCard>
-      </div>
-    </section>
+    <AgentLifecycleAccordion
+      templateName={template.name}
+      templateStatus={template.status}
+      intro={`${formatTemplateType(template.type)} template — walk it through Learned, Verified, Connected, Run, then Sell.`}
+      stages={stages}
+      summaries={summaries}
+      descriptions={descriptions}
+      bodies={bodies}
+      defaultOpenId={defaultOpenStageId(stages)}
+    />
   );
 }

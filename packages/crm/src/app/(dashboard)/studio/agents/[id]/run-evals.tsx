@@ -11,7 +11,7 @@
 // work, so on no_llm_key it shows the same actionable "add your key" prompt linking
 // to Settings (the first workspace stays free; building/testing agents needs a key).
 
-import { useState, useTransition } from "react";
+import { useEffect, useState, useTransition } from "react";
 import Link from "next/link";
 import { ClipboardCheck } from "lucide-react";
 import {
@@ -21,11 +21,38 @@ import {
 
 type Ok = Extract<RunAgentEvalsActionResult, { ok: true }>;
 
+// T5 (Max: "takes too much time") — rotating status copy on the button while
+// evals run, so the several-seconds LLM round trip (author scenarios, chat
+// with the agent N times, grade each transcript) feels alive instead of a
+// frozen "Running…". Mirrors editor-client.tsx's REFINE_STATUS_MESSAGES
+// rotation (same interval-reset-on-pending / clear-on-settle pattern).
+const RUN_EVALS_STATUS_MESSAGES = [
+  "Generating scenarios…",
+  "Simulating your customers…",
+  "Replaying your recording…",
+  "Grading transcripts…",
+];
+const RUN_EVALS_STATUS_INTERVAL_MS = 2500;
+
 export function RunEvalsCard({ templateId }: { templateId: string }) {
   const [running, startRun] = useTransition();
   const [result, setResult] = useState<Ok | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [needsKey, setNeedsKey] = useState(false);
+
+  // Rotating loader copy index for the "Run evals" button. Resets to 0 when
+  // a run starts, advances on an interval while pending, and clears the
+  // interval on settle (running -> false) or unmount. Plain client timer —
+  // the FINAL result rendering below is unchanged.
+  const [statusIdx, setStatusIdx] = useState(0);
+  useEffect(() => {
+    if (!running) return;
+    setStatusIdx(0);
+    const id = setInterval(() => {
+      setStatusIdx((i) => (i + 1) % RUN_EVALS_STATUS_MESSAGES.length);
+    }, RUN_EVALS_STATUS_INTERVAL_MS);
+    return () => clearInterval(id);
+  }, [running]);
 
   const run = () => {
     setError(null);
@@ -86,7 +113,7 @@ export function RunEvalsCard({ templateId }: { templateId: string }) {
           disabled={running}
           className="crm-button-primary h-9 shrink-0 px-4 text-sm"
         >
-          {running ? "Running…" : "Run evals"}
+          {running ? RUN_EVALS_STATUS_MESSAGES[statusIdx] : "Run evals"}
         </button>
       </header>
 
