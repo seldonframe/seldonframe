@@ -18,6 +18,12 @@ export type RunStageAction =
   | { type: "start_clicked" }
   | { type: "start_failed"; error: string }
   | { type: "started"; runId: string; status: SupervisedRunStatus; actionLog: SupervisedRunActionEvent[] }
+  /** F6, Wave 2 review — dispatched once on mount when the page loads with
+   *  an already-`running` supervised_runs row (the operator navigated away
+   *  and back mid-run): transitions idle straight to `running` so the
+   *  client component's mount effect knows to resume polling that run id,
+   *  instead of falling to idle and re-clicking into `already_running`. */
+  | { type: "init_running"; runId: string; actionLog: SupervisedRunActionEvent[] }
   | {
       type: "poll_tick";
       runId: string;
@@ -46,6 +52,12 @@ export function runStageReducer(state: RunStageState, action: RunStageAction): R
     case "started":
       if (state.status !== "starting") return state;
       return terminalOrRunning(action.runId, action.status, action.actionLog, null);
+
+    case "init_running":
+      // Only meaningful on a fresh mount (idle) — never clobbers an
+      // already-active, client-driven run.
+      if (state.status !== "idle") return state;
+      return { status: "running", runId: action.runId, actionLog: action.actionLog };
 
     case "poll_tick":
       // Only meaningful while we're actively tracking THIS run.

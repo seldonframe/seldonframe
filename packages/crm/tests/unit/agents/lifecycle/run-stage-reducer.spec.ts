@@ -128,4 +128,25 @@ describe("runStageReducer", () => {
     });
     assert.deepEqual(next, succeeded);
   });
+
+  // ── F6 (Wave 2 review) — resume polling for an in-flight run on mount ──────
+
+  test("idle + init_running -> running (so the mount effect can resume polling that run)", () => {
+    const next = runStageReducer(RUN_STAGE_IDLE, {
+      type: "init_running",
+      runId: "run-1",
+      actionLog: [EVT],
+    });
+    assert.deepEqual(next, { status: "running", runId: "run-1", actionLog: [EVT] });
+  });
+
+  test("init_running is a no-op from any non-idle state (never clobbers an active client-driven run)", () => {
+    const running: RunStageState = { status: "running", runId: "run-1", actionLog: [] };
+    const next = runStageReducer(running, {
+      type: "init_running",
+      runId: "run-2",
+      actionLog: [EVT],
+    });
+    assert.deepEqual(next, running);
+  });
 });

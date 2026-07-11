@@ -33,45 +33,78 @@ export function RunStage({
   initialLastRun: SupervisedRun | null;
 }) {
   const initial =
-    initialLastRun && initialLastRun.status !== "running"
-      ? ({
-          status: initialLastRun.status as "succeeded" | "failed",
+    initialLastRun && initialLastRun.status === "running"
+      ? runStageReducer(RUN_STAGE_IDLE, {
+          type: "init_running",
           runId: initialLastRun.id,
           actionLog: initialLastRun.actionLog ?? [],
-          summary: initialLastRun.summary ?? "Run finished with no summary.",
-        } as const)
-      : RUN_STAGE_IDLE;
+        })
+      : initialLastRun && initialLastRun.status !== "running"
+        ? ({
+            status: initialLastRun.status as "succeeded" | "failed",
+            runId: initialLastRun.id,
+            actionLog: initialLastRun.actionLog ?? [],
+            summary: initialLastRun.summary ?? "Run finished with no summary.",
+          } as const)
+        : RUN_STAGE_IDLE;
 
   const [state, dispatch] = useReducer(runStageReducer, initial);
-  const pollRef = useRef<ReturnType<typeof setInterval> | null>(null);
+  // Self-scheduling setTimeout chain (F7, Wave 2 review) rather than
+  // setInterval: the next poll is only scheduled AFTER the current one
+  // resolves, so a slow request can never overlap the next tick. Holds the
+  // pending timer (idle) so stopPolling/unmount can cancel it.
+  const pollTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
-  useEffect(() => {
-    return () => {
-      if (pollRef.current) clearInterval(pollRef.current);
-    };
-  }, []);
+  const stopPolling = () => {
+    if (pollTimerRef.current) {
+      clearTimeout(pollTimerRef.current);
+      pollTimerRef.current = null;
+    }
+  };
+
+  const pollOnce = async (runId: string) => {
+    const res = await getSupervisedRunAction(runId);
+    if (!res.ok) {
+      dispatch({ type: "poll_failed" });
+      // A transient poll error never stops the retry cadence — schedule
+      // the next attempt exactly as a healthy tick would.
+      pollTimerRef.current = setTimeout(() => pollOnce(runId), POLL_MS);
+      return;
+    }
+    dispatch({
+      type: "poll_tick",
+      runId,
+      status: res.run.status as "running" | "succeeded" | "failed",
+      actionLog: res.run.actionLog ?? [],
+      summary: res.run.summary,
+    });
+    if (res.run.status === "running") {
+      pollTimerRef.current = setTimeout(() => pollOnce(runId), POLL_MS);
+    } else {
+      stopPolling();
+    }
+  };
 
   const startPolling = (runId: string) => {
-    if (pollRef.current) clearInterval(pollRef.current);
-    pollRef.current = setInterval(async () => {
-      const res = await getSupervisedRunAction(runId);
-      if (!res.ok) {
-        dispatch({ type: "poll_failed" });
-        return;
-      }
-      dispatch({
-        type: "poll_tick",
-        runId,
-        status: res.run.status as "running" | "succeeded" | "failed",
-        actionLog: res.run.actionLog ?? [],
-        summary: res.run.summary,
-      });
-      if (res.run.status !== "running" && pollRef.current) {
-        clearInterval(pollRef.current);
-        pollRef.current = null;
-      }
-    }, POLL_MS);
+    stopPolling();
+    pollTimerRef.current = setTimeout(() => pollOnce(runId), POLL_MS);
   };
+
+  useEffect(() => {
+    // F6, Wave 2 review — resume polling an in-flight run found on mount
+    // (the operator navigated away mid-run and came back) instead of
+    // falling to idle and re-clicking into "already_running".
+    if (initialLastRun && initialLastRun.status === "running") {
+      startPolling(initialLastRun.id);
+    }
+    return () => {
+      stopPolling();
+    };
+    // Mount-only: resuming an in-flight run is a one-time decision based on
+    // the server-rendered initial prop, not a value that should re-trigger
+    // this effect on every render.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
 
   const run = async () => {
     dispatch({ type: "start_clicked" });
