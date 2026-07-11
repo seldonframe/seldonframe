@@ -31,6 +31,7 @@
 // nothing extra + the caller surfaces a warning). None of these functions throw.
 
 import type { ConnectorBinding } from "@/lib/agents/mcp/connectors";
+import { defaultToolsForToolkits } from "@/lib/integrations/composio/catalog";
 
 /** A live Composio toolkit, flattened to the fields the matcher needs. This is
  *  intentionally a self-contained shape (slug + name + optional description) —
@@ -268,10 +269,22 @@ export function resolveCapabilitiesToToolkits(
 
 /**
  * PURE. Map each toolkit slug onto a real composio `ConnectorBinding`
- * (`{ id, kind:"composio", enabledToolkits:[slug], enabledTools:[] }`) — the
- * exact shape a hand-bound composio connector produces, so every binding parses
- * through `connectorBindingSchema`. De-duplicated by id, order-stable. Empty/
- * invalid slugs are dropped. Never throws.
+ * (`{ id, kind:"composio", enabledToolkits:[slug], enabledTools:[the
+ * toolkit's curated default tools, or [] for a long-tail toolkit outside
+ * the curated catalog] }`) — the exact shape a hand-bound composio connector
+ * produces, so every binding parses through `connectorBindingSchema`.
+ * De-duplicated by id, order-stable. Empty/invalid slugs are dropped. Never
+ * throws.
+ *
+ * F-C (closes the empty-allowlist bug class — same as compile-agent.ts's
+ * bindingForToolkit and bind-tools.ts's bindingForEntry): a generated agent
+ * has no later discovery/picker step to fill `enabledTools` in, so leaving
+ * it empty meant zero real tools at runtime for any capability resolved
+ * through this long-tail path. `defaultToolsForToolkits` only knows the 8
+ * curated `COMPOSIO_TOOLKITS` slugs — a live Composio-only toolkit outside
+ * that set (the whole point of this resolver: "the long tail... the day
+ * Composio lists it") still resolves to `[]` here, same as before; there's
+ * no curated default to seed for a toolkit we don't otherwise know about.
  */
 export function bindComposioToolkits(slugs: string[]): ConnectorBinding[] {
   if (!Array.isArray(slugs)) return [];
@@ -287,7 +300,7 @@ export function bindComposioToolkits(slugs: string[]): ConnectorBinding[] {
       id: slug,
       kind: "composio",
       enabledToolkits: [slug],
-      enabledTools: [],
+      enabledTools: defaultToolsForToolkits([slug]),
     });
   }
   return out;

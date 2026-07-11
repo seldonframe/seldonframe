@@ -90,7 +90,20 @@ export type SupervisedRunDeps = {
 };
 
 export type SupervisedRunResult =
-  | { ok: true; runId: string; status: "succeeded" | "failed"; summary: string }
+  | {
+      ok: true;
+      runId: string;
+      status: "succeeded" | "failed";
+      summary: string;
+      /** F-E (2026-07-11 incident: prod row 48e7fcc0-0e34-4447-bc3f-
+       *  9bbdc811a9dc) — the SAME actionLog durably written via finishRun,
+       *  returned to the synchronous caller too. Before this fix the
+       *  caller (startSupervisedRunAction -> run-stage.tsx) had no way to
+       *  know what actually happened without a follow-up poll, and the
+       *  common case — the turn finishes within the same request — never
+       *  polls at all, so the evidence silently never reached the UI. */
+      actionLog: SupervisedRunActionEvent[];
+    }
   | { ok: false; error: "already_running" };
 
 /**
@@ -236,5 +249,5 @@ export async function runSupervised(
 
   await deps.finishRun(runId, { status, summary, actionLog });
 
-  return { ok: true, runId, status, summary };
+  return { ok: true, runId, status, summary, actionLog };
 }

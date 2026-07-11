@@ -37,7 +37,7 @@ import { DeployButton } from "../deploy-button";
 import { DeployToClientsButton } from "../deploy-to-clients-button";
 import { TestButton } from "../test-button";
 import { isAgentLifecycleEnabled } from "@/lib/agents/lifecycle/policy";
-import { lifecycleGate } from "@/lib/agents/lifecycle/gate";
+import { lifecycleGate, hasActionableTools } from "@/lib/agents/lifecycle/gate";
 import { getLatestEvalRun } from "@/lib/agents/evals/eval-runs-store";
 import { supervisedRuns, type SupervisedRun } from "@/db/schema/agent-lifecycle";
 import { composioForOrg, listConnections } from "@/lib/integrations/composio/client";
@@ -56,6 +56,7 @@ import { LearnedStage } from "./lifecycle/learned-stage";
 import { VerifiedStage } from "./lifecycle/verified-stage";
 import { ConnectedStage, type RequiredToolkitView } from "./lifecycle/connected-stage";
 import { RunStage } from "./lifecycle/run-stage";
+import { derivePlannedActions } from "./lifecycle/run-plan";
 import { SellStage } from "./lifecycle/sell-stage";
 
 export const dynamic = "force-dynamic";
@@ -354,7 +355,16 @@ export default async function AgentTemplatePage({
   const [gate, connections, latestRun, deployments, latestEvalRun] = await Promise.all([
     lifecycleGate(
       { getLatestEvalRun, hasSucceededSupervisedRun: hasSucceededSupervisedRunForTemplate },
-      { orgId, templateId: template.id },
+      {
+        orgId,
+        templateId: template.id,
+        // F-D: a tool-free (pure-chat) template is exempt from the
+        // supervised-run requirement — evals are still required.
+        hasActionableTools: hasActionableTools({
+          connectors: blueprint.connectors,
+          capabilities: blueprint.capabilities,
+        }),
+      },
     ),
     requiredToolkits.length > 0 && composioConfigured ? listConnections(orgId) : Promise.resolve([]),
     findLatestSupervisedRun(orgId, template.id),
@@ -378,6 +388,7 @@ export default async function AgentTemplatePage({
     requiredToolkitCount: requiredToolkits.length,
     connectedToolkitCount: connectedCount,
     supervisedRunSucceeded: gate.supervisedRun,
+    supervisedRunExempt: gate.supervisedRunExempt,
     hasDeploymentOrListing,
   });
 
@@ -404,6 +415,7 @@ export default async function AgentTemplatePage({
     connectedToolkitCount: connectedCount,
     evalPassRate: latestEvalRun ? latestEvalRun.passRate : null,
     supervisedRunStatus: latestRun ? (latestRun.status as "running" | "succeeded" | "failed") : null,
+    supervisedRunExempt: gate.supervisedRunExempt,
     hasDeploymentOrListing,
     hasRecording: Boolean(recordingProvenance),
   });
@@ -473,7 +485,17 @@ export default async function AgentTemplatePage({
         composioConfigured={composioConfigured}
       />
     ),
-    run: <RunStage templateId={template.id} initialLastRun={latestRun} />,
+    run: (
+      <RunStage
+        templateId={template.id}
+        initialLastRun={latestRun}
+        supervisedRunExempt={gate.supervisedRunExempt}
+        plannedActions={derivePlannedActions({
+          connectors: blueprint.connectors,
+          scenarios: derivedScenarios,
+        })}
+      />
+    ),
     sell: (
       <SellStage
         templateId={template.id}
@@ -484,6 +506,7 @@ export default async function AgentTemplatePage({
         initialConnect={sellerConnect}
         evalPass={gate.evalPass}
         supervisedRunSucceeded={gate.supervisedRun}
+        supervisedRunExempt={gate.supervisedRunExempt}
       />
     ),
   };

@@ -27,6 +27,12 @@ export type LifecycleStageInput = {
   requiredToolkitCount: number;
   connectedToolkitCount: number;
   supervisedRunSucceeded: boolean;
+  /** F-D: true when the template has no bound external tools and no
+   *  action-capable native capability (lifecycleGate's
+   *  `hasActionableTools`/`supervisedRunExempt`) — a pure-chat agent that
+   *  can never take a real tool action, so the Run stage counts as
+   *  complete without ever running. */
+  supervisedRunExempt: boolean;
   hasDeploymentOrListing: boolean;
 };
 
@@ -59,7 +65,12 @@ export function deriveLifecycleStages(input: LifecycleStageInput): LifecycleStag
       title: "Connected",
       complete: isConnectedStageComplete(input),
     },
-    { id: "run", step: "04", title: "Run", complete: input.supervisedRunSucceeded },
+    {
+      id: "run",
+      step: "04",
+      title: "Run",
+      complete: input.supervisedRunSucceeded || input.supervisedRunExempt,
+    },
     { id: "sell", step: "05", title: "Sell", complete: input.hasDeploymentOrListing },
   ];
 }
@@ -89,6 +100,8 @@ export type LifecycleStageSummaryInput = {
   /** 0-100, or null when no eval run has ever completed for this template. */
   evalPassRate: number | null;
   supervisedRunStatus: "succeeded" | "failed" | "running" | null;
+  /** F-D: overrides the Run summary to explain WHY, regardless of status. */
+  supervisedRunExempt: boolean;
   hasDeploymentOrListing: boolean;
   hasRecording: boolean;
 };
@@ -106,8 +119,9 @@ export function deriveLifecycleStageSummaries(
         ? "All apps connected"
         : `${input.connectedToolkitCount}/${input.requiredToolkitCount} apps connected`;
 
-  const run =
-    input.supervisedRunStatus === "succeeded"
+  const run = input.supervisedRunExempt
+    ? "No connected apps to supervise"
+    : input.supervisedRunStatus === "succeeded"
       ? "Last run succeeded"
       : input.supervisedRunStatus === "failed"
         ? "Last run failed"

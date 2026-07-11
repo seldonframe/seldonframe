@@ -28,6 +28,7 @@ import {
   connectorBindingSchema,
   type ConnectorBinding,
 } from "../../../../src/lib/agents/mcp/connectors";
+import { defaultToolsForToolkits } from "../../../../src/lib/integrations/composio/catalog";
 
 /** A representative fake catalog: Google Business Profile (the GMB long-tail
  *  case), plus a spread of unrelated toolkits so the matcher has to discriminate. */
@@ -157,12 +158,31 @@ describe("bindComposioToolkits — binding shape", () => {
 
     const gb = bindings.find((b) => b.id === "googlebusiness");
     assert.ok(gb, "googlebusiness binding present");
+    // "googlebusiness" is a live-Composio-only, long-tail toolkit — NOT one
+    // of the 8 curated COMPOSIO_TOOLKITS (gmail, googlecalendar, googledrive,
+    // slack, notion, hubspot, quickbooks, outlook), so there's no curated
+    // default tool list to seed for it; it still resolves to [].
     assert.deepEqual(gb, {
       id: "googlebusiness",
       kind: "composio",
       enabledToolkits: ["googlebusiness"],
       enabledTools: [],
     });
+  });
+
+  // F-C (2026-07-11, closes the empty-allowlist bug class — same as T1's
+  // compile-agent.ts fix and T6's bind-tools.ts fix): a generated agent has
+  // no later discovery step to fill `enabledTools` in, so a CURATED-catalog
+  // slug (one of the 8 in COMPOSIO_TOOLKITS) resolved through this long-tail
+  // path must ALSO be seeded with its curated default tools — never [].
+  test("a curated-catalog slug (notion) is seeded with its curated default tools, never an empty allowlist", () => {
+    const [binding] = bindComposioToolkits(["notion"]);
+    assert.ok(binding && binding.kind === "composio");
+    assert.deepEqual(
+      (binding as { enabledTools: string[] }).enabledTools,
+      defaultToolsForToolkits(["notion"]),
+    );
+    assert.notDeepEqual((binding as { enabledTools: string[] }).enabledTools, []);
   });
 
   test("duplicate slugs collapse to one binding", () => {

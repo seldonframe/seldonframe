@@ -42,7 +42,17 @@ import {
 import { resolveAgentTrigger } from "@/lib/agents/triggers/agent-trigger";
 
 export type StartSupervisedRunResult =
-  | { ok: true; runId: string; status: "succeeded" | "failed"; summary: string }
+  | {
+      ok: true;
+      runId: string;
+      status: "succeeded" | "failed";
+      summary: string;
+      /** F-E — the run's real actionLog, returned to the synchronous
+       *  caller so the Run stage doesn't have to (and, in the common case
+       *  where the turn finishes within this same request, CAN'T) rely on
+       *  a follow-up poll to ever see it. */
+      actionLog: SupervisedRunActionEvent[];
+    }
   | {
       ok: false;
       error: "unauthorized" | "template_not_found" | "no_llm_key" | "already_running";
@@ -200,7 +210,13 @@ export async function startSupervisedRunAction(templateId: string): Promise<Star
 
   const result = await runSupervised(deps, { orgId, templateId, kickoffMessage });
   if (!result.ok) return { ok: false, error: result.error };
-  return { ok: true, runId: result.runId, status: result.status, summary: result.summary };
+  return {
+    ok: true,
+    runId: result.runId,
+    status: result.status,
+    summary: result.summary,
+    actionLog: result.actionLog,
+  };
 }
 
 export type GetSupervisedRunResult =

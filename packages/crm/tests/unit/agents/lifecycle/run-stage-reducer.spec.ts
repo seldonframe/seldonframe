@@ -25,23 +25,46 @@ describe("runStageReducer", () => {
       runId: "run-1",
       status: "running",
       actionLog: [],
+      summary: null,
     });
     assert.deepEqual(next, { status: "running", runId: "run-1", actionLog: [] });
   });
 
-  test("starting → succeeded when the action already resolved before the first poll", () => {
+  // F-E (2026-07-11 incident: prod row 48e7fcc0-0e34-4447-bc3f-9bbdc811a9dc)
+  // — a run that finishes SYNCHRONOUSLY within startSupervisedRunAction's
+  // own request (the common case) never gets a follow-up poll, so `started`
+  // must carry the REAL actionLog + summary through, not silently drop the
+  // summary to the "no summary" fallback (the reducer used to hardcode
+  // `null` here regardless of what the action carried — and the action
+  // type didn't even have a summary field to carry it).
+  test("starting → succeeded when the action already resolved before the first poll — carries the REAL summary through, never the fallback", () => {
     const starting: RunStageState = { status: "starting" };
     const next = runStageReducer(starting, {
       type: "started",
       runId: "run-1",
       status: "succeeded",
       actionLog: [EVT],
+      summary: "Sent 3 emails and updated 2 QuickBooks invoices.",
     });
     assert.equal(next.status, "succeeded");
     if (next.status === "succeeded") {
       assert.equal(next.runId, "run-1");
       assert.deepEqual(next.actionLog, [EVT]);
+      assert.equal(next.summary, "Sent 3 emails and updated 2 QuickBooks invoices.");
     }
+  });
+
+  test("started with a null summary still falls back to the 'no summary' placeholder (defensive — should not happen for a real terminal result)", () => {
+    const starting: RunStageState = { status: "starting" };
+    const next = runStageReducer(starting, {
+      type: "started",
+      runId: "run-1",
+      status: "failed",
+      actionLog: [],
+      summary: null,
+    });
+    assert.equal(next.status, "failed");
+    if (next.status === "failed") assert.match(next.summary, /no summary/i);
   });
 
   test("starting → start_failed on start_failed", () => {
@@ -125,6 +148,7 @@ describe("runStageReducer", () => {
       runId: "run-2",
       status: "running",
       actionLog: [],
+      summary: null,
     });
     assert.deepEqual(next, succeeded);
   });

@@ -34,6 +34,7 @@ import {
   getStarterTemplate,
 } from "../../../../src/lib/agent-templates/starter-pack";
 import type { VerifyCheck } from "../../../../src/lib/agents/verify/agent-verify";
+import { defaultToolsForToolkits } from "../../../../src/lib/integrations/composio/catalog";
 
 const REVIEW_URL = "https://g.page/r/abc123/review";
 
@@ -317,7 +318,13 @@ describe("assembleAgentBundle — tool binding", () => {
     assert.deepEqual(postiz.enabledTools, []);
   });
 
-  test("a 'log to Notion' intent binds the composio notion toolkit", () => {
+  // T6 (2026-07-11 incident follow-up): a composio binding produced through
+  // this path used to rest at `enabledTools: []`, on the assumption a later
+  // discovery step would fill it in — but a GENERATED agent gets no such
+  // step, so prod data confirmed every generated starter's composio
+  // bindings resolved to ZERO real tools at runtime. enabledTools is now
+  // seeded with the toolkit's curated default tools instead.
+  test("a 'log to Notion' intent binds the composio notion toolkit, seeded with its curated default tools", () => {
     const b = assembleAgentBundle({
       skill: "speed-to-lead",
       trigger: { kind: "event", event: "lead.created", channel: "sms" },
@@ -331,7 +338,8 @@ describe("assembleAgentBundle — tool binding", () => {
       notion.kind === "composio" ? notion.enabledToolkits : undefined,
       ["notion"],
     );
-    assert.deepEqual(notion.enabledTools, []);
+    assert.deepEqual(notion.enabledTools, defaultToolsForToolkits(["notion"]));
+    assert.notDeepEqual(notion.enabledTools, []);
   });
 
   test("tool binding adds no warnings in the pure layer", () => {

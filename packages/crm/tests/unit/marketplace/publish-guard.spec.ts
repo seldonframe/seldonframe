@@ -30,7 +30,12 @@ function fakeTemplate(over: Partial<AgentTemplate> = {}): AgentTemplate {
     builderOrgId: ORG_ID,
     name: "Inbox Watcher",
     type: "chat",
-    blueprint: {},
+    // F-D: a real action-capable capability, so these tests exercise the
+    // STRICT gate (a template WITH tools) — a blank blueprint would make
+    // hasActionableTools false and exempt the supervised-run requirement
+    // entirely, which is a different, deliberately-tested case (see the
+    // "F-D exemption" describe block below), not what these tests intend.
+    blueprint: { capabilities: ["book_appointment"] },
     status: "tested",
     createdAt: new Date(),
     updatedAt: new Date(),
@@ -149,6 +154,41 @@ describe("resolvePublishGuard", () => {
     if (!result.ok) return;
     assert.equal(result.orgId, ORG_ID);
     assert.equal(result.template.id, TEMPLATE_ID);
+  });
+
+  // ── F-D exemption (2026-07-11, opus-review gate regression) ────────────────
+  // A tool-free (pure-chat) template's supervised-run requirement is exempt
+  // — this server-side publish gate must match the Run stage's ladder badge
+  // exactly, so this wiring is proven here too, not just in gate.spec.ts.
+
+  test("F-D: flag ON, tool-free template (blank blueprint), eval passes, no supervised run -> proceeds (exempt)", async () => {
+    const result = await resolvePublishGuard(
+      baseDeps({
+        loadTemplate: async () => fakeTemplate({ blueprint: {} }),
+        lifecycleGateDeps: {
+          getLatestEvalRun: async () => ({ passRate: 100, scenarioCount: 3 } as never),
+          hasSucceededSupervisedRun: async () => false,
+        },
+        isLifecycleEnabled: true,
+      }),
+      { templateId: TEMPLATE_ID },
+    );
+    assert.equal(result.ok, true);
+  });
+
+  test("F-D: flag ON, tool-free template, eval FAILS -> still blocked on eval_pass only", async () => {
+    const result = await resolvePublishGuard(
+      baseDeps({
+        loadTemplate: async () => fakeTemplate({ blueprint: {} }),
+        lifecycleGateDeps: {
+          getLatestEvalRun: async () => null,
+          hasSucceededSupervisedRun: async () => false,
+        },
+        isLifecycleEnabled: true,
+      }),
+      { templateId: TEMPLATE_ID },
+    );
+    assert.deepEqual(result, { ok: false, error: "lifecycle_gate", missing: ["eval_pass"] });
   });
 
   test("flag OFF -> proceeds regardless of the gate (dark-ship, zero behavior change)", async () => {
