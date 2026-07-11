@@ -116,13 +116,27 @@ export function isUniqueViolationError(err: unknown): boolean {
  * sends on a real cron tick ("your schedule just fired"), just as a chat
  * message rather than a SeldonEvent — no new trigger rail, per the spec's
  * "NO new infrastructure" constraint. Every other trigger kind gets a
- * neutral "go ahead and run now" kickoff. Pure; never throws.
+ * neutral "go ahead and run now" kickoff.
+ *
+ * T3 framing (2026-07-11 incident follow-up): the recorded workflow's steps
+ * describe the HUMAN'S browser path, not a literal script to narrate — the
+ * agent has real, connected tools and its job is to accomplish each step's
+ * OUTCOME with them right now. If a step genuinely can't be done with the
+ * tools it has, it must say exactly which step and why instead of claiming
+ * success. Pure; never throws.
  */
 export function buildKickoffMessage(trigger: AgentTrigger | null | undefined): string {
-  if (trigger?.kind === "schedule") {
-    return "Your schedule just fired — go ahead and run your workflow now, exactly as if it were live.";
-  }
-  return "Go ahead and run your workflow now, exactly as if it were live.";
+  const opening =
+    trigger?.kind === "schedule"
+      ? "Your schedule just fired — run your workflow now, exactly as if it were live."
+      : "Go ahead and run your workflow now, exactly as if it were live.";
+  return (
+    `${opening} You have real, connected tools — use them. The workflow's ` +
+    "steps describe the human path that was recorded; your job is to " +
+    "accomplish each step's outcome with your tools right now, not narrate " +
+    "the recording. If any step can't be done with your available tools, " +
+    "say exactly which step and why instead of claiming it succeeded."
+  );
 }
 
 async function defaultRunWithTimeout<T>(fn: () => Promise<T>, timeoutMs: number): Promise<T | "timeout"> {
@@ -198,8 +212,23 @@ export async function runSupervised(
     status = "failed";
     summary = `Run timed out after ${Math.round(timeoutMs / 1000)}s.`;
   } else if (outcome.ok) {
-    status = "succeeded";
-    summary = outcome.reply || "Run completed.";
+    // outcome.ok is NOT sufficient on its own (the 2026-07-11 incident: a
+    // turn can return ok:true — the model replied without erroring — while
+    // taking zero real tool actions, e.g. because its only bound tool
+    // resolved to an empty allowlist). The verdict is deterministic on the
+    // actionLog instead: at least one 'ok' tool event is what "succeeded"
+    // actually means for a supervised run.
+    const tookRealAction = actionLog.some((event) => event.status === "ok");
+    if (tookRealAction) {
+      status = "succeeded";
+      summary = outcome.reply || "Run completed.";
+    } else {
+      status = "failed";
+      const reply = outcome.reply?.trim();
+      summary = reply
+        ? `The run completed without taking any real actions in your connected apps. ${reply}`
+        : "The run completed without taking any real actions in your connected apps.";
+    }
   } else {
     status = "failed";
     summary = `Run failed: ${outcome.reason}`;
