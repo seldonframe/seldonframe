@@ -8,7 +8,7 @@
 
 import { notFound } from "next/navigation";
 import Link from "next/link";
-import { eq } from "drizzle-orm";
+import { and, desc, eq } from "drizzle-orm";
 import { ArrowLeft } from "lucide-react";
 import { db } from "@/db";
 import { organizations } from "@/db/schema";
@@ -25,6 +25,7 @@ import { getSellerListingContextAction } from "@/lib/marketplace/seller-actions"
 import { VETTED_CONNECTORS } from "@/lib/agents/mcp/connectors";
 import { findSessionByTemplateId } from "@/lib/recordings/session-store";
 import type { FlowModel } from "@/lib/recordings/trace-schema";
+import type { EvalScenario } from "@/lib/agents/evals/eval-types";
 import type { AgentBlueprint } from "@/db/schema";
 import { AgentTemplateEditor } from "./editor-client";
 import { ListOnMarketplace } from "./list-on-marketplace";
@@ -34,8 +35,61 @@ import { TemplateStatusBadge, formatTemplateType } from "../status-badge";
 import { DeployButton } from "../deploy-button";
 import { DeployToClientsButton } from "../deploy-to-clients-button";
 import { TestButton } from "../test-button";
+import { isAgentLifecycleEnabled } from "@/lib/agents/lifecycle/policy";
+import { lifecycleGate } from "@/lib/agents/lifecycle/gate";
+import { getLatestEvalRun } from "@/lib/agents/evals/eval-runs-store";
+import { supervisedRuns, type SupervisedRun } from "@/db/schema/agent-lifecycle";
+import { composioForOrg, listConnections } from "@/lib/integrations/composio/client";
+import { getComposioToolkit } from "@/lib/integrations/composio/catalog";
+import { listDeployments } from "@/lib/deployments/store";
+import { deriveLifecycleStages } from "./lifecycle/stage-derivation";
+import { requiredToolkitSlugs, countConnectedRequiredToolkits } from "./lifecycle/connected-toolkits";
+import { LifecycleRail, LifecycleStageCard } from "./lifecycle/ladder";
+import { LearnedStage } from "./lifecycle/learned-stage";
+import { VerifiedStage } from "./lifecycle/verified-stage";
+import { ConnectedStage, type RequiredToolkitView } from "./lifecycle/connected-stage";
+import { RunStage } from "./lifecycle/run-stage";
+import { SellStage } from "./lifecycle/sell-stage";
 
 export const dynamic = "force-dynamic";
+// Composio's SDK (lib/integrations/composio/client.ts, imported below for the
+// Connected stage) is a Node-runtime-only dependency — this page now
+// transitively imports it, so it must declare the Node runtime explicitly.
+export const runtime = "nodejs";
+
+/** Org-scoped read of the most recent supervised_runs row for a template
+ *  (any status — the Run stage shows the last attempt on revisit). */
+async function findLatestSupervisedRun(orgId: string, templateId: string): Promise<SupervisedRun | null> {
+  const [row] = await db
+    .select()
+    .from(supervisedRuns)
+    .where(and(eq(supervisedRuns.orgId, orgId), eq(supervisedRuns.templateId, templateId)))
+    .orderBy(desc(supervisedRuns.startedAt))
+    .limit(1);
+  return row ?? null;
+}
+
+/** Org-scoped read: does at least one succeeded supervised run exist for this
+ *  template? The same predicate lifecycleGate + the marketplace publish gate
+ *  use (lib/marketplace/seller-actions.ts's own copy), duplicated here rather
+ *  than exported cross-module to keep each call site's org-scope explicit. */
+async function hasSucceededSupervisedRunForTemplate(args: {
+  orgId: string;
+  templateId: string;
+}): Promise<boolean> {
+  const [row] = await db
+    .select({ id: supervisedRuns.id })
+    .from(supervisedRuns)
+    .where(
+      and(
+        eq(supervisedRuns.orgId, args.orgId),
+        eq(supervisedRuns.templateId, args.templateId),
+        eq(supervisedRuns.status, "succeeded"),
+      ),
+    )
+    .limit(1);
+  return Boolean(row);
+}
 
 export default async function AgentTemplatePage({
   params,
@@ -115,6 +169,12 @@ export default async function AgentTemplatePage({
       })()
     : null;
 
+  // Agent lifecycle slice — flag off is BYTE-FOR-BYTE the existing page
+  // below (early return, no extra queries run). Flag on renders the
+  // five-stage ladder instead.
+  const lifecycleEnabled = isAgentLifecycleEnabled({ SF_AGENT_LIFECYCLE: process.env.SF_AGENT_LIFECYCLE });
+
+  if (!lifecycleEnabled) {
   return (
     <section className="animate-page-enter">
       {/* ── Sticky header (Claude Design, direction A) ──────────────────────
@@ -275,6 +335,169 @@ export default async function AgentTemplatePage({
             initialConnect={sellerConnect}
           />
         </EditorSection>
+      </div>
+    </section>
+  );
+  }
+
+  // ── Lifecycle ladder (SF_AGENT_LIFECYCLE=1) ────────────────────────────
+  const requiredToolkits = requiredToolkitSlugs(blueprint.connectors);
+  const composioConfigured =
+    requiredToolkits.length > 0 ? (await composioForOrg(orgId)) !== null : true;
+  const [gate, connections, latestRun, deployments] = await Promise.all([
+    lifecycleGate(
+      { getLatestEvalRun, hasSucceededSupervisedRun: hasSucceededSupervisedRunForTemplate },
+      { orgId, templateId: template.id },
+    ),
+    requiredToolkits.length > 0 && composioConfigured ? listConnections(orgId) : Promise.resolve([]),
+    findLatestSupervisedRun(orgId, template.id),
+    listDeployments(orgId),
+  ]);
+
+  // listConnections already returns the mapped ToolkitConnection[] shape —
+  // no second mapToolkitConnections pass needed (that helper is for RAW
+  // Composio SDK items, which listConnections has already reduced).
+  const connectedSlugs = new Set(connections.filter((c) => c.connected).map((c) => c.slug));
+  const connectedCount = countConnectedRequiredToolkits(requiredToolkits, connectedSlugs);
+  const hasDeploymentForTemplate = deployments.some((d) => d.agentTemplateId === template.id);
+  const hasDeploymentOrListing = hasDeploymentForTemplate || Boolean(sellerListing);
+
+  const stages = deriveLifecycleStages({
+    hasTemplate: true,
+    evalPass: gate.evalPass,
+    requiredToolkitCount: requiredToolkits.length,
+    connectedToolkitCount: connectedCount,
+    supervisedRunSucceeded: gate.supervisedRun,
+    hasDeploymentOrListing,
+  });
+
+  const connectionBySlug = new Map(connections.map((c) => [c.slug, c]));
+  const requiredToolkitViews: RequiredToolkitView[] = requiredToolkits.map((slug) => {
+    const catalog = getComposioToolkit(slug);
+    const conn = connectionBySlug.get(slug);
+    return {
+      slug,
+      name: catalog?.label ?? slug,
+      logo: catalog?.logo ?? null,
+      connected: conn?.connected ?? false,
+      why: `Used by ${template.name}'s workflow.`,
+    };
+  });
+
+  const derivedScenarios = (recordingSession?.derivedScenarios as EvalScenario[] | null) ?? [];
+  const answeredQuestions = (recordingSession?.answeredQuestions as
+    | { question: string | null; answer: string; answeredAt: string }[]
+    | null) ?? [];
+
+  return (
+    <section className="sf-lifecycle animate-page-enter">
+      <div className="sticky top-0 z-10 -mx-4 mb-2 border-b border-border/70 bg-background/90 px-4 py-3 backdrop-blur-xl sm:-mx-6 sm:px-6 lg:-mx-8 lg:px-8">
+        <div className="flex flex-wrap items-center gap-x-3 gap-y-2">
+          <Link
+            href="/studio/agents"
+            aria-label="Back to Agents"
+            className="crm-topbar-icon-btn size-9 shrink-0"
+          >
+            <ArrowLeft className="size-4" />
+          </Link>
+          <div className="flex min-w-0 items-center gap-2">
+            <Link
+              href="/studio/agents"
+              className="shrink-0 text-xs text-muted-foreground hover:text-foreground"
+            >
+              Agents
+            </Link>
+            <span aria-hidden className="text-xs text-muted-foreground">
+              /
+            </span>
+            <h1 className="truncate text-base font-semibold tracking-tight text-foreground sm:text-[17px]">
+              {template.name}
+            </h1>
+            <TemplateStatusBadge status={template.status} />
+          </div>
+        </div>
+        <div className="mt-3">
+          <LifecycleRail stages={stages} />
+        </div>
+      </div>
+
+      <div className="mx-auto max-w-3xl space-y-4 pt-6 pb-24">
+        <p className="max-w-2xl text-sm leading-relaxed text-muted-foreground">
+          {formatTemplateType(template.type)} template — walk it through Learned,
+          Verified, Connected, Run, then Sell.
+        </p>
+
+        <div className="pt-6">
+          <AgentTemplateEditor
+            templateId={template.id}
+            surface={surface}
+            isNew={isNew}
+            initialTrigger={trigger}
+            initialBlueprint={{
+              greeting: blueprint.greeting ?? "",
+              customSkillMd: blueprint.customSkillMd ?? "",
+              voice: blueprint.voice ?? DEFAULT_VOICE_RECEPTIONIST_VOICE,
+              capabilities: blueprint.capabilities ?? [...allCapabilities],
+              faq: (blueprint.faq ?? []).map((f) => ({ q: f.q, a: f.a })),
+              quoteRanges: (blueprint.quoteRanges ?? []).map((r) => ({
+                service: r.service,
+                low: r.low,
+                high: r.high,
+              })),
+              connectors: blueprint.connectors ?? [],
+              guardrails: blueprint.guardrails ?? null,
+              verify: blueprint.verify ?? null,
+            }}
+            allCapabilities={allCapabilities}
+            vettedConnectors={VETTED_CONNECTORS.map((c) => ({
+              id: c.id,
+              label: c.label,
+              secretService: c.secretService,
+            }))}
+          />
+        </div>
+
+        <LifecycleStageCard
+          stage={stages[0]}
+          description="What Seldon learned from your recording, and how to keep teaching it."
+        >
+          <LearnedStage
+            templateId={template.id}
+            hasRecording={Boolean(recordingProvenance)}
+            provenance={recordingProvenance}
+            initialAnsweredQuestions={answeredQuestions}
+            initialOpenQuestions={recordingProvenance?.openQuestions ?? []}
+          />
+        </LifecycleStageCard>
+
+        <LifecycleStageCard stage={stages[1]} description="Your recordings are the test.">
+          <VerifiedStage templateId={template.id} scenarios={derivedScenarios} />
+        </LifecycleStageCard>
+
+        <LifecycleStageCard stage={stages[2]} description="The apps this agent needs, connected.">
+          <ConnectedStage
+            templateId={template.id}
+            toolkits={requiredToolkitViews}
+            composioConfigured={composioConfigured}
+          />
+        </LifecycleStageCard>
+
+        <LifecycleStageCard stage={stages[3]} description="Run it once — watch every action.">
+          <RunStage templateId={template.id} initialLastRun={latestRun} />
+        </LifecycleStageCard>
+
+        <LifecycleStageCard stage={stages[4]} description="For myself, on the marketplace, or to a client.">
+          <SellStage
+            templateId={template.id}
+            templateName={template.name}
+            agentType={template.type}
+            builderName={builderName}
+            initialListing={sellerListing}
+            initialConnect={sellerConnect}
+            evalPass={gate.evalPass}
+            supervisedRunSucceeded={gate.supervisedRun}
+          />
+        </LifecycleStageCard>
       </div>
     </section>
   );
