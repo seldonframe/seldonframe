@@ -1,7 +1,7 @@
 import { describe, test } from "node:test";
 import assert from "node:assert/strict";
 
-import { runSupervised } from "@/lib/agents/lifecycle/supervised-run";
+import { runSupervised, buildKickoffMessage } from "@/lib/agents/lifecycle/supervised-run";
 import type { SupervisedRunActionEvent } from "@/db/schema/agent-lifecycle";
 
 const ORG_ID = "org-1";
@@ -32,6 +32,21 @@ function baseDeps(overrides: Partial<Parameters<typeof runSupervised>[0]> = {}) 
     finished,
   };
 }
+
+describe("buildKickoffMessage", () => {
+  test("schedule trigger -> the 'your schedule just fired' kickoff", () => {
+    assert.match(buildKickoffMessage({ kind: "schedule", cron: "0 * * * *", channel: "email" }), /schedule just fired/i);
+  });
+
+  test("inbound trigger -> the neutral 'run now' kickoff", () => {
+    assert.doesNotMatch(buildKickoffMessage({ kind: "inbound", channel: "chat" }), /schedule/i);
+  });
+
+  test("null/undefined trigger -> the neutral kickoff, never throws", () => {
+    assert.doesNotThrow(() => buildKickoffMessage(null));
+    assert.doesNotThrow(() => buildKickoffMessage(undefined));
+  });
+});
 
 describe("runSupervised", () => {
   test("happy path: creates a run, streams tool events in order, finishes succeeded", async () => {

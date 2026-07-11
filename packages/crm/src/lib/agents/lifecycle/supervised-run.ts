@@ -12,6 +12,7 @@
 // throwing `runTurn` is caught and recorded as 'failed', never propagated.
 
 import type { SupervisedRunActionEvent } from "@/db/schema/agent-lifecycle";
+import type { AgentTrigger } from "@/lib/agents/triggers/agent-trigger";
 
 /** Default hard timeout for one supervised run — long enough for a
  *  multi-tool-call turn, short enough that a wedged run doesn't strand the
@@ -58,6 +59,22 @@ export type SupervisedRunDeps = {
 export type SupervisedRunResult =
   | { ok: true; runId: string; status: "succeeded" | "failed"; summary: string }
   | { ok: false; error: "already_running" };
+
+/**
+ * The kickoff message that starts a supervised run — a plain-text turn that
+ * stands in for whatever would actually fire this template live. For a
+ * schedule trigger it's the SAME semantic shape `runDueScheduledAgents`
+ * sends on a real cron tick ("your schedule just fired"), just as a chat
+ * message rather than a SeldonEvent — no new trigger rail, per the spec's
+ * "NO new infrastructure" constraint. Every other trigger kind gets a
+ * neutral "go ahead and run now" kickoff. Pure; never throws.
+ */
+export function buildKickoffMessage(trigger: AgentTrigger | null | undefined): string {
+  if (trigger?.kind === "schedule") {
+    return "Your schedule just fired — go ahead and run your workflow now, exactly as if it were live.";
+  }
+  return "Go ahead and run your workflow now, exactly as if it were live.";
+}
 
 async function defaultRunWithTimeout<T>(fn: () => Promise<T>, timeoutMs: number): Promise<T | "timeout"> {
   let timer: ReturnType<typeof setTimeout>;
