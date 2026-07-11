@@ -89,6 +89,19 @@ export async function POST(request: Request): Promise<Response> {
     { role: "seldon", text: result.reply },
   ];
 
+  // Q&A record (agent lifecycle slice, Stage 01 "Learned"): whenever a merge
+  // applied, append the answered pair(s) to answered_questions so the record
+  // survives claim — decomposed pairs get their real question text, a direct
+  // merge gets `{question: null, answer: message}` (mirrors
+  // continueInterviewCore's post-claim persistence exactly).
+  const answeredAt = new Date().toISOString();
+  const newAnswered =
+    result.applied
+      ? (result.appliedPairs && result.appliedPairs.length > 0
+          ? result.appliedPairs.map((p) => ({ question: p.question, answer: p.answer, answeredAt }))
+          : [{ question: null, answer: message, answeredAt }])
+      : [];
+
   // Persist the updated FlowModel too (full-column update, same as
   // compile-trace's write to recordingSessions.flowModel) — otherwise
   // Seldon's "I'll update the flow" reply never actually reaches what
@@ -101,6 +114,11 @@ export async function POST(request: Request): Promise<Response> {
     .set({
       interviewLog: sql`COALESCE(${recordingSessions.interviewLog}, '[]'::jsonb) || ${JSON.stringify(newTurns)}::jsonb`,
       ...(result.applied ? { flowModel: result.model } : {}),
+      ...(newAnswered.length > 0
+        ? {
+            answeredQuestions: sql`COALESCE(${recordingSessions.answeredQuestions}, '[]'::jsonb) || ${JSON.stringify(newAnswered)}::jsonb`,
+          }
+        : {}),
       openQuestions: result.openQuestions,
       updatedAt: new Date(),
     })
