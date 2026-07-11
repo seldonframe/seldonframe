@@ -574,3 +574,17 @@ Package the build → test → deploy → sell → get-paid loop as a distributi
 - [x] Commit on branch; review block below
 
 **Review:** Pack lives at `skills/seldonframe-agent-business/{SKILL.md,README.md,SUBMISSION-KIT.md}` on `feature/agent-business-skill-pack`. Grounding: all 25 MCP tool names in the SKILL.md verified present in `skills/mcp-server/src/tools.js`; sell/get-paid documented as what they really are (Studio listing panel [human] + `set_usage_price`/`list_my_listings` ops on `/api/v1/build/listings` + `/api/v1/build/payout` [API/CLI]) since no MCP listing/payout tools exist. RED baseline (haiku, no skill): invented add_agent_tools/configure_voice_channel/configure_payment_receiver, misused submit_soul/create_subscription/send_sms, skipped evals → fed the grounding table. GREEN (haiku, skill only): correct 11-step loop with surfaces labeled, refused force:true, refused real-message testing, correct payout statuses, verbatim wizardUrl relay, no-key-upfront. Two tester-reported wording gaps patched post-GREEN (queued archetypes not creatable via create_agent; blueprint patchable-field list) — informational, sourced from tools.js. NOT submitted anywhere — SUBMISSION-KIT.md has Max's ordered checklist (merge→republish 1.57→topics→smoke→3 PRs; Aradotso is auto-ingest).
+
+## 2026-07-11 — Agent-lifecycle slice (Learn→Verify→Connect→Run→Sell) + Hermes bet specs
+
+- [x] Spec grounded in 3-scout recon + L-16 source verification (`docs/superpowers/specs/2026-07-11-agent-lifecycle-design.md`)
+- [x] Plan: 11 TDD tasks, two waves (`docs/superpowers/plans/2026-07-11-agent-lifecycle.md`)
+- [x] Wave 1 (T1–T5 pipeline/backend): flag + migration 0068 + inbox-watch trigger + interview decomposition + continue-interview-recompile + supervised-run backend + marketplace gate — 163/163 tests
+- [x] Wave 2 (T6–T11 UI): token-swap CSS + 5-stage ladder + all stages + deployToSelf — 197/197 tests, flag-off byte-identical
+- [x] Independent reviews: Wave 1 (opus) APPROVE + Wave 2 APPROVE — 8 non-blocking findings ALL fixed (F1–F8, incl. migration 0069 partial-unique running-run index)
+- [x] verify-build gate (independent runner): **PASS** — 0 new test failures of 9,496, tsc delta 0, journal +2 clean, regression greps empty; live smoke DEFERRED-TO-DEPLOY
+- [x] Hermes strategy doc + 4 Max-approved bet specs committed (`71f55cee6`)
+- [ ] **Max: merge call** (24 commits on feature/record-to-agent; migrations auto-run on deploy)
+- [ ] Post-deploy: flag `SF_AGENT_LIFECYCLE=1` → live smoke + vision gate on the ladder + supervised-run real-key smoke
+
+**Review:** All production code was either independently reviewed (waves) or is a tested remediation of a reviewer finding (fix wave); verify-runner was maker-independent. Known deferred: live render smoke of flag-on ladder (no local next build possible), Connected-stage per-step "why" line (needs binding→step mapping persisted — follow-up), toolkit logos unrendered.
