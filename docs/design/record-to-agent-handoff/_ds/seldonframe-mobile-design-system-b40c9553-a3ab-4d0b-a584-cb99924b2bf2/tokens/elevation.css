@@ -1,0 +1,38 @@
+/* ─────────────────────────────────────────────────────────────
+   SeldonFrame — Elevation
+   Depth comes from soft, layered shadows + a hairline border.
+   Never flat, never heavy. Shadows tint toward slate (--gray-900).
+   ───────────────────────────────────────────────────────────── */
+
+:root {
+  /* Hairline border used on every surface for crisp edges */
+  --hairline: 1px solid var(--border-hairline);
+
+  /* Soft layered shadow ramp */
+  --shadow-xs:
+    0 1px 2px rgba(15, 20, 28, 0.06);
+  --shadow-sm:
+    0 1px 2px rgba(15, 20, 28, 0.05),
+    0 4px 10px rgba(15, 20, 28, 0.05);
+  --shadow-card:
+    0 1px 2px rgba(15, 20, 28, 0.04),
+    0 8px 24px rgba(15, 20, 28, 0.07);
+  --shadow-card-hover:
+    0 2px 4px rgba(15, 20, 28, 0.06),
+    0 14px 36px rgba(15, 20, 28, 0.11);
+  --shadow-popover:
+    0 4px 8px rgba(15, 20, 28, 0.06),
+    0 18px 44px rgba(15, 20, 28, 0.16);
+  --shadow-sheet:
+    0 -2px 8px rgba(15, 20, 28, 0.05),
+    0 -24px 64px rgba(15, 20, 28, 0.22);
+
+  /* Accent glow for primary CTAs — derived from agency accent */
+  --shadow-accent:
+    0 6px 18px color-mix(in srgb, var(--accent) 30%, transparent);
+  --shadow-accent-press:
+    0 2px 8px color-mix(in srgb, var(--accent) 26%, transparent);
+
+  /* Focus ring */
+  --focus-ring: 0 0 0 3px var(--accent-ring);
+}
