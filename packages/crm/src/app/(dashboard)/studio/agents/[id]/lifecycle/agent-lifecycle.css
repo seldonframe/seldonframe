@@ -1,0 +1,53 @@
+/*
+ * Agent lifecycle slice (T6) — the token-swap layer.
+ *
+ * A small, scoped semantic-token subset the ladder consumes, adopting the
+ * TOKEN NAMES/SCALE from the Claude Design handoff's `_ds/` (docs/design/
+ * record-to-agent-handoff/) but binding VALUES to SeldonFrame's live
+ * dashboard chrome — never the handoff's warm-beige palette verbatim.
+ *
+ * Two mode scopes:
+ *   .sf-lifecycle       — light-first, values aligned to the existing
+ *                          dashboard tokens (var(--card) etc., defined
+ *                          globally in globals.css) so the ladder reads as
+ *                          part of the same product, not a themed insert.
+ *   .sf-lifecycle-dark   — reserved for /record's future adoption (spec
+ *                          non-goal this slice). Defined now so the swap
+ *                          layer exists; consumed nowhere in this slice.
+ *
+ * Plain CSS import — no runtime/JS dependency (L-18: this file is never a
+ * client-component import chain, just a stylesheet).
+ */
+
+.sf-lifecycle {
+  --lc-surface: var(--background);
+  --lc-card: var(--card);
+  --lc-ink: var(--foreground);
+  --lc-muted: var(--muted-foreground);
+  --lc-line: var(--border);
+  --lc-accent: var(--primary);
+  --lc-radius: 0.875rem;
+  --lc-motion: 180ms ease;
+}
+
+.sf-lifecycle-dark {
+  --lc-surface: #0b0b0f;
+  --lc-card: #131318;
+  --lc-ink: #f5f5f7;
+  --lc-muted: #9a9aa5;
+  --lc-line: #232329;
+  --lc-accent: #8b7cf6;
+  --lc-radius: 0.875rem;
+  --lc-motion: 180ms ease;
+}
+
+.sf-lifecycle-stage {
+  border-radius: var(--lc-radius);
+  border: 1px solid var(--lc-line);
+  background: var(--lc-card);
+  transition: border-color var(--lc-motion);
+}
+
+.sf-lifecycle-stage[data-complete="true"] {
+  border-color: color-mix(in srgb, var(--lc-accent) 35%, var(--lc-line));
+}
