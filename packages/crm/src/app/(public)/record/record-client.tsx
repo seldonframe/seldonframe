@@ -28,7 +28,10 @@ import {
   MAX_FRAMES_PER_RECORDING,
   MAX_RECORDING_SECONDS,
 } from "@/lib/recordings/policy";
-import { VIDEO_MAX_BYTES } from "@/lib/media/resolve-url";
+// NOTE: never import lib/media/resolve-url here — its import chain reaches
+// next/cache (server-only) and breaks the client bundle at next build
+// (L-18). policy.ts carries the client-safe copy of the cap.
+import { RECORDING_VIDEO_MAX_BYTES } from "@/lib/recordings/policy";
 import {
   SHARE_CACHE_NAME,
   STAGED_RECORDING_CACHE_KEY,
@@ -467,7 +470,11 @@ export function RecordClient({
       // only the raw video attachment is skipped when it wouldn't be
       // accepted or is over the size cap, same fail-soft posture as an
       // oversized live-capture video.
-      const video = file.size <= VIDEO_MAX_BYTES && file.type === "video/webm" ? file : null;
+      const video =
+        file.size <= RECORDING_VIDEO_MAX_BYTES &&
+        ["video/webm", "video/mp4", "video/quicktime"].includes(file.type)
+          ? file
+          : null;
 
       await finalizeRecording({ slotIndex, frames, transcript, video });
     } catch (err) {

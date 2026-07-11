@@ -40,3 +40,12 @@ export const MAX_FRAMES_PER_RECORDING = 240;
 export const MAX_FRAME_EDGE_PX = 1280;
 /** Max interview chat turns allowed per session. */
 export const MAX_INTERVIEW_TURNS = 30;
+
+/** Client-safe copy of the recording video size cap. The server truth lives
+ *  in lib/media/resolve-url.ts (VIDEO_MAX_BYTES) — but that module's import
+ *  chain (page-blocks/images → landing/set-r1-media → next/cache
+ *  revalidatePath) is server-only, and importing it from record-client.tsx
+ *  broke `next build` (L-18 class: client bundle pulling a server-only API;
+ *  tsc can't see it). Keep the two values in sync; route-guards.ts asserts
+ *  the server side. */
+export const RECORDING_VIDEO_MAX_BYTES = 50 * 1024 * 1024;
