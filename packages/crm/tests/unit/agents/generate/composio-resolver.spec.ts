@@ -165,6 +165,27 @@ describe("bindComposioToolkits — binding shape", () => {
     });
   });
 
+  test("a catalog slug seeds its curated default tools; a non-catalog slug stays [] (widened later by live discovery at persist time — see discover-tools.ts §2.2)", () => {
+    const bindings = bindComposioToolkits(["notion", "googlebusiness"]);
+
+    const notion = bindings.find((b) => b.id === "notion");
+    assert.ok(notion, "notion binding present");
+    assert.ok(
+      notion!.enabledTools.length > 0,
+      "catalog toolkit seeds its curated default tools",
+    );
+    assertValidBinding(notion);
+
+    const gb = bindings.find((b) => b.id === "googlebusiness");
+    assert.ok(gb, "googlebusiness binding present");
+    assert.deepEqual(
+      gb!.enabledTools,
+      [],
+      "non-catalog toolkit stays [] until the persist-time live-discovery fill",
+    );
+    assertValidBinding(gb);
+  });
+
   test("duplicate slugs collapse to one binding", () => {
     const bindings = bindComposioToolkits([
       "notion",
