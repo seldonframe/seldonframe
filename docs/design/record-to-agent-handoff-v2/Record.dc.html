@@ -1,0 +1,559 @@
+<!DOCTYPE html>
+<html>
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet>
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin="anonymous">
+  <link href="https://fonts.googleapis.com/css2?family=Geist:wght@400;500;600;700&family=Geist+Mono:wght@400;500&display=swap" rel="stylesheet">
+  <style>
+    html, body { margin: 0; padding: 0; background: #0B0F0E; }
+    a { color: #14B8A6; text-decoration: none; }
+    a:hover { color: #2DD4BF; }
+    button { font-family: inherit; cursor: pointer; }
+    input, textarea { font-family: inherit; }
+    input::placeholder, textarea::placeholder { color: rgba(231,229,222,0.32); }
+    @keyframes sfPulse { 0%, 100% { opacity: 1; } 50% { opacity: 0.3; } }
+    @keyframes sfBlink { 0%, 49% { opacity: 1; } 50%, 100% { opacity: 0; } }
+    @keyframes sfSpin { to { transform: rotate(360deg); } }
+  </style>
+</helmet>
+<div style="min-height: 100vh; background: #0B0F0E; color: #E7E5DE; font-family: 'Geist', ui-sans-serif, system-ui, sans-serif; -webkit-font-smoothing: antialiased;">
+
+  <!-- ── Header ─────────────────────────────────────────── -->
+  <header data-screen-label="Record header" style="border-bottom: 1px solid rgba(231,229,222,0.07);">
+    <div style="max-width: 1180px; margin: 0 auto; padding: 18px 24px; display: flex; align-items: center; gap: 12px; flex-wrap: wrap;">
+      <div style="display: flex; align-items: center; gap: 10px;">
+        <div style="width: 22px; height: 22px; border-radius: 5px; background: #14B8A6; display: grid; place-items: center;">
+          <div style="width: 8px; height: 8px; background: #0B0F0E; border-radius: 2px;"></div>
+        </div>
+        <span style="font-size: 15px; font-weight: 600; letter-spacing: -0.01em;">SeldonFrame</span>
+        <span style="font-family: 'Geist Mono', monospace; font-size: 13px; color: rgba(231,229,222,0.45);">/record</span>
+      </div>
+      <div style="margin-left: auto; display: flex; align-items: center; gap: 20px;">
+        <a href="#how" style="font-size: 13px; color: rgba(231,229,222,0.6);">How it works</a>
+        <a href="Agent Home.dc.html" style="font-size: 13px; color: rgba(231,229,222,0.6);">Sign in</a>
+      </div>
+    </div>
+  </header>
+
+  <!-- ── Hero + step strip ──────────────────────────────── -->
+  <section data-screen-label="Hero" id="how" style="max-width: 1180px; margin: 0 auto; padding: 64px 24px 40px;">
+    <h1 style="margin: 0; font-size: clamp(34px, 5vw, 54px); line-height: 1.05; letter-spacing: -0.03em; font-weight: 600; max-width: 760px;">Show Seldon how you work.<br>It builds the agent.</h1>
+    <p style="margin: 20px 0 0; font-size: 17px; line-height: 1.55; color: rgba(231,229,222,0.62); max-width: 560px; text-wrap: pretty;">Screen-record yourself doing the job once — talking out loud. Seldon watches, asks about what it didn't understand, and compiles a working agent. No signup to start.</p>
+
+    <div style="margin-top: 44px; display: flex; gap: 0; flex-wrap: wrap; row-gap: 20px;">
+      <sc-for list="{{ stepItems }}" as="st" hint-placeholder-count="3">
+        <div style="display: flex; align-items: flex-start; gap: 12px; padding-right: 36px; min-width: 220px; flex: 1;">
+          <div style="width: 28px; height: 28px; border-radius: 50%; flex-shrink: 0; display: grid; place-items: center; font-size: 13px; font-weight: 600; font-variant-numeric: tabular-nums; background: {{ st.bg }}; color: {{ st.fg }}; border: 1px solid {{ st.border }};">
+            <sc-if value="{{ st.isDone }}" hint-placeholder-val="{{ false }}">
+              <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"><path d="M20 6 9 17l-5-5"></path></svg>
+            </sc-if>
+            <sc-if value="{{ st.notDone }}" hint-placeholder-val="{{ true }}"><span>{{ st.n }}</span></sc-if>
+          </div>
+          <div>
+            <div style="font-size: 14px; font-weight: 600; letter-spacing: -0.01em; color: {{ st.titleColor }};">{{ st.title }}</div>
+            <div style="font-size: 13px; margin-top: 3px; color: rgba(231,229,222,0.5); line-height: 1.45; max-width: 220px;">{{ st.sub }}</div>
+          </div>
+        </div>
+      </sc-for>
+    </div>
+  </section>
+
+  <!-- ── Main: slots + recap ────────────────────────────── -->
+  <main style="max-width: 1180px; margin: 0 auto; padding: 8px 24px 96px; display: flex; gap: 40px; flex-wrap: wrap; align-items: flex-start;">
+
+    <!-- Slots column -->
+    <section data-screen-label="Recording slots" style="flex: 1.5; min-width: 320px;">
+      <div style="display: flex; align-items: baseline; gap: 12px; flex-wrap: wrap; margin-bottom: 6px;">
+        <h2 style="margin: 0; font-size: 18px; font-weight: 600; letter-spacing: -0.015em;">Your recordings</h2>
+        <sc-if value="{{ restored }}" hint-placeholder-val="{{ true }}">
+          <span style="font-size: 13px; color: rgba(231,229,222,0.45);">Restored from earlier · <button onClick="{{ startFresh }}" style="background: none; border: none; padding: 0; font-size: 13px; color: rgba(231,229,222,0.6); text-decoration: underline; text-underline-offset: 3px;">Start fresh</button></span>
+        </sc-if>
+      </div>
+      <p style="margin: 0 0 20px; font-size: 14px; color: rgba(231,229,222,0.5); max-width: 480px; line-height: 1.5;">One happy path is enough to start. Edge cases make the agent trustworthy — record the times things go differently.</p>
+
+      <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(290px, 1fr)); gap: 14px;">
+        <sc-for list="{{ slots }}" as="slot" hint-placeholder-count="6">
+          <div style="border: 1px solid {{ slot.borderColor }}; border-radius: 12px; background: #0F1413; padding: 18px; display: flex; flex-direction: column; gap: 12px; min-height: 148px;">
+            <div style="display: flex; align-items: center; justify-content: space-between; gap: 8px;">
+              <span style="font-size: 14px; font-weight: 600; letter-spacing: -0.01em;">{{ slot.name }}</span>
+              <span style="font-size: 10px; text-transform: uppercase; letter-spacing: 0.1em; font-weight: 600; color: {{ slot.tagColor }};">{{ slot.tag }}</span>
+            </div>
+
+            <!-- empty -->
+            <sc-if value="{{ slot.isEmpty }}" hint-placeholder-val="{{ true }}">
+              <div style="display: flex; flex-direction: column; gap: 12px; flex: 1;">
+                <p style="margin: 0; font-size: 13px; color: rgba(231,229,222,0.45); line-height: 1.5; flex: 1;">{{ slot.hint }}</p>
+                <sc-if value="{{ notMobile }}" hint-placeholder-val="{{ true }}">
+                  <div style="display: flex; align-items: center; gap: 14px;">
+                    <button onClick="{{ slot.onRecord }}" style="height: 40px; padding: 0 18px; border-radius: 8px; border: 1px solid rgba(231,229,222,0.16); background: transparent; color: #E7E5DE; font-size: 13px; font-weight: 600; display: inline-flex; align-items: center; gap: 8px;" style-hover="border-color: rgba(231,229,222,0.35);">
+                      <span style="width: 8px; height: 8px; border-radius: 50%; background: #F87171;"></span>
+                      Record
+                    </button>
+                    <button onClick="{{ slot.onUpload }}" style="background: none; border: none; padding: 0; font-size: 13px; color: rgba(231,229,222,0.5); text-decoration: underline; text-underline-offset: 3px;">or upload a file</button>
+                  </div>
+                </sc-if>
+                <sc-if value="{{ isMobile }}" hint-placeholder-val="{{ false }}">
+                  <div style="display: flex; flex-direction: column; gap: 8px;">
+                    <button onClick="{{ slot.onUpload }}" style="height: 46px; padding: 0 18px; border-radius: 8px; border: 1px solid rgba(231,229,222,0.16); background: transparent; color: #E7E5DE; font-size: 14px; font-weight: 600;">Upload a screen recording</button>
+                    <span style="font-size: 12px; color: rgba(231,229,222,0.4); line-height: 1.45;">Use your phone's built-in screen recorder (Control Center on iPhone), then upload the video here.</span>
+                  </div>
+                </sc-if>
+              </div>
+            </sc-if>
+
+            <!-- recording -->
+            <sc-if value="{{ slot.isRecording }}" hint-placeholder-val="{{ false }}">
+              <div style="display: flex; flex-direction: column; gap: 10px; flex: 1;">
+                <div style="display: flex; align-items: center; gap: 10px;">
+                  <span style="width: 9px; height: 9px; border-radius: 50%; background: #F87171; animation: sfPulse 1.4s ease-in-out infinite;"></span>
+                  <span style="font-size: 13px; font-weight: 600; color: #F87171;">Recording</span>
+                  <span style="font-size: 20px; font-weight: 600; font-variant-numeric: tabular-nums; letter-spacing: -0.01em; margin-left: auto;">{{ slot.elapsedFmt }}</span>
+                </div>
+                <div style="font-size: 12px; color: rgba(231,229,222,0.45); font-variant-numeric: tabular-nums;">{{ slot.frames }} frames captured</div>
+                <div style="font-family: 'Geist Mono', monospace; font-size: 12px; color: rgba(231,229,222,0.55); line-height: 1.5; border-top: 1px solid rgba(231,229,222,0.07); padding-top: 10px; min-height: 34px;">"{{ slot.transcript }}<span style="animation: sfBlink 1s step-end infinite;">▌</span></div>
+                <button onClick="{{ slot.onStop }}" style="height: 44px; border-radius: 8px; border: none; background: #E7E5DE; color: #0B0F0E; font-size: 14px; font-weight: 600;">Stop &amp; compile</button>
+              </div>
+            </sc-if>
+
+            <!-- uploading -->
+            <sc-if value="{{ slot.isUploading }}" hint-placeholder-val="{{ false }}">
+              <div style="display: flex; flex-direction: column; gap: 12px; flex: 1; justify-content: center;">
+                <div style="display: flex; align-items: center; gap: 10px;">
+                  <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="rgba(231,229,222,0.6)" stroke-width="2" stroke-linecap="round" style="animation: sfSpin 1s linear infinite;"><path d="M21 12a9 9 0 1 1-6.2-8.56"></path></svg>
+                  <span style="font-size: 13px; color: rgba(231,229,222,0.7);">Uploading…</span>
+                  <span style="font-size: 12px; color: rgba(231,229,222,0.4); margin-left: auto; font-variant-numeric: tabular-nums;">{{ slot.progressPct }}%</span>
+                </div>
+                <div style="height: 3px; border-radius: 2px; background: rgba(231,229,222,0.1); overflow: hidden;"><div style="height: 100%; background: rgba(231,229,222,0.5); border-radius: 2px; transition: width 0.6s; width: {{ slot.progressW }};"></div></div>
+              </div>
+            </sc-if>
+
+            <!-- compiling -->
+            <sc-if value="{{ slot.isCompiling }}" hint-placeholder-val="{{ false }}">
+              <div style="display: flex; flex-direction: column; gap: 12px; flex: 1; justify-content: center;">
+                <div style="display: flex; align-items: center; gap: 10px;">
+                  <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="#14B8A6" stroke-width="2" stroke-linecap="round" style="animation: sfSpin 1.2s linear infinite;"><path d="M21 12a9 9 0 1 1-6.2-8.56"></path></svg>
+                  <span style="font-size: 13px; color: #14B8A6; font-weight: 500;">Compiling — tracing your steps</span>
+                  <span style="font-size: 12px; color: rgba(231,229,222,0.4); margin-left: auto; font-variant-numeric: tabular-nums;">{{ slot.progressPct }}%</span>
+                </div>
+                <div style="height: 3px; border-radius: 2px; background: rgba(231,229,222,0.1); overflow: hidden;"><div style="height: 100%; background: #14B8A6; border-radius: 2px; transition: width 0.6s; width: {{ slot.progressW }};"></div></div>
+              </div>
+            </sc-if>
+
+            <!-- traced -->
+            <sc-if value="{{ slot.isTraced }}" hint-placeholder-val="{{ false }}">
+              <div style="display: flex; gap: 14px; flex: 1;">
+                <div style="width: 76px; height: 48px; border-radius: 6px; background: #E9E7E0; position: relative; overflow: hidden; flex-shrink: 0;">
+                  <div style="height: 10px; background: #D6D3CA; display: flex; align-items: center; gap: 3px; padding: 0 5px;">
+                    <span style="width: 3px; height: 3px; border-radius: 50%; background: #B9B5AA;"></span>
+                    <span style="width: 3px; height: 3px; border-radius: 50%; background: #B9B5AA;"></span>
+                    <span style="width: 3px; height: 3px; border-radius: 50%; background: #B9B5AA;"></span>
+                  </div>
+                  <div style="margin: 6px 6px 0; height: 4px; width: 70%; background: #C9C5BA; border-radius: 2px;"></div>
+                  <div style="margin: 4px 6px 0; height: 4px; width: 52%; background: #D6D3CA; border-radius: 2px;"></div>
+                  <div style="margin: 4px 6px 0; height: 4px; width: 60%; background: #D6D3CA; border-radius: 2px;"></div>
+                  <div style="position: absolute; right: 4px; bottom: 4px; background: rgba(11,15,14,0.82); color: #E7E5DE; font-size: 9px; padding: 1px 4px; border-radius: 3px; font-variant-numeric: tabular-nums;">{{ slot.duration }}</div>
+                </div>
+                <div style="display: flex; flex-direction: column; gap: 5px; min-width: 0; flex: 1;">
+                  <input value="{{ slot.label }}" onChange="{{ slot.onLabelChange }}" aria-label="Recording label" style="background: transparent; border: 1px solid transparent; border-radius: 6px; padding: 3px 6px; margin-left: -7px; color: #E7E5DE; font-size: 14px; font-weight: 600; letter-spacing: -0.01em; width: 100%;" style-focus="border-color: rgba(231,229,222,0.25); outline: none;" style-hover="border-color: rgba(231,229,222,0.12);">
+                  <span style="font-size: 12px; color: #14B8A6;">Traced · {{ slot.steps }} steps found</span>
+                  <button onClick="{{ slot.onRerecord }}" style="background: none; border: none; padding: 0; font-size: 12px; color: rgba(231,229,222,0.4); text-align: left; text-decoration: underline; text-underline-offset: 3px;">Re-record</button>
+                </div>
+              </div>
+            </sc-if>
+
+            <!-- failed -->
+            <sc-if value="{{ slot.isFailed }}" hint-placeholder-val="{{ false }}">
+              <div style="display: flex; flex-direction: column; gap: 10px; flex: 1;">
+                <div style="display: flex; gap: 8px; align-items: flex-start;">
+                  <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="#F87171" stroke-width="2" stroke-linecap="round" style="flex-shrink: 0; margin-top: 1px;"><circle cx="12" cy="12" r="10"></circle><path d="M12 8v4"></path><path d="M12 16h.01"></path></svg>
+                  <p style="margin: 0; font-size: 13px; color: rgba(231,229,222,0.65); line-height: 1.5;">{{ slot.error }}</p>
+                </div>
+                <button onClick="{{ slot.onRecord }}" style="height: 44px; border-radius: 8px; border: 1px solid rgba(231,229,222,0.16); background: transparent; color: #E7E5DE; font-size: 13px; font-weight: 600; display: inline-flex; align-items: center; justify-content: center; gap: 8px;" style-hover="border-color: rgba(231,229,222,0.35);">
+                  <span style="width: 8px; height: 8px; border-radius: 50%; background: #F87171;"></span>
+                  Re-record
+                </button>
+              </div>
+            </sc-if>
+          </div>
+        </sc-for>
+      </div>
+    </section>
+
+    <!-- Recap panel -->
+    <sc-if value="{{ recapVisible }}" hint-placeholder-val="{{ true }}">
+      <aside data-screen-label="Recap panel" style="flex: 1; min-width: 320px; max-width: 460px; border: 1px solid rgba(231,229,222,0.1); border-radius: 14px; background: #0F1413; overflow: hidden;">
+        <div style="padding: 22px 22px 18px; border-bottom: 1px solid rgba(231,229,222,0.07);">
+          <div style="font-size: 10px; text-transform: uppercase; letter-spacing: 0.12em; font-weight: 600; color: #14B8A6; margin-bottom: 10px;">What Seldon understood</div>
+          <h3 style="margin: 0; font-size: 19px; font-weight: 600; letter-spacing: -0.015em;">Week Pack forwarding</h3>
+          <p style="margin: 8px 0 0; font-size: 13px; line-height: 1.55; color: rgba(231,229,222,0.55); text-wrap: pretty;">Forward each new "Week Pack" email to the ops account and star the original so nothing is processed twice.</p>
+          <div style="margin-top: 12px; font-size: 12px; color: rgba(231,229,222,0.5);"><span style="color: #34D399;">4 automatable</span> · <span style="color: #FBBF24;">1 needs approval</span> · <span style="color: #F87171;">1 stays with you</span></div>
+        </div>
+
+        <div style="padding: 18px 22px; border-bottom: 1px solid rgba(231,229,222,0.07); display: flex; flex-direction: column; gap: 14px;">
+          <sc-for list="{{ steps }}" as="step" hint-placeholder-count="6">
+            <div style="display: flex; gap: 12px; align-items: flex-start;">
+              <span style="font-size: 12px; font-variant-numeric: tabular-nums; color: rgba(231,229,222,0.35); width: 16px; flex-shrink: 0; padding-top: 2px;">{{ step.n }}</span>
+              <div style="min-width: 0;">
+                <div style="display: flex; align-items: center; gap: 8px; flex-wrap: wrap;">
+                  <span style="font-size: 13px; font-weight: 500;">{{ step.t }}</span>
+                  <span style="font-size: 10px; border: 1px solid rgba(231,229,222,0.14); border-radius: 4px; padding: 1px 5px; color: rgba(231,229,222,0.5); letter-spacing: 0.02em;">{{ step.app }}</span>
+                  <span style="font-size: 11px; font-weight: 600; color: {{ step.covColor }}; display: inline-flex; align-items: center; gap: 5px;"><span style="width: 6px; height: 6px; border-radius: 50%; background: {{ step.covColor }};"></span>{{ step.cov }}</span>
+                </div>
+                <div style="font-size: 12px; color: rgba(231,229,222,0.42); margin-top: 3px; line-height: 1.45;">{{ step.why }}</div>
+              </div>
+            </div>
+          </sc-for>
+        </div>
+
+        <div style="padding: 18px 22px; border-bottom: 1px solid rgba(231,229,222,0.07);">
+          <div style="font-size: 10px; text-transform: uppercase; letter-spacing: 0.12em; font-weight: 600; color: rgba(231,229,222,0.45); margin-bottom: 10px;">Branches</div>
+          <div style="display: flex; flex-direction: column; gap: 8px;">
+            <sc-for list="{{ branches }}" as="br" hint-placeholder-count="3">
+              <div style="display: flex; gap: 9px; font-size: 13px; color: rgba(231,229,222,0.62); line-height: 1.5;"><span style="color: rgba(231,229,222,0.3);">→</span><span>{{ br.text }}</span></div>
+            </sc-for>
+          </div>
+        </div>
+
+        <div style="padding: 18px 22px; border-bottom: 1px solid rgba(231,229,222,0.07);">
+          <div style="font-size: 10px; text-transform: uppercase; letter-spacing: 0.12em; font-weight: 600; color: rgba(231,229,222,0.45); margin-bottom: 12px;">Open questions</div>
+          <div style="display: flex; flex-direction: column; gap: 14px;">
+            <sc-for list="{{ questions }}" as="q" hint-placeholder-count="3">
+              <div style="display: flex; gap: 10px; align-items: flex-start;">
+                <sc-if value="{{ q.answered }}" hint-placeholder-val="{{ true }}">
+                  <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="#14B8A6" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" style="flex-shrink: 0; margin-top: 2px;"><path d="M20 6 9 17l-5-5"></path></svg>
+                  <div style="font-size: 13px; line-height: 1.5;"><span style="color: rgba(231,229,222,0.5);">{{ q.q }}</span> <span style="font-weight: 600; color: #E7E5DE;">{{ q.a }}</span></div>
+                </sc-if>
+                <sc-if value="{{ q.unanswered }}" hint-placeholder-val="{{ false }}">
+                  <span style="width: 15px; height: 15px; border: 1.5px solid rgba(231,229,222,0.3); border-radius: 50%; flex-shrink: 0; margin-top: 2px;"></span>
+                  <div style="flex: 1; min-width: 0;">
+                    <div style="font-size: 13px; line-height: 1.5; color: #E7E5DE;">{{ q.q }}</div>
+                    <div style="display: flex; gap: 8px; margin-top: 8px;">
+                      <input value="{{ q.draft }}" onChange="{{ q.onDraft }}" placeholder="Type your answer" style="flex: 1; min-width: 0; height: 38px; border-radius: 8px; border: 1px solid rgba(231,229,222,0.14); background: #0B0F0E; color: #E7E5DE; font-size: 13px; padding: 0 12px;" style-focus="border-color: #14B8A6; outline: none;">
+                      <button onClick="{{ q.onAnswer }}" style="height: 38px; padding: 0 14px; border-radius: 8px; border: none; background: rgba(20,184,166,0.14); color: #2DD4BF; font-size: 13px; font-weight: 600;">Answer</button>
+                    </div>
+                  </div>
+                </sc-if>
+              </div>
+            </sc-for>
+          </div>
+        </div>
+
+        <!-- Ask Seldon chat -->
+        <div data-screen-label="Ask Seldon chat" style="padding: 18px 22px;">
+          <div style="font-size: 10px; text-transform: uppercase; letter-spacing: 0.12em; font-weight: 600; color: rgba(231,229,222,0.45); margin-bottom: 4px;">Ask Seldon</div>
+          <p style="margin: 0 0 12px; font-size: 12px; color: rgba(231,229,222,0.42);">Corrections, details, anything the recording didn't show.</p>
+          <div style="display: flex; flex-direction: column; gap: 10px; max-height: 300px; overflow-y: auto;">
+            <sc-for list="{{ chat }}" as="msg" hint-placeholder-count="3">
+              <sc-if value="{{ msg.isUser }}" hint-placeholder-val="{{ true }}">
+                <div style="align-self: flex-end; max-width: 85%; background: rgba(20,184,166,0.1); border: 1px solid rgba(20,184,166,0.18); border-radius: 10px 10px 3px 10px; padding: 8px 12px; font-size: 13px; line-height: 1.5;">{{ msg.text }}</div>
+              </sc-if>
+              <sc-if value="{{ msg.isSeldon }}" hint-placeholder-val="{{ false }}">
+                <div style="align-self: flex-start; max-width: 90%; font-size: 13px; line-height: 1.5; color: rgba(231,229,222,0.75);"><span style="color: #14B8A6; font-weight: 600;">Seldon</span> — {{ msg.text }}</div>
+              </sc-if>
+              <sc-if value="{{ msg.isNotice }}" hint-placeholder-val="{{ false }}">
+                <div style="align-self: stretch; border: 1px solid rgba(248,113,113,0.25); border-radius: 10px; padding: 10px 12px;">
+                  <div style="font-size: 12px; font-weight: 600; color: #F87171; margin-bottom: 4px;">Couldn't apply this</div>
+                  <div style="font-size: 13px; line-height: 1.5; color: rgba(231,229,222,0.62);">{{ msg.text }}</div>
+                  <button onClick="{{ retryNotice }}" style="background: none; border: none; padding: 0; margin-top: 8px; font-size: 12px; font-weight: 600; color: #E7E5DE; text-decoration: underline; text-underline-offset: 3px;">Retry</button>
+                </div>
+              </sc-if>
+            </sc-for>
+            <sc-if value="{{ thinking }}" hint-placeholder-val="{{ false }}">
+              <div style="align-self: flex-start; display: flex; align-items: center; gap: 8px; font-size: 13px; color: rgba(231,229,222,0.5);">
+                <span style="width: 7px; height: 7px; border-radius: 50%; background: #14B8A6; animation: sfPulse 1.2s ease-in-out infinite;"></span>
+                Seldon is updating the flow…
+              </div>
+            </sc-if>
+          </div>
+          <div style="display: flex; gap: 8px; margin-top: 14px;">
+            <input value="{{ draft }}" onChange="{{ onDraft }}" onKeyDown="{{ onDraftKey }}" placeholder="Tell Seldon something…" style="flex: 1; min-width: 0; height: 44px; border-radius: 9px; border: 1px solid rgba(231,229,222,0.14); background: #0B0F0E; color: #E7E5DE; font-size: 13px; padding: 0 14px;" style-focus="border-color: #14B8A6; outline: none;">
+            <button onClick="{{ send }}" aria-label="Send" style="width: 44px; height: 44px; border-radius: 9px; border: 1px solid rgba(231,229,222,0.14); background: transparent; color: #E7E5DE; display: grid; place-items: center;" style-hover="border-color: rgba(231,229,222,0.35);">
+              <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="m22 2-7 20-4-9-9-4z"></path><path d="M22 2 11 13"></path></svg>
+            </button>
+          </div>
+        </div>
+
+        <!-- CTA -->
+        <div style="padding: 18px 22px 22px; border-top: 1px solid rgba(231,229,222,0.07);">
+          <a href="Agent Home.dc.html" style="display: flex; align-items: center; justify-content: center; height: 48px; border-radius: 9px; background: #14B8A6; color: #052E2B; font-size: 14px; font-weight: 600; letter-spacing: -0.01em;" style-hover="background: #2DD4BF; color: #052E2B;">
+            <sc-if value="{{ anonymous }}" hint-placeholder-val="{{ true }}"><span>Looks right — claim &amp; compile my agent</span></sc-if>
+            <sc-if value="{{ signedIn }}" hint-placeholder-val="{{ false }}"><span>Looks right — compile my agent</span></sc-if>
+          </a>
+          <p style="margin: 10px 0 0; text-align: center; font-size: 12px; color: rgba(231,229,222,0.4);">Free · takes about 2 minutes · you approve everything before it runs</p>
+        </div>
+      </aside>
+    </sc-if>
+  </main>
+
+  <footer style="border-top: 1px solid rgba(231,229,222,0.07);">
+    <div style="max-width: 1180px; margin: 0 auto; padding: 20px 24px; display: flex; gap: 16px; align-items: center; font-size: 12px; color: rgba(231,229,222,0.35);">
+      <span>SeldonFrame</span>
+      <span>Recordings stay private — they train your agent only.</span>
+    </div>
+  </footer>
+</div>
+</x-dc>
+<script type="text/x-dc" data-dc-script data-props="{
+  &quot;restoredSession&quot;: { &quot;editor&quot;: &quot;boolean&quot;, &quot;default&quot;: true, &quot;tsType&quot;: &quot;boolean&quot;, &quot;section&quot;: &quot;Demo state&quot; },
+  &quot;anonymousVisitor&quot;: { &quot;editor&quot;: &quot;boolean&quot;, &quot;default&quot;: true, &quot;tsType&quot;: &quot;boolean&quot;, &quot;section&quot;: &quot;Demo state&quot; }
+}">
+const TRANSCRIPT_LINES = [
+  "…so this one came from a sender I didn't recognize, watch what I do…",
+  "…first I check the attachment is actually the full pack…",
+  "…then I forward it over to ops and star the original…",
+  "…if it's already starred I just leave it alone…",
+];
+
+const STEPS = [
+  { n: "1", t: 'Find new "Week Pack" emails', app: "Gmail", cov: "Automatable", covColor: "#34D399", why: "Watched you search — Seldon can query Gmail directly" },
+  { n: "2", t: "Check the sender is your supplier", app: "Gmail", cov: "Needs approval", covColor: "#FBBF24", why: "You paused to check — Seldon will ask when the sender is new" },
+  { n: "3", t: "Forward to ops@jmarinheating.com", app: "Gmail", cov: "Automatable", covColor: "#34D399", why: "Exact address confirmed in your answer below" },
+  { n: "4", t: "Flag incomplete packs for review", app: "Gmail", cov: "Stays with you", covColor: "#F87171", why: "You skimmed the manifest by eye — no rule to copy yet" },
+  { n: "5", t: "Star the original", app: "Gmail", cov: "Automatable", covColor: "#34D399", why: "Seen in both recordings, no variation" },
+  { n: "6", t: "Archive the thread", app: "Gmail", cov: "Automatable", covColor: "#34D399", why: "You answered: archive it" },
+];
+
+class Component extends DCLogic {
+  state = this.seed(this.props.restoredSession ?? true);
+
+  seed(restored) {
+    const base = {
+      draft: "",
+      thinking: false,
+      isMobile: false,
+      restored,
+      branches: [
+        "If the sender isn't a saved supplier → Seldon pauses and asks you first",
+        "If the email is already starred → skip it (already processed)",
+        "If no Week Pack arrives by Friday → do nothing (you said the cadence varies)",
+      ],
+      qDrafts: {},
+    };
+    if (!restored) {
+      return Object.assign(base, {
+        slots: [
+          { id: "happy", name: "Happy path", hint: "One normal, successful run — start to finish, talking out loud.", status: "empty" },
+          { id: "e1", name: "Edge case 1", hint: "A time it goes differently.", status: "empty" },
+          { id: "e2", name: "Edge case 2", hint: "Another variation, if you have one.", status: "empty" },
+          { id: "e3", name: "Edge case 3", hint: "Optional.", status: "empty" },
+          { id: "e4", name: "Edge case 4", hint: "Optional.", status: "empty" },
+          { id: "e5", name: "Edge case 5", hint: "Optional.", status: "empty" },
+        ],
+        questions: [],
+        chat: [],
+      });
+    }
+    return Object.assign(base, {
+      slots: [
+        { id: "happy", name: "Happy path", hint: "", status: "traced", label: "Forward Week Pack & star original", duration: "2:41", steps: 6 },
+        { id: "e1", name: "Edge case 1", hint: "", status: "recording", elapsed: 47, frames: 94, tIdx: 0 },
+        { id: "e2", name: "Edge case 2", hint: "", status: "compiling", progress: 62, recSeconds: 73, pendingLabel: "Unknown sender variation" },
+        { id: "e3", name: "Edge case 3", hint: "", status: "failed", error: "The upload cut off at 0:12 — Seldon couldn't see the full flow." },
+        { id: "e4", name: "Edge case 4", hint: "Another variation, if you have one.", status: "empty" },
+        { id: "e5", name: "Edge case 5", hint: "Optional.", status: "empty" },
+      ],
+      questions: [
+        { q: "Which address should forwards go to?", a: "ops@jmarinheating.com", answered: true },
+        { q: "Archive the original after starring, or leave it in the inbox?", a: "Archive it", answered: true },
+        { q: "If two Week Pack emails arrive the same day, forward both or only the newest?", a: "", answered: false },
+      ],
+      chat: [
+        { role: "user", text: "The forward address is ops@jmarinheating.com" },
+        { role: "seldon", text: "Applied — step 3 now forwards to ops@jmarinheating.com." },
+        { role: "user", text: "If the attachment is missing, just skip that email" },
+        { role: "notice", text: "None of your recordings show an email without an attachment, so I can't verify the skip is safe. Re-record it as an edge case, or retry and I'll add it as an unverified branch." },
+      ],
+    });
+  }
+
+  componentDidMount() {
+    this.timer = setInterval(() => this.tick(), 1000);
+    this.mq = window.matchMedia("(max-width: 720px)");
+    this.mqHandler = () => this.setState({ isMobile: this.mq.matches });
+    this.mq.addEventListener("change", this.mqHandler);
+    this.mqHandler();
+  }
+
+  componentWillUnmount() {
+    clearInterval(this.timer);
+    if (this.mq) this.mq.removeEventListener("change", this.mqHandler);
+  }
+
+  componentDidUpdate(prevProps) {
+    const prev = prevProps.restoredSession ?? true;
+    const cur = this.props.restoredSession ?? true;
+    if (prev !== cur) this.setState(this.seed(cur));
+  }
+
+  tick() {
+    let changed = false;
+    const slots = this.state.slots.map((s) => {
+      if (s.status === "recording") {
+        changed = true;
+        const elapsed = s.elapsed + 1;
+        return { ...s, elapsed, frames: s.frames + 2, tIdx: elapsed % 4 === 0 ? s.tIdx + 1 : s.tIdx };
+      }
+      if (s.status === "uploading") {
+        changed = true;
+        const p = (s.progress ?? 0) + 22;
+        return p >= 100 ? { ...s, status: "compiling", progress: 4 } : { ...s, progress: p };
+      }
+      if (s.status === "compiling") {
+        changed = true;
+        const p = (s.progress ?? 0) + 8;
+        if (p >= 100) {
+          return { ...s, status: "traced", label: s.pendingLabel || s.name + " — new variation", duration: this.fmt(s.recSeconds || 63), steps: 4 };
+        }
+        return { ...s, progress: p };
+      }
+      return s;
+    });
+    if (changed) this.setState({ slots });
+  }
+
+  fmt(sec) {
+    return Math.floor(sec / 60) + ":" + String(sec % 60).padStart(2, "0");
+  }
+
+  patchSlot(id, patch) {
+    this.setState((st) => ({ slots: st.slots.map((s) => (s.id === id ? { ...s, ...patch } : s)) }));
+  }
+
+  renderVals() {
+    const st = this.state;
+    const anyTraced = st.slots.some((s) => s.status === "traced");
+    const hasUnanswered = st.questions.some((q) => !q.answered);
+    const current = !anyTraced ? 1 : hasUnanswered ? 2 : 3;
+
+    const stepItems = [
+      { n: "1", title: "Record yourself working", sub: "Talk out loud — narration is half the signal." },
+      { n: "2", title: "Answer Seldon's questions", sub: "It asks only what the recording didn't show." },
+      { n: "3", title: "Get your agent", sub: "Compiled, testable, yours to switch on." },
+    ].map((s, i) => {
+      const n = i + 1;
+      const isDone = n < current;
+      const isCurrent = n === current;
+      return {
+        ...s,
+        isDone,
+        notDone: !isDone,
+        bg: isDone ? "#14B8A6" : isCurrent ? "rgba(20,184,166,0.14)" : "transparent",
+        fg: isDone ? "#052E2B" : isCurrent ? "#2DD4BF" : "rgba(231,229,222,0.4)",
+        border: isDone ? "#14B8A6" : isCurrent ? "rgba(20,184,166,0.5)" : "rgba(231,229,222,0.16)",
+        titleColor: isCurrent || isDone ? "#E7E5DE" : "rgba(231,229,222,0.45)",
+      };
+    });
+
+    const slots = st.slots.map((s) => {
+      const status = s.status;
+      const tagMap = {
+        empty: [s.id === "happy" ? "Start here" : "Optional", s.id === "happy" ? "#2DD4BF" : "rgba(231,229,222,0.35)"],
+        recording: ["Recording", "#F87171"],
+        uploading: ["Uploading", "rgba(231,229,222,0.5)"],
+        compiling: ["Compiling", "#14B8A6"],
+        traced: ["Traced", "#14B8A6"],
+        failed: ["Failed", "#F87171"],
+      };
+      const [tag, tagColor] = tagMap[status];
+      return {
+        ...s,
+        tag,
+        tagColor,
+        isEmpty: status === "empty",
+        isRecording: status === "recording",
+        isUploading: status === "uploading",
+        isCompiling: status === "compiling",
+        isTraced: status === "traced",
+        isFailed: status === "failed",
+        borderColor: status === "failed" ? "rgba(248,113,113,0.35)" : status === "recording" ? "rgba(248,113,113,0.25)" : "rgba(231,229,222,0.1)",
+        elapsedFmt: this.fmt(s.elapsed || 0),
+        transcript: TRANSCRIPT_LINES[(s.tIdx || 0) % TRANSCRIPT_LINES.length],
+        progressPct: Math.min(99, s.progress || 0),
+        progressW: Math.min(99, s.progress || 0) + "%",
+        onRecord: () => this.patchSlot(s.id, { status: "recording", elapsed: 0, frames: 0, tIdx: 0, error: null }),
+        onStop: () => this.patchSlot(s.id, { status: "uploading", progress: 12, recSeconds: s.elapsed }),
+        onUpload: () => this.patchSlot(s.id, { status: "uploading", progress: 8, recSeconds: 88 }),
+        onRerecord: () => this.patchSlot(s.id, { status: "empty" }),
+        onLabelChange: (e) => this.patchSlot(s.id, { label: e.target.value }),
+      };
+    });
+
+    const questions = st.questions.map((q, i) => ({
+      ...q,
+      unanswered: !q.answered,
+      draft: st.qDrafts[i] || "",
+      onDraft: (e) => this.setState({ qDrafts: { ...this.state.qDrafts, [i]: e.target.value } }),
+      onAnswer: () => {
+        const val = (this.state.qDrafts[i] || "").trim();
+        if (!val) return;
+        this.setState((prev) => ({
+          questions: prev.questions.map((qq, j) => (j === i ? { ...qq, answered: true, a: val } : qq)),
+          chat: [...prev.chat, { role: "seldon", text: "Got it — answer recorded and applied to the flow." }],
+        }));
+      },
+    }));
+
+    const chat = st.chat.map((m) => ({ ...m, isUser: m.role === "user", isSeldon: m.role === "seldon", isNotice: m.role === "notice" }));
+
+    return {
+      stepItems,
+      slots,
+      steps: STEPS,
+      branches: st.branches.map((b) => ({ text: b })),
+      questions,
+      chat,
+      thinking: st.thinking,
+      draft: st.draft,
+      restored: st.restored,
+      recapVisible: anyTraced,
+      isMobile: st.isMobile,
+      notMobile: !st.isMobile,
+      anonymous: this.props.anonymousVisitor ?? true,
+      signedIn: !(this.props.anonymousVisitor ?? true),
+      onDraft: (e) => this.setState({ draft: e.target.value }),
+      onDraftKey: (e) => { if (e.key === "Enter") this.send(); },
+      send: () => this.send(),
+      retryNotice: () => this.retryNotice(),
+      startFresh: () => this.setState(this.seed(false)),
+    };
+  }
+
+  send() {
+    const text = this.state.draft.trim();
+    if (!text || this.state.thinking) return;
+    this.setState((st) => ({ chat: [...st.chat, { role: "user", text }], draft: "", thinking: true }));
+    setTimeout(() => {
+      this.setState((st) => {
+        const unansweredIdx = st.questions.findIndex((q) => !q.answered);
+        const questions = unansweredIdx >= 0 ? st.questions.map((q, i) => (i === unansweredIdx ? { ...q, answered: true, a: text } : q)) : st.questions;
+        return {
+          thinking: false,
+          questions,
+          chat: [...st.chat, { role: "seldon", text: unansweredIdx >= 0 ? "Applied — that answers the open question above. The flow is updated." : "Applied — the flow is updated. Check the recap above." }],
+        };
+      });
+    }, 1600);
+  }
+
+  retryNotice() {
+    if (this.state.thinking) return;
+    this.setState({ thinking: true });
+    setTimeout(() => {
+      this.setState((st) => ({
+        thinking: false,
+        chat: st.chat.map((m) => (m.role === "notice" ? { role: "seldon", text: "Added as an unverified branch: no attachment → skip and log it. It'll show as untested until an eval covers it." } : m)),
+        branches: st.branches.includes("If the attachment is missing → skip and log it (unverified — no recording covers this)") ? st.branches : [...st.branches, "If the attachment is missing → skip and log it (unverified — no recording covers this)"],
+      }));
+    }, 1600);
+  }
+}
+</script>
+</body>
+</html>

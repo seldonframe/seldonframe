@@ -1,0 +1,39 @@
+/* ─────────────────────────────────────────────────────────────
+   SeldonFrame — Typography
+   Geist for everything; Geist Mono for numerics & data.
+   Mobile-first scale (390px baseline). Tight tracking on display.
+   ───────────────────────────────────────────────────────────── */
+
+:root {
+  --font-sans: "Geist", ui-sans-serif, system-ui, -apple-system, "Segoe UI", sans-serif;
+  --font-mono: "Geist Mono", ui-monospace, "SF Mono", Menlo, monospace;
+
+  /* Weights */
+  --weight-regular: 400;
+  --weight-book:    450;
+  --weight-medium:  500;
+  --weight-semi:    550;
+  --weight-bold:    600;
+  --weight-heavy:   700;
+
+  /* Type scale — size / line-height / tracking
+     Names map to mobile usage roles. */
+  --type-display:   28px;  /* big numbers, screen hero */
+  --type-title:     22px;  /* screen titles */
+  --type-heading:   18px;  /* card titles, sheet titles */
+  --type-body:      16px;  /* default reading text, inputs */
+  --type-subhead:   15px;  /* dense list primary text */
+  --type-label:     14px;  /* labels, secondary list text */
+  --type-caption:   13px;  /* metadata, timestamps */
+  --type-micro:     11px;  /* eyebrows / uppercase tags */
+
+  --lh-tight:  1.12;  /* @kind other */
+  --lh-snug:   1.28;  /* @kind other */
+  --lh-normal: 1.45;  /* @kind other */
+
+  --track-display: -0.022em;
+  --track-title:   -0.018em;
+  --track-tight:   -0.012em;
+  --track-normal:  0em;
+  --track-eyebrow:  0.06em;
+}

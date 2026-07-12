@@ -1,0 +1,766 @@
+<!DOCTYPE html>
+<html>
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet>
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin="anonymous">
+  <link href="https://fonts.googleapis.com/css2?family=Hanken+Grotesk:wght@400;500;600;700&family=Geist+Mono:wght@400;500&display=swap" rel="stylesheet">
+  <style>
+    html, body { margin: 0; padding: 0; background: #EFEBE1; }
+    a { color: inherit; text-decoration: none; }
+    a:hover { color: inherit; }
+    button { font-family: inherit; cursor: pointer; }
+    input, textarea, select { font-family: inherit; }
+    @keyframes sfPulse { 0%, 100% { opacity: 1; } 50% { opacity: 0.3; } }
+    @keyframes sfSpin { to { transform: rotate(360deg); } }
+  </style>
+</helmet>
+<div ref="{{ rootRef }}" style="--bg: #F6F2EA; --card: #FFFDFA; --sunken: #EFE9DD; --ink: #221D17; --muted: #6E665A; --faint: #9C9488; --line: #E0D9CC; --line-soft: #E8E2D6; --red: #C6402C; --red-soft: rgba(198,64,44,0.08); --teal: #0E9384; --teal-soft: rgba(14,147,132,0.10); --green: #1B8A5A; --amber: #A16207; --amber-soft: rgba(161,98,7,0.1); --bad: #B3261E; --bad-soft: rgba(179,38,30,0.08); --shadow: 0 1px 2px rgba(34,29,23,0.05); min-height: 100vh; background: var(--bg); color: var(--ink); font-family: 'Hanken Grotesk', ui-sans-serif, system-ui, sans-serif; -webkit-font-smoothing: antialiased; padding: 10px; box-sizing: border-box;">
+  <div style="border: 1px solid var(--line); border-radius: 16px; background: var(--bg); min-height: calc(100vh - 22px); display: flex; overflow: clip;">
+
+    <!-- ── Sidebar (desktop) ─────────────────────────────── -->
+    <sc-if value="{{ notMobile }}" hint-placeholder-val="{{ true }}">
+      <nav data-screen-label="Dashboard sidebar" style="width: 236px; flex-shrink: 0; border-right: 1px solid var(--line-soft); padding: 16px 12px; display: flex; flex-direction: column; gap: 4px; overflow-y: auto;">
+        <div style="display: flex; align-items: flex-start; gap: 10px; padding: 4px 6px 12px;">
+          <div style="width: 30px; height: 30px; border-radius: 8px; border: 1.5px solid var(--ink); display: grid; place-items: center; flex-shrink: 0;">
+            <div style="width: 10px; height: 10px; border: 1.5px solid var(--ink); border-radius: 2px;"></div>
+          </div>
+          <div>
+            <div style="font-size: 14px; font-weight: 700; letter-spacing: -0.01em;">SeldonFrame</div>
+            <div style="font-size: 11px; color: var(--muted); line-height: 1.35;">Operating system for modern teams</div>
+          </div>
+        </div>
+        <button style="display: flex; align-items: center; gap: 10px; background: var(--card); border: 1px solid var(--line-soft); border-radius: 10px; padding: 9px 10px; box-shadow: var(--shadow); text-align: left; color: var(--ink); width: 100%; box-sizing: border-box;">
+          <div style="width: 26px; height: 26px; border-radius: 7px; border: 1.5px solid var(--ink); display: grid; place-items: center; flex-shrink: 0;"><div style="width: 8px; height: 8px; border: 1.5px solid var(--ink); border-radius: 2px;"></div></div>
+          <div style="min-width: 0; flex: 1;">
+            <div style="font-size: 12.5px; font-weight: 600; white-space: nowrap; overflow: hidden; text-overflow: ellipsis;">J. Marin Heating &amp;…</div>
+            <div style="font-size: 11px; color: var(--muted);">Active workspace</div>
+          </div>
+          <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="var(--muted)" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="m7 15 5 5 5-5"></path><path d="m7 9 5-5 5 5"></path></svg>
+        </button>
+
+        <div style="font-size: 10.5px; text-transform: uppercase; letter-spacing: 0.09em; color: var(--faint); font-weight: 600; margin: 14px 6px 4px;">Overview</div>
+        <div style="display: flex; align-items: center; gap: 10px; background: var(--card); border: 1px solid var(--line-soft); border-radius: 10px; padding: 9px 12px; box-shadow: var(--shadow); font-size: 13.5px; font-weight: 500;"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="m3 10.5 9-7.5 9 7.5"></path><path d="M5 9.5V20a1 1 0 0 0 1 1h12a1 1 0 0 0 1-1V9.5"></path></svg>Home</div>
+        <div style="display: flex; align-items: center; gap: 10px; background: var(--card); border: 1px solid var(--line-soft); border-radius: 10px; padding: 9px 12px; box-shadow: var(--shadow); font-size: 13.5px; font-weight: 500;"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M19 12H5"></path><path d="m12 19-7-7 7-7"></path></svg>Back to agency</div>
+
+        <div style="font-size: 10.5px; text-transform: uppercase; letter-spacing: 0.09em; color: var(--faint); font-weight: 600; margin: 14px 6px 4px;">Customers</div>
+        <div style="display: flex; align-items: center; gap: 10px; background: var(--card); border: 1px solid var(--line-soft); border-radius: 10px; padding: 9px 12px; box-shadow: var(--shadow); font-size: 13.5px; font-weight: 500;"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="9" cy="8" r="4"></circle><path d="M2 21c0-3.9 3.1-6 7-6s7 2.1 7 6"></path><path d="M17 4.6a4 4 0 0 1 0 6.8"></path><path d="M18.5 15.5c2.2.8 3.5 2.7 3.5 5.5"></path></svg>Customers</div>
+        <div style="display: flex; align-items: center; gap: 10px; background: var(--card); border: 1px solid var(--line-soft); border-radius: 10px; padding: 9px 12px; box-shadow: var(--shadow); font-size: 13.5px; font-weight: 500;"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="5" width="18" height="16" rx="2"></rect><path d="M8 3v4"></path><path d="M16 3v4"></path><path d="M3 10h18"></path></svg>Bookings</div>
+        <div style="display: flex; align-items: center; gap: 10px; background: var(--card); border: 1px solid var(--line-soft); border-radius: 10px; padding: 9px 12px; box-shadow: var(--shadow); font-size: 13.5px; font-weight: 500;"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"></path><path d="M14 2v6h6"></path><path d="M9 13h6"></path><path d="M9 17h4"></path></svg>Lead Forms</div>
+
+        <div style="font-size: 10.5px; text-transform: uppercase; letter-spacing: 0.09em; color: var(--faint); font-weight: 600; margin: 14px 6px 4px;">Inbox</div>
+        <div style="display: flex; align-items: center; gap: 10px; background: var(--card); border: 1px solid var(--line-soft); border-radius: 10px; padding: 9px 12px; box-shadow: var(--shadow); font-size: 13.5px; font-weight: 500;"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M22 13h-6l-2 3h-4l-2-3H2"></path><path d="M5.5 5h13L22 13v6a1 1 0 0 1-1 1H3a1 1 0 0 1-1-1v-6z"></path></svg>Inbox</div>
+        <div style="display: flex; align-items: center; gap: 10px; background: var(--card); border: 1px solid var(--line-soft); border-radius: 10px; padding: 9px 12px; box-shadow: var(--shadow); font-size: 13.5px; font-weight: 500;"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="2" y="5" width="20" height="14" rx="2"></rect><path d="m2 7 10 6 10-6"></path></svg>Messaging</div>
+
+        <div style="font-size: 10.5px; text-transform: uppercase; letter-spacing: 0.09em; color: var(--faint); font-weight: 600; margin: 14px 6px 4px;">Money</div>
+        <div style="display: flex; align-items: center; gap: 10px; background: var(--card); border: 1px solid var(--line-soft); border-radius: 10px; padding: 9px 12px; box-shadow: var(--shadow); font-size: 13.5px; font-weight: 500;"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 2v20"></path><path d="M17 5.5H9.5a3.5 3.5 0 0 0 0 7h5a3.5 3.5 0 0 1 0 7H6"></path></svg>Money</div>
+
+        <div style="font-size: 10.5px; text-transform: uppercase; letter-spacing: 0.09em; color: var(--faint); font-weight: 600; margin: 14px 6px 4px;">Agents</div>
+        <div style="display: flex; align-items: center; gap: 10px; background: var(--card); border: 1px solid var(--line); border-radius: 10px; padding: 9px 12px; box-shadow: var(--shadow); font-size: 13.5px; font-weight: 700;"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="var(--teal)" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><rect x="4" y="8" width="16" height="12" rx="3"></rect><path d="M12 8V4"></path><path d="M9 13v2"></path><path d="M15 13v2"></path><path d="M4 14H2"></path><path d="M22 14h-2"></path></svg>Agents</div>
+
+        <div style="font-size: 10.5px; text-transform: uppercase; letter-spacing: 0.09em; color: var(--faint); font-weight: 600; margin: 14px 6px 4px;">System</div>
+        <div style="display: flex; align-items: center; gap: 10px; background: var(--card); border: 1px solid var(--line-soft); border-radius: 10px; padding: 9px 12px; box-shadow: var(--shadow); font-size: 13.5px; font-weight: 500;"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 22v-4"></path><path d="M9 7V2"></path><path d="M15 7V2"></path><path d="M6 7h12v4a6 6 0 0 1-12 0z"></path></svg>Integrations</div>
+        <div style="display: flex; align-items: center; gap: 10px; background: var(--card); border: 1px solid var(--line-soft); border-radius: 10px; padding: 9px 12px; box-shadow: var(--shadow); font-size: 13.5px; font-weight: 500;"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M20 7h-9"></path><path d="M14 17H5"></path><circle cx="17" cy="17" r="3"></circle><circle cx="7" cy="7" r="3"></circle></svg>Settings</div>
+        <div style="display: flex; align-items: center; gap: 10px; background: var(--card); border: 1px solid var(--line-soft); border-radius: 10px; padding: 9px 12px; box-shadow: var(--shadow); font-size: 13.5px; font-weight: 500;"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 2 4 5v6c0 5.1 3.4 8.6 8 10 4.6-1.4 8-4.9 8-10V5z"></path></svg>SF Admin</div>
+
+        <div style="margin-top: auto; padding-top: 16px;">
+          <div style="display: flex; align-items: center; gap: 10px; background: var(--card); border: 1px solid var(--line-soft); border-radius: 10px; padding: 9px 10px; box-shadow: var(--shadow);">
+            <div style="width: 26px; height: 26px; border-radius: 50%; background: var(--sunken); display: grid; place-items: center; font-size: 12px; font-weight: 700;">M</div>
+            <div style="font-size: 13px; font-weight: 600; flex: 1;">Maxime Houle</div>
+            <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="var(--muted)" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="m7 15 5 5 5-5"></path><path d="m7 9 5-5 5 5"></path></svg>
+          </div>
+        </div>
+      </nav>
+    </sc-if>
+
+    <!-- ── Main column ───────────────────────────────────── -->
+    <div style="flex: 1; min-width: 0; padding: 16px clamp(14px, 3vw, 28px) 80px; display: flex; flex-direction: column; gap: 14px;">
+
+      <!-- Mobile top row -->
+      <sc-if value="{{ isMobile }}" hint-placeholder-val="{{ false }}">
+        <div style="display: flex; align-items: center; gap: 10px;">
+          <div style="width: 26px; height: 26px; border-radius: 7px; border: 1.5px solid var(--ink); display: grid; place-items: center;"><div style="width: 8px; height: 8px; border: 1.5px solid var(--ink); border-radius: 2px;"></div></div>
+          <span style="font-size: 14px; font-weight: 700;">SeldonFrame</span>
+          <button onClick="{{ toggleDark }}" aria-label="Toggle dark mode" style="margin-left: auto; width: 44px; height: 44px; border-radius: 10px; border: 1px solid var(--line-soft); background: var(--card); color: var(--ink); display: grid; place-items: center;">
+            <sc-if value="{{ notDark }}" hint-placeholder-val="{{ true }}"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 12.8A9 9 0 1 1 11.2 3a7 7 0 0 0 9.8 9.8z"></path></svg></sc-if>
+            <sc-if value="{{ dark }}" hint-placeholder-val="{{ false }}"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="4"></circle><path d="M12 2v2"></path><path d="M12 20v2"></path><path d="m4.9 4.9 1.4 1.4"></path><path d="m17.7 17.7 1.4 1.4"></path><path d="M2 12h2"></path><path d="M20 12h2"></path><path d="m4.9 19.1 1.4-1.4"></path><path d="m17.7 6.3 1.4-1.4"></path></svg></sc-if>
+          </button>
+        </div>
+      </sc-if>
+
+      <!-- Workspace banner -->
+      <div style="background: var(--card); border: 1px solid var(--line-soft); border-radius: 14px; padding: 12px 16px; font-size: 13px; color: var(--muted); box-shadow: var(--shadow);">
+        <span style="font-weight: 600; color: var(--ink);">J. Marin Heating &amp; Air Conditioning</span> active · <a href="#" style="color: var(--red); text-decoration: underline; text-underline-offset: 3px;">Back to all organizations</a>
+      </div>
+
+      <!-- Topbar -->
+      <div data-screen-label="Dashboard topbar" style="background: var(--card); border: 1px solid var(--line-soft); border-radius: 14px; padding: 12px 16px; display: flex; align-items: center; gap: 12px; flex-wrap: wrap; box-shadow: var(--shadow);">
+        <div style="min-width: 0;">
+          <div style="font-size: 17px; font-weight: 700; letter-spacing: -0.015em;">Dashboard</div>
+          <sc-if value="{{ notMobile }}" hint-placeholder-val="{{ true }}"><div style="font-size: 12px; color: var(--muted);">Stay focused on the current client workspace.</div></sc-if>
+        </div>
+        <div style="margin-left: auto; display: flex; align-items: center; gap: 8px; flex-wrap: wrap;">
+          <sc-if value="{{ notMobile }}" hint-placeholder-val="{{ true }}">
+            <div style="display: flex; align-items: center; gap: 8px; border: 1px solid var(--line-soft); background: var(--sunken); border-radius: 10px; padding: 0 12px; height: 38px; color: var(--muted); font-size: 13px; min-width: 200px;">
+              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><circle cx="11" cy="11" r="8"></circle><path d="m21 21-4.3-4.3"></path></svg>
+              <span style="flex: 1;">Search Anything…</span>
+              <span style="font-family: 'Geist Mono', monospace; font-size: 11px; border: 1px solid var(--line); border-radius: 5px; padding: 1px 5px;">⌘K</span>
+            </div>
+            <button style="height: 38px; padding: 0 14px; border-radius: 10px; border: 1px solid var(--line-soft); background: var(--card); color: var(--ink); font-size: 13px; font-weight: 600;">Docs</button>
+          </sc-if>
+          <sc-if value="{{ notMobile }}" hint-placeholder-val="{{ true }}">
+            <button onClick="{{ toggleDark }}" aria-label="Toggle dark mode" style="width: 38px; height: 38px; border-radius: 10px; border: 1px solid var(--line-soft); background: var(--card); color: var(--ink); display: grid; place-items: center;">
+              <sc-if value="{{ notDark }}" hint-placeholder-val="{{ true }}"><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 12.8A9 9 0 1 1 11.2 3a7 7 0 0 0 9.8 9.8z"></path></svg></sc-if>
+              <sc-if value="{{ dark }}" hint-placeholder-val="{{ false }}"><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="4"></circle><path d="M12 2v2"></path><path d="M12 20v2"></path><path d="m4.9 4.9 1.4 1.4"></path><path d="m17.7 17.7 1.4 1.4"></path><path d="M2 12h2"></path><path d="M20 12h2"></path><path d="m4.9 19.1 1.4-1.4"></path><path d="m17.7 6.3 1.4-1.4"></path></svg></sc-if>
+            </button>
+          </sc-if>
+          <button aria-label="Notifications" style="width: 38px; height: 38px; border-radius: 10px; border: 1px solid var(--line-soft); background: var(--card); color: var(--ink); display: grid; place-items: center;">
+            <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M6 8a6 6 0 0 1 12 0c0 7 3 9 3 9H3s3-2 3-9"></path><path d="M10.3 21a1.94 1.94 0 0 0 3.4 0"></path></svg>
+          </button>
+          <div style="display: flex; align-items: center; gap: 8px;">
+            <div style="width: 30px; height: 30px; border-radius: 50%; background: var(--sunken); border: 1px solid var(--line-soft); display: grid; place-items: center; font-size: 12px; font-weight: 700;">M</div>
+            <sc-if value="{{ notMobile }}" hint-placeholder-val="{{ true }}"><span style="font-size: 13px; font-weight: 600;">Maxime Houle</span></sc-if>
+          </div>
+        </div>
+      </div>
+
+      <!-- SeldonChat bar -->
+      <div style="background: var(--card); border: 1px solid var(--line-soft); border-radius: 14px; padding: 4px 6px; display: flex; align-items: center; gap: 10px; box-shadow: var(--shadow);">
+        <div style="width: 34px; height: 34px; display: grid; place-items: center; color: var(--muted);"><svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor" stroke="none"><path d="M12 2l2.1 7.9L22 12l-7.9 2.1L12 22l-2.1-7.9L2 12l7.9-2.1z"></path></svg></div>
+        <input placeholder="Ask SeldonChat — change anything" style="flex: 1; min-width: 0; height: 44px; border: none; background: transparent; color: var(--ink); font-size: 14px; outline: none;">
+      </div>
+
+      <!-- Tabs -->
+      <div style="display: inline-flex; align-self: flex-start; max-width: 100%; overflow-x: auto; background: var(--card); border: 1px solid var(--line-soft); border-radius: 12px; padding: 4px; gap: 2px; box-shadow: var(--shadow);">
+        <span style="display: inline-flex; align-items: center; gap: 7px; padding: 8px 14px; border-radius: 9px; background: var(--sunken); border: 1px solid var(--line-soft); font-size: 13px; font-weight: 700; white-space: nowrap;"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><rect x="3" y="3" width="7" height="7" rx="1"></rect><rect x="14" y="3" width="7" height="7" rx="1"></rect><rect x="3" y="14" width="7" height="7" rx="1"></rect><rect x="14" y="14" width="7" height="7" rx="1"></rect></svg>Agents</span>
+        <span style="display: inline-flex; align-items: center; gap: 7px; padding: 8px 14px; border-radius: 9px; font-size: 13px; font-weight: 500; color: var(--muted); white-space: nowrap;"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M22 12h-4l-3 9L9 3l-3 9H2"></path></svg>Activity</span>
+        <span style="display: inline-flex; align-items: center; gap: 7px; padding: 8px 14px; border-radius: 9px; font-size: 13px; font-weight: 500; color: var(--muted); white-space: nowrap;"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="9" cy="8" r="4"></circle><path d="M2 21c0-3.9 3.1-6 7-6s7 2.1 7 6"></path></svg>Clients</span>
+        <span style="display: inline-flex; align-items: center; gap: 7px; padding: 8px 14px; border-radius: 9px; font-size: 13px; font-weight: 500; color: var(--muted); white-space: nowrap;"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 2v20"></path><path d="M17 5.5H9.5a3.5 3.5 0 0 0 0 7h5a3.5 3.5 0 0 1 0 7H6"></path></svg>Revenue</span>
+      </div>
+
+      <!-- ── Agent header ──────────────────────────────── -->
+      <div data-screen-label="Agent header" style="margin-top: 8px;">
+        <div style="display: flex; align-items: center; gap: 10px; flex-wrap: wrap;">
+          <button aria-label="Back to agents" style="width: 34px; height: 34px; border-radius: 9px; border: 1px solid var(--line-soft); background: var(--card); color: var(--ink); display: grid; place-items: center; flex-shrink: 0;"><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M19 12H5"></path><path d="m12 19-7-7 7-7"></path></svg></button>
+          <span style="font-size: 12px; color: var(--muted);">Agents /</span>
+          <h1 style="margin: 0; font-size: 19px; font-weight: 700; letter-spacing: -0.015em; min-width: 0;">Week Pack forwarding</h1>
+          <span style="font-size: 11px; font-weight: 700; letter-spacing: 0.04em; text-transform: uppercase; color: {{ statusChip.fg }}; background: {{ statusChip.bg }}; border: 1px solid {{ statusChip.border }}; border-radius: 999px; padding: 3px 10px;">{{ statusChip.text }}</span>
+          <button onClick="{{ toggleAdvanced }}" style="margin-left: auto; height: 34px; padding: 0 12px; border-radius: 9px; border: 1px solid var(--line-soft); background: var(--card); color: var(--muted); font-size: 12.5px; font-weight: 600; display: inline-flex; align-items: center; gap: 7px;">
+            Advanced: what it says &amp; does
+            <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="transition: transform 0.2s; transform: {{ advChevron }};"><path d="m6 9 6 6 6-6"></path></svg>
+          </button>
+        </div>
+        <p style="margin: 10px 0 0 44px; font-size: 13px; color: var(--muted);">Compiled from your screen recording on Jul 9 · <a href="Record.dc.html" style="color: var(--teal); text-decoration: underline; text-underline-offset: 3px;">view the /record session</a></p>
+
+        <!-- Advanced (collapsed) -->
+        <sc-if value="{{ advancedOpen }}" hint-placeholder-val="{{ false }}">
+          <div style="margin: 14px 0 0 44px; background: var(--card); border: 1px solid var(--line-soft); border-radius: 14px; padding: 18px; display: grid; grid-template-columns: repeat(auto-fit, minmax(260px, 1fr)); gap: 18px; box-shadow: var(--shadow);">
+            <div>
+              <div style="font-size: 11px; font-weight: 700; text-transform: uppercase; letter-spacing: 0.08em; color: var(--faint); margin-bottom: 8px;">Greeting</div>
+              <textarea rows="3" style="width: 100%; box-sizing: border-box; border: 1px solid var(--line); border-radius: 9px; background: var(--bg); color: var(--ink); font-size: 13px; line-height: 1.5; padding: 10px 12px; resize: vertical;" defaultValue="Hi — I handle Week Pack forwarding for J. Marin Heating. I only touch emails matching 'Week Pack'."></textarea>
+            </div>
+            <div>
+              <div style="font-size: 11px; font-weight: 700; text-transform: uppercase; letter-spacing: 0.08em; color: var(--faint); margin-bottom: 8px;">Skill</div>
+              <textarea rows="7" spellCheck="false" style="width: 100%; box-sizing: border-box; border: 1px solid var(--line); border-radius: 9px; background: var(--bg); color: var(--ink); font-family: 'Geist Mono', monospace; font-size: 11.5px; line-height: 1.6; padding: 10px 12px; resize: vertical; white-space: pre;" defaultValue="skill: week-pack-forwarding
+trigger: gmail poll · every 15 min
+match: subject contains &quot;Week Pack&quot;
+steps:
+  - verify sender in suppliers[]   # pause if unknown
+  - forward -> ops@jmarinheating.com
+  - star original; archive thread"></textarea>
+            </div>
+            <div>
+              <div style="font-size: 11px; font-weight: 700; text-transform: uppercase; letter-spacing: 0.08em; color: var(--faint); margin-bottom: 8px;">Guardrails</div>
+              <div style="display: flex; flex-direction: column; gap: 8px; font-size: 13px;">
+                <div style="display: flex; align-items: center; gap: 8px; justify-content: space-between;"><span>Max forwards per day</span><input defaultValue="200" style="width: 64px; height: 32px; border: 1px solid var(--line); border-radius: 7px; background: var(--bg); color: var(--ink); font-size: 13px; text-align: center;"></div>
+                <div style="display: flex; align-items: center; gap: 8px; justify-content: space-between;"><span>Only emails matching</span><input defaultValue="Week Pack" style="width: 110px; height: 32px; border: 1px solid var(--line); border-radius: 7px; background: var(--bg); color: var(--ink); font-size: 13px; padding: 0 8px;"></div>
+                <div style="display: flex; align-items: center; gap: 8px; justify-content: space-between;"><span>Never forwards outside</span><input defaultValue="jmarinheating.com" style="width: 150px; height: 32px; border: 1px solid var(--line); border-radius: 7px; background: var(--bg); color: var(--ink); font-size: 13px; padding: 0 8px;"></div>
+                <div style="display: flex; align-items: center; gap: 8px; justify-content: space-between;"><span>Pause when sender is unknown</span><span style="font-size: 12px; font-weight: 700; color: var(--teal);">Always on</span></div>
+              </div>
+            </div>
+          </div>
+        </sc-if>
+      </div>
+
+      <!-- ── Lifecycle ladder ──────────────────────────── -->
+      <div style="margin-top: 16px; max-width: 900px;">
+
+        <!-- Stage 1 · Learned -->
+        <div data-screen-label="Stage 1 Learned" style="display: flex; gap: 14px;">
+          <div style="display: flex; flex-direction: column; align-items: center; width: 34px; flex-shrink: 0;">
+            <div style="width: 30px; height: 30px; border-radius: 50%; display: grid; place-items: center; font-size: 13px; font-weight: 700; background: {{ n1.bg }}; color: {{ n1.fg }}; border: 1.5px solid {{ n1.border }};"><sc-if value="{{ n1.check }}" hint-placeholder-val="{{ true }}"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"><path d="M20 6 9 17l-5-5"></path></svg></sc-if><sc-if value="{{ n1.noCheck }}" hint-placeholder-val="{{ false }}"><span>1</span></sc-if></div>
+            <div style="flex: 1; width: 1.5px; background: var(--line); margin-top: 6px;"></div>
+          </div>
+          <div style="flex: 1; min-width: 0; padding-bottom: 26px;">
+            <div style="display: flex; align-items: baseline; gap: 10px; flex-wrap: wrap; padding: 4px 0 12px;">
+              <h2 style="margin: 0; font-size: 16px; font-weight: 700; letter-spacing: -0.01em;">Learned</h2>
+              <span style="font-size: 13px; color: var(--muted);">Born from your recording</span>
+              <span style="margin-left: auto; font-size: 11.5px; font-weight: 700; color: {{ c1.fg }}; background: {{ c1.bg }}; border-radius: 999px; padding: 3px 10px;">{{ c1.text }}</span>
+            </div>
+            <div style="background: var(--card); border: 1px solid var(--line-soft); border-radius: 14px; padding: 20px; box-shadow: var(--shadow);">
+              <p style="margin: 0; font-size: 14px; line-height: 1.55; text-wrap: pretty;">Forward each new "Week Pack" email to the ops account and star the original so nothing is processed twice.</p>
+              <div style="margin-top: 8px; font-size: 12.5px; color: var(--muted);">6 steps · <span style="color: var(--green); font-weight: 600;">4 automatable</span> · <span style="color: var(--amber); font-weight: 600;">1 needs approval</span> · <span style="color: var(--bad); font-weight: 600;">1 stays with you</span></div>
+
+              <div style="margin-top: 16px; display: flex; flex-direction: column;">
+                <sc-for list="{{ steps }}" as="step" hint-placeholder-count="6">
+                  <div style="display: flex; gap: 12px; align-items: flex-start; padding: 9px 0; border-top: 1px solid var(--line-soft);">
+                    <span style="font-size: 12px; color: var(--faint); width: 14px; padding-top: 3px; font-variant-numeric: tabular-nums;">{{ step.n }}</span>
+                    <div style="min-width: 0; flex: 1;">
+                      <div style="display: flex; align-items: center; gap: 8px; flex-wrap: wrap;">
+                        <input value="{{ step.t }}" onChange="{{ step.onEdit }}" aria-label="Step label" style="background: transparent; border: 1px solid transparent; border-radius: 6px; padding: 2px 5px; margin-left: -6px; color: var(--ink); font-size: 13.5px; font-weight: 600; min-width: 160px; flex: 1;" style-hover="border-color: var(--line);" style-focus="border-color: var(--teal); outline: none;">
+                        <span style="font-size: 10px; border: 1px solid var(--line); border-radius: 4px; padding: 1px 5px; color: var(--muted);">{{ step.app }}</span>
+                        <span style="font-size: 11px; font-weight: 700; color: {{ step.covColor }}; display: inline-flex; align-items: center; gap: 5px;"><span style="width: 6px; height: 6px; border-radius: 50%; background: {{ step.covColor }};"></span>{{ step.cov }}</span>
+                      </div>
+                      <div style="font-size: 12px; color: var(--muted); margin-top: 2px;">{{ step.why }}</div>
+                    </div>
+                  </div>
+                </sc-for>
+              </div>
+
+              <div style="margin-top: 16px; border-top: 1px solid var(--line-soft); padding-top: 14px;">
+                <div style="font-size: 11px; font-weight: 700; text-transform: uppercase; letter-spacing: 0.08em; color: var(--faint); margin-bottom: 10px;">The interview — every question, with its answer</div>
+                <div style="display: flex; flex-direction: column; gap: 12px;">
+                  <sc-for list="{{ questions }}" as="q" hint-placeholder-count="4">
+                    <div style="display: flex; gap: 10px; align-items: flex-start;">
+                      <sc-if value="{{ q.answered }}" hint-placeholder-val="{{ true }}">
+                        <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="var(--teal)" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" style="flex-shrink: 0; margin-top: 2px;"><path d="M20 6 9 17l-5-5"></path></svg>
+                        <div style="font-size: 13px; line-height: 1.5;"><span style="color: var(--muted);">{{ q.q }}</span> <span style="font-weight: 600;">{{ q.a }}</span></div>
+                      </sc-if>
+                      <sc-if value="{{ q.unanswered }}" hint-placeholder-val="{{ false }}">
+                        <span style="width: 15px; height: 15px; border: 1.5px solid var(--faint); border-radius: 50%; flex-shrink: 0; margin-top: 2px;"></span>
+                        <div style="flex: 1; min-width: 0;">
+                          <div style="font-size: 13px; font-weight: 600; line-height: 1.5;">{{ q.q }}</div>
+                          <div style="display: flex; gap: 8px; margin-top: 8px; flex-wrap: wrap;">
+                            <input value="{{ q.draft }}" onChange="{{ q.onDraft }}" placeholder="Answer here — the interview continues on this page" style="flex: 1; min-width: 200px; height: 40px; border-radius: 9px; border: 1px solid var(--line); background: var(--bg); color: var(--ink); font-size: 13px; padding: 0 12px;" style-focus="border-color: var(--teal); outline: none;">
+                            <button onClick="{{ q.onAnswer }}" style="height: 40px; padding: 0 16px; border-radius: 9px; border: none; background: var(--teal-soft); color: var(--teal); font-size: 13px; font-weight: 700;">Answer</button>
+                          </div>
+                        </div>
+                      </sc-if>
+                    </div>
+                  </sc-for>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <!-- Stage 2 · Verified -->
+        <div data-screen-label="Stage 2 Verified" style="display: flex; gap: 14px;">
+          <div style="display: flex; flex-direction: column; align-items: center; width: 34px; flex-shrink: 0;">
+            <div style="width: 30px; height: 30px; border-radius: 50%; display: grid; place-items: center; font-size: 13px; font-weight: 700; background: {{ n2.bg }}; color: {{ n2.fg }}; border: 1.5px solid {{ n2.border }};"><sc-if value="{{ n2.check }}" hint-placeholder-val="{{ true }}"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"><path d="M20 6 9 17l-5-5"></path></svg></sc-if><sc-if value="{{ n2.noCheck }}" hint-placeholder-val="{{ false }}"><span>2</span></sc-if></div>
+            <div style="flex: 1; width: 1.5px; background: var(--line); margin-top: 6px;"></div>
+          </div>
+          <div style="flex: 1; min-width: 0; padding-bottom: 26px;">
+            <div style="display: flex; align-items: baseline; gap: 10px; flex-wrap: wrap; padding: 4px 0 12px;">
+              <h2 style="margin: 0; font-size: 16px; font-weight: 700; letter-spacing: -0.01em;">Verified</h2>
+              <span style="font-size: 13px; color: var(--muted);">Evals</span>
+              <span style="margin-left: auto; font-size: 11.5px; font-weight: 700; color: {{ c2.fg }}; background: {{ c2.bg }}; border-radius: 999px; padding: 3px 10px;">{{ c2.text }}</span>
+            </div>
+            <div style="background: var(--card); border: 1px solid var(--line-soft); border-radius: 14px; padding: 20px; box-shadow: var(--shadow);">
+              <p style="margin: 0; font-size: 13.5px; line-height: 1.55; color: var(--muted); text-wrap: pretty;">Evals replay scenarios from your recordings in a sandbox — nothing real is sent, and nothing touches your accounts. A pass means the agent did exactly what you did.</p>
+              <div style="margin-top: 16px; display: flex; align-items: center; gap: 16px; flex-wrap: wrap;">
+                <div style="font-size: 32px; font-weight: 700; letter-spacing: -0.02em; font-variant-numeric: tabular-nums;">{{ evalScore }}</div>
+                <div style="font-size: 12.5px; color: var(--muted); line-height: 1.4;">scenarios passing<br>last run {{ evalLastRun }}</div>
+                <sc-if value="{{ evalStale }}" hint-placeholder-val="{{ false }}"><span style="font-size: 12px; font-weight: 600; color: var(--amber); background: var(--amber-soft); border-radius: 999px; padding: 4px 10px;">An answer changed since this run — re-run to verify</span></sc-if>
+                <sc-if value="{{ evalIdle }}" hint-placeholder-val="{{ true }}">
+                  <button onClick="{{ runEvals }}" style="margin-left: auto; height: 40px; padding: 0 16px; border-radius: 9px; border: 1px solid var(--teal); background: transparent; color: var(--teal); font-size: 13px; font-weight: 700;">Run evals again</button>
+                </sc-if>
+                <sc-if value="{{ evalRunning }}" hint-placeholder-val="{{ false }}">
+                  <span style="margin-left: auto; display: inline-flex; align-items: center; gap: 8px; font-size: 13px; color: var(--teal); font-weight: 600;"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" style="animation: sfSpin 1s linear infinite;"><path d="M21 12a9 9 0 1 1-6.2-8.56"></path></svg>Replaying scenario {{ evalProgress }} of 12…</span>
+                </sc-if>
+              </div>
+              <div style="margin-top: 14px; display: flex; flex-direction: column;">
+                <sc-for list="{{ evalResults }}" as="ev" hint-placeholder-count="6">
+                  <div style="display: flex; gap: 10px; align-items: flex-start; padding: 8px 0; border-top: 1px solid var(--line-soft); font-size: 13px;">
+                    <sc-if value="{{ ev.pass }}" hint-placeholder-val="{{ true }}"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="var(--green)" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" style="flex-shrink: 0; margin-top: 2px;"><path d="M20 6 9 17l-5-5"></path></svg></sc-if>
+                    <sc-if value="{{ ev.fail }}" hint-placeholder-val="{{ false }}"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="var(--bad)" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" style="flex-shrink: 0; margin-top: 2px;"><path d="M18 6 6 18"></path><path d="m6 6 12 12"></path></svg></sc-if>
+                    <div style="min-width: 0;"><span style="font-weight: 500;">{{ ev.name }}</span><sc-if value="{{ ev.fail }}" hint-placeholder-val="{{ false }}"><span style="color: var(--bad);"> — {{ ev.note }}</span></sc-if></div>
+                  </div>
+                </sc-for>
+                <sc-if value="{{ evalCollapsed }}" hint-placeholder-val="{{ true }}">
+                  <button onClick="{{ expandEvals }}" style="border: none; background: none; padding: 8px 0 0; text-align: left; font-size: 12.5px; color: var(--muted); text-decoration: underline; text-underline-offset: 3px;">Show all 12 scenarios</button>
+                </sc-if>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <!-- Stage 3 · Connected -->
+        <div data-screen-label="Stage 3 Connected" style="display: flex; gap: 14px;">
+          <div style="display: flex; flex-direction: column; align-items: center; width: 34px; flex-shrink: 0;">
+            <div style="width: 30px; height: 30px; border-radius: 50%; display: grid; place-items: center; font-size: 13px; font-weight: 700; background: {{ n3.bg }}; color: {{ n3.fg }}; border: 1.5px solid {{ n3.border }};"><sc-if value="{{ n3.check }}" hint-placeholder-val="{{ false }}"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"><path d="M20 6 9 17l-5-5"></path></svg></sc-if><sc-if value="{{ n3.noCheck }}" hint-placeholder-val="{{ true }}"><span>3</span></sc-if></div>
+            <div style="flex: 1; width: 1.5px; background: var(--line); margin-top: 6px;"></div>
+          </div>
+          <div style="flex: 1; min-width: 0; padding-bottom: 26px;">
+            <div style="display: flex; align-items: baseline; gap: 10px; flex-wrap: wrap; padding: 4px 0 12px;">
+              <h2 style="margin: 0; font-size: 16px; font-weight: 700; letter-spacing: -0.01em;">Connected</h2>
+              <span style="font-size: 13px; color: var(--muted);">Generated from the flow</span>
+              <span style="margin-left: auto; font-size: 11.5px; font-weight: 700; color: {{ c3.fg }}; background: {{ c3.bg }}; border-radius: 999px; padding: 3px 10px;">{{ c3.text }}</span>
+            </div>
+            <div style="background: var(--card); border: 1px solid var(--line-soft); border-radius: 14px; padding: 20px; box-shadow: var(--shadow);">
+              <div style="display: flex; align-items: center; gap: 12px; flex-wrap: wrap;">
+                <div style="width: 36px; height: 36px; border-radius: 9px; border: 1px solid var(--line); display: grid; place-items: center; flex-shrink: 0;"><svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="2" y="5" width="20" height="14" rx="2"></rect><path d="m2 7 10 6 10-6"></path></svg></div>
+                <div style="min-width: 0; flex: 1;">
+                  <div style="font-size: 14px; font-weight: 600;">This agent needs Gmail</div>
+                  <sc-if value="{{ gmailConnected }}" hint-placeholder-val="{{ false }}"><div style="font-size: 12.5px; color: var(--green); font-weight: 600;">Connected as j.marin@jmarinheating.com</div></sc-if>
+                  <sc-if value="{{ gmailNotConnected }}" hint-placeholder-val="{{ true }}"><div style="font-size: 12.5px; color: var(--muted);">Not connected — every step in this flow runs through it</div></sc-if>
+                </div>
+                <sc-if value="{{ gmailNotConnected }}" hint-placeholder-val="{{ true }}">
+                  <button onClick="{{ connectGmail }}" style="height: 44px; padding: 0 18px; border-radius: 9px; border: none; background: var(--red); color: #FFFDFA; font-size: 13.5px; font-weight: 700;">Connect Gmail</button>
+                </sc-if>
+                <sc-if value="{{ gmailConnected }}" hint-placeholder-val="{{ false }}">
+                  <button style="height: 36px; padding: 0 12px; border-radius: 9px; border: 1px solid var(--line-soft); background: var(--card); color: var(--muted); font-size: 12.5px; font-weight: 600;">Change</button>
+                </sc-if>
+              </div>
+
+              <!-- Supervised run — centerpiece -->
+              <div style="margin-top: 18px; border: 1.5px solid {{ runBorder }}; border-radius: 12px; padding: 22px; background: var(--bg);">
+                <div style="font-size: 10.5px; font-weight: 700; text-transform: uppercase; letter-spacing: 0.11em; color: var(--teal);">The first real run</div>
+                <h3 style="margin: 8px 0 0; font-size: 20px; font-weight: 700; letter-spacing: -0.02em;">Run it once, supervised</h3>
+                <p style="margin: 8px 0 0; font-size: 13.5px; line-height: 1.55; color: var(--muted); max-width: 520px; text-wrap: pretty;">Seldon executes one real pass on your inbox while you watch. Every action appears below before it happens — nothing is sent without you seeing it.</p>
+
+                <sc-if value="{{ runIdle }}" hint-placeholder-val="{{ true }}">
+                  <div style="margin-top: 16px; display: flex; align-items: center; gap: 12px; flex-wrap: wrap;">
+                    <button onClick="{{ startRun }}" disabled="{{ runDisabled }}" style="height: 48px; padding: 0 22px; border-radius: 10px; border: none; background: {{ runBtnBg }}; color: {{ runBtnFg }}; font-size: 14.5px; font-weight: 700; display: inline-flex; align-items: center; gap: 9px;">
+                      <svg width="15" height="15" viewBox="0 0 24 24" fill="currentColor" stroke="none"><path d="M6 4l14 8-14 8z"></path></svg>
+                      Start the supervised run
+                    </button>
+                    <sc-if value="{{ runDisabled }}" hint-placeholder-val="{{ true }}"><span style="font-size: 12.5px; color: var(--muted);">Connect Gmail first — this run is real</span></sc-if>
+                  </div>
+                </sc-if>
+
+                <sc-if value="{{ runActive }}" hint-placeholder-val="{{ false }}">
+                  <div style="margin-top: 16px; border: 1px solid var(--line-soft); border-radius: 10px; background: var(--card); padding: 14px 16px; display: flex; flex-direction: column; gap: 9px;">
+                    <sc-for list="{{ runLog }}" as="entry" hint-placeholder-count="3">
+                      <div style="display: flex; gap: 10px; align-items: flex-start; font-family: 'Geist Mono', monospace; font-size: 12px; line-height: 1.5;">
+                        <span style="color: var(--faint); flex-shrink: 0; font-variant-numeric: tabular-nums;">{{ entry.t }}</span>
+                        <sc-if value="{{ entry.ok }}" hint-placeholder-val="{{ true }}"><svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="var(--green)" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" style="flex-shrink: 0; margin-top: 2px;"><path d="M20 6 9 17l-5-5"></path></svg></sc-if>
+                        <sc-if value="{{ entry.running }}" hint-placeholder-val="{{ false }}"><span style="width: 8px; height: 8px; border-radius: 50%; background: var(--teal); flex-shrink: 0; margin-top: 5px; animation: sfPulse 1.2s ease-in-out infinite;"></span></sc-if>
+                        <sc-if value="{{ entry.approval }}" hint-placeholder-val="{{ false }}"><span style="color: var(--amber); flex-shrink: 0; font-weight: 700;">⏸</span></sc-if>
+                        <span style="color: {{ entry.color }};">{{ entry.text }}</span>
+                      </div>
+                    </sc-for>
+                    <sc-if value="{{ runWaiting }}" hint-placeholder-val="{{ false }}">
+                      <div style="display: flex; gap: 10px; align-items: center; flex-wrap: wrap; border-top: 1px solid var(--line-soft); padding-top: 12px; margin-top: 4px;">
+                        <span style="font-size: 13px; font-weight: 600; font-family: 'Hanken Grotesk', sans-serif;">New sender — forward anyway?</span>
+                        <button onClick="{{ approveRun }}" style="height: 40px; padding: 0 16px; border-radius: 9px; border: none; background: var(--teal); color: #FFFDFA; font-size: 13px; font-weight: 700;">Approve &amp; forward</button>
+                        <button onClick="{{ denyRun }}" style="height: 40px; padding: 0 14px; border-radius: 9px; border: 1px solid var(--line); background: transparent; color: var(--muted); font-size: 13px; font-weight: 600;">Skip this one</button>
+                      </div>
+                    </sc-if>
+                  </div>
+                  <sc-if value="{{ runDone }}" hint-placeholder-val="{{ false }}">
+                    <div style="margin-top: 12px; display: flex; align-items: center; gap: 9px; font-size: 13px; font-weight: 600; color: var(--green);">
+                      <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M20 6 9 17l-5-5"></path></svg>
+                      {{ runSummary }} — everything above actually happened in your Gmail.
+                    </div>
+                  </sc-if>
+                </sc-if>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <!-- Stage 4 · On -->
+        <div data-screen-label="Stage 4 On" style="display: flex; gap: 14px;">
+          <div style="display: flex; flex-direction: column; align-items: center; width: 34px; flex-shrink: 0;">
+            <div style="width: 30px; height: 30px; border-radius: 50%; display: grid; place-items: center; font-size: 13px; font-weight: 700; background: {{ n4.bg }}; color: {{ n4.fg }}; border: 1.5px solid {{ n4.border }};"><sc-if value="{{ n4.check }}" hint-placeholder-val="{{ false }}"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"><path d="M20 6 9 17l-5-5"></path></svg></sc-if><sc-if value="{{ n4.noCheck }}" hint-placeholder-val="{{ true }}"><span>4</span></sc-if></div>
+            <div style="flex: 1; width: 1.5px; background: var(--line); margin-top: 6px;"></div>
+          </div>
+          <div style="flex: 1; min-width: 0; padding-bottom: 26px;">
+            <div style="display: flex; align-items: baseline; gap: 10px; flex-wrap: wrap; padding: 4px 0 12px;">
+              <h2 style="margin: 0; font-size: 16px; font-weight: 700; letter-spacing: -0.01em;">On</h2>
+              <span style="font-size: 13px; color: var(--muted);">Turn it on for me</span>
+              <span style="margin-left: auto; font-size: 11.5px; font-weight: 700; color: {{ c4.fg }}; background: {{ c4.bg }}; border-radius: 999px; padding: 3px 10px;">{{ c4.text }}</span>
+            </div>
+            <div style="background: var(--card); border: 1px solid var(--line-soft); border-radius: 14px; padding: 20px; box-shadow: var(--shadow);">
+              <div style="display: flex; align-items: flex-start; gap: 14px; flex-wrap: wrap;">
+                <div style="flex: 1; min-width: 240px;">
+                  <p style="margin: 0; font-size: 14px; line-height: 1.55; text-wrap: pretty;">Checks your inbox every 15 minutes for new Week Pack emails. Forwards matches, stars the originals, and pauses to ask when a sender is new.</p>
+                  <sc-if value="{{ onLocked }}" hint-placeholder-val="{{ true }}"><p style="margin: 8px 0 0; font-size: 12.5px; color: var(--muted);">Locked until you've watched it run once — finish stage 3.</p></sc-if>
+                  <sc-if value="{{ agentOn }}" hint-placeholder-val="{{ false }}"><p style="margin: 8px 0 0; font-size: 12.5px; color: var(--teal); font-weight: 600;">On · next check in 14 min</p></sc-if>
+                </div>
+                <button onClick="{{ toggleAgent }}" aria-label="Turn agent on or off" style="width: 52px; height: 30px; border-radius: 999px; border: none; padding: 3px; display: flex; background: {{ switchBg }}; justify-content: {{ switchAlign }}; cursor: {{ switchCursor }}; flex-shrink: 0;">
+                  <span style="width: 24px; height: 24px; border-radius: 50%; background: #FFFDFA; box-shadow: 0 1px 3px rgba(0,0,0,0.25);"></span>
+                </button>
+              </div>
+              <div style="margin-top: 16px; border-top: 1px solid var(--line-soft); padding-top: 12px;">
+                <div style="font-size: 11px; font-weight: 700; text-transform: uppercase; letter-spacing: 0.08em; color: var(--faint); margin-bottom: 8px;">Recent runs</div>
+                <sc-if value="{{ noRuns }}" hint-placeholder-val="{{ true }}"><p style="margin: 0; font-size: 13px; color: var(--muted);">No runs yet. The supervised run in stage 3 will be the first entry here — honestly, there's nothing to show before that.</p></sc-if>
+                <sc-for list="{{ runs }}" as="r" hint-placeholder-count="1">
+                  <div style="display: flex; gap: 12px; align-items: baseline; padding: 7px 0; font-size: 13px; flex-wrap: wrap;">
+                    <span style="color: var(--muted); font-variant-numeric: tabular-nums; flex-shrink: 0;">{{ r.time }}</span>
+                    <span style="font-weight: 700; color: var(--green); font-size: 11px; text-transform: uppercase; letter-spacing: 0.05em;">{{ r.outcome }}</span>
+                    <span style="color: var(--ink);">{{ r.summary }}</span>
+                  </div>
+                </sc-for>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <!-- Stage 5 · Sell -->
+        <div data-screen-label="Stage 5 Sell" style="display: flex; gap: 14px;">
+          <div style="display: flex; flex-direction: column; align-items: center; width: 34px; flex-shrink: 0;">
+            <div style="width: 30px; height: 30px; border-radius: 50%; display: grid; place-items: center; font-size: 13px; font-weight: 700; background: {{ n5.bg }}; color: {{ n5.fg }}; border: 1.5px solid {{ n5.border }};"><span>5</span></div>
+          </div>
+          <div style="flex: 1; min-width: 0;">
+            <div style="display: flex; align-items: baseline; gap: 10px; flex-wrap: wrap; padding: 4px 0 12px;">
+              <h2 style="margin: 0; font-size: 16px; font-weight: 700; letter-spacing: -0.01em;">Sell</h2>
+              <span style="font-size: 13px; color: var(--muted);">Where this agent goes to work</span>
+              <span style="margin-left: auto; font-size: 11.5px; font-weight: 700; color: {{ c5.fg }}; background: {{ c5.bg }}; border-radius: 999px; padding: 3px 10px;">{{ c5.text }}</span>
+            </div>
+            <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(240px, 1fr)); gap: 14px;">
+
+              <div style="background: var(--card); border: 1px solid var(--line-soft); border-radius: 14px; padding: 18px; box-shadow: var(--shadow); display: flex; flex-direction: column; gap: 10px;">
+                <div style="display: flex; align-items: center; gap: 8px; justify-content: space-between;">
+                  <span style="font-size: 14px; font-weight: 700;">Deploy for myself</span>
+                  <sc-if value="{{ agentOn }}" hint-placeholder-val="{{ false }}"><span style="font-size: 11px; font-weight: 700; color: var(--green); background: rgba(27,138,90,0.1); border-radius: 999px; padding: 2px 8px;">Done</span></sc-if>
+                </div>
+                <sc-if value="{{ agentOn }}" hint-placeholder-val="{{ false }}"><p style="margin: 0; font-size: 12.5px; color: var(--muted); line-height: 1.5; flex: 1;">Running on your own inbox since today. Manage it in stage 4.</p></sc-if>
+                <sc-if value="{{ agentOff }}" hint-placeholder-val="{{ true }}"><p style="margin: 0; font-size: 12.5px; color: var(--muted); line-height: 1.5; flex: 1;">Finishes when stage 4 is on — the agent runs on your own inbox, no extra setup.</p></sc-if>
+              </div>
+
+              <div style="background: var(--card); border: 1px solid var(--line-soft); border-radius: 14px; padding: 18px; box-shadow: var(--shadow); display: flex; flex-direction: column; gap: 10px;">
+                <span style="font-size: 14px; font-weight: 700;">Publish to marketplace</span>
+                <div style="display: flex; flex-direction: column; gap: 6px; font-size: 12.5px; flex: 1;">
+                  <div style="display: flex; gap: 7px; align-items: center;"><svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="var(--teal)" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M20 6 9 17l-5-5"></path></svg><span>Evals passing — {{ evalScore }}</span></div>
+                  <sc-if value="{{ hasRunDone }}" hint-placeholder-val="{{ false }}"><div style="display: flex; gap: 7px; align-items: center;"><svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="var(--teal)" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M20 6 9 17l-5-5"></path></svg><span>One supervised run — done</span></div></sc-if>
+                  <sc-if value="{{ noRunDone }}" hint-placeholder-val="{{ true }}"><div style="display: flex; gap: 7px; align-items: center; color: var(--muted);"><span style="width: 13px; height: 13px; border: 1.5px solid var(--faint); border-radius: 50%; flex-shrink: 0;"></span><span>One supervised run — not yet (stage 3)</span></div></sc-if>
+                  <p style="margin: 4px 0 0; color: var(--faint); line-height: 1.45;">Buyers see your pass rate and run history exactly as they are.</p>
+                </div>
+                <sc-if value="{{ notPublished }}" hint-placeholder-val="{{ true }}">
+                  <button onClick="{{ publish }}" disabled="{{ noRunDone }}" style="height: 44px; border-radius: 9px; border: none; background: {{ pubBtnBg }}; color: {{ pubBtnFg }}; font-size: 13px; font-weight: 700; cursor: {{ pubBtnCursor }};">Publish to marketplace</button>
+                </sc-if>
+                <sc-if value="{{ published }}" hint-placeholder-val="{{ false }}">
+                  <div style="height: 44px; border-radius: 9px; background: var(--teal-soft); color: var(--teal); font-size: 13px; font-weight: 700; display: grid; place-items: center;">Live on the marketplace</div>
+                </sc-if>
+              </div>
+
+              <div style="background: var(--card); border: 1px solid var(--line-soft); border-radius: 14px; padding: 18px; box-shadow: var(--shadow); display: flex; flex-direction: column; gap: 10px;">
+                <span style="font-size: 14px; font-weight: 700;">Deploy to a client</span>
+                <p style="margin: 0; font-size: 12.5px; color: var(--muted); line-height: 1.5;">For agencies — a no-login client runs this agent under your brand. Phone number and billing activate when you connect Twilio and Stripe.</p>
+                <div style="display: flex; align-items: center; gap: 6px; font-size: 11px; color: var(--faint); flex-wrap: wrap; flex: 1;">
+                  <span style="font-weight: 600; color: var(--muted);">Agent</span><span>→</span><span>Client</span><span>→</span><span>Pricing</span><span>→</span><span>Review</span>
+                </div>
+                <button style="height: 44px; border-radius: 9px; border: 1px solid var(--red); background: transparent; color: var(--red); font-size: 13px; font-weight: 700;">Start client deploy</button>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Help button -->
+  <button aria-label="Help" style="position: fixed; right: 22px; bottom: 22px; width: 46px; height: 46px; border-radius: 50%; border: none; background: var(--red); color: #FFFDFA; font-size: 18px; font-weight: 700; box-shadow: 0 8px 24px rgba(34,29,23,0.25);">?</button>
+</div>
+</x-dc>
+<script type="text/x-dc" data-dc-script data-props="{
+  &quot;darkMode&quot;: { &quot;editor&quot;: &quot;boolean&quot;, &quot;default&quot;: false, &quot;tsType&quot;: &quot;boolean&quot;, &quot;section&quot;: &quot;Theme&quot; }
+}">
+const EVAL_SCENARIOS = [
+  { name: "Single pack, known sender", pass: true },
+  { name: "Two packs arrive the same day", pass: true },
+  { name: "Unknown sender pauses for approval", pass: true },
+  { name: "Already-starred email is skipped", pass: true },
+  { name: "Pack email with no attachment", pass: false, note: "agent guessed 'skip' — answer the open question in Learned" },
+  { name: "Friday with no pack — does nothing", pass: true },
+  { name: "Forward address bounces — retries, then flags", pass: true },
+  { name: "Pack arrives outside business hours", pass: true },
+  { name: "Subject matches but body is unrelated", pass: true },
+  { name: "Duplicate of an already-forwarded pack", pass: true },
+  { name: "Pack with 3 attachments", pass: true },
+  { name: "Daily forward cap reached — stops and notifies", pass: true },
+];
+
+const RUN_SCRIPT = [
+  { t: "3:41:02", text: "Connected to Gmail as j.marin@jmarinheating.com", kind: "ok" },
+  { t: "3:41:03", text: 'Checked inbox — 2 new "Week Pack" emails found', kind: "ok" },
+  { t: "3:41:05", text: "Email 1 · supplier@weekpack.com — known supplier", kind: "ok" },
+  { t: "3:41:07", text: "Forwarded email 1 to ops@jmarinheating.com", kind: "ok" },
+  { t: "3:41:08", text: "Starred original · archived thread", kind: "ok" },
+  { t: "3:41:10", text: "Email 2 · billing@weekpack-eu.com — sender not in your supplier list", kind: "approval" },
+];
+
+class Component extends DCLogic {
+  state = {
+    dark: this.props.darkMode ?? false,
+    isMobile: false,
+    advancedOpen: false,
+    evalExpanded: false,
+    evalStatus: "idle",
+    evalProgress: 0,
+    evalLastRun: "yesterday · 4:12 PM",
+    evalStale: false,
+    evalRerunAfterAnswer: false,
+    gmailConnected: false,
+    runStatus: "idle",
+    runLogIdx: 0,
+    runTail: [],
+    runSummaryText: "",
+    agentOn: false,
+    publishedState: false,
+    qDraft: "",
+    stepEdits: {},
+    questions: [
+      { q: "Which address should forwards go to?", a: "ops@jmarinheating.com", answered: true },
+      { q: "Archive the original after starring, or leave it in the inbox?", a: "Archive it", answered: true },
+      { q: "If two Week Pack emails arrive the same day?", a: "Forward both", answered: true },
+      { q: "When a pack arrives with no attachment — skip it or flag it for you?", a: "", answered: false },
+    ],
+  };
+
+  componentDidMount() {
+    this.mq = window.matchMedia("(max-width: 920px)");
+    this.mqHandler = () => this.setState({ isMobile: this.mq.matches });
+    this.mq.addEventListener("change", this.mqHandler);
+    this.mqHandler();
+    if (this._root) this.applyTheme(this._root);
+  }
+
+  componentWillUnmount() {
+    if (this.mq) this.mq.removeEventListener("change", this.mqHandler);
+    clearInterval(this.runTimer);
+    clearInterval(this.evalTimer);
+  }
+
+  componentDidUpdate(prevProps) {
+    const prevDark = (prevProps && prevProps.darkMode) ?? false;
+    if (prevDark !== (this.props.darkMode ?? false)) {
+      this.setState({ dark: this.props.darkMode ?? false });
+    }
+    // The runtime doesn't pass prevState — always re-apply (cheap, idempotent).
+    if (this._root) this.applyTheme(this._root);
+  }
+
+  applyTheme(el) {
+    const light = {
+      "--bg": "#F6F2EA", "--card": "#FFFDFA", "--sunken": "#EFE9DD", "--ink": "#221D17",
+      "--muted": "#6E665A", "--faint": "#9C9488", "--line": "#E0D9CC", "--line-soft": "#E8E2D6",
+      "--red": "#C6402C", "--red-soft": "rgba(198,64,44,0.08)", "--teal": "#0E9384",
+      "--teal-soft": "rgba(14,147,132,0.10)", "--green": "#1B8A5A", "--amber": "#A16207",
+      "--amber-soft": "rgba(161,98,7,0.1)", "--bad": "#B3261E", "--bad-soft": "rgba(179,38,30,0.08)",
+      "--shadow": "0 1px 2px rgba(34,29,23,0.05)",
+    };
+    const dark = {
+      "--bg": "#121514", "--card": "#1A1E1D", "--sunken": "#222726", "--ink": "#F2F1EC",
+      "--muted": "#A6ACA7", "--faint": "#767C77", "--line": "rgba(255,255,255,0.12)", "--line-soft": "rgba(255,255,255,0.07)",
+      "--red": "#E25742", "--red-soft": "rgba(226,87,66,0.12)", "--teal": "#14B8A6",
+      "--teal-soft": "rgba(20,184,166,0.14)", "--green": "#34D399", "--amber": "#FBBF24",
+      "--amber-soft": "rgba(251,191,36,0.12)", "--bad": "#F87171", "--bad-soft": "rgba(248,113,113,0.12)",
+      "--shadow": "0 1px 2px rgba(0,0,0,0.4)",
+    };
+    const t = this.state.dark ? dark : light;
+    for (const k in t) el.style.setProperty(k, t[k]);
+    document.body.style.background = this.state.dark ? "#0C0E0D" : "#EFEBE1";
+  }
+
+  node(stateName) {
+    const teal = "var(--teal)";
+    if (stateName === "done") return { bg: teal, fg: "#FFFDFA", border: teal, check: true, noCheck: false };
+    if (stateName === "current") return { bg: "var(--teal-soft)", fg: teal, border: teal, check: false, noCheck: true };
+    return { bg: "transparent", fg: "var(--faint)", border: "var(--line)", check: false, noCheck: true };
+  }
+
+  chip(kind, text) {
+    if (kind === "done") return { text, fg: "var(--teal)", bg: "var(--teal-soft)" };
+    if (kind === "warn") return { text, fg: "var(--amber)", bg: "var(--amber-soft)" };
+    return { text, fg: "var(--muted)", bg: "var(--sunken)" };
+  }
+
+  startRun() {
+    if (!this.state.gmailConnected || this.state.runStatus !== "idle") return;
+    this.setState({ runStatus: "running", runLogIdx: 1 });
+    this.runTimer = setInterval(() => {
+      this.setState((st) => {
+        const next = st.runLogIdx + 1;
+        if (next > RUN_SCRIPT.length) {
+          clearInterval(this.runTimer);
+          return { runStatus: "waiting", runLogIdx: RUN_SCRIPT.length };
+        }
+        if (RUN_SCRIPT[next - 1] && RUN_SCRIPT[next - 1].kind === "approval" && next === RUN_SCRIPT.length) {
+          clearInterval(this.runTimer);
+          return { runLogIdx: next, runStatus: "waiting" };
+        }
+        return { runLogIdx: next };
+      });
+    }, 1100);
+  }
+
+  finishRun(approved) {
+    const tail = approved
+      ? [
+          { t: "3:41:58", text: "Approved by you · forwarded email 2, starred, archived", kind: "ok" },
+          { t: "3:41:59", text: "Run complete — 2 forwarded · 1 approved by you · 0 errors", kind: "ok" },
+        ]
+      : [
+          { t: "3:41:58", text: "Skipped email 2 on your call — left untouched in the inbox", kind: "ok" },
+          { t: "3:41:59", text: "Run complete — 1 forwarded · 1 skipped · 0 errors", kind: "ok" },
+        ];
+    this.setState({
+      runStatus: "done",
+      runTail: tail,
+      runSummaryText: approved ? "2 forwarded · 1 approved by you · 0 errors" : "1 forwarded · 1 skipped on your call · 0 errors",
+    });
+  }
+
+  runEvals() {
+    if (this.state.evalStatus === "running") return;
+    this.setState({ evalStatus: "running", evalProgress: 1 });
+    this.evalTimer = setInterval(() => {
+      this.setState((st) => {
+        if (st.evalProgress >= 12) {
+          clearInterval(this.evalTimer);
+          const answered = st.questions.every((q) => q.answered);
+          return { evalStatus: "idle", evalLastRun: "just now", evalStale: false, evalRerunAfterAnswer: answered };
+        }
+        return { evalProgress: st.evalProgress + 1 };
+      });
+    }, 350);
+  }
+
+  renderVals() {
+    const st = this.state;
+    const runDoneFlag = st.runStatus === "done";
+    const allAnswered = st.questions.every((q) => q.answered);
+    const fixedEvals = st.evalRerunAfterAnswer;
+    const passCount = fixedEvals ? 12 : 11;
+
+    const questions = st.questions.map((q, i) => ({
+      ...q,
+      unanswered: !q.answered,
+      draft: st.qDraft,
+      onDraft: (e) => this.setState({ qDraft: e.target.value }),
+      onAnswer: () => {
+        const val = st.qDraft.trim() || this.state.qDraft.trim();
+        if (!val) return;
+        this.setState((prev) => ({
+          questions: prev.questions.map((qq, j) => (j === i ? { ...qq, answered: true, a: val } : qq)),
+          qDraft: "",
+          evalStale: true,
+        }));
+      },
+    }));
+
+    const steps = [
+      { n: "1", t: 'Find new "Week Pack" emails', app: "Gmail", cov: "Automatable", covColor: "var(--green)", why: "Watched you search — Seldon queries Gmail directly" },
+      { n: "2", t: "Check the sender is your supplier", app: "Gmail", cov: "Needs approval", covColor: "var(--amber)", why: "You paused to check — Seldon asks when the sender is new" },
+      { n: "3", t: "Forward to ops@jmarinheating.com", app: "Gmail", cov: "Automatable", covColor: "var(--green)", why: "Exact address confirmed in your answer" },
+      { n: "4", t: "Flag incomplete packs for review", app: "Gmail", cov: "Stays with you", covColor: "var(--bad)", why: "You skimmed the manifest by eye — no rule to copy yet" },
+      { n: "5", t: "Star the original", app: "Gmail", cov: "Automatable", covColor: "var(--green)", why: "Seen in both recordings, no variation" },
+      { n: "6", t: "Archive the thread", app: "Gmail", cov: "Automatable", covColor: "var(--green)", why: "You answered: archive it" },
+    ].map((s, i) => ({
+      ...s,
+      t: st.stepEdits[i] ?? s.t,
+      onEdit: (e) => this.setState({ stepEdits: { ...this.state.stepEdits, [i]: e.target.value } }),
+    }));
+
+    const results = EVAL_SCENARIOS.map((s) => ({
+      ...s,
+      pass: fixedEvals ? true : s.pass,
+      fail: fixedEvals ? false : !s.pass,
+      note: s.note || "",
+    }));
+    const evalResults = st.evalExpanded ? results : results.slice(0, 6);
+
+    const visibleLog = RUN_SCRIPT.slice(0, st.runLogIdx).concat(st.runTail).map((e, i, arr) => ({
+      ...e,
+      ok: e.kind === "ok" && !(st.runStatus === "running" && i === arr.length - 1),
+      running: st.runStatus === "running" && i === arr.length - 1 && e.kind === "ok",
+      approval: e.kind === "approval",
+      color: e.kind === "approval" ? "var(--amber)" : "var(--ink)",
+    }));
+
+    const runs = runDoneFlag ? [{ time: "Today · 3:41 PM", outcome: "OK", summary: "Supervised · " + st.runSummaryText }] : [];
+
+    const stage3Done = st.gmailConnected && runDoneFlag;
+    const sellReady = (st.agentOn ? 1 : 0) + (st.publishedState ? 1 : 0) + 0;
+
+    const statusChip = st.publishedState
+      ? { text: "Published", fg: "#FFFDFA", bg: "var(--teal)", border: "var(--teal)" }
+      : { text: "Tested", fg: "var(--teal)", bg: "var(--teal-soft)", border: "transparent" };
+
+    return {
+      rootRef: (el) => { this._root = el; if (el) this.applyTheme(el); },
+      dark: st.dark,
+      notDark: !st.dark,
+      toggleDark: () => this.setState({ dark: !this.state.dark }),
+      isMobile: st.isMobile,
+      notMobile: !st.isMobile,
+      advancedOpen: st.advancedOpen,
+      advChevron: st.advancedOpen ? "rotate(180deg)" : "rotate(0deg)",
+      toggleAdvanced: () => this.setState({ advancedOpen: !this.state.advancedOpen }),
+      statusChip,
+      steps,
+      questions,
+
+      n1: this.node("done"),
+      c1: allAnswered ? this.chip("done", "Complete") : this.chip("warn", "1 open question"),
+      n2: this.node("done"),
+      c2: st.evalStale ? this.chip("warn", "Re-run needed") : this.chip("done", passCount + "/12 passing"),
+      n3: this.node(stage3Done ? "done" : "current"),
+      c3: stage3Done ? this.chip("done", "Complete") : this.chip("neutral", st.gmailConnected ? "1 of 2 done" : "Action needed"),
+      n4: this.node(st.agentOn ? "done" : runDoneFlag ? "current" : "future"),
+      c4: st.agentOn ? this.chip("done", "On") : this.chip("neutral", runDoneFlag ? "Off — ready" : "Locked"),
+      n5: this.node(st.agentOn || st.publishedState ? "current" : "future"),
+      c5: this.chip("neutral", sellReady + " of 3 live"),
+
+      evalScore: passCount + "/12",
+      evalLastRun: st.evalLastRun,
+      evalStale: st.evalStale,
+      evalIdle: st.evalStatus === "idle",
+      evalRunning: st.evalStatus === "running",
+      evalProgress: st.evalProgress,
+      evalResults,
+      evalCollapsed: !st.evalExpanded,
+      expandEvals: () => this.setState({ evalExpanded: true }),
+      runEvals: () => this.runEvals(),
+
+      gmailConnected: st.gmailConnected,
+      gmailNotConnected: !st.gmailConnected,
+      connectGmail: () => this.setState({ gmailConnected: true }),
+
+      runIdle: st.runStatus === "idle",
+      runActive: st.runStatus !== "idle",
+      runWaiting: st.runStatus === "waiting",
+      runDone: runDoneFlag,
+      hasRunDone: runDoneFlag,
+      noRunDone: !runDoneFlag,
+      runLog: visibleLog,
+      runSummary: st.runSummaryText,
+      runBorder: st.runStatus === "done" ? "var(--teal)" : "var(--teal)",
+      runDisabled: !st.gmailConnected,
+      runBtnBg: st.gmailConnected ? "var(--teal)" : "var(--sunken)",
+      runBtnFg: st.gmailConnected ? "#FFFDFA" : "var(--faint)",
+      startRun: () => this.startRun(),
+      approveRun: () => this.finishRun(true),
+      denyRun: () => this.finishRun(false),
+
+      agentOn: st.agentOn,
+      agentOff: !st.agentOn,
+      onLocked: !runDoneFlag,
+      toggleAgent: () => { if (this.state.runStatus === "done") this.setState({ agentOn: !this.state.agentOn }); },
+      switchBg: st.agentOn ? "var(--teal)" : "var(--line)",
+      switchAlign: st.agentOn ? "flex-end" : "flex-start",
+      switchCursor: runDoneFlag ? "pointer" : "not-allowed",
+      noRuns: runs.length === 0,
+      runs,
+
+      published: st.publishedState,
+      notPublished: !st.publishedState,
+      publish: () => { if (this.state.runStatus === "done") this.setState({ publishedState: true }); },
+      pubBtnBg: runDoneFlag ? "var(--red)" : "var(--sunken)",
+      pubBtnFg: runDoneFlag ? "#FFFDFA" : "var(--faint)",
+      pubBtnCursor: runDoneFlag ? "pointer" : "not-allowed",
+    };
+  }
+}
+</script>
+</body>
+</html>
