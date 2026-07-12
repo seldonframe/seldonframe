@@ -26,7 +26,7 @@ import { getOrgId } from "@/lib/auth/helpers";
 import { assertWritable } from "@/lib/demo/server";
 import { findSessionByTemplateId } from "@/lib/recordings/session-store";
 import type { FlowModel } from "@/lib/recordings/trace-schema";
-import { scrubStepLabels } from "@/lib/share/scrub-step-label";
+import { scrubStepLabel, scrubStepLabels } from "@/lib/share/scrub-step-label";
 
 const APP_ORIGIN =
   process.env.NEXT_PUBLIC_APP_URL?.trim().replace(/\/$/, "") || "https://app.seldonframe.com";
@@ -118,7 +118,11 @@ export async function previewShareCardAction(
   const rawLabels = await deps.loadTemplateSteps(templateId);
   const labels = scrubStepLabels(rawLabels.length > 0 ? rawLabels : [`${template.name} runs`]);
 
-  return { ok: true, agentName: template.name, steps: labels.map((label) => ({ label })) };
+  // Preview must equal published (opus review 2026-07-12 #2): the public page
+  // scrubs the name at the getPublicShareCard chokepoint, so the preview
+  // scrubs identically — the operator approves exactly what will render.
+  const previewName = scrubStepLabel(template.name) || "This agent";
+  return { ok: true, agentName: previewName, steps: labels.map((label) => ({ label })) };
 }
 
 export type PublishShareCardResult =
