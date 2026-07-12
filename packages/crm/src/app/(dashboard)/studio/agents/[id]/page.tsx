@@ -56,8 +56,11 @@ import { LearnedStage } from "./lifecycle/learned-stage";
 import { VerifiedStage } from "./lifecycle/verified-stage";
 import { ConnectedStage, type RequiredToolkitView } from "./lifecycle/connected-stage";
 import { RunStage } from "./lifecycle/run-stage";
-import { derivePlannedActions } from "./lifecycle/run-plan";
+import { derivePlannedActions, deriveRunVerdict } from "./lifecycle/run-plan";
 import { SellStage } from "./lifecycle/sell-stage";
+import { resolveLifecycleMode, resolveInitialStageId } from "./lifecycle/setup-mode";
+import { SetupModeShell } from "./lifecycle/setup-mode-shell";
+import { CelebrationScreen } from "./lifecycle/celebration-screen";
 
 export const dynamic = "force-dynamic";
 // Composio's SDK (lib/integrations/composio/client.ts, imported below for the
@@ -465,6 +468,30 @@ export default async function AgentTemplatePage({
     />
   );
 
+  // Setup mode (spec §1): incomplete lifecycle -> the one-stage-per-screen
+  // wizard at the first incomplete stage; `?view=full` is the explicit
+  // escape hatch back to the compact home layout; every stage complete ->
+  // home mode is the only mode (nothing left to walk through). Both derive
+  // from the SAME `stages` array the accordion already uses — never a
+  // second source of truth for completion.
+  const lifecycleMode = resolveLifecycleMode({ stages, view: sp.view });
+  const initialStageId = resolveInitialStageId(sp.stage, stages);
+
+  // Celebration (T4, spec §3): fires ONLY on the DERIVED verified state —
+  // a REAL supervised-run success (never the tool-free exemption, never a
+  // button click) — and only while still in Setup mode. If Run just
+  // succeeded but the agent is ALSO fully complete otherwise (deployed or
+  // listed), resolveLifecycleMode has already flipped to home mode above,
+  // so this can only be true while the wizard is still open.
+  const isCelebratingRun = lifecycleMode === "setup" && gate.supervisedRun && !gate.supervisedRunExempt;
+  const runPlannedActions = derivePlannedActions({
+    connectors: blueprint.connectors,
+    scenarios: derivedScenarios,
+  });
+  const runActionLog = latestRun?.actionLog ?? [];
+  const runVerdict = deriveRunVerdict({ actionLog: runActionLog, plannedCount: runPlannedActions.length });
+  const runActionCount = runActionLog.filter((event) => event.status === "ok").length;
+
   const bodies: Record<LifecycleStageId, ReactNode> = {
     learned: (
       <>
@@ -491,15 +518,32 @@ export default async function AgentTemplatePage({
         composioConfigured={composioConfigured}
       />
     ),
-    run: (
+    // T4 (spec §3) — once the Run stage's completion is a REAL supervised-
+    // run success (never the tool-free exemption) AND the wizard is still
+    // open, its body becomes the terminal celebration screen instead of the
+    // run button — the wizard doesn't hand the operator a "done" checkmark
+    // and then keep marching them to Sell as a separate step; the
+    // celebration screen already embeds Sell + the share card.
+    run: isCelebratingRun ? (
+      <CelebrationScreen
+        templateId={template.id}
+        templateName={template.name}
+        agentType={template.type}
+        builderName={builderName}
+        initialListing={sellerListing}
+        initialConnect={sellerConnect}
+        evalPass={gate.evalPass}
+        supervisedRunSucceeded={gate.supervisedRun}
+        supervisedRunExempt={gate.supervisedRunExempt}
+        actionCount={runActionCount}
+        verdict={runVerdict}
+      />
+    ) : (
       <RunStage
         templateId={template.id}
         initialLastRun={latestRun}
         supervisedRunExempt={gate.supervisedRunExempt}
-        plannedActions={derivePlannedActions({
-          connectors: blueprint.connectors,
-          scenarios: derivedScenarios,
-        })}
+        plannedActions={runPlannedActions}
       />
     ),
     sell: (
@@ -517,6 +561,28 @@ export default async function AgentTemplatePage({
     ),
   };
 
+  // Setup mode (spec §1): any stage incomplete -> the one-stage-per-screen
+  // wizard, landing on the validated `?stage=` param or the first
+  // incomplete stage. `?view=full` (handled inside resolveLifecycleMode)
+  // forces the compact home layout below regardless of completion.
+  if (lifecycleMode === "setup") {
+    return (
+      <SetupModeShell
+        templateId={template.id}
+        templateName={template.name}
+        templateStatus={template.status}
+        stages={stages}
+        summaries={summaries}
+        descriptions={descriptions}
+        bodies={bodies}
+        initialStageId={initialStageId}
+        noAutoAdvanceStageIds={isCelebratingRun ? ["run"] : []}
+      />
+    );
+  }
+
+  // Home mode: every stage complete (or `?view=full`) -> the existing
+  // compact one-page accordion, unchanged.
   return (
     <AgentLifecycleAccordion
       templateName={template.name}

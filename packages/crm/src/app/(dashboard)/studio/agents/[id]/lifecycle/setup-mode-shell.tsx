@@ -37,6 +37,7 @@ export function SetupModeShell({
   descriptions,
   bodies,
   initialStageId,
+  noAutoAdvanceStageIds = [],
 }: {
   templateId: string;
   templateName: string;
@@ -46,6 +47,13 @@ export function SetupModeShell({
   descriptions: Record<LifecycleStageId, string>;
   bodies: Record<LifecycleStageId, ReactNode>;
   initialStageId: LifecycleStageId;
+  /** T4 — stages whose body IS the terminal screen once complete (today:
+   *  only "run", when it just resolved into CelebrationScreen — see
+   *  page.tsx). These never auto-advance or show the "nice, done" beat:
+   *  the celebration screen itself already communicates success and owns
+   *  its own escape hatch ("Take me to my agent"). Every other stage keeps
+   *  the normal beat-then-advance behavior unchanged. */
+  noAutoAdvanceStageIds?: LifecycleStageId[];
 }) {
   const router = useRouter();
   const [, startTransition] = useTransition();
@@ -71,9 +79,10 @@ export function SetupModeShell({
   // then advance on the next idle tick — never a hard jump mid-read.
   useEffect(() => {
     if (!wasCompleteRef.current && stage.complete) {
+      wasCompleteRef.current = true;
+      if (noAutoAdvanceStageIds.includes(stage.id)) return undefined;
       dispatch({ type: "STAGE_COMPLETED" });
       const timer = setTimeout(() => dispatch({ type: "CONTINUE", stages }), SUCCESS_BEAT_MS);
-      wasCompleteRef.current = true;
       return () => clearTimeout(timer);
     }
     wasCompleteRef.current = stage.complete;
