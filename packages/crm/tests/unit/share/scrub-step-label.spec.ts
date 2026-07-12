@@ -18,6 +18,20 @@ describe("scrubStepLabel", () => {
     assert.equal(scrubStepLabel("Text +1 (555) 123 4567"), "Text [phone]");
   });
 
+  test("strips a 7-digit local number with no area code", () => {
+    assert.equal(scrubStepLabel("Call 555-1234"), "Call [phone]");
+  });
+
+  test("strips a bare domain with no scheme or www prefix", () => {
+    assert.equal(scrubStepLabel("Check acme-plumbing.com for the quote"), "Check [link] for the quote");
+    assert.equal(scrubStepLabel("Visit acme.io/pricing now"), "Visit [link] now");
+  });
+
+  test("leaves version-like and non-domain dotted tokens alone", () => {
+    assert.equal(scrubStepLabel("Upgrade to v2.0 of the script"), "Upgrade to v2.0 of the script");
+    assert.equal(scrubStepLabel("Uses Node.js under the hood"), "Uses Node.js under the hood");
+  });
+
   test("non-string / empty input -> ''", () => {
     assert.equal(scrubStepLabel(null), "");
     assert.equal(scrubStepLabel(undefined), "");

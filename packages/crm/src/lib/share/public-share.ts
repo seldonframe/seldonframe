@@ -9,6 +9,7 @@ import { eq } from "drizzle-orm";
 import { db } from "@/db";
 import { shareCards, type ShareCardStep } from "@/db/schema/share-cards";
 import { agentTemplates } from "@/db/schema/agent-templates";
+import { scrubStepLabel } from "@/lib/share/scrub-step-label";
 
 export type PublicShareCard = {
   agentName: string;
@@ -33,5 +34,14 @@ export async function getPublicShareCard(slug: string): Promise<PublicShareCard 
     .limit(1);
 
   if (!row) return null;
-  return { agentName: row.agentName, steps: row.sanitizedSteps ?? [] };
+  // 2026-07-11 opus review: the agent NAME is operator-authored free text
+  // (unlike sanitizedSteps, which are scrubbed at publish time — see
+  // share-card-actions.ts) and was rendering straight into the public page's
+  // <h1>/<title> AND the /api/og query string with no scrub pass at all.
+  // Scrubbing it HERE — the single chokepoint both /a/[slug]'s render and
+  // its generateMetadata (which builds the OG url from this same field)
+  // read from — covers both call sites in one fix, never two places
+  // re-deriving the same rule.
+  const scrubbedName = scrubStepLabel(row.agentName);
+  return { agentName: scrubbedName || "This agent", steps: row.sanitizedSteps ?? [] };
 }
