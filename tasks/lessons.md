@@ -2087,3 +2087,4 @@ C4 close-out with empirical SLICE 11 data.
   them with the fix or the next green bar re-certifies the lie. (3) Co-located spec
   files vs the canonical tests/unit tree: check where the repo's suite actually
   lives BEFORE writing the first test of a session.
+- 2026-07-12: A string COMPOSED by keyword-matching other strings can state the opposite of its source ("no free tier" matched /free/i → "(has a free plan)"). Render new composed surfaces and read them; shape tests cannot catch a lie — add an invariant test for the truth claim. (docs/learnings/2026-07-12-derived-string-negation-lie.md)
