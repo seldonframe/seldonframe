@@ -194,7 +194,9 @@ export function SlotCard({
               {formatElapsed(elapsedMs ?? 0)}
             </span>
           </div>
-          <p className="text-[12px] tabular-nums text-[#9CA3AF]">{frameEstimate} frames captured</p>
+          {/* 1fps capture ⇒ frames ≈ elapsed seconds; it's an estimate, say so
+              (review #4 — never state an estimate as an exact count). */}
+          <p className="text-[12px] tabular-nums text-[#9CA3AF]">≈{frameEstimate} frames captured</p>
           {isActive ? (
             <textarea
               value={fallbackText}
@@ -256,12 +258,15 @@ export function SlotCard({
           </div>
           <div className="flex min-w-0 flex-1 flex-col gap-0.5">
             <span className="text-[12px] text-[#14B8A6]">
-              Traced · {stepsFound} step{stepsFound === 1 ? "" : "s"} found
+              {/* stepsFound is the MERGED flow's total — attribute it to the
+                  flow, not this recording (review #4). */}
+              Traced · flow so far: {stepsFound} step{stepsFound === 1 ? "" : "s"}
             </span>
             <button
               type="button"
+              disabled={!canStart || !sessionReady}
               onClick={onRecord}
-              className="text-left text-[12px] text-[#6B7280] underline-offset-2 hover:text-[#9CA3AF] hover:underline"
+              className="text-left text-[12px] text-[#6B7280] underline-offset-2 hover:text-[#9CA3AF] hover:underline disabled:cursor-not-allowed disabled:opacity-40 disabled:hover:no-underline"
             >
               Re-record
             </button>
@@ -275,8 +280,9 @@ export function SlotCard({
           <p className="text-[12.5px] leading-[1.5] text-[#9CA3AF]">{slot.error}</p>
           <button
             type="button"
+            disabled={!canStart || !sessionReady}
             onClick={onRecord}
-            className="inline-flex h-11 items-center justify-center gap-2 rounded-[8px] border border-[rgba(231,229,222,.16)] bg-transparent text-[13px] font-[600] text-[#E7E5DE]"
+            className="inline-flex h-11 items-center justify-center gap-2 rounded-[8px] border border-[rgba(231,229,222,.16)] bg-transparent text-[13px] font-[600] text-[#E7E5DE] disabled:cursor-not-allowed disabled:opacity-40"
           >
             <span className="size-2 rounded-full bg-[#EF4444]" aria-hidden />
             Re-record

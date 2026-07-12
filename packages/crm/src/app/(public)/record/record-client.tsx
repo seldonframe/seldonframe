@@ -296,6 +296,11 @@ export function RecordClient({
 
   async function handleStart(slotIndex: number) {
     if (!state.sessionId || !state.token) return;
+    // Belt for the Re-record path (opus review 2026-07-12, blocking #1): if any
+    // slot is mid-capture, START_RECORDING would no-op in the reducer but
+    // startCapture below would still open a second, uncontrollable
+    // getDisplayMedia. Never start while another capture is in flight.
+    if (state.activeSlot !== null) return;
     dispatch({ type: "START_RECORDING", slotIndex });
     setElapsedMs((prev) => ({ ...prev, [slotIndex]: 0 }));
     try {
@@ -635,10 +640,15 @@ export function RecordClient({
             the two-column layout only kicks in once there's room for both. */}
         <div className="flex flex-col gap-6 min-[900px]:flex-row">
           <section aria-label="Recording slots" className="flex flex-1 flex-col gap-3">
-            {restoredSession ? <RestoredBanner onStartFresh={handleStartFresh} /> : null}
+            {state.sessionId ? (
+              <RestoredBanner restored={restoredSession} onStartFresh={handleStartFresh} />
+            ) : null}
             {state.slots.map((slot) => {
               const isActive = state.activeSlot === slot.slotIndex;
-              const canStart = state.activeSlot === null && slot.status === "empty";
+              // Also gates the traced/failed Re-record buttons (review #1b):
+              // no slot may start while any capture is in flight. The empty-
+              // state Record button only renders on empty slots anyway.
+              const canStart = state.activeSlot === null;
               return (
                 <SlotCard
                   key={slot.slotIndex}
