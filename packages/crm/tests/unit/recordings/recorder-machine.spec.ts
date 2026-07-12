@@ -8,13 +8,15 @@ import { describe, test } from "node:test";
 import assert from "node:assert/strict";
 
 import {
+  currentStep,
   initialRecorderState,
   pickFirstEmptySlot,
   recorderReducer,
+  summarizeCoverage,
   type RecorderState,
 } from "../../../src/app/(public)/record/recorder-machine";
 import { MAX_RECORDINGS_PER_SESSION } from "../../../src/lib/recordings/policy";
-import type { FlowModel } from "../../../src/lib/recordings/trace-schema";
+import type { CoverageEntry, FlowModel } from "../../../src/lib/recordings/trace-schema";
 
 function fixtureFlowModel(overrides?: Partial<FlowModel>): FlowModel {
   return {
@@ -584,6 +586,65 @@ describe("happy-path sequence", () => {
     assert.equal(state.slots[0].label, "Happy path");
     assert.ok(state.flowModel);
     assert.equal(state.coverage.length, 1);
+  });
+});
+
+describe("currentStep", () => {
+  test("step 1 while no slot has been traced yet", () => {
+    const state = recorderReducer(initialRecorderState(), {
+      type: "SESSION_READY",
+      sessionId: "s",
+      token: "t",
+    });
+    assert.equal(currentStep(state), 1);
+  });
+
+  test("step 1 while a slot is actively recording (still no traced slot)", () => {
+    let state = initialRecorderState();
+    state = recorderReducer(state, { type: "START_RECORDING", slotIndex: 0 });
+    assert.equal(currentStep(state), 1);
+  });
+
+  test("step 2 once a slot is traced (recap/interview)", () => {
+    const next = recorderReducer(initialRecorderState(), {
+      type: "TRACED",
+      slotIndex: 0,
+      flowModel: fixtureFlowModel(),
+      coverage: [],
+      whatChanged: [],
+      openQuestions: ["anything else?"],
+    });
+    assert.equal(next.phase, "recap");
+    assert.equal(currentStep(next), 2);
+  });
+
+  test("step 3 once phase is approved", () => {
+    const state: RecorderState = { ...initialRecorderState(), phase: "approved" };
+    assert.equal(currentStep(state), 3);
+  });
+});
+
+describe("summarizeCoverage", () => {
+  test("counts each tier into its honest-badge bucket", () => {
+    const coverage: CoverageEntry[] = [
+      { stepIndex: 0, tier: "green", toolkit: "gmail", reason: "a" },
+      { stepIndex: 1, tier: "green", toolkit: "gmail", reason: "b" },
+      { stepIndex: 2, tier: "yellow", toolkit: "gmail", reason: "c" },
+      { stepIndex: 3, tier: "red", toolkit: "gmail", reason: "d" },
+    ];
+    assert.deepEqual(summarizeCoverage(coverage), {
+      automatable: 2,
+      needsApproval: 1,
+      staysWithYou: 1,
+    });
+  });
+
+  test("empty coverage summarizes to all zeros", () => {
+    assert.deepEqual(summarizeCoverage([]), {
+      automatable: 0,
+      needsApproval: 0,
+      staysWithYou: 0,
+    });
   });
 });
 

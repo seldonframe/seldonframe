@@ -105,6 +105,36 @@ function isInRange(slotIndex: number): boolean {
   return Number.isInteger(slotIndex) && slotIndex >= 0 && slotIndex < MAX_RECORDINGS_PER_SESSION;
 }
 
+/** Which of the 3-step onboarding strip (Record / Answer / Get your agent)
+ *  is "current" for the v2 /record UI — pure derived read of existing
+ *  phase/slot state, no new transitions. Step 1 until any slot is traced,
+ *  step 2 for the recap/interview phase, step 3 once the flow is approved
+ *  (compiled). Presentation-only selector — record-ui/* is the only caller. */
+export function currentStep(state: RecorderState): 1 | 2 | 3 {
+  if (state.phase === "approved") return 3;
+  const anyTraced = state.slots.some((slot) => slot.status === "traced");
+  return anyTraced ? 2 : 1;
+}
+
+export type CoverageSummary = {
+  automatable: number;
+  needsApproval: number;
+  staysWithYou: number;
+};
+
+/** Buckets coverage entries into the recap panel's honest-badge counts
+ *  (green→Automatable, yellow→Needs approval, red→Stays with you). Pure
+ *  presentation derivation — the tiers themselves are unchanged. */
+export function summarizeCoverage(coverage: CoverageEntry[]): CoverageSummary {
+  const summary: CoverageSummary = { automatable: 0, needsApproval: 0, staysWithYou: 0 };
+  for (const entry of coverage) {
+    if (entry.tier === "green") summary.automatable += 1;
+    else if (entry.tier === "yellow") summary.needsApproval += 1;
+    else summary.staysWithYou += 1;
+  }
+  return summary;
+}
+
 /** First slot with status "empty", or null if every slot is occupied. Used
  *  by the Web Share Target flow (record-client.tsx) to decide which slot a
  *  shared recording lands in — the same "first empty slot" rule the
