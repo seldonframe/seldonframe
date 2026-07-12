@@ -20,7 +20,7 @@
 
 import { useEffect, useReducer, useRef, useState, type ChangeEvent } from "react";
 import { upload } from "@vercel/blob/client";
-import { initialRecorderState, pickFirstEmptySlot, recorderReducer } from "./recorder-machine";
+import { currentStep, initialRecorderState, pickFirstEmptySlot, recorderReducer } from "./recorder-machine";
 import { startCapture, type CaptureHandle } from "./capture";
 import { extractFromVideoFile } from "./capture-file";
 import {
@@ -36,12 +36,11 @@ import {
   SHARE_CACHE_NAME,
   STAGED_RECORDING_CACHE_KEY,
 } from "@/lib/recordings/share-target";
-import type {
-  CoverageEntry,
-  CoverageTier,
-  FlowModel,
-  TranscriptSegment,
-} from "@/lib/recordings/trace-schema";
+import type { CoverageEntry, FlowModel, TranscriptSegment } from "@/lib/recordings/trace-schema";
+import { StepStrip } from "./record-ui/step-strip";
+import { RestoredBanner } from "./record-ui/restored-banner";
+import { SlotCard } from "./record-ui/slot-card";
+import { RecapPanel } from "./record-ui/recap-panel";
 
 const STORAGE_KEY = "sf-record-session";
 
@@ -83,18 +82,6 @@ function clearStoredSession(): void {
   }
 }
 
-const TIER_COLOR: Record<CoverageTier, string> = {
-  green: "#22C55E",
-  yellow: "#EAB308",
-  red: "#EF4444",
-};
-
-const TIER_LABEL: Record<CoverageTier, string> = {
-  green: "Automatable",
-  yellow: "Needs approval",
-  red: "Stays with you",
-};
-
 export function RecordClient({
   claimedSessionId,
   claimed,
@@ -121,6 +108,19 @@ export function RecordClient({
   const [compiling, setCompiling] = useState(false);
   const [compiledTemplateId, setCompiledTemplateId] = useState<string | null>(null);
   const captureHandles = useRef<Record<number, CaptureHandle>>({});
+
+  // Presentation-only additions for the v2 slot card (record-ui/slot-card.tsx):
+  // live elapsed-ms while a slot is recording (capture.ts's existing, previously
+  // unused onTick option), and the settled clip length once known (from the
+  // same CaptureResult/ExtractFromVideoFileResult the upload path already
+  // reads durationMs off of). Neither touches the reducer or the
+  // upload/trace/compile flow — display state only.
+  const [elapsedMs, setElapsedMs] = useState<Record<number, number>>({});
+  const [slotDurationMs, setSlotDurationMs] = useState<Record<number, number>>({});
+  // True once the stored-session rehydrate path (below) successfully restores
+  // an earlier session — drives the "Restored from earlier · Start fresh"
+  // strip. Local UI state only; the rehydrate flow itself is unchanged.
+  const [restoredSession, setRestoredSession] = useState(false);
 
   // Mobile browsers have no getDisplayMedia — phones use the OS's built-in
   // screen recorder, then upload the file here. Default to `true` so the
@@ -275,6 +275,7 @@ export function RecordClient({
             // its own recap.
             claimed: claimed && (claimedSessionId === null || claimedSessionId === stored.sessionId),
           });
+          setRestoredSession(true);
         })
         .catch(() => {
           if (cancelled) return;
@@ -296,11 +297,15 @@ export function RecordClient({
   async function handleStart(slotIndex: number) {
     if (!state.sessionId || !state.token) return;
     dispatch({ type: "START_RECORDING", slotIndex });
+    setElapsedMs((prev) => ({ ...prev, [slotIndex]: 0 }));
     try {
       const handle = await startCapture({
         maxSeconds: MAX_RECORDING_SECONDS,
         maxFrames: MAX_FRAMES_PER_RECORDING,
         maxEdgePx: MAX_FRAME_EDGE_PX,
+        // Live elapsed-ms for the slot card's timer (record-ui/slot-card.tsx)
+        // — an already-existing capture.ts option, previously unwired.
+        onTick: (ms) => setElapsedMs((prev) => ({ ...prev, [slotIndex]: ms })),
         // The browser's native "Stop sharing" bar (or the max-length cap)
         // ends the capture without our Stop button — run the exact same
         // finalize→upload→compile flow. handleStop is safe to double-fire:
@@ -410,6 +415,7 @@ export function RecordClient({
     try {
       const result = await handle.stop();
       delete captureHandles.current[slotIndex];
+      setSlotDurationMs((prev) => ({ ...prev, [slotIndex]: result.durationMs }));
 
       const transcript =
         result.transcript.length > 0
@@ -454,12 +460,13 @@ export function RecordClient({
     dispatch({ type: "FILE_PICKED", slotIndex });
 
     try {
-      const { frames } = await extractFromVideoFile(file, {
+      const { frames, durationMs } = await extractFromVideoFile(file, {
         maxFrames: MAX_FRAMES_PER_RECORDING,
         maxEdgePx: MAX_FRAME_EDGE_PX,
         onProgress: (done, total) =>
           setUploadProgress((prev) => ({ ...prev, [slotIndex]: { done, total } })),
       });
+      setSlotDurationMs((prev) => ({ ...prev, [slotIndex]: durationMs }));
 
       const transcript: TranscriptSegment[] = fallbackText[slotIndex]
         ? [{ atMs: 0, text: fallbackText[slotIndex] }]
@@ -593,20 +600,23 @@ export function RecordClient({
     window.location.assign("/record");
   }
 
+  const recapVisible = state.phase === "recap" || state.phase === "approved";
+
   return (
     <main className="min-h-screen bg-[#0B0F0E] px-5 py-10 text-[#E7E5DE] md:px-8 md:py-16">
       <div className="mx-auto flex w-full max-w-[1100px] flex-col gap-8">
         <header className="flex flex-col items-center text-center">
           <p className="inline-flex items-center gap-2.5 font-sans text-[12.5px] tracking-[0.04em] text-[#9CA3AF]">
             <span className="inline-block size-1.5 rounded-full bg-[#14B8A6]" aria-hidden />
-            Record a workflow — no signup required
+            No signup to start
           </p>
           <h1 className="mt-3 max-w-[26ch] text-balance font-sans text-[clamp(26px,3.6vw,40px)] font-[500] leading-[1.08] tracking-[-0.02em] text-[#F5F4F0]">
             Show Seldon how you work. It builds the agent.
           </h1>
           <p className="mx-auto mt-3 max-w-[58ch] text-pretty text-[15px] leading-[1.55] text-[#9CA3AF]">
-            Screen-record yourself doing a job — record a few edge cases too — and Seldon compiles
-            a draft agent from what it saw.
+            Screen-record yourself doing the job once — talking out loud, narration is half the
+            signal. Seldon watches, asks about what it didn&apos;t understand, and compiles a
+            working agent.
           </p>
           {message ? (
             <p role="alert" className="mt-3 text-[13px] text-[#EF4444]">
@@ -616,336 +626,73 @@ export function RecordClient({
           {sharedNotice ? (
             <p className="mt-3 text-[13px] text-[#9CA3AF]">{sharedNotice}</p>
           ) : null}
+          <div className="w-full max-w-[720px]">
+            <StepStrip current={currentStep(state)} />
+          </div>
         </header>
 
         {/* Stacks to one column below ~900px (slots above, recap below) —
             the two-column layout only kicks in once there's room for both. */}
         <div className="flex flex-col gap-6 min-[900px]:flex-row">
           <section aria-label="Recording slots" className="flex flex-1 flex-col gap-3">
-            {state.sessionId ? (
-              <div className="flex justify-end">
-                <button
-                  type="button"
-                  onClick={handleStartFresh}
-                  className="text-[12.5px] text-[#6B7280] underline-offset-2 hover:text-[#9CA3AF] hover:underline"
-                >
-                  Start fresh
-                </button>
-              </div>
-            ) : null}
+            {restoredSession ? <RestoredBanner onStartFresh={handleStartFresh} /> : null}
             {state.slots.map((slot) => {
               const isActive = state.activeSlot === slot.slotIndex;
               const canStart = state.activeSlot === null && slot.status === "empty";
               return (
-                <div
+                <SlotCard
                   key={slot.slotIndex}
-                  className="rounded-[14px] border border-[rgba(231,229,222,.12)] bg-[#12171533] p-4"
-                >
-                  <div className="flex items-center justify-between gap-3">
-                    <input
-                      type="text"
-                      value={slot.label ?? ""}
-                      onChange={(e) =>
-                        dispatch({ type: "SET_LABEL", slotIndex: slot.slotIndex, label: e.target.value })
-                      }
-                      placeholder={
-                        slot.slotIndex === 0 ? "Happy path" : `Edge case ${slot.slotIndex}`
-                      }
-                      className="flex-1 bg-transparent text-[14px] text-[#E7E5DE] outline-none placeholder:text-[#6B7280]"
-                    />
-                    <span className="rounded-full border border-[rgba(231,229,222,.16)] px-2.5 py-1 text-[11px] uppercase tracking-[0.05em] text-[#9CA3AF]">
-                      {slot.status}
-                    </span>
-                  </div>
-
-                  {slot.error ? (
-                    <p className="mt-2 text-[12.5px] text-[#EF4444]">{slot.error}</p>
-                  ) : null}
-
-                  <div className="mt-3 flex flex-wrap items-center gap-2.5">
-                    {slot.status === "empty" && supportsScreenCapture ? (
-                      <button
-                        type="button"
-                        disabled={!canStart || !state.sessionId}
-                        onClick={() => handleStart(slot.slotIndex)}
-                        className="inline-flex h-11 items-center justify-center rounded-full bg-[#14B8A6] px-4 text-[13px] font-[600] text-[#0B0F0E] disabled:cursor-not-allowed disabled:opacity-40"
-                      >
-                        Record
-                      </button>
-                    ) : null}
-                    {slot.status === "recording" ? (
-                      <button
-                        type="button"
-                        onClick={() => handleStop(slot.slotIndex)}
-                        className="inline-flex h-11 items-center justify-center rounded-full border border-[#EF4444] px-4 text-[13px] font-[600] text-[#EF4444]"
-                      >
-                        Stop
-                      </button>
-                    ) : null}
-                    {slot.status === "empty" && !pendingUpload[slot.slotIndex] ? (
-                      <label
-                        className={
-                          supportsScreenCapture
-                            ? "inline-flex h-11 cursor-pointer items-center text-[12.5px] text-[#9CA3AF] underline-offset-2 hover:text-[#E7E5DE] hover:underline"
-                            : "inline-flex h-11 cursor-pointer items-center justify-center rounded-full bg-[#14B8A6] px-4 text-[13px] font-[600] text-[#0B0F0E]"
-                        }
-                      >
-                        {supportsScreenCapture ? "or upload a recording" : "Upload a screen recording"}
-                        <input
-                          type="file"
-                          accept="video/*"
-                          className="sr-only"
-                          onChange={(e) => handleFileChange(slot.slotIndex, e)}
-                        />
-                      </label>
-                    ) : null}
-                  </div>
-
-                  {!supportsScreenCapture && slot.status === "empty" && !pendingUpload[slot.slotIndex] ? (
-                    <p className="mt-2 text-[12px] text-[#9CA3AF]">
-                      Record your screen with your phone&apos;s built-in recorder, then upload it here.
-                    </p>
-                  ) : null}
-
-                  {isActive && slot.status === "recording" ? (
-                    <textarea
-                      value={fallbackText[slot.slotIndex] ?? ""}
-                      onChange={(e) =>
-                        setFallbackText((prev) => ({ ...prev, [slot.slotIndex]: e.target.value }))
-                      }
-                      placeholder="Describe what you did (used if your browser can't transcribe speech)"
-                      className="mt-3 h-16 w-full resize-none rounded-[10px] border border-[rgba(231,229,222,.12)] bg-transparent p-2.5 text-[13px] text-[#E7E5DE] outline-none placeholder:text-[#6B7280]"
-                    />
-                  ) : null}
-
-                  {slot.status === "empty" && pendingUpload[slot.slotIndex] ? (
-                    <div className="mt-3 flex flex-col gap-2">
-                      <textarea
-                        value={fallbackText[slot.slotIndex] ?? ""}
-                        onChange={(e) =>
-                          setFallbackText((prev) => ({ ...prev, [slot.slotIndex]: e.target.value }))
-                        }
-                        placeholder="Describe what you did in this recording (required — uploaded files have no live transcript)"
-                        className="h-16 w-full resize-none rounded-[10px] border border-[rgba(231,229,222,.12)] bg-transparent p-2.5 text-[13px] text-[#E7E5DE] outline-none placeholder:text-[#6B7280]"
-                      />
-                      <div className="flex items-center gap-3">
-                        <button
-                          type="button"
-                          disabled={!fallbackText[slot.slotIndex]?.trim()}
-                          onClick={() => {
-                            const file = pendingUpload[slot.slotIndex];
-                            if (!file) return;
-                            cancelPendingUpload(slot.slotIndex);
-                            void handleFilePicked(slot.slotIndex, file);
-                          }}
-                          className="inline-flex h-11 items-center justify-center rounded-full bg-[#14B8A6] px-4 text-[13px] font-[600] text-[#0B0F0E] disabled:cursor-not-allowed disabled:opacity-40"
-                        >
-                          Process recording
-                        </button>
-                        <button
-                          type="button"
-                          onClick={() => cancelPendingUpload(slot.slotIndex)}
-                          className="text-[12.5px] text-[#6B7280] hover:text-[#9CA3AF]"
-                        >
-                          Cancel
-                        </button>
-                      </div>
-                    </div>
-                  ) : null}
-
-                  {slot.status === "uploading" && uploadProgress[slot.slotIndex] ? (
-                    <p className="mt-2 text-[12.5px] text-[#9CA3AF]">
-                      Reading your recording&hellip; {uploadProgress[slot.slotIndex]!.done}/
-                      {uploadProgress[slot.slotIndex]!.total}
-                    </p>
-                  ) : null}
-
-                  {slot.whatChanged && slot.whatChanged.length > 0 ? (
-                    <ul className="mt-2 list-disc pl-4 text-[12.5px] text-[#14B8A6]">
-                      {slot.whatChanged.map((line, i) => (
-                        <li key={i}>{line}</li>
-                      ))}
-                    </ul>
-                  ) : null}
-                </div>
+                  slot={slot}
+                  isActive={isActive}
+                  canStart={canStart}
+                  sessionReady={!!state.sessionId}
+                  supportsScreenCapture={supportsScreenCapture}
+                  elapsedMs={slot.status === "recording" ? (elapsedMs[slot.slotIndex] ?? 0) : null}
+                  durationMs={slot.status === "traced" ? (slotDurationMs[slot.slotIndex] ?? null) : null}
+                  stepsFound={state.flowModel?.steps.length ?? 0}
+                  fallbackText={fallbackText[slot.slotIndex] ?? ""}
+                  pendingUpload={pendingUpload[slot.slotIndex]}
+                  uploadProgress={uploadProgress[slot.slotIndex]}
+                  onRecord={() => handleStart(slot.slotIndex)}
+                  onStop={() => handleStop(slot.slotIndex)}
+                  onFileChange={(e) => handleFileChange(slot.slotIndex, e)}
+                  onLabelChange={(label) => dispatch({ type: "SET_LABEL", slotIndex: slot.slotIndex, label })}
+                  onFallbackTextChange={(text) =>
+                    setFallbackText((prev) => ({ ...prev, [slot.slotIndex]: text }))
+                  }
+                  onProcessUpload={() => {
+                    const file = pendingUpload[slot.slotIndex];
+                    if (!file) return;
+                    cancelPendingUpload(slot.slotIndex);
+                    void handleFilePicked(slot.slotIndex, file);
+                  }}
+                  onCancelUpload={() => cancelPendingUpload(slot.slotIndex)}
+                />
               );
             })}
           </section>
 
-          {state.phase === "recap" || state.phase === "approved" ? (
-            <section
-              aria-label="Recap"
-              className="flex flex-1 flex-col gap-5 rounded-[16px] border border-[rgba(231,229,222,.12)] bg-[#12171533] p-5"
-            >
-              <div>
-                <h2 className="text-[15px] font-[600] text-[#F5F4F0]">
-                  {state.flowModel?.title ?? "Your workflow"}
-                </h2>
-                <p className="mt-1 text-[13px] text-[#9CA3AF]">{state.flowModel?.goal}</p>
-              </div>
-
-              <ol className="flex flex-col gap-2">
-                {state.flowModel?.steps.map((step) => {
-                  const entry = state.coverage.find((c) => c.stepIndex === step.index);
-                  const tier: CoverageTier = entry?.tier ?? "red";
-                  return (
-                    <li
-                      key={step.index}
-                      className="flex items-start gap-2.5 rounded-[10px] border border-[rgba(231,229,222,.08)] p-2.5"
-                    >
-                      <span
-                        className="mt-1 inline-block size-2 shrink-0 rounded-full"
-                        style={{ backgroundColor: TIER_COLOR[tier] }}
-                        aria-hidden
-                      />
-                      <div className="flex-1">
-                        <p className="text-[13.5px] text-[#E7E5DE]">
-                          {step.app} — {step.action}
-                        </p>
-                        <p className="text-[12px] text-[#9CA3AF]">
-                          {TIER_LABEL[tier]}
-                          {entry?.reason ? ` — ${entry.reason}` : ""}
-                        </p>
-                      </div>
-                    </li>
-                  );
-                })}
-              </ol>
-
-              {state.flowModel?.branches && state.flowModel.branches.length > 0 ? (
-                <div>
-                  <h3 className="text-[12px] font-[600] uppercase tracking-[0.05em] text-[#9CA3AF]">
-                    Branches
-                  </h3>
-                  <ul className="mt-1.5 flex flex-col gap-1">
-                    {state.flowModel.branches.map((branch, i) => (
-                      <li key={i} className="text-[12.5px] text-[#E7E5DE]">
-                        {branch.condition} → {branch.behavior}
-                      </li>
-                    ))}
-                  </ul>
-                </div>
-              ) : null}
-
-              {state.openQuestions.length > 0 ? (
-                <div>
-                  <h3 className="text-[12px] font-[600] uppercase tracking-[0.05em] text-[#9CA3AF]">
-                    Open questions ({state.openQuestions.length})
-                  </h3>
-                  <ul className="mt-1.5 flex flex-col gap-1">
-                    {state.openQuestions.map((q, i) => (
-                      <li key={i} className="text-[12.5px] text-[#EAB308]">
-                        {q}
-                      </li>
-                    ))}
-                  </ul>
-                </div>
-              ) : null}
-
-              <div className="flex flex-col gap-2">
-                <h3 className="text-[12px] font-[600] uppercase tracking-[0.05em] text-[#9CA3AF]">
-                  Ask Seldon
-                </h3>
-                <div className="flex max-h-[180px] flex-col gap-1.5 overflow-y-auto">
-                  {state.interview.map((turn, i) => (
-                    <p
-                      key={i}
-                      className={`text-[13px] ${turn.role === "user" ? "text-[#E7E5DE]" : "text-[#14B8A6]"}`}
-                    >
-                      <strong>{turn.role === "user" ? "You: " : "Seldon: "}</strong>
-                      {turn.text}
-                    </p>
-                  ))}
-                  {interviewPending ? (
-                    <p className="text-[13px] italic text-[#6B7280]">Seldon is updating the flow&hellip;</p>
-                  ) : null}
-                  {interviewError ? (
-                    <p role="alert" className="text-[13px] text-[#EF4444]">
-                      {interviewError}{" "}
-                      <button
-                        type="button"
-                        onClick={() => void handleInterviewRetry()}
-                        className="underline underline-offset-2 hover:text-[#F5F4F0]"
-                      >
-                        Retry
-                      </button>
-                    </p>
-                  ) : null}
-                </div>
-                <div className="flex gap-2">
-                  <input
-                    type="text"
-                    value={interviewInput}
-                    disabled={interviewPending}
-                    onChange={(e) => setInterviewInput(e.target.value)}
-                    onKeyDown={(e) => {
-                      if (e.key === "Enter") {
-                        e.preventDefault();
-                        void handleInterviewSend();
-                      }
-                    }}
-                    placeholder="Answer an open question or add detail..."
-                    className="flex-1 rounded-[10px] border border-[rgba(231,229,222,.12)] bg-transparent px-3 py-2 text-[13px] text-[#E7E5DE] outline-none placeholder:text-[#6B7280] disabled:opacity-50"
-                  />
-                  <button
-                    type="button"
-                    disabled={interviewPending}
-                    onClick={() => void handleInterviewSend()}
-                    className="rounded-[10px] bg-[#14B8A6] px-3 py-2 text-[13px] font-[600] text-[#0B0F0E] disabled:cursor-not-allowed disabled:opacity-50"
-                  >
-                    Send
-                  </button>
-                </div>
-              </div>
-
-              {state.phase === "recap" && isAuthed ? (
-                <button
-                  type="button"
-                  disabled={compiling}
-                  onClick={() => void handleCompileNow()}
-                  className="mt-1 inline-flex items-center justify-center gap-2.5 rounded-full bg-[#14B8A6] px-5 py-3 text-[14px] font-[600] text-[#0B0F0E] disabled:opacity-50"
-                >
-                  {compiling ? "Compiling..." : "Looks right — compile my agent"}
-                </button>
-              ) : null}
-
-              {state.phase === "recap" && !isAuthed ? (
-                <a
-                  href={claimHref}
-                  onClick={() => dispatch({ type: "APPROVED" })}
-                  className="mt-1 inline-flex items-center justify-center gap-2.5 rounded-full bg-[#14B8A6] px-5 py-3 text-[14px] font-[600] text-[#0B0F0E]"
-                >
-                  Looks right — claim &amp; compile my agent
-                </a>
-              ) : null}
-
-              {state.phase === "approved" && !compiledTemplateId ? (
-                <button
-                  type="button"
-                  disabled={compiling}
-                  onClick={() => void handleCompileAgent()}
-                  className="mt-1 inline-flex items-center justify-center gap-2.5 rounded-full bg-[#14B8A6] px-5 py-3 text-[14px] font-[600] text-[#0B0F0E] disabled:opacity-50"
-                >
-                  {compiling ? "Compiling..." : "Compile my agent"}
-                </button>
-              ) : null}
-
-              {compiledTemplateId ? (
-                <div className="mt-1 flex flex-col gap-2">
-                  <p className="text-[13.5px] font-[600] text-[#F5F4F0]">Your agent is compiled</p>
-                  <a
-                    href={`/studio/agents/${compiledTemplateId}`}
-                    className="inline-flex items-center justify-center gap-2.5 rounded-full bg-[#14B8A6] px-5 py-3 text-[14px] font-[600] text-[#0B0F0E]"
-                  >
-                    Open your agent
-                  </a>
-                  <p className="text-[12px] text-[#9CA3AF]">
-                    It was compiled from your recording — run its evals and test it before
-                    publishing. It&apos;s a draft.
-                  </p>
-                </div>
-              ) : null}
-            </section>
+          {recapVisible ? (
+            <RecapPanel
+              phase={state.phase}
+              flowModel={state.flowModel}
+              coverage={state.coverage}
+              openQuestions={state.openQuestions}
+              interview={state.interview}
+              interviewInput={interviewInput}
+              interviewPending={interviewPending}
+              interviewError={interviewError}
+              isAuthed={isAuthed}
+              compiling={compiling}
+              compiledTemplateId={compiledTemplateId}
+              claimHref={claimHref}
+              onInterviewInputChange={setInterviewInput}
+              onInterviewSend={() => void handleInterviewSend()}
+              onInterviewRetry={() => void handleInterviewRetry()}
+              onCompileNow={() => void handleCompileNow()}
+              onCompileAgent={() => void handleCompileAgent()}
+              onApprove={() => dispatch({ type: "APPROVED" })}
+            />
           ) : null}
         </div>
       </div>
