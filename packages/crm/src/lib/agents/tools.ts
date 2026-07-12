@@ -1886,7 +1886,28 @@ export type GetToolsOptions = {
    *  false, composio bindings are dropped entirely (fail-closed to native-only,
    *  so the model never even sees the toolkit's tools). */
   hasComposioKey?: (orgId: string) => Promise<boolean>;
+  /** H1 hotfix (2026-07-11 prod incident) — sandbox every WRAPPED connector
+   *  tool (MCP/vetted/byo AND composio): the model still sees the exact
+   *  same name/description/jsonSchema, but execute() returns a synthetic ok
+   *  envelope and NEVER calls the real executor (no network, no external
+   *  side effect). Distinct from `ToolExecuteContext.testMode`, which only
+   *  short-circuits SF's OWN native write tools (book_appointment, etc.) —
+   *  connector tools have historically executed for REAL regardless of
+   *  testMode (supervised-run's "Run it once" relies on exactly that: real
+   *  Composio/MCP actions, sandboxed natives). The eval harness is the ONE
+   *  caller that needs BOTH sandboxed — it sets this true; every other
+   *  caller (supervised-run, live agents, the Studio test panel) leaves it
+   *  unset and keeps today's behavior byte-for-byte. */
+  sandboxConnectors?: boolean;
 };
+
+/** A synthetic, side-effect-free result for a sandboxed connector tool call —
+ *  the eval transcript still reads as if the tool ran, but nothing real
+ *  happened. Mirrors the shape native write tools already return under
+ *  `ctx.testMode` ({ ok:true, testMode:true, ... }). */
+function sandboxConnectorExecute(toolName: string): AgentTool["execute"] {
+  return async () => ({ ok: true, testMode: true, sandboxed: true, tool: toolName });
+}
 
 /** Lazily-built default MCP deps: read the bearer from the encrypted
  *  workspaceSecrets store (skipAccessCheck — the runtime has no user session in
@@ -2008,8 +2029,17 @@ export async function getToolsForCapabilities(
     }
   }
 
+  // H1 hotfix — sandbox every wrapped connector tool's execute() when asked
+  // (the eval harness). Applied AFTER both wrap steps so neither wrapMcpTool
+  // nor resolveComposioBinding needs to know about eval-mode at all — the
+  // real executor is simply never referenced for a sandboxed tool, so no
+  // network/DB call can happen no matter what deps were resolved above.
+  const finalWrapped = opts?.sandboxConnectors
+    ? wrapped.map((tool) => ({ ...tool, execute: sandboxConnectorExecute(tool.name) }))
+    : wrapped;
+
   // Natives FIRST (unchanged), then the wrapped MCP/Composio tools.
-  return [...native, ...wrapped];
+  return [...native, ...finalWrapped];
 }
 
 export function findTool(name: string): AgentTool | undefined {

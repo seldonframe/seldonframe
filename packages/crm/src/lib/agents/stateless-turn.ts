@@ -110,6 +110,14 @@ export type RunStatelessAgentTurnInput = {
    *  unaffected. Never throws into the loop — a callback error is caught
    *  and swallowed so a logging bug can never break a live agent turn. */
   onToolEvent?: (event: StatelessToolEvent) => void;
+  /** H1 hotfix (2026-07-11) — forwarded to getToolsForCapabilities: when
+   *  true, every wrapped connector (MCP/vetted/byo AND composio) tool
+   *  executes as a synthetic no-op instead of calling the real
+   *  toolkit/API. Distinct from `testMode` (which only sandboxes SF's own
+   *  native write tools) — the eval harness sets this true; supervised-run
+   *  and every other caller leave it unset (real connector execution,
+   *  unchanged). Default false/undefined. */
+  sandboxConnectors?: boolean;
 };
 
 /**
@@ -254,6 +262,7 @@ export async function runStatelessAgentTurn(
   const tools = await getToolsForCapabilities(input.blueprint.capabilities, {
     orgId: input.orgId,
     connectors: input.blueprint.connectors,
+    sandboxConnectors: input.sandboxConnectors,
   });
 
   // Seed the messages array from the plain-text chat history.
