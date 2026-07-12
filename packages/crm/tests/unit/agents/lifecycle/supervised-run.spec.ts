@@ -3,6 +3,8 @@ import assert from "node:assert/strict";
 
 import {
   runSupervised,
+  beginSupervisedRun,
+  driveSupervisedRunTurn,
   buildKickoffMessage,
   resolveRunningRunGuard,
   isUniqueViolationError,
@@ -225,6 +227,51 @@ describe("runSupervised", () => {
   });
 });
 
+// ─── H2 hotfix — beginSupervisedRun / driveSupervisedRunTurn split ───────────
+//
+// startSupervisedRunAction now calls these two separately (begin
+// synchronously, drive inside after()) instead of the combined
+// runSupervised. Locks that the split is behavior-PRESERVING: begin does
+// exactly the guard+create runSupervised always did, drive does exactly the
+// turn+timeout+finish runSupervised always did, and running them back to
+// back (which is literally what runSupervised itself now does) produces the
+// identical result the "runSupervised" describe block above already proves.
+
+describe("beginSupervisedRun / driveSupervisedRunTurn (H2 hotfix)", () => {
+  test("begin returns the runId immediately without ever calling runTurn", async () => {
+    let runTurnCalled = false;
+    const { deps } = baseDeps({
+      runTurn: async () => {
+        runTurnCalled = true;
+        return { ok: true as const, reply: "should not run" };
+      },
+    });
+    const begin = await beginSupervisedRun(deps, { orgId: ORG_ID, templateId: TEMPLATE_ID });
+    assert.deepEqual(begin, { ok: true, runId: RUN_ID });
+    assert.equal(runTurnCalled, false, "begin must be the FAST half — no turn work yet");
+  });
+
+  test("begin rejects when already running — same as runSupervised's guard", async () => {
+    const { deps } = baseDeps({ hasRunningRun: async () => true });
+    const begin = await beginSupervisedRun(deps, { orgId: ORG_ID, templateId: TEMPLATE_ID });
+    assert.deepEqual(begin, { ok: false, error: "already_running" });
+  });
+
+  test("begin then drive, called separately, matches runSupervised's combined result exactly", async () => {
+    const { deps, finished } = baseDeps();
+    const begin = await beginSupervisedRun(deps, { orgId: ORG_ID, templateId: TEMPLATE_ID });
+    assert.equal(begin.ok, true);
+    if (!begin.ok) return;
+    const result = await driveSupervisedRunTurn(deps, begin.runId, "run it");
+    assert.equal(result.ok, true);
+    if (result.ok) {
+      assert.equal(result.runId, RUN_ID);
+      assert.equal(result.status, "succeeded");
+    }
+    assert.equal(finished[0]?.status, "succeeded", "the row was finished exactly once, by drive");
+  });
+});
+
 // ─── F1 (Wave 1 review) — stranded `running` row can't brick the Run button ──
 
 describe("resolveRunningRunGuard", () => {
@@ -288,17 +335,28 @@ describe("isUniqueViolationError", () => {
 });
 
 describe("DEFAULT_TIMEOUT_MS (app-side run timeout)", () => {
-  test("stays below a 60s platform function ceiling with margin (Wave 1 review, F1)", async () => {
+  test("H2 hotfix (2026-07-11): 240s, comfortably below the 300s after()/maxDuration ceiling", async () => {
     // Exercised indirectly via buildKickoffMessage's neighbor export contract:
     // runSupervised's own default timeout path is covered by the "hard
     // timeout" test above via DI; here we just pin the constant's value so a
     // future edit can't silently drift back above the platform ceiling.
+    //
+    // Capture into a variable rather than asserting INSIDE the injected
+    // runWithTimeout fake — an assertion thrown there lands inside
+    // driveSupervisedRunTurn's own try/catch around the runWithTimeout call
+    // and gets silently swallowed as a turn failure, never reaching the test
+    // runner (a real gap this rewrite closes: the OLD version of this test
+    // asserted 55_000 inside that same callback and kept reporting green
+    // even after DEFAULT_TIMEOUT_MS changed to 240_000).
+    let seenTimeoutMs: number | undefined;
     const { deps } = baseDeps({
       runWithTimeout: async (fn, timeoutMs) => {
-        assert.equal(timeoutMs, 55_000, "the DEFAULT_TIMEOUT_MS the action relies on must be 55s");
+        seenTimeoutMs = timeoutMs;
         return fn();
       },
     });
     await runSupervised(deps, { orgId: ORG_ID, templateId: TEMPLATE_ID, kickoffMessage: "run it" });
+    assert.equal(seenTimeoutMs, 240_000, "DEFAULT_TIMEOUT_MS must be 240s (300s after()/maxDuration ceiling - margin)");
+    assert.ok(seenTimeoutMs! < 300_000, "must stay below the 300s platform function ceiling with margin");
   });
 });

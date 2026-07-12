@@ -33,9 +33,12 @@
 
 "use server";
 
+import type Anthropic from "@anthropic-ai/sdk";
+import { after } from "next/server";
 import { and, eq } from "drizzle-orm";
 import { db } from "@/db";
 import { agentTemplates, organizations } from "@/db/schema";
+import { evalRunJobs, type EvalRunJob } from "@/db/schema/eval-run-jobs";
 import type { AgentBlueprint } from "@/db/schema/agents";
 import { getOrgId } from "@/lib/auth/helpers";
 import { assertWritable } from "@/lib/demo/server";
@@ -66,14 +69,38 @@ export type RunAgentEvalsScenarioResult = {
   notes?: string;
 };
 
+export type RunAgentEvalsOk = {
+  ok: true;
+  summary: { passed: number; total: number; passRate: number };
+  scenarios: RunAgentEvalsScenarioResult[];
+  /** How many scenarios FAILED — the count recorded as Brain lessons. */
+  lessonsRecorded: number;
+};
+
+/** Legacy synchronous result shape — kept as the TYPE the job's `result`
+ *  column stores, and as the poll action's success shape (the UI already
+ *  knows how to render it, unchanged, see run-evals.tsx). */
 export type RunAgentEvalsActionResult =
+  | RunAgentEvalsOk
   | {
-      ok: true;
-      summary: { passed: number; total: number; passRate: number };
-      scenarios: RunAgentEvalsScenarioResult[];
-      /** How many scenarios FAILED — the count recorded as Brain lessons. */
-      lessonsRecorded: number;
-    }
+      ok: false;
+      error: "unauthorized" | "template_not_found" | "no_llm_key";
+      message?: string;
+    };
+
+/**
+ * H2 hotfix (2026-07-11 prod incident) — starting an eval run RETURNS
+ * IMMEDIATELY with a jobId; the real work (author scenarios, simulate N
+ * customers, grade N transcripts — a genuinely multi-minute LLM workload)
+ * runs OUT OF REQUEST via `after()`. Before this fix, the synchronous "Run
+ * evals" POST held the request open long enough to hit Vercel's function
+ * ceiling (a live 504) and, because Next.js queues server actions PER TAB,
+ * froze every other click (Run/Deploy) on that tab behind it. The client
+ * polls `getEvalRunJobAction(jobId)` — same pattern the Run stage's
+ * supervised-run poll already uses.
+ */
+export type StartEvalRunResult =
+  | { ok: true; jobId: string; status: "running" }
   | {
       ok: false;
       error: "unauthorized" | "template_not_found" | "no_llm_key";
@@ -82,13 +109,10 @@ export type RunAgentEvalsActionResult =
 
 /**
  * Run the conversation eval for an agent template (org-guarded; BYOK-gated; money-
- * safe). Returns the pass-rate summary + a per-scenario ✓/✗ with the failed check
- * names, plus how many failures were recorded as Brain lessons. Thin wrapper — see
- * the file header; the work is in runAgentEvals.
+ * safe). Guards run synchronously (fast); the eval itself + persistence run inside
+ * `after()`. Thin wrapper — see the file header; the work is in runAgentEvals.
  */
-export async function runAgentEvalsAction(
-  agentTemplateId: string,
-): Promise<RunAgentEvalsActionResult> {
+export async function runAgentEvalsAction(agentTemplateId: string): Promise<StartEvalRunResult> {
   assertWritable();
 
   const orgId = await getOrgId();
@@ -124,6 +148,50 @@ export async function runAgentEvalsAction(
 
   const blueprint = (template.blueprint ?? {}) as AgentBlueprint;
 
+  const [job] = await db
+    .insert(evalRunJobs)
+    .values({ orgId, templateId: template.id, status: "running" })
+    .returning({ id: evalRunJobs.id });
+
+  after(async () => {
+    try {
+      const evalResult = await runEvalsAndPersist({ orgId, templateId: template.id, blueprint, client, org });
+      await db
+        .update(evalRunJobs)
+        .set({ status: "succeeded", result: evalResult, finishedAt: new Date() })
+        .where(eq(evalRunJobs.id, job.id));
+    } catch (err) {
+      await db
+        .update(evalRunJobs)
+        .set({
+          status: "failed",
+          error: err instanceof Error ? err.message : String(err),
+          finishedAt: new Date(),
+        })
+        .where(eq(evalRunJobs.id, job.id));
+    }
+  });
+
+  return { ok: true, jobId: job.id, status: "running" };
+}
+
+/**
+ * The actual eval work — author scenarios, run them against the real agent
+ * brain (sandboxed: testMode + sandboxConnectors, see H1), grade, persist.
+ * Extracted so `runAgentEvalsAction` can call it from inside `after()`.
+ * Never throws the way runAgentEvals/persistTemplateEvalRun are already
+ * fail-soft internally, but the ONE new possible throw (the job-row DB
+ * writes around it) is caught by the caller.
+ */
+async function runEvalsAndPersist(args: {
+  orgId: string;
+  templateId: string;
+  blueprint: AgentBlueprint;
+  client: Anthropic;
+  org: { slug: string; timezone: string | null };
+}): Promise<RunAgentEvalsOk> {
+  const { orgId, templateId, blueprint, client, org } = args;
+
   // Assemble the PRODUCTION deps. The sim / grader / generator all reuse the
   // operator's BYOK client (so the whole run bills the operator, not the platform),
   // and the agent-reply adapter drives the template's real brain in testMode.
@@ -133,7 +201,7 @@ export async function runAgentEvalsAction(
       blueprint,
       orgId,
       // Stable agent key for the Brain lesson namespace — the template id.
-      agentKey: template.id,
+      agentKey: templateId,
     },
     {
       generator: makeLlmScenarioGenerator({ getClient }),
@@ -184,14 +252,14 @@ export async function runAgentEvalsAction(
   // FAIL-SOFT: persistTemplateEvalRun never throws (it logs + swallows any
   // failure internally) — the operator's result below is computed either way,
   // so a persistence hiccup can never turn a successful eval run into a
-  // failed action. graderModel mirrors the EXACT resolution
+  // failed job. graderModel mirrors the EXACT resolution
   // makeLlmEvalGrader/score-llm.ts uses at call time (env override else the
   // Haiku default) so the persisted row reflects the model that actually
   // graded this run, not a guess.
   await persistTemplateEvalRun(
     {
       orgId,
-      templateId: agentTemplateId,
+      templateId,
       result: { results, summary },
       graderModel: process.env.ANTHROPIC_EVAL_MODEL?.trim() || DEFAULT_EVAL_MODEL,
     },
@@ -202,6 +270,31 @@ export async function runAgentEvalsAction(
   );
 
   return { ok: true, summary, scenarios, lessonsRecorded };
+}
+
+export type GetEvalRunJobResult =
+  | { ok: true; status: EvalRunJob["status"]; result: RunAgentEvalsOk | null; error: string | null }
+  | { ok: false; error: "unauthorized" | "not_found" };
+
+/** Org-scoped poll read for an eval run job — the "Run evals" button's
+ *  ~2s poll while `status === "running"` (mirrors getSupervisedRunAction). */
+export async function getEvalRunJobAction(jobId: string): Promise<GetEvalRunJobResult> {
+  const orgId = await getOrgId();
+  if (!orgId) return { ok: false, error: "unauthorized" };
+
+  const [row] = await db
+    .select()
+    .from(evalRunJobs)
+    .where(and(eq(evalRunJobs.id, jobId), eq(evalRunJobs.orgId, orgId)))
+    .limit(1);
+  if (!row) return { ok: false, error: "not_found" };
+
+  return {
+    ok: true,
+    status: row.status as EvalRunJob["status"],
+    result: (row.result as RunAgentEvalsOk | null) ?? null,
+    error: row.error,
+  };
 }
 
 /**

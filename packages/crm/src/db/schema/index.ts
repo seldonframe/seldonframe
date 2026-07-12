@@ -216,3 +216,7 @@ export * from "./agent-lifecycle";
 // celebration screen's opt-in, PREVIEW-before-publish share card). Additive.
 // See docs/superpowers/specs/2026-07-11-agent-setup-mode-design.md.
 export * from "./share-cards";
+
+// 2026-07-11 — H2 hotfix (migration 0071): eval_run_jobs, an ephemeral poll
+// target for the out-of-request "Run evals" flow (after()). Additive.
+export * from "./eval-run-jobs";

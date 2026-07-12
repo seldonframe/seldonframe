@@ -11,12 +11,13 @@
 // an honest inline message, never a silent retry).
 //
 // F-E (2026-07-11 incident: prod row 48e7fcc0-0e34-4447-bc3f-9bbdc811a9dc) —
-// the run() handler now dispatches the REAL actionLog + summary the server
-// action returns, instead of hardcoding an empty log and dropping the
-// summary. That was the root cause: a run that finishes synchronously
-// within startSupervisedRunAction's own request (the common case) never
-// triggers a follow-up poll, so whatever `started` was dispatched with is
-// the only evidence the UI will ever see.
+// originally fixed by dispatching the server action's REAL actionLog +
+// summary instead of hardcoding an empty log. SUPERSEDED by the H2 hotfix
+// (same day): startSupervisedRunAction now ALWAYS returns immediately with
+// status:"running" (the real turn runs out-of-request via after(), see
+// lib/agent-templates/supervised-run-actions.ts) — there is no more
+// synchronous-completion case, so run() always falls through to polling and
+// the poll IS the only source of evidence, every time.
 //
 // F-F (evidence-first restructure) — three lanes, never conflated:
 //   PLAN   — "This run will:" (derivePlannedActions), shown before running.
@@ -160,19 +161,18 @@ export function RunStage({
       });
       return;
     }
-    // F-E — dispatch the REAL actionLog + summary the server already
-    // resolved, instead of hardcoding actionLog:[] and dropping summary.
-    // For the common case (the turn finishes inside this same request),
-    // this IS the only evidence the UI will ever see — there is no
-    // follow-up poll below (the early return right after).
+    // H2 hotfix (2026-07-11) — the server action now ALWAYS returns
+    // status:"running" (the real turn runs out-of-request via after());
+    // there is no more synchronous succeeded/failed shortcut, so every
+    // start immediately falls through to polling. actionLog starts empty —
+    // the poll below is the only source of evidence from here on.
     dispatch({
       type: "started",
       runId: result.runId,
       status: result.status,
-      actionLog: result.actionLog,
-      summary: result.summary,
+      actionLog: [],
+      summary: null,
     });
-    if (result.status === "succeeded" || result.status === "failed") return;
     startPolling(result.runId);
   };
 

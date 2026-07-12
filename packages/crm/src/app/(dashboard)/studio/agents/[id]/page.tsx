@@ -64,6 +64,12 @@ export const dynamic = "force-dynamic";
 // Connected stage) is a Node-runtime-only dependency — this page now
 // transitively imports it, so it must declare the Node runtime explicitly.
 export const runtime = "nodejs";
+// H2 hotfix (2026-07-11) — startSupervisedRunAction and runAgentEvalsAction
+// (both invoked from this page) defer their real work into `after()`,
+// which keeps the underlying function instance alive past the response.
+// 300s is Vercel's hard function ceiling; DEFAULT_TIMEOUT_MS (supervised
+// runs, 240s) and the eval harness both stay comfortably under it.
+export const maxDuration = 300;
 
 /** Org-scoped read of the most recent supervised_runs row for a template
  *  (any status — the Run stage shows the last attempt on revisit). */

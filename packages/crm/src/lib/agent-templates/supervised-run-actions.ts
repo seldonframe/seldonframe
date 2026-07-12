@@ -23,6 +23,7 @@
 
 "use server";
 
+import { after } from "next/server";
 import { and, desc, eq, sql } from "drizzle-orm";
 import { db } from "@/db";
 import { agentTemplates, organizations } from "@/db/schema";
@@ -34,7 +35,8 @@ import { getAIClient } from "@/lib/ai/client";
 import { resolveStudioBuildGate, NEEDS_BYOK_MESSAGE } from "./studio-build-gate";
 import { runStatelessAgentTurn, type StatelessToolEvent } from "@/lib/agents/stateless-turn";
 import {
-  runSupervised,
+  beginSupervisedRun,
+  driveSupervisedRunTurn,
   buildKickoffMessage,
   resolveRunningRunGuard,
   type SupervisedRunDeps,
@@ -45,13 +47,13 @@ export type StartSupervisedRunResult =
   | {
       ok: true;
       runId: string;
-      status: "succeeded" | "failed";
-      summary: string;
-      /** F-E — the run's real actionLog, returned to the synchronous
-       *  caller so the Run stage doesn't have to (and, in the common case
-       *  where the turn finishes within this same request, CAN'T) rely on
-       *  a follow-up poll to ever see it. */
-      actionLog: SupervisedRunActionEvent[];
+      /** H2 hotfix (2026-07-11) — ALWAYS "running" now: the action returns
+       *  the instant the row is created (sub-second), and the real turn
+       *  runs out-of-request via `after()` (see below). The Run stage
+       *  already polls `getSupervisedRunAction` whenever status isn't
+       *  terminal, so this is a strict subset of a shape it already
+       *  handles — no UI change required. */
+      status: "running";
     }
   | {
       ok: false;
@@ -151,8 +153,17 @@ async function finishRunReal(
  * runAgentEvalsAction exactly — money-safe: this is unbounded-COGS real-tool
  * execution, so it requires the operator's OWN key). Resolves the template's
  * real blueprint + a neutral workspace context, wires runStatelessAgentTurn
- * as the `runTurn` dep (testMode:true — see file header), and delegates to
- * runSupervised.
+ * as the `runTurn` dep (testMode:true — see file header).
+ *
+ * H2 hotfix (2026-07-11 prod incident) — this now RETURNS IMMEDIATELY after
+ * the guard+create half (`beginSupervisedRun`, sub-second) and defers the
+ * actual turn (`driveSupervisedRunTurn`, up to DEFAULT_TIMEOUT_MS=240s) to
+ * `after()`, so it runs OUT OF REQUEST. Before this fix, a slow "Run evals"/
+ * "Run it once" POST held the whole request open for minutes; Next.js
+ * queues server actions PER TAB, so every other click on that tab (Deploy,
+ * another Run) froze behind it — this is what caused the 504s + the queued
+ * run that finished for real but got marked "failed — timed out" by the
+ * OLD 55s app-side timer. Returning fast unjams the queue permanently.
  */
 export async function startSupervisedRunAction(templateId: string): Promise<StartSupervisedRunResult> {
   assertWritable();
@@ -208,15 +219,27 @@ export async function startSupervisedRunAction(templateId: string): Promise<Star
     finishRun: finishRunReal,
   };
 
-  const result = await runSupervised(deps, { orgId, templateId, kickoffMessage });
-  if (!result.ok) return { ok: false, error: result.error };
-  return {
-    ok: true,
-    runId: result.runId,
-    status: result.status,
-    summary: result.summary,
-    actionLog: result.actionLog,
-  };
+  const begin = await beginSupervisedRun(deps, { orgId, templateId });
+  if (!begin.ok) return { ok: false, error: begin.error };
+
+  // Out-of-request: the response below returns BEFORE this runs. Errors
+  // inside driveSupervisedRunTurn are already caught internally (it never
+  // throws — see supervised-run.ts) and always finish the row, so there is
+  // no unhandled-rejection risk here; the extra catch is belt-and-suspenders
+  // logging only.
+  after(async () => {
+    try {
+      await driveSupervisedRunTurn(deps, begin.runId, kickoffMessage);
+    } catch (err) {
+      console.warn("[supervised-run-actions] drive_run_after_failed", {
+        runId: begin.runId,
+        templateId,
+        error: err instanceof Error ? err.message : String(err),
+      });
+    }
+  });
+
+  return { ok: true, runId: begin.runId, status: "running" };
 }
 
 export type GetSupervisedRunResult =
