@@ -54,6 +54,7 @@ import {
   makeStatelessAgentReply,
 } from "@/lib/agents/evals/run-agent-evals";
 import { recordEvalRun } from "@/lib/agents/evals/eval-runs-store";
+import { resolveEvalJobStatus } from "@/lib/agents/evals/eval-job-staleness";
 import { persistTemplateEvalRun } from "@/lib/agents/evals/persist-template-run";
 
 /** One scenario's verdict, shaped for the UI: did it pass the hard gates, and if
@@ -288,6 +289,22 @@ export async function getEvalRunJobAction(jobId: string): Promise<GetEvalRunJobR
     .where(and(eq(evalRunJobs.id, jobId), eq(evalRunJobs.orgId, orgId)))
     .limit(1);
   if (!row) return { ok: false, error: "not_found" };
+
+  // Staleness reaper (opus review 2026-07-12 #1 — the eval twin of the
+  // supervised-run F1 guard): an over-age 'running' row means the after()
+  // work died before finishing it; reconcile lazily on read so the poll can
+  // never spin forever. Pure decision in eval-job-staleness.ts; org-scoped write.
+  const staleness = resolveEvalJobStatus(
+    { status: row.status, startedAt: row.startedAt },
+    new Date(),
+  );
+  if (staleness.kind === "stale_failed") {
+    await db
+      .update(evalRunJobs)
+      .set({ status: "failed", error: staleness.error, finishedAt: new Date() })
+      .where(and(eq(evalRunJobs.id, jobId), eq(evalRunJobs.orgId, orgId)));
+    return { ok: true, status: "failed", result: null, error: staleness.error };
+  }
 
   return {
     ok: true,
