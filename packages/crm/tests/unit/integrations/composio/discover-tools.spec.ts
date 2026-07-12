@@ -19,6 +19,7 @@ import assert from "node:assert/strict";
 import {
   TOOLKIT_DISCOVERY_TOOL_CAP,
   pickDiscoverySubset,
+  normalizeDiscoveredTools,
   fillComposioBindingTools,
   fillBlueprintConnectorsForPersist,
   type ToolkitToolLister,
@@ -62,6 +63,67 @@ describe("pickDiscoverySubset — pure important-first/fallback/cap", () => {
     const big = Array.from({ length: TOOLKIT_DISCOVERY_TOOL_CAP + 10 }, (_, i) => `t${i}`);
     assert.equal(pickDiscoverySubset(big, []).length, TOOLKIT_DISCOVERY_TOOL_CAP);
     assert.equal(pickDiscoverySubset([], big).length, TOOLKIT_DISCOVERY_TOOL_CAP);
+  });
+});
+
+describe("normalizeDiscoveredTools — raw SDK item → McpToolSchema (schema-bound)", () => {
+  test("happy path: {slug, description, inputParameters} maps straight through", () => {
+    const out = normalizeDiscoveredTools([
+      { slug: "YOUTUBE_LIST_VIDEOS", description: "List videos on a channel.", inputParameters: { type: "object", properties: {} } },
+    ]);
+    assert.deepEqual(out, [
+      { name: "YOUTUBE_LIST_VIDEOS", description: "List videos on a channel.", inputSchema: { type: "object", properties: {} } },
+    ]);
+  });
+
+  test("a description over 4000 chars is clamped to exactly 4000 (mcpToolSchemaSchema bound)", () => {
+    const longDescription = "x".repeat(5000);
+    const out = normalizeDiscoveredTools([{ slug: "SOME_TOOL", description: longDescription }]);
+    assert.equal(out.length, 1);
+    assert.equal(out[0].description.length, 4000);
+    assert.equal(out[0].description, "x".repeat(4000));
+  });
+
+  test("a slug over 128 chars is DROPPED (McpToolSchema.name / enabledTools bound)", () => {
+    const longSlug = "A".repeat(129);
+    const out = normalizeDiscoveredTools([
+      { slug: longSlug, description: "d" },
+      { slug: "OK_TOOL", description: "d" },
+    ]);
+    assert.deepEqual(out.map((t) => t.name), ["OK_TOOL"]);
+  });
+
+  test("a slug at exactly 128 chars is kept (boundary)", () => {
+    const slug = "A".repeat(128);
+    const out = normalizeDiscoveredTools([{ slug, description: "d" }]);
+    assert.deepEqual(out.map((t) => t.name), [slug]);
+  });
+
+  test("missing/blank slug is dropped", () => {
+    const out = normalizeDiscoveredTools([{ description: "no slug" }, { slug: "   ", description: "blank" }, { slug: "REAL", description: "ok" }]);
+    assert.deepEqual(out.map((t) => t.name), ["REAL"]);
+  });
+
+  test("non-object / missing inputParameters → permissive default schema", () => {
+    const out = normalizeDiscoveredTools([
+      { slug: "NO_PARAMS", description: "d" },
+      { slug: "STRING_PARAMS", description: "d", inputParameters: "not an object" },
+    ]);
+    for (const t of out) {
+      assert.deepEqual(t.inputSchema, { type: "object", additionalProperties: true });
+    }
+  });
+
+  test("missing description falls back to a generated one", () => {
+    const out = normalizeDiscoveredTools([{ slug: "NO_DESC" }]);
+    assert.equal(out[0].description, "Composio tool NO_DESC.");
+  });
+
+  test("never throws on garbage input", () => {
+    assert.deepEqual(normalizeDiscoveredTools(undefined), []);
+    assert.deepEqual(normalizeDiscoveredTools(null), []);
+    assert.deepEqual(normalizeDiscoveredTools("not an array"), []);
+    assert.doesNotThrow(() => normalizeDiscoveredTools([null, 42, "x", { slug: 5 }]));
   });
 });
 
@@ -174,6 +236,26 @@ describe("fillComposioBindingTools — non-catalog live fill", () => {
     const result = await fillComposioBindingTools("org1", [binding], { listToolkitTools: lister });
     assert.equal(result.changed, false);
     assert.deepEqual(result.connectors, [binding]);
+  });
+});
+
+describe("fillComposioBindingTools — F1 schema-bound persisted shape", () => {
+  test("a lister returning an oversized-description tool still yields a binding that parses through connectorBindingSchema", async () => {
+    const binding: ConnectorBinding = {
+      id: "youtube",
+      kind: "composio",
+      enabledToolkits: ["youtube"],
+      enabledTools: [],
+    };
+    const oversized: McpToolSchema = {
+      name: "YOUTUBE_LIST_VIDEOS",
+      description: "y".repeat(9000),
+      inputSchema: { type: "object" },
+    };
+    const lister: ToolkitToolLister = async () => [oversized];
+    const result = await fillComposioBindingTools("org1", [binding], { listToolkitTools: lister });
+    const filled = result.connectors[0] as Extract<ConnectorBinding, { kind: "composio" }>;
+    assertValidBinding(filled);
   });
 });
 

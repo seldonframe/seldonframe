@@ -56,10 +56,41 @@ type RawComposioTool = {
   inputParameters?: unknown;
 };
 
+/** Bounds mirrored from `mcpToolSchemaSchema` (lib/agents/mcp/connectors.ts —
+ *  `name: z.string().min(1).max(128)`, `description: z.string().max(4000)`).
+ *  Not exported from that file as named constants, so duplicated here
+ *  deliberately: a discovered tool must NEVER produce a binding that fails
+ *  `connectorBindingSchema` — `updateAgentTemplate` does not re-validate on
+ *  write, but the Studio "Connectors & Tools" save path safeParses the whole
+ *  connectors array, so one oversized discovered entry would otherwise
+ *  permanently brick blueprint edits for that template with `invalid_patch`. */
+const MAX_TOOL_SLUG_LENGTH = 128;
+const MAX_TOOL_DESCRIPTION_LENGTH = 4000;
+
+/** Enforce the schema bounds on one already-shaped `McpToolSchema` — `null`
+ *  when the slug is unusable or over `MAX_TOOL_SLUG_LENGTH` (an oversized
+ *  name can't be truncated without becoming a different, wrong tool name, so
+ *  it's dropped rather than mangled); an oversized `description` is clamped
+ *  (slice) rather than dropped, since truncating prose loses nothing
+ *  load-bearing. Applied both to freshly-normalized live-discovery output
+ *  AND (defense-in-depth) to whatever an injected `ToolkitToolLister` hands
+ *  back — a custom lister isn't guaranteed to already respect these bounds. */
+function boundToolSchema(schema: McpToolSchema): McpToolSchema | null {
+  if (!schema || typeof schema.name !== "string") return null;
+  const name = schema.name.trim();
+  if (!name || name.length > MAX_TOOL_SLUG_LENGTH) return null;
+  const description =
+    typeof schema.description === "string" && schema.description.length > MAX_TOOL_DESCRIPTION_LENGTH
+      ? schema.description.slice(0, MAX_TOOL_DESCRIPTION_LENGTH)
+      : schema.description;
+  return { ...schema, name, description };
+}
+
 /** PURE: map raw Composio SDK tool items → `McpToolSchema[]`. Drops items
- *  without a usable slug; the schema's `name` IS the Composio tool slug (the
- *  wire name the runtime executes). Never throws — malformed items are
- *  simply skipped. */
+ *  without a usable slug (missing/blank OR over `MAX_TOOL_SLUG_LENGTH`); the
+ *  schema's `name` IS the Composio tool slug (the wire name the runtime
+ *  executes). An oversized description is clamped, never dropped. Never
+ *  throws — malformed items are simply skipped. */
 export function normalizeDiscoveredTools(items: unknown): McpToolSchema[] {
   if (!Array.isArray(items)) return [];
   const out: McpToolSchema[] = [];
@@ -76,7 +107,8 @@ export function normalizeDiscoveredTools(items: unknown): McpToolSchema[] {
       item.inputParameters && typeof item.inputParameters === "object"
         ? (item.inputParameters as Record<string, unknown>)
         : { type: "object", additionalProperties: true };
-    out.push({ name: slug, description, inputSchema });
+    const bounded = boundToolSchema({ name: slug, description, inputSchema });
+    if (bounded) out.push(bounded);
   }
   return out;
 }
@@ -169,9 +201,15 @@ async function fillOneComposioBinding(
       const discovered = await lister(orgId, slug);
       if (Array.isArray(discovered)) {
         for (const schema of discovered) {
-          if (!schema || typeof schema.name !== "string" || !schema.name) continue;
-          addTool(schema.name);
-          addCached(schema);
+          // Defense-in-depth (F1): re-enforce the schema bounds here too — an
+          // injected ToolkitToolLister (a custom `deps.listToolkitTools`, not
+          // just the real discoverToolkitToolsLive → normalizeDiscoveredTools
+          // path) isn't guaranteed to already respect them, and one oversized
+          // entry must never reach the persisted binding.
+          const bounded = boundToolSchema(schema);
+          if (!bounded) continue;
+          addTool(bounded.name);
+          addCached(bounded);
         }
       }
     } catch {
