@@ -31,7 +31,6 @@ import { MarketingAgentOrbit } from "@/components/landing/marketing-agent-orbit"
 import { FlickerGrid } from "@/components/landing/flicker-grid";
 import { MarketingDemoMarquee } from "@/components/landing/marketing-demo-marquee";
 import { heroSubmitTarget } from "@/components/landing/hero-submit-target";
-import { HeroModeSwitch } from "@/components/landing/landing-mode";
 import { BorderBeam } from "@/components/ui/border-beam";
 
 // Re-exported for callers that only need the pure routing decision (e.g.
@@ -337,12 +336,6 @@ export function MarketingHero({
             borderWidth={1}
           />
         )}
-        {/* Mode switch: build vs record (Task 9). Null when the flag is
-            off — the form is byte-identical to today. */}
-        <div className="mx-2 mt-2">
-          <HeroModeSwitch />
-        </div>
-
         {/* Tabs */}
         <div
           role="tablist"
@@ -379,8 +372,9 @@ export function MarketingHero({
           </button>
         </div>
 
-        {/* URL pane */}
-        <div className={`px-4 pt-3.5 ${tab === "url" ? "block" : "hidden"}`}>
+        {/* URL pane — terminal-style prompt prefix */}
+        <div className={`items-center gap-2.5 px-4 pt-3.5 ${tab === "url" ? "flex" : "hidden"}`}>
+          <span className="select-none font-mono text-[16px] font-[600] text-[#059669]" aria-hidden>&gt;</span>
           <input
             ref={urlRef}
             type="text"
@@ -431,6 +425,16 @@ export function MarketingHero({
           </button>
         </div>
       </form>
+
+      {/* The second on-ramp, at the point of action: record instead of describe. */}
+      <a
+        href="/record"
+        className="group mt-3.5 inline-flex items-center gap-2 text-[13.5px] font-[500] text-[#6E665A] transition-colors hover:text-[#059669]"
+      >
+        <span className="size-[7px] rounded-full bg-[#E5484D]" aria-hidden />
+        or <span className="font-[600] text-[#221D17] group-hover:text-[#059669]">record a workflow</span> you already do
+        <ArrowRight size={13} className="transition-transform group-hover:translate-x-0.5" aria-hidden />
+      </a>
       </div>
       </div>
 

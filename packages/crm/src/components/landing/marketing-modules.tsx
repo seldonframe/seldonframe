@@ -27,17 +27,13 @@ import { motion, useInView, useReducedMotion } from "framer-motion";
 import {
   Calendar,
   FileText,
-  Mail,
   MessageSquare,
   Phone,
-  Plug,
-  Send,
-  Smartphone,
   Star,
   Users,
 } from "lucide-react";
 import { BentoGrid, BentoCard } from "@/components/ui/magic/bento-grid";
-import { OrbitingCircles } from "@/components/ui/magic/orbiting-circles";
+import { MarketingAgentMarquee } from "@/components/landing/marketing-agent-marquee";
 
 // Shared spring-ish ease used everywhere (the brief's cubic-bezier).
 const EASE = [0.22, 1, 0.36, 1] as const;
@@ -81,38 +77,6 @@ const FEATURES = [
   },
 ] as const;
 
-const AGENTS = [
-  "Speed-to-Lead",
-  "Review Agent",
-  "Reactivation Agent",
-  "Quote Agent",
-  "Follow-up Agent",
-] as const;
-
-// The 6 SURFACES an SF agent can run on (CLAUDE.md §1b — distinct from the
-// 6 build-time PRIMITIVES). Powers the "any agent on any surface" orbit
-// figure below — used by MarketingAgents only.
-const SURFACES = [
-  { label: "Voice", icon: Phone },
-  { label: "web-chat", icon: MessageSquare },
-  { label: "SMS", icon: Smartphone },
-  { label: "Email", icon: Mail },
-  { label: "DM", icon: Send },
-  { label: "MCP", full: "MCP-endpoint", icon: Plug },
-] as const;
-
-// Real tools the agents act through (Composio-bound), mirroring the top-hero
-// orbit. Inner ring = first 4, outer ring = rest.
-const AGENT_TOOLS = [
-  { src: "/brand/integrations/gmail.svg", alt: "Gmail" },
-  { src: "/brand/integrations/google-calendar.svg", alt: "Google Calendar" },
-  { src: "/brand/integrations/stripe.svg", alt: "Stripe" },
-  { src: "/brand/integrations/slack.svg", alt: "Slack" },
-  { src: "/brand/integrations/hubspot.svg", alt: "HubSpot" },
-  { src: "/brand/integrations/notion.svg", alt: "Notion" },
-  { src: "/brand/integrations/google-sheets.svg", alt: "Google Sheets" },
-  { src: "/brand/integrations/instagram.svg", alt: "Instagram" },
-] as const;
 
 export function MarketingModules() {
   return (
@@ -175,110 +139,42 @@ export function MarketingAgents() {
     <section
       id="agents"
       aria-label="Hire agents"
-      className="border-t border-[rgba(34,29,23,.08)] bg-[#1F2B24] px-5 py-20 md:px-8 md:py-28 lg:px-12"
+      className="overflow-hidden border-t border-[rgba(34,29,23,.08)] bg-[#1F2B24] px-5 py-20 md:px-8 md:py-28 lg:px-12"
     >
       <div className="mx-auto max-w-[1120px]">
-        <div className="grid gap-10 lg:grid-cols-[1fr_260px] lg:items-center lg:gap-14">
-          <div>
-            {/* Section head */}
-            <div className="max-w-[640px]">
-              <div className="inline-flex items-center gap-2.5 text-[12px] font-[600] uppercase tracking-[0.09em] text-[rgba(52, 211, 153,.9)]">
-                <span className="h-px w-4 bg-[rgba(52, 211, 153,.5)]" aria-hidden />
-                Hire agents
-              </div>
-              <h2 className="mt-3.5 text-[clamp(27px,4.2vw,42px)] font-[500] leading-[1.08] tracking-[-0.025em] text-[#F6F2EA]">
-                Hire agents.
-              </h2>
-              <p className="mt-4 max-w-[60ch] text-[clamp(15.5px,1.9vw,18px)] leading-[1.55] text-[rgba(246,242,234,.78)]">
-                Add no-code AI agents to do the work — answer every call, text back missed calls,
-                request 5-star reviews, reply to DMs and email, win back cold leads. Start from a
-                template or build your own in plain English.{" "}
-                <strong className="font-[500] text-[#FFFDFA]">A 24/7 worker for pennies — not an employee or an agency.</strong>
-              </p>
-            </div>
-
-            {/* Agent chips */}
-            <div className="mt-7 flex flex-wrap gap-2">
-              {AGENTS.map((name) => (
-                <span
-                  key={name}
-                  className="inline-flex items-center gap-1.5 rounded-full border border-[rgba(255,255,255,.12)] bg-[rgba(255,255,255,.06)] px-3 py-1.5 text-[12.5px] font-[500] text-[rgba(246,242,234,.88)]"
-                >
-                  <span className="size-1.5 shrink-0 rounded-full bg-[#34d399] shadow-[0_0_0_3px_rgba(52, 211, 153,.22)]" aria-hidden />
-                  {name}
-                </span>
-              ))}
-              <span className="inline-flex items-center rounded-full border border-dashed border-[rgba(255,255,255,.14)] bg-transparent px-3 py-1.5 font-sans text-[11px] tracking-[0.04em] text-[rgba(246,242,234,.45)]">
-                + more shipping monthly
-              </span>
-            </div>
-
-            {/* CTAs — browse the marketplace, or build a custom agent in the Studio */}
-            <div className="mt-8 flex flex-wrap gap-3">
-              <Link
-                href="/marketplace"
-                className="inline-flex items-center gap-2 rounded-full bg-[#F6F2EA] px-5 py-3 text-[14px] font-[600] text-[#1F2B24] transition-transform hover:-translate-y-px"
-              >
-                Browse the agent marketplace →
-              </Link>
-              <Link
-                href="/build"
-                className="inline-flex items-center gap-2 rounded-full border border-[rgba(255,255,255,.22)] bg-transparent px-5 py-3 text-[14px] font-[500] text-[rgba(246,242,234,.9)] transition-colors hover:border-[rgba(255,255,255,.4)]"
-              >
-                Or build your own in the Studio →
-              </Link>
-            </div>
+        {/* Section head — the two on-ramps */}
+        <div className="mx-auto max-w-[680px] text-center">
+          <div className="inline-flex items-center gap-2.5 text-[12px] font-[600] uppercase tracking-[0.09em] text-[rgba(52, 211, 153,.9)]">
+            <span className="h-px w-4 bg-[rgba(52, 211, 153,.5)]" aria-hidden />
+            Hire agents
           </div>
+          <h2 className="mt-3.5 text-[clamp(27px,4.2vw,42px)] font-[500] leading-[1.08] tracking-[-0.025em] text-[#F6F2EA]">
+            Two ways to build an agent.
+          </h2>
+          <p className="mx-auto mt-4 max-w-[58ch] text-[clamp(15.5px,1.9vw,18px)] leading-[1.55] text-[rgba(246,242,234,.78)]">
+            <strong className="font-[500] text-[#FFFDFA]">Describe what you&apos;re missing</strong> and SF generates it,
+            or <strong className="font-[500] text-[#FFFDFA]">record what you already do</strong> and SF compiles it. Either
+            way you get a 24/7 worker for pennies — not an employee or an agency.
+          </p>
+        </div>
 
-          {/* Lead figure — one agent, working across your real tools, mirroring
-              the top-hero orbit (real logos, not abstract chips). The 6 SF
-              surfaces (CLAUDE.md §1b) are preserved as the caption below so the
-              "any agent on any surface" claim survives the visual swap. */}
-          <div className="flex flex-col items-center gap-4">
-            <div
-              className="relative mx-auto size-[290px] shrink-0"
-              aria-label="One agent, working across your tools: Gmail, Google Calendar, Stripe, Slack, HubSpot, Notion, Google Sheets, and 1,000 more via Composio"
-            >
-              <div className="absolute left-1/2 top-1/2 z-10 flex size-16 -translate-x-1/2 -translate-y-1/2 items-center justify-center rounded-[18px] bg-[#34d399] shadow-[0_0_0_8px_rgba(52, 211, 153,.14)]">
-                {/* eslint-disable-next-line @next/next/no-img-element -- static brand asset */}
-                <img src="/brand/seldonframe-icon.svg" alt="SeldonFrame agent" width={30} height={30} className="block" />
-              </div>
-              <OrbitingCircles
-                radius={78}
-                duration={22}
-                iconSize={42}
-                path={false}
-                className="border border-[rgba(255,255,255,.16)] bg-[#FFFDFA]"
-              >
-                {AGENT_TOOLS.slice(0, 4).map((t) => (
-                  // eslint-disable-next-line @next/next/no-img-element -- static vendored SVG
-                  <img key={t.src} src={t.src} alt={t.alt} width={22} height={22} className="block" />
-                ))}
-              </OrbitingCircles>
-              <OrbitingCircles
-                radius={128}
-                duration={30}
-                reverse
-                iconSize={44}
-                path={false}
-                className="border border-[rgba(255,255,255,.16)] bg-[#FFFDFA]"
-              >
-                {AGENT_TOOLS.slice(4).map((t) => (
-                  // eslint-disable-next-line @next/next/no-img-element -- static vendored SVG
-                  <img key={t.src} src={t.src} alt={t.alt} width={23} height={23} className="block" />
-                ))}
-              </OrbitingCircles>
-            </div>
-            <p className="max-w-[240px] text-center text-[12px] leading-[1.5] text-[rgba(246,242,234,.6)]">
-              on{" "}
-              {SURFACES.map((s, i) => (
-                <span key={s.label}>
-                  {i > 0 && " · "}
-                  <span className="text-[rgba(246,242,234,.85)]">{s.label}</span>
-                </span>
-              ))}
-            </p>
-          </div>
+        {/* The two catalogs, scrolling */}
+        <MarketingAgentMarquee />
+
+        {/* CTAs */}
+        <div className="mt-10 flex flex-wrap justify-center gap-3">
+          <Link
+            href="/marketplace"
+            className="inline-flex items-center gap-2 rounded-full bg-[#F6F2EA] px-5 py-3 text-[14px] font-[600] text-[#1F2B24] transition-transform hover:-translate-y-px"
+          >
+            Browse the agent marketplace →
+          </Link>
+          <Link
+            href="/build"
+            className="inline-flex items-center gap-2 rounded-full border border-[rgba(255,255,255,.22)] bg-transparent px-5 py-3 text-[14px] font-[500] text-[rgba(246,242,234,.9)] transition-colors hover:border-[rgba(255,255,255,.4)]"
+          >
+            Or build your own in the Studio →
+          </Link>
         </div>
       </div>
     </section>
