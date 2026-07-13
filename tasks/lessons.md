@@ -2088,3 +2088,19 @@ C4 close-out with empirical SLICE 11 data.
   files vs the canonical tests/unit tree: check where the repo's suite actually
   lives BEFORE writing the first test of a session.
 - 2026-07-12: A string COMPOSED by keyword-matching other strings can state the opposite of its source ("no free tier" matched /free/i → "(has a free plan)"). Render new composed surfaces and read them; shape tests cannot catch a lie — add an invariant test for the truth claim. (docs/learnings/2026-07-12-derived-string-negation-lie.md)
+
+---
+
+## L-35 — Fetch before you spec: stale origin/main makes you rebuild shipped work
+
+- **Trigger:** The email-agent slice (2026-07-12) was scoped from session memory
+  + scout reports as "build the inbox-watch trigger" — but the local
+  `origin/main` ref was days stale. A `git fetch` revealed fresh main already
+  shipped the inferred inbox-watch trigger, widened Gmail triage defaults, and
+  the Composio push bridge; ~80% of the assumed build existed. The real slice
+  was 2 gaps, not 2 subsystems.
+- **Rule:** Before writing any spec that claims "X doesn't exist," run
+  `git fetch origin main` and verify every load-bearing existence claim against
+  the FRESH base commit (`git show origin/main:<path>` / `git grep <pattern>
+  origin/main`). Session memory and subagent reports describe the repo as it
+  WAS. Full approach: docs/learnings/2026-07-12-competitor-teardown-to-gap-slice.md
