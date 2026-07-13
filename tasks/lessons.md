@@ -2120,3 +2120,23 @@ C4 close-out with empirical SLICE 11 data.
   over a rebase only when the diff is provably identical (conflict-free, zero
   file overlap); test gates re-run regardless because they exercise the
   integrated tree. See docs/learnings/2026-07-12-verify-the-verdict-exists.md.
+
+## L-37 — A git worktree of a pnpm monorepo needs a real `pnpm install`, not a node_modules junction
+
+- **Trigger:** Re-ran /verify-build in a worktree after cleanup removed the
+  earlier node_modules setup. Recreated only `packages/crm/node_modules` as a
+  junction to the main repo; the runner failed with
+  `Cannot find package 'tsx'`. Adding a second junction for the root
+  `node_modules` made it WORSE (702/702 specs failed — every import broke),
+  because pnpm's per-package `node_modules` is a web of RELATIVE symlinks into
+  the workspace-root `.pnpm` virtual store, and a junction doesn't relocate
+  that store. tsx isn't a top-level package dir at all — it lives in
+  `node_modules/.pnpm/tsx@x.y.z` and is resolved through those symlinks.
+- **Rule:** For a pnpm-workspace worktree that needs to RUN tests/tsc, run a
+  real `pnpm install` in the worktree root (with a warm global store it's
+  mostly hardlinks — ~3-4 min, `reused N, downloaded 0`). Junctions are fine
+  for a quick `tsc` that only needs types resolvable, but NOT for the test
+  runner or anything that executes through tsx/.pnpm symlinks. Verify the
+  install left the tree clean (`git status --porcelain` — no lockfile drift)
+  before pushing. Supersedes the junction-only shortcut in
+  worktree-typecheck-method for any RUN (execute) step.
