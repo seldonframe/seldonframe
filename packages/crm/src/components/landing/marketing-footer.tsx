@@ -88,7 +88,7 @@ export function MarketingFooter() {
   return (
     <footer
       aria-labelledby="footer-heading"
-      className="border-t border-[var(--lp-border-soft)] bg-[#EFE9DD] px-5 pb-12 pt-16 text-[var(--lp-muted)] md:px-8 md:pb-14 md:pt-20 lg:px-12 lg:pb-16 lg:pt-24"
+      className="border-t border-[var(--lp-border-soft)] bg-[var(--lp-bg-alt)] px-5 pb-12 pt-16 text-[var(--lp-muted)] md:px-8 md:pb-14 md:pt-20 lg:px-12 lg:pb-16 lg:pt-24"
     >
       <h2 id="footer-heading" className="sr-only">Footer</h2>
 
@@ -113,7 +113,7 @@ export function MarketingFooter() {
               </Link>
               <Link
                 href="/agencies"
-                className="inline-flex items-center gap-1.5 self-start text-[13px] font-[500] text-[var(--lp-accent)] transition-colors hover:text-[#00695C]"
+                className="inline-flex items-center gap-1.5 self-start text-[13px] font-[500] text-[var(--lp-accent)] transition-colors hover:text-[var(--lp-accent-strong)]"
               >
                 For agencies →
               </Link>
@@ -122,7 +122,7 @@ export function MarketingFooter() {
 
           {COLUMNS.map((col) => (
             <nav key={col.heading} aria-label={col.heading}>
-              <h3 className="m-0 mb-4 font-sans text-[11px] font-[600] uppercase tracking-[0.14em] text-[#9A9183]">
+              <h3 className="m-0 mb-4 font-sans text-[11px] font-[600] uppercase tracking-[0.14em] text-[var(--lp-faint)]">
                 {col.heading}
               </h3>
               <ul className="m-0 flex list-none flex-col gap-2.5 p-0">
@@ -136,7 +136,7 @@ export function MarketingFooter() {
                     >
                       {link.label}
                       {link.soon ? (
-                        <span className="ml-1.5 font-mono text-[9.5px] uppercase tracking-[0.08em] text-[#9A9183]">
+                        <span className="ml-1.5 font-mono text-[9.5px] uppercase tracking-[0.08em] text-[var(--lp-faint)]">
                           SOON
                         </span>
                       ) : null}
@@ -148,7 +148,7 @@ export function MarketingFooter() {
           ))}
         </div>
 
-        <div className="mt-14 flex flex-wrap items-center justify-between gap-3.5 border-t border-[var(--lp-border-soft)] pt-5 font-mono text-[11.5px] text-[#9A9183]">
+        <div className="mt-14 flex flex-wrap items-center justify-between gap-3.5 border-t border-[var(--lp-border-soft)] pt-5 font-mono text-[11.5px] text-[var(--lp-faint)]">
           <span>© 2026 SeldonFrame, Inc. All rights reserved.</span>
           <span className="lp-record-only items-center text-[13.5px] text-[var(--lp-muted)]">
             Recordings stay private — they train your agent only.
@@ -158,7 +158,7 @@ export function MarketingFooter() {
               href="https://x.com/seldonframe"
               target="_blank"
               rel="noopener noreferrer"
-              className="text-[#9A9183] transition-colors hover:text-[var(--lp-ink)]"
+              className="text-[var(--lp-faint)] transition-colors hover:text-[var(--lp-ink)]"
             >
               X
             </Link>
@@ -166,7 +166,7 @@ export function MarketingFooter() {
               href="https://github.com/seldonframe/crm"
               target="_blank"
               rel="noopener noreferrer"
-              className="text-[#9A9183] transition-colors hover:text-[var(--lp-ink)]"
+              className="text-[var(--lp-faint)] transition-colors hover:text-[var(--lp-ink)]"
             >
               GitHub
             </Link>
@@ -174,7 +174,7 @@ export function MarketingFooter() {
               href="https://linkedin.com/company/seldonframe"
               target="_blank"
               rel="noopener noreferrer"
-              className="text-[#9A9183] transition-colors hover:text-[var(--lp-ink)]"
+              className="text-[var(--lp-faint)] transition-colors hover:text-[var(--lp-ink)]"
             >
               LinkedIn
             </Link>

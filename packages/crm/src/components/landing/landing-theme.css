@@ -19,6 +19,7 @@
   --lp-on-accent: #FFFDFA;
   --lp-cta-bg: #1F2B24;
   --lp-cta-ink: #F6F2EA;
+  --lp-bg-alt: #EFE9DD; /* footer / alternate band background */
   transition: background-color 0.4s ease, color 0.4s ease;
 }
 
@@ -37,6 +38,7 @@
   --lp-on-accent: #14110D;
   --lp-cta-bg: #F6F2EA;
   --lp-cta-ink: #1F2B24;
+  --lp-bg-alt: #191510; /* footer / alternate band background */
 }
 
 /* Mode-gated visibility for SERVER components (nav chip, footer line)
