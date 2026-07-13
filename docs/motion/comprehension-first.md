@@ -47,8 +47,7 @@ thing carrying the meaning by itself.
 ## Timing tokens
 
 Read `packages/crm/src/components/motion/motion-tokens.css`, imported at
-the route level (same pattern as `landing-theme.css`). Nothing hardcodes
-milliseconds:
+the route level (same pattern as `landing-theme.css`):
 
 - `--motion-fast: 180ms` — micro-interactions (hover, focus, toggle).
 - `--motion-base: 280ms` — standard transitions (reveal, fade, slide-in).
@@ -58,16 +57,33 @@ milliseconds:
 - `--motion-ease-inout` — for motion that needs a symmetric in/out feel
   (e.g. looping or back-and-forth motion).
 
-All three durations collapse to `0ms` under `prefers-reduced-motion:
-reduce`, so components that read the tokens get reduced-motion behavior
-for free without a separate code path.
+CSS-transition-based components (hover states, simple reveals — e.g. the
+bento card's hover overlay) consume these tokens directly via
+`[transition-duration:var(--motion-base)]` and get the `0ms` reduced-motion
+collapse below for free, with no separate code path. Continuous, scroll-
+driven, or orbiting animations (animated-beam, orbiting-circles, the
+terminal typewriter, and other framer-motion/`motion/react` components) are
+timed in seconds as a JS animation config, which is the normal idiom for
+that library and cannot read a CSS custom property directly — those
+components instead guard themselves with `useReducedMotion()` (or a
+`forceStatic` prop) to render the static state when the OS preference is
+set. Both mechanisms serve the same guardrail; which one applies depends on
+whether the animation is a CSS transition or a JS-driven `motion/react`
+animation.
+
+The three durations collapse to `0ms` under `prefers-reduced-motion:
+reduce`, so CSS-transition components that read the tokens get
+reduced-motion behavior for free without a separate code path.
 
 ## How to add a new animation (checklist)
 
 1. Name the one concept it clarifies — if you can't, stop, it's cut.
 2. Build the static state first; confirm it's correct with zero motion.
-3. Animate `transform`/`opacity` only, timed from the `--motion-*`
-   tokens above — never a hardcoded duration or a new easing curve.
+3. Animate `transform`/`opacity` only. CSS-transition components read
+   timing from the `--motion-*` tokens above; JS-driven `motion/react`
+   components use their own second-based config guarded by
+   `useReducedMotion()`/`forceStatic`. Either way, don't invent a new
+   easing curve.
 4. Verify it respects `prefers-reduced-motion: reduce` and, if
    below the fold, lazy-mounts via `whileInView`/IntersectionObserver.
 5. Check it in both landing modes (light build + warm-dark record) and

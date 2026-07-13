@@ -21,6 +21,8 @@ import { cn } from "@/lib/utils";
 interface Avatar {
   imageUrl: string;
   profileUrl: string;
+  /** Optional display name, used for the link's accessible name / alt text. */
+  name?: string;
 }
 
 interface AvatarCirclesProps {
@@ -44,7 +46,7 @@ export function AvatarCircles({
         >
           <img
             src={avatar.imageUrl}
-            alt=""
+            alt={avatar.name ?? "Profile"}
             className="h-full w-full rounded-full object-cover"
           />
         </a>

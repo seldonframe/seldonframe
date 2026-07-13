@@ -205,7 +205,7 @@ function AvatarCirclesDemo() {
   )
 }
 
-function BorderBeamDemo() {
+function BorderBeamDemo({ reducedMotion }: { reducedMotion: boolean }) {
   return (
     <div
       style={{
@@ -221,24 +221,43 @@ function BorderBeamDemo() {
       }}
     >
       building…
-      <BorderBeam size={40} />
+      {/* BorderBeam has no internal reduced-motion guard — this lab must
+          faithfully show what a reduced-motion user sees, so we skip
+          mounting it entirely (static box, no beam) instead of animating
+          regardless of the toggle. */}
+      {!reducedMotion && <BorderBeam size={40} />}
     </div>
   )
 }
 
-function AnimatedListDemo() {
+function AnimatedListDemo({ reducedMotion }: { reducedMotion: boolean }) {
+  const items = ["New contact", "Booking confirmed", "Deal moved to Won"]
+  const itemStyle: React.CSSProperties = {
+    border: "1px solid var(--lp-border, #ccc)",
+    borderRadius: 8,
+    padding: "8px 12px",
+    fontSize: 12,
+  }
+
+  // AnimatedList has no internal reduced-motion guard — when the lab's
+  // toggle is on, render the items statically (no staggered reveal)
+  // instead of letting them animate regardless of the toggle.
+  if (reducedMotion) {
+    return (
+      <div className="w-full" style={{ display: "flex", flexDirection: "column", gap: 8 }}>
+        {items.map((label) => (
+          <div key={label} style={itemStyle}>
+            {label}
+          </div>
+        ))}
+      </div>
+    )
+  }
+
   return (
     <AnimatedList delay={800} className="w-full">
-      {["New contact", "Booking confirmed", "Deal moved to Won"].map((label) => (
-        <div
-          key={label}
-          style={{
-            border: "1px solid var(--lp-border, #ccc)",
-            borderRadius: 8,
-            padding: "8px 12px",
-            fontSize: 12,
-          }}
-        >
+      {items.map((label) => (
+        <div key={label} style={itemStyle}>
           {label}
         </div>
       ))}
@@ -333,14 +352,14 @@ export function MotionLabClient() {
             name="BorderBeam (existing)"
             purpose='"Live / building right now" active-state accent.'
           >
-            <BorderBeamDemo />
+            <BorderBeamDemo reducedMotion={reducedMotion} />
           </LabCard>
 
           <LabCard
             name="AnimatedList (existing)"
             purpose="Sequential reveal of live activity — new contacts, bookings, deals moving stages."
           >
-            <AnimatedListDemo />
+            <AnimatedListDemo reducedMotion={reducedMotion} />
           </LabCard>
         </div>
       </div>

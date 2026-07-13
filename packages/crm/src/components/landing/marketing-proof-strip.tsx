@@ -58,6 +58,7 @@ export function MarketingProofStrip() {
               {
                 imageUrl: "/brand/maxime-houle.png",
                 profileUrl: "https://twitter.com/maximehoule",
+                name: "Maxime Houle",
               },
             ]}
             className="h-8 w-8"

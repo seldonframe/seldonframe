@@ -140,7 +140,7 @@ export const BentoCard = ({
     ) : null}
 
     {!forceStatic && (
-      <div className="pointer-events-none absolute inset-0 transform-gpu transition-all duration-300 group-hover:bg-[var(--lp-ink)]/[.03]" />
+      <div className="pointer-events-none absolute inset-0 transform-gpu transition-all [transition-duration:var(--motion-base)] [transition-timing-function:var(--motion-ease)] group-hover:bg-[var(--lp-ink)]/[.03]" />
     )}
   </div>
 )

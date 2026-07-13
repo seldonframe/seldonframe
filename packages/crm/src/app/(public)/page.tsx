@@ -38,6 +38,7 @@
 // under the node:test harness (no CSS loader in tsx). /record/page.tsx
 // must carry the same import (Task 10).
 import "@/components/landing/landing-theme.css";
+import "@/components/motion/motion-tokens.css";
 
 import type { Metadata } from "next";
 import { redirect } from "next/navigation";

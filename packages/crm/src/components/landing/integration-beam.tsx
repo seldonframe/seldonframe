@@ -13,6 +13,11 @@
 // resting connector lines are always present in the DOM — this is what a
 // crawler or a reduced-motion user sees, not a blank canvas that only
 // "arrives" once JS animates it in.
+//
+// This section is buildStack/light-only (mirrors marketing-ide-strip.tsx),
+// so it intentionally keeps hardcoded parchment/teal hex values instead of
+// the `--lp-*` tokens — those values ARE the build-mode palette and this
+// component never renders in "record" mode.
 
 import { useRef } from "react";
 
@@ -72,7 +77,8 @@ export function IntegrationBeam() {
               ref={toolRefs[tool.id as keyof typeof toolRefs]}
               className="flex size-9 items-center justify-center rounded-[8px] border border-[rgba(34,29,23,.10)] bg-[#FFFDFA] text-[10px] font-[600] text-[#221D17] shadow-[0_1px_2px_rgba(34,29,23,.05)]"
             >
-              {tool.label.slice(0, 2)}
+              {/* Abbreviation duplicates the adjacent label for screen readers. */}
+              <span aria-hidden="true">{tool.label.slice(0, 2)}</span>
             </div>
           </div>
         ))}
