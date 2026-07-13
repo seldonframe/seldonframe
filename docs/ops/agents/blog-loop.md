@@ -51,9 +51,12 @@ This is the whole reason a daily YouTube loop is safe. For **every specific clai
 Then a machine-spun check: read it aloud in your head — if it reads like generic AI filler rather than a specific story, it fails; rewrite or drop.
 
 ## Step 5 — Draft-first publish (PR, do NOT auto-merge)
-If the gate is green: commit the article on `chore/blog-loop-YYYY-MM-DD`, push, `gh pr create` with a body that includes the source video + the Step-4 claim→snippet table. **STOP there — do not merge.** Max reviews the PR (a ~30-second glance at the claim→snippet table) and merges himself.
+The `/blog` surface is the data-driven article engine (mirrors `/guides`): a `BlogArticle` registry entry + one shared template + a `.md` twin, not hand-coded React. Instead of a bare markdown draft, this step publishes the article INTO the engine:
+1. Write `packages/crm/src/lib/seo/blog/<slug>.ts` exporting `article: BlogArticle` (see `packages/crm/src/lib/seo/blog/types.ts`). `sourceVideo` is **REQUIRED** for loop articles (the information-gain citation) — never omit it here (the omission is only valid for hand-authored, non-video posts like the seed article).
+2. Add the `.md` twin route folder `packages/crm/src/app/blog/<slug>.md/route.ts` (mirror an existing one, e.g. `why-original-content-wins-seo.md/route.ts`).
+3. Wire the new article into `packages/crm/src/lib/seo/blog/index.ts` (import + add to `BLOG_ARTICLES`).
+4. Commit all three files on `chore/blog-loop-YYYY-MM-DD`, push, `gh pr create` with a body that includes the source video + the Step-4 claim→snippet table. **STOP there — do not merge.** Max reviews the PR (a ~30-second glance at the claim→snippet table) and merges himself.
 - **Auto-merge flip (Max only):** once Max trusts the loop, he can change this step to `gh pr merge <n> --merge` for hands-off publishing. Until this line is edited, the loop never merges itself.
-- **Live-on-site note:** the `/blog` surface is hand-coded React per post today, so this loop writes a publish-ready markdown draft, not a live page. Making articles auto-live requires the small **data-driven `/blog` article engine** (the planned follow-up slice: a `BlogArticle` registry + one template + `.md` twin, like the guides engine). Until that ships, "publish" = merge the markdown draft; Max (or the engine, later) renders it.
 
 ## Step 6 — Recap email (Max's review channel)
 Send a recap via Resend on EVERY run — published-draft, dry-day, or gate-stopped (silence is the only failure Max can't see). Read `RESEND_SENDING_KEY` from `packages/crm/.env.local` (if missing, skip + say so). POST https://api.resend.com/emails, `Authorization: Bearer <key>`:

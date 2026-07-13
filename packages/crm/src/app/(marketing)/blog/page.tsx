@@ -5,6 +5,8 @@
 
 import type { Metadata } from "next";
 import { MarketingShell } from "../marketing-shell";
+import { articlesNewestFirst } from "@/lib/seo/blog";
+import { AUTHOR } from "@/components/seo/author-byline";
 
 export const metadata: Metadata = {
   title: "Blog — SeldonFrame",
@@ -21,7 +23,7 @@ type Post = {
   status: "live" | "soon";
 };
 
-const POSTS: Post[] = [
+const HAND_CODED_POSTS: Post[] = [
   {
     slug: "why-mcp",
     title: "Why we built SeldonFrame on MCP",
@@ -50,6 +52,25 @@ const POSTS: Post[] = [
     status: "soon",
   },
 ];
+
+/** Registry articles (the data-driven engine) rendered as the same Post
+ *  shape as the hand-coded posts, newest-first. Deduped by slug against
+ *  HAND_CODED_POSTS so a slug never appears twice on the index. */
+function registryPosts(): Post[] {
+  const handCodedSlugs = new Set(HAND_CODED_POSTS.map((p) => p.slug));
+  return articlesNewestFirst()
+    .filter((a) => !handCodedSlugs.has(a.slug))
+    .map((a) => ({
+      slug: a.slug,
+      title: a.title,
+      lede: a.dek,
+      date: new Date(`${a.date}T00:00:00Z`).toLocaleDateString("en-US", { year: "numeric", month: "long", day: "numeric", timeZone: "UTC" }),
+      author: a.author ?? AUTHOR.name,
+      status: "live" as const,
+    }));
+}
+
+const POSTS: Post[] = [...HAND_CODED_POSTS, ...registryPosts()];
 
 export default function BlogIndexPage() {
   return (

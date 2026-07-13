@@ -12,6 +12,7 @@ import { COMPETITORS, getCompetitor } from "@/lib/seo/alternative-pages";
 import { VS_PAIRS, vsSlug } from "@/lib/seo/alternative-pages-extras";
 import { BEST_PAGES, bestSlug, getBestPage, midSentence } from "@/lib/seo/best-pages";
 import { allGuideSlugs, getGuide } from "@/lib/seo/guides";
+import { allBlogSlugs, getBlogArticle } from "@/lib/seo/blog";
 import { siteBaseUrl } from "@/app/sitemap";
 import { loadStorefrontCatalog } from "@/lib/marketplace/load-storefront";
 import { logMarkdownFetch } from "@/lib/marketplace/md-analytics";
@@ -191,6 +192,14 @@ export async function GET(req: Request): Promise<Response> {
   for (const slug of allGuideSlugs()) {
     const g = getGuide(slug);
     lines.push(`- [${g.title}](${base}/guides/${slug}): ${g.description}`);
+  }
+  lines.push("");
+
+  lines.push("## Blog (original, sourced articles)");
+  lines.push("");
+  for (const slug of allBlogSlugs()) {
+    const a = getBlogArticle(slug);
+    lines.push(`- [${a.title}](${base}/blog/${slug}): ${a.description}`);
   }
   lines.push("");
 
