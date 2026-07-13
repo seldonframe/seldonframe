@@ -17,16 +17,29 @@
 // event-agent path already uses (prod = runStatelessAgentTurn, testMode:
 // false) — no hand-rolled tool loop, no new execution primitive.
 //
-// MONEY-SAFE / IDEMPOTENT: the Gmail `messageId` (when present in the
-// webhook payload) is the event identity — a redelivery for the same
-// (deploymentId, messageId) is skipped. A missing messageId is a defensive
-// fallback: still runs (never silently drops a real trigger), just isn't
-// deduped.
+// MONEY-SAFE / IDEMPOTENT (verify-gate fix wave, 2026-07-12):
+//   - The Gmail `messageId` (when present in the webhook payload) is the
+//     event identity. `claimRun` (deps.claimRun) does an ATOMIC
+//     claim-before-run — dedupe check + append + a per-deployment DAILY RUN
+//     CAP check + increment, all in ONE database statement (see
+//     lib/deployments/store.ts::claimComposioPushRun). This closes a
+//     TOCTOU window a separate read-then-write pair would leave open: two
+//     overlapping webhook redeliveries can no longer both pass a "not yet
+//     processed" check and both run.
+//   - The run cap is a circuit breaker against unbounded LLM spend from a
+//     mail flood — it is enforced even when `messageId` is absent (a
+//     defensive fallback path still runs, but is still capped).
+//   - A FAILED run (throw, or `{ok:false}`) RELEASES its claim
+//     (deps.releaseClaim) so a webhook redelivery can retry a transient
+//     failure (no LLM key, timeout) instead of being silently swallowed
+//     forever. A SUCCESSFUL run keeps its claim (never re-runs the same
+//     message).
 //
-// FAIL-SOFT per deployment: one deployment's error is swallowed + counted in
-// `skipped`... no — surfaced via console.warn and still counted in `started`
-// (it fired; the run itself failed). This NEVER throws — a bad deployment
-// must never break a sibling deployment or the composio bridge.
+// FAIL-SOFT per deployment: one deployment's error is swallowed + surfaced
+// via console.warn / the optional `log`, and still counted in `started`
+// (it fired; the run itself failed — see FIX 3 above for what that means
+// for its claim). This NEVER throws — a bad deployment must never break a
+// sibling deployment or the composio bridge.
 //
 // Org-scoped: `listMatchingDeployments` is called with `orgId` (the org the
 // webhook resolved via data._composio.orgId) and must only return
@@ -49,6 +62,10 @@ export type ComposioEventDeploymentMatch = {
   blueprint: AgentBlueprint;
 };
 
+/** The outcome of an atomic claim-before-run attempt (deps.claimRun). Mirrors
+ *  store.ts::claimComposioPushRun's return shape 1:1. */
+export type ClaimRunResult = { claimed: true } | { claimed: false; reason: string };
+
 export type DispatchComposioEventDeps = {
   /** Enumerate ACTIVE deployments for this org whose resolved trigger is
    *  `{kind:"event", event: eventType}`. Org-scoped by the caller. */
@@ -67,12 +84,23 @@ export type DispatchComposioEventDeps = {
     blueprint: AgentBlueprint;
     payload: Record<string, unknown>;
   }) => Promise<{ ok: boolean }>;
-  /** Has this (deploymentId, messageId) pair already been processed? Only
-   *  consulted when the payload carries a messageId. */
-  isAlreadyProcessed: (deploymentId: string, messageId: string) => Promise<boolean>;
-  /** Record (deploymentId, messageId) as processed, after a run attempt.
-   *  Only called when the payload carried a messageId. */
-  markProcessed: (deploymentId: string, messageId: string) => Promise<void>;
+  /** Verify-gate FIX 1 + FIX 2 — ONE atomic statement that both dedupes
+   *  (deploymentId, messageId) AND gates/increments the per-deployment daily
+   *  run cap (prod = store.ts::claimComposioPushRun). `messageId` is null
+   *  when the payload didn't carry one — the claim is then cap-only (no
+   *  dedupe, per the fail-open-on-missing-id contract), never assumed to
+   *  throw-free by the orchestrator (guarded below — a throw is treated as
+   *  "not claimed", the safe direction for a money-spend gate). */
+  claimRun: (
+    deploymentId: string,
+    orgId: string,
+    messageId: string | null,
+  ) => Promise<ClaimRunResult>;
+  /** Verify-gate FIX 3 — release a previously-granted claim after a FAILED
+   *  run (throw or `{ok:false}`) so a webhook redelivery can retry. Only
+   *  called when `messageId` was present (nothing was claimed to release
+   *  otherwise). Guarded — a throw here is logged and swallowed. */
+  releaseClaim: (deploymentId: string, messageId: string) => Promise<void>;
   log?: (event: string, data: Record<string, unknown>) => void;
 };
 
@@ -126,40 +154,74 @@ export async function dispatchComposioEventToDeployments(
   if (matches.length === 0) return result;
 
   const messageId = extractMessageId(args.payload);
+  if (!messageId) {
+    // The real GMAIL_NEW_GMAIL_MESSAGE payload shape is unverified until
+    // live smoke — this is how a shape mismatch gets caught. Payload KEYS
+    // only, never values (no content/secret leakage into logs).
+    log("push_run_no_message_id", {
+      eventType: args.eventType,
+      orgId: args.orgId,
+      payloadKeys: Object.keys(args.payload ?? {}),
+    });
+  }
 
   for (const m of matches) {
     try {
-      if (messageId) {
-        const already = await deps.isAlreadyProcessed(m.deploymentId, messageId);
-        if (already) {
-          result.skipped.push(m.deploymentId);
-          continue;
+      let claim: ClaimRunResult;
+      try {
+        claim = await deps.claimRun(m.deploymentId, m.orgId, messageId);
+      } catch (err) {
+        // A claim error fails CLOSED (treated as not-claimed) — the safe
+        // direction for a money-spend gate. Never throws the dispatcher.
+        console.warn(
+          `[composio-event-dispatch] claimRun failed for deployment ${m.deploymentId}:`,
+          err instanceof Error ? err.message : String(err),
+        );
+        claim = { claimed: false, reason: "claim_error" };
+      }
+
+      if (!claim.claimed) {
+        result.skipped.push(m.deploymentId);
+        if (claim.reason === "capped") {
+          log("push_run_capped", {
+            deploymentId: m.deploymentId,
+            orgId: m.orgId,
+            eventType: args.eventType,
+          });
         }
+        continue;
       }
 
       result.started.push(m.deploymentId);
 
+      let ok = false;
       try {
-        await deps.runAgenticTurn({
+        const turnResult = await deps.runAgenticTurn({
           orgId: m.orgId,
           deploymentId: m.deploymentId,
           channel: m.channel,
           blueprint: m.blueprint,
           payload: args.payload,
         });
+        ok = turnResult?.ok === true;
       } catch (err) {
         console.warn(
           `[composio-event-dispatch] runAgenticTurn failed for deployment ${m.deploymentId}:`,
           err instanceof Error ? err.message : String(err),
         );
+        ok = false;
       }
 
-      if (messageId) {
+      // FIX 3 — a FAILED run releases its claim so a webhook redelivery can
+      // retry a transient failure. A SUCCESSFUL run keeps the claim (never
+      // re-runs the same message). Only meaningful when a messageId was
+      // claimed in the first place.
+      if (!ok && messageId) {
         try {
-          await deps.markProcessed(m.deploymentId, messageId);
+          await deps.releaseClaim(m.deploymentId, messageId);
         } catch (err) {
           console.warn(
-            `[composio-event-dispatch] markProcessed failed for deployment ${m.deploymentId}:`,
+            `[composio-event-dispatch] releaseClaim failed for deployment ${m.deploymentId}:`,
             err instanceof Error ? err.message : String(err),
           );
         }

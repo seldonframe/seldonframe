@@ -15,17 +15,21 @@
 
 import {
   listComposioEventDeploymentsForOrg,
-  isComposioMessageProcessed,
-  markComposioMessageProcessed,
+  claimComposioPushRun,
+  releaseComposioPushRunClaim,
 } from "@/lib/deployments/store";
 import type { DispatchComposioEventDeps } from "@/lib/deployments/composio-event-dispatch";
 
-/** Build the production deps for dispatchComposioEventToDeployments. */
+/** Build the production deps for dispatchComposioEventToDeployments.
+ *  `claimRun`/`releaseClaim` wire the verify-gate fix-wave atomic
+ *  claim-before-run (FIX 1 daily cap + FIX 2 dedupe, one statement) and the
+ *  FIX 3 release-on-failure — see store.ts::claimComposioPushRun. */
 export function buildDispatchComposioEventDeps(): DispatchComposioEventDeps {
   return {
     listMatchingDeployments: listComposioEventDeploymentsForOrg,
-    isAlreadyProcessed: isComposioMessageProcessed,
-    markProcessed: markComposioMessageProcessed,
+    claimRun: (deploymentId, orgId, messageId) =>
+      claimComposioPushRun(deploymentId, orgId, messageId),
+    releaseClaim: releaseComposioPushRunClaim,
 
     runAgenticTurn: async ({ orgId, channel, blueprint }) => {
       const { db } = await import("@/db");

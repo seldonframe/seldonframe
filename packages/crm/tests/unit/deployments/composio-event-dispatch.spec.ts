@@ -2,8 +2,16 @@
 // fired composio.* event (e.g. composio.gmail.new_message) out to the
 // record-compiled deployments whose trigger matches, running each via the
 // injected agentic-turn seam (prod = runStatelessAgentTurn, testMode:false —
-// the same seam the action-only event-agent path uses). Idempotent per
-// (deploymentId, messageId) so a webhook redelivery never double-runs.
+// the same seam the action-only event-agent path uses).
+//
+// Verify-gate fix wave (2026-07-12):
+//   FIX 1 — a per-deployment daily run cap (money-spend circuit breaker).
+//   FIX 2 — an ATOMIC claim-before-run (no read-modify-write TOCTOU): the
+//     orchestrator now calls ONE `claimRun` dep instead of separate
+//     isAlreadyProcessed/markProcessed checks.
+//   FIX 3 — a FAILED run releases its claim so a webhook redelivery can
+//     retry a transient failure (no LLM key, timeout) instead of being
+//     silently swallowed forever.
 
 import { test } from "node:test";
 import assert from "node:assert/strict";
@@ -11,6 +19,7 @@ import {
   dispatchComposioEventToDeployments,
   type ComposioEventDeploymentMatch,
   type DispatchComposioEventDeps,
+  type ClaimRunResult,
 } from "../../../src/lib/deployments/composio-event-dispatch";
 
 const ORG = "org_1";
@@ -31,15 +40,20 @@ function fakeDeps(overrides: Partial<DispatchComposioEventDeps> = {}): DispatchC
   return {
     listMatchingDeployments: async () => [match()],
     runAgenticTurn: async () => ({ ok: true }),
-    isAlreadyProcessed: async () => false,
-    markProcessed: async () => {},
+    claimRun: async () => ({ claimed: true }),
+    releaseClaim: async () => {},
     ...overrides,
   };
 }
 
-test("match fires runAgenticTurn for the deployment", async () => {
+test("match fires runAgenticTurn after a successful claim", async () => {
   const calls: unknown[] = [];
+  let claimArgs: unknown = null;
   const deps = fakeDeps({
+    claimRun: async (deploymentId, orgId, messageId) => {
+      claimArgs = { deploymentId, orgId, messageId };
+      return { claimed: true };
+    },
     runAgenticTurn: async (args) => {
       calls.push(args);
       return { ok: true };
@@ -56,6 +70,7 @@ test("match fires runAgenticTurn for the deployment", async () => {
   assert.deepEqual(r.started, ["dep_1"]);
   assert.deepEqual(r.skipped, []);
   assert.equal(calls.length, 1);
+  assert.deepEqual(claimArgs, { deploymentId: "dep_1", orgId: ORG, messageId: "msg_1" });
 });
 
 test("no matching deployments -> attempted:0", async () => {
@@ -68,16 +83,16 @@ test("no matching deployments -> attempted:0", async () => {
   assert.deepEqual(r, { attempted: 0, started: [], skipped: [] });
 });
 
-test("redelivery with the same messageId is skipped (idempotent)", async () => {
-  let calls = 0;
+test("redelivery with the same messageId is skipped — claim reports already_processed, run never fires", async () => {
+  let runCalls = 0;
   const deps = fakeDeps({
-    isAlreadyProcessed: async (deploymentId, messageId) => {
+    claimRun: async (deploymentId, orgId, messageId) => {
       assert.equal(deploymentId, "dep_1");
       assert.equal(messageId, "msg_1");
-      return true;
+      return { claimed: false, reason: "already_processed" };
     },
     runAgenticTurn: async () => {
-      calls += 1;
+      runCalls += 1;
       return { ok: true };
     },
   });
@@ -88,27 +103,121 @@ test("redelivery with the same messageId is skipped (idempotent)", async () => {
     payload: { messageId: "msg_1" },
   });
 
-  assert.equal(calls, 0);
+  assert.equal(runCalls, 0);
   assert.deepEqual(r.skipped, ["dep_1"]);
   assert.deepEqual(r.started, []);
 });
 
-test("missing messageId -> still runs (defensive) but does not mark/dedupe", async () => {
-  let markCalled = false;
+test("FIX 1 — cap reached: claim reports capped, deployment is skipped (not run) and a push_run_capped event is logged", async () => {
+  let runCalls = 0;
+  const logs: Array<{ event: string; data: Record<string, unknown> }> = [];
   const deps = fakeDeps({
-    markProcessed: async () => {
-      markCalled = true;
+    claimRun: async () => ({ claimed: false, reason: "capped" }),
+    runAgenticTurn: async () => {
+      runCalls += 1;
+      return { ok: true };
+    },
+    log: (event, data) => {
+      logs.push({ event, data });
     },
   });
 
   const r = await dispatchComposioEventToDeployments(deps, {
     orgId: ORG,
     eventType: EVENT,
-    payload: {},
+    payload: { messageId: "msg_1" },
+  });
+
+  assert.equal(runCalls, 0);
+  assert.deepEqual(r.skipped, ["dep_1"]);
+  assert.ok(
+    logs.some((l) => l.event === "push_run_capped" && l.data.deploymentId === "dep_1"),
+    `expected a push_run_capped log line, got: ${JSON.stringify(logs)}`,
+  );
+});
+
+test("missing messageId -> still runs (defensive), claim called with null, and a structured warn is logged with payload keys only", async () => {
+  let claimMessageId: string | null | undefined = undefined;
+  const logs: Array<{ event: string; data: Record<string, unknown> }> = [];
+  const deps = fakeDeps({
+    claimRun: async (deploymentId, orgId, messageId) => {
+      claimMessageId = messageId;
+      return { claimed: true };
+    },
+    log: (event, data) => {
+      logs.push({ event, data });
+    },
+  });
+
+  const r = await dispatchComposioEventToDeployments(deps, {
+    orgId: ORG,
+    eventType: EVENT,
+    payload: { secretToken: "should-not-appear", subject: "hi" },
   });
 
   assert.deepEqual(r.started, ["dep_1"]);
-  assert.equal(markCalled, false);
+  assert.equal(claimMessageId, null);
+  const warnLog = logs.find((l) => l.event === "push_run_no_message_id");
+  assert.ok(warnLog, `expected a push_run_no_message_id log line, got: ${JSON.stringify(logs)}`);
+  // payload KEYS only, never values (no secret/content leakage).
+  assert.deepEqual(new Set(warnLog!.data.payloadKeys as string[]), new Set(["secretToken", "subject"]));
+  assert.equal(JSON.stringify(warnLog!.data).includes("should-not-appear"), false);
+});
+
+test("FIX 3 — a FAILED run (ok:false) releases its claim so a redelivery can retry", async () => {
+  let releaseArgs: unknown = null;
+  const deps = fakeDeps({
+    runAgenticTurn: async () => ({ ok: false }),
+    releaseClaim: async (deploymentId, messageId) => {
+      releaseArgs = { deploymentId, messageId };
+    },
+  });
+
+  await dispatchComposioEventToDeployments(deps, {
+    orgId: ORG,
+    eventType: EVENT,
+    payload: { messageId: "msg_1" },
+  });
+
+  assert.deepEqual(releaseArgs, { deploymentId: "dep_1", messageId: "msg_1" });
+});
+
+test("FIX 3 — a THROWING run also releases its claim", async () => {
+  let releaseArgs: unknown = null;
+  const deps = fakeDeps({
+    runAgenticTurn: async () => {
+      throw new Error("timeout");
+    },
+    releaseClaim: async (deploymentId, messageId) => {
+      releaseArgs = { deploymentId, messageId };
+    },
+  });
+
+  await dispatchComposioEventToDeployments(deps, {
+    orgId: ORG,
+    eventType: EVENT,
+    payload: { messageId: "msg_1" },
+  });
+
+  assert.deepEqual(releaseArgs, { deploymentId: "dep_1", messageId: "msg_1" });
+});
+
+test("a SUCCESSFUL run does NOT release its claim", async () => {
+  let releaseCalled = false;
+  const deps = fakeDeps({
+    runAgenticTurn: async () => ({ ok: true }),
+    releaseClaim: async () => {
+      releaseCalled = true;
+    },
+  });
+
+  await dispatchComposioEventToDeployments(deps, {
+    orgId: ORG,
+    eventType: EVENT,
+    payload: { messageId: "msg_1" },
+  });
+
+  assert.equal(releaseCalled, false);
 });
 
 test("per-deployment error is isolated — one bad deployment never blocks the rest", async () => {
@@ -127,7 +236,6 @@ test("per-deployment error is isolated — one bad deployment never blocks the r
   });
 
   assert.deepEqual(r.started.sort(), ["dep_bad", "dep_ok"].sort());
-  // dep_bad threw inside runAgenticTurn — dispatch never throws, and dep_ok still ran.
 });
 
 test("listMatchingDeployments throwing -> never throws, returns empty result", async () => {
@@ -144,17 +252,27 @@ test("listMatchingDeployments throwing -> never throws, returns empty result", a
   assert.deepEqual(r, { attempted: 0, started: [], skipped: [] });
 });
 
-test("marks processed after a successful run (so the next redelivery is skipped)", async () => {
-  const marked: Array<{ deploymentId: string; messageId: string }> = [];
+test("claimRun throwing -> treated as not-claimed, never throws the dispatcher", async () => {
   const deps = fakeDeps({
-    markProcessed: async (deploymentId, messageId) => {
-      marked.push({ deploymentId, messageId });
+    claimRun: async () => {
+      throw new Error("db down");
     },
   });
-  await dispatchComposioEventToDeployments(deps, {
+  const r = await dispatchComposioEventToDeployments(deps, {
     orgId: ORG,
     eventType: EVENT,
-    payload: { messageId: "msg_3" },
+    payload: { messageId: "msg_1" },
   });
-  assert.deepEqual(marked, [{ deploymentId: "dep_1", messageId: "msg_3" }]);
+  assert.deepEqual(r.skipped, ["dep_1"]);
+  assert.deepEqual(r.started, []);
+});
+
+// Type-level sanity: ClaimRunResult is the discriminated union claimRun deps
+// return — exercised implicitly by the fakes above, asserted here so the
+// exported type stays part of the module's public contract.
+test("ClaimRunResult shape", () => {
+  const claimed: ClaimRunResult = { claimed: true };
+  const notClaimed: ClaimRunResult = { claimed: false, reason: "capped" };
+  assert.equal(claimed.claimed, true);
+  assert.equal(notClaimed.claimed, false);
 });
