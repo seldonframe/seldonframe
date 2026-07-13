@@ -116,6 +116,7 @@ export function MarketingModules() {
               Icon={feat.icon}
               className="col-span-1"
               background={<div className="p-6 pb-0">{feat.mock}</div>}
+              forceStatic
             />
           ))}
         </BentoGrid>
