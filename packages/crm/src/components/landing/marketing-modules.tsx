@@ -25,6 +25,7 @@ import { useEffect, useRef, useState, type ReactNode } from "react";
 import Link from "next/link";
 import { motion, useInView, useReducedMotion } from "framer-motion";
 import { Calendar, FileText, MessageSquare, Phone, Star, Users } from "lucide-react";
+import { BentoGrid, BentoCard } from "@/components/ui/magic/bento-grid";
 
 // Shared spring-ish ease used everywhere (the brief's cubic-bezier).
 const EASE = [0.22, 1, 0.36, 1] as const;
@@ -105,19 +106,19 @@ export function MarketingModules() {
           </p>
         </div>
 
-        {/* Feature grid */}
-        <div className="mt-12 grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-3">
+        {/* Feature grid — one BentoCard per module (Task 9 reflow) */}
+        <BentoGrid className="mt-12 grid-cols-1 auto-rows-auto gap-4 sm:grid-cols-2 lg:grid-cols-3">
           {FEATURES.map((feat) => (
-            <article
+            <BentoCard
               key={feat.title}
-              className="flex flex-col gap-4 overflow-hidden rounded-[16px] border border-[rgba(34,29,23,.08)] bg-[#FFFDFA] p-6 shadow-[0_1px_2px_rgba(34,29,23,.05),0_10px_30px_rgba(34,29,23,.07)]"
-            >
-              <FeatureHead icon={feat.icon} label={feat.title} />
-              <p className="m-0 text-[13.5px] leading-[1.5] text-[#6E665A]">{feat.body}</p>
-              <div className="mt-auto">{feat.mock}</div>
-            </article>
+              name={feat.title}
+              description={feat.body}
+              Icon={feat.icon}
+              className="col-span-1"
+              background={<div className="p-6 pb-0">{feat.mock}</div>}
+            />
           ))}
-        </div>
+        </BentoGrid>
 
       </div>
     </section>
@@ -189,17 +190,6 @@ export function MarketingAgents() {
         </div>
       </div>
     </section>
-  );
-}
-
-function FeatureHead({ icon: Icon, label }: { icon: typeof Users; label: string }) {
-  return (
-    <div className="flex items-center gap-3">
-      <span className="inline-flex size-[42px] items-center justify-center rounded-[12px] bg-[#EFE9DD] text-[#00897B]">
-        <Icon size={21} strokeWidth={1.7} aria-hidden />
-      </span>
-      <h3 className="m-0 text-[15.5px] font-[600] tracking-[-0.01em] text-[#221D17]">{label}</h3>
-    </div>
   );
 }
 
