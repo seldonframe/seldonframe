@@ -29,6 +29,7 @@ import { ArrowRight, FileText, Globe } from "lucide-react";
 
 import { MarketingDemoMarquee } from "@/components/landing/marketing-demo-marquee";
 import { heroSubmitTarget } from "@/components/landing/hero-submit-target";
+import { HeroModeSwitch } from "@/components/landing/landing-mode";
 
 // Re-exported for callers that only need the pure routing decision (e.g.
 // tests) without pulling in this "use client" component.
@@ -240,6 +241,12 @@ export function MarketingHero({
         onSubmit={(e) => { e.preventDefault(); submit(); }}
         className="sf-prompt relative mt-10 w-full max-w-[720px] overflow-hidden rounded-[18px] border border-[rgba(34,29,23,.14)] bg-[#FFFDFA] shadow-[0_1px_2px_rgba(34,29,23,.06),0_10px_30px_rgba(34,29,23,.08)] transition-[border-color,box-shadow] duration-200 focus-within:border-[#00897B]/50 focus-within:shadow-[0_1px_2px_rgba(34,29,23,.06),0_10px_30px_rgba(34,29,23,.08),0_0_0_3px_rgba(0,137,123,.12)]"
       >
+        {/* Mode switch: build vs record (Task 9). Null when the flag is
+            off — the form is byte-identical to today. */}
+        <div className="mx-2 mt-2">
+          <HeroModeSwitch />
+        </div>
+
         {/* Tabs */}
         <div
           role="tablist"

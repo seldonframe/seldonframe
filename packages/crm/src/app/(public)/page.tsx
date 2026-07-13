@@ -37,6 +37,7 @@ import type { Metadata } from "next";
 import { redirect } from "next/navigation";
 import { auth } from "@/auth";
 import { isWebUngatedBuildOn } from "@/lib/web-build/policy";
+import { isRecordToAgentOn } from "@/lib/recordings/policy";
 
 /** SF_TIER_LADDER (2026-07-08) — same strict-"1" contract as the other
  *  dark-by-default flags. Duplicated locally (also in
@@ -46,17 +47,8 @@ function isTierLadderOn(env: { SF_TIER_LADDER?: string | undefined }): boolean {
   return env.SF_TIER_LADDER?.trim() === "1";
 }
 
-import { MarketingNav } from "@/components/landing/marketing-nav";
-import { MarketingHero } from "@/components/landing/marketing-hero";
-import { MarketingProofStrip } from "@/components/landing/marketing-proof-strip";
-import { MarketingBuildSteps } from "@/components/landing/marketing-build-steps";
-import { MarketingIdeStrip } from "@/components/landing/marketing-ide-strip";
-import { MarketingModules, MarketingAgents } from "@/components/landing/marketing-modules";
-import { MarketingSmbCta } from "@/components/landing/marketing-smb-cta";
-import { LandingMarketingPricingSection } from "@/components/landing/marketing-pricing-section";
-import { LandingMarketingFaqSection } from "@/components/landing/marketing-faq-section";
-import { MarketingFinalCta } from "@/components/landing/marketing-final-cta";
-import { MarketingFooter } from "@/components/landing/marketing-footer";
+import { UnifiedLanding } from "./unified-landing";
+import { resolveLandingMode } from "./landing-mode";
 // Positioning line is shared with the /home.md agent-Markdown twin (M3) so the
 // promise can't drift between the human page and the Markdown.
 import { POSITIONING_ONE_LINER } from "./home-copy";
@@ -79,18 +71,22 @@ export const metadata: Metadata = {
   },
 };
 
-export default async function PublicHomePage() {
+export default async function PublicHomePage({
+  searchParams,
+}: {
+  searchParams: Promise<{ mode?: string }>;
+}) {
   const session = await auth();
   if (session?.user?.id) {
     redirect("/dashboard");
   }
   const tierLadderOn = isTierLadderOn({ SF_TIER_LADDER: process.env.SF_TIER_LADDER });
+  const params = await searchParams;
+  const recordEnabled = isRecordToAgentOn({ SF_RECORD_TO_AGENT: process.env.SF_RECORD_TO_AGENT });
+  const initialMode = resolveLandingMode(params.mode, recordEnabled);
 
   return (
-    // Light-theme marketing surface — warm paper / Hanken Grotesk /
-    // Newsreader italic. Matches seldonstudio.com aesthetic with
-    // SeldonFrame green (#00897B) instead of clay accent.
-    <div className="min-h-screen bg-[#F6F2EA] text-[#221D17] selection:bg-[#00897B]/20 selection:text-[#00897B]">
+    <>
       {/* Entity anchor: Organization + WebSite JSON-LD. Every other page's
           Article/SoftwareApplication schema hangs off this org identity, and
           sameAs ties the entity to the real X/GitHub profiles for E-E-A-T. */}
@@ -129,29 +125,16 @@ export default async function PublicHomePage() {
           }),
         }}
       />
-      <MarketingNav />
-      <main id="main-content">
-        {/* Positioning v2 ladder (2026-06-22) — one idea per section:
-            Hero + 3-min demo → Run → Sell → Hire agents → Build & sell →
-            pricing / proof / FAQ / close. The "Why not just…" comparison
-            (MarketingReplace) is demoted off the homepage to keep the
-            ladder to one idea per rung; the component still ships. */}
-        <MarketingHero
-          ungatedBuildEnabled={isWebUngatedBuildOn({
-            SF_WEB_UNGATED_BUILD: process.env.SF_WEB_UNGATED_BUILD,
-          })}
-        />
-        <MarketingBuildSteps />
-        <MarketingIdeStrip />
-        <MarketingModules />
-        <MarketingSmbCta />
-        <MarketingAgents />
-        <LandingMarketingPricingSection tierLadderOn={tierLadderOn} />
-        <MarketingProofStrip />
-        <LandingMarketingFaqSection />
-        <MarketingFinalCta />
-      </main>
-      <MarketingFooter />
-    </div>
+      <UnifiedLanding
+        initialMode={initialMode}
+        recordEnabled={recordEnabled}
+        urlStrategy="replace-state"
+        tierLadderOn={tierLadderOn}
+        ungatedBuildEnabled={isWebUngatedBuildOn({
+          SF_WEB_UNGATED_BUILD: process.env.SF_WEB_UNGATED_BUILD,
+        })}
+        recordProps={{ claimedSessionId: null, claimed: false, isAuthed: false, sharedFlag: null }}
+      />
+    </>
   );
 }

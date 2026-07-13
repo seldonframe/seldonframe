@@ -64,7 +64,7 @@ function buildFaqSchema() {
 export function RecordFaq({ withSchema = false }: { withSchema?: boolean }) {
   return (
     <section
-      id="faq"
+      id="record-faq"
       aria-labelledby="record-faq-heading"
       className="border-t border-[var(--lp-border-soft)] bg-[var(--lp-bg)] px-5 py-20 md:px-8 md:py-28 lg:px-12"
     >
