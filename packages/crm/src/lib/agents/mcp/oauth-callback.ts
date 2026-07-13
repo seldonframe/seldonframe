@@ -90,7 +90,6 @@ export async function handleMcpOauthCallback(
     return failureRedirect("org_mismatch");
   }
 
-  let toStore: TokenEnvelope;
   try {
     const envelope = await deps.exchange({
       tokenEndpoint: payload.tokenEndpoint,
@@ -101,17 +100,30 @@ export async function handleMcpOauthCallback(
       redirectUri: deps.redirectUri,
     });
 
-    const toolCount = await deps.probeTools(payload.orgId, payload.connectorId).catch(() => null);
-    toStore =
-      toolCount !== null && toolCount !== undefined
-        ? { ...envelope, discovered_tools_count: toolCount }
-        : envelope;
-
+    // Store the envelope FIRST — the default probe (discoverVettedToolsLive →
+    // resolveConnectorBearer) reads the STORED secret, so probing before this
+    // write would always see nothing and stamp a false discovered_tools_count
+    // of 0 for a working connection.
     await deps.storeSecret({
       workspaceId: payload.orgId,
       serviceName: connector.secretService,
-      value: JSON.stringify(toStore),
+      value: JSON.stringify(envelope),
     });
+
+    const toolCount = await deps.probeTools(payload.orgId, payload.connectorId).catch(() => null);
+    if (toolCount !== null && toolCount !== undefined) {
+      // Fail-soft re-store with the count-stamped envelope — the connection
+      // already succeeded above, so a throw here must not fail the connect.
+      try {
+        await deps.storeSecret({
+          workspaceId: payload.orgId,
+          serviceName: connector.secretService,
+          value: JSON.stringify({ ...envelope, discovered_tools_count: toolCount }),
+        });
+      } catch {
+        // The unstamped envelope from the first store is still valid.
+      }
+    }
   } catch {
     return failureRedirect("exchange_failed");
   }

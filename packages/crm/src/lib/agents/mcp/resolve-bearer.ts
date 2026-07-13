@@ -112,6 +112,9 @@ export async function resolveConnectorBearer(
     return raw;
   }
 
+  // NIT (review): a legacy plain bearer that happens to start with "{" would
+  // land here and, failing to parse as a TokenEnvelope, return null instead
+  // of the raw string — accepted, because real API tokens are never JSON.
   const envelope = parseTokenEnvelope(raw);
   if (!envelope) return null; // malformed envelope = unusable, never pass raw JSON as a bearer.
 

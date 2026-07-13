@@ -170,20 +170,58 @@ describe("handleMcpOauthCallback", () => {
     assert.equal(result.redirect, "/integrations?error=mcp_oauth_exchange_failed");
   });
 
-  test("happy path: stores envelope JSON with discovered_tools_count stamped, redirects ?connected=circle, clears cookie", async () => {
-    let storedValue = "";
+  test("happy path (real store→probe ordering): storeSecret runs BEFORE probeTools reads it; count gets stamped via a re-store", async () => {
+    // Regression for the review finding: the default probe wiring
+    // (discoverVettedToolsLive -> resolveConnectorBearer) reads the STORED
+    // secret. A shared map stands in for that stored secret so this test
+    // actually exercises whether the envelope is persisted before the probe
+    // runs — probing first would always see nothing and wrongly stamp 0.
+    const calls: string[] = [];
+    const sharedStore = new Map<string, string>();
     const result = await handleMcpOauthCallback(
       { code: "authcode", state: "state-abc" },
       makeDeps({
-        storeSecret: async ({ value }) => { storedValue = value; },
-        probeTools: async () => 7,
+        storeSecret: async ({ serviceName, value }) => {
+          calls.push("store");
+          sharedStore.set(serviceName, value);
+        },
+        probeTools: async (_orgId, connectorId) => {
+          calls.push("probe");
+          // Mirrors the real wiring: the probe can only see tools once the
+          // bearer has actually been persisted for this connector.
+          return sharedStore.get(connectorId) ? 7 : null;
+        },
       }),
     );
     assert.equal(result.redirect, "/integrations?connected=circle");
     assert.equal(result.clearCookie, true);
-    const parsed = JSON.parse(storedValue);
+    assert.deepEqual(
+      calls,
+      ["store", "probe", "store"],
+      "store must happen before probe reads it, then a second store persists the count",
+    );
+    const finalValue = sharedStore.get("circle");
+    assert.ok(finalValue);
+    const parsed = JSON.parse(finalValue!);
     assert.equal(parsed.access_token, "fake-access-token-NOT-REAL");
     assert.equal(parsed.discovered_tools_count, 7);
+  });
+
+  test("probe throws AFTER a successful store → connect still succeeds, no count stamped (fail-soft re-store)", async () => {
+    const sharedStore = new Map<string, string>();
+    const result = await handleMcpOauthCallback(
+      { code: "authcode", state: "state-abc" },
+      makeDeps({
+        storeSecret: async ({ serviceName, value }) => { sharedStore.set(serviceName, value); },
+        probeTools: async () => { throw new Error("probe boom"); },
+      }),
+    );
+    assert.equal(result.redirect, "/integrations?connected=circle");
+    const finalValue = sharedStore.get("circle");
+    assert.ok(finalValue, "the first (unstamped) store must have succeeded");
+    const parsed = JSON.parse(finalValue!);
+    assert.equal(parsed.access_token, "fake-access-token-NOT-REAL");
+    assert.equal("discovered_tools_count" in parsed, false);
   });
 
   test("probe returning null (fail-soft) → envelope stored WITHOUT discovered_tools_count", async () => {

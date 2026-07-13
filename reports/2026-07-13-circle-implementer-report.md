@@ -89,6 +89,12 @@ Confirmed 2 pre-existing failures in `bind-tools.spec.ts` ("log to Notion" / "lo
 ℹ todo 0
 ```
 
+## Review fixes (opus SHIP-WITH-NITS, applied post-report)
+
+- **SHOULD-FIX — first-connect tool count was always 0**: `oauth-callback.ts`'s happy path ran `probeTools` before `storeSecret`, but the default probe (`discoverVettedToolsLive` → `resolveConnectorBearer`) reads the STORED secret — on first connect the envelope wasn't persisted yet, so the probe always saw nothing and stamped `discovered_tools_count: 0`. Fixed by reordering: (1) `storeSecret(envelope)` first, (2) fail-soft `probeTools`, (3) when the probe returns a non-null count, a second fail-soft `storeSecret` persists the count-stamped envelope (a throw on this second write no longer fails the connect — the connection already works from step 1). Updated the happy-path test to exercise the REAL ordering via a shared `Map` standing in for the persisted secret (`storeSecret` writes to it, `probeTools` reads from it) and assert the call order (`["store", "probe", "store"]`); added a new test asserting a probe throw after a successful store still redirects to `?connected=circle` with the unstamped envelope intact.
+- **NIT**: added a one-line comment in `resolve-bearer.ts` at the `{`-prefix envelope-detection branch noting a legacy plain bearer that happens to start with `{` would be (mis)treated as a failed envelope parse and return `null` — accepted, since real API tokens are never JSON.
+- Specs re-run: `oauth-callback.spec.ts` (13/13) + `resolve-bearer.spec.ts` (9/9), both pass. `tsc --noEmit`: same single pre-existing unrelated error only.
+
 ## Open risks / follow-ups (not done, out of this slice's scope per the design's §3 non-goals)
 
 - Live smoke (real Circle account, real OAuth round-trip, real agent-turn tool call) is explicitly deferred to post-deploy per the design's §4 — nothing in this slice can be verified against the real Circle API offline.
