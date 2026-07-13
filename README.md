@@ -12,10 +12,12 @@ The open-source platform that gives your coding agent the primitives real produc
 [![npm version](https://img.shields.io/npm/v/@seldonframe/mcp.svg?color=1FAE85)](https://www.npmjs.com/package/@seldonframe/mcp)
 [![GitHub stars](https://img.shields.io/github/stars/seldonframe/seldonframe?color=1FAE85)](https://github.com/seldonframe/seldonframe/stargazers)
 [![Discord](https://img.shields.io/badge/Discord-join-5865F2.svg)](https://discord.gg/sbVUu976NW)
-[![X](https://img.shields.io/badge/follow-%40seldonframe-1d9bf0.svg)](https://x.com/seldonframe)
+[![X](https://img.shields.io/badge/follow-%40themaxthule-1d9bf0.svg)](https://x.com/themaxthule)
 [![smithery badge](https://smithery.ai/badge/maximehoule100/seldonframe)](https://smithery.ai/servers/maximehoule100/seldonframe)
 
-[Website](https://seldonframe.com) · [For builders](https://seldonframe.com/build) · [Docs](https://seldonframe.com/docs) · [Live demo](https://j-marin-heating-air-conditioning-9599.app.seldonframe.com/) · [Discord](https://discord.gg/sbVUu976NW)
+[Website](https://seldonframe.com) · [For builders](https://seldonframe.com/build) · [Docs](https://seldonframe.com/docs) · [Discord](https://discord.gg/sbVUu976NW)
+
+**Live demos:** [HVAC](https://j-marin-heating-air-conditioning-9599.app.seldonframe.com/) · [Med spa](https://app.seldonframe.com/w/metro-medspa-9d24) · [Med spa](https://app.seldonframe.com/w/skinney-medspa) · [Weight loss](https://app.seldonframe.com/w/vive-ageless-weight-loss-center)
 
 </div>
 
@@ -52,7 +54,26 @@ No API key. No signup form. **Your first workspace is free forever.** That one s
   </tr>
 </table>
 
-Click either screenshot — [this HVAC workspace](https://j-marin-heating-air-conditioning-9599.app.seldonframe.com/) is live, and the chatbot on it books real appointments. Eight more live demo workspaces are on [seldonframe.com](https://seldonframe.com).
+And here's the agent on that site handling a real inbound — checking the live calendar, and, when asked for a price, *refusing to invent one* (that's the quote-guard, not a scripted reply):
+
+<table>
+  <tr>
+    <td width="42%">
+      <a href="https://j-marin-heating-air-conditioning-9599.app.seldonframe.com/"><img src=".github/assets/demo-chat.png" alt="A real conversation with the site's chat agent — it offers same-day scheduling and declines to guess a price" /></a>
+    </td>
+    <td width="58%">
+      <p>A genuine exchange with the chatbot on the live site — nothing scripted:</p>
+      <ul>
+        <li><b>It reads the real calendar.</b> "Today's fully booked — here are tomorrow's 9/10/11 AM slots."</li>
+        <li><b>It won't lie about price.</b> Asked what a visit costs, it says <i>"I don't have exact rates on hand, but I'll have a technician confirm the cost before any work starts"</i> — the <b>quote-guard</b> in action, not a canned line.</li>
+        <li><b>It qualifies to book.</b> Asks for the service address to confirm you're in-area, then locks the slot.</li>
+      </ul>
+      <p>Same agent answers on <b>SMS and voice</b> too — the channel is just a config knob.</p>
+    </td>
+  </tr>
+</table>
+
+Click any screenshot — [this HVAC workspace](https://j-marin-heating-air-conditioning-9599.app.seldonframe.com/) is live and books real appointments. More live workspaces: [Metro MedSpa](https://app.seldonframe.com/w/metro-medspa-9d24) · [SKINNEY Medspa](https://app.seldonframe.com/w/skinney-medspa) · [Vive Ageless Weight Loss](https://app.seldonframe.com/w/vive-ageless-weight-loss-center) — and more on [seldonframe.com](https://seldonframe.com).
 
 ---
 
@@ -85,54 +106,13 @@ Two non-negotiables drive the roadmap: **the checker must be separate from the m
 | **State** | ✅ Shipped | Agent **loop-memory** in **Brain v2** — agents recall what they did before acting and record after. The review "ask once per customer" throttle is now a memory recall, not a bespoke flag. |
 | **Verify** (maker ≠ checker) | ✅ Shipped | Deterministic validators grade every run — pass rates surface on each agent's health card and `/runs`; `run_agent_evals` replays scripted scenarios. Rolling out: the same checker as a hard pre-send gate + an LLM judge for judgment calls. |
 | **Guardrails / Stop** | ✅ Shipped | Quote-guard (never invent prices), enforced read-back before booking, per-contact throttles, booking-policy enforcement (hours · duration · required fields), hard call/iteration caps. Rolling out: generic token-budget brakes for long-looping agents. |
-| **Generate-by-default** | 🗺 Roadmap | One English sentence → trigger + skill + channel + guardrail + checker + state + stop, generated together. *"text every customer for a Google review the day after their job — never twice, only if completed"* emits all of it. |
+| **Generate-by-default** | ✅ Shipped | One English sentence → trigger + skill + channel + tool bindings + guardrails, generated together. *"text every customer for a Google review the day after their job — never twice, only if completed"* compiles into a real agent. The `generate_agent` MCP tool and the Studio wizard both run this pipeline. |
+| **Record → Agent** | 🗺 Roadmap | Skip describing it — **screen-share your workflow once**. SeldonFrame watches, compiles the steps into a draft agent (skill + tool bindings + eval scenarios derived from the recording), and you deploy in minutes. Live behind a flag at [`/record`](https://seldonframe.com/record); becoming the default on-ramp next. |
 ### The loop, drawn
 
-```mermaid
-flowchart TD
-    subgraph TRIG["Triggers"]
-        direction LR
-        TIn["Inbound<br/>call · chat · email · SMS"]
-        TEv["Event<br/>booking.completed · lead.created"]
-        TSch["Schedule<br/>cron cadence"]
-    end
+<img src=".github/assets/agent-loop.svg" alt="The agent loop: one build command in a terminal; Inbound / Event / Schedule triggers feed a running agent loop (Model · Tools · State · Verify) with native + Composio tools orbiting the core and Stop brakes bounding it; each pass produces a real action — books the calendar, texts the lead back, answers the phone." width="100%" />
 
-    subgraph LOOP["Agent loop"]
-        direction TB
-        Model["Model<br/>(reasoning + skill-pack)"]
-        Tools["Tools<br/>Composio + native:<br/>book · update CRM · send SMS/email"]
-        State["State<br/>Brain v2: recall &amp; record"]
-        Verify{"Verify<br/>(separate checker)"}
-
-        Model --> Tools
-        Tools --> State
-        State --> Verify
-        Verify -- "fail: block / retry" --> Model
-    end
-
-    TIn --> Model
-    TEv --> Model
-    TSch --> Model
-
-    Verify -- "pass" --> Act["Act"]
-
-    subgraph OUT["Channels &amp; front office"]
-        direction LR
-        Chan["Voice · SMS · Email · Chat"]
-        Office["Front office:<br/>site · booking · CRM"]
-    end
-
-    Act --> Chan
-    Act --> Office
-
-    Stop(["Stop<br/>budget · max iterations · no-progress"]) -. bounds .-> LOOP
-    Obs[("Observability<br/>/runs + Brain")] -. observes .-> LOOP
-
-    classDef wip stroke-dasharray:5 5,stroke-width:2px;
-    class Verify,Stop wip;
-```
-
-> Dashed nodes (**Verify**, **Stop**) are the in-progress primitives. **Trigger** and **State** are shipped today; the rest of the loop is landing next.
+> One sentence builds it; **triggers** drive it; the ring is the loop *running* — **Model → Tools → State → Verify** — with tools orbiting the core, `/runs` + Brain observing, and the **Stop** brakes bounding every pass. Everything in the diagram is shipped today. *(Animated SVG — if your viewer freezes it, the still frame reads the same.)*
 
 ---
 Deeper — the pre-wired stack, the architectural bet, the roadmap: **[docs/ARCHITECTURE.md](docs/ARCHITECTURE.md)**.
@@ -316,7 +296,7 @@ The highest-leverage PR here is **an agent template or a vertical skill-pack** �
 ## Community
 
 - 💬 [Discord](https://discord.gg/sbVUu976NW) — fastest way to get help, feedback, or just say hi
-- 🐦 [@seldonframe on X](https://x.com/seldonframe) — release notes, tips, dogfood notes
+- 🐦 [@themaxthule on X](https://x.com/themaxthule) — release notes, tips, dogfood notes
 - 📚 [Docs](https://seldonframe.com/docs) — deeper guides than this README
 - 🐛 [Issues](https://github.com/seldonframe/seldonframe/issues) · 📡 [Discussions](https://github.com/seldonframe/seldonframe/discussions)
 - ✉️ Partnerships: [hello@seldonframe.com](mailto:hello@seldonframe.com)

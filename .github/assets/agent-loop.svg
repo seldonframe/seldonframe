@@ -1,0 +1,167 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1200 560" width="1200" height="560" font-family="ui-sans-serif,-apple-system,Segoe UI,Roboto,Helvetica,Arial,sans-serif" role="img" aria-label="The SeldonFrame agent loop: a build command in a terminal, triggers feeding a running agent loop with orbiting tools, producing real actions.">
+  <defs>
+    <linearGradient id="beam" x1="0" y1="0" x2="1" y2="0">
+      <stop offset="0%" stop-color="#1FAE85" stop-opacity="0"/>
+      <stop offset="45%" stop-color="#1FAE85"/>
+      <stop offset="100%" stop-color="#38BDF8"/>
+    </linearGradient>
+    <linearGradient id="beamR" x1="0" y1="0" x2="1" y2="0">
+      <stop offset="0%" stop-color="#38BDF8"/>
+      <stop offset="55%" stop-color="#1FAE85"/>
+      <stop offset="100%" stop-color="#1FAE85" stop-opacity="0"/>
+    </linearGradient>
+    <radialGradient id="coreGlow" cx="50%" cy="50%" r="50%">
+      <stop offset="0%" stop-color="#0E9E77" stop-opacity="0.35"/>
+      <stop offset="70%" stop-color="#0E9E77" stop-opacity="0.06"/>
+      <stop offset="100%" stop-color="#0E9E77" stop-opacity="0"/>
+    </radialGradient>
+    <filter id="soft" x="-40%" y="-40%" width="180%" height="180%">
+      <feGaussianBlur stdDeviation="3.2"/>
+    </filter>
+    <style>
+      .lbl{fill:#E6EDF3}
+      .mut{fill:#8B95A5}
+      .fnt{fill:#5E6B7E;letter-spacing:.18em}
+      .chip{fill:#111826;stroke:#243449;stroke-width:1.5}
+      .mono{font-family:ui-monospace,SFMono-Regular,Menlo,Consolas,monospace}
+    </style>
+  </defs>
+
+  <!-- panel -->
+  <rect x="1" y="1" width="1198" height="558" rx="22" fill="#0A0E16" stroke="#1B2434" stroke-width="1.5"/>
+  <text x="44" y="46" class="fnt" font-size="14" font-weight="700">THE AGENT LOOP</text>
+  <text x="1156" y="46" class="fnt" font-size="13" text-anchor="end" font-weight="600">Trigger → (Model · Tools · State) → Verify → Act</text>
+
+  <!-- ============ TERMINAL (the build) ============ -->
+  <g>
+    <rect x="44" y="70" width="360" height="150" rx="13" class="chip"/>
+    <circle cx="72" cy="98" r="5.5" fill="#FF5F57"/>
+    <circle cx="92" cy="98" r="5.5" fill="#FEBC2E"/>
+    <circle cx="112" cy="98" r="5.5" fill="#28C840"/>
+    <text x="150" y="103" class="mut mono" font-size="12.5">seldonframe · mcp</text>
+    <text x="66" y="140" class="mut mono" font-size="14.5">$ claude mcp add seldonframe</text>
+    <text x="66" y="168" class="lbl mono" font-size="14.5">&gt; Build me an AI receptionist</text>
+    <text x="66" y="190" class="lbl mono" font-size="14.5">&#160;&#160;for an HVAC company.</text>
+    <text x="66" y="212" class="mono" font-size="14.5" fill="#1FAE85">✓ live · answering &amp; booking</text>
+    <rect x="322" y="200" width="9" height="15" fill="#1FAE85">
+      <animate attributeName="opacity" values="1;1;0;0" dur="1s" repeatCount="indefinite"/>
+    </rect>
+  </g>
+  <text x="52" y="250" class="mut" font-size="12.5">one sentence, once — then it just runs:</text>
+
+  <!-- ============ TRIGGERS (left inputs) ============ -->
+  <g font-size="15">
+    <g transform="translate(44,286)">
+      <rect width="196" height="56" rx="11" class="chip"/>
+      <text x="18" y="26" class="lbl" font-weight="700">Inbound</text>
+      <text x="18" y="45" class="mut" font-size="12.5">call · chat · SMS · email</text>
+    </g>
+    <g transform="translate(44,360)">
+      <rect width="196" height="56" rx="11" class="chip"/>
+      <text x="18" y="26" class="lbl" font-weight="700">Event</text>
+      <text x="18" y="45" class="mut" font-size="12.5">booking.completed · lead.created</text>
+    </g>
+    <g transform="translate(44,434)">
+      <rect width="196" height="56" rx="11" class="chip"/>
+      <text x="18" y="26" class="lbl" font-weight="700">Schedule</text>
+      <text x="18" y="45" class="mut" font-size="12.5">cron cadence</text>
+    </g>
+  </g>
+
+  <!-- ============ BEAMS: triggers -> core ============ -->
+  <g fill="none" stroke-linecap="round">
+    <path id="bL1" d="M240 314 C 360 314, 400 340, 512 340" stroke="#22304a" stroke-width="2.5"/>
+    <path id="bL2" d="M240 388 C 360 388, 420 356, 522 348" stroke="#22304a" stroke-width="2.5"/>
+    <path id="bL3" d="M240 462 C 380 462, 430 372, 520 358" stroke="#22304a" stroke-width="2.5"/>
+    <use href="#bL1" stroke="url(#beam)" stroke-width="2.6" stroke-dasharray="9 15">
+      <animate attributeName="stroke-dashoffset" from="0" to="-72" dur="1.3s" repeatCount="indefinite"/>
+    </use>
+    <use href="#bL2" stroke="url(#beam)" stroke-width="2.6" stroke-dasharray="9 15">
+      <animate attributeName="stroke-dashoffset" from="0" to="-72" dur="1.6s" repeatCount="indefinite"/>
+    </use>
+    <use href="#bL3" stroke="url(#beam)" stroke-width="2.6" stroke-dasharray="9 15">
+      <animate attributeName="stroke-dashoffset" from="0" to="-72" dur="1.9s" repeatCount="indefinite"/>
+    </use>
+    <circle r="3.6" fill="#7DE8C6"><animateMotion dur="1.3s" repeatCount="indefinite"><mpath href="#bL1"/></animateMotion></circle>
+    <circle r="3.6" fill="#7DE8C6"><animateMotion dur="1.6s" repeatCount="indefinite"><mpath href="#bL2"/></animateMotion></circle>
+    <circle r="3.6" fill="#7DE8C6"><animateMotion dur="1.9s" repeatCount="indefinite"><mpath href="#bL3"/></animateMotion></circle>
+  </g>
+
+  <!-- ============ CORE (the loop) ============ -->
+  <g transform="translate(640,348)">
+    <circle r="150" fill="url(#coreGlow)"/>
+    <!-- orbit path -->
+    <circle r="128" fill="none" stroke="#1C283C" stroke-width="1.5" stroke-dasharray="2 6"/>
+    <!-- running-loop ring -->
+    <circle r="96" fill="none" stroke="#17324a" stroke-width="6"/>
+    <circle r="96" fill="none" stroke="#1FAE85" stroke-width="6" stroke-linecap="round" stroke-dasharray="150 453" transform="rotate(-90)">
+      <animateTransform attributeName="transform" type="rotate" from="-90" to="270" dur="3.2s" repeatCount="indefinite"/>
+    </circle>
+
+    <!-- stage labels on ring -->
+    <g font-size="13.5" font-weight="700" text-anchor="middle">
+      <text x="0" y="-62" class="lbl">Model</text>
+      <text x="60" y="4" class="lbl">Tools</text>
+      <text x="0" y="76" class="lbl">State</text>
+      <text x="-60" y="4" class="lbl">Verify</text>
+    </g>
+    <!-- center -->
+    <text x="0" y="8" text-anchor="middle" font-size="23" font-weight="800" class="lbl">Agent</text>
+    <text x="0" y="30" text-anchor="middle" font-size="13" font-weight="700" fill="#4FD1A6">loop</text>
+
+    <!-- orbiting tools: static positioning group (translate) wraps a counter-rotating group,
+         so the parent spin orbits them while labels stay upright. -->
+    <g>
+      <animateTransform attributeName="transform" type="rotate" from="0" to="360" dur="24s" repeatCount="indefinite"/>
+      <g transform="translate(128 0)"><g><animateTransform attributeName="transform" type="rotate" from="0" to="-360" dur="24s" repeatCount="indefinite"/><circle r="20" class="chip"/><text y="4" text-anchor="middle" font-size="11" font-weight="700" class="lbl">Cal</text></g></g>
+      <g transform="translate(39.6 121.7)"><g><animateTransform attributeName="transform" type="rotate" from="0" to="-360" dur="24s" repeatCount="indefinite"/><circle r="20" class="chip"/><text y="4" text-anchor="middle" font-size="11" font-weight="700" class="lbl">CRM</text></g></g>
+      <g transform="translate(-103.6 75.2)"><g><animateTransform attributeName="transform" type="rotate" from="0" to="-360" dur="24s" repeatCount="indefinite"/><circle r="20" class="chip"/><text y="4" text-anchor="middle" font-size="11" font-weight="700" class="lbl">SMS</text></g></g>
+      <g transform="translate(-103.6 -75.2)"><g><animateTransform attributeName="transform" type="rotate" from="0" to="-360" dur="24s" repeatCount="indefinite"/><circle r="20" class="chip"/><text y="5" text-anchor="middle" font-size="14" font-weight="700" class="lbl">@</text></g></g>
+      <g transform="translate(39.6 -121.7)"><g><animateTransform attributeName="transform" type="rotate" from="0" to="-360" dur="24s" repeatCount="indefinite"/><circle r="20" class="chip"/><text y="4" text-anchor="middle" font-size="9.5" font-weight="700" class="lbl">1000+</text></g></g>
+    </g>
+
+    <!-- guardrail / verify badges -->
+    <g font-size="11.5" font-weight="700">
+      <g transform="translate(-52,104)"><rect width="104" height="26" rx="13" fill="#12241c" stroke="#1FAE85" stroke-width="1.3"/><text x="52" y="17" text-anchor="middle" fill="#4FD1A6">Stop · brakes</text></g>
+      <g transform="translate(-118,-120)"><rect width="96" height="24" rx="12" fill="#101826" stroke="#243449" stroke-width="1.2"/><text x="48" y="16" text-anchor="middle" class="mut">/runs · Brain</text></g>
+    </g>
+  </g>
+
+  <!-- ============ BEAMS: core -> acts ============ -->
+  <g fill="none" stroke-linecap="round">
+    <path id="bR1" d="M760 330 C 850 316, 900 306, 946 306" stroke="#22304a" stroke-width="2.5"/>
+    <path id="bR2" d="M768 348 C 860 372, 900 384, 946 386" stroke="#22304a" stroke-width="2.5"/>
+    <path id="bR3" d="M760 366 C 850 452, 900 460, 946 462" stroke="#22304a" stroke-width="2.5"/>
+    <use href="#bR1" stroke="url(#beamR)" stroke-width="2.6" stroke-dasharray="9 15">
+      <animate attributeName="stroke-dashoffset" from="0" to="-72" dur="1.4s" repeatCount="indefinite"/>
+    </use>
+    <use href="#bR2" stroke="url(#beamR)" stroke-width="2.6" stroke-dasharray="9 15">
+      <animate attributeName="stroke-dashoffset" from="0" to="-72" dur="1.7s" repeatCount="indefinite"/>
+    </use>
+    <use href="#bR3" stroke="url(#beamR)" stroke-width="2.6" stroke-dasharray="9 15">
+      <animate attributeName="stroke-dashoffset" from="0" to="-72" dur="2.0s" repeatCount="indefinite"/>
+    </use>
+    <circle r="3.6" fill="#8FD8FF"><animateMotion dur="1.4s" repeatCount="indefinite"><mpath href="#bR1"/></animateMotion></circle>
+    <circle r="3.6" fill="#8FD8FF"><animateMotion dur="1.7s" repeatCount="indefinite"><mpath href="#bR2"/></animateMotion></circle>
+    <circle r="3.6" fill="#8FD8FF"><animateMotion dur="2.0s" repeatCount="indefinite"><mpath href="#bR3"/></animateMotion></circle>
+  </g>
+
+  <!-- ============ ACTS (right outcomes) ============ -->
+  <g font-size="15">
+    <g transform="translate(946,280)">
+      <rect width="210" height="52" rx="11" class="chip"/>
+      <text x="18" y="24" class="lbl" font-weight="700">Books the calendar</text>
+      <text x="18" y="42" class="mut" font-size="12">real slot · read back first</text>
+    </g>
+    <g transform="translate(946,360)">
+      <rect width="210" height="52" rx="11" class="chip"/>
+      <text x="18" y="24" class="lbl" font-weight="700">Texts the lead back</text>
+      <text x="18" y="42" class="mut" font-size="12">seconds after a form submit</text>
+    </g>
+    <g transform="translate(946,440)">
+      <rect width="210" height="52" rx="11" class="chip"/>
+      <text x="18" y="24" class="lbl" font-weight="700">Answers the phone</text>
+      <text x="18" y="42" class="mut" font-size="12">voice · SMS · email · chat</text>
+    </g>
+  </g>
+</svg>
