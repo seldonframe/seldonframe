@@ -2,7 +2,7 @@
 //
 // Redesign 2026-06-18 — warm light aesthetic + ANIMATED build log.
 // "How it works" — 3-step flow. Paper/card surface, Newsreader italic
-// accent numbers, SeldonFrame green (#00897B) for active/done dots.
+// accent numbers, SeldonFrame green (#059669) for active/done dots.
 //
 // Each step card's terminal-style "mock" rows now animate, mirroring the
 // motion idiom shipped in marketing-modules.tsx:
@@ -84,8 +84,8 @@ export function MarketingBuildSteps() {
       <div className="mx-auto max-w-[1120px]">
         {/* Section head */}
         <div className="max-w-[600px]">
-          <div className="inline-flex items-center gap-2.5 text-[12px] font-[600] uppercase tracking-[0.09em] text-[#00897B]">
-            <span className="h-px w-4 bg-[#00897B] opacity-50" aria-hidden />
+          <div className="inline-flex items-center gap-2.5 text-[12px] font-[600] uppercase tracking-[0.09em] text-[#059669]">
+            <span className="h-px w-4 bg-[#059669] opacity-50" aria-hidden />
             How it works
           </div>
           <h2 className="mt-3.5 text-[clamp(27px,4.2vw,42px)] font-[500] leading-[1.08] tracking-[-0.025em] text-[#221D17]">
@@ -101,7 +101,7 @@ export function MarketingBuildSteps() {
 
           {/* "What you need" beat — BYOK as a qualifier, not a barrier. */}
           <p className="mt-5 inline-flex max-w-[60ch] items-start gap-2 rounded-[12px] border border-[rgba(34,29,23,.10)] bg-[#FFFDFA] px-4 py-3 text-[13.5px] leading-[1.5] text-[#6E665A] shadow-[0_1px_2px_rgba(34,29,23,.05)]">
-            <span className="mt-0.5 inline-block size-1.5 shrink-0 rounded-full bg-[#00897B]" aria-hidden />
+            <span className="mt-0.5 inline-block size-1.5 shrink-0 rounded-full bg-[#059669]" aria-hidden />
             <span>
               <strong className="font-[600] text-[#221D17]">All you need:</strong> a URL, and an AI key you probably
               already have (ChatGPT, Claude, or Gemini). We show you how to connect it in 30 seconds.
@@ -117,7 +117,7 @@ export function MarketingBuildSteps() {
               className="relative flex flex-col gap-4 overflow-hidden rounded-[18px] border border-[rgba(34,29,23,.08)] bg-[#FFFDFA] p-6 shadow-[0_1px_2px_rgba(34,29,23,.05),0_10px_30px_rgba(34,29,23,.07)]"
             >
               {/* Newsreader italic step number */}
-              <span className="font-[Newsreader,Georgia,serif] text-2xl italic text-[#00897B]">
+              <span className="font-[Newsreader,Georgia,serif] text-2xl italic text-[#059669]">
                 {step.num}
               </span>
               <h3 className="m-0 text-[16px] font-[600] leading-tight tracking-[-0.01em] text-[#221D17]">
@@ -138,7 +138,7 @@ export function MarketingBuildSteps() {
 
       <style jsx>{`
         .sf-blink-dot {
-          box-shadow: 0 0 0 3px color-mix(in oklab, #00897b 22%, transparent);
+          box-shadow: 0 0 0 3px color-mix(in oklab, #059669 22%, transparent);
           animation: sf-blink 1.4s ease-in-out infinite;
         }
         @keyframes sf-blink {
@@ -227,9 +227,9 @@ function StatusDot({ tone }: { tone: "idle" | "active" | "done" }) {
     <span
       className={`size-1.5 shrink-0 rounded-sm ${
         tone === "done"
-          ? "bg-[#00897B] shadow-[0_0_6px_rgba(0,137,123,.5)]"
+          ? "bg-[#059669] shadow-[0_0_6px_rgba(5, 150, 105,.5)]"
           : tone === "active"
-          ? "sf-blink-dot bg-[#00897B]"
+          ? "sf-blink-dot bg-[#059669]"
           : "bg-[#9A9183]/40"
       }`}
       aria-hidden
@@ -274,7 +274,7 @@ function ScanMock() {
           {!reduce && step === 1 ? (
             <motion.span
               aria-hidden
-              className="ml-0.5 inline-block h-3 w-px translate-y-[2px] bg-[#00897B] align-middle"
+              className="ml-0.5 inline-block h-3 w-px translate-y-[2px] bg-[#059669] align-middle"
               animate={{ opacity: [1, 0, 1] }}
               transition={{ duration: 0.7, repeat: Infinity, ease: "linear" }}
             />
@@ -343,7 +343,7 @@ function ArriveMock({ rows }: { rows: readonly ArriveRow[] }) {
             {emphasis ? (
               <motion.span
                 aria-hidden
-                className="shrink-0 text-[#00897B]"
+                className="shrink-0 text-[#059669]"
                 initial={false}
                 animate={{ opacity: visible ? 1 : 0, scale: visible ? 1 : 0.6 }}
                 transition={{ duration: 0.32, ease: EASE, delay: justArrived ? 0.12 : 0 }}
@@ -384,7 +384,7 @@ function LinkCheck({ className = "" }: { className?: string }) {
     <svg viewBox="0 0 24 24" fill="none" className={className} aria-hidden>
       <path
         d="M9 17H7A5 5 0 0 1 7 7h2m6 0h2a5 5 0 0 1 1.5 9.75M9 12h6"
-        stroke="#00897B"
+        stroke="#059669"
         strokeWidth={2}
         strokeLinecap="round"
         strokeLinejoin="round"

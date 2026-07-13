@@ -3,7 +3,7 @@
 import { useMemo, useState } from "react";
 import type { OrgTheme } from "@/lib/theme/types";
 
-const SWATCHES = ["#14b8a6", "#3b82f6", "#8b5cf6", "#f43f5e", "#f97316", "#10b981", "#64748b", "#f59e0b"] as const;
+const SWATCHES = ["#059669", "#3b82f6", "#8b5cf6", "#f43f5e", "#f97316", "#10b981", "#64748b", "#f59e0b"] as const;
 
 const FONT_OPTIONS: OrgTheme["fontFamily"][] = ["Inter", "DM Sans", "Playfair Display", "Space Grotesk", "Lora", "Outfit"];
 

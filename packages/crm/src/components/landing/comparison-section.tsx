@@ -18,7 +18,7 @@ export function LandingComparisonSection() {
           </div>
         </div>
 
-        <div className="rounded-xl border border-zinc-800 border-l-2 border-l-[#14b8a6] bg-zinc-900 p-8">
+        <div className="rounded-xl border border-zinc-800 border-l-2 border-l-[#059669] bg-zinc-900 p-8">
           <span className="text-[10px] font-bold uppercase tracking-widest text-zinc-500">With SeldonFrame</span>
           <div className="mt-8 space-y-4">
             {[
@@ -30,7 +30,7 @@ export function LandingComparisonSection() {
               "Change something once → it updates everywhere",
             ].map((text) => (
               <div key={text} className="flex items-center gap-3 text-sm text-zinc-300">
-                <Check size={14} className="text-[#14b8a6]" />
+                <Check size={14} className="text-[#059669]" />
                 {text}
               </div>
             ))}

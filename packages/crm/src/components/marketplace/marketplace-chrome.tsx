@@ -92,7 +92,7 @@ export function MarketplaceNav({
   defaultQuery?: string;
 }): ReactElement {
   const navColor = (tab: NavTab) => (active === tab ? MKT.green : "rgba(34,29,23,0.62)");
-  const navBg = (tab: NavTab) => (active === tab ? "rgba(0,137,123,0.10)" : "transparent");
+  const navBg = (tab: NavTab) => (active === tab ? "rgba(5, 150, 105,0.10)" : "transparent");
 
   return (
     <header

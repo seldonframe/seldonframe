@@ -92,7 +92,7 @@ export async function POST(request: Request) {
   // chatbot embed activates). v1.55.0 removed enhance-blocks from the
   // default creation path, so `organizations.theme.aestheticArchetype`
   // was left null and `primaryColor` defaulted to the legacy teal
-  // (#14b8a6) — making every public chatbot bubble render in
+  // (#059669) — making every public chatbot bubble render in
   // SeldonFrame teal regardless of the workspace's vertical. This call
   // classifies the archetype from soul + writes the right palette so
   // the embed.js route reads correct tokens on its first request.

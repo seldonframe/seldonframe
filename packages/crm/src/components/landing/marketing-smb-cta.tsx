@@ -7,7 +7,7 @@
 // pulled out of the hero so each rung holds one idea.
 //
 // Design tokens: card #FFFDFA, paper #F6F2EA, ink #221D17, muted #6E665A,
-// accent green #00897B, border rgba(34,29,23,.10). Newsreader italic accent.
+// accent green #059669, border rgba(34,29,23,.10). Newsreader italic accent.
 
 import Link from "next/link";
 
@@ -19,10 +19,10 @@ export function MarketingSmbCta() {
       className="border-t border-[rgba(34,29,23,.08)] bg-[#F6F2EA] px-5 py-16 md:px-8 md:py-20 lg:px-12"
     >
       <div className="mx-auto max-w-[880px] rounded-[24px] border border-[rgba(34,29,23,.08)] bg-[#FFFDFA] px-6 py-12 text-center shadow-[0_1px_2px_rgba(34,29,23,.05),0_20px_50px_rgba(34,29,23,.08)] md:px-12 md:py-14">
-        <div className="inline-flex items-center justify-center gap-2.5 text-[12px] font-[600] uppercase tracking-[0.09em] text-[#00897B]">
-          <span className="h-px w-4 bg-[#00897B] opacity-50" aria-hidden />
+        <div className="inline-flex items-center justify-center gap-2.5 text-[12px] font-[600] uppercase tracking-[0.09em] text-[#059669]">
+          <span className="h-px w-4 bg-[#059669] opacity-50" aria-hidden />
           Get paid
-          <span className="h-px w-4 bg-[#00897B] opacity-50" aria-hidden />
+          <span className="h-px w-4 bg-[#059669] opacity-50" aria-hidden />
         </div>
 
         <h2 className="mx-auto mt-4 max-w-[20ch] text-balance text-[clamp(26px,4.2vw,42px)] font-[500] leading-[1.1] tracking-[-0.025em] text-[#221D17]">
@@ -42,9 +42,9 @@ export function MarketingSmbCta() {
         <div className="mt-8 flex justify-center">
           <Link
             href="/signup"
-            className="inline-flex items-center gap-2.5 rounded-full bg-[#1F2B24] px-7 py-4 text-[15px] font-[500] text-[#F6F2EA] shadow-[0_1px_2px_rgba(34,29,23,.10),0_6px_16px_rgba(34,29,23,.10),0_18px_40px_rgba(34,29,23,.06),inset_0_1.5px_0_rgba(255,255,255,.12)] transition-all hover:-translate-y-[1.5px] hover:shadow-[0_2px_4px_rgba(34,29,23,.12),0_12px_26px_rgba(34,29,23,.14),inset_0_1.5px_0_rgba(255,255,255,.14)] active:translate-y-px focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[#00897B]"
+            className="inline-flex items-center gap-2.5 rounded-full bg-[#1F2B24] px-7 py-4 text-[15px] font-[500] text-[#F6F2EA] shadow-[0_1px_2px_rgba(34,29,23,.10),0_6px_16px_rgba(34,29,23,.10),0_18px_40px_rgba(34,29,23,.06),inset_0_1.5px_0_rgba(255,255,255,.12)] transition-all hover:-translate-y-[1.5px] hover:shadow-[0_2px_4px_rgba(34,29,23,.12),0_12px_26px_rgba(34,29,23,.14),inset_0_1.5px_0_rgba(255,255,255,.14)] active:translate-y-px focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[#059669]"
           >
-            <span className="size-[7px] rounded-full bg-[#00897B] shadow-[0_0_0_4px_rgba(0,137,123,.22)]" aria-hidden />
+            <span className="size-[7px] rounded-full bg-[#059669] shadow-[0_0_0_4px_rgba(5, 150, 105,.22)]" aria-hidden />
             Build it free →
           </Link>
         </div>

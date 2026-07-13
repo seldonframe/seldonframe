@@ -41,7 +41,7 @@ export async function installSoulPackage(orgId: string, pkg: SoulPackage) {
         ? pkg.soul.pipelineStages.map((stage) => ({
             name: stage.name,
             probability: 0,
-            color: "#14b8a6",
+            color: "#059669",
           }))
         : ((existingSoul.pipeline as { stages?: Array<{ name: string; probability: number; color: string }> } | undefined)?.stages ?? []),
     },

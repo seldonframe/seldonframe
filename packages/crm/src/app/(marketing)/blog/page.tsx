@@ -82,7 +82,7 @@ const SOON = HAND_CODED_POSTS.filter((p) => p.status === "soon");
 const POSTS: Post[] = [...REGISTRY, ...HAND_LIVE, ...SOON];
 
 const INDEX_CSS = `.sf-blog-card{transition:transform .15s ease,border-color .15s ease,box-shadow .15s ease}
-a.sf-blog-link:hover .sf-blog-card{transform:translateY(-2px);border-color:rgba(0,137,123,0.45);box-shadow:0 10px 30px -18px rgba(34,29,23,0.35)}
+a.sf-blog-link:hover .sf-blog-card{transform:translateY(-2px);border-color:rgba(5, 150, 105,0.45);box-shadow:0 10px 30px -18px rgba(34,29,23,0.35)}
 a.sf-blog-link:hover .sf-blog-cta{gap:9px}`;
 
 function PostCard({ post }: { post: Post }): ReactElement {

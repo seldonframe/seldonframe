@@ -34,7 +34,7 @@ interface SoulPipelineStage {
 const COLOR_PALETTE = [
   "#0284c7", // blue
   "#9333ea", // purple
-  "#0d9488", // teal
+  "#047857", // teal
   "#d97706", // amber
   "#ea580c", // orange
   "#16a34a", // green

@@ -61,7 +61,7 @@ export function LandingHowItWorksSection() {
             data-step={String(step.number)}
             className="flex flex-col rounded-xl border border-zinc-800 bg-zinc-900 p-5"
           >
-            <div className="mb-4 inline-flex h-8 w-8 items-center justify-center rounded-full bg-[#14b8a6]/15 text-sm font-bold text-[#14b8a6]">
+            <div className="mb-4 inline-flex h-8 w-8 items-center justify-center rounded-full bg-[#059669]/15 text-sm font-bold text-[#059669]">
               {step.number}
             </div>
             <h3 className="text-lg font-semibold text-zinc-100">{step.title}</h3>

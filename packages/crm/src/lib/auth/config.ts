@@ -68,7 +68,7 @@ function renderSeldonFrameSignInEmail({
   baseUrl: string;
 }): { subject: string; html: string; text: string } {
   const wordmark = `${baseUrl}/brand/seldonframe-wordmark.svg`;
-  const primary = "#14b8a6"; // matches --primary teal in the design system
+  const primary = "#059669"; // matches --primary teal in the design system
   const ink = "#0a0e1a";
   const bg = "#f6f7f9";
   const muted = "#6b7280";

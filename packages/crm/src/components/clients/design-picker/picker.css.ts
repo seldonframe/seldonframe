@@ -14,7 +14,7 @@ export const PICKER_CSS = `
   --pk-muted:   var(--muted-foreground, #646a77);
   --pk-line:    var(--border, #e6e7ec);
   --pk-line-2:  var(--muted, #eef0f3);
-  --pk-accent:  var(--primary, #12a07b);
+  --pk-accent:  var(--primary, #059669);
   --pk-accent-d:    color-mix(in oklab, var(--pk-accent) 84%, #000);
   --pk-accent-tint: color-mix(in oklab, var(--pk-accent) 14%, var(--pk-surface));
   --pk-accent-ink:  color-mix(in oklab, var(--pk-accent) 66%, var(--pk-ink));

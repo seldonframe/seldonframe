@@ -44,7 +44,7 @@ export const TRENDS: Trend[] = [
   {
     key: "voice-ai-smb",
     label: "Voice AI for SMBs",
-    color: "#00897B",
+    color: "#059669",
     points: [
       { year: 2019, value: 4 },
       { year: 2021, value: 8 },

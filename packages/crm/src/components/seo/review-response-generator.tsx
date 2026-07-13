@@ -8,7 +8,7 @@
 import { useMemo, useState, type ReactElement } from "react";
 
 const INK = "#221D17";
-const GREEN = "#00897B";
+const GREEN = "#059669";
 const INK10 = "rgba(34,29,23,0.10)";
 
 type Scenario = "great" | "price" | "timing" | "quality" | "mixed" | "fake";
@@ -279,7 +279,7 @@ export function ReviewResponseGenerator(): ReactElement {
                   padding: "8px 16px",
                   borderRadius: 10,
                   border: `1.5px solid ${rating === r ? GREEN : INK10}`,
-                  background: rating === r ? "rgba(0,137,123,0.12)" : "#fff",
+                  background: rating === r ? "rgba(5, 150, 105,0.12)" : "#fff",
                   color: rating === r ? GREEN : INK,
                   fontWeight: 700,
                   fontSize: 14.5,
@@ -344,7 +344,7 @@ export function ReviewResponseGenerator(): ReactElement {
                   padding: "8px 18px",
                   borderRadius: 10,
                   border: `1.5px solid ${tone === t.id ? GREEN : INK10}`,
-                  background: tone === t.id ? "rgba(0,137,123,0.12)" : "#fff",
+                  background: tone === t.id ? "rgba(5, 150, 105,0.12)" : "#fff",
                   color: tone === t.id ? GREEN : INK,
                   fontWeight: 700,
                   fontSize: 13.5,

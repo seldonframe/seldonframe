@@ -106,7 +106,7 @@ export function LandingHeroMockup() {
       <div aria-hidden="true">
       {/* Soft teal radial behind the card — sells "primary surface" */}
       <div
-        className="pointer-events-none absolute -top-32 right-0 h-72 w-72 rounded-full bg-[#14b8a6]/10 blur-3xl"
+        className="pointer-events-none absolute -top-32 right-0 h-72 w-72 rounded-full bg-[#059669]/10 blur-3xl"
       />
 
       {/* Window chrome */}
@@ -125,7 +125,7 @@ export function LandingHeroMockup() {
         <aside className="border-b border-zinc-800/60 bg-zinc-950/60 px-3 py-4 md:w-48 md:shrink-0 md:border-b-0 md:border-r">
           {/* Workspace switcher */}
           <div className="flex items-center gap-2.5 rounded-lg border border-zinc-800/80 bg-zinc-900/80 p-2.5">
-            <div className="flex size-7 shrink-0 items-center justify-center rounded-md bg-[#14b8a6]/15 text-[11px] font-bold text-[#14b8a6]">
+            <div className="flex size-7 shrink-0 items-center justify-center rounded-md bg-[#059669]/15 text-[11px] font-bold text-[#059669]">
               AH
             </div>
             <div className="min-w-0 flex-1">

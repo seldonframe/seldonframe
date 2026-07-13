@@ -14,8 +14,8 @@
 //   enhanceLandingForWorkspace … no longer called by default"). The
 //   default public surface became a chatbot-preview page seeded by
 //   `v2/complete`. As a side effect, `organizations.theme` was left at
-//   the legacy DB column DEFAULT — `{primaryColor:"#14b8a6",
-//   accentColor:"#0d9488", fontFamily:"Inter", mode:"dark", …}` from
+//   the legacy DB column DEFAULT — `{primaryColor:"#059669",
+//   accentColor:"#047857", fontFamily:"Inter", mode:"dark", …}` from
 //   drizzle/0010_organization_theme_jsonb.sql — for every new workspace.
 //
 //   Visible regression: the public chatbot embed (api/v1/public/agent/…
@@ -38,9 +38,9 @@
 //   3. Write a new theme that:
 //        - sets aestheticArchetype to the classified id
 //        - overwrites primaryColor / accentColor / fontFamily / mode WHEN
-//          they look like the legacy SeldonFrame default (#14b8a6 / Inter
+//          they look like the legacy SeldonFrame default (#059669 / Inter
 //          / dark). Operator-customized values (any hex other than
-//          #14b8a6/#0d9488, any font other than Inter, light mode) are
+//          #059669/#047857, any font other than Inter, light mode) are
 //          preserved.
 //        - preserves logoUrl + motionPreset + borderRadius untouched —
 //          those are independent of archetype and operators frequently
@@ -75,8 +75,8 @@ import { DEFAULT_ORG_THEME, type OrgTheme } from "@/lib/theme/types";
  *  created before the archetype theme was applied. Any theme whose
  *  primaryColor matches this exactly is presumed to be the untouched
  *  default and is eligible for archetype overwrite. */
-const LEGACY_DEFAULT_PRIMARY = "#14b8a6";
-const LEGACY_DEFAULT_ACCENT = "#0d9488";
+const LEGACY_DEFAULT_PRIMARY = "#059669";
+const LEGACY_DEFAULT_ACCENT = "#047857";
 const LEGACY_DEFAULT_FONT = "Inter";
 
 /** A theme is considered "legacy untouched default" if its primary AND

@@ -77,7 +77,7 @@ export function FrontOfficeFlow({
         {/* ── NEW WAY (connected, green-accented chain) ── */}
         <div
           style={{
-            border: `1.5px solid rgba(0,137,123,0.35)`,
+            border: `1.5px solid rgba(5, 150, 105,0.35)`,
             borderRadius: 16,
             padding: "20px 20px 18px",
             background: MKT.green10,
@@ -123,7 +123,7 @@ const NEW_STEP_BOX: CSSProperties = {
   display: "flex",
   alignItems: "center",
   gap: 10,
-  border: `1px solid rgba(0,137,123,0.3)`,
+  border: `1px solid rgba(5, 150, 105,0.3)`,
   borderRadius: 12,
   padding: "10px 14px",
   fontSize: 13.5,

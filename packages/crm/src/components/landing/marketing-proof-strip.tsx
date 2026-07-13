@@ -41,7 +41,7 @@ export function MarketingProofStrip() {
               className="inline-flex items-center gap-1.5 rounded-full border border-[rgba(34,29,23,.10)] bg-[#FFFDFA] px-3 py-1.5 text-[12.5px] font-[500] text-[#221D17] shadow-[0_1px_2px_rgba(34,29,23,.05)]"
             >
               <span
-                className="flex size-[15px] shrink-0 items-center justify-center rounded-full bg-[rgba(0,137,123,.12)] text-[9px] font-[700] leading-none text-[#00897B]"
+                className="flex size-[15px] shrink-0 items-center justify-center rounded-full bg-[rgba(5, 150, 105,.12)] text-[9px] font-[700] leading-none text-[#059669]"
                 aria-hidden
               >
                 ✓

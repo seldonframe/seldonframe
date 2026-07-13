@@ -35,7 +35,7 @@ export function MarketingSoul() {
             <circle cx="0" cy="0" r="220" fill="none" stroke="rgba(244,244,245,0.04)" strokeWidth="1" strokeDasharray="3 5" />
             <circle cx="0" cy="0" r="150" fill="none" stroke="rgba(244,244,245,0.06)" strokeWidth="1" strokeDasharray="3 5" />
 
-            <g stroke="#14b8a6" strokeWidth="1.2" fill="none" opacity="0.55">
+            <g stroke="#059669" strokeWidth="1.2" fill="none" opacity="0.55">
               <line x1="0" y1="0" x2="-200" y2="-100">
                 <animate attributeName="stroke-opacity" values="0.2;0.9;0.2" dur="3s" repeatCount="indefinite" />
               </line>
@@ -51,8 +51,8 @@ export function MarketingSoul() {
             </g>
 
             <g>
-              <circle cx="0" cy="0" r="62" fill="#0c0c0e" stroke="#14b8a6" strokeWidth="1.4" />
-              <circle cx="0" cy="0" r="62" fill="none" stroke="#14b8a6" strokeWidth="2" opacity="0.4">
+              <circle cx="0" cy="0" r="62" fill="#0c0c0e" stroke="#059669" strokeWidth="1.4" />
+              <circle cx="0" cy="0" r="62" fill="none" stroke="#059669" strokeWidth="2" opacity="0.4">
                 <animate attributeName="r" values="62;78;62" dur="3.6s" repeatCount="indefinite" />
                 <animate attributeName="opacity" values="0.4;0;0.4" dur="3.6s" repeatCount="indefinite" />
               </circle>

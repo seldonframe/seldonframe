@@ -216,7 +216,7 @@ export default async function ListingDetailPage({ params, searchParams }: Listin
           <div>
             {/* header — semantic h1 + the SEO/GEO credibility line */}
             <header className="sf-listing-head" style={{ display: "flex", alignItems: "flex-start", gap: 20, paddingBottom: 26, borderBottom: "1px solid rgba(34,29,23,0.10)" }}>
-              <span style={{ width: 74, height: 74, borderRadius: 19, background: "rgba(0,137,123,0.10)", color: MKT.green, display: "flex", alignItems: "center", justifyContent: "center", flex: "none" }}>
+              <span style={{ width: 74, height: 74, borderRadius: 19, background: "rgba(5, 150, 105,0.10)", color: MKT.green, display: "flex", alignItems: "center", justifyContent: "center", flex: "none" }}>
                 <MarketplaceIcon name={agent.icon} size={36} />
               </span>
               <div style={{ flex: 1, minWidth: 0 }}>
@@ -251,7 +251,7 @@ export default async function ListingDetailPage({ params, searchParams }: Listin
                         letterSpacing: "0.04em",
                         textTransform: "uppercase",
                         color: MKT.green,
-                        background: "rgba(0,137,123,0.10)",
+                        background: "rgba(5, 150, 105,0.10)",
                         padding: "4px 10px",
                         borderRadius: 999,
                         fontFamily: MKT.fontMono,
@@ -378,7 +378,7 @@ export default async function ListingDetailPage({ params, searchParams }: Listin
                             <div style={{ fontWeight: 650, fontSize: 15, display: "flex", alignItems: "center", gap: 7, whiteSpace: "nowrap" }}>
                               {r.author}
                               {r.verified ? (
-                                <span style={{ display: "inline-flex", alignItems: "center", gap: 3, fontSize: 11, fontWeight: 700, color: MKT.green, background: "rgba(0,137,123,0.10)", padding: "2px 8px", borderRadius: 999, whiteSpace: "nowrap" }}>
+                                <span style={{ display: "inline-flex", alignItems: "center", gap: 3, fontSize: 11, fontWeight: 700, color: MKT.green, background: "rgba(5, 150, 105,0.10)", padding: "2px 8px", borderRadius: 999, whiteSpace: "nowrap" }}>
                                   <MarketplaceIcon name="shield" size={13} />
                                   Verified install
                                 </span>
@@ -411,7 +411,7 @@ export default async function ListingDetailPage({ params, searchParams }: Listin
                       className="sf-cardhover"
                       style={{ textDecoration: "none", color: MKT.ink, background: "#fff", border: "1px solid rgba(34,29,23,0.10)", borderRadius: 15, padding: 16, display: "flex", alignItems: "center", gap: 13, boxShadow: "0 1px 2px rgba(34,29,23,0.04)" }}
                     >
-                      <span style={{ width: 44, height: 44, borderRadius: 12, background: "rgba(0,137,123,0.10)", color: MKT.green, display: "flex", alignItems: "center", justifyContent: "center", flex: "none" }}>
+                      <span style={{ width: 44, height: 44, borderRadius: 12, background: "rgba(5, 150, 105,0.10)", color: MKT.green, display: "flex", alignItems: "center", justifyContent: "center", flex: "none" }}>
                         <MarketplaceIcon name={o.icon} size={21} />
                       </span>
                       <div style={{ flex: 1, minWidth: 0 }}>
@@ -517,8 +517,8 @@ export default async function ListingDetailPage({ params, searchParams }: Listin
                   justifyContent: "space-between",
                   gap: 16,
                   flexWrap: "wrap",
-                  background: "rgba(0,137,123,0.06)",
-                  border: "1px solid rgba(0,137,123,0.18)",
+                  background: "rgba(5, 150, 105,0.06)",
+                  border: "1px solid rgba(5, 150, 105,0.18)",
                   borderRadius: 16,
                   padding: "18px 22px",
                 }}

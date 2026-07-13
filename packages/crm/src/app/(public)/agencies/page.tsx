@@ -22,7 +22,7 @@ export const metadata: Metadata = {
 
 export default function AgenciesPage() {
   return (
-    <div className="min-h-screen bg-[#F6F2EA] text-[#221D17] selection:bg-[#00897B]/20 selection:text-[#00897B]">
+    <div className="min-h-screen bg-[#F6F2EA] text-[#221D17] selection:bg-[#059669]/20 selection:text-[#059669]">
       <MarketingNav />
       <main id="main-content" className="pt-[100px]">
         <MarketingAgencyMath />
@@ -35,22 +35,22 @@ export default function AgenciesPage() {
             </h2>
             <ul className="mt-4 flex flex-col flex-wrap gap-x-8 gap-y-2.5 md:flex-row">
               <li>
-                <Link href="/sell" className="text-[14.5px] font-[600] text-[#00897B] underline-offset-4 hover:underline">
+                <Link href="/sell" className="text-[14.5px] font-[600] text-[#059669] underline-offset-4 hover:underline">
                   Sell AI agents: the complete playbook
                 </Link>
               </li>
               <li>
-                <Link href="/guides/ai-agency-pricing-models" className="text-[14.5px] font-[600] text-[#00897B] underline-offset-4 hover:underline">
+                <Link href="/guides/ai-agency-pricing-models" className="text-[14.5px] font-[600] text-[#059669] underline-offset-4 hover:underline">
                   AI agency pricing models
                 </Link>
               </li>
               <li>
-                <Link href="/guides/white-label-ai-agents" className="text-[14.5px] font-[600] text-[#00897B] underline-offset-4 hover:underline">
+                <Link href="/guides/white-label-ai-agents" className="text-[14.5px] font-[600] text-[#059669] underline-offset-4 hover:underline">
                   White-label AI agents
                 </Link>
               </li>
               <li>
-                <Link href="/guides/what-to-include-in-an-ai-front-office-package" className="text-[14.5px] font-[600] text-[#00897B] underline-offset-4 hover:underline">
+                <Link href="/guides/what-to-include-in-an-ai-front-office-package" className="text-[14.5px] font-[600] text-[#059669] underline-offset-4 hover:underline">
                   What goes in an AI front-office package
                 </Link>
               </li>

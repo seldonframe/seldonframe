@@ -201,7 +201,7 @@ export default async function SettingsPage() {
           description: "Colors, fonts, logo for your public pages and chatbot",
           status: (
             <span className="inline-flex items-center gap-2 text-xs text-muted-foreground">
-              <span className="h-2.5 w-2.5 rounded-full border border-border" style={{ backgroundColor: themeSettings?.theme.primaryColor || "#14b8a6" }} />
+              <span className="h-2.5 w-2.5 rounded-full border border-border" style={{ backgroundColor: themeSettings?.theme.primaryColor || "#059669" }} />
               {themeSettings?.theme.primaryColor || "Primary color"}
             </span>
           ),
@@ -347,7 +347,7 @@ export default async function SettingsPage() {
       description: "Colors, fonts, logo for public pages and the chatbot",
       status: (
         <span className="inline-flex items-center gap-2 text-xs text-muted-foreground">
-          <span className="h-2.5 w-2.5 rounded-full border border-border" style={{ backgroundColor: themeSettings?.theme.primaryColor || "#14b8a6" }} />
+          <span className="h-2.5 w-2.5 rounded-full border border-border" style={{ backgroundColor: themeSettings?.theme.primaryColor || "#059669" }} />
           {themeSettings?.theme.primaryColor || "Primary color"}
         </span>
       ),

@@ -22,7 +22,7 @@ import {
 } from "./result-card";
 
 const INK = "#221D17";
-const GREEN = "#00897B";
+const GREEN = "#059669";
 const INK10 = "rgba(34,29,23,0.10)";
 const AMBER = "#B8860B";
 const BLUE = "#2E5F8A";
@@ -258,7 +258,7 @@ export function GohighlevelCostCalculator(): ReactElement {
                   borderRadius: 10,
                   fontWeight: 700,
                   fontSize: 13.5,
-                  background: plan === p ? "rgba(0,137,123,0.08)" : "rgba(255,255,255,0.6)",
+                  background: plan === p ? "rgba(5, 150, 105,0.08)" : "rgba(255,255,255,0.6)",
                   cursor: "pointer",
                 }}
               >

@@ -457,8 +457,8 @@ function IdeChat(): ReactElement {
               fontFamily: MKT.fontMono,
               fontSize: 12,
               color: "#9FE8DD",
-              background: "rgba(0,137,123,0.16)",
-              border: "1px solid rgba(0,137,123,0.30)",
+              background: "rgba(5, 150, 105,0.16)",
+              border: "1px solid rgba(5, 150, 105,0.30)",
               padding: "4px 9px",
               borderRadius: 8,
             }}
@@ -666,8 +666,8 @@ function FooterCtas(): ReactElement {
       className="sf-build-cta"
       style={{
         marginTop: SECTION_GAP,
-        background: "rgba(0,137,123,0.07)",
-        border: "1px solid rgba(0,137,123,0.18)",
+        background: "rgba(5, 150, 105,0.07)",
+        border: "1px solid rgba(5, 150, 105,0.18)",
         borderRadius: 26,
         padding: "44px 44px",
       }}

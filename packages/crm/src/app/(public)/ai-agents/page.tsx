@@ -75,7 +75,7 @@ export default function AgentsIndexPage() {
                   width: 48,
                   height: 48,
                   borderRadius: 13,
-                  background: "rgba(0,137,123,0.10)",
+                  background: "rgba(5, 150, 105,0.10)",
                   color: MKT.green,
                   display: "flex",
                   alignItems: "center",
