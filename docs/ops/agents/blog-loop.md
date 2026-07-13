@@ -21,11 +21,11 @@ This is the **information-gain** article loop — the counterpart to the weekly 
 ## Step 1 — Source (information gain first, keyword second)
 Invoke the **`information-gain` skill** (`.claude/skills/information-gain`):
 1. Read `docs/strategy/youtube-sources.md` and pick a channel/cluster with fresh, specific founder stories.
-2. Check `docs/strategy/youtube-transcripts/` FIRST — if a human dropped a transcript, use it (the first line is the source URL).
+2. Check `docs/strategy/youtube-transcripts/` FIRST — use the first dropped transcript whose source video is NOT already published. **Dedup (never republish the same video):** for each dropped transcript, take its line-1 source URL and grep it across `packages/crm/src/lib/seo/blog/*.ts` — if any published `BlogArticle` already carries that `sourceVideo.url`, that transcript is DONE; skip it. This is the guard that stops a re-run (or the daily run after you merge an article) from duplicating a video you already shipped. Leaving a used transcript in the folder is fine — the dedup makes it a no-op.
 3. Otherwise fetch one: `node scripts/youtube-transcript.mjs "<video-url>" --json`.
 4. Pick the ONE video with the richest original material (real numbers, a real decision, a real failure).
 
-**If no real transcript is available today** (fetch blocked AND nothing in the drop folder): STOP. Send the recap email saying "no source today — no article" and exit 0. **Never invent a transcript or write a sourceless "founder story."** A dry day is a correct outcome, not a failure to paper over.
+**If no UNUSED transcript is available today** (every dropped transcript is already published AND the fetch is blocked): STOP. Send the recap email saying "no source today — no article" and exit 0. **Never invent a transcript or write a sourceless "founder story."** A dry day is a correct outcome, not a failure to paper over.
 
 ## Step 2 — Mine the non-commodity material
 From the transcript, extract ONLY what exists nowhere else in writing — for each, keep the **exact transcript snippet** it came from (you'll need it in Step 4):
