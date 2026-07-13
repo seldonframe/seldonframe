@@ -3,17 +3,30 @@
 
 export type DesignId =
   | "auto"
+  // Health track — the 5 premium landing templates.
   | "earthy-modern-clinical"
   | "clinical-luxe"
   | "warm-wellness"
   | "cinematic-sanctuary"
-  | "editorial-bodywork";
+  | "editorial-bodywork"
+  // Archetype track — the 8 aesthetic archetypes (trades/generic verticals).
+  // Kept in sync with AestheticArchetypeId in lib/workspace/aesthetic-archetypes.
+  | "editorial-warm"
+  | "bold-urgency"
+  | "clinical-trust"
+  | "cinematic-aspirational"
+  | "technical-restrained"
+  | "soft-residential"
+  | "brutalist"
+  | "midnight-craft";
 
 export type DesignTemplate = {
   id: Exclude<DesignId, "auto">;
   name: string;
-  /** path/URL to the catalog hero thumbnail (kept in its OWN palette) */
-  thumb: string;
+  /** path/URL to the catalog hero thumbnail (kept in its OWN palette).
+   *  Optional — archetype-track designs have no thumbnail yet; the picker's
+   *  <Thumb> degrades to a named placeholder and the swatches carry the color. */
+  thumb?: string;
   /** best-fit niches, shown under the name */
   niche: string[];
   /** 1–2 signature colors for a small scanning accent (not chrome) */
@@ -42,6 +55,15 @@ export type DesignPickerProps = {
   onPick: (id: PickerValue) => void;
   onClose: () => void;
   title?: string;
+  /** The design options to render. Defaults to the 5 health templates
+   *  (DESIGNS); the ready page passes ARCHETYPE_DESIGNS for trades/generic
+   *  verticals. */
+  designs?: DesignTemplate[];
+  /** Section header above the grid (e.g. "Health & wellness designs" or
+   *  "Design styles"). */
+  sectionLabel?: string;
+  /** Footnote under the grid explaining the track. */
+  autoNote?: string;
 };
 
 export type DesignChipProps = {
@@ -59,4 +81,9 @@ export type ReadyDesignModuleProps = {
   autoReason?: string;
   onChange: (id: PickerValue) => void;
   mobile?: boolean;
+  /** Design options for this workspace's track (health templates vs archetype
+   *  looks). Defaults to the health templates when omitted. */
+  designs?: DesignTemplate[];
+  sectionLabel?: string;
+  autoNote?: string;
 };

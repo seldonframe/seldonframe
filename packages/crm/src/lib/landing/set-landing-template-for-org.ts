@@ -19,8 +19,14 @@ import { revalidatePath } from "next/cache";
 import { db } from "@/db";
 import { organizations } from "@/db/schema";
 import { isLandingTemplateId } from "@/components/landing-templates/registry";
-import { resolveHealthTemplate } from "@/lib/landing/template-selection";
+import { resolveHealthTemplate, isHealthVertical } from "@/lib/landing/template-selection";
 import { DEFAULT_ORG_THEME, type OrgTheme } from "@/lib/theme/types";
+import { ARCHETYPES, type AestheticArchetypeId } from "@/lib/workspace/aesthetic-archetypes";
+import { setArchetypeForOrg, classifyArchetypeFromSoul } from "@/lib/workspace/apply-archetype-theme";
+
+function isArchetypeId(id: string): id is AestheticArchetypeId {
+  return Object.prototype.hasOwnProperty.call(ARCHETYPES, id);
+}
 
 export type SetLandingTemplateResult =
   | { ok: true; landingTemplate: string; landingTemplateChoice: string }
@@ -45,6 +51,7 @@ export async function setLandingTemplateForOrg(
       id: organizations.id,
       slug: organizations.slug,
       soul: organizations.soul,
+      settings: organizations.settings,
       theme: organizations.theme,
     })
     .from(organizations)
@@ -55,7 +62,42 @@ export async function setLandingTemplateForOrg(
   }
 
   const vertical = ((org.soul as unknown as { industry?: string } | null)?.industry ?? "").toString();
+  const prevTheme: OrgTheme = org.theme ?? DEFAULT_ORG_THEME;
 
+  // Two design "tracks" share this write:
+  //   • health track   → 5 premium landing templates (theme.landingTemplate)
+  //   • archetype track → 8 aesthetic archetypes (theme.aestheticArchetype),
+  //                       the re-skin path used by every trades/generic vertical.
+  // A trades workspace is on the archetype track unless a premium health
+  // template was somehow applied. "auto" is disambiguated the same way the
+  // ready page picks the track, so a plumber's "auto" re-classifies an
+  // archetype rather than silently landing a wellness template.
+  const onHealthTrack =
+    isHealthVertical(vertical) || isLandingTemplateId(prevTheme.landingTemplate);
+
+  // ── Archetype track ────────────────────────────────────────────────────
+  const revalidate = () => {
+    // The public landing renders /w/[slug] dynamically, but revalidate anyway
+    // in case ISR is added later, and to bust any RSC cache.
+    if (org.slug) revalidatePath(`/w/${org.slug}`);
+  };
+
+  if (isArchetypeId(choice)) {
+    const res = await setArchetypeForOrg(org.id, choice, choice);
+    if (!res.ok) return { ok: false, error: res.reason ?? "archetype_write_failed" };
+    revalidate();
+    return { ok: true, landingTemplate: prevTheme.landingTemplate ?? "", landingTemplateChoice: choice };
+  }
+
+  if (choice === "auto" && !onHealthTrack) {
+    const classified = classifyArchetypeFromSoul(org.soul, org.settings);
+    const res = await setArchetypeForOrg(org.id, classified, "auto");
+    if (!res.ok) return { ok: false, error: res.reason ?? "archetype_write_failed" };
+    revalidate();
+    return { ok: true, landingTemplate: prevTheme.landingTemplate ?? "", landingTemplateChoice: "auto" };
+  }
+
+  // ── Health template track ──────────────────────────────────────────────
   let landingTemplate: string;
   let landingTemplateChoice: string;
   if (choice === "auto") {
@@ -68,18 +110,12 @@ export async function setLandingTemplateForOrg(
     return { ok: false, error: `unknown_template_id: ${choice}` };
   }
 
-  const prevTheme: OrgTheme = org.theme ?? DEFAULT_ORG_THEME;
   await db
     .update(organizations)
     .set({ theme: { ...prevTheme, landingTemplate, landingTemplateChoice } })
     .where(eq(organizations.id, org.id));
 
-  if (org.slug) {
-    // The public landing renders /w/[slug] dynamically, but revalidate anyway
-    // in case ISR is added later, and to bust any RSC cache — same rationale
-    // as setLandingTemplateAction's original comment.
-    revalidatePath(`/w/${org.slug}`);
-  }
+  revalidate();
 
   return { ok: true, landingTemplate, landingTemplateChoice };
 }

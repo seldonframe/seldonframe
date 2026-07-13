@@ -92,6 +92,38 @@ function isLegacyDefaultTheme(theme: OrgTheme): boolean {
   );
 }
 
+/**
+ * Classify an aesthetic archetype from an org's raw `soul` + `settings` JSONB.
+ *
+ * organizations.soul stores snake_case keys (personality_vertical,
+ * emergency_service, …) even though the OrgSoul TS interface is camelCase, so
+ * we read the runtime shape via Record<string, unknown>. Extracted so both the
+ * creation-time seed (applyArchetypeThemeToOrg) and the ready-page "Auto"
+ * design choice (setLandingTemplateForOrg) classify identically.
+ */
+export function classifyArchetypeFromSoul(
+  soul: unknown,
+  settings: unknown,
+): AestheticArchetypeId {
+  const soulRecord = (soul as Record<string, unknown> | null) ?? null;
+  const settingsRecord = (settings as Record<string, unknown> | null) ?? null;
+  const crmPersonality = settingsRecord?.crmPersonality as
+    | { vertical?: string }
+    | undefined;
+  const vertical =
+    (soulRecord?.personality_vertical as string | undefined) ??
+    crmPersonality?.vertical ??
+    "";
+  return classifyArchetype({
+    vertical,
+    emergencyService: (soulRecord?.emergency_service as boolean | null | undefined) ?? null,
+    sameDay: (soulRecord?.same_day as boolean | null | undefined) ?? null,
+    reviewRating: (soulRecord?.review_rating as number | null | undefined) ?? null,
+    reviewCount: (soulRecord?.review_count as number | null | undefined) ?? null,
+    businessDescription: (soulRecord?.business_description as string | null | undefined) ?? null,
+  });
+}
+
 export interface ApplyArchetypeThemeResult {
   ok: boolean;
   /** Classified archetype id (always returned even on write failure, so
@@ -155,26 +187,9 @@ export async function applyArchetypeThemeToOrg(
     // camelCase. Cast through Record<string, unknown> to read the actual
     // runtime shape — same pattern used in resolveOrgArchetype
     // (lib/page-blocks/persist.ts) and seedChatbotPreviewLandingForOrg.
-    const soulRecord = (org.soul as unknown as Record<string, unknown> | null) ?? null;
     // Fall back to settings.crmPersonality.vertical when soul.personality_vertical
     // is missing — the v2 creation path writes vertical into settings, not soul.
-    const settingsRecord = (org.settings ?? null) as Record<string, unknown> | null;
-    const crmPersonality = settingsRecord?.crmPersonality as
-      | { vertical?: string }
-      | undefined;
-    const vertical =
-      (soulRecord?.personality_vertical as string | undefined) ??
-      crmPersonality?.vertical ??
-      "";
-
-    const archetypeId = classifyArchetype({
-      vertical,
-      emergencyService: (soulRecord?.emergency_service as boolean | null | undefined) ?? null,
-      sameDay: (soulRecord?.same_day as boolean | null | undefined) ?? null,
-      reviewRating: (soulRecord?.review_rating as number | null | undefined) ?? null,
-      reviewCount: (soulRecord?.review_count as number | null | undefined) ?? null,
-      businessDescription: (soulRecord?.business_description as string | null | undefined) ?? null,
-    });
+    const archetypeId = classifyArchetypeFromSoul(org.soul, org.settings);
     const archetype = ARCHETYPES[archetypeId];
 
     // Only overwrite palette/font fields when the current theme looks like
@@ -270,6 +285,11 @@ export interface SetExplicitArchetypeResult {
 export async function setArchetypeForOrg(
   orgId: string,
   archetypeId: AestheticArchetypeId,
+  /** The operator's *intent* to record on theme.aestheticArchetypeChoice.
+   *  Defaults to the archetype id (an explicit hand-pick). Pass "auto" when
+   *  this write is the result of re-classifying from soul, so the ready-page
+   *  picker shows "Auto-picked for X" rather than "Chosen by you". */
+  choice: string = archetypeId,
 ): Promise<SetExplicitArchetypeResult> {
   try {
     const archetype = ARCHETYPES[archetypeId];
@@ -295,6 +315,7 @@ export async function setArchetypeForOrg(
       fontFamily: archetype.fonts.headline as OrgTheme["fontFamily"],
       mode: archetype.defaultThemeMode,
       aestheticArchetype: archetypeId,
+      aestheticArchetypeChoice: choice,
       // Preserve any premium health template — an archetype switch is a
       // different axis and must not silently clear it (same rationale as
       // applyArchetypeThemeToOrg's legacy-overwrite branch above).

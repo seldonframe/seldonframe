@@ -17,21 +17,34 @@
 // The 9 live demo workspaces (name, type, href). The slug is derived from the
 // workspace href and matches the screenshot in /public/shots/<slug>.jpg.
 export const LIVE_DEMOS = [
-  { name: "Rapid Rooter Plumbing", type: "Plumbing", href: "https://app.seldonframe.com/w/rapid-rooter-plumbing-828a" },
-  { name: "PeakAir Heating & Cooling", type: "HVAC", href: "https://app.seldonframe.com/w/peakair-heating-cooling-e7df" },
-  { name: "Summit Roofing Co.", type: "Roofing", href: "https://app.seldonframe.com/w/summit-roofing-co-e045" },
-  { name: "Voltware Electric", type: "Electrician", href: "https://app.seldonframe.com/w/voltware-electric-1325" },
-  { name: "Hearth & Home Builds", type: "General contractor", href: "https://app.seldonframe.com/w/hearth-home-builds-87ac" },
-  { name: "Coastline Garage Doors", type: "Garage doors", href: "https://app.seldonframe.com/w/coastline-garage-doors-4c77" },
-  { name: "Lumière Med Spa", type: "Med spa", href: "https://app.seldonframe.com/w/lumire-med-spa-20b0" },
-  { name: "Vitalis Weight Clinic", type: "GLP-1 clinic", href: "https://app.seldonframe.com/w/vitalis-weight-clinic-d320" },
-  { name: "Apex TRT & Hormone", type: "Men's health", href: "https://app.seldonframe.com/w/apex-trt-hormone-7b4a" },
+  { name: "J. Marin Heating & Air Conditioning", type: "HVAC", href: "https://j-marin-heating-air-conditioning-9599.app.seldonframe.com/" },
+  { name: "Metro MedSpa", type: "Med spa", href: "https://app.seldonframe.com/w/metro-medspa-9d24" },
+  { name: "The Cooling Specialists", type: "Air conditioning", href: "https://app.seldonframe.com/w/the-cooling-specialists" },
+  { name: "Vive Ageless Weight Loss Center", type: "Weight loss", href: "https://app.seldonframe.com/w/vive-ageless-weight-loss-center" },
+  { name: "Crown Plumbing", type: "Plumbing", href: "https://app.seldonframe.com/w/crown-plumbing" },
+  { name: "GameDay Men's Health", type: "Men's health", href: "https://app.seldonframe.com/w/gameday-mens-health-west-palm-beach" },
+  { name: "Rejuvenate MedSpa", type: "Med spa", href: "https://app.seldonframe.com/w/rejuvenate-medspa" },
+  { name: "Clean Cut Landscape Co", type: "Landscaping", href: "https://app.seldonframe.com/w/clean-cut-landscape-co" },
+  { name: "SKINNEY Medspa", type: "Med spa", href: "https://app.seldonframe.com/w/skinney-medspa" },
 ] as const;
 
 type Demo = (typeof LIVE_DEMOS)[number];
 
+// Derive the screenshot slug from either URL shape:
+//   • path form   https://app.seldonframe.com/w/<slug>
+//   • subdomain   https://<slug>.app.seldonframe.com/
+// The subdomain form (used by workspaces on their own app subdomain) must not
+// fall through to "" — that would point the card at /shots/.jpg (a broken image).
 function slugOf(href: string): string {
-  return href.split("/w/")[1] ?? "";
+  const afterW = href.split("/w/")[1];
+  if (afterW) return afterW.split(/[/?#]/)[0];
+  try {
+    const m = new URL(href).host.match(/^([^.]+)\.app\.seldonframe\.com$/i);
+    if (m) return m[1];
+  } catch {
+    /* malformed href — fall through to "" */
+  }
+  return "";
 }
 
 function hostOf(href: string): string {
