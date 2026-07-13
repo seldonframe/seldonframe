@@ -8,6 +8,7 @@
 
 import dynamic from "next/dynamic";
 import { HeroModeSwitch } from "@/components/landing/landing-mode";
+import { RecordLoop } from "@/components/landing/record/record-loop";
 
 // Code-split: the recorder bundle (state machine, service worker,
 // upload pipeline) loads when record mode mounts — never on the
@@ -56,6 +57,9 @@ export function RecordHero({
           signal. Seldon watches, asks about what it didn&apos;t understand, and compiles a
           working agent.
         </p>
+
+        {/* The pipeline, shown not told: record → compile → agent live. */}
+        <RecordLoop />
 
         {/* The hero card: mode switch on top, live recorder inside. */}
         <div className="mt-10 w-full max-w-[860px] rounded-[18px] border border-[var(--lp-border)] bg-[var(--lp-card)] p-2 text-left shadow-[0_1px_2px_rgba(0,0,0,.2),0_10px_30px_rgba(0,0,0,.25)]">

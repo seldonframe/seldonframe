@@ -27,6 +27,7 @@ import { useCallback, useEffect, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 import { ArrowRight, FileText, Globe } from "lucide-react";
 
+import { MarketingAgentOrbit } from "@/components/landing/marketing-agent-orbit";
 import { MarketingDemoMarquee } from "@/components/landing/marketing-demo-marquee";
 import { heroSubmitTarget } from "@/components/landing/hero-submit-target";
 import { HeroModeSwitch } from "@/components/landing/landing-mode";
@@ -209,6 +210,19 @@ export function MarketingHero({
           the focal point). */}
       <div className="flex w-full max-w-[860px] flex-col items-center">
       <div className="flex w-full flex-col items-center text-center">
+      {/* Momentum pill — the Postiz "NEW:" move; ships-fast signal + the
+          record on-ramp in one line. */}
+      <a
+        href="/record"
+        className="mb-4 inline-flex items-center gap-2 rounded-full border border-[rgba(34,29,23,.12)] bg-[#FFFDFA] px-3.5 py-1.5 text-[12.5px] font-[500] text-[#221D17] shadow-[0_1px_2px_rgba(34,29,23,.06)] transition-colors hover:border-[#00897B]/40"
+      >
+        <span className="sf-rec-dot inline-block size-[7px] rounded-full bg-[#E5484D]" aria-hidden />
+        <strong className="font-[700]">NEW</strong>
+        <span className="text-[#6E665A]">
+          — turn a screen recording into a working agent →
+        </span>
+      </a>
+
       {/* Eyebrow */}
       <p className="inline-flex items-center gap-2.5 font-sans text-[12.5px] tracking-[0.04em] text-[#6E665A]">
         <span className="inline-block h-px w-4 bg-[#9A9183]" aria-hidden />
@@ -216,19 +230,30 @@ export function MarketingHero({
         Built in 3 minutes — No coding
       </p>
 
-      {/* Headline */}
-      <h1 className="mt-3 max-w-[20ch] text-balance font-sans text-[clamp(34px,4.8vw,56px)] font-[500] leading-[1.04] tracking-[-0.025em] text-[#221D17]">
-        Start a service business{" "}
+      {/* Headline — outcome + mechanism (the Postiz formula) */}
+      <h1 className="mt-3 max-w-[22ch] text-balance font-sans text-[clamp(34px,4.8vw,56px)] font-[500] leading-[1.04] tracking-[-0.025em] text-[#221D17]">
+        Run your business{" "}
         <em className="font-[Newsreader,Georgia,serif] font-normal not-italic tracking-[-0.01em]">
-          for free
-        </em>
+          on autopilot
+        </em>{" "}
+        with agents
       </h1>
 
-      {/* Subhead */}
-      <p className="mx-auto mt-4 max-w-[62ch] text-pretty text-[clamp(15.5px,1.6vw,17.5px)] leading-[1.55] text-[#6E665A]">
-        SeldonFrame is the all-in-one platform to{" "}
-        <strong className="font-[500] text-[#221D17]">build, run, and grow</strong>{" "}
-        your online business with agents. Start free, then $29/mo.
+      {/* Subhead — what runs on autopilot, concretely, then the openness line */}
+      <p className="mx-auto mt-4 max-w-[68ch] text-pretty text-[clamp(15.5px,1.6vw,17.5px)] leading-[1.55] text-[#6E665A]">
+        Answer every call, text back every lead, book the job, and ask for the
+        review — automatically, across{" "}
+        <strong className="font-[500] text-[#221D17]">
+          voice, SMS, email, and web chat
+        </strong>{" "}
+        — then see it all in one dashboard: website, bookings, CRM.
+      </p>
+      <p className="mx-auto mt-2.5 max-w-[68ch] text-pretty text-[14.5px] leading-[1.55] text-[#6E665A]">
+        Build from any agent:{" "}
+        <strong className="font-[500] text-[#221D17]">
+          Claude Code / Cursor / Codex / Windsurf / VS Code / Zed
+        </strong>{" "}
+        — or no IDE at all.
       </p>
 
       {/* Primary CTA */}
@@ -242,9 +267,27 @@ export function MarketingHero({
         </a>
       </div>
 
-      {/* Trust line under the CTA */}
-      <p className="mt-4 max-w-[60ch] text-pretty text-[13.5px] leading-[1.5] text-[#6E665A]">
-        unlimited workspaces · works with your ChatGPT, Claude, or Gemini key
+      {/* BYOK line — elevated out of microcopy (the Postiz "use any agent"
+          move, applied to model keys): real logos, real claim. Wording
+          matches the site's standing BYOK claim (Claude/ChatGPT/Gemini). */}
+      <p className="mt-4 inline-flex flex-wrap items-center justify-center gap-x-2 gap-y-1.5 text-[14px] leading-[1.5] text-[#221D17]">
+        <span className="inline-flex items-center gap-1" aria-hidden>
+          {[
+            { src: "/brand/models/anthropic.svg", alt: "Claude" },
+            { src: "/brand/models/openai.svg", alt: "ChatGPT" },
+            { src: "/brand/models/gemini.svg", alt: "Gemini" },
+          ].map((m) => (
+            <span
+              key={m.src}
+              className="flex size-[22px] items-center justify-center rounded-full border border-[rgba(34,29,23,.10)] bg-[#FFFDFA] shadow-[0_1px_2px_rgba(34,29,23,.05)]"
+            >
+              {/* eslint-disable-next-line @next/next/no-img-element -- static vendored SVG */}
+              <img src={m.src} alt={m.alt} width={12} height={12} className="block" />
+            </span>
+          ))}
+        </span>
+        Works with your Claude, ChatGPT, or Gemini key —{" "}
+        <strong className="font-[600]">we never mark up tokens.</strong>
       </p>
 
       {/* Input form */}
@@ -363,6 +406,13 @@ export function MarketingHero({
       </div>
       </div>
 
+      {/* Rotating live-demo marquee — directly under the CTA/form on
+          purpose: real generated sites are stronger social proof than any
+          logo wall (anchor target for "#demos"). */}
+      <div id="demos" className="w-full scroll-mt-24">
+        <MarketingDemoMarquee />
+      </div>
+
       {/* Proof checklist */}
       <ul className="mt-6 flex flex-wrap items-center justify-center gap-x-5 gap-y-2">
         {["Build it free", "Live in 3 minutes", "$29/mo flat", "Cancel anytime"].map((item) => (
@@ -373,10 +423,8 @@ export function MarketingHero({
         ))}
       </ul>
 
-      {/* Rotating live-demo marquee (anchor target for "#demos") */}
-      <div id="demos" className="w-full scroll-mt-24">
-        <MarketingDemoMarquee />
-      </div>
+      {/* The agent at work: SF mark orbited by the real model + app logos */}
+      <MarketingAgentOrbit />
 
       {/* Loading overlay */}
       {submitting ? (
@@ -402,6 +450,17 @@ export function MarketingHero({
         @keyframes sf-blink {
           0%, 100% { opacity: 1; }
           50% { opacity: 0.4; }
+        }
+        .sf-rec-dot {
+          box-shadow: 0 0 0 3px color-mix(in oklab, #E5484D 22%, transparent);
+          animation: sf-rec-pulse 1.6s ease-in-out infinite;
+        }
+        @media (prefers-reduced-motion: reduce) {
+          .sf-rec-dot { animation: none; }
+        }
+        @keyframes sf-rec-pulse {
+          0%, 100% { opacity: 1; transform: scale(1); }
+          50% { opacity: 0.55; transform: scale(0.82); }
         }
       `}</style>
     </section>
