@@ -28,6 +28,16 @@ exists (only Patterns — the corpus below it is raw evidence, skip it). Pattern
 market-validated structure (hooks, pacing, number use); apply them to the framing,
 never let them override Max's voice or the format rules below.
 
+## Information gain (optional — value posts + long-form only)
+When a draft would land harder with an ORIGINAL founder story or real number
+that isn't this session's own receipt, invoke the **`information-gain` skill**
+(`.claude/skills/information-gain`) with the topic: it mines a niche YouTube
+transcript into a cited source brief (a real figure / failure / decision that
+exists nowhere else in writing). Weave in at most one, **embed or link the
+source video**, and only state numbers the transcript actually says. Skip this
+for build-logs and scars — those run on this session's own receipts, never mined
+material. Never let a mined number become a `[FILL]`-style fabrication.
+
 ## Produce (append to `docs/strategy/x-drafts/YYYY-MM-DD.md`)
 
 2-3 drafts, each tagged with its format + the target keyword. Rules per draft:
