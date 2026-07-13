@@ -24,8 +24,21 @@
 import { useEffect, useRef, useState, type ReactNode } from "react";
 import Link from "next/link";
 import { motion, useInView, useReducedMotion } from "framer-motion";
-import { Calendar, FileText, MessageSquare, Phone, Star, Users } from "lucide-react";
+import {
+  Calendar,
+  FileText,
+  Mail,
+  MessageSquare,
+  Phone,
+  Plug,
+  Send,
+  Smartphone,
+  Sparkles,
+  Star,
+  Users,
+} from "lucide-react";
 import { BentoGrid, BentoCard } from "@/components/ui/magic/bento-grid";
+import { OrbitingCircles } from "@/components/ui/magic/orbiting-circles";
 
 // Shared spring-ish ease used everywhere (the brief's cubic-bezier).
 const EASE = [0.22, 1, 0.36, 1] as const;
@@ -75,6 +88,18 @@ const AGENTS = [
   "Reactivation Agent",
   "Quote Agent",
   "Follow-up Agent",
+] as const;
+
+// The 6 SURFACES an SF agent can run on (CLAUDE.md §1b — distinct from the
+// 6 build-time PRIMITIVES). Powers the "any agent on any surface" orbit
+// figure below — used by MarketingAgents only.
+const SURFACES = [
+  { label: "Voice", icon: Phone },
+  { label: "Web chat", icon: MessageSquare },
+  { label: "SMS", icon: Smartphone },
+  { label: "Email", icon: Mail },
+  { label: "DM", icon: Send },
+  { label: "MCP", full: "MCP-endpoint", icon: Plug },
 ] as const;
 
 export function MarketingModules() {
@@ -141,53 +166,87 @@ export function MarketingAgents() {
       className="border-t border-[rgba(34,29,23,.08)] bg-[#1F2B24] px-5 py-20 md:px-8 md:py-28 lg:px-12"
     >
       <div className="mx-auto max-w-[1120px]">
-        {/* Section head */}
-        <div className="max-w-[640px]">
-          <div className="inline-flex items-center gap-2.5 text-[12px] font-[600] uppercase tracking-[0.09em] text-[rgba(111,194,143,.9)]">
-            <span className="h-px w-4 bg-[rgba(111,194,143,.5)]" aria-hidden />
-            Hire agents
+        <div className="grid gap-10 lg:grid-cols-[1fr_260px] lg:items-center lg:gap-14">
+          <div>
+            {/* Section head */}
+            <div className="max-w-[640px]">
+              <div className="inline-flex items-center gap-2.5 text-[12px] font-[600] uppercase tracking-[0.09em] text-[rgba(111,194,143,.9)]">
+                <span className="h-px w-4 bg-[rgba(111,194,143,.5)]" aria-hidden />
+                Hire agents
+              </div>
+              <h2 className="mt-3.5 text-[clamp(27px,4.2vw,42px)] font-[500] leading-[1.08] tracking-[-0.025em] text-[#F6F2EA]">
+                Hire agents.
+              </h2>
+              <p className="mt-4 max-w-[60ch] text-[clamp(15.5px,1.9vw,18px)] leading-[1.55] text-[rgba(246,242,234,.78)]">
+                Add no-code AI agents to do the work — answer every call, text back missed calls,
+                request 5-star reviews, reply to DMs and email, win back cold leads. Start from a
+                template or build your own in plain English.{" "}
+                <strong className="font-[500] text-[#FFFDFA]">A 24/7 worker for pennies — not an employee or an agency.</strong>
+              </p>
+            </div>
+
+            {/* Agent chips */}
+            <div className="mt-7 flex flex-wrap gap-2">
+              {AGENTS.map((name) => (
+                <span
+                  key={name}
+                  className="inline-flex items-center gap-1.5 rounded-full border border-[rgba(255,255,255,.12)] bg-[rgba(255,255,255,.06)] px-3 py-1.5 text-[12.5px] font-[500] text-[rgba(246,242,234,.88)]"
+                >
+                  <span className="size-1.5 shrink-0 rounded-full bg-[#6fc28f] shadow-[0_0_0_3px_rgba(111,194,143,.22)]" aria-hidden />
+                  {name}
+                </span>
+              ))}
+              <span className="inline-flex items-center rounded-full border border-dashed border-[rgba(255,255,255,.14)] bg-transparent px-3 py-1.5 font-sans text-[11px] tracking-[0.04em] text-[rgba(246,242,234,.45)]">
+                + more shipping monthly
+              </span>
+            </div>
+
+            {/* CTAs — browse the marketplace, or build a custom agent in the Studio */}
+            <div className="mt-8 flex flex-wrap gap-3">
+              <Link
+                href="/marketplace"
+                className="inline-flex items-center gap-2 rounded-full bg-[#F6F2EA] px-5 py-3 text-[14px] font-[600] text-[#1F2B24] transition-transform hover:-translate-y-px"
+              >
+                Browse the agent marketplace →
+              </Link>
+              <Link
+                href="/build"
+                className="inline-flex items-center gap-2 rounded-full border border-[rgba(255,255,255,.22)] bg-transparent px-5 py-3 text-[14px] font-[500] text-[rgba(246,242,234,.9)] transition-colors hover:border-[rgba(255,255,255,.4)]"
+              >
+                Or build your own in the Studio →
+              </Link>
+            </div>
           </div>
-          <h2 className="mt-3.5 text-[clamp(27px,4.2vw,42px)] font-[500] leading-[1.08] tracking-[-0.025em] text-[#F6F2EA]">
-            Hire agents.
-          </h2>
-          <p className="mt-4 max-w-[60ch] text-[clamp(15.5px,1.9vw,18px)] leading-[1.55] text-[rgba(246,242,234,.78)]">
-            Add no-code AI agents to do the work — answer every call, text back missed calls,
-            request 5-star reviews, reply to DMs and email, win back cold leads. Start from a
-            template or build your own in plain English.{" "}
-            <strong className="font-[500] text-[#FFFDFA]">A 24/7 worker for pennies — not an employee or an agency.</strong>
-          </p>
-        </div>
 
-        {/* Agent chips */}
-        <div className="mt-7 flex flex-wrap gap-2">
-          {AGENTS.map((name) => (
-            <span
-              key={name}
-              className="inline-flex items-center gap-1.5 rounded-full border border-[rgba(255,255,255,.12)] bg-[rgba(255,255,255,.06)] px-3 py-1.5 text-[12.5px] font-[500] text-[rgba(246,242,234,.88)]"
+          {/* Lead figure — one agent, every surface. The 6 real SF surfaces
+              (voice · web-chat · SMS · email · DM · MCP-endpoint, CLAUDE.md
+              §1b) orbit a single agent core, making the "any agent on any
+              surface" composition claim concrete. Additive: doesn't touch
+              any existing block above. */}
+          <div
+            className="relative mx-auto size-[260px] shrink-0"
+            aria-label="One agent, deployed on every surface: voice, web chat, SMS, email, DM, and MCP-endpoint"
+          >
+            <div className="absolute left-1/2 top-1/2 z-10 flex size-14 -translate-x-1/2 -translate-y-1/2 items-center justify-center rounded-full bg-[#6fc28f] text-[#1F2B24] shadow-[0_0_0_8px_rgba(111,194,143,.14)]">
+              <Sparkles className="size-6" aria-hidden />
+            </div>
+            <OrbitingCircles
+              radius={100}
+              duration={28}
+              iconSize={50}
+              className="flex-col gap-0.5 border border-[rgba(255,255,255,.16)] bg-[#243830] text-[rgba(246,242,234,.92)]"
             >
-              <span className="size-1.5 shrink-0 rounded-full bg-[#6fc28f] shadow-[0_0_0_3px_rgba(111,194,143,.22)]" aria-hidden />
-              {name}
-            </span>
-          ))}
-          <span className="inline-flex items-center rounded-full border border-dashed border-[rgba(255,255,255,.14)] bg-transparent px-3 py-1.5 font-sans text-[11px] tracking-[0.04em] text-[rgba(246,242,234,.45)]">
-            + more shipping monthly
-          </span>
-        </div>
-
-        {/* CTAs — browse the marketplace, or build a custom agent in the Studio */}
-        <div className="mt-8 flex flex-wrap gap-3">
-          <Link
-            href="/marketplace"
-            className="inline-flex items-center gap-2 rounded-full bg-[#F6F2EA] px-5 py-3 text-[14px] font-[600] text-[#1F2B24] transition-transform hover:-translate-y-px"
-          >
-            Browse the agent marketplace →
-          </Link>
-          <Link
-            href="/build"
-            className="inline-flex items-center gap-2 rounded-full border border-[rgba(255,255,255,.22)] bg-transparent px-5 py-3 text-[14px] font-[500] text-[rgba(246,242,234,.9)] transition-colors hover:border-[rgba(255,255,255,.4)]"
-          >
-            Or build your own in the Studio →
-          </Link>
+              {SURFACES.map((surface) => (
+                <div key={surface.label} className="flex flex-col items-center justify-center gap-0.5 text-center leading-none">
+                  <surface.icon className="size-3.5" aria-hidden />
+                  <span className="text-[7px] font-[600] uppercase tracking-[0.04em]">
+                    {surface.label}
+                    {"full" in surface && <span className="sr-only">-endpoint</span>}
+                  </span>
+                </div>
+              ))}
+            </OrbitingCircles>
+          </div>
         </div>
       </div>
     </section>
