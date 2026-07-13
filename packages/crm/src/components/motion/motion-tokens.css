@@ -1,0 +1,14 @@
+/* packages/crm/src/components/motion/motion-tokens.css
+   Cross-surface motion timing tokens (spec §4.2). Imported at the route
+   level (like landing-theme.css). Vendored magic/* components read these
+   so timing is consistent everywhere; nothing hardcodes ms. */
+:root {
+  --motion-fast: 180ms;
+  --motion-base: 280ms;
+  --motion-slow: 420ms;
+  --motion-ease: cubic-bezier(0.22, 1, 0.36, 1);       /* ease-out-ish */
+  --motion-ease-inout: cubic-bezier(0.65, 0, 0.35, 1);
+}
+@media (prefers-reduced-motion: reduce) {
+  :root { --motion-fast: 0ms; --motion-base: 0ms; --motion-slow: 0ms; }
+}
