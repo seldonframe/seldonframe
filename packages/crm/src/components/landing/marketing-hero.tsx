@@ -28,6 +28,7 @@ import { useRouter } from "next/navigation";
 import { ArrowRight, FileText, Globe } from "lucide-react";
 
 import { MarketingAgentOrbit } from "@/components/landing/marketing-agent-orbit";
+import { FlickerGrid } from "@/components/landing/flicker-grid";
 import { MarketingDemoMarquee } from "@/components/landing/marketing-demo-marquee";
 import { heroSubmitTarget } from "@/components/landing/hero-submit-target";
 import { HeroModeSwitch } from "@/components/landing/landing-mode";
@@ -200,15 +201,42 @@ export function MarketingHero({
     return () => clearTimeout(t);
   }, []);
 
+  // Flickering-grid backdrop fades out as the hero scrolls away.
+  const [gridOpacity, setGridOpacity] = useState(1);
+  useEffect(() => {
+    const onScroll = () => {
+      const y = window.scrollY;
+      // Full at top, gone by ~520px of scroll.
+      setGridOpacity(Math.max(0, 1 - y / 520));
+    };
+    onScroll();
+    window.addEventListener("scroll", onScroll, { passive: true });
+    return () => window.removeEventListener("scroll", onScroll);
+  }, []);
+
   return (
     <section
       id="top"
       aria-label="SeldonFrame hero"
       className="relative flex flex-col items-center justify-center overflow-hidden px-5 pb-24 pt-[100px] text-center md:px-8 md:pb-32 md:pt-[120px] lg:px-12"
     >
+      {/* Flickering-grid backdrop — same parchment field, subtle ink squares,
+          fades on scroll. Decorative + reduced-motion-safe (static grid). A
+          bottom mask keeps text legible and blends into the page below. */}
+      <div
+        className="pointer-events-none absolute inset-0 z-0"
+        style={{ opacity: gridOpacity, transition: "opacity 120ms linear" }}
+        aria-hidden
+      >
+        <FlickerGrid
+          className="[mask-image:radial-gradient(ellipse_at_center,black,transparent_78%)]"
+          color="#1F2B24"
+        />
+      </div>
+
       {/* Single centered column (video panel removed — the chatbox/form is
           the focal point). */}
-      <div className="flex w-full max-w-[860px] flex-col items-center">
+      <div className="relative z-10 flex w-full max-w-[860px] flex-col items-center">
       <div className="flex w-full flex-col items-center text-center">
       {/* Momentum pill — the Postiz "NEW:" move; ships-fast signal + the
           record on-ramp in one line. */}
