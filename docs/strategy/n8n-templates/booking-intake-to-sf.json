@@ -1,0 +1,81 @@
+{
+  "name": "SeldonFrame — Form Booking Intake",
+  "nodes": [
+    {
+      "parameters": {
+        "httpMethod": "POST",
+        "path": "sf-booking-intake",
+        "responseMode": "onReceived",
+        "options": {}
+      },
+      "id": "d1b2c3d4-0001-4000-8000-000000000001",
+      "name": "Form Submission Webhook",
+      "type": "n8n-nodes-base.webhook",
+      "typeVersion": 2,
+      "position": [240, 300],
+      "notes": "Point your Typeform/JotForm webhook (or n8n's Typeform/JotForm trigger node) at this URL. Field names below assume a generic form payload — adjust the Set node mapping to match your actual form's field keys."
+    },
+    {
+      "parameters": {
+        "mode": "manual",
+        "duplicateItem": false,
+        "assignments": {
+          "assignments": [
+            { "name": "name", "type": "string", "value": "={{ $json.body.name || $json.body.fullName }}" },
+            { "name": "email", "type": "string", "value": "={{ $json.body.email }}" },
+            { "name": "phone", "type": "string", "value": "={{ $json.body.phone }}" },
+            { "name": "notes", "type": "string", "value": "={{ $json.body.notes || $json.body.message || '' }}" },
+            { "name": "requested_time", "type": "string", "value": "={{ $json.body.requested_time || $json.body.preferredTime || '' }}" }
+          ]
+        },
+        "options": {}
+      },
+      "id": "d1b2c3d4-0002-4000-8000-000000000002",
+      "name": "Map Form Fields",
+      "type": "n8n-nodes-base.set",
+      "typeVersion": 3.4,
+      "position": [460, 300]
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "https://app.seldonframe.com/api/v1/public/bookings",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            { "name": "Content-Type", "value": "application/json" }
+          ]
+        },
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={\n  \"name\": \"{{ $json.name }}\",\n  \"email\": \"{{ $json.email }}\",\n  \"phone\": \"{{ $json.phone }}\",\n  \"notes\": \"{{ $json.notes }}\",\n  \"requested_time\": \"{{ $json.requested_time }}\"\n}"
+      },
+      "id": "d1b2c3d4-0003-4000-8000-000000000003",
+      "name": "SF Submit Booking",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [680, 300],
+      "notes": "SF resolves the org from the request host — no auth headers needed. Confirm your exact booking field set with GET /api/v1/public/bookings docs or by inspecting an existing SF booking form before mapping additional fields."
+    }
+  ],
+  "connections": {
+    "Form Submission Webhook": {
+      "main": [
+        [
+          { "node": "Map Form Fields", "type": "main", "index": 0 }
+        ]
+      ]
+    },
+    "Map Form Fields": {
+      "main": [
+        [
+          { "node": "SF Submit Booking", "type": "main", "index": 0 }
+        ]
+      ]
+    }
+  },
+  "active": false,
+  "settings": { "executionOrder": "v1" },
+  "pinData": {},
+  "meta": { "templateCredsSetupCompleted": false }
+}
