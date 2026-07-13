@@ -40,7 +40,7 @@ export function AvatarCircles({
         <a
           key={index}
           href={avatar.profileUrl}
-          className="relative inline-flex h-10 w-10 items-center justify-center rounded-full bg-white ring-2 ring-[var(--lp-bg)] hover:z-20 transition-transform hover:scale-110"
+          className="relative inline-flex h-10 w-10 items-center justify-center rounded-full bg-[var(--lp-card)] ring-2 ring-[var(--lp-bg)] hover:z-20 transition-transform hover:scale-110"
         >
           <img
             src={avatar.imageUrl}
@@ -50,9 +50,9 @@ export function AvatarCircles({
         </a>
       ))}
       {numPeople !== undefined && (
-        <div className="relative inline-flex h-10 w-10 items-center justify-center rounded-full bg-white ring-2 ring-[var(--lp-bg)]">
-          <span className="text-xs font-semibold text-gray-700">
-            +{numPeople}
+        <div className="relative inline-flex h-10 w-10 items-center justify-center rounded-full bg-[var(--lp-card)] ring-2 ring-[var(--lp-bg)]">
+          <span className="text-xs font-semibold text-[var(--lp-body)]">
+            {`+${numPeople}`}
           </span>
         </div>
       )}
