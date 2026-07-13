@@ -50,8 +50,10 @@ services:
     build:
       context: .
     image: seldonframe-app
-    command: ["pnpm", "db:migrate"]
-    env_file: .env.docker
+    # Applies the current schema to a fresh DB over a plain Postgres
+    # connection (drizzle-kit's Neon driver can't reach local Postgres).
+    # Idempotent — skips if the schema already exists.
+    command: ["sh", "scripts/docker-migrate.sh"]
     environment:
       DATABASE_URL: postgres://seldon:seldon@postgres:5432/seldonframe
     depends_on:

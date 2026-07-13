@@ -39,8 +39,9 @@ ENV NODE_ENV=production PNPM_HOME=/pnpm PATH=/pnpm:$PATH \
 RUN corepack enable
 WORKDIR /app
 
-# curl for the compose healthcheck; tini for correct signal handling.
-RUN apt-get update && apt-get install -y --no-install-recommends curl tini \
+# curl for the healthcheck; tini for signal handling; psql for the
+# self-host schema apply (scripts/docker-migrate.sh).
+RUN apt-get update && apt-get install -y --no-install-recommends curl tini postgresql-client \
     && rm -rf /var/lib/apt/lists/*
 
 COPY --from=builder /app ./
