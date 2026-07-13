@@ -188,7 +188,7 @@ export function RecapPanel({
               </button>
             ) : null}
             <label
-              className="cursor-pointer text-[13.5px] underline-offset-2 hover:underline"
+              className="cursor-pointer text-[13.5px] underline-offset-2 hover:text-[color:var(--lp-ink)] hover:underline"
               style={{ color: "var(--lp-body)" }}
             >
               or upload
@@ -249,7 +249,7 @@ export function RecapPanel({
               }
             }}
             placeholder="Answer an open question or add detail..."
-            className="flex-1 rounded-[10px] border bg-transparent px-3 py-2 text-[13.5px] outline-none disabled:opacity-50"
+            className="flex-1 rounded-[10px] border bg-transparent px-3 py-2 text-[13.5px] outline-none placeholder:text-[color:var(--lp-muted)] disabled:opacity-50"
             style={{ borderColor: "var(--lp-border-soft)", color: "var(--lp-ink)" }}
           />
           <button

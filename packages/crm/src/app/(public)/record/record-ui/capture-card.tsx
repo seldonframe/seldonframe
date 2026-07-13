@@ -96,7 +96,7 @@ export function CaptureCard({
                 Record
               </button>
               <label
-                className="cursor-pointer text-[13.5px] underline-offset-2 hover:underline"
+                className="cursor-pointer text-[13.5px] underline-offset-2 hover:text-[color:var(--lp-ink)] hover:underline"
                 style={{ color: "var(--lp-body)" }}
               >
                 or upload a recording
@@ -123,7 +123,7 @@ export function CaptureCard({
             value={fallbackText}
             onChange={(e) => onFallbackTextChange(e.target.value)}
             placeholder="Describe what you did in this recording (required — uploaded files have no live transcript)"
-            className="h-16 w-full resize-none rounded-[10px] border bg-transparent p-2.5 text-[13.5px] outline-none"
+            className="h-16 w-full resize-none rounded-[10px] border bg-transparent p-2.5 text-[13.5px] outline-none placeholder:text-[color:var(--lp-muted)]"
             style={{ borderColor: "var(--lp-border-soft)", color: "var(--lp-ink)" }}
           />
           <div className="flex items-center justify-center gap-3">
@@ -169,7 +169,7 @@ export function CaptureCard({
               value={fallbackText}
               onChange={(e) => onFallbackTextChange(e.target.value)}
               placeholder="Describe what you did (used if your browser can't transcribe speech)"
-              className="h-14 w-full resize-none rounded-[10px] border-t bg-transparent p-2.5 pt-2.5 font-mono text-[13.5px] leading-[1.55] outline-none"
+              className="h-14 w-full resize-none rounded-[10px] border-t bg-transparent p-2.5 pt-2.5 font-mono text-[13.5px] leading-[1.55] outline-none placeholder:text-[color:var(--lp-muted)]"
               style={{ borderColor: "var(--lp-border-soft)", color: "var(--lp-body)" }}
             />
           ) : null}

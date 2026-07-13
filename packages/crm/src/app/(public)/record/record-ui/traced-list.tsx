@@ -79,7 +79,7 @@ export function TracedList({
               type="button"
               disabled={!canStart || !sessionReady}
               onClick={() => onRerecord(slot.slotIndex)}
-              className="shrink-0 text-[13.5px] underline-offset-2 hover:underline disabled:cursor-not-allowed disabled:opacity-40 disabled:hover:no-underline"
+              className="shrink-0 text-[13.5px] underline-offset-2 hover:text-[color:var(--lp-body)] hover:underline disabled:cursor-not-allowed disabled:opacity-40 disabled:hover:no-underline"
               style={{ color: "var(--lp-muted)" }}
             >
               Re-record
