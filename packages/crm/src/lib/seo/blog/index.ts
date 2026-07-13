@@ -7,10 +7,11 @@
 import type { BlogArticle } from "./types";
 
 import { article as whyOriginalContentWinsSeo } from "./why-original-content-wins-seo";
+import { article as agentsAreTheNewSaas } from "./agents-are-the-new-saas";
 
 export type { BlogArticle, BlogSection, BlogCallout, BlogFaq, BlogSource, BlogSourceVideo } from "./types";
 
-export const BLOG_ARTICLES: BlogArticle[] = [whyOriginalContentWinsSeo];
+export const BLOG_ARTICLES: BlogArticle[] = [whyOriginalContentWinsSeo, agentsAreTheNewSaas];
 
 export function getBlogArticle(slug: string): BlogArticle {
   const found = BLOG_ARTICLES.find((a) => a.slug === slug);
