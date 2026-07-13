@@ -35,7 +35,10 @@ const FACTS: ExtractedBusinessFacts = {
 /** Build a minimal valid R1LandingPayload JSON string. */
 function makePayloadJson(services: Array<{ id: string; name: string; description?: string; photo?: { src: string; alt: string } }>) {
   return JSON.stringify({
-    hero: { archetype: "bold-urgency", heading: "We Fix It Fast", subheading: "24/7", emergencyService: true },
+    // A real (non-generic) hero image so the hero post-process is skipped —
+    // these fixtures exercise the SERVICE resolver. The dedicated hero test
+    // below overrides this with the generic fallback to exercise the hero path.
+    hero: { archetype: "bold-urgency", heading: "We Fix It Fast", subheading: "24/7", emergencyService: true, heroImage: { src: "https://real.example.com/hero.jpg", alt: "Acme HVAC" } },
     services: {
       archetype: "bold-urgency",
       heading: "Our Services",
@@ -233,6 +236,44 @@ describe("generateR1Payload — photo post-process", () => {
     assert.equal(capturedVertical, "hvac");
     assert.equal(capturedArchetype, "bold-urgency");
     assert.equal(capturedBusinessName, "Acme HVAC");
+  });
+
+  test("swaps the generic hardcoded hero fallback for a vertical/archetype image", async () => {
+    // The prompt's no-photo hero fallback pins this exact Unsplash photo id for
+    // every trades workspace. The generator must detect it and resolve a
+    // relevant image instead.
+    const genericSrc =
+      "https://images.unsplash.com/photo-1581094794329-c8112a89af12?w=1200&q=70&auto=format&fit=crop&q=professional%20worker";
+    const json = JSON.stringify({
+      hero: { archetype: "bold-urgency", heading: "We Fix It Fast", subheading: "24/7", emergencyService: true, heroImage: { src: genericSrc, alt: "old" } },
+      services: { archetype: "bold-urgency", heading: "Our Services", services: [{ id: "s1", name: "AC Repair", description: "We fix AC." }] },
+      testimonials: { archetype: "bold-urgency", heading: "Reviews", testimonials: [{ id: "t1", quote: "Great!", name: "Jane D." }] },
+      faq: { archetype: "bold-urgency", heading: "FAQ", items: [{ id: "f1", question: "24/7?", answer: "Yes." }] },
+      footer: { archetype: "bold-urgency", businessName: "Acme HVAC", phone: "(209) 555-0100" },
+    });
+
+    const heroPhoto = { src: "https://images.unsplash.com/hero-real?w=1600", alt: "Acme HVAC hero" };
+    let heroVertical: string | null = null;
+
+    const payload = await generateR1Payload({
+      facts: FACTS,
+      archetype: "bold-urgency",
+      byokKey: "fake-key",
+      anthropicClient: makeClient(json),
+      // The hero post-process is the call with an empty serviceName (photo-less
+      // service cards also pass realSrc:null, so serviceName is the discriminator).
+      resolveServicePhotoFn: async (input) => {
+        if (input.serviceName === "") {
+          heroVertical = input.vertical;
+          return heroPhoto;
+        }
+        return null;
+      },
+    });
+
+    // Generic fallback was replaced by the resolved image, keyed to the real vertical.
+    assert.equal(payload.hero.heroImage?.src, heroPhoto.src);
+    assert.equal(heroVertical, "hvac");
   });
 
   test("throws on LLM call failure (anthropicClient seam)", async () => {

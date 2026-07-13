@@ -36,6 +36,12 @@ const DEFAULT_MODEL =
 // 4096 tokens is more than enough for the R1 shape.
 const MAX_TOKENS = 4096;
 
+// The Unsplash photo id the prompt hardcodes as the no-extracted-photo hero
+// fallback (see r1-payload-prompt.ts). Every trades workspace without a
+// scrapeable hero photo lands on this exact image, so we detect it and swap in
+// a vertical/archetype-relevant one in the hero post-process below.
+const GENERIC_HERO_PHOTO_ID = "photo-1581094794329";
+
 const SYSTEM_PROMPT =
   `You are a JSON-only landing page copy service. ` +
   `You receive business facts and archetype guidelines in the user message. ` +
@@ -253,6 +259,45 @@ export async function generateR1Payload(args: {
       // the renderer placeholder handles it.
     } catch {
       // One photo failure must never abort the build — degrade silently.
+    }
+  }
+
+  // ── Hero image post-process ────────────────────────────────────────────────
+  // The prompt's no-extracted-photo hero fallback (r1-payload-prompt.ts) is a
+  // SINGLE hardcoded Unsplash photo id shared by EVERY trades workspace — its
+  // trailing `&q=<query>` is a no-op on an images.unsplash.com by-id URL, so a
+  // plumber with no scrapeable hero photo gets the exact same generic image as
+  // every other trade. Unlike service cards, the hero was never run through the
+  // image resolver. When the hero is that generic fallback (or missing), resolve
+  // a vertical/archetype-relevant HD image instead — same resolver + DI seam the
+  // service cards use, so it varies per business and per archetype (the
+  // archetype's curated fallbackImageQueries pick deterministically by business
+  // name). Real extracted hero photos are left untouched.
+  const heroSrc = (parsed.hero.heroImage?.src ?? "").trim();
+  const heroIsGenericFallback = !heroSrc || heroSrc.includes(GENERIC_HERO_PHOTO_ID);
+  if (heroIsGenericFallback) {
+    try {
+      const resolved = await photoFn({
+        realSrc: null, // ignore the generic hardcoded URL — force the relevant fallback
+        realAlt: parsed.hero.heroImage?.alt ?? null,
+        // Empty serviceName → the resolver's `${serviceName} ${vertical}` query is
+        // just the vertical (e.g. "hvac"); when the vertical is unknown, the
+        // resolver falls to the archetype's curated fallbackImageQueries.
+        serviceName: "",
+        vertical,
+        archetype: args.archetype,
+        businessName: args.facts.business_name,
+      });
+      if (resolved?.src) {
+        parsed.hero.heroImage = {
+          src: resolved.src,
+          alt:
+            parsed.hero.heroImage?.alt ||
+            `${args.facts.business_name} — professional at work`,
+        };
+      }
+    } catch {
+      // Network / rate-limit — keep the prompt's fallback rather than abort.
     }
   }
 
