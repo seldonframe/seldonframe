@@ -24,6 +24,7 @@ export function SellStage({
   initialConnect,
   evalPass,
   supervisedRunSucceeded,
+  supervisedRunExempt,
 }: {
   templateId: string;
   templateName: string;
@@ -33,6 +34,10 @@ export function SellStage({
   initialConnect: SellerConnectStatus;
   evalPass: boolean;
   supervisedRunSucceeded: boolean;
+  /** F-D: true for a tool-free (pure-chat) template — the supervised-run
+   *  requirement is exempt, so it counts as satisfied for the checklist too
+   *  (matches the server-side publish gate exactly). */
+  supervisedRunExempt: boolean;
 }) {
   const [pending, startPending] = useTransition();
   const [selfResult, setSelfResult] = useState<
@@ -47,7 +52,8 @@ export function SellStage({
     });
   };
 
-  const marketplaceReady = evalPass && supervisedRunSucceeded;
+  const supervisedRunSatisfied = supervisedRunSucceeded || supervisedRunExempt;
+  const marketplaceReady = evalPass && supervisedRunSatisfied;
 
   return (
     <div className="space-y-4">
@@ -96,15 +102,15 @@ export function SellStage({
               </li>
               <li
                 className={
-                  supervisedRunSucceeded ? "text-emerald-700 dark:text-emerald-400" : "text-[var(--lc-muted)]"
+                  supervisedRunSatisfied ? "text-emerald-700 dark:text-emerald-400" : "text-[var(--lc-muted)]"
                 }
               >
-                {supervisedRunSucceeded ? (
+                {supervisedRunSatisfied ? (
                   <Check className="mr-1 inline size-3" />
                 ) : (
                   <X className="mr-1 inline size-3" />
                 )}
-                Supervised run completed
+                {supervisedRunExempt ? "No connected apps to supervise" : "Supervised run completed"}
               </li>
             </ul>
             {marketplaceReady ? (

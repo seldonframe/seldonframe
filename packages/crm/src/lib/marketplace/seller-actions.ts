@@ -48,7 +48,12 @@ import { getLatestEvalRun, listEvalRunsForSubject } from "@/lib/agents/evals/eva
 import { buildTrustStats } from "@/lib/marketplace/trust-stats";
 import { applyTastePreferencesUpdate } from "@/lib/marketplace/taste/apply-taste-preferences";
 import { isAgentLifecycleEnabled } from "@/lib/agents/lifecycle/policy";
-import { lifecycleGate, resolvePublishGate, type LifecycleGateDeps } from "@/lib/agents/lifecycle/gate";
+import {
+  lifecycleGate,
+  resolvePublishGate,
+  hasActionableTools,
+  type LifecycleGateDeps,
+} from "@/lib/agents/lifecycle/gate";
 import { supervisedRuns } from "@/db/schema/agent-lifecycle";
 import type { AgentTemplate } from "@/db/schema/agent-templates";
 
@@ -282,7 +287,17 @@ export async function resolvePublishGuard(
   if (!template) return { ok: false, error: "template_not_found" };
 
   if (deps.isLifecycleEnabled) {
-    const gate = await lifecycleGate(deps.lifecycleGateDeps, { orgId, templateId });
+    const gate = await lifecycleGate(deps.lifecycleGateDeps, {
+      orgId,
+      templateId,
+      // F-D: a tool-free template (pure-chat FAQ agent) can never pass a
+      // supervised run — exempt it here too, so the server-side publish
+      // gate matches the Run stage's ladder badge exactly.
+      hasActionableTools: hasActionableTools({
+        connectors: template.blueprint?.connectors,
+        capabilities: template.blueprint?.capabilities,
+      }),
+    });
     const publishGate = resolvePublishGate({ enabled: true, missing: gate.missing });
     if (publishGate.blocked) {
       return { ok: false, error: "lifecycle_gate", missing: gate.missing };

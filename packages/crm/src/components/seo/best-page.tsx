@@ -37,6 +37,7 @@ const CATEGORY_ALTERNATIVE_LINK: Partial<Record<string, string>> = {
   crm: "gohighlevel",
   "ai-receptionist": "goodcall",
   "website-builder": "durable",
+  "everyday-ai-agent": "lindy",
 };
 
 /** Compose the "cheapest real option" TL;DR fact: prefer a contender whose
@@ -45,7 +46,8 @@ const CATEGORY_ALTERNATIVE_LINK: Partial<Record<string, string>> = {
  *  contenders in a stable, already-considered order — never-lies: this reads
  *  the string, it never invents a price). Pure + exported for unit tests. */
 export function composeCheapestOption(category: BestCategory): string {
-  const freeContender = category.contenders.find((c) => /free/i.test(c.from));
+  // "no free tier" must not count as having a free plan (never-lies).
+  const freeContender = category.contenders.find((c) => /free/i.test(c.from) && !/no free/i.test(c.from));
   if (freeContender) {
     return `${freeContender.name} — ${freeContender.from} (has a free plan)`;
   }

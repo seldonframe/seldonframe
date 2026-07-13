@@ -2052,3 +2052,91 @@ C4 close-out with empirical SLICE 11 data.
   only anonymous users get the /signup?callbackUrl=… link. Corollary for
   testing: the funnel's "new user" happy path and the "existing user" path
   are DIFFERENT paths — smoke both before calling a claim flow done.
+
+## L-33 — A success verdict derived from "the turn completed" is a lie waiting to happen
+
+- **Trigger:** Prod supervised run 32a12952: agent replied "I can't actually execute
+  the workflow steps," action_log=[], status='succeeded' — verdict was `outcome.ok`
+  (LLM turn returned) not observable end state. Second incident same day (48e7fcc0):
+  the run DID act, but the result type never carried `actionLog` and the reducer
+  hardcoded `summary:null` — the UI showed "Succeeded — no summary" + zero log lines
+  while the DB row held 4 events. Max concluded (reasonably) nothing worked, twice.
+- **Rule:** (1) Any "succeeded" on an agent action surface must be COMPUTED from the
+  observable record (≥1 ok tool action; read-back where the effect is external),
+  never from "the code/turn ran" — same class as the SeldonChat vision_check rule.
+  (2) The UI renders EVIDENCE (plan → actions w/ proof ids → agent words, subordinate),
+  never a bare verdict badge; a verdict without its evidence pipe intact is
+  indistinguishable from a lie. Trace result types end-to-end: the durable row, the
+  action return, and the client props must carry the SAME evidence fields.
+  (3) Diagnose these with a direct prod-row read (Neon MCP on the run table) — the
+  DB told the truth both times when the UI didn't.
+
+## L-34 — Empty-allowlist authoring + tests that enshrine the bug
+
+- **Trigger:** Composio bindings authored with `enabledTools: []` resolve to ZERO
+  tools (resolver iterates only the allowlist; empty-means-disabled is load-bearing
+  for the editor toggle, so the resolver can't default). SEVEN authoring instances
+  existed (compile-agent, bind-tools, composio-resolver, agent-bundle + specs);
+  worse, the canonical tests/unit suite ASSERTED the empty allowlist as expected —
+  the green bar had locked the bug in.
+- **Rule:** (1) When a list field means "allowlist," empty-at-authoring is a silent
+  zero-capability bug — seed defaults at EVERY authoring site (never in the resolver
+  when empty-means-disabled is a real contract) and grep ALL writers of the shape in
+  one pass (the slug='home' lesson, third occurrence of the class). (2) When fixing
+  a bug class, audit the TESTS for assertions that encode the buggy behavior — flip
+  them with the fix or the next green bar re-certifies the lie. (3) Co-located spec
+  files vs the canonical tests/unit tree: check where the repo's suite actually
+  lives BEFORE writing the first test of a session.
+- 2026-07-12: A string COMPOSED by keyword-matching other strings can state the opposite of its source ("no free tier" matched /free/i → "(has a free plan)"). Render new composed surfaces and read them; shape tests cannot catch a lie — add an invariant test for the truth claim. (docs/learnings/2026-07-12-derived-string-negation-lie.md)
+
+---
+
+## L-35 — Fetch before you spec: stale origin/main makes you rebuild shipped work
+
+- **Trigger:** The email-agent slice (2026-07-12) was scoped from session memory
+  + scout reports as "build the inbox-watch trigger" — but the local
+  `origin/main` ref was days stale. A `git fetch` revealed fresh main already
+  shipped the inferred inbox-watch trigger, widened Gmail triage defaults, and
+  the Composio push bridge; ~80% of the assumed build existed. The real slice
+  was 2 gaps, not 2 subsystems.
+- **Rule:** Before writing any spec that claims "X doesn't exist," run
+  `git fetch origin main` and verify every load-bearing existence claim against
+  the FRESH base commit (`git show origin/main:<path>` / `git grep <pattern>
+  origin/main`). Session memory and subagent reports describe the repo as it
+  WAS. Full approach: docs/learnings/2026-07-12-competitor-teardown-to-gap-slice.md
+
+---
+
+## L-36 — A gate verdict must exist as a recorded artifact on the final sha
+
+- **Trigger:** Record v3 merge (2026-07-12). The controller's summary claimed
+  "/verify-build PASS", but the verify-runner had died with no completion
+  record, and its (never-recorded) run predated the final fix-wave commit. A
+  stale task-notification at merge time was the only tell. Re-ran the gate on
+  the final rebased sha before pushing to main.
+- **Rule:** Before any merge, enumerate the gates and confirm each has a
+  RECORDED verdict (agent result or report file) on the FINAL sha. "An agent
+  was dispatched" / "I remember it passed" is not a verdict. Verdicts carry
+  over a rebase only when the diff is provably identical (conflict-free, zero
+  file overlap); test gates re-run regardless because they exercise the
+  integrated tree. See docs/learnings/2026-07-12-verify-the-verdict-exists.md.
+
+## L-37 — A git worktree of a pnpm monorepo needs a real `pnpm install`, not a node_modules junction
+
+- **Trigger:** Re-ran /verify-build in a worktree after cleanup removed the
+  earlier node_modules setup. Recreated only `packages/crm/node_modules` as a
+  junction to the main repo; the runner failed with
+  `Cannot find package 'tsx'`. Adding a second junction for the root
+  `node_modules` made it WORSE (702/702 specs failed — every import broke),
+  because pnpm's per-package `node_modules` is a web of RELATIVE symlinks into
+  the workspace-root `.pnpm` virtual store, and a junction doesn't relocate
+  that store. tsx isn't a top-level package dir at all — it lives in
+  `node_modules/.pnpm/tsx@x.y.z` and is resolved through those symlinks.
+- **Rule:** For a pnpm-workspace worktree that needs to RUN tests/tsc, run a
+  real `pnpm install` in the worktree root (with a warm global store it's
+  mostly hardlinks — ~3-4 min, `reused N, downloaded 0`). Junctions are fine
+  for a quick `tsc` that only needs types resolvable, but NOT for the test
+  runner or anything that executes through tsx/.pnpm symlinks. Verify the
+  install left the tree clean (`git status --porcelain` — no lockfile drift)
+  before pushing. Supersedes the junction-only shortcut in
+  worktree-typecheck-method for any RUN (execute) step.

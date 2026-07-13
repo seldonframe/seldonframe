@@ -19,6 +19,7 @@ import {
   markAgentTemplateTestedAction,
 } from "@/lib/agent-templates/test-actions";
 import type { StatelessToolCall } from "@/lib/agents/stateless-turn";
+import { LlmKeyDialog } from "@/components/integrations/llm-key-dialog";
 
 type Msg = {
   role: "user" | "assistant" | "system";
@@ -70,6 +71,12 @@ export function TemplateTestClient(props: {
   const [status, setStatus] = useState(props.status);
   const [marking, startMark] = useTransition();
   const [markError, setMarkError] = useState<string | null>(null);
+  // In-place BYOK modal (record-v3 S4a) — replaces the needs_byok Link to
+  // /settings/integrations/llm, which used to bounce the operator off this
+  // sandbox. There's no single "retry" call to re-run here (the banner is
+  // keyMode-derived, not tied to one blocked action) — onSaved just clears
+  // the gate so the next Send attempt goes through.
+  const [keyDialogOpen, setKeyDialogOpen] = useState(false);
 
   useEffect(() => {
     if (scrollRef.current) {
@@ -179,14 +186,21 @@ export function TemplateTestClient(props: {
               with this agent in the sandbox.
             </p>
           </div>
-          <Link
-            href="/settings/integrations/llm"
+          <button
+            type="button"
+            onClick={() => setKeyDialogOpen(true)}
             className="shrink-0 rounded-md border border-current/30 px-3 py-1 text-xs font-medium hover:bg-current/10"
           >
             Add your key &rarr;
-          </Link>
+          </button>
         </div>
       )}
+
+      <LlmKeyDialog
+        open={keyDialogOpen}
+        onOpenChange={setKeyDialogOpen}
+        onSaved={() => setNoKey(false)}
+      />
 
       <div className="grid gap-3 lg:grid-cols-[minmax(0,1fr)_300px]">
         {/* Chat */}

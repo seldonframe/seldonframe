@@ -11,6 +11,7 @@ import {
   inferTriggerFromModel,
 } from "@/lib/recordings/compile-agent";
 import type { CoverageEntry, FlowModel, WorkflowStep, WorkflowTrace } from "@/lib/recordings/trace-schema";
+import { defaultToolsForToolkits } from "@/lib/integrations/composio/catalog";
 
 function step(index: number, overrides: Partial<WorkflowStep> = {}): WorkflowStep {
   return {
@@ -176,6 +177,45 @@ describe("flowModelToBundle", () => {
     assert.ok(bundle.blueprint.connectors?.some((c) => c.kind === "composio" ? c.enabledToolkits.includes("gmail") : c.id === "gmail"));
     assert.equal(scenarios.length, 1);
     assert.ok(warnings.some((w) => /log payment 1/.test(w)));
+  });
+
+  // T1 (2026-07-11 incident follow-up: DB row 32a12952-c2ec-468b-8636-
+  // 3aa5fd76ae7d, a supervised run whose only bound tool resolved to an
+  // empty allowlist, so it had zero real tools no matter what). A compiled
+  // agent gets no later discovery/picker step to fill `enabledTools` in —
+  // this binding IS its resting run state — so bindingForToolkit must seed
+  // the toolkit's curated default tools, never [].
+  test("a green-coverage composio toolkit compiles to a binding seeded with its curated default tools, never an empty allowlist", () => {
+    const model = baseModel();
+    const { bundle } = flowModelToBundle({
+      model,
+      recordings: [{ label: "Happy path", trace: baseTrace() }],
+    });
+    const gmail = bundle.blueprint.connectors?.find(
+      (c) => c.kind === "composio" && c.enabledToolkits.includes("gmail"),
+    );
+    assert.ok(gmail && gmail.kind === "composio");
+    assert.deepEqual(
+      (gmail as { enabledTools: string[] }).enabledTools,
+      defaultToolsForToolkits(["gmail"]),
+    );
+    assert.notDeepEqual((gmail as { enabledTools: string[] }).enabledTools, []);
+  });
+
+  test("a green-coverage postiz (vetted) step is unchanged — still an empty allowlist (no toolkit-default catalog for vetted connectors)", () => {
+    const model = baseModel({
+      coverage: [
+        { stepIndex: 0, tier: "green", toolkit: "postiz", reason: "matches postiz post" },
+        { stepIndex: 1, tier: "red", reason: "no tool binding" },
+      ],
+    });
+    const { bundle } = flowModelToBundle({
+      model,
+      recordings: [{ label: "Happy path", trace: baseTrace() }],
+    });
+    const postiz = bundle.blueprint.connectors?.find((c) => c.kind === "vetted" && c.id === "postiz");
+    assert.ok(postiz);
+    assert.deepEqual((postiz as { enabledTools: string[] }).enabledTools, []);
   });
 
   test("identity comes from the flow model, not the starter it fell through to", () => {

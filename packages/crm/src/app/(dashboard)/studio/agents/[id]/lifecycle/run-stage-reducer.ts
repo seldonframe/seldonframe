@@ -17,7 +17,21 @@ export type RunStageState =
 export type RunStageAction =
   | { type: "start_clicked" }
   | { type: "start_failed"; error: string }
-  | { type: "started"; runId: string; status: SupervisedRunStatus; actionLog: SupervisedRunActionEvent[] }
+  | {
+      type: "started";
+      runId: string;
+      status: SupervisedRunStatus;
+      actionLog: SupervisedRunActionEvent[];
+      /** F-E — the run's REAL summary when the server action already
+       *  resolved terminally (the common case: the turn finishes inside
+       *  startSupervisedRunAction's own request). Previously this action
+       *  had no summary field at all, and the reducer hardcoded `null` in
+       *  terminalOrRunning — silently discarding real evidence and always
+       *  falling back to "Run finished with no summary." even when a real
+       *  summary existed. `null` for the non-terminal (status:"running")
+       *  case, where it's unused. */
+      summary: string | null;
+    }
   /** F6, Wave 2 review — dispatched once on mount when the page loads with
    *  an already-`running` supervised_runs row (the operator navigated away
    *  and back mid-run): transitions idle straight to `running` so the
@@ -51,7 +65,7 @@ export function runStageReducer(state: RunStageState, action: RunStageAction): R
 
     case "started":
       if (state.status !== "starting") return state;
-      return terminalOrRunning(action.runId, action.status, action.actionLog, null);
+      return terminalOrRunning(action.runId, action.status, action.actionLog, action.summary);
 
     case "init_running":
       // Only meaningful on a fresh mount (idle) — never clobbers an

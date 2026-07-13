@@ -39,7 +39,7 @@ import { DeployButton } from "../deploy-button";
 import { DeployToClientsButton } from "../deploy-to-clients-button";
 import { TestButton } from "../test-button";
 import { isAgentLifecycleEnabled } from "@/lib/agents/lifecycle/policy";
-import { lifecycleGate } from "@/lib/agents/lifecycle/gate";
+import { lifecycleGate, hasActionableTools } from "@/lib/agents/lifecycle/gate";
 import { getLatestEvalRun } from "@/lib/agents/evals/eval-runs-store";
 import { supervisedRuns, type SupervisedRun } from "@/db/schema/agent-lifecycle";
 import { composioForOrg, listConnections } from "@/lib/integrations/composio/client";
@@ -58,13 +58,23 @@ import { LearnedStage } from "./lifecycle/learned-stage";
 import { VerifiedStage } from "./lifecycle/verified-stage";
 import { ConnectedStage, type RequiredToolkitView } from "./lifecycle/connected-stage";
 import { RunStage } from "./lifecycle/run-stage";
+import { derivePlannedActions, deriveRunVerdict } from "./lifecycle/run-plan";
 import { SellStage } from "./lifecycle/sell-stage";
+import { resolveLifecycleMode, resolveInitialStageId } from "./lifecycle/setup-mode";
+import { SetupModeShell } from "./lifecycle/setup-mode-shell";
+import { CelebrationScreen } from "./lifecycle/celebration-screen";
 
 export const dynamic = "force-dynamic";
 // Composio's SDK (lib/integrations/composio/client.ts, imported below for the
 // Connected stage) is a Node-runtime-only dependency — this page now
 // transitively imports it, so it must declare the Node runtime explicitly.
 export const runtime = "nodejs";
+// H2 hotfix (2026-07-11) — startSupervisedRunAction and runAgentEvalsAction
+// (both invoked from this page) defer their real work into `after()`,
+// which keeps the underlying function instance alive past the response.
+// 300s is Vercel's hard function ceiling; DEFAULT_TIMEOUT_MS (supervised
+// runs, 240s) and the eval harness both stay comfortably under it.
+export const maxDuration = 300;
 
 /** Org-scoped read of the most recent supervised_runs row for a template
  *  (any status — the Run stage shows the last attempt on revisit). */
@@ -384,7 +394,16 @@ export default async function AgentTemplatePage({
   const [gate, connections, latestRun, deployments, latestEvalRun] = await Promise.all([
     lifecycleGate(
       { getLatestEvalRun, hasSucceededSupervisedRun: hasSucceededSupervisedRunForTemplate },
-      { orgId, templateId: template.id },
+      {
+        orgId,
+        templateId: template.id,
+        // F-D: a tool-free (pure-chat) template is exempt from the
+        // supervised-run requirement — evals are still required.
+        hasActionableTools: hasActionableTools({
+          connectors: blueprint.connectors,
+          capabilities: blueprint.capabilities,
+        }),
+      },
     ),
     requiredToolkits.length > 0 && composioConfigured
       ? listConnections(orgId, { extraToolkits: requiredToolkits })
@@ -410,6 +429,7 @@ export default async function AgentTemplatePage({
     requiredToolkitCount: requiredToolkits.length,
     connectedToolkitCount: connectedCount,
     supervisedRunSucceeded: gate.supervisedRun,
+    supervisedRunExempt: gate.supervisedRunExempt,
     hasDeploymentOrListing,
   });
 
@@ -436,6 +456,7 @@ export default async function AgentTemplatePage({
     connectedToolkitCount: connectedCount,
     evalPassRate: latestEvalRun ? latestEvalRun.passRate : null,
     supervisedRunStatus: latestRun ? (latestRun.status as "running" | "succeeded" | "failed") : null,
+    supervisedRunExempt: gate.supervisedRunExempt,
     hasDeploymentOrListing,
     hasRecording: Boolean(recordingProvenance),
   });
@@ -480,6 +501,30 @@ export default async function AgentTemplatePage({
     />
   );
 
+  // Setup mode (spec §1): incomplete lifecycle -> the one-stage-per-screen
+  // wizard at the first incomplete stage; `?view=full` is the explicit
+  // escape hatch back to the compact home layout; every stage complete ->
+  // home mode is the only mode (nothing left to walk through). Both derive
+  // from the SAME `stages` array the accordion already uses — never a
+  // second source of truth for completion.
+  const lifecycleMode = resolveLifecycleMode({ stages, view: sp.view });
+  const initialStageId = resolveInitialStageId(sp.stage, stages);
+
+  // Celebration (T4, spec §3): fires ONLY on the DERIVED verified state —
+  // a REAL supervised-run success (never the tool-free exemption, never a
+  // button click) — and only while still in Setup mode. If Run just
+  // succeeded but the agent is ALSO fully complete otherwise (deployed or
+  // listed), resolveLifecycleMode has already flipped to home mode above,
+  // so this can only be true while the wizard is still open.
+  const isCelebratingRun = lifecycleMode === "setup" && gate.supervisedRun && !gate.supervisedRunExempt;
+  const runPlannedActions = derivePlannedActions({
+    connectors: blueprint.connectors,
+    scenarios: derivedScenarios,
+  });
+  const runActionLog = latestRun?.actionLog ?? [];
+  const runVerdict = deriveRunVerdict({ actionLog: runActionLog, plannedCount: runPlannedActions.length });
+  const runActionCount = runActionLog.filter((event) => event.status === "ok").length;
+
   const bodies: Record<LifecycleStageId, ReactNode> = {
     learned: (
       <>
@@ -506,7 +551,34 @@ export default async function AgentTemplatePage({
         composioConfigured={composioConfigured}
       />
     ),
-    run: <RunStage templateId={template.id} initialLastRun={latestRun} />,
+    // T4 (spec §3) — once the Run stage's completion is a REAL supervised-
+    // run success (never the tool-free exemption) AND the wizard is still
+    // open, its body becomes the terminal celebration screen instead of the
+    // run button — the wizard doesn't hand the operator a "done" checkmark
+    // and then keep marching them to Sell as a separate step; the
+    // celebration screen already embeds Sell + the share card.
+    run: isCelebratingRun ? (
+      <CelebrationScreen
+        templateId={template.id}
+        templateName={template.name}
+        agentType={template.type}
+        builderName={builderName}
+        initialListing={sellerListing}
+        initialConnect={sellerConnect}
+        evalPass={gate.evalPass}
+        supervisedRunSucceeded={gate.supervisedRun}
+        supervisedRunExempt={gate.supervisedRunExempt}
+        actionCount={runActionCount}
+        verdict={runVerdict}
+      />
+    ) : (
+      <RunStage
+        templateId={template.id}
+        initialLastRun={latestRun}
+        supervisedRunExempt={gate.supervisedRunExempt}
+        plannedActions={runPlannedActions}
+      />
+    ),
     sell: (
       <SellStage
         templateId={template.id}
@@ -517,10 +589,33 @@ export default async function AgentTemplatePage({
         initialConnect={sellerConnect}
         evalPass={gate.evalPass}
         supervisedRunSucceeded={gate.supervisedRun}
+        supervisedRunExempt={gate.supervisedRunExempt}
       />
     ),
   };
 
+  // Setup mode (spec §1): any stage incomplete -> the one-stage-per-screen
+  // wizard, landing on the validated `?stage=` param or the first
+  // incomplete stage. `?view=full` (handled inside resolveLifecycleMode)
+  // forces the compact home layout below regardless of completion.
+  if (lifecycleMode === "setup") {
+    return (
+      <SetupModeShell
+        templateId={template.id}
+        templateName={template.name}
+        templateStatus={template.status}
+        stages={stages}
+        summaries={summaries}
+        descriptions={descriptions}
+        bodies={bodies}
+        initialStageId={initialStageId}
+        noAutoAdvanceStageIds={isCelebratingRun ? ["run"] : []}
+      />
+    );
+  }
+
+  // Home mode: every stage complete (or `?view=full`) -> the existing
+  // compact one-page accordion, unchanged.
   return (
     <AgentLifecycleAccordion
       templateName={template.name}

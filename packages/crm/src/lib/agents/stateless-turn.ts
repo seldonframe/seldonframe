@@ -110,6 +110,19 @@ export type RunStatelessAgentTurnInput = {
    *  unaffected. Never throws into the loop — a callback error is caught
    *  and swallowed so a logging bug can never break a live agent turn. */
   onToolEvent?: (event: StatelessToolEvent) => void;
+  /** H1 hotfix (2026-07-11) — forwarded to getToolsForCapabilities: when
+   *  true, every wrapped connector (MCP/vetted/byo AND composio) tool
+   *  executes as a synthetic no-op instead of calling the real
+   *  toolkit/API. Distinct from `testMode` (which only sandboxes SF's own
+   *  native write tools) — the eval harness sets this true; supervised-run
+   *  and every other caller leave it unset (real connector execution,
+   *  unchanged). Default false/undefined. */
+  sandboxConnectors?: boolean;
+  /** Email-agent slice (Part A2) — the operator's sent-mail voice profile
+   *  (Brain note `voice-profiles/email.md`), for an email-channel event/
+   *  schedule run. The caller (a DB-coupled deps builder) resolves it, since
+   *  this module stays DB-free; absent/null → no-op, byte-for-byte unchanged. */
+  voiceProfileNote?: string | null;
 };
 
 /**
@@ -125,6 +138,63 @@ export type RunStatelessAgentTurnInput = {
  */
 export function toolFailureGloss(toolName: string): string {
   return `${toolName} failed`;
+}
+
+/** Common id-shaped field names, checked in order (F-F item 2 — the ACTION
+ *  lane's target/proof suffix). Best-effort, generic across tool shapes —
+ *  Composio result shapes vary by toolkit/action and aren't generically
+ *  introspectable beyond common conventions, so a toolkit whose result uses
+ *  an uncommon id field name simply gets no proof suffix (documented
+ *  limit, not a bug: the line still renders, just without the extra id). */
+const PROOF_FIELD_NAMES = [
+  "id",
+  "messageId",
+  "message_id",
+  "threadId",
+  "thread_id",
+  "eventId",
+  "event_id",
+  "recordId",
+  "record_id",
+  "bookingId",
+  "booking_id",
+  "uid",
+];
+
+/** A short id-like string can be at most this long to count as a "proof" —
+ *  guards against an id-named field actually smuggling a body/blob through
+ *  (the summarized/no-secrets rule — never a raw payload in the durable,
+ *  operator-visible action log). */
+const MAX_PROOF_LENGTH = 64;
+
+/**
+ * Extract a cheap, short target/proof id from a tool's raw result, for the
+ * supervised run's ACTION lane ("Sent — GMAIL_SEND_EMAIL_id: abc123").
+ * Shallow (top-level fields only), never recurses into nested objects, and
+ * only ever returns a short existing string — never a number coerced to
+ * string, never an object, never anything long enough to be a body rather
+ * than an id. Pure; never throws. Returns `undefined` when nothing
+ * id-shaped is found (the line still renders without a suffix).
+ */
+export function extractToolProof(output: unknown): string | undefined {
+  if (output == null || typeof output !== "object" || Array.isArray(output)) return undefined;
+  const record = output as Record<string, unknown>;
+  for (const field of PROOF_FIELD_NAMES) {
+    const value = record[field];
+    if (
+      typeof value === "string" &&
+      value.trim().length > 0 &&
+      value.length <= MAX_PROOF_LENGTH &&
+      // An id-named field carrying an email address or embedded whitespace
+      // is smuggling PII/free text through an "id" field, not a real short
+      // id — reject it rather than surface it in the operator-visible log.
+      !value.includes("@") &&
+      !/\s/.test(value)
+    ) {
+      return value.trim();
+    }
+  }
+  return undefined;
 }
 
 /** Fires `onToolEvent` if provided, swallowing any error the callback
@@ -187,6 +257,7 @@ export async function runStatelessAgentTurn(
     testMode: input.testMode,
     now: input.now ?? new Date(),
     timezone: input.timezone || "UTC",
+    voiceProfileNote: input.voiceProfileNote,
   });
 
   // Same seam as production: native (capability-filtered) tools plus any MCP
@@ -197,6 +268,7 @@ export async function runStatelessAgentTurn(
   const tools = await getToolsForCapabilities(input.blueprint.capabilities, {
     orgId: input.orgId,
     connectors: input.blueprint.connectors,
+    sandboxConnectors: input.sandboxConnectors,
   });
 
   // Seed the messages array from the plain-text chat history.
@@ -350,7 +422,16 @@ export async function runStatelessAgentTurn(
           tool_use_id: tu.id,
           content: JSON.stringify(output ?? null),
         });
-        emitToolEvent(input.onToolEvent, { tool: tu.name, phase: "result", ok: true, line: `${tu.name} succeeded.` });
+        // F-F item 2 — a short target/proof suffix when the result has a
+        // cheap id field (never the raw payload; extractToolProof caps
+        // length and only reads top-level string fields).
+        const proof = extractToolProof(output);
+        emitToolEvent(input.onToolEvent, {
+          tool: tu.name,
+          phase: "result",
+          ok: true,
+          line: proof ? `${tu.name} succeeded (${proof}).` : `${tu.name} succeeded.`,
+        });
       } catch (err) {
         const message = err instanceof Error ? err.message : String(err);
         // The raw `message` stays ONLY in this non-persisted tool_result

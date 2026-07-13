@@ -51,6 +51,7 @@ import type { CalendarBinding } from "@/lib/agents/booking/calendar-backend";
 import type { BookingPolicy } from "@/lib/agents/booking/booking-policy";
 import { bindingToCtxBooking } from "@/lib/agents/booking/binding-ctx";
 import { captureLlmGeneration } from "@/lib/analytics/llm-capture";
+import { VOICE_PROFILE_NOTE_PATH } from "@/lib/agents/voice-profile/ingest-sent-mail";
 
 const MODEL = process.env.ANTHROPIC_AGENT_MODEL?.trim() || "claude-sonnet-4-5-20250929";
 const MAX_TURN_ITERATIONS = 6; // tool-call cap per single turn (catches loops)
@@ -256,6 +257,30 @@ export async function executeTurn(input: {
     soul: baseSoul,
     persona: input.persona ?? null,
   });
+  // Email-agent slice (Part A2) — for an email-channel agent, read the
+  // operator's sent-mail voice profile by EXACT path (no widening of the
+  // generic brain-notes recall) and splice it as its own prompt section. A
+  // missing note (never ingested yet) or a read error is a no-op — this must
+  // never block a turn. One indexed readBrainNote call, only for email.
+  let voiceProfileNote: string | null = null;
+  if (agent.channel === "email") {
+    try {
+      const { readBrainNote } = await import("@/lib/brain/store");
+      const note = await readBrainNote({
+        orgId: agent.orgId,
+        scope: "workspace",
+        path: VOICE_PROFILE_NOTE_PATH,
+      });
+      voiceProfileNote = note?.body ?? null;
+    } catch (err) {
+      console.warn(
+        `[runtime] voice-profile note read failed for org ${agent.orgId}:`,
+        err instanceof Error ? err.message : String(err),
+      );
+      voiceProfileNote = null;
+    }
+  }
+
   const systemPrompt = await composeSystemPrompt({
     orgName: orgRow.name,
     soul: personaSoul,
@@ -269,6 +294,7 @@ export async function executeTurn(input: {
     timezone: orgRow.timezone ?? "UTC",
     // Per-deployment opener (P2) — null on the workspace path → no opener section.
     greetingPrefix,
+    voiceProfileNote,
   });
   // The seam: native (capability-filtered) tools PLUS any bound MCP connector
   // tools (blueprint.connectors), wrapped to look native. With no connectors

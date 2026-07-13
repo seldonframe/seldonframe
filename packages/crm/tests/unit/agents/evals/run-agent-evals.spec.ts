@@ -290,6 +290,7 @@ describe("makeStatelessAgentReply — maps turns → stateless history + returns
     const captured: Array<{
       messages: Array<{ role: string; content: string }>;
       testMode: boolean;
+      sandboxConnectors?: boolean;
     }> = [];
     const reply = makeStatelessAgentReply({
       orgId: "org-1",
@@ -298,7 +299,11 @@ describe("makeStatelessAgentReply — maps turns → stateless history + returns
       blueprint: BLUEPRINT,
       client: {} as never,
       runTurn: async (input) => {
-        captured.push({ messages: input.messages, testMode: input.testMode });
+        captured.push({
+          messages: input.messages,
+          testMode: input.testMode,
+          sandboxConnectors: (input as { sandboxConnectors?: boolean }).sandboxConnectors,
+        });
         return { ok: true, reply: "Sure — what's your address?", toolCalls: [] };
       },
     });
@@ -321,6 +326,14 @@ describe("makeStatelessAgentReply — maps turns → stateless history + returns
     ]);
     // Sandboxed by construction — money-safe.
     assert.equal(captured[0].testMode, true, "the agent runs in testMode (no real writes)");
+    // H1 hotfix — testMode alone never sandboxed connector tools; the
+    // adapter must additionally set sandboxConnectors so a bound
+    // Composio/MCP tool can't touch a real inbox during an eval.
+    assert.equal(
+      captured[0].sandboxConnectors,
+      true,
+      "the eval adapter sandboxes connector tools too — money-safe for bound Composio/MCP tools",
+    );
   });
 
   test("a degraded turn ({ ok:false }) → { text:'' } fail-soft (no throw)", async () => {

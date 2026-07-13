@@ -10,16 +10,25 @@
 // Mirrors the test sandbox's BYOK handling: running evals is unbounded-COGS build
 // work, so on no_llm_key it shows the same actionable "add your key" prompt linking
 // to Settings (the first workspace stays free; building/testing agents needs a key).
+//
+// H2 hotfix (2026-07-11) — runAgentEvalsAction now returns a jobId
+// IMMEDIATELY (the real work runs out-of-request via after()); this island
+// polls getEvalRunJobAction ~2s until the job resolves. "running" here means
+// "waiting on the poll", not "the request is pending" — the rotating button
+// copy now spans the real wait instead of a synchronous await.
 
-import { useEffect, useState, useTransition } from "react";
-import Link from "next/link";
+import { useEffect, useRef, useState, useTransition } from "react";
 import { ClipboardCheck } from "lucide-react";
 import {
   runAgentEvalsAction,
-  type RunAgentEvalsActionResult,
+  getEvalRunJobAction,
+  type RunAgentEvalsOk,
 } from "@/lib/agent-templates/eval-actions";
+import { LlmKeyDialog } from "@/components/integrations/llm-key-dialog";
 
-type Ok = Extract<RunAgentEvalsActionResult, { ok: true }>;
+type Ok = RunAgentEvalsOk;
+
+const POLL_MS = 2000;
 
 // T5 (Max: "takes too much time") — rotating status copy on the button while
 // evals run, so the several-seconds LLM round trip (author scenarios, chat
@@ -35,10 +44,21 @@ const RUN_EVALS_STATUS_MESSAGES = [
 const RUN_EVALS_STATUS_INTERVAL_MS = 2500;
 
 export function RunEvalsCard({ templateId }: { templateId: string }) {
-  const [running, startRun] = useTransition();
+  const [, startStart] = useTransition();
+  const [running, setRunning] = useState(false);
   const [result, setResult] = useState<Ok | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [needsKey, setNeedsKey] = useState(false);
+  // In-place BYOK modal (record-v3 S4a) — replaces the needs_byok Link to
+  // /settings/integrations/llm. onSaved re-runs the same run() call.
+  const [keyDialogOpen, setKeyDialogOpen] = useState(false);
+  const pollTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+
+  useEffect(() => {
+    return () => {
+      if (pollTimerRef.current) clearTimeout(pollTimerRef.current);
+    };
+  }, []);
 
   // Rotating loader copy index for the "Run evals" button. Resets to 0 when
   // a run starts, advances on an interval while pending, and clears the
@@ -54,29 +74,52 @@ export function RunEvalsCard({ templateId }: { templateId: string }) {
     return () => clearInterval(id);
   }, [running]);
 
+  const pollJob = (jobId: string) => {
+    pollTimerRef.current = setTimeout(async () => {
+      const job = await getEvalRunJobAction(jobId);
+      if (!job.ok) {
+        setError("Couldn't check the run's status. Try again.");
+        setRunning(false);
+        return;
+      }
+      if (job.status === "running") {
+        pollJob(jobId);
+        return;
+      }
+      setRunning(false);
+      if (job.status === "succeeded" && job.result) {
+        setResult(job.result);
+      } else {
+        setError(job.error ?? "The eval run failed. Try again.");
+      }
+    }, POLL_MS);
+  };
+
   const run = () => {
     setError(null);
     setNeedsKey(false);
-    startRun(async () => {
+    setResult(null);
+    setRunning(true);
+    startStart(async () => {
       try {
         const res = await runAgentEvalsAction(templateId);
         if (res.ok) {
-          setResult(res);
+          pollJob(res.jobId);
         } else if (res.error === "no_llm_key") {
           setNeedsKey(true);
-          setResult(null);
+          setRunning(false);
         } else {
           setError(
             res.message ??
               `Couldn't run evals (${res.error}). Try again in a moment.`,
           );
-          setResult(null);
+          setRunning(false);
         }
       } catch (err) {
         setError(
           `Connection error: ${err instanceof Error ? err.message : String(err)}`,
         );
-        setResult(null);
+        setRunning(false);
       }
     });
   };
@@ -130,14 +173,17 @@ export function RunEvalsCard({ templateId }: { templateId: string }) {
               your own agents runs on your Anthropic key.
             </p>
           </div>
-          <Link
-            href="/settings/integrations/llm"
+          <button
+            type="button"
+            onClick={() => setKeyDialogOpen(true)}
             className="shrink-0 rounded-md border border-current/30 px-3 py-1 text-xs font-medium hover:bg-current/10"
           >
             Add your key &rarr;
-          </Link>
+          </button>
         </div>
       )}
+
+      <LlmKeyDialog open={keyDialogOpen} onOpenChange={setKeyDialogOpen} onSaved={run} />
 
       {error && (
         <p className="rounded-lg bg-rose-50 px-3 py-2 text-[13px] text-rose-700 dark:bg-rose-950/40 dark:text-rose-300">

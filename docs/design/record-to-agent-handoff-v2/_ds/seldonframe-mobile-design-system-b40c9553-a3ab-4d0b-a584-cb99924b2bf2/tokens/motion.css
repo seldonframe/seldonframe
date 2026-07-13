@@ -1,0 +1,31 @@
+/* ─────────────────────────────────────────────────────────────
+   SeldonFrame — Motion
+   Restrained, delightful. One spring-like ease for almost
+   everything; a softer ease for sheets. Respect reduced motion.
+   ───────────────────────────────────────────────────────────── */
+
+:root {
+  /* Easings. ease-out = default settle · spring = sheet/card pop · in-out = calendar swap */
+  --ease-out:    cubic-bezier(0.22, 1, 0.36, 1); /* @kind other */
+  --ease-spring: cubic-bezier(0.34, 1.4, 0.5, 1); /* @kind other */
+  --ease-in-out: cubic-bezier(0.65, 0, 0.35, 1); /* @kind other */
+
+  /* Durations: taps · transitions · sheets · list stagger */
+  --dur-fast:    120ms; /* @kind other */
+  --dur-normal:  200ms; /* @kind other */
+  --dur-slow:    300ms; /* @kind other */
+  --dur-stagger:  40ms; /* @kind other */
+
+  /* Press feedback */
+  --press-scale: 0.97; /* @kind other */
+  --card-press-scale: 0.985; /* @kind other */
+}
+
+@media (prefers-reduced-motion: reduce) {
+  :root {
+    --dur-fast: 1ms; /* @kind other */
+    --dur-normal: 1ms; /* @kind other */
+    --dur-slow: 1ms; /* @kind other */
+    --dur-stagger: 0ms; /* @kind other */
+  }
+}

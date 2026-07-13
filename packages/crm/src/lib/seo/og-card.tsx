@@ -375,6 +375,66 @@ export function ToolCard({ name, hook }: { name: string; hook: string }): ReactE
   );
 }
 
+const AGENT_SHARE_NAME_MAX = 40;
+const AGENT_SHARE_STEP_MAX = 28;
+const AGENT_SHARE_STEP_CAP = 4;
+
+/** kind=agent-share — the static PNG variant of the celebration screen's
+ *  share card (agent setup mode slice, T5). `steps` is the pipe-separated,
+ *  ALREADY-SCRUBBED step-label string the public /a/[slug] page's metadata
+ *  builds from its own DB read — this route never queries the DB itself,
+ *  same convention as every other card here (clamped string params only). */
+export function AgentShareCard({ name, steps }: { name: string; steps: string }): ReactElement {
+  const safeName = clampEllipsis(name, AGENT_SHARE_NAME_MAX) || "An agent";
+  const stepList = steps
+    .split("|")
+    .map((s) => clampEllipsis(s, AGENT_SHARE_STEP_MAX))
+    .filter(Boolean)
+    .slice(0, AGENT_SHARE_STEP_CAP);
+
+  return (
+    <CardFrame background={OG_COLORS.dark} texture>
+      <BrandMark onDark />
+      <div style={{ display: "flex", flexDirection: "column", gap: 24 }}>
+        <div style={{ display: "flex", fontSize: 64, fontWeight: 800, fontFamily: "Inter-ExtraBold", color: OG_COLORS.paper, lineHeight: 1.1 }}>
+          {`${safeName} — built with SeldonFrame`}
+        </div>
+        {stepList.length > 0 ? (
+          <div style={{ display: "flex", flexWrap: "wrap", gap: 16 }}>
+            {stepList.map((step, i) => (
+              <div key={i} style={{ display: "flex", alignItems: "center", gap: 16 }}>
+                <div
+                  style={{
+                    display: "flex",
+                    alignItems: "center",
+                    padding: "12px 22px",
+                    borderRadius: 12,
+                    backgroundColor: "#1c2230",
+                    border: "2px solid #3a4256",
+                    fontSize: 26,
+                    fontWeight: 700,
+                    fontFamily: "Inter-Bold",
+                    color: OG_COLORS.paper,
+                  }}
+                >
+                  {step}
+                </div>
+                {i < stepList.length - 1 ? (
+                  <div style={{ display: "flex", fontSize: 30, color: OG_COLORS.green }}>{"→"}</div>
+                ) : null}
+              </div>
+            ))}
+          </div>
+        ) : null}
+      </div>
+      <div style={{ display: "flex", flexDirection: "column", gap: 24 }}>
+        <Pill filled onDark>{"Built from a screen recording"}</Pill>
+        <AccentBar />
+      </div>
+    </CardFrame>
+  );
+}
+
 /** kind=default (unknown/fallback) — generic brand card, still HTTP 200. */
 export function DefaultCard(): ReactElement {
   return (

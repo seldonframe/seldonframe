@@ -75,6 +75,32 @@ test("defaultToolsForToolkits([]) is empty", () => {
   assert.deepEqual(defaultToolsForToolkits([]), []);
 });
 
+// Recorded inbox-triage flows (auto-label, archive, mark read, move) compile
+// to agents whose binding wraps EXACTLY these defaults — pin the triage
+// actions so a future trim can't silently strand those agents toolless.
+test("gmail defaults include the inbox-triage label actions", () => {
+  const tools = defaultToolsForToolkits(["gmail"]);
+  for (const slug of [
+    "GMAIL_ADD_LABEL_TO_EMAIL",
+    "GMAIL_MODIFY_THREAD_LABELS",
+    "GMAIL_LIST_LABELS",
+    "GMAIL_CREATE_LABEL",
+  ]) {
+    assert.ok(tools.includes(slug), `gmail defaults missing ${slug}`);
+  }
+});
+
+test("outlook defaults include the inbox-triage folder/move/update actions", () => {
+  const tools = defaultToolsForToolkits(["outlook"]);
+  for (const slug of [
+    "OUTLOOK_LIST_MAIL_FOLDERS",
+    "OUTLOOK_BATCH_MOVE_MESSAGES",
+    "OUTLOOK_UPDATE_EMAIL_MESSAGE",
+  ]) {
+    assert.ok(tools.includes(slug), `outlook defaults missing ${slug}`);
+  }
+});
+
 // ─── mapToolkitConnections (pure) ─────────────────────────────────────────────
 
 test("maps a connected toolkit to connected=true + accountId", () => {

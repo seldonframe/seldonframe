@@ -12,8 +12,19 @@ import { agentTemplates, organizations } from "@/db/schema";
 import type { AgentBlueprint } from "@/db/schema/agents";
 import { getOrgId } from "@/lib/auth/helpers";
 import { assertWritable } from "@/lib/demo/server";
-import { createDeployment, updateDeployment } from "@/lib/deployments/store";
+import {
+  createDeployment,
+  updateDeployment,
+  getDeploymentOrgAndTemplate,
+  stampDeploymentTriggerUpgraded,
+  countDeploymentsForTemplate,
+} from "@/lib/deployments/store";
 import { deployToSelfCore, type DeployToSelfDeps } from "@/lib/agents/lifecycle/deploy-to-self";
+import { ingestSentMailVoiceProfile } from "@/lib/agents/voice-profile/ingest-sent-mail";
+import { buildVoiceIngestDeps } from "@/lib/agents/voice-profile/build-deps";
+import { maybeUpgradeInboxTriggerToPush } from "@/lib/deployments/upgrade-inbox-trigger";
+import { getAgentTemplate, updateAgentTemplate } from "@/lib/agent-templates/store";
+import { createTrigger, listConnections } from "@/lib/integrations/composio/client";
 
 export type DeployToSelfActionResult =
   | { ok: true; deploymentId: string; active: boolean; triggerSentence: string }
@@ -56,6 +67,45 @@ export async function deployToSelfAction(templateId: string): Promise<DeployToSe
       const result = await updateDeployment({ id: deploymentId, patch: { status: "active" } });
       return { ok: result.ok };
     },
+    // Email-agent slice (Part A3) — best-effort voice-profile ingestion,
+    // fired only for an email+gmail deploy (deployToSelfCore's own gate).
+    // Never blocks/fails the deploy — deployToSelfCore already wraps the
+    // call in try/catch.
+    ingestVoiceProfile: async ({ orgId: ingestOrgId }) => {
+      await ingestSentMailVoiceProfile(buildVoiceIngestDeps(ingestOrgId), {
+        orgId: ingestOrgId,
+      });
+    },
+    // Email-agent slice (Part B2) — best-effort poll->push upgrade. The
+    // module itself checks ALL conditions; deployToSelfCore already wraps
+    // this call in try/catch, so a failure here never fails the deploy.
+    maybeUpgradeInboxTrigger: async ({ orgId: upgradeOrgId, deploymentId }) =>
+      maybeUpgradeInboxTriggerToPush(
+        {
+          getDeployment: getDeploymentOrgAndTemplate,
+          getTemplateBlueprint: async (agentTemplateId) => {
+            const tmpl = await getAgentTemplate(agentTemplateId);
+            return (tmpl?.blueprint ?? null) as AgentBlueprint | null;
+          },
+          countDeploymentsForTemplate,
+          hasWebhookSecret: () => Boolean(process.env.COMPOSIO_WEBHOOK_SECRET?.trim()),
+          isGmailConnected: async (checkOrgId) => {
+            const connections = await listConnections(checkOrgId);
+            return connections.some((c) => c.slug === "gmail" && c.connected);
+          },
+          createTrigger: (triggerOrgId) =>
+            createTrigger(triggerOrgId, "GMAIL_NEW_GMAIL_MESSAGE"),
+          updateTemplateTrigger: async (agentTemplateId, trigger) => {
+            const updated = await updateAgentTemplate({
+              id: agentTemplateId,
+              patch: { trigger },
+            });
+            if (!updated.ok) throw new Error(updated.error);
+          },
+          stampUpgraded: stampDeploymentTriggerUpgraded,
+        },
+        { orgId: upgradeOrgId, deploymentId },
+      ),
   };
 
   const result = await deployToSelfCore(deps, {

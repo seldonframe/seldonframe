@@ -78,11 +78,21 @@ const SaveSchema = z.object({
   apiKey: z.string().min(10).max(500),
 });
 
-export async function saveLlmKeyAction(formData: FormData): Promise<void> {
+export type SaveLlmKeyResult = { ok: true; provider: "anthropic" | "openai" } | { ok: false; error: string };
+
+/**
+ * Shared validate-encrypt-persist path for a BYOK save. Returns a result
+ * object rather than redirecting — callers decide navigation. Used by both
+ * `saveLlmKeyAction` (the /settings page — redirects) and
+ * `saveLlmKeyInPlaceAction` (the in-place modal — never navigates, see
+ * llm-key-dialog.tsx's header comment / record-v3 spec bug #6: the operator
+ * must never be bounced off the page they were on to add a key).
+ */
+async function persistLlmKey(formData: FormData): Promise<SaveLlmKeyResult> {
   assertWritable();
   const orgId = await getOrgId();
   if (!orgId) {
-    redirect("/login");
+    return { ok: false, error: "You must be signed in to save a key." };
   }
 
   const parsed = SaveSchema.safeParse({
@@ -90,9 +100,7 @@ export async function saveLlmKeyAction(formData: FormData): Promise<void> {
     apiKey: (formData.get("apiKey") as string | null)?.trim() ?? "",
   });
   if (!parsed.success) {
-    redirect(
-      `/settings/integrations/llm?error=${encodeURIComponent(parsed.error.message.slice(0, 100))}`,
-    );
+    return { ok: false, error: parsed.error.message.slice(0, 200) };
   }
 
   const { provider, apiKey } = parsed.data;
@@ -100,23 +108,20 @@ export async function saveLlmKeyAction(formData: FormData): Promise<void> {
   // Provider-specific key shape sanity check (best-effort — Anthropic
   // keys start with sk-ant-, OpenAI keys start with sk-).
   if (provider === "anthropic" && !apiKey.startsWith("sk-ant-")) {
-    redirect(
-      `/settings/integrations/llm?error=${encodeURIComponent("Anthropic keys start with sk-ant-")}`,
-    );
+    return { ok: false, error: "Anthropic keys start with sk-ant-" };
   }
   if (provider === "openai" && !apiKey.startsWith("sk-")) {
-    redirect(
-      `/settings/integrations/llm?error=${encodeURIComponent("OpenAI keys start with sk-")}`,
-    );
+    return { ok: false, error: "OpenAI keys start with sk-" };
   }
 
   let encryptedKey: string;
   try {
     encryptedKey = encryptValue(apiKey);
   } catch {
-    redirect(
-      `/settings/integrations/llm?error=${encodeURIComponent("Encryption unavailable. Set ENCRYPTION_KEY env var on the deployment.")}`,
-    );
+    return {
+      ok: false,
+      error: "Encryption unavailable. Set ENCRYPTION_KEY env var on the deployment.",
+    };
   }
 
   const [orgRow] = await db
@@ -144,7 +149,30 @@ export async function saveLlmKeyAction(formData: FormData): Promise<void> {
     .set({ integrations: next, updatedAt: new Date() })
     .where(eq(organizations.id, orgId));
 
-  redirect(`/settings/integrations/llm?saved=${provider}`);
+  return { ok: true, provider };
+}
+
+export async function saveLlmKeyAction(formData: FormData): Promise<void> {
+  const result = await persistLlmKey(formData);
+  if (!result.ok) {
+    if (result.error === "You must be signed in to save a key.") {
+      redirect("/login");
+    }
+    redirect(`/settings/integrations/llm?error=${encodeURIComponent(result.error)}`);
+  }
+  redirect(`/settings/integrations/llm?saved=${result.provider}`);
+}
+
+/**
+ * In-place variant for LlmKeyDialog (record-v3 S4a) — same validation +
+ * encryption + persistence as saveLlmKeyAction, but returns a result object
+ * instead of ever calling redirect(). Any caller that needs to stay on the
+ * current page (studio editor, test sandbox, run-evals, the /record recap)
+ * must use this, never saveLlmKeyAction, whose redirect would navigate the
+ * browser to /settings/integrations/llm out from under the modal.
+ */
+export async function saveLlmKeyInPlaceAction(formData: FormData): Promise<SaveLlmKeyResult> {
+  return persistLlmKey(formData);
 }
 
 const RemoveSchema = z.object({

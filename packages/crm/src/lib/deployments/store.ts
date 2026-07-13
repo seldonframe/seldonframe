@@ -1382,6 +1382,444 @@ export async function markDeploymentScheduleFired(
     .where(eq(deployments.id, deploymentId));
 }
 
+// ─── composio event -> deployment dispatch (email-agent slice, Part B1) ────
+//
+// Data layer for dispatchComposioEventToDeployments (lib/deployments/
+// composio-event-dispatch.ts). Mirrors listScheduledAgentDeployments's shape
+// (lazy DB import, org-scoped, resolveAgentTrigger-filtered) but for
+// `kind:"event"` triggers, and org-scoped to the ONE org the webhook resolved
+// (data._composio.orgId) rather than a global scan.
+
+/** The reserved customization jsonb key holding the last-N processed Gmail
+ *  messageIds per deployment (the idempotency guard for a webhook
+ *  redelivery). Mirrors SCHEDULE_LAST_FIRED_KEY's no-migration pattern. */
+export const COMPOSIO_PROCESSED_MESSAGE_IDS_KEY = "_composioProcessedMessageIds";
+
+/** Cap on how many recent messageIds we remember per deployment (bounded
+ *  jsonb growth — a redelivery race is only plausible for a very recent
+ *  message, not one from weeks ago). */
+const MAX_PROCESSED_MESSAGE_IDS = 20;
+
+/**
+ * List the ACTIVE deployments belonging to `orgId` (clientOrgId OR
+ * builderOrgId — the self-deploy path sets both to the same org) whose
+ * template's resolved trigger is `{kind:"event", event: eventType}`. Returns
+ * the shape dispatchComposioEventToDeployments consumes. Lazy DB import; DI'd
+ * in unit tests via the orchestrator's `listMatchingDeployments`.
+ */
+export async function listComposioEventDeploymentsForOrg(
+  orgId: string,
+  eventType: string,
+): Promise<import("@/lib/deployments/composio-event-dispatch").ComposioEventDeploymentMatch[]> {
+  if (!orgId) return [];
+  const { db } = await import("@/db");
+  const { deployments } = await import("@/db/schema/deployments");
+  const { agentTemplates } = await import("@/db/schema/agent-templates");
+  const { resolveAgentTrigger } = await import("@/lib/agents/triggers/agent-trigger");
+  const { and, eq, or } = await import("drizzle-orm");
+
+  const rows = await db
+    .select({
+      deploymentId: deployments.id,
+      builderOrgId: deployments.builderOrgId,
+      clientOrgId: deployments.clientOrgId,
+      agentTemplateId: deployments.agentTemplateId,
+      templateType: agentTemplates.type,
+      templateBlueprint: agentTemplates.blueprint,
+    })
+    .from(deployments)
+    .innerJoin(agentTemplates, eq(deployments.agentTemplateId, agentTemplates.id))
+    .where(
+      and(
+        eq(deployments.status, "active"),
+        or(eq(deployments.clientOrgId, orgId), eq(deployments.builderOrgId, orgId)),
+      ),
+    );
+
+  const out: import("@/lib/deployments/composio-event-dispatch").ComposioEventDeploymentMatch[] = [];
+  for (const r of rows) {
+    const blueprint = (r.templateBlueprint ?? {}) as Parameters<typeof resolveAgentTrigger>[0] & {
+      trigger?: unknown;
+    };
+    const trigger = resolveAgentTrigger(
+      blueprint.trigger as Parameters<typeof resolveAgentTrigger>[0],
+      r.templateType,
+    );
+    if (trigger.kind !== "event" || trigger.event !== eventType) continue;
+
+    out.push({
+      deploymentId: r.deploymentId,
+      orgId: r.clientOrgId ?? r.builderOrgId,
+      agentKey: r.agentTemplateId,
+      channel: trigger.channel,
+      blueprint: (r.templateBlueprint ?? {}) as import("@/db/schema/agents").AgentBlueprint,
+    });
+  }
+  return out;
+}
+
+/** The reserved customization jsonb key holding `{date, count}` — the
+ *  per-deployment daily push-run counter (verify-gate FIX 1: an unbounded
+ *  mail flood must never translate into unbounded LLM spend). */
+export const COMPOSIO_PUSH_RUN_COUNT_KEY = "_composioPushRunCount";
+
+/** Default daily cap on push-triggered agentic runs per deployment. A small,
+ *  deliberately generous constant — this is a circuit breaker against a
+ *  runaway flood, not a product limit. */
+export const DEFAULT_PUSH_RUN_DAILY_CAP = 200;
+
+/** `YYYY-MM-DD` (UTC) — the cap resets per calendar day. Precision to the
+ *  workspace's local timezone is not worth the extra read for a circuit
+ *  breaker; UTC is a stable, cheap boundary. */
+function todayUtcDateKey(): string {
+  return new Date().toISOString().slice(0, 10);
+}
+
+/**
+ * Best-effort READ-ONLY diagnosis of WHY an atomic claim's UPDATE returned no
+ * row — "not_found", "already_processed", "capped", or "org_mismatch". This
+ * is ONLY for accurate structured logging (composio-event-dispatch.ts logs
+ * `push_run_capped` specifically when the cap is the cause) — it is NEVER
+ * the gate itself (the atomic UPDATE above already decided pass/fail; this
+ * runs strictly AFTER, on the failure path only). A stale read here can at
+ * worst mislabel a log line, never affect correctness. Never throws — an
+ * error here degrades to a generic "skipped" reason.
+ */
+async function diagnoseClaimFailure(
+  deploymentId: string,
+  orgId: string,
+  messageId: string | null,
+  capPerDay: number,
+  today: string,
+): Promise<string> {
+  try {
+    const { db } = await import("@/db");
+    const { deployments } = await import("@/db/schema/deployments");
+    const { eq } = await import("drizzle-orm");
+
+    const [row] = await db
+      .select({
+        customization: deployments.customization,
+        clientOrgId: deployments.clientOrgId,
+        builderOrgId: deployments.builderOrgId,
+      })
+      .from(deployments)
+      .where(eq(deployments.id, deploymentId))
+      .limit(1);
+
+    if (!row) return "not_found";
+    if (row.clientOrgId !== orgId && row.builderOrgId !== orgId) return "org_mismatch";
+
+    const customization = (row.customization ?? {}) as Record<string, unknown>;
+    const counter = customization[COMPOSIO_PUSH_RUN_COUNT_KEY] as
+      | { date?: unknown; count?: unknown }
+      | undefined;
+    const capped =
+      counter?.date === today &&
+      typeof counter.count === "number" &&
+      counter.count >= capPerDay;
+    if (capped) return "capped";
+
+    if (messageId) {
+      const ids = customization[COMPOSIO_PROCESSED_MESSAGE_IDS_KEY];
+      if (Array.isArray(ids) && ids.includes(messageId)) return "already_processed";
+    }
+
+    // Row exists, org matches, not capped, not deduped — most likely a
+    // benign race with a concurrent claim. Generic label.
+    return "concurrent_claim";
+  } catch {
+    return "unknown";
+  }
+}
+
+/**
+ * Atomically CLAIM a push-triggered run for (deploymentId, messageId) in ONE
+ * statement — verify-gate FIX 2 + FIX 1 combined:
+ *
+ *   - FIX 2 (dedupe, no TOCTOU): the claim + the append to the processed-ids
+ *     list happen in the SAME UPDATE's WHERE/SET, so two overlapping webhook
+ *     redeliveries can't both read "not yet processed" and both run — only
+ *     the row that successfully updates (RETURNING id) is granted the claim.
+ *   - FIX 1 (run cap): the SAME statement also gates + increments a
+ *     per-deployment daily run counter (`_composioPushRunCount`), so a mail
+ *     flood can't drive unbounded LLM spend even without a messageId to
+ *     dedupe on.
+ *
+ * `messageId` is optional (payload didn't carry one — still gated by the
+ * cap, just not deduped: the caller logs this as a defensive fallback, see
+ * composio-event-dispatch.ts). Every path is a BOUND parameter — the
+ * `ARRAY[...]::text[]` jsonb_set path is a literal we control, never
+ * interpolated from caller input; no `sql.raw` anywhere.
+ *
+ * Returns `{claimed:true}` when this call may proceed to run; `{claimed:
+ * false, reason}` when the row wasn't found / org mismatch / already
+ * processed / cap exceeded. Never throws — a query error fails CLOSED
+ * (`claimed:false`, the safe direction for a money-spend gate).
+ */
+export async function claimComposioPushRun(
+  deploymentId: string,
+  orgId: string,
+  messageId: string | null,
+  opts?: { capPerDay?: number },
+): Promise<{ claimed: true } | { claimed: false; reason: string }> {
+  if (!deploymentId || !orgId) return { claimed: false, reason: "missing_ids" };
+  const capPerDay = opts?.capPerDay ?? DEFAULT_PUSH_RUN_DAILY_CAP;
+  const today = todayUtcDateKey();
+
+  try {
+    const { db } = await import("@/db");
+    const { deployments } = await import("@/db/schema/deployments");
+    const { and, eq, or, sql } = await import("drizzle-orm");
+
+    // The run-counter SET clause: reset to {date: today, count: 1} when the
+    // stored date isn't today, else increment. Shared by both branches below.
+    const nextCountJson = sql`
+      jsonb_build_object(
+        'date', ${today}::text,
+        'count',
+        CASE
+          WHEN (${deployments.customization} -> ${COMPOSIO_PUSH_RUN_COUNT_KEY} ->> 'date') = ${today}::text
+          THEN COALESCE((${deployments.customization} -> ${COMPOSIO_PUSH_RUN_COUNT_KEY} ->> 'count')::int, 0) + 1
+          ELSE 1
+        END
+      )
+    `;
+    // The cap gate: allow when the stored date isn't today (fresh window) OR
+    // today's count is still under the cap.
+    const underCap = sql`
+      (
+        (${deployments.customization} -> ${COMPOSIO_PUSH_RUN_COUNT_KEY} ->> 'date') IS DISTINCT FROM ${today}::text
+        OR COALESCE((${deployments.customization} -> ${COMPOSIO_PUSH_RUN_COUNT_KEY} ->> 'count')::int, 0) < ${capPerDay}
+      )
+    `;
+    const orgScope = or(
+      eq(deployments.clientOrgId, orgId),
+      eq(deployments.builderOrgId, orgId),
+    );
+
+    if (messageId) {
+      // Full claim: dedupe (append messageId, bounded to MAX_PROCESSED_MESSAGE_IDS,
+      // last-in-first-out) AND the run-cap counter, gated by BOTH "not already
+      // processed" and "under cap" in the WHERE clause.
+      const nextProcessedJson = sql`
+        (
+          SELECT COALESCE(jsonb_agg(tail.elem ORDER BY tail.ord), '[]'::jsonb)
+          FROM (
+            SELECT elem, ord
+            FROM jsonb_array_elements(
+              (
+                CASE
+                  WHEN jsonb_typeof(${deployments.customization} -> ${COMPOSIO_PROCESSED_MESSAGE_IDS_KEY}) = 'array'
+                  THEN ${deployments.customization} -> ${COMPOSIO_PROCESSED_MESSAGE_IDS_KEY}
+                  ELSE '[]'::jsonb
+                END
+              ) || to_jsonb(${messageId}::text)
+            ) WITH ORDINALITY AS t(elem, ord)
+            ORDER BY ord DESC
+            LIMIT ${MAX_PROCESSED_MESSAGE_IDS}
+          ) tail
+        )
+      `;
+      const alreadyProcessed = sql`
+        COALESCE(${deployments.customization} -> ${COMPOSIO_PROCESSED_MESSAGE_IDS_KEY}, '[]'::jsonb) @> to_jsonb(${messageId}::text)
+      `;
+
+      const [row] = await db
+        .update(deployments)
+        .set({
+          customization: sql`
+            jsonb_set(
+              jsonb_set(
+                COALESCE(${deployments.customization}, '{}'::jsonb),
+                ARRAY[${COMPOSIO_PROCESSED_MESSAGE_IDS_KEY}]::text[],
+                ${nextProcessedJson},
+                true
+              ),
+              ARRAY[${COMPOSIO_PUSH_RUN_COUNT_KEY}]::text[],
+              ${nextCountJson},
+              true
+            )
+          ` as unknown as Partial<DeploymentCustomization>,
+          updatedAt: new Date(),
+        })
+        .where(and(eq(deployments.id, deploymentId), orgScope, sql`NOT (${alreadyProcessed})`, underCap))
+        .returning({ id: deployments.id });
+
+      if (!row) {
+        return {
+          claimed: false,
+          reason: await diagnoseClaimFailure(deploymentId, orgId, messageId, capPerDay, today),
+        };
+      }
+      return { claimed: true };
+    }
+
+    // No messageId to dedupe on — cap-only claim (still atomic, still
+    // increments the counter so a flood of un-id'd events is bounded too).
+    const [row] = await db
+      .update(deployments)
+      .set({
+        customization: sql`
+          jsonb_set(
+            COALESCE(${deployments.customization}, '{}'::jsonb),
+            ARRAY[${COMPOSIO_PUSH_RUN_COUNT_KEY}]::text[],
+            ${nextCountJson},
+            true
+          )
+        ` as unknown as Partial<DeploymentCustomization>,
+        updatedAt: new Date(),
+      })
+      .where(and(eq(deployments.id, deploymentId), orgScope, underCap))
+      .returning({ id: deployments.id });
+
+    if (!row) {
+      return {
+        claimed: false,
+        reason: await diagnoseClaimFailure(deploymentId, orgId, null, capPerDay, today),
+      };
+    }
+    return { claimed: true };
+  } catch (err) {
+    console.warn(
+      `[deployments/store] claimComposioPushRun failed for deployment ${deploymentId}:`,
+      err instanceof Error ? err.message : String(err),
+    );
+    return { claimed: false, reason: "claim_error" };
+  }
+}
+
+/**
+ * RELEASE a previously-claimed messageId (verify-gate FIX 3) — removes it
+ * from the processed-ids list in ONE statement, bound path, so a webhook
+ * redelivery for a run that FAILED (threw, or reported `ok:false`) is free
+ * to retry the transient failure instead of being silently swallowed
+ * forever. Does NOT touch the run-count counter (a failed attempt still
+ * counts toward the daily cap — a persistently-failing agent shouldn't get
+ * unlimited retries either). No-op (never throws to the caller) when
+ * `messageId` is null (nothing was claimed to release).
+ */
+export async function releaseComposioPushRunClaim(
+  deploymentId: string,
+  messageId: string | null,
+): Promise<void> {
+  if (!deploymentId || !messageId) return;
+  try {
+    const { db } = await import("@/db");
+    const { deployments } = await import("@/db/schema/deployments");
+    const { eq, sql } = await import("drizzle-orm");
+
+    await db
+      .update(deployments)
+      .set({
+        customization: sql`
+          jsonb_set(
+            COALESCE(${deployments.customization}, '{}'::jsonb),
+            ARRAY[${COMPOSIO_PROCESSED_MESSAGE_IDS_KEY}]::text[],
+            (
+              SELECT COALESCE(jsonb_agg(elem), '[]'::jsonb)
+              FROM jsonb_array_elements(
+                COALESCE(${deployments.customization} -> ${COMPOSIO_PROCESSED_MESSAGE_IDS_KEY}, '[]'::jsonb)
+              ) elem
+              WHERE elem <> to_jsonb(${messageId}::text)
+            ),
+            true
+          )
+        ` as unknown as Partial<DeploymentCustomization>,
+        updatedAt: new Date(),
+      })
+      .where(eq(deployments.id, deploymentId));
+  } catch (err) {
+    console.warn(
+      `[deployments/store] releaseComposioPushRunClaim failed for deployment ${deploymentId}:`,
+      err instanceof Error ? err.message : String(err),
+    );
+  }
+}
+
+// ─── poll->push upgrade audit stamp (email-agent slice, Part B2) ───────────
+
+/** The reserved customization jsonb key stamping when a deployment's inbox
+ *  trigger was upgraded from poll to push (audit trail; no migration). */
+export const TRIGGER_UPGRADED_AT_KEY = "triggerUpgradedAt";
+
+/**
+ * Verify-gate FIX 4 — how many deployments (any status) point at this
+ * template. maybeUpgradeInboxTriggerToPush refuses the poll->push flip when
+ * this is > 1 (the trigger lives on the TEMPLATE, so a shared multi-client
+ * template must never silently inherit an event trigger a second client's
+ * deploy never registered). Lazy DB import.
+ */
+export async function countDeploymentsForTemplate(agentTemplateId: string): Promise<number> {
+  if (!agentTemplateId) return 0;
+  const { db } = await import("@/db");
+  const { deployments } = await import("@/db/schema/deployments");
+  const { eq, sql } = await import("drizzle-orm");
+
+  const [row] = await db
+    .select({ count: sql<number>`count(*)::int` })
+    .from(deployments)
+    .where(eq(deployments.agentTemplateId, agentTemplateId));
+  return row?.count ?? 0;
+}
+
+/** Resolve a deployment's org (clientOrgId ?? builderOrgId) + template id —
+ *  the lookup maybeUpgradeInboxTriggerToPush's `getDeployment` dep needs.
+ *  Lazy DB import; returns null when the deployment doesn't exist. */
+export async function getDeploymentOrgAndTemplate(
+  deploymentId: string,
+): Promise<{ orgId: string; agentTemplateId: string } | null> {
+  if (!deploymentId) return null;
+  const { db } = await import("@/db");
+  const { deployments } = await import("@/db/schema/deployments");
+  const { eq } = await import("drizzle-orm");
+
+  const [row] = await db
+    .select({
+      builderOrgId: deployments.builderOrgId,
+      clientOrgId: deployments.clientOrgId,
+      agentTemplateId: deployments.agentTemplateId,
+    })
+    .from(deployments)
+    .where(eq(deployments.id, deploymentId))
+    .limit(1);
+  if (!row) return null;
+  return {
+    orgId: row.clientOrgId ?? row.builderOrgId,
+    agentTemplateId: row.agentTemplateId,
+  };
+}
+
+/** Stamp `customization.triggerUpgradedAt` (ISO) on a deployment — the
+ *  poll->push upgrade's audit marker. Same read-modify-write jsonb idiom as
+ *  markDeploymentScheduleFired (no migration). Lazy DB import. */
+export async function stampDeploymentTriggerUpgraded(
+  deploymentId: string,
+  at: Date,
+): Promise<void> {
+  if (!deploymentId) return;
+  const { db } = await import("@/db");
+  const { deployments } = await import("@/db/schema/deployments");
+  const { eq } = await import("drizzle-orm");
+
+  const [row] = await db
+    .select({ customization: deployments.customization })
+    .from(deployments)
+    .where(eq(deployments.id, deploymentId))
+    .limit(1);
+
+  const current = (row?.customization ?? {}) as Record<string, unknown>;
+  const next = { ...current, [TRIGGER_UPGRADED_AT_KEY]: at.toISOString() };
+
+  await db
+    .update(deployments)
+    .set({
+      customization: next as Partial<DeploymentCustomization>,
+      updatedAt: new Date(),
+    })
+    .where(eq(deployments.id, deploymentId));
+}
+
 // ─── listSfManagedDeploymentsForRent (Task 7 — the monthly rent cron) ───────
 
 /** One row the rent cron plans against — see planMonthlyRent

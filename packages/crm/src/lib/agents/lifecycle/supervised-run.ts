@@ -15,13 +15,19 @@ import type { SupervisedRunActionEvent } from "@/db/schema/agent-lifecycle";
 import type { AgentTrigger } from "@/lib/agents/triggers/agent-trigger";
 
 /** Default hard timeout for one supervised run. MUST stay comfortably below
- *  the platform's own function timeout (Vercel's default/Pro ceiling is
- *  60s for a standard Fluid/Serverless function) — if the app-side timeout
- *  is longer than the platform's, the PLATFORM kills the invocation first,
- *  `finishRun` never runs, and the `supervised_runs` row is stranded at
- *  `running` forever (Wave 1 review, F1). 55s leaves a 5s margin inside a
- *  60s platform ceiling for `finishRun`'s own write to land. */
-const DEFAULT_TIMEOUT_MS = 55_000;
+ *  the platform's own function timeout — if the app-side timeout is longer
+ *  than the platform's, the PLATFORM kills the invocation first, `finishRun`
+ *  never runs, and the `supervised_runs` row is stranded at `running`
+ *  forever (Wave 1 review, F1).
+ *
+ *  H2 hotfix (2026-07-11) — the OLD 55s rationale ("a standard 60s
+ *  Fluid/Serverless ceiling") is obsolete now that `driveSupervisedRunTurn`
+ *  runs out-of-request inside `after()` (see supervised-run-actions.ts):
+ *  the request itself returns in under a second, and the deferred work runs
+ *  against the route's `maxDuration` (300s — Vercel's hard function
+ *  ceiling), not the old synchronous-response budget. 240s leaves a 60s
+ *  margin inside that 300s ceiling for `finishRun`'s own write to land. */
+const DEFAULT_TIMEOUT_MS = 240_000;
 
 /** A `running` row older than this is presumed stranded — the platform
  *  killed the function before the app-side timeout (above) or `finishRun`
@@ -90,7 +96,20 @@ export type SupervisedRunDeps = {
 };
 
 export type SupervisedRunResult =
-  | { ok: true; runId: string; status: "succeeded" | "failed"; summary: string }
+  | {
+      ok: true;
+      runId: string;
+      status: "succeeded" | "failed";
+      summary: string;
+      /** F-E (2026-07-11 incident: prod row 48e7fcc0-0e34-4447-bc3f-
+       *  9bbdc811a9dc) — the SAME actionLog durably written via finishRun,
+       *  returned to the synchronous caller too. Before this fix the
+       *  caller (startSupervisedRunAction -> run-stage.tsx) had no way to
+       *  know what actually happened without a follow-up poll, and the
+       *  common case — the turn finishes within the same request — never
+       *  polls at all, so the evidence silently never reached the UI. */
+      actionLog: SupervisedRunActionEvent[];
+    }
   | { ok: false; error: "already_running" };
 
 /**
@@ -155,16 +174,22 @@ async function defaultRunWithTimeout<T>(fn: () => Promise<T>, timeoutMs: number)
   }
 }
 
+export type BeginSupervisedRunResult = { ok: true; runId: string } | { ok: false; error: "already_running" };
+
 /**
- * Run ONE supervised, real-tool template turn: enforces one-running-run-per-
- * template, creates the durable row, drives `runTurn` (racing a hard
- * timeout), streams tool events best-effort, and ALWAYS finishes the row —
- * succeeded, failed (turn error), or failed (timeout). Never throws.
+ * H2 hotfix (2026-07-11) — the FAST half of what used to be one
+ * `runSupervised` call: enforce one-running-run-per-template and insert the
+ * durable `running` row. Sub-second (one SELECT + one INSERT), so the
+ * caller can return `{runId, status:"running"}` to the client immediately
+ * and defer the actual (potentially multi-minute) turn to
+ * `driveSupervisedRunTurn` inside `after()` — unjamming Next's per-tab
+ * server-action queue, which is what let a long-running "Run evals"/"Run it
+ * once" POST freeze every other click on the same tab behind it.
  */
-export async function runSupervised(
-  deps: SupervisedRunDeps,
-  input: { orgId: string; templateId: string; kickoffMessage: string },
-): Promise<SupervisedRunResult> {
+export async function beginSupervisedRun(
+  deps: Pick<SupervisedRunDeps, "hasRunningRun" | "createRun">,
+  input: { orgId: string; templateId: string },
+): Promise<BeginSupervisedRunResult> {
   const alreadyRunning = await deps.hasRunningRun({ orgId: input.orgId, templateId: input.templateId });
   if (alreadyRunning) return { ok: false, error: "already_running" };
 
@@ -174,15 +199,27 @@ export async function runSupervised(
   // (migration 0069) is the correctness backstop: a second concurrent
   // insert violates that partial unique index, and we map ITS error
   // (by code, never by message) onto the same already_running result.
-  let created: { id: string };
   try {
-    created = await deps.createRun({ orgId: input.orgId, templateId: input.templateId });
+    const created = await deps.createRun({ orgId: input.orgId, templateId: input.templateId });
+    return { ok: true, runId: created.id };
   } catch (err) {
     if (isUniqueViolationError(err)) return { ok: false, error: "already_running" };
     throw err;
   }
-  const runId = created.id;
+}
 
+/**
+ * H2 hotfix — the SLOW half: drives `runTurn` (racing a hard timeout) for an
+ * ALREADY-CREATED run row, streams tool events best-effort, and ALWAYS
+ * finishes the row — succeeded, failed (turn error), or failed (timeout).
+ * Never throws. Designed to run inside `after()` (out-of-request), so its
+ * caller has already returned a response by the time this executes.
+ */
+export async function driveSupervisedRunTurn(
+  deps: Omit<SupervisedRunDeps, "hasRunningRun" | "createRun">,
+  runId: string,
+  kickoffMessage: string,
+): Promise<SupervisedRunResult> {
   const actionLog: SupervisedRunActionEvent[] = [];
   const onToolEvent = (event: SupervisedRunActionEvent) => {
     actionLog.push(event);
@@ -197,7 +234,7 @@ export async function runSupervised(
   let outcome: SupervisedRunTurnResult | "timeout";
   try {
     outcome = await runWithTimeout(
-      () => deps.runTurn({ message: input.kickoffMessage, onToolEvent }),
+      () => deps.runTurn({ message: kickoffMessage, onToolEvent }),
       timeoutMs,
     );
   } catch (err) {
@@ -236,5 +273,22 @@ export async function runSupervised(
 
   await deps.finishRun(runId, { status, summary, actionLog });
 
-  return { ok: true, runId, status, summary };
+  return { ok: true, runId, status, summary, actionLog };
+}
+
+/**
+ * Legacy synchronous entry point — begins AND drives the run in one call,
+ * to completion, exactly as this module always has. Kept for tests and any
+ * caller that genuinely wants to await the whole thing (e.g. a script);
+ * `startSupervisedRunAction` no longer uses this — it calls
+ * `beginSupervisedRun` synchronously and `driveSupervisedRunTurn` inside
+ * `after()` instead (H2 hotfix). Behavior is IDENTICAL to before the split.
+ */
+export async function runSupervised(
+  deps: SupervisedRunDeps,
+  input: { orgId: string; templateId: string; kickoffMessage: string },
+): Promise<SupervisedRunResult> {
+  const begin = await beginSupervisedRun(deps, input);
+  if (!begin.ok) return begin;
+  return driveSupervisedRunTurn(deps, begin.runId, input.kickoffMessage);
 }

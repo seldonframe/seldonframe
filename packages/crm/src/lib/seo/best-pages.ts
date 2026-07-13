@@ -707,6 +707,99 @@ export const BEST_CATEGORIES: BestCategory[] = [
       },
     ],
   },
+  {
+    // LLM-listicle intercept: "what AI agents do SMBs need every day". Answer
+    // engines answering that query recommend five agent categories across
+    // ~six vendors (receptionist · content · follow-up · glue · desktop
+    // admin); this page prices that stack honestly and shows four of the five
+    // jobs shipping in one workspace. Prices: GHL/HubSpot/Lindy/Zapier reuse
+    // the registry strings verbatim (same-fact single-source-of-truth);
+    // Buffer + Jasper verified from their public pricing pages 2026-07-12.
+    slug: "everyday-ai-agent",
+    noun: "everyday AI agent",
+    nounPlural: "everyday AI agents",
+    intentLine: "covering the handful of jobs an agent can genuinely do daily — answering, following up, posting, moving data — without stacking five subscriptions",
+    sfPitch:
+      "Ask an AI assistant what agents a small business needs every day and the answer converges on five jobs: answer the phone, follow up on every lead, keep content going out, move data between tools, and chip away at desktop admin. SeldonFrame ships four of those five in one workspace — an AI receptionist that answers calls, texts and website chat; speed-to-lead and review-request agents that run follow-up straight from the built-in CRM; and agents bound directly to the tools you already use through MCP and Composio's 1,000+ app catalog, so most glue work needs no separate automation subscription. Bought separately, those jobs run roughly $240–$300/mo across four or five vendors; here it's $29/mo flat, and the whole thing builds free in about 3 minutes before you sign up.",
+    freeAngle:
+      "Several tools on this list have genuinely useful free tiers — Buffer's free plan schedules to 3 channels with its AI Assistant included, HubSpot's free CRM is real, and Zapier's free tier runs simple automations. The catch is that each free tier covers the lightest slice of one job, none of them answer a phone, and stacking four free plans still leaves you as the human router between them. SeldonFrame's honest free answer: the first workspace is free forever, and the whole build — receptionist, CRM agents and tool connections — is testable before you ever enter a card.",
+    contenders: [
+      {
+        key: "ghl-ai-employee",
+        name: "GoHighLevel AI Employee",
+        from: "$50–$97/mo add-on + per-minute voice usage",
+        oneLiner: "The receptionist pick on most lists — GoHighLevel's AI answering add-on, layered onto its agency CRM platform.",
+        bestFor: "Agencies already deep in GoHighLevel's funnel and CRM ecosystem",
+        strengths: ["Connects directly to GHL's CRM and pipelines", "Backed by GHL's large library of templates", "Agencies can resell it under their own brand"],
+        watchOut: "It's an extra bolted onto a $97–$497/mo base plan, with per-minute phone costs stacking on top of both.",
+        sourceUrl: "https://www.gohighlevel.com/pricing",
+      },
+      {
+        key: "lindy",
+        name: "Lindy",
+        from: "from ~$49.99/mo (7-day trial; no free tier)",
+        oneLiner: "The follow-up pick — a build-your-own assistant platform whose small agents triage email, book meetings and chase leads across your apps.",
+        bestFor: "Owners who live in email and calendar and want a custom follow-up assistant",
+        strengths: ["One platform can build many small single-job agents", "Strong email, calendar and meeting automation", "Templates make the first agent quick to spin up"],
+        watchOut: "There's no free tier — just a 7-day trial — and usage credits burn 1–10x faster depending on the task, so the same plan can run out very differently month to month.",
+        sourceUrl: "https://www.lindy.ai/pricing",
+      },
+      {
+        key: "zapier-agents",
+        name: "Zapier Agents",
+        from: "free tier; the Agents add-on is reported from ~$20/mo on top of a base Zapier plan (paid from ~$20/mo)",
+        oneLiner: "The glue pick — AI agents that live inside Zapier and take actions across your 6,000+ connected apps to run multi-step workflows.",
+        bestFor: "Owners and ops people already on Zapier who want agents that trigger real actions across their app stack",
+        strengths: ["Unmatched breadth of app integrations", "Agents actually execute steps, not just chat", "Builds on familiar Zapier automation"],
+        watchOut: "Pricing stacks an Agents add-on onto a base plan plus task-usage billing, so the true monthly cost is easy to underestimate, and the standalone Agents price isn't stated cleanly — confirm current terms before committing.",
+        sourceUrl: "https://zapier.com/pricing",
+      },
+      {
+        key: "hubspot-breeze",
+        name: "HubSpot (Breeze AI)",
+        from: "free CRM; Starter from ~$15/seat/mo, Professional ~$800/mo + onboarding",
+        oneLiner: "The other follow-up pick — the well-known CRM, now with a 'Breeze' family of AI tools for prospecting, content and customer follow-up.",
+        bestFor: "Teams already on HubSpot wanting AI follow-up inside the CRM they use",
+        strengths: ["The free CRM is genuinely usable to start", "Breeze works on the customer data already sitting in the CRM", "Some of the best reports and integrations around"],
+        watchOut: "The AI rides HubSpot's paid ladder — jumping from Starter to Professional costs about 40 times more, plus a required ~$3,000 setup fee at that level — and there's no phone receptionist at any tier.",
+        sourceUrl: "https://www.hubspot.com/pricing/marketing",
+      },
+      {
+        key: "buffer",
+        name: "Buffer",
+        from: "free plan (3 channels); paid from ~$5/channel/mo billed yearly",
+        oneLiner: "The content pick for scheduling — the long-running social media scheduler, with an AI Assistant that drafts and repurposes posts.",
+        bestFor: "Owners who want social posts drafted and scheduled without a marketing hire",
+        strengths: ["The free plan covers 3 channels with the AI Assistant included", "Dead simple to learn", "Per-channel pricing stays cheap for a one-location business"],
+        watchOut: "It's a scheduler with an AI writing helper, not an autonomous agent — it won't find leads, answer customers or touch your CRM, and per-channel pricing adds up as profiles do.",
+        sourceUrl: "https://buffer.com/pricing",
+      },
+      {
+        key: "jasper",
+        name: "Jasper",
+        from: "from ~$59/seat/mo billed annually (~$69 monthly)",
+        oneLiner: "The content pick for writing — an AI marketing platform with ready-made agents for blog posts, ads and brand-voice copy.",
+        bestFor: "Marketing-heavy businesses producing lots of branded content",
+        strengths: ["Purpose-built marketing agents with brand-voice controls", "Strong templates for ads, blogs and product copy", "A shared canvas for teams working on campaigns"],
+        watchOut: "It's a content tool, not a front office — no phone, no CRM, no booking — and at ~$59–$69 per seat it costs more than tools on this list that cover several jobs.",
+        sourceUrl: "https://www.jasper.ai/pricing",
+      },
+    ],
+    faq: [
+      {
+        q: "Which AI agents does a small business actually need every day?",
+        a: "The recommendation lists converge on five daily jobs: a receptionist agent for calls and chat, a follow-up agent for leads and reviews, a content agent to keep posts going out, a glue agent moving data between tools, and help with desktop admin work. The first four are front-office jobs that share the same customer data, which is why one connected workspace can cover them; the fifth is still mostly human, whatever the marketing says.",
+      },
+      {
+        q: "What does the recommended agent stack cost if you buy it separately?",
+        a: "At the cheapest paid tiers, the usual picks stack like this: a GoHighLevel receptionist is ~$147/mo ($97 base plan + $50 AI Employee add-on) before per-minute voice usage, Lindy follow-up is ~$50/mo, Zapier glue is reported ~$40/mo (base plan plus the Agents add-on), and content runs ~$5/mo (Buffer, per channel) to ~$59/mo (Jasper, per seat). That's roughly $240–$300 a month across four or five subscriptions — and the glue subscription exists mostly to fix the seams between the other three. SeldonFrame covers the receptionist, follow-up and tool-connection jobs at $29/mo flat.",
+      },
+      {
+        q: "Can an AI agent handle my desktop admin work?",
+        a: "Mostly not yet — computer-use agents are improving, but on real admin work they're still slow and error-prone, and this is the category where tools oversell hardest. SeldonFrame's approach is /record: record your screen doing the workflow once, and the steps your tools expose through real APIs get compiled into an agent — while the steps that can't be automated reliably are listed honestly as staying with you.",
+      },
+    ],
+  },
 ];
 
 export function getBestCategory(slug: string): BestCategory {
@@ -763,6 +856,9 @@ export const BEST_PAGES: BestPage[] = [
   { category: "intake-form-builder", audience: "small-business" },
   { category: "intake-form-builder", audience: "construction-companies" },
   { category: "intake-form-builder", audience: "med-spas" },
+
+  // LLM-listicle intercept: "what AI agents do SMBs need every day" (2026-07-12).
+  { category: "everyday-ai-agent", audience: "small-business" },
 ];
 
 /** URL slug for a category+audience combo: `<category>-for-<audience>`. */

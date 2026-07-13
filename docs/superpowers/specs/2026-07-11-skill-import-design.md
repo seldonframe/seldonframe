@@ -45,7 +45,7 @@ Applied on import AND retrofit onto template-editor customSkillMd saves:
 ## 4. Build phases
 1. **P1:** sanitize lib + parse + review screen + draft-template creation + provenance panel (lifecycle integration is free once the ladder exists).
 2. **P2:** MCP `import_agent_skill` + marketplace listing prefill + "imported & verified" badge.
-3. **P3:** registry browse (agentskills GitHub/registry index) + bulk import for agencies.
+3. **P3 (upgraded 2026-07-12 from "registry browse" after the never-stops-learning pipeline reflection):** the **skill prospector** — an INTERNAL weekly loop (x-vault operational shape, NOT a product feature) that scouts → extracts → rule-scores → drafts imports, feeding this rail: sources ranked by ICP signal (agentskills registry + curated skill repos [mattpocock/skills · davidondrej/skills · ui-skills.com — also the P1 seed corpus] > GitHub search scoped to SMB-job keywords > trending); filter criterion = "is this an SMB front-office JOB", never "is this an AI workflow"; deterministic score gate before any LLM stage; **license + provenance captured at scout time, permissive-only for anything marketplace-bound (hard requirement — sold skills need attribution)**; every draft still enters the lifecycle ladder — evals + supervised run remain the trust gate (the differentiated claim: executed and verified, not scraped). Measure import→verified→listed before productizing. Bulk import for agencies rides this.
 
 Estimate: P1 ≈ 900–1,200 LOC incl. tests (sanitizer is cross-ref-validator-class — L-17 2.5–3.0x test band on ~5–6 rule edges).
 

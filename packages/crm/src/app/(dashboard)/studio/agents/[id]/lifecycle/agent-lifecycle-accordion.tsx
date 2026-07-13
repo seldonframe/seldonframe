@@ -150,16 +150,24 @@ export function AgentLifecycleAccordion({
                   {summaries[stage.id]}
                 </span>
               </button>
-              {isOpen ? (
-                <div className="space-y-4 px-4 pb-4 pl-[3.75rem] sm:px-5 sm:pb-5 sm:pl-[4.25rem]">
-                  {descriptions[stage.id] ? (
-                    <p className="-mt-2 max-w-2xl text-sm leading-relaxed text-[var(--lc-muted)]">
-                      {descriptions[stage.id]}
-                    </p>
-                  ) : null}
-                  {bodies[stage.id]}
-                </div>
-              ) : null}
+              {/* F-A fix: every stage body stays MOUNTED (never conditionally
+                  rendered null) — only its visibility toggles. The old
+                  `{isOpen ? <div>…</div> : null}` unmounted the closed
+                  stages' React trees on every chip click, including
+                  AgentTemplateEditor's local state (greeting, script, FAQ)
+                  nested inside the Learned stage's body — an operator's
+                  unsaved edits were silently dropped the moment they clicked
+                  another chip. */}
+              <div
+                className={`space-y-4 px-4 pb-4 pl-[3.75rem] sm:px-5 sm:pb-5 sm:pl-[4.25rem] ${isOpen ? "" : "hidden"}`}
+              >
+                {descriptions[stage.id] ? (
+                  <p className="-mt-2 max-w-2xl text-sm leading-relaxed text-[var(--lc-muted)]">
+                    {descriptions[stage.id]}
+                  </p>
+                ) : null}
+                {bodies[stage.id]}
+              </div>
             </section>
           );
         })}

@@ -23,6 +23,7 @@ import assert from "node:assert/strict";
 import {
   runStatelessAgentTurn,
   toolFailureGloss,
+  extractToolProof,
   type RunStatelessAgentTurnInput,
 } from "../../../src/lib/agents/stateless-turn";
 import type { AgentBlueprint } from "../../../src/db/schema/agents";
@@ -388,6 +389,44 @@ describe("runStatelessAgentTurn — onToolEvent DI hook", () => {
     assert.equal(resultEvent?.ok, false);
   });
 
+  // F-F item 2 (evidence-first Run stage restructure) — the ACTION lane's
+  // lines get a target/proof suffix when the tool's result has a cheap id
+  // field (e.g. book_appointment's testMode synthetic bookingId), extracted
+  // right where the raw `output` is in scope (never a raw payload/body —
+  // just a short id string appended to the already-summarized line).
+  test("a successful tool call's result line includes a proof suffix when the output has an id-shaped field (bookingId)", async () => {
+    const fake = makeFakeClient([
+      {
+        content: [
+          {
+            type: "tool_use",
+            id: "tu_1",
+            name: "book_appointment",
+            input: {
+              fullName: "Jane Doe",
+              phone: "+15551234567",
+              slotIso: "2026-06-25T16:00:00Z",
+              confirmed: true,
+            },
+          },
+        ],
+        stop_reason: "tool_use",
+      },
+      { content: [{ type: "text", text: "You're all set." }], stop_reason: "end_turn" },
+    ]);
+    const events: Array<{ tool: string; phase: string; ok?: boolean; line: string }> = [];
+    await runStatelessAgentTurn(
+      baseInput({
+        client: fake.client,
+        messages: [{ role: "user", content: "Book me for the 25th." }],
+        onToolEvent: (e) => events.push(e),
+      }),
+    );
+    const resultEvent = events.find((e) => e.phase === "result");
+    // testMode's synthetic book_appointment result is { ok, testMode, bookingId: "test-<ms>" }.
+    assert.match(resultEvent!.line, /test-\d+/);
+  });
+
   test("no onToolEvent provided → default no-op, behavior unchanged", async () => {
     const fake = makeFakeClient([
       {
@@ -432,6 +471,50 @@ describe("toolFailureGloss", () => {
     // gloss. This test pins that contract so a future edit can't
     // reintroduce a second (message) argument without this test failing.
     assert.equal(toolFailureGloss.length, 1);
+  });
+});
+
+// ─── 3d. extractToolProof (F-F item 2, evidence-first Run stage) ─────────────
+//
+// A cheap, generic, shallow id-field extractor for the ACTION lane's proof
+// suffix — never a raw payload/body, just a short existing id string when
+// one is present at the TOP LEVEL of a tool's result. Composio result
+// shapes vary by toolkit/action and aren't generically introspectable
+// beyond common id-ish field names, so this is intentionally a best-effort
+// convenience, not a complete solution (documented limit).
+
+describe("extractToolProof", () => {
+  test("finds a top-level 'id' field", () => {
+    assert.equal(extractToolProof({ id: "msg_abc123" }), "msg_abc123");
+  });
+
+  test("finds common id-ish field names (messageId, threadId, bookingId, ...)", () => {
+    assert.equal(extractToolProof({ messageId: "m1" }), "m1");
+    assert.equal(extractToolProof({ threadId: "t1" }), "t1");
+    assert.equal(extractToolProof({ bookingId: "test-123" }), "test-123");
+    assert.equal(extractToolProof({ event_id: "e1" }), "e1");
+  });
+
+  test("no id-shaped field -> undefined", () => {
+    assert.equal(extractToolProof({ ok: true, count: 3 }), undefined);
+    assert.equal(extractToolProof({}), undefined);
+  });
+
+  test("never throws on null/undefined/non-object/array output", () => {
+    assert.equal(extractToolProof(null), undefined);
+    assert.equal(extractToolProof(undefined), undefined);
+    assert.equal(extractToolProof("a string"), undefined);
+    assert.equal(extractToolProof([{ id: "should-not-match" }]), undefined);
+  });
+
+  test("a huge string in an id-shaped field is not treated as a proof (guards against smuggling a body through an id field)", () => {
+    assert.equal(extractToolProof({ id: "x".repeat(200) }), undefined);
+  });
+
+  test("an email address or whitespace-bearing string in an id-shaped field is rejected (guards against PII/free-text smuggled through an id field)", () => {
+    assert.equal(extractToolProof({ id: "person@example.com" }), undefined);
+    assert.equal(extractToolProof({ messageId: "hello world" }), undefined);
+    assert.equal(extractToolProof({ record_id: "ok-123" }), "ok-123");
   });
 });
 

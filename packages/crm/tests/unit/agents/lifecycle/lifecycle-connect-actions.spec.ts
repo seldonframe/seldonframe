@@ -132,6 +132,58 @@ describe("connectLifecycleToolkitAction", () => {
     assert.deepEqual(result, { ok: true, redirectUrl: "https://connect.composio.dev/abc" });
   });
 
+  test("default mode (popup): callback targets the minimal /integrations/connected route, never the agent page", async () => {
+    let calledCallbackUrl: string | null = null;
+    await connectLifecycleToolkitAction(
+      { templateId: TEMPLATE_ID, toolkit: TOOLKIT },
+      baseDeps({
+        createConnectLink: (async (_orgId, _toolkit, callbackUrl) => {
+          calledCallbackUrl = callbackUrl;
+          return { redirectUrl: "https://connect.composio.dev/abc" };
+        }) as ConnectLifecycleToolkitDeps["createConnectLink"],
+      }),
+    );
+    assert.equal(calledCallbackUrl, "https://app.seldonframe.com/integrations/connected?popup=1&toolkit=gmail");
+  });
+
+  test("mode: redirect with a trusted same-origin /studio returnTo -> uses it as the callback", async () => {
+    let calledCallbackUrl: string | null = null;
+    await connectLifecycleToolkitAction(
+      {
+        templateId: TEMPLATE_ID,
+        toolkit: TOOLKIT,
+        mode: "redirect",
+        returnTo: "https://app.seldonframe.com/studio/agents/tmpl-1?stage=connected",
+      },
+      baseDeps({
+        createConnectLink: (async (_orgId, _toolkit, callbackUrl) => {
+          calledCallbackUrl = callbackUrl;
+          return { redirectUrl: "https://connect.composio.dev/abc" };
+        }) as ConnectLifecycleToolkitDeps["createConnectLink"],
+      }),
+    );
+    assert.equal(calledCallbackUrl, "https://app.seldonframe.com/studio/agents/tmpl-1?stage=connected");
+  });
+
+  test("mode: redirect with an untrusted returnTo -> falls back to the standard #lc-connected return, never an open redirect", async () => {
+    let calledCallbackUrl: string | null = null;
+    await connectLifecycleToolkitAction(
+      {
+        templateId: TEMPLATE_ID,
+        toolkit: TOOLKIT,
+        mode: "redirect",
+        returnTo: "https://evil.example.com/whatever",
+      },
+      baseDeps({
+        createConnectLink: (async (_orgId, _toolkit, callbackUrl) => {
+          calledCallbackUrl = callbackUrl;
+          return { redirectUrl: "https://connect.composio.dev/abc" };
+        }) as ConnectLifecycleToolkitDeps["createConnectLink"],
+      }),
+    );
+    assert.equal(calledCallbackUrl, "https://app.seldonframe.com/studio/agents/tmpl-1?connected=gmail#lc-connected");
+  });
+
   test("composio not configured -> composio_not_configured", async () => {
     const result = await connectLifecycleToolkitAction(
       { templateId: TEMPLATE_ID, toolkit: TOOLKIT },

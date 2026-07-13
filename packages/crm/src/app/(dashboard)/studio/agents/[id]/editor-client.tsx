@@ -37,6 +37,7 @@ import {
   saveAgentTemplateBlueprintAction,
   generateAgentDraftAction,
 } from "@/lib/agent-templates/actions";
+import { LlmKeyDialog } from "@/components/integrations/llm-key-dialog";
 import { sendTestEventAgentAction } from "@/lib/agents/triggers/actions";
 import { recordGeneratorEditAction } from "@/lib/agents/generate/actions";
 import type { AgentBlueprint } from "@/db/schema/agents";
@@ -362,6 +363,10 @@ export function AgentTemplateEditor(props: Props) {
   const [isRefining, startRefine] = useTransition();
   const [refineError, setRefineError] = useState<React.ReactNode | null>(null);
   const [refined, setRefined] = useState(false);
+  // In-place BYOK modal (record-v3 S4a) — replaces the needs_byok Link to
+  // /settings/integrations/llm, which used to bounce the builder off this
+  // editor entirely. onSaved re-runs refine() with the same prompt.
+  const [keyDialogOpen, setKeyDialogOpen] = useState(false);
 
   // Rotating loader copy index for the Refine button. Resets to 0 when a
   // refinement starts, advances on an interval while pending, and clears the
@@ -473,12 +478,13 @@ export function AgentTemplateEditor(props: Props) {
             <span>
               {draft.message ??
                 "Add your Anthropic key to build + test agents — your first workspace stays free."}{" "}
-              <Link
-                href="/settings/integrations/llm"
+              <button
+                type="button"
+                onClick={() => setKeyDialogOpen(true)}
                 className="font-medium underline underline-offset-2 hover:opacity-80"
               >
                 Add your key &rarr;
-              </Link>
+              </button>
             </span>,
           );
         } else if (draft.error === "generation_failed") {
@@ -514,6 +520,52 @@ export function AgentTemplateEditor(props: Props) {
       prev.includes(cap) ? prev.filter((c) => c !== cap) : [...prev, cap],
     );
   };
+
+  // The script textarea + its Refine footer — factored out so the
+  // collapsibleScript branch below can wrap it in a visibility-toggling
+  // <div> without duplicating the JSX (F-A/F-B fix).
+  const scriptBody = (
+    <>
+      <textarea
+        id="agent-script"
+        value={customSkillMd}
+        onChange={(e) => setCustomSkillMd(e.target.value)}
+        spellCheck={false}
+        rows={16}
+        className="block min-h-[300px] w-full resize-y border-0 bg-muted/20 px-5 py-4 font-mono text-[13px] leading-7 text-foreground focus:outline-none"
+        placeholder={c.scriptPlaceholder}
+      />
+      {/* Refine footer — AI-assisted iteration over the whole config. */}
+      <div className="flex items-center gap-2.5 border-t border-border/70 bg-card px-3 py-2.5">
+        <span
+          className="inline-flex size-8 shrink-0 items-center justify-center rounded-lg bg-primary/10 text-primary"
+          aria-hidden
+        >
+          <Sparkles className="size-4" />
+        </span>
+        <input
+          type="text"
+          value={refinePrompt}
+          onChange={(e) => setRefinePrompt(e.target.value)}
+          onKeyDown={(e) => {
+            if (e.key === "Enter" && !isRefining) refine();
+          }}
+          disabled={isRefining}
+          placeholder="Refine in plain language — e.g. add an FAQ about emergency service"
+          className="h-9 min-w-0 flex-1 border-0 bg-transparent px-1 text-sm text-foreground focus:outline-none disabled:opacity-60"
+        />
+        <button
+          type="button"
+          onClick={refine}
+          disabled={isRefining}
+          className="crm-button-secondary inline-flex h-9 shrink-0 items-center gap-1.5 px-4 text-sm"
+        >
+          <Sparkles className={`size-4 ${isRefining ? "animate-pulse" : ""}`} />
+          {isRefining ? REFINE_STATUS_MESSAGES[refineStatusIdx] : "Refine"}
+        </button>
+      </div>
+    </>
+  );
 
   return (
     <div>
@@ -620,50 +672,20 @@ export function AgentTemplateEditor(props: Props) {
                 </button>
               ) : null}
             </div>
-            {scriptExpanded ? (
-              <>
-                <textarea
-                  id="agent-script"
-                  value={customSkillMd}
-                  onChange={(e) => setCustomSkillMd(e.target.value)}
-                  spellCheck={false}
-                  rows={16}
-                  className="block min-h-[300px] w-full resize-y border-0 bg-muted/20 px-5 py-4 font-mono text-[13px] leading-7 text-foreground focus:outline-none"
-                  placeholder={c.scriptPlaceholder}
-                />
-                {/* Refine footer — AI-assisted iteration over the whole config. */}
-                <div className="flex items-center gap-2.5 border-t border-border/70 bg-card px-3 py-2.5">
-                  <span
-                    className="inline-flex size-8 shrink-0 items-center justify-center rounded-lg bg-primary/10 text-primary"
-                    aria-hidden
-                  >
-                    <Sparkles className="size-4" />
-                  </span>
-                  <input
-                    type="text"
-                    value={refinePrompt}
-                    onChange={(e) => setRefinePrompt(e.target.value)}
-                    onKeyDown={(e) => {
-                      if (e.key === "Enter" && !isRefining) refine();
-                    }}
-                    disabled={isRefining}
-                    placeholder="Refine in plain language — e.g. add an FAQ about emergency service"
-                    className="h-9 min-w-0 flex-1 border-0 bg-transparent px-1 text-sm text-foreground focus:outline-none disabled:opacity-60"
-                  />
-                  <button
-                    type="button"
-                    onClick={refine}
-                    disabled={isRefining}
-                    className="crm-button-secondary inline-flex h-9 shrink-0 items-center gap-1.5 px-4 text-sm"
-                  >
-                    <Sparkles
-                      className={`size-4 ${isRefining ? "animate-pulse" : ""}`}
-                    />
-                    {isRefining ? REFINE_STATUS_MESSAGES[refineStatusIdx] : "Refine"}
-                  </button>
-                </div>
-              </>
-            ) : null}
+            {/* F-A/F-B fix: ALWAYS mounted (never conditionally rendered
+                null) — the label above (htmlFor="agent-script") must always
+                point at a present element; pointing at an unmounted
+                textarea while collapsed is a broken a11y association.
+                Visibility toggles via `hidden` instead. Only wrapped in the
+                extra toggle <div> when collapsibleScript is actually in
+                play (collapsibleScript=false ⇒ scriptExpanded is always
+                true and never flips), so the flag-off editor page's DOM
+                stays byte-for-byte what it was — no extra wrapper node. */}
+            {props.collapsibleScript ? (
+              <div className={scriptExpanded ? "" : "hidden"}>{scriptBody}</div>
+            ) : (
+              scriptBody
+            )}
           </div>
           {refined && (
             <p className="mt-2 text-xs text-emerald-700 dark:text-emerald-400">
@@ -675,6 +697,15 @@ export function AgentTemplateEditor(props: Props) {
               {refineError}
             </p>
           )}
+          <LlmKeyDialog
+            open={keyDialogOpen}
+            onOpenChange={setKeyDialogOpen}
+            onSaved={() => {
+              // Re-run the same refinement now that a key exists — matches
+              // the plan's "re-trigger the blocked call" contract.
+              refine();
+            }}
+          />
         </div>
 
         {/* TTS voice — voice templates only (chat has no TTS) */}

@@ -19,7 +19,7 @@ import {
   type AudienceGroup,
 } from "../../../src/lib/seo/best-pages";
 import { renderBestMarkdown } from "../../../src/lib/seo/best-markdown";
-import { monthYearToIso } from "../../../src/components/seo/best-page";
+import { monthYearToIso, composeCheapestOption } from "../../../src/components/seo/best-page";
 
 const AUDIENCE_GROUPS: ReadonlySet<AudienceGroup> = new Set(["trades", "beauty", "medical", "construction", "general"]);
 
@@ -213,6 +213,18 @@ test("monthYearToIso handles all 12 months and rejects garbage", () => {
   assert.throws(() => monthYearToIso("Julember 2026"), /unrecognized/);
   assert.throws(() => monthYearToIso("2026"), /unrecognized/);
   assert.throws(() => monthYearToIso(""), /unrecognized/);
+});
+
+test("composeCheapestOption never claims a free plan off a 'no free tier' price line", () => {
+  for (const category of BEST_CATEGORIES) {
+    const line = composeCheapestOption(category);
+    if (line.endsWith("(has a free plan)")) {
+      assert.ok(!/no free/i.test(line), `${category.slug}: claimed a free plan on a 'no free' price line: ${line}`);
+    }
+  }
+  // Regression: Lindy's "(7-day trial; no free tier)" must not be picked as the
+  // free option — Zapier Agents is the first contender with a real free tier.
+  assert.match(composeCheapestOption(getBestCategory("everyday-ai-agent")), /^Zapier Agents/);
 });
 
 test("renderBestMarkdown for a sample slug contains the quick-picks and methodology sections", () => {

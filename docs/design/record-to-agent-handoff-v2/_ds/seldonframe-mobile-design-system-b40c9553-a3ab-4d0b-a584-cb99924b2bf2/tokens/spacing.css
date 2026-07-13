@@ -1,0 +1,44 @@
+/* ─────────────────────────────────────────────────────────────
+   SeldonFrame — Spacing, radii, sizing
+   Strict 8pt system (with 2/4px half-steps for dense UI).
+   Touch targets never below 48px.
+   ───────────────────────────────────────────────────────────── */
+
+:root {
+  /* 8pt spacing scale */
+  --space-0:  0;
+  --space-1:  2px;
+  --space-2:  4px;
+  --space-3:  8px;
+  --space-4:  12px;
+  --space-5:  16px;
+  --space-6:  20px;
+  --space-7:  24px;
+  --space-8:  32px;
+  --space-9:  40px;
+  --space-10: 48px;
+  --space-11: 64px;
+  --space-12: 80px;
+
+  /* Corner radii */
+  --radius-xs:   6px;
+  --radius-sm:   8px;
+  --radius-md:   12px;   /* default control / field */
+  --radius-lg:   16px;   /* cards */
+  --radius-xl:   22px;   /* sheets, big surfaces */
+  --radius-pill: 999px;
+
+  /* Touch / control sizing */
+  --tap-min:      48px;  /* minimum interactive target */
+  --control-h:    48px;  /* primary button / field height */
+  --control-h-sm: 40px;  /* compact button */
+  --icon-tap:     44px;  /* icon button hit area */
+
+  /* Mobile frame */
+  --screen-w:        390px;
+  --gutter:          16px;  /* screen edge padding */
+  --header-h:        56px;
+  --tabbar-h:        64px;
+  --safe-top:        env(safe-area-inset-top, 0px);
+  --safe-bottom:     env(safe-area-inset-bottom, 0px);
+}

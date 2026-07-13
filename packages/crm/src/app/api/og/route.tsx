@@ -27,6 +27,7 @@ import { readFile } from "node:fs/promises";
 import path from "node:path";
 import { ImageResponse } from "next/og";
 import {
+  AgentShareCard,
   AltCard,
   BestCard,
   clamp,
@@ -101,6 +102,13 @@ export async function GET(request: Request) {
       const name = clamp(searchParams.get("name"), NAME_MAX);
       const hook = clamp(searchParams.get("hook"), HOOK_MAX);
       card = <ToolCard name={name} hook={hook} />;
+      break;
+    }
+    case "agent-share": {
+      const name = clamp(searchParams.get("name"), NAME_MAX);
+      // Pipe-separated, already-scrubbed step labels — see AgentShareCard.
+      const steps = clamp(searchParams.get("steps"), 400);
+      card = <AgentShareCard name={name} steps={steps} />;
       break;
     }
     default: {

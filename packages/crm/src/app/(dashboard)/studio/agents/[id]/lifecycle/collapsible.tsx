@@ -32,7 +32,14 @@ export function Collapsible({
           className={`size-4 shrink-0 text-[var(--lc-muted)] transition-transform ${open ? "rotate-180" : ""}`}
         />
       </button>
-      {open ? <div className="border-t border-[var(--lc-line)] p-3">{children}</div> : null}
+      {/* F-A fix: ALWAYS mounted, visibility toggled with `hidden` — this
+          wraps AgentTemplateEditor, whose greeting/script/FAQ edits live in
+          local React state. Conditionally rendering `children` (the old
+          `{open ? <div>…</div> : null}`) unmounted that state on every
+          collapse, silently dropping unsaved edits. */}
+      <div className={`border-t border-[var(--lc-line)] p-3 ${open ? "" : "hidden"}`}>
+        {children}
+      </div>
     </div>
   );
 }
