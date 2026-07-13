@@ -1,0 +1,91 @@
+# SeldonFrame — self-host the whole stack with one command:
+#
+#   cp .env.docker.example .env.docker   # then add your LLM key
+#   docker compose up --build
+#   # → http://localhost:3000
+#
+# Three services:
+#   postgres    plain Postgres 16 — your data lives here.
+#   neon-proxy  translates the Neon serverless driver's SQL-over-HTTP into
+#               ordinary Postgres, so the app's neon-http runtime works
+#               against your own database (see src/db/index.ts).
+#   migrate     runs drizzle migrations once, then exits.
+#   app         the Next.js app (dashboard + generated public sites + API).
+#
+# Everything is bring-your-own-key: no data leaves your machine except the
+# LLM calls you configure.
+
+name: seldonframe
+
+services:
+  postgres:
+    image: postgres:16
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: seldon
+      POSTGRES_PASSWORD: seldon
+      POSTGRES_DB: seldonframe
+    # wal_level=logical is what the Neon proxy expects in front of Postgres.
+    command: ["postgres", "-c", "wal_level=logical"]
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U seldon -d seldonframe"]
+      interval: 5s
+      timeout: 5s
+      retries: 20
+
+  neon-proxy:
+    image: ghcr.io/timowilhelm/local-neon-http-proxy:main
+    restart: unless-stopped
+    environment:
+      PG_CONNECTION_STRING: postgres://seldon:seldon@postgres:5432/seldonframe
+    ports:
+      - "4444:4444"
+    depends_on:
+      postgres:
+        condition: service_healthy
+
+  migrate:
+    build:
+      context: .
+    image: seldonframe-app
+    command: ["pnpm", "db:migrate"]
+    env_file: .env.docker
+    environment:
+      DATABASE_URL: postgres://seldon:seldon@postgres:5432/seldonframe
+    depends_on:
+      postgres:
+        condition: service_healthy
+    restart: "no"
+
+  app:
+    build:
+      context: .
+    image: seldonframe-app
+    restart: unless-stopped
+    env_file: .env.docker
+    environment:
+      # Migrations speak plain Postgres to `postgres`; the runtime speaks
+      # neon-http, redirected to the proxy by NEON_LOCAL_HOST (src/db/index.ts).
+      DATABASE_URL: postgres://seldon:seldon@postgres:5432/seldonframe
+      NEON_LOCAL_HOST: neon-proxy
+      NEON_LOCAL_PORT: "4444"
+      NEXT_PUBLIC_APP_URL: http://localhost:3000
+      PORT: "3000"
+    ports:
+      - "3000:3000"
+    depends_on:
+      neon-proxy:
+        condition: service_started
+      migrate:
+        condition: service_completed_successfully
+    healthcheck:
+      test: ["CMD-SHELL", "curl -fsS http://localhost:3000/api/version || exit 1"]
+      interval: 15s
+      timeout: 5s
+      retries: 10
+      start_period: 40s
+
+volumes:
+  pgdata:

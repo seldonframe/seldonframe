@@ -28,14 +28,31 @@ Pricing for paid tiers: $29/mo (Pro) or $99/mo (Agency, white-label). See [seldo
 
 Run the entire stack on your own infrastructure. AGPL-3.0-licensed source code; full control over data, deploy target, and customization.
 
-### Prerequisites
+### Fastest path — Docker Compose
+
+One command brings up Postgres, the database proxy, migrations, and the app:
+
+```bash
+git clone https://github.com/seldonframe/seldonframe.git
+cd seldonframe
+cp .env.docker.example .env.docker     # then add your ANTHROPIC_API_KEY or OPENAI_API_KEY
+docker compose up --build              # → http://localhost:3000
+```
+
+That's it — data lives in a local Postgres volume, and nothing leaves your machine except the LLM calls you configure. Compose runs the schema migrations for you before the app starts.
+
+> Why the extra `neon-proxy` service? In production SeldonFrame runs on Neon, whose driver speaks SQL-over-HTTP. The proxy lets that same runtime talk to your own plain Postgres — see [`packages/crm/src/db/index.ts`](packages/crm/src/db/index.ts). Migrations connect to Postgres directly.
+
+### Manual path — run from source
+
+#### Prerequisites
 
 - Node.js 20+
 - pnpm 10+
 - Postgres 15+ (Neon, Supabase, or local)
 - Anthropic or OpenAI API key
 
-### Setup
+#### Setup
 
 ```bash
 git clone https://github.com/seldonframe/seldonframe.git
@@ -63,20 +80,20 @@ TWILIO_ACCOUNT_SID=...          # SMS
 STRIPE_SECRET_KEY=...           # payments
 ```
 
-### Database
+#### Database
 
 ```bash
 pnpm db:generate
 pnpm db:migrate
 ```
 
-### Run
+#### Run
 
 ```bash
 pnpm dev:crm                    # → http://localhost:3000
 ```
 
-### Build (for production deploy)
+#### Build (for production deploy)
 
 ```bash
 pnpm build

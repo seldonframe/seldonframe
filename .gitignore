@@ -62,3 +62,6 @@ dist/agent-servers/
 
 .vercel
 .env*.local
+
+# Docker self-host: ship the example, never the filled-in secrets
+!.env.docker.example

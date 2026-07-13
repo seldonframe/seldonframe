@@ -1,0 +1,14 @@
+# Keep the build context lean without dropping anything the app reads at
+# build or runtime. Conservative on purpose — only node_modules, build
+# output, VCS, and secrets are excluded.
+**/node_modules
+**/.next
+**/dist
+**/.turbo
+**/coverage
+.git
+**/*.log
+**/.env
+**/.env.*
+!**/.env.example
+.DS_Store
