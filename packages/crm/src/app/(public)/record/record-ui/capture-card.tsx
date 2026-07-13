@@ -72,41 +72,44 @@ export function CaptureCard({
             ? "rgba(239,68,68,.35)"
             : slot.status === "recording"
               ? "rgba(239,68,68,.25)"
-              : "rgba(231,229,222,.1)",
-        background: "#0F1413",
+              : "var(--lp-border-soft)",
+        background: "var(--lp-card)",
       }}
     >
       {isEmptyNoUpload ? (
         <div className="flex w-full flex-col items-center gap-4">
-          <p className="max-w-[46ch] text-pretty text-[13.5px] leading-[1.5] text-[#9CA3AF]">
+          <p className="max-w-[46ch] text-pretty text-[13.5px] leading-[1.55]" style={{ color: "var(--lp-body)" }}>
             {isFirstRecording
               ? "One normal, successful run — start to finish, talking out loud."
               : "Anything ever go differently? Record that too — edge cases make the agent trustworthy."}
           </p>
-          {slot.error ? <p className="text-[12.5px] text-[#EF4444]">{slot.error}</p> : null}
+          {slot.error ? <p className="text-[13.5px]" style={{ color: "#EF4444" }}>{slot.error}</p> : null}
           {supportsScreenCapture ? (
             <div className="flex flex-col items-center gap-3">
               <button
                 type="button"
                 disabled={!canStart || !sessionReady}
                 onClick={onRecord}
-                className="inline-flex h-14 items-center gap-2.5 rounded-full border border-[rgba(231,229,222,.16)] bg-transparent px-7 text-[15px] font-[600] text-[#E7E5DE] hover:border-[rgba(231,229,222,.35)] disabled:cursor-not-allowed disabled:opacity-40"
+                className="inline-flex h-14 items-center gap-2.5 rounded-full border border-[color:var(--lp-border)] bg-transparent px-7 text-[15px] font-[600] text-[color:var(--lp-ink)] hover:border-[color:var(--lp-ink)] disabled:cursor-not-allowed disabled:opacity-40"
               >
                 <span className="size-2 rounded-full bg-[#F87171]" aria-hidden />
                 Record
               </button>
-              <label className="cursor-pointer text-[13px] text-[#9CA3AF] underline-offset-2 hover:text-[#E7E5DE] hover:underline">
+              <label
+                className="cursor-pointer text-[13.5px] underline-offset-2 hover:underline"
+                style={{ color: "var(--lp-body)" }}
+              >
                 or upload a recording
                 <input type="file" accept="video/*" className="sr-only" onChange={onFileChange} />
               </label>
             </div>
           ) : (
             <div className="flex w-full max-w-[360px] flex-col gap-2">
-              <label className="inline-flex h-12 cursor-pointer items-center justify-center rounded-full border border-[rgba(231,229,222,.16)] bg-transparent px-5 text-center text-[14px] font-[600] text-[#E7E5DE] hover:border-[rgba(231,229,222,.35)]">
+              <label className="inline-flex h-12 cursor-pointer items-center justify-center rounded-full border border-[color:var(--lp-border)] bg-transparent px-5 text-center text-[14px] font-[600] text-[color:var(--lp-ink)] hover:border-[color:var(--lp-ink)]">
                 Upload a screen recording
                 <input type="file" accept="video/*" className="sr-only" onChange={onFileChange} />
               </label>
-              <p className="text-[12px] leading-[1.45] text-[#9CA3AF]">
+              <p className="text-[13.5px] leading-[1.55]" style={{ color: "var(--lp-body)" }}>
                 Record your screen with your phone&apos;s built-in recorder, then upload it here.
               </p>
             </div>
@@ -120,18 +123,25 @@ export function CaptureCard({
             value={fallbackText}
             onChange={(e) => onFallbackTextChange(e.target.value)}
             placeholder="Describe what you did in this recording (required — uploaded files have no live transcript)"
-            className="h-16 w-full resize-none rounded-[10px] border border-[rgba(231,229,222,.12)] bg-transparent p-2.5 text-[13px] text-[#E7E5DE] outline-none placeholder:text-[#6B7280]"
+            className="h-16 w-full resize-none rounded-[10px] border bg-transparent p-2.5 text-[13.5px] outline-none"
+            style={{ borderColor: "var(--lp-border-soft)", color: "var(--lp-ink)" }}
           />
           <div className="flex items-center justify-center gap-3">
             <button
               type="button"
               disabled={!fallbackText.trim()}
               onClick={onProcessUpload}
-              className="inline-flex h-11 items-center justify-center rounded-full bg-[#14B8A6] px-5 text-[13px] font-[600] text-[#0B0F0E] disabled:cursor-not-allowed disabled:opacity-40"
+              className="inline-flex h-11 items-center justify-center rounded-full px-5 text-[13.5px] font-[600] disabled:cursor-not-allowed disabled:opacity-40"
+              style={{ background: "var(--lp-accent)", color: "var(--lp-on-accent)" }}
             >
               Process recording
             </button>
-            <button type="button" onClick={onCancelUpload} className="text-[12.5px] text-[#6B7280] hover:text-[#9CA3AF]">
+            <button
+              type="button"
+              onClick={onCancelUpload}
+              className="text-[13.5px]"
+              style={{ color: "var(--lp-muted)" }}
+            >
               Cancel
             </button>
           </div>
@@ -142,25 +152,32 @@ export function CaptureCard({
         <div className="flex w-full max-w-[480px] flex-col items-center gap-2.5">
           <div className="flex items-center gap-2.5">
             <span className="size-2.5 animate-pulse rounded-full bg-[#EF4444]" aria-hidden />
-            <span className="text-[13px] font-[600] text-[#EF4444]">Recording</span>
-            <span className="text-[19px] font-[600] tabular-nums tracking-[-0.01em] text-[#E7E5DE]">
+            <span className="text-[13.5px] font-[600] text-[#EF4444]">Recording</span>
+            <span
+              className="text-[19px] font-[600] tabular-nums tracking-[-0.01em]"
+              style={{ color: "var(--lp-ink)" }}
+            >
               {formatElapsed(elapsedMs ?? 0)}
             </span>
           </div>
           {/* 1fps capture ⇒ frames ≈ elapsed seconds; it's an estimate, say so. */}
-          <p className="text-[12px] tabular-nums text-[#9CA3AF]">≈{frameEstimate} frames captured</p>
+          <p className="text-[13.5px] tabular-nums" style={{ color: "var(--lp-body)" }}>
+            ≈{frameEstimate} frames captured
+          </p>
           {isActive ? (
             <textarea
               value={fallbackText}
               onChange={(e) => onFallbackTextChange(e.target.value)}
               placeholder="Describe what you did (used if your browser can't transcribe speech)"
-              className="h-14 w-full resize-none rounded-[10px] border-t border-[rgba(231,229,222,.07)] bg-transparent p-2.5 pt-2.5 font-mono text-[12px] leading-[1.5] text-[#9CA3AF] outline-none placeholder:text-[#6B7280]"
+              className="h-14 w-full resize-none rounded-[10px] border-t bg-transparent p-2.5 pt-2.5 font-mono text-[13.5px] leading-[1.55] outline-none"
+              style={{ borderColor: "var(--lp-border-soft)", color: "var(--lp-body)" }}
             />
           ) : null}
           <button
             type="button"
             onClick={onStop}
-            className="inline-flex h-12 items-center justify-center rounded-full border-none bg-[#E7E5DE] px-6 text-[14px] font-[600] text-[#0B0F0E]"
+            className="inline-flex h-12 items-center justify-center rounded-full border-none px-6 text-[14px] font-[600]"
+            style={{ background: "var(--lp-ink)", color: "var(--lp-bg)" }}
           >
             Stop &amp; compile
           </button>
@@ -174,7 +191,7 @@ export function CaptureCard({
             height="18"
             viewBox="0 0 24 24"
             fill="none"
-            stroke="#14B8A6"
+            stroke="var(--lp-accent)"
             strokeWidth="2"
             strokeLinecap="round"
             className="animate-spin"
@@ -188,12 +205,13 @@ export function CaptureCard({
 
       {slot.status === "failed" ? (
         <div className="flex w-full max-w-[480px] flex-col items-center gap-2.5">
-          <p className="text-[12.5px] leading-[1.5] text-[#9CA3AF]">{slot.error}</p>
+          <p className="text-[13.5px] leading-[1.55]" style={{ color: "var(--lp-body)" }}>{slot.error}</p>
           <button
             type="button"
             disabled={!canStart || !sessionReady}
             onClick={onRecord}
-            className="inline-flex h-12 items-center justify-center gap-2 rounded-full border border-[rgba(231,229,222,.16)] bg-transparent px-6 text-[13px] font-[600] text-[#E7E5DE] disabled:cursor-not-allowed disabled:opacity-40"
+            className="inline-flex h-12 items-center justify-center gap-2 rounded-full border bg-transparent px-6 text-[13.5px] font-[600] disabled:cursor-not-allowed disabled:opacity-40"
+            style={{ borderColor: "var(--lp-border)", color: "var(--lp-ink)" }}
           >
             <span className="size-2 rounded-full bg-[#EF4444]" aria-hidden />
             Re-record

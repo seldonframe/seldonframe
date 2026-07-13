@@ -28,9 +28,9 @@ export function StepStrip({ current }: { current: 1 | 2 | 3 }) {
             <div
               className="mt-0.5 flex size-7 shrink-0 items-center justify-center rounded-full border text-[13px] font-[600] tabular-nums"
               style={{
-                background: isDone ? "#14B8A6" : isCurrent ? "rgba(20,184,166,.14)" : "transparent",
-                color: isDone ? "#052E2B" : isCurrent ? "#2DD4BF" : "rgba(231,229,222,.4)",
-                borderColor: isDone ? "#14B8A6" : isCurrent ? "rgba(20,184,166,.5)" : "rgba(231,229,222,.16)",
+                background: isDone ? "var(--lp-accent)" : isCurrent ? "rgba(20,184,166,.14)" : "transparent",
+                color: isDone ? "var(--lp-on-accent)" : isCurrent ? "var(--lp-accent-strong)" : "var(--lp-muted)",
+                borderColor: isDone ? "var(--lp-accent)" : isCurrent ? "rgba(20,184,166,.5)" : "var(--lp-border)",
               }}
             >
               {isDone ? (
@@ -44,11 +44,13 @@ export function StepStrip({ current }: { current: 1 | 2 | 3 }) {
             <div>
               <p
                 className="text-[13.5px] font-[600]"
-                style={{ color: isCurrent || isDone ? "#F5F4F0" : "rgba(231,229,222,.45)" }}
+                style={{ color: isCurrent || isDone ? "var(--lp-ink)" : "var(--lp-muted)" }}
               >
                 {step.title}
               </p>
-              <p className="mt-0.5 max-w-[220px] text-[12.5px] leading-[1.45] text-[#9CA3AF]">{step.sub}</p>
+              <p className="mt-0.5 max-w-[220px] text-[13.5px] leading-[1.55]" style={{ color: "var(--lp-body)" }}>
+                {step.sub}
+              </p>
             </div>
           </div>
         );

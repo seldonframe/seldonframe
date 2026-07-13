@@ -73,15 +73,18 @@ export function RecapPanel({
   return (
     <section
       aria-label="Recap"
-      className="flex flex-1 flex-col gap-5 rounded-[16px] border border-[rgba(231,229,222,.12)] bg-[#12171533] p-5"
+      className="flex flex-1 flex-col gap-5 rounded-[16px] border p-5"
+      style={{ borderColor: "var(--lp-border-soft)", background: "#12171533" }}
     >
       <div>
-        <p className="text-[10px] font-[600] uppercase tracking-[0.12em] text-[#14B8A6]">
+        <p className="text-[10px] font-[600] uppercase tracking-[0.12em]" style={{ color: "var(--lp-accent)" }}>
           What Seldon understood
         </p>
-        <h2 className="mt-2.5 text-[15px] font-[600] text-[#F5F4F0]">{flowModel?.title ?? "Your workflow"}</h2>
-        <p className="mt-1 text-[13px] text-[#9CA3AF]">{flowModel?.goal}</p>
-        <p className="mt-2.5 text-[12px] text-[#9CA3AF]">
+        <h2 className="mt-2.5 text-[15px] font-[600]" style={{ color: "var(--lp-ink)" }}>
+          {flowModel?.title ?? "Your workflow"}
+        </h2>
+        <p className="mt-1 text-[13.5px]" style={{ color: "var(--lp-body)" }}>{flowModel?.goal}</p>
+        <p className="mt-2.5 text-[13.5px]" style={{ color: "var(--lp-body)" }}>
           <span style={{ color: TIER_COLOR.green }}>{summary.automatable} automatable</span>
           {" · "}
           <span style={{ color: TIER_COLOR.yellow }}>{summary.needsApproval} need approval</span>
@@ -97,7 +100,8 @@ export function RecapPanel({
           return (
             <li
               key={step.index}
-              className="flex items-start gap-2.5 rounded-[10px] border border-[rgba(231,229,222,.08)] p-2.5"
+              className="flex items-start gap-2.5 rounded-[10px] border p-2.5"
+              style={{ borderColor: "var(--lp-border-soft)" }}
             >
               <span
                 className="mt-1 inline-block size-2 shrink-0 rounded-full"
@@ -106,15 +110,20 @@ export function RecapPanel({
               />
               <div className="flex-1">
                 <div className="flex flex-wrap items-center gap-2">
-                  <p className="text-[13.5px] text-[#E7E5DE]">{step.action}</p>
-                  <span className="rounded-[4px] border border-[rgba(231,229,222,.14)] px-1.5 py-px text-[10px] text-[#9CA3AF]">
+                  <p className="text-[13.5px]" style={{ color: "var(--lp-ink)" }}>{step.action}</p>
+                  <span
+                    className="rounded-[4px] border px-1.5 py-px text-[10px]"
+                    style={{ borderColor: "var(--lp-border-soft)", color: "var(--lp-body)" }}
+                  >
                     {step.app}
                   </span>
                   <span className="text-[11px] font-[600]" style={{ color: TIER_COLOR[tier] }}>
                     {TIER_LABEL[tier]}
                   </span>
                 </div>
-                {entry?.reason ? <p className="mt-1 text-[12px] text-[#9CA3AF]">{entry.reason}</p> : null}
+                {entry?.reason ? (
+                  <p className="mt-1 text-[13.5px]" style={{ color: "var(--lp-body)" }}>{entry.reason}</p>
+                ) : null}
               </div>
             </li>
           );
@@ -123,10 +132,12 @@ export function RecapPanel({
 
       {flowModel?.branches && flowModel.branches.length > 0 ? (
         <div>
-          <h3 className="text-[12px] font-[600] uppercase tracking-[0.05em] text-[#9CA3AF]">Branches</h3>
+          <h3 className="text-[13.5px] font-[600] uppercase tracking-[0.05em]" style={{ color: "var(--lp-body)" }}>
+            Branches
+          </h3>
           <ul className="mt-1.5 flex flex-col gap-1">
             {flowModel.branches.map((branch, i) => (
-              <li key={i} className="text-[12.5px] text-[#E7E5DE]">
+              <li key={i} className="text-[13.5px]" style={{ color: "var(--lp-ink)" }}>
                 {branch.condition} → {branch.behavior}
               </li>
             ))}
@@ -136,12 +147,12 @@ export function RecapPanel({
 
       {openQuestions.length > 0 ? (
         <div>
-          <h3 className="text-[12px] font-[600] uppercase tracking-[0.05em] text-[#9CA3AF]">
+          <h3 className="text-[13.5px] font-[600] uppercase tracking-[0.05em]" style={{ color: "var(--lp-body)" }}>
             Open questions ({openQuestions.length})
           </h3>
           <ul className="mt-1.5 flex flex-col gap-1">
             {openQuestions.map((q, i) => (
-              <li key={i} className="text-[12.5px] text-[#EAB308]">
+              <li key={i} className="text-[13.5px] text-[#EAB308]">
                 {q}
               </li>
             ))}
@@ -154,10 +165,13 @@ export function RecapPanel({
           not just at the record-client.tsx call site, so this component's
           own contract holds regardless of caller. */}
       {edgeCasePrompt && phase === "recap" ? (
-        <div className="flex flex-col gap-2.5 rounded-[10px] border border-[rgba(20,184,166,.22)] bg-[#14B8A60D] p-3">
+        <div
+          className="flex flex-col gap-2.5 rounded-[10px] border p-3"
+          style={{ borderColor: "rgba(20,184,166,.22)", background: "var(--lp-accent-soft)" }}
+        >
           <div>
-            <p className="text-[13px] font-[600] text-[#F5F4F0]">Make it trustworthy</p>
-            <p className="mt-0.5 text-[12.5px] leading-[1.5] text-[#9CA3AF]">
+            <p className="text-[13.5px] font-[600]" style={{ color: "var(--lp-ink)" }}>Make it trustworthy</p>
+            <p className="mt-0.5 text-[13.5px] leading-[1.55]" style={{ color: "var(--lp-body)" }}>
               Anything ever go differently? Record that too — edge cases make the agent trustworthy.
             </p>
           </div>
@@ -166,13 +180,17 @@ export function RecapPanel({
               <button
                 type="button"
                 onClick={edgeCasePrompt.onRecord}
-                className="inline-flex h-9 items-center gap-2 rounded-full border border-[rgba(231,229,222,.16)] bg-transparent px-4 text-[12.5px] font-[600] text-[#E7E5DE]"
+                className="inline-flex h-9 items-center gap-2 rounded-full border bg-transparent px-4 text-[13.5px] font-[600]"
+                style={{ borderColor: "var(--lp-border)", color: "var(--lp-ink)" }}
               >
                 <span className="size-1.5 rounded-full bg-[#EF4444]" aria-hidden />
                 + Record an edge case
               </button>
             ) : null}
-            <label className="cursor-pointer text-[12.5px] text-[#9CA3AF] underline-offset-2 hover:text-[#E7E5DE] hover:underline">
+            <label
+              className="cursor-pointer text-[13.5px] underline-offset-2 hover:underline"
+              style={{ color: "var(--lp-body)" }}
+            >
               or upload
               <input
                 type="file"
@@ -186,24 +204,32 @@ export function RecapPanel({
       ) : null}
 
       <div className="flex flex-col gap-2">
-        <h3 className="text-[12px] font-[600] uppercase tracking-[0.05em] text-[#9CA3AF]">Ask Seldon</h3>
+        <h3 className="text-[13.5px] font-[600] uppercase tracking-[0.05em]" style={{ color: "var(--lp-body)" }}>
+          Ask Seldon
+        </h3>
         <div className="flex max-h-[180px] flex-col gap-1.5 overflow-y-auto">
           {interview.map((turn, i) => (
-            <p key={i} className={`text-[13px] ${turn.role === "user" ? "text-[#E7E5DE]" : "text-[#14B8A6]"}`}>
+            <p
+              key={i}
+              className="text-[13.5px]"
+              style={{ color: turn.role === "user" ? "var(--lp-ink)" : "var(--lp-accent)" }}
+            >
               <strong>{turn.role === "user" ? "You: " : "Seldon: "}</strong>
               {turn.text}
             </p>
           ))}
           {interviewPending ? (
-            <p className="text-[13px] italic text-[#6B7280]">Seldon is updating the flow&hellip;</p>
+            <p className="text-[13.5px] italic" style={{ color: "var(--lp-muted)" }}>
+              Seldon is updating the flow&hellip;
+            </p>
           ) : null}
           {interviewError ? (
-            <p role="alert" className="text-[13px] text-[#EF4444]">
+            <p role="alert" className="text-[13.5px] text-[#EF4444]">
               {interviewError}{" "}
               <button
                 type="button"
                 onClick={onInterviewRetry}
-                className="underline underline-offset-2 hover:text-[#F5F4F0]"
+                className="underline underline-offset-2 hover:text-[color:var(--lp-ink)]"
               >
                 Retry
               </button>
@@ -223,13 +249,15 @@ export function RecapPanel({
               }
             }}
             placeholder="Answer an open question or add detail..."
-            className="flex-1 rounded-[10px] border border-[rgba(231,229,222,.12)] bg-transparent px-3 py-2 text-[13px] text-[#E7E5DE] outline-none placeholder:text-[#6B7280] disabled:opacity-50"
+            className="flex-1 rounded-[10px] border bg-transparent px-3 py-2 text-[13.5px] outline-none disabled:opacity-50"
+            style={{ borderColor: "var(--lp-border-soft)", color: "var(--lp-ink)" }}
           />
           <button
             type="button"
             disabled={interviewPending}
             onClick={onInterviewSend}
-            className="rounded-[10px] bg-[#14B8A6] px-3 py-2 text-[13px] font-[600] text-[#0B0F0E] disabled:cursor-not-allowed disabled:opacity-50"
+            className="rounded-[10px] px-3 py-2 text-[13.5px] font-[600] disabled:cursor-not-allowed disabled:opacity-50"
+            style={{ background: "var(--lp-accent)", color: "var(--lp-on-accent)" }}
           >
             Send
           </button>
@@ -239,13 +267,17 @@ export function RecapPanel({
       {/* record v3 S3 — sticky bottom claim/compile CTA on mobile (<720px)
           once the recap is ready; desktop keeps it inline in the panel. */}
       {phase === "recap" ? (
-        <div className="sticky bottom-0 -mx-5 -mb-5 border-t border-[rgba(231,229,222,.08)] bg-[#0B0F0E]/95 px-5 py-3 backdrop-blur min-[720px]:static min-[720px]:m-0 min-[720px]:border-0 min-[720px]:bg-transparent min-[720px]:p-0 min-[720px]:backdrop-blur-none">
+        <div
+          className="sticky bottom-0 -mx-5 -mb-5 border-t px-5 py-3 backdrop-blur min-[720px]:static min-[720px]:m-0 min-[720px]:border-0 min-[720px]:bg-transparent min-[720px]:p-0 min-[720px]:backdrop-blur-none"
+          style={{ borderColor: "var(--lp-border-soft)", background: "color-mix(in srgb, var(--lp-bg) 95%, transparent)" }}
+        >
           {isAuthed ? (
             <button
               type="button"
               disabled={compiling}
               onClick={onCompileNow}
-              className="mt-1 inline-flex w-full items-center justify-center gap-2.5 rounded-full bg-[#14B8A6] px-5 py-3 text-[14px] font-[600] text-[#0B0F0E] disabled:opacity-50 min-[720px]:w-auto"
+              className="mt-1 inline-flex w-full items-center justify-center gap-2.5 rounded-full px-5 py-3 text-[14px] font-[600] disabled:opacity-50 min-[720px]:w-auto"
+              style={{ background: "var(--lp-accent)", color: "var(--lp-on-accent)" }}
             >
               {compiling ? "Compiling..." : "Looks right — compile my agent"}
             </button>
@@ -253,7 +285,8 @@ export function RecapPanel({
             <a
               href={claimHref}
               onClick={onApprove}
-              className="mt-1 inline-flex w-full items-center justify-center gap-2.5 rounded-full bg-[#14B8A6] px-5 py-3 text-[14px] font-[600] text-[#0B0F0E] min-[720px]:w-auto"
+              className="mt-1 inline-flex w-full items-center justify-center gap-2.5 rounded-full px-5 py-3 text-[14px] font-[600] min-[720px]:w-auto"
+              style={{ background: "var(--lp-accent)", color: "var(--lp-on-accent)" }}
             >
               Looks right — claim &amp; compile my agent
             </a>
@@ -266,7 +299,8 @@ export function RecapPanel({
           type="button"
           disabled={compiling}
           onClick={onCompileAgent}
-          className="mt-1 inline-flex items-center justify-center gap-2.5 rounded-full bg-[#14B8A6] px-5 py-3 text-[14px] font-[600] text-[#0B0F0E] disabled:opacity-50"
+          className="mt-1 inline-flex items-center justify-center gap-2.5 rounded-full px-5 py-3 text-[14px] font-[600] disabled:opacity-50"
+          style={{ background: "var(--lp-accent)", color: "var(--lp-on-accent)" }}
         >
           {compiling ? "Compiling..." : "Compile my agent"}
         </button>
@@ -274,14 +308,15 @@ export function RecapPanel({
 
       {compiledTemplateId ? (
         <div className="mt-1 flex flex-col gap-2">
-          <p className="text-[13.5px] font-[600] text-[#F5F4F0]">Your agent is compiled</p>
+          <p className="text-[13.5px] font-[600]" style={{ color: "var(--lp-ink)" }}>Your agent is compiled</p>
           <a
             href={`/studio/agents/${compiledTemplateId}`}
-            className="inline-flex items-center justify-center gap-2.5 rounded-full bg-[#14B8A6] px-5 py-3 text-[14px] font-[600] text-[#0B0F0E]"
+            className="inline-flex items-center justify-center gap-2.5 rounded-full px-5 py-3 text-[14px] font-[600]"
+            style={{ background: "var(--lp-accent)", color: "var(--lp-on-accent)" }}
           >
             Open your agent
           </a>
-          <p className="text-[12px] text-[#9CA3AF]">
+          <p className="text-[13.5px]" style={{ color: "var(--lp-body)" }}>
             It was compiled from your recording — run its evals and test it before publishing. It&apos;s a
             draft.
           </p>

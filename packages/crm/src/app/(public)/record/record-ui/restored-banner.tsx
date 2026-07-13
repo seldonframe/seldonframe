@@ -22,14 +22,17 @@ export function RestoredBanner({
 }) {
   return (
     <div className="flex flex-wrap items-baseline gap-3">
-      <h2 className="text-[18px] font-[600] tracking-[-0.015em] text-[#E7E5DE]">Your recordings</h2>
+      <h2 className="text-[18px] font-[600] tracking-[-0.015em]" style={{ color: "var(--lp-ink)" }}>
+        Your recordings
+      </h2>
       {restored ? (
-        <span className="text-[13px] text-[#6B7280]">
+        <span className="text-[13.5px]" style={{ color: "var(--lp-muted)" }}>
           Restored from earlier ·{" "}
           <button
             type="button"
             onClick={onStartFresh}
-            className="underline-offset-2 text-[#9CA3AF] hover:text-[#E7E5DE] hover:underline"
+            className="underline-offset-2 hover:underline hover:text-[color:var(--lp-ink)]"
+            style={{ color: "var(--lp-body)" }}
           >
             Start fresh
           </button>

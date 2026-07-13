@@ -51,7 +51,7 @@ export function WaitCopy({
     status === "uploading" && uploadProgress ? ` ${uploadProgress.done}/${uploadProgress.total}` : "";
 
   return (
-    <p aria-live="polite" className="text-[13px] text-[#9CA3AF]">
+    <p aria-live="polite" className="text-[13.5px]" style={{ color: "var(--lp-body)" }}>
       {lines[idx]}
       {progressSuffix}
     </p>

@@ -46,11 +46,17 @@ export function TracedList({
           <li
             key={slot.slotIndex}
             className="flex items-center gap-3.5 rounded-[10px] border p-3"
-            style={{ borderColor: "rgba(231,229,222,.1)", background: "#0F1413" }}
+            style={{ borderColor: "var(--lp-border-soft)", background: "var(--lp-card)" }}
           >
-            <div className="relative h-10 w-[64px] shrink-0 overflow-hidden rounded-[6px] bg-[#1B2220]">
+            <div
+              className="relative h-10 w-[64px] shrink-0 overflow-hidden rounded-[6px]"
+              style={{ background: "var(--lp-card)" }}
+            >
               {durationMs !== null ? (
-                <span className="absolute bottom-1 right-1 rounded-[3px] bg-[rgba(11,15,14,.82)] px-1 text-[9px] tabular-nums text-[#E7E5DE]">
+                <span
+                  className="absolute bottom-1 right-1 rounded-[3px] px-1 text-[9px] tabular-nums"
+                  style={{ background: "rgba(11,15,14,.82)", color: "var(--lp-ink)" }}
+                >
                   {formatElapsed(durationMs)}
                 </span>
               ) : null}
@@ -62,9 +68,10 @@ export function TracedList({
                 onChange={(e) => onLabelChange(slot.slotIndex, e.target.value)}
                 aria-label="Recording label"
                 placeholder={slot.slotIndex === 0 ? "Happy path" : `Edge case ${slot.slotIndex}`}
-                className="-ml-1 truncate rounded-[6px] bg-transparent px-1 py-0.5 text-[13.5px] font-[600] text-[#E7E5DE] outline-none"
+                className="-ml-1 truncate rounded-[6px] bg-transparent px-1 py-0.5 text-[13.5px] font-[600] outline-none"
+                style={{ color: "var(--lp-ink)" }}
               />
-              <span className="text-[12px] text-[#14B8A6]">
+              <span className="text-[13.5px]" style={{ color: "var(--lp-accent)" }}>
                 Traced · flow so far: {stepsFound} step{stepsFound === 1 ? "" : "s"}
               </span>
             </div>
@@ -72,7 +79,8 @@ export function TracedList({
               type="button"
               disabled={!canStart || !sessionReady}
               onClick={() => onRerecord(slot.slotIndex)}
-              className="shrink-0 text-[12px] text-[#6B7280] underline-offset-2 hover:text-[#9CA3AF] hover:underline disabled:cursor-not-allowed disabled:opacity-40 disabled:hover:no-underline"
+              className="shrink-0 text-[13.5px] underline-offset-2 hover:underline disabled:cursor-not-allowed disabled:opacity-40 disabled:hover:no-underline"
+              style={{ color: "var(--lp-muted)" }}
             >
               Re-record
             </button>

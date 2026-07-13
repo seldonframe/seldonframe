@@ -5,12 +5,11 @@
 // interview, compile-agent) happens in handlers here, never inside the
 // reducer itself.
 //
-// Palette: dark theme (this app's default — see try-client.tsx's header
-// comment on why /try overrides to light; /record does NOT override,
-// it's meant to feel like the rest of the dark dashboard chrome the
-// operator will land in after claiming). Ink #0B0F0E paper / #E7E5DE text
-// / #14B8A6 teal accent — same teal as OnboardingShell's brand mark, so
-// the visual language is consistent from record → claim → dashboard.
+// Palette: renders inside a dark-mode .lp-root (data-mode="record"), using
+// the --lp-* tokens from components/landing/landing-theme.css — see that
+// file's dark block for the resolved values. This component owns no page
+// shell/hero of its own (Task 6's record-hero.tsx + the landing composition
+// supply that); it renders only the interactive recorder surface.
 //
 // Session persistence across the claim redirect: the raw bearer token only
 // ever exists in memory (server never re-issues it), so it's mirrored into
@@ -642,49 +641,20 @@ export function RecordClient({
       : undefined;
 
   return (
-    <div className="flex min-h-screen flex-col bg-[#0B0F0E] text-[#E7E5DE]">
-      <header className="border-b border-[rgba(231,229,222,.07)]">
-        <div className="mx-auto flex w-full max-w-[1180px] flex-wrap items-center gap-3 px-5 py-4 md:px-8">
-          <div className="flex items-center gap-2.5">
-            <span className="grid size-[22px] shrink-0 place-items-center rounded-[5px] bg-[#14B8A6]" aria-hidden>
-              <span className="size-2 rounded-[2px] bg-[#0B0F0E]" />
-            </span>
-            <span className="text-[15px] font-[600] tracking-[-0.01em]">SeldonFrame</span>
-            <span className="font-mono text-[13px] text-[rgba(231,229,222,.45)]">/record</span>
-          </div>
+    <div className="mx-auto flex w-full max-w-[1100px] flex-col gap-8">
+        {message ? (
+          <p role="alert" className="text-[13.5px] leading-[1.55]" style={{ color: "#EF4444" }}>
+            {message}
+          </p>
+        ) : null}
+        {sharedNotice ? (
+          <p className="text-[13.5px] leading-[1.55]" style={{ color: "var(--lp-body)" }}>
+            {sharedNotice}
+          </p>
+        ) : null}
+        <div className="w-full max-w-[720px]">
+          <StepStrip current={currentStep(state)} />
         </div>
-      </header>
-
-      <main className="flex-1 px-5 py-10 md:px-8 md:py-16">
-      <div className="mx-auto flex w-full max-w-[1100px] flex-col gap-8">
-        {/* Mobile (<720px) centers the hero + step strip (record v3 S3);
-            desktop matches the design (Record.dc.html's <main> is
-            align-items: flex-start — left-aligned, not centered). */}
-        <header className="flex flex-col items-center text-center min-[720px]:items-start min-[720px]:text-left">
-          <p className="inline-flex items-center gap-2.5 font-sans text-[12.5px] tracking-[0.04em] text-[#9CA3AF]">
-            <span className="inline-block size-1.5 rounded-full bg-[#14B8A6]" aria-hidden />
-            No signup to start
-          </p>
-          <h1 className="mt-3 max-w-[26ch] text-balance font-sans text-[clamp(26px,3.6vw,40px)] font-[500] leading-[1.08] tracking-[-0.02em] text-[#F5F4F0]">
-            Show Seldon how you work. It builds the agent.
-          </h1>
-          <p className="mx-auto mt-3 max-w-[58ch] text-pretty text-[15px] leading-[1.55] text-[#9CA3AF] min-[720px]:mx-0">
-            Screen-record yourself doing the job once — talking out loud, narration is half the
-            signal. Seldon watches, asks about what it didn&apos;t understand, and compiles a
-            working agent.
-          </p>
-          {message ? (
-            <p role="alert" className="mt-3 text-[13px] text-[#EF4444]">
-              {message}
-            </p>
-          ) : null}
-          {sharedNotice ? (
-            <p className="mt-3 text-[13px] text-[#9CA3AF]">{sharedNotice}</p>
-          ) : null}
-          <div className="w-full max-w-[720px]">
-            <StepStrip current={currentStep(state)} />
-          </div>
-        </header>
 
         {/* Stacks to one column below ~900px (capture above, recap below) —
             the two-column layout only kicks in once there's room for both.
@@ -724,7 +694,7 @@ export function RecordClient({
                 onCancelUpload={() => cancelPendingUpload(captureSlot.slotIndex)}
               />
             ) : (
-              <p className="text-[13px] text-[#9CA3AF]">
+              <p className="text-[13.5px] leading-[1.55]" style={{ color: "var(--lp-body)" }}>
                 All {MAX_RECORDINGS_PER_SESSION} recording slots are used.
               </p>
             )}
@@ -764,15 +734,6 @@ export function RecordClient({
             />
           ) : null}
         </div>
-      </div>
-      </main>
-
-      <footer className="border-t border-[rgba(231,229,222,.07)]">
-        <div className="mx-auto flex w-full max-w-[1180px] flex-wrap items-center gap-4 px-5 py-5 text-[12px] text-[rgba(231,229,222,.35)] md:px-8">
-          <span>SeldonFrame</span>
-          <span>Recordings stay private — they train your agent only.</span>
-        </div>
-      </footer>
     </div>
   );
 }

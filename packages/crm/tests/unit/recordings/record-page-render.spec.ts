@@ -55,15 +55,26 @@ describe("<RecordClient> — initial landing-phase render", () => {
     assert.doesNotMatch(html, /Ask Seldon/);
   });
 
-  test("headline + slots section render", () => {
+  test("slots section renders", () => {
     const html = renderInitial();
-    assert.match(html, /Show Seldon how you work/);
     assert.match(html, /aria-label="Recording slots"/);
+  });
+
+  test("StepStrip labels render", () => {
+    const html = renderInitial();
+    assert.match(html, /Record yourself working/);
+    assert.match(html, /Answer Seldon&#x27;s questions|Answer Seldon's questions/);
+    assert.match(html, /Get your agent/);
   });
 
   test("agent-loop explainer is removed", () => {
     const html = renderInitial();
     assert.doesNotMatch(html, /The agent loop/);
+  });
+
+  test("no page shell — RecordClient renders only the interactive surface (Task 5 extraction)", () => {
+    const html = renderInitial();
+    assert.doesNotMatch(html, /min-h-screen/);
   });
 
   test('"Start fresh" is absent when no session exists yet (landing phase)', () => {
