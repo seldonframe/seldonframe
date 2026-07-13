@@ -2104,3 +2104,19 @@ C4 close-out with empirical SLICE 11 data.
   the FRESH base commit (`git show origin/main:<path>` / `git grep <pattern>
   origin/main`). Session memory and subagent reports describe the repo as it
   WAS. Full approach: docs/learnings/2026-07-12-competitor-teardown-to-gap-slice.md
+
+---
+
+## L-36 — A gate verdict must exist as a recorded artifact on the final sha
+
+- **Trigger:** Record v3 merge (2026-07-12). The controller's summary claimed
+  "/verify-build PASS", but the verify-runner had died with no completion
+  record, and its (never-recorded) run predated the final fix-wave commit. A
+  stale task-notification at merge time was the only tell. Re-ran the gate on
+  the final rebased sha before pushing to main.
+- **Rule:** Before any merge, enumerate the gates and confirm each has a
+  RECORDED verdict (agent result or report file) on the FINAL sha. "An agent
+  was dispatched" / "I remember it passed" is not a verdict. Verdicts carry
+  over a rebase only when the diff is provably identical (conflict-free, zero
+  file overlap); test gates re-run regardless because they exercise the
+  integrated tree. See docs/learnings/2026-07-12-verify-the-verdict-exists.md.
