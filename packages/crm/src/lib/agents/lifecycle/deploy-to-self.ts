@@ -82,6 +82,16 @@ export type DeployToSelfDeps = {
    *  throw is caught and swallowed (see deployToSelfCore). Absent → no-op
    *  (every non-email / non-gmail deploy, byte-for-byte unchanged). */
   ingestVoiceProfile?: (args: { orgId: string }) => Promise<unknown>;
+  /** Email-agent slice (Part B2) — best-effort poll->push upgrade for a
+   *  record-compiled inbox-watch agent (maybeUpgradeInboxTriggerToPush). The
+   *  module itself checks ALL upgrade conditions (schedule/email/inbox-watch
+   *  cron + gmail binding + webhook secret + gmail connected) — this hook is
+   *  called unconditionally when present; a throw is caught and swallowed
+   *  (see deployToSelfCore). Absent → no-op (byte-for-byte unchanged). */
+  maybeUpgradeInboxTrigger?: (args: {
+    orgId: string;
+    deploymentId: string;
+  }) => Promise<{ upgraded: boolean; reason?: string }>;
 };
 
 /** True iff the blueprint binds a Composio "gmail" toolkit — the signal that
@@ -153,6 +163,35 @@ export async function deployToSelfCore(
       );
     }
   }
+
+  // Email-agent slice (Part B2) — best-effort poll->push upgrade. Awaited
+  // (it's a fast, cheap-checks-first module) so the deploy log line below can
+  // report `upgraded`; guarded so a throwing upgrade attempt NEVER fails the
+  // deploy — the hourly schedule is already the floor.
+  let inboxTriggerUpgraded = false;
+  if (deps.maybeUpgradeInboxTrigger) {
+    try {
+      const upgrade = await deps.maybeUpgradeInboxTrigger({
+        orgId: input.orgId,
+        deploymentId: created.deploymentId,
+      });
+      inboxTriggerUpgraded = upgrade.upgraded;
+    } catch (err) {
+      console.warn(
+        `[deploy-to-self] maybeUpgradeInboxTrigger failed for org ${input.orgId}:`,
+        err instanceof Error ? err.message : String(err),
+      );
+    }
+  }
+  console.log(
+    JSON.stringify({
+      action: "deploy_to_self.complete",
+      orgId: input.orgId,
+      deploymentId: created.deploymentId,
+      triggerKind: trigger.kind,
+      inboxTriggerUpgraded,
+    }),
+  );
 
   const needsNumber = agentNeedsNumber(trigger);
   let active = false;

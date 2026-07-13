@@ -12,10 +12,18 @@ import { agentTemplates, organizations } from "@/db/schema";
 import type { AgentBlueprint } from "@/db/schema/agents";
 import { getOrgId } from "@/lib/auth/helpers";
 import { assertWritable } from "@/lib/demo/server";
-import { createDeployment, updateDeployment } from "@/lib/deployments/store";
+import {
+  createDeployment,
+  updateDeployment,
+  getDeploymentOrgAndTemplate,
+  stampDeploymentTriggerUpgraded,
+} from "@/lib/deployments/store";
 import { deployToSelfCore, type DeployToSelfDeps } from "@/lib/agents/lifecycle/deploy-to-self";
 import { ingestSentMailVoiceProfile } from "@/lib/agents/voice-profile/ingest-sent-mail";
 import { buildVoiceIngestDeps } from "@/lib/agents/voice-profile/build-deps";
+import { maybeUpgradeInboxTriggerToPush } from "@/lib/deployments/upgrade-inbox-trigger";
+import { getAgentTemplate, updateAgentTemplate } from "@/lib/agent-templates/store";
+import { createTrigger, listConnections } from "@/lib/integrations/composio/client";
 
 export type DeployToSelfActionResult =
   | { ok: true; deploymentId: string; active: boolean; triggerSentence: string }
@@ -67,6 +75,35 @@ export async function deployToSelfAction(templateId: string): Promise<DeployToSe
         orgId: ingestOrgId,
       });
     },
+    // Email-agent slice (Part B2) — best-effort poll->push upgrade. The
+    // module itself checks ALL conditions; deployToSelfCore already wraps
+    // this call in try/catch, so a failure here never fails the deploy.
+    maybeUpgradeInboxTrigger: async ({ orgId: upgradeOrgId, deploymentId }) =>
+      maybeUpgradeInboxTriggerToPush(
+        {
+          getDeployment: getDeploymentOrgAndTemplate,
+          getTemplateBlueprint: async (agentTemplateId) => {
+            const tmpl = await getAgentTemplate(agentTemplateId);
+            return (tmpl?.blueprint ?? null) as AgentBlueprint | null;
+          },
+          hasWebhookSecret: () => Boolean(process.env.COMPOSIO_WEBHOOK_SECRET?.trim()),
+          isGmailConnected: async (checkOrgId) => {
+            const connections = await listConnections(checkOrgId);
+            return connections.some((c) => c.slug === "gmail" && c.connected);
+          },
+          createTrigger: (triggerOrgId) =>
+            createTrigger(triggerOrgId, "GMAIL_NEW_GMAIL_MESSAGE"),
+          updateTemplateTrigger: async (agentTemplateId, trigger) => {
+            const updated = await updateAgentTemplate({
+              id: agentTemplateId,
+              patch: { trigger },
+            });
+            if (!updated.ok) throw new Error(updated.error);
+          },
+          stampUpgraded: stampDeploymentTriggerUpgraded,
+        },
+        { orgId: upgradeOrgId, deploymentId },
+      ),
   };
 
   const result = await deployToSelfCore(deps, {

@@ -1527,6 +1527,69 @@ export async function markComposioMessageProcessed(
     .where(eq(deployments.id, deploymentId));
 }
 
+// ─── poll->push upgrade audit stamp (email-agent slice, Part B2) ───────────
+
+/** The reserved customization jsonb key stamping when a deployment's inbox
+ *  trigger was upgraded from poll to push (audit trail; no migration). */
+export const TRIGGER_UPGRADED_AT_KEY = "triggerUpgradedAt";
+
+/** Resolve a deployment's org (clientOrgId ?? builderOrgId) + template id —
+ *  the lookup maybeUpgradeInboxTriggerToPush's `getDeployment` dep needs.
+ *  Lazy DB import; returns null when the deployment doesn't exist. */
+export async function getDeploymentOrgAndTemplate(
+  deploymentId: string,
+): Promise<{ orgId: string; agentTemplateId: string } | null> {
+  if (!deploymentId) return null;
+  const { db } = await import("@/db");
+  const { deployments } = await import("@/db/schema/deployments");
+  const { eq } = await import("drizzle-orm");
+
+  const [row] = await db
+    .select({
+      builderOrgId: deployments.builderOrgId,
+      clientOrgId: deployments.clientOrgId,
+      agentTemplateId: deployments.agentTemplateId,
+    })
+    .from(deployments)
+    .where(eq(deployments.id, deploymentId))
+    .limit(1);
+  if (!row) return null;
+  return {
+    orgId: row.clientOrgId ?? row.builderOrgId,
+    agentTemplateId: row.agentTemplateId,
+  };
+}
+
+/** Stamp `customization.triggerUpgradedAt` (ISO) on a deployment — the
+ *  poll->push upgrade's audit marker. Same read-modify-write jsonb idiom as
+ *  markDeploymentScheduleFired (no migration). Lazy DB import. */
+export async function stampDeploymentTriggerUpgraded(
+  deploymentId: string,
+  at: Date,
+): Promise<void> {
+  if (!deploymentId) return;
+  const { db } = await import("@/db");
+  const { deployments } = await import("@/db/schema/deployments");
+  const { eq } = await import("drizzle-orm");
+
+  const [row] = await db
+    .select({ customization: deployments.customization })
+    .from(deployments)
+    .where(eq(deployments.id, deploymentId))
+    .limit(1);
+
+  const current = (row?.customization ?? {}) as Record<string, unknown>;
+  const next = { ...current, [TRIGGER_UPGRADED_AT_KEY]: at.toISOString() };
+
+  await db
+    .update(deployments)
+    .set({
+      customization: next as Partial<DeploymentCustomization>,
+      updatedAt: new Date(),
+    })
+    .where(eq(deployments.id, deploymentId));
+}
+
 // ─── listSfManagedDeploymentsForRent (Task 7 — the monthly rent cron) ───────
 
 /** One row the rent cron plans against — see planMonthlyRent

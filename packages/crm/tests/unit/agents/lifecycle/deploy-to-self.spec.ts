@@ -272,3 +272,54 @@ describe("deployToSelfCore — voice-profile ingestion (Part A3)", () => {
     if (result.ok) assert.equal(result.deploymentId, "dep-1");
   });
 });
+
+describe("deployToSelfCore — poll->push upgrade hook (Part B2)", () => {
+  test("calls maybeUpgradeInboxTrigger with the created deploymentId", async () => {
+    let calledWith: unknown = null;
+    const deps = fakeDeps({
+      maybeUpgradeInboxTrigger: async (args) => {
+        calledWith = args;
+        return { upgraded: true };
+      },
+    });
+
+    const result = await deployToSelfCore(deps, {
+      orgId: ORG_ID,
+      orgName: "Acme Plumbing",
+      templateId: TEMPLATE_ID,
+      blueprint: blueprintWithTrigger({ kind: "schedule", cron: "0 * * * *", channel: "email" }),
+    });
+
+    assert.equal(result.ok, true);
+    assert.deepEqual(calledWith, { orgId: ORG_ID, deploymentId: "dep-1" });
+  });
+
+  test("maybeUpgradeInboxTrigger throwing NEVER fails the deploy", async () => {
+    const deps = fakeDeps({
+      maybeUpgradeInboxTrigger: async () => {
+        throw new Error("composio down");
+      },
+    });
+
+    const result = await deployToSelfCore(deps, {
+      orgId: ORG_ID,
+      orgName: "Acme Plumbing",
+      templateId: TEMPLATE_ID,
+      blueprint: blueprintWithTrigger({ kind: "schedule", cron: "0 * * * *", channel: "email" }),
+    });
+
+    assert.equal(result.ok, true);
+    if (result.ok) assert.equal(result.deploymentId, "dep-1");
+  });
+
+  test("absent maybeUpgradeInboxTrigger dep -> no-op, deploy unaffected", async () => {
+    const deps = fakeDeps();
+    const result = await deployToSelfCore(deps, {
+      orgId: ORG_ID,
+      orgName: "Acme Plumbing",
+      templateId: TEMPLATE_ID,
+      blueprint: blueprintWithTrigger({ kind: "schedule", cron: "0 * * * *", channel: "email" }),
+    });
+    assert.equal(result.ok, true);
+  });
+});
