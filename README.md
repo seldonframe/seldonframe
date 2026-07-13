@@ -272,7 +272,7 @@ Your builder hub is **[seldonframe.com/build](https://seldonframe.com/build)** �
 
 | | |
 |---|---|
-| **Self-host** | $0 — AGPL-3.0, the entire monorepo |
+| **Self-host** | $0 — AGPL-3.0, the entire monorepo · [`docker compose up`](QUICKSTART.md#self-host) and you're running |
 | **Hosted — first workspace** | Free forever, no card |
 | **Hosted — unlimited workspaces** | $29/mo flat (white-label + voice included) |
 | **Your AI tokens** | Bring your own key — we never mark up usage |
