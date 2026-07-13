@@ -41,8 +41,13 @@ Everything here is worthless the moment it fabricates. So:
 
 - A **topic / keyword cluster** (from the calling loop — e.g. "SaaS mastermind",
   "AI receptionist for clinics", "speed to lead").
-- Optionally, a **channel or creator list** in the niche (better yield than open
-  search — recurring founder-interview channels are goldmines).
+- The **curated channel list** in `docs/strategy/youtube-sources.md` — read it
+  and prefer the channels under the matching cluster (recurring founder-interview
+  channels are goldmines, far better yield than open search). Max feeds new
+  channels there; that file is the "prime the pump" input.
+- Any **pre-saved transcripts** in `docs/strategy/youtube-transcripts/` — a
+  human-dropped transcript (from the manual notegpt.io route) that you use
+  as-is. Check this folder FIRST; it's the reliable path when the API is blocked.
 
 ## The loop (per topic)
 
@@ -58,7 +63,9 @@ Collect 3–6 URLs per topic. Use `WebSearch` (site:youtube.com) or a known
 channel list. Record `{ title, channel, url }` for each.
 
 ### 2. Pull the transcript
-Run the helper (fail-soft, honest):
+FIRST check `docs/strategy/youtube-transcripts/` — if a human already dropped a
+transcript for this video (from the manual notegpt.io route), use it as-is; the
+first line holds the source URL. Otherwise run the helper (fail-soft, honest):
 
 ```
 node scripts/youtube-transcript.mjs "<url>" --json
