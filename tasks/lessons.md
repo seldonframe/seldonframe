@@ -2140,3 +2140,43 @@ C4 close-out with empirical SLICE 11 data.
   install left the tree clean (`git status --porcelain` — no lockfile drift)
   before pushing. Supersedes the junction-only shortcut in
   worktree-typecheck-method for any RUN (execute) step.
+
+---
+
+## L-38 — When grep disagrees with a fresh Read about COMMITTED state, trust `git show HEAD:` + a real test run, not the grep
+
+- **Trigger:** After a 51-commit merge, a single `grep` of a conflict-resolved
+  file (`lifecycle-connect-actions.ts`) returned ZERO hits for the widening
+  symbols (`requiredToolkitSlugs`/`isOwnToolkit`), which read as "the merge
+  silently dropped a reviewed feature." A harness "file modified by linter"
+  note reinforced it. I nearly re-applied a fix that wasn't needed. A fresh
+  `Read` then showed the widening WAS present; `git show HEAD:<file> | grep -c`
+  = 6, working tree clean, and the spec passed 11/11 including the widening
+  tests. The lone grep had caught a transient mid-write filesystem state (a
+  background agent / harness linter touching files).
+- **Rule:** Ground truth for "what is committed" is `git show HEAD:<path>` (and
+  for "does it work", a real test run), NOT a single working-tree grep — the
+  working tree can be mid-write when a background subagent or the harness's
+  linter is touching files. When a grep result would trigger a corrective
+  action (re-apply a fix, revert a merge, re-resolve a conflict), CONFIRM it
+  against `git show HEAD:` + a targeted test BEFORE acting. It was still right
+  to verify the reviewed feature survived the merge — silently dropping
+  reviewed code in a merge is a real failure mode — just verify with the
+  authoritative source, not the first signal.
+
+## L-39 — A non-empty response body is not success; detect service-error sentinels (Optimistic Path, tool edition)
+
+- **Trigger:** The new `scripts/youtube-transcript.mjs` fetched a transcript,
+  got HTTP 200 with 142 chars of text, and reported `ok:true` — but the body
+  was youtubetranscript.com's error message *"We're sorry, YouTube is currently
+  blocking us from fetching subtitles"*, not a transcript. The tool would have
+  fed a fabricated-looking "transcript" (actually a service error) into the
+  content loop. Classic §3.1 Optimistic Path: "the fetch returned data" ≠ "the
+  fetch returned the thing I asked for."
+- **Rule:** For any external-fetch helper whose output feeds a downstream
+  writer, success = the RIGHT content, not just a 2xx + non-empty body. Add an
+  `isReal…()` guard that (a) enforces a sane minimum length and (b) rejects
+  known service-error sentinel phrases, then falls through to the next
+  source / an honest failure. Especially in a never-lies content pipeline: a
+  helper that passes an error body downstream launders it into a fabricated
+  claim. Fail honestly (point to the manual route) rather than pass through.
