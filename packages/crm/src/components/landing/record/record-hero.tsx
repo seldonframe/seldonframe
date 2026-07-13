@@ -9,6 +9,7 @@
 import dynamic from "next/dynamic";
 import { HeroModeSwitch } from "@/components/landing/landing-mode";
 import { RecordLoop } from "@/components/landing/record/record-loop";
+import { FlickerGrid } from "@/components/landing/flicker-grid";
 
 // Code-split: the recorder bundle (state machine, service worker,
 // upload pipeline) loads when record mode mounts — never on the
@@ -39,9 +40,18 @@ export function RecordHero({
     <section
       id="record-top"
       aria-label="Record how you work"
-      className="relative flex flex-col items-center px-5 pb-16 pt-[100px] md:px-8 md:pb-20 md:pt-[120px]"
+      className="relative flex flex-col items-center overflow-hidden px-5 pb-16 pt-[100px] md:px-8 md:pb-20 md:pt-[120px]"
     >
-      <div className="flex w-full max-w-[860px] flex-col items-center text-center">
+      {/* Flickering-grid backdrop — dark, accent-teal squares, masked to fade
+          toward the edges. Decorative + reduced-motion-safe. */}
+      <div
+        className="pointer-events-none absolute inset-0 top-0 z-0 h-[520px] [mask-image:radial-gradient(ellipse_at_top,black,transparent_75%)]"
+        aria-hidden
+      >
+        <FlickerGrid color="#2FD4A7" />
+      </div>
+
+      <div className="relative z-10 flex w-full max-w-[860px] flex-col items-center text-center">
         <p className="inline-flex items-center gap-2.5 font-sans text-[13.5px] tracking-[0.04em] text-[var(--lp-muted)]">
           <span className="inline-block size-1.5 rounded-full bg-[var(--lp-accent)]" aria-hidden />
           No signup to start

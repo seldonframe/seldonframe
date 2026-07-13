@@ -33,7 +33,6 @@ import {
   Plug,
   Send,
   Smartphone,
-  Sparkles,
   Star,
   Users,
 } from "lucide-react";
@@ -100,6 +99,19 @@ const SURFACES = [
   { label: "Email", icon: Mail },
   { label: "DM", icon: Send },
   { label: "MCP", full: "MCP-endpoint", icon: Plug },
+] as const;
+
+// Real tools the agents act through (Composio-bound), mirroring the top-hero
+// orbit. Inner ring = first 4, outer ring = rest.
+const AGENT_TOOLS = [
+  { src: "/brand/integrations/gmail.svg", alt: "Gmail" },
+  { src: "/brand/integrations/google-calendar.svg", alt: "Google Calendar" },
+  { src: "/brand/integrations/stripe.svg", alt: "Stripe" },
+  { src: "/brand/integrations/slack.svg", alt: "Slack" },
+  { src: "/brand/integrations/hubspot.svg", alt: "HubSpot" },
+  { src: "/brand/integrations/notion.svg", alt: "Notion" },
+  { src: "/brand/integrations/google-sheets.svg", alt: "Google Sheets" },
+  { src: "/brand/integrations/instagram.svg", alt: "Instagram" },
 ] as const;
 
 export function MarketingModules() {
@@ -218,39 +230,54 @@ export function MarketingAgents() {
             </div>
           </div>
 
-          {/* Lead figure — one agent, every surface. The 6 real SF surfaces
-              (voice · web-chat · SMS · email · DM · MCP-endpoint, CLAUDE.md
-              §1b) orbit a single agent core, making the "any agent on any
-              surface" composition claim concrete. Additive: doesn't touch
-              any existing block above. */}
-          <div
-            className="relative mx-auto size-[290px] shrink-0"
-            aria-label="One agent, deployed on every surface: voice, web-chat, SMS, email, DM, and MCP-endpoint"
-          >
-            <div className="absolute left-1/2 top-1/2 z-10 flex size-14 -translate-x-1/2 -translate-y-1/2 items-center justify-center rounded-full bg-[#6fc28f] text-[#1F2B24] shadow-[0_0_0_8px_rgba(111,194,143,.14)]">
-              <Sparkles className="size-6" aria-hidden />
-            </div>
-            {/* path={false}: OrbitingCircles' default ring is stroke-black/10
-                dark:stroke-white/10 — on this always-dark #1F2B24 slab (light-
-                only build, no dark: activation) that reads as invisible
-                black-on-dark, so the ring is dropped for restraint. */}
-            <OrbitingCircles
-              radius={110}
-              duration={28}
-              iconSize={60}
-              path={false}
-              className="flex-col gap-1 border border-[rgba(255,255,255,.16)] bg-[#243830] text-[rgba(246,242,234,.92)]"
+          {/* Lead figure — one agent, working across your real tools, mirroring
+              the top-hero orbit (real logos, not abstract chips). The 6 SF
+              surfaces (CLAUDE.md §1b) are preserved as the caption below so the
+              "any agent on any surface" claim survives the visual swap. */}
+          <div className="flex flex-col items-center gap-4">
+            <div
+              className="relative mx-auto size-[290px] shrink-0"
+              aria-label="One agent, working across your tools: Gmail, Google Calendar, Stripe, Slack, HubSpot, Notion, Google Sheets, and 1,000 more via Composio"
             >
-              {SURFACES.map((surface) => (
-                <div key={surface.label} className="flex flex-col items-center justify-center gap-1 text-center leading-none">
-                  <surface.icon className="size-3.5" aria-hidden />
-                  <span className="text-[10px] font-[600] uppercase tracking-[0.02em]">
-                    {surface.label}
-                    {"full" in surface && <span className="sr-only">-endpoint</span>}
-                  </span>
-                </div>
+              <div className="absolute left-1/2 top-1/2 z-10 flex size-16 -translate-x-1/2 -translate-y-1/2 items-center justify-center rounded-[18px] bg-[#6fc28f] shadow-[0_0_0_8px_rgba(111,194,143,.14)]">
+                {/* eslint-disable-next-line @next/next/no-img-element -- static brand asset */}
+                <img src="/brand/seldonframe-icon.svg" alt="SeldonFrame agent" width={30} height={30} className="block" />
+              </div>
+              <OrbitingCircles
+                radius={78}
+                duration={22}
+                iconSize={42}
+                path={false}
+                className="border border-[rgba(255,255,255,.16)] bg-[#FFFDFA]"
+              >
+                {AGENT_TOOLS.slice(0, 4).map((t) => (
+                  // eslint-disable-next-line @next/next/no-img-element -- static vendored SVG
+                  <img key={t.src} src={t.src} alt={t.alt} width={22} height={22} className="block" />
+                ))}
+              </OrbitingCircles>
+              <OrbitingCircles
+                radius={128}
+                duration={30}
+                reverse
+                iconSize={44}
+                path={false}
+                className="border border-[rgba(255,255,255,.16)] bg-[#FFFDFA]"
+              >
+                {AGENT_TOOLS.slice(4).map((t) => (
+                  // eslint-disable-next-line @next/next/no-img-element -- static vendored SVG
+                  <img key={t.src} src={t.src} alt={t.alt} width={23} height={23} className="block" />
+                ))}
+              </OrbitingCircles>
+            </div>
+            <p className="max-w-[240px] text-center text-[12px] leading-[1.5] text-[rgba(246,242,234,.6)]">
+              on{" "}
+              {SURFACES.map((s, i) => (
+                <span key={s.label}>
+                  {i > 0 && " · "}
+                  <span className="text-[rgba(246,242,234,.85)]">{s.label}</span>
+                </span>
               ))}
-            </OrbitingCircles>
+            </p>
           </div>
         </div>
       </div>

@@ -20,19 +20,23 @@
 // component never renders in "record" mode.
 
 import { useRef } from "react";
+import { Phone } from "lucide-react";
 
 import { AnimatedBeam } from "@/components/ui/magic/animated-beam";
 
 type ToolNode = {
   id: string;
   label: string;
+  /** Real brand logo under /public; `phone` has no brand mark so it renders
+   *  a lucide glyph instead. */
+  logo?: string;
 };
 
 const TOOLS: readonly ToolNode[] = [
-  { id: "calendar", label: "Calendar" },
-  { id: "gmail", label: "Gmail" },
+  { id: "calendar", label: "Calendar", logo: "/brand/integrations/google-calendar.svg" },
+  { id: "gmail", label: "Gmail", logo: "/brand/integrations/gmail.svg" },
   { id: "phone", label: "Phone" },
-  { id: "slack", label: "Slack" },
+  { id: "slack", label: "Slack", logo: "/brand/integrations/slack.svg" },
 ];
 
 export function IntegrationBeam() {
@@ -59,10 +63,11 @@ export function IntegrationBeam() {
       <div className="relative z-10 flex flex-col items-center gap-1.5">
         <div
           ref={centerRef}
-          className="flex size-12 items-center justify-center rounded-full bg-[#00897B] text-[13px] font-[700] text-white shadow-[0_2px_8px_rgba(0,137,123,.35)]"
+          className="flex size-12 items-center justify-center rounded-full bg-[#00897B] shadow-[0_2px_8px_rgba(0,137,123,.35)]"
           aria-hidden
         >
-          SF
+          {/* eslint-disable-next-line @next/next/no-img-element -- static brand asset */}
+          <img src="/brand/seldonframe-icon-white.svg" alt="" width={24} height={24} className="block" />
         </div>
         <span className="text-[11px] font-[600] text-[#221D17]">SeldonFrame</span>
       </div>
@@ -75,10 +80,14 @@ export function IntegrationBeam() {
             <span className="text-[11px] font-[500] text-[#6E665A]">{tool.label}</span>
             <div
               ref={toolRefs[tool.id as keyof typeof toolRefs]}
-              className="flex size-9 items-center justify-center rounded-[8px] border border-[rgba(34,29,23,.10)] bg-[#FFFDFA] text-[10px] font-[600] text-[#221D17] shadow-[0_1px_2px_rgba(34,29,23,.05)]"
+              className="flex size-9 items-center justify-center rounded-[8px] border border-[rgba(34,29,23,.10)] bg-[#FFFDFA] text-[#221D17] shadow-[0_1px_2px_rgba(34,29,23,.05)]"
             >
-              {/* Abbreviation duplicates the adjacent label for screen readers. */}
-              <span aria-hidden="true">{tool.label.slice(0, 2)}</span>
+              {tool.logo ? (
+                // eslint-disable-next-line @next/next/no-img-element -- static vendored SVG
+                <img src={tool.logo} alt="" width={18} height={18} className="block" aria-hidden="true" />
+              ) : (
+                <Phone className="size-[17px] text-[#00897B]" aria-hidden="true" />
+              )}
             </div>
           </div>
         ))}
