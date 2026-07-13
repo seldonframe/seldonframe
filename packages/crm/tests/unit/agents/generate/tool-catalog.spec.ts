@@ -121,6 +121,22 @@ describe("TOOL_CATALOG — required coverage", () => {
     assert.equal(e.connectorKind, "vetted");
   });
 
+  test("includes circle (vetted, OAuth community platform)", () => {
+    const e = entry("circle");
+    assert.equal(e.connectorKind, "vetted");
+    assert.ok(
+      VETTED_CONNECTORS.find((c) => c.id === "circle")?.authType === "oauth",
+      "circle's registry entry must be authType oauth",
+    );
+  });
+
+  test("findToolsByKeywords matches a Circle-mastermind sentence", () => {
+    const hits = findToolsByKeywords(
+      "pair up active members of my Circle mastermind each month",
+    );
+    assert.ok(hits.some((h) => h.id === "circle"));
+  });
+
   test("postiz description is multi-platform (not Instagram-exclusive)", () => {
     const { description } = entry("postiz");
     // The poster reaches well beyond Instagram — the description must name other

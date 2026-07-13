@@ -89,6 +89,40 @@ describe("bindToolsForIntent — vetted (Postiz)", () => {
   });
 });
 
+describe("bindToolsForIntent — vetted OAuth (Circle)", () => {
+  test("a Circle-mastermind pairing sentence yields a valid vetted Circle binding; warnings === []", () => {
+    const { connectors, warnings } = bindToolsForIntent(
+      intentWith("pair up active members of my Circle mastermind each month"),
+    );
+    assert.equal(warnings.length, 0, "pure layer never produces warnings");
+
+    const circle = connectors.find((c) => c.id === "circle");
+    assert.ok(circle, "should include a Circle binding");
+    assert.deepEqual(circle, {
+      id: "circle",
+      kind: "vetted",
+      serviceName: "circle",
+      enabledTools: [],
+    });
+    assertValidBinding(circle);
+  });
+
+  test("a figurative \"circle back\" sentence still matches (whole-word matcher, no semantic disambiguation) — accepted-suggestion noise, never an error", () => {
+    // findToolsByKeywords is a whole-word (not semantic) matcher — "circle" as a
+    // standalone word matches regardless of "circle back" idiom vs the Circle
+    // product. Per the design (§D), this is accepted suggestion noise (the
+    // operator can just not click bind it), never surfaced as an error/throw.
+    const { connectors, warnings } = bindToolsForIntent(
+      intentWith("let's circle back next week on the proposal"),
+    );
+    assert.equal(warnings.length, 0);
+    assert.ok(
+      connectors.some((c) => c.id === "circle"),
+      "the whole-word matcher is expected to match here too — documented tradeoff, not a bug",
+    );
+  });
+});
+
 describe("bindToolsForIntent — composio", () => {
   test("a 'log to Notion' intent yields a composio binding enabling the notion toolkit", () => {
     const { connectors, warnings } = bindToolsForIntent(
