@@ -33,6 +33,12 @@
 // Preserves the existing auth redirect: signed-in users go to the
 // dashboard; unauthenticated visitors see the marketing surface.
 
+// Landing theme tokens — imported at the route level, NOT in
+// unified-landing.tsx or landing-mode.tsx, so those stay importable
+// under the node:test harness (no CSS loader in tsx). /record/page.tsx
+// must carry the same import (Task 10).
+import "@/components/landing/landing-theme.css";
+
 import type { Metadata } from "next";
 import { redirect } from "next/navigation";
 import { auth } from "@/auth";

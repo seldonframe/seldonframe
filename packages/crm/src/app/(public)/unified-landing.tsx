@@ -4,8 +4,8 @@
 // resolved from ?mode=; /record renders it pre-flipped. Section stacks
 // are server-rendered and handed to the client shell as children.
 
-// Landing theme tokens — page-level import (see landing-mode.tsx header note).
-import "@/components/landing/landing-theme.css";
+// NOTE: landing-theme.css is imported by each route (page.tsx,
+// record/page.tsx) — see the header note in landing-mode.tsx.
 
 import type { LandingMode } from "./landing-mode";
 import { LandingModeShell } from "@/components/landing/landing-mode";
