@@ -18,7 +18,13 @@ export const article: BlogArticle = {
     url: "https://www.youtube.com/watch?v=83fWzQSWB10",
     title: "AI Agents are the new SaaS",
     channel: "Greg Isenberg — The Startup Ideas Podcast",
+    thumbnail: "https://img.youtube.com/vi/83fWzQSWB10/maxresdefault.jpg",
   },
+  heroStats: [
+    { value: 1000, display: "$1,000/mo", label: "for one workflow, one promise (plus a $1,500 setup)" },
+    { value: 42, display: "42 / 50", label: "maintenance requests routed correctly in the pilot eval" },
+    { value: 500, display: "500 tickets", label: "handled per month on the $3,000/mo outcome tier" },
+  ],
   sections: [
     {
       h2: "The product is the job, not the tool",
@@ -34,11 +40,29 @@ export const article: BlogArticle = {
       h2: "Shadow the human, then write a seven-part spec",
       body:
         "Before any prompting or coding, Isenberg's advice is to shadow the person currently doing the job: watch them work through it \"10 to 20 times,\" have them screen-record and narrate, and ask what makes a case easy, what makes it weird, and where mistakes actually happen. His example is a restaurant host fielding \"what time are you open?\" — the real workflow underneath that question includes knowing when the kitchen closes, which tables suit a stroller, when the patio is closed, and how to route a VIP. As he puts it, *\"the detail is the product.\"*\n\nOut of that shadowing comes what he calls a seven-part agent spec: what wakes the agent up, what context it needs, what tools it can use, what it's allowed to do on its own, where it needs approval, when it should escalate to a human, and what success looks like. Skip that structure, he warns, and \"you're not just going to build agent slop\" — the goal is an agent that does the work as well as or better than a human, consistently, because consistency is what people actually pay for.",
+      callout: {
+        kind: "tip",
+        text: "Before you write a single prompt, watch the human do the job 10-20 times — screen-recorded and narrated. The seven-part spec (trigger, context, tools, autonomy, approvals, escalation, success) comes straight out of that shadowing, not out of guessing.",
+      },
     },
     {
       h2: "Build the smallest useful agent, not a fake autonomous employee",
       body:
         "Isenberg pushes back directly on the Twitter-demo version of \"agent\" — the fully autonomous employee that looks impressive and doesn't really work. His recommended starting point is what he calls the **minimal useful agent (MUA)**, and he names four legitimate first versions: a *draft-and-approve* agent that reads context and drafts a reply, quote, or next step for a human to approve; a *triage* agent that classifies and routes inbound work (a maintenance request, a billing issue, a refund); a *coordinator* agent that moves between systems and people — checking availability, sending reminders, chasing missing info; and a *bounded-action* agent that can take one narrow action under clear rules, like booking an appointment or processing a refund under $50.\n\nHe cites Anthropic's own agent guidance to back the restraint: many agent problems should start as a **workflow** — a predictable path — with autonomy earned only once the predictable version is proven, adding judgment where it creates value rather than starting fully open-ended. His practical version: launch with one workflow and one promise, something as narrow as \"we answer missed calls for roofers and book qualified jobs,\" because early customers buying an agent for the first time don't want everything at once.",
+      callout: {
+        kind: "warning",
+        text: "Skip the seven-part spec and Isenberg's warning is blunt: you're not building an agent, you're building agent slop. Start as a workflow with one promise — autonomy gets earned once the predictable version is proven, not assumed on day one.",
+      },
+      diagram: {
+        type: "stack",
+        title: "Four legitimate first versions (the MUA)",
+        layers: [
+          { label: "Draft-and-approve", sub: "Reads context, drafts a reply/quote/next step for a human to approve" },
+          { label: "Triage", sub: "Classifies and routes inbound work — a maintenance request, a billing issue, a refund" },
+          { label: "Coordinator", sub: "Moves between systems and people — checks availability, sends reminders, chases missing info" },
+          { label: "Bounded-action", sub: "Takes one narrow action under clear rules, e.g. booking an appointment or a refund under $50" },
+        ],
+      },
     },
     {
       h2: "The wrapper is the SaaS, and evals are how you sell trust",
@@ -54,6 +78,17 @@ export const article: BlogArticle = {
       h2: "Distribution is the workflow teardown, and the 30-day plan",
       body:
         "For getting the agent in front of buyers, Isenberg's distribution bet is the **workflow teardown**: show the old way — a call comes in, nobody answers, the customer calls a competitor, or a CSR fields five questions, checks a calendar, books the job, and forgets the follow-up — next to the agent way, where the same call gets answered, qualified, booked, logged, and flagged for a human only on the edge cases. \"You want to be in the business of selling painkillers, not vitamins,\" he says — pick one workflow and let the internet associate you with it.\n\nHe closes with a four-week plan: day one, pick a niche where missed work costs money; day two, interview ten operators and watch them work; day three, pick one workflow with frequency, pain, and a clear success metric; day four, write the seven-part spec; day five, run it manually with AI to prove it helps before writing software; day six, build the smallest useful version; day seven, build the 50-example eval set. Week two is selling two pilots in the same niche; week three is building the wrapper — logs, approvals, settings, analytics — and he specifically suggests using AI tools to build that software itself; week four is publishing the teardown content and turning pilots into proof.\n\nHis closing line makes the argument's shape explicit: software is moving \"from 'help me do the work' to 'do the work with me,'\" and the opportunity sits with whoever finds the smallest painful, repeating workflow in a niche they understand — and makes it disappear.",
+      diagram: {
+        type: "flow",
+        title: "The agent way (the teardown's after side)",
+        steps: [
+          { label: "Call comes in" },
+          { label: "Agent answers + qualifies" },
+          { label: "Books the job" },
+          { label: "Updates the CRM" },
+          { label: "Flags edge cases", sub: "Only the rare case reaches a human" },
+        ],
+      },
     },
   ],
   faq: [

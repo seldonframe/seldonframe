@@ -96,6 +96,43 @@ for (const a of BLOG_ARTICLES) {
     }
   });
 
+  test(`blog '${a.slug}' diagrams (if any) have non-empty labels + valid values`, () => {
+    for (const s of a.sections) {
+      if (!s.diagram) continue;
+      const d = s.diagram;
+      if (d.type === "flow" || d.type === "stack") {
+        const items = d.type === "flow" ? d.steps : d.layers;
+        assert.ok(items.length > 0, `${s.h2}: diagram has no items`);
+        for (const item of items) assert.ok(item.label.trim().length > 0, `${s.h2}: diagram item has empty label`);
+      }
+      if (d.type === "loop") {
+        assert.ok(d.steps.length > 0, `${s.h2}: loop has no steps`);
+        for (const step of d.steps) assert.ok(step.trim().length > 0, `${s.h2}: loop step has empty label`);
+      }
+      if (d.type === "compare") {
+        assert.ok(d.left.items.length >= 1, `${s.h2}: compare left has no items`);
+        assert.ok(d.right.items.length >= 1, `${s.h2}: compare right has no items`);
+      }
+      if (d.type === "bars") {
+        assert.ok(d.items.length > 0, `${s.h2}: bars has no items`);
+        for (const item of d.items) {
+          assert.ok(Number.isFinite(item.value) && item.value > 0, `${s.h2}: bar '${item.label}' value not finite/positive`);
+          assert.ok(item.display.trim().length > 0, `${s.h2}: bar '${item.label}' has empty display`);
+        }
+      }
+    }
+  });
+
+  test(`blog '${a.slug}' heroStats (if present) have finite value + non-empty display/label`, () => {
+    if (a.heroStats === undefined) return;
+    assert.ok(a.heroStats.length >= 2 && a.heroStats.length <= 4, `expected 2-4 heroStats, got ${a.heroStats.length}`);
+    for (const stat of a.heroStats) {
+      assert.ok(Number.isFinite(stat.value), `heroStats: value not finite (${stat.value})`);
+      assert.ok(stat.display.trim().length > 0, "heroStats: empty display");
+      assert.ok(stat.label.trim().length > 0, "heroStats: empty label");
+    }
+  });
+
   test(`blog '${a.slug}' callout analogies (if any) don't double up "kind of like"`, () => {
     for (const s of a.sections) {
       if (!s.callout || s.callout.kind !== "analogy") continue;

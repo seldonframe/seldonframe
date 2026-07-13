@@ -5,18 +5,25 @@
 // sitemap + llms.txt registration, Article JSON-LD, the E-E-A-T author byline,
 // and IndexNow (via the existing cron reading the whole sitemap).
 //
-// Unlike guides (keyword-first, diagram-heavy how-tos), blog articles are
-// prose-first POV/story pieces — no diagram scaffolding. never-lies applies:
-// every factual/statistical claim must be hedged or backed by a real entry in
-// `sources`. The spec test enforces >=1 source.
+// never-lies applies: every factual/statistical claim must be hedged or
+// backed by a real entry in `sources`. The spec test enforces >=1 source.
+
+import type { GuideDiagram, GuideCallout } from "../guides/types";
+
+// Blog reuses the guides visual engine verbatim (diagrams + the callout
+// shape) rather than re-declaring its own — one engine, two content
+// registries. `BlogCallout` is kept as an alias so existing callers
+// (blog-markdown.ts) keep working unchanged.
+export type BlogCallout = GuideCallout;
+export type BlogDiagram = GuideDiagram;
 
 /** One <h2> section. `body` is markdown-lite paragraphs separated by blank
  *  lines (supports **bold**, *italic*, [label](/internal-path)); the HTML
  *  template renders each paragraph as a <p> with inline markup parsed, and
- *  the Markdown twin emits it verbatim (it already is Markdown). No diagram
- *  field — blog is prose-first, unlike guides. */
-export type BlogCallout = { kind: "analogy" | "tip" | "warning"; text: string };
-export type BlogSection = { h2: string; body: string; callout?: BlogCallout };
+ *  the Markdown twin emits it verbatim (it already is Markdown). `diagram`
+ *  and `callout` are optional, rendered after the section body — same as
+ *  guides (GuideDiagramView + CalloutBox). */
+export type BlogSection = { h2: string; body: string; diagram?: GuideDiagram; callout?: GuideCallout };
 
 export type BlogFaq = { q: string; a: string };
 
@@ -26,8 +33,9 @@ export type BlogSource = { label: string; url: string };
 /** The YouTube (or other) primary source this article is built from. OPTIONAL —
  *  a build-log/POV post has none; a blog-loop founder-story article REQUIRES
  *  one (enforced by the loop, not the type). When present it's the citation +
- *  the information-gain signal. */
-export type BlogSourceVideo = { url: string; title: string; channel: string; timestamp?: string };
+ *  the information-gain signal. `thumbnail` is optional — if absent and the
+ *  url is a YouTube watch link, the template derives the maxres thumbnail. */
+export type BlogSourceVideo = { url: string; title: string; channel: string; timestamp?: string; thumbnail?: string };
 
 export type BlogArticle = {
   /** URL slug: /blog/<slug>, url-safe. */
@@ -44,7 +52,7 @@ export type BlogArticle = {
   /** ISO yyyy-mm-dd. */
   date: string;
   sourceVideo?: BlogSourceVideo;
-  /** >=3 prose sections, markdown-lite. NO diagram scaffolding — blog is prose-first. */
+  /** >=3 sections, markdown-lite, each optionally carrying a diagram/callout. */
   sections: BlogSection[];
   /** Optional (GEO boost); if present each q/a non-empty. */
   faq?: BlogFaq[];
@@ -54,4 +62,9 @@ export type BlogArticle = {
   relatedGuide?: string;
   /** >=1 real https source (never-lies); include sourceVideo.url when present. */
   sources: BlogSource[];
+  /** Optional 2-4 item NumberTicker band rendered under the video hero. Each
+   *  `value` must be finite; `display`/`label` are the formatted string shown
+   *  (e.g. {value:1000, display:"$1,000/mo", label:"one workflow, one promise"}).
+   *  Use ONLY numbers already stated in the article — no new claims. */
+  heroStats?: { value: number; display: string; label: string }[];
 };

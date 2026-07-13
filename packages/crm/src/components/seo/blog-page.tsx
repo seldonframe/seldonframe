@@ -1,17 +1,24 @@
 // Server-rendered template for a /blog/<slug> long-form original article —
-// the HTML twin of blog-markdown.ts. Renders inside MarketingShell using the
-// same dark visual + `.marketing-prose` rhythm as the existing hand-coded
-// posts (e.g. why-mcp), so registry articles are visually indistinguishable
-// from hand-coded ones. One template renders every BlogArticle in the
-// registry (data-driven, like GuidePage).
+// rebuilt to match /guides' visual quality exactly (2026-07-13 redesign):
+// the `sf-mkt` light parchment theme, the diagrams + callout engine, a real
+// video hero (HeroVideoDialog), and a NumberTicker heroStats band. Renders on
+// the MKT marketing palette (not MarketingShell's dark chrome) — the guides
+// visual engine is imported verbatim, never re-implemented. Stays a server
+// component; HeroVideoDialog/NumberTicker/Highlighter are the client leaves.
 
 import type { ReactElement, ReactNode } from "react";
 import Link from "next/link";
-import { MarketingShell } from "@/app/(marketing)/marketing-shell";
-import { AUTHOR, articleLd, authorPersonLd } from "@/components/seo/author-byline";
+import { MarketplaceNav, MarketplaceFooter } from "@/components/marketplace/marketplace-chrome";
+import { MarketplaceStyles } from "@/components/marketplace/marketplace-styles";
+import { MKT } from "@/components/marketplace/marketplace-data";
+import { AUTHOR, articleLd, authorPersonLd, AuthorByline } from "@/components/seo/author-byline";
 import { getBlogArticle } from "@/lib/seo/blog";
 import type { BlogCallout } from "@/lib/seo/blog/types";
+import { GuideDiagramView, GuideDiagramStyles, faviconUrl } from "@/components/seo/guide-diagrams";
 import { tokenizeInlineMarkup, stripInlineMarkup, startsWithKindOfLike } from "@/lib/seo/guide-inline";
+import { HeroVideoDialog } from "@/components/ui/hero-video-dialog";
+import { NumberTicker } from "@/components/ui/number-ticker";
+import { Highlighter } from "@/components/ui/highlighter";
 
 /** Split a section body into paragraphs on blank lines. */
 function paragraphs(body: string): string[] {
@@ -19,8 +26,8 @@ function paragraphs(body: string): string[] {
 }
 
 /** Render markdown-lite text into React nodes (bold/italic/internal links) —
- *  mirrors renderInlineMarkup in guide-page.tsx, styled for the dark blog
- *  chrome instead of the light MKT palette. */
+ *  identical contract to guide-page.tsx's renderInlineMarkup, styled for the
+ *  MKT light palette. */
 function renderInlineMarkup(text: string): ReactNode[] {
   return tokenizeInlineMarkup(text).map((token, i): ReactElement => {
     switch (token.kind) {
@@ -31,12 +38,11 @@ function renderInlineMarkup(text: string): ReactNode[] {
       case "link":
         if (token.internal) {
           return (
-            <Link key={i} href={token.href} className="text-[#1FAE85] hover:underline font-semibold">
+            <Link key={i} href={token.href} className="sf-link" style={{ color: MKT.green, fontWeight: 700 }}>
               {token.label}
             </Link>
           );
         }
-        // Non-internal hrefs render as plain text per the markup contract.
         return <span key={i}>{token.label}</span>;
       case "text":
         return <span key={i}>{token.text}</span>;
@@ -46,24 +52,36 @@ function renderInlineMarkup(text: string): ReactNode[] {
 
 export { stripInlineMarkup };
 
-const CALLOUT_META: Record<BlogCallout["kind"], { label: string; icon: string }> = {
-  analogy: { label: "Kind of like…", icon: "💡" },
-  tip: { label: "Tip", icon: "✅" },
-  warning: { label: "Watch out", icon: "⚠️" },
+const CALLOUT_META: Record<BlogCallout["kind"], { label: string; icon: string; bg: string; border: string }> = {
+  analogy: { label: "Kind of like…", icon: "💡", bg: MKT.green10, border: "rgba(0,137,123,0.28)" },
+  tip: { label: "Tip", icon: "✅", bg: "rgba(34,29,23,0.04)", border: MKT.ink10 },
+  warning: { label: "Watch out", icon: "⚠️", bg: "rgba(196,132,30,0.10)", border: "rgba(196,132,30,0.32)" },
 };
 
 function CalloutBox({ callout }: { callout: BlogCallout }): ReactElement {
   const meta = CALLOUT_META[callout.kind];
   const skipLabel = callout.kind === "analogy" && startsWithKindOfLike(callout.text);
   return (
-    <div className="my-6 flex gap-3 items-start rounded-[12px] border border-white/10 bg-white/[0.03] px-5 py-4">
-      <span aria-hidden className="text-[17px] leading-[1.5] flex-none">
+    <div
+      style={{
+        marginTop: 18,
+        marginBottom: 6,
+        padding: "14px 18px",
+        borderRadius: 12,
+        border: `1.5px solid ${meta.border}`,
+        background: meta.bg,
+        display: "flex",
+        gap: 10,
+        alignItems: "flex-start",
+      }}
+    >
+      <span aria-hidden style={{ fontSize: 17, lineHeight: 1.5, flex: "0 0 auto" }}>
         {meta.icon}
       </span>
-      <p className="m-0 text-[14.5px] leading-[1.6] text-[#d4d4d8]">
+      <p style={{ margin: 0, fontSize: 14.5, lineHeight: 1.6, color: "rgba(34,29,23,0.85)" }}>
         {!skipLabel && (
           <>
-            <strong className="font-extrabold text-[#fafafa]">{meta.label}</strong>
+            <strong style={{ fontWeight: 800 }}>{meta.label}</strong>
             {callout.kind === "analogy" ? " " : ": "}
           </>
         )}
@@ -81,10 +99,28 @@ function formatDate(iso: string): string {
   }
 }
 
-/** Extract a bare domain from a source URL (for the plain-text sources list). */
+/** Extract a bare domain (for the favicon service) from a source URL. */
 function domainFromUrl(url: string): string | null {
   try {
     return new URL(url).hostname.replace(/^www\./, "");
+  } catch {
+    return null;
+  }
+}
+
+/** Extract the 11-char YouTube video id from a watch/short/embed URL. Returns
+ *  null for non-YouTube sources — the caller falls back to no thumbnail/hero. */
+function youTubeId(url: string): string | null {
+  try {
+    const u = new URL(url);
+    const host = u.hostname.replace(/^www\./, "");
+    if (host === "youtu.be") return u.pathname.slice(1).split("/")[0] || null;
+    if (host === "youtube.com" || host === "m.youtube.com") {
+      if (u.pathname === "/watch") return u.searchParams.get("v");
+      if (u.pathname.startsWith("/embed/")) return u.pathname.split("/")[2] ?? null;
+      if (u.pathname.startsWith("/shorts/")) return u.pathname.split("/")[2] ?? null;
+    }
+    return null;
   } catch {
     return null;
   }
@@ -109,8 +145,6 @@ export function BlogArticlePage({ slug }: { slug: string }): ReactElement {
   if (a.sourceVideo) {
     articleJsonLd.isBasedOn = a.sourceVideo.url;
   }
-  // FAQPage JSON-LD — parity with /guides (guide-page.tsx). Only when the
-  // article carries FAQ (blog faq is optional, unlike guides' required faq).
   const faqJsonLd =
     a.faq && a.faq.length > 0
       ? {
@@ -124,106 +158,155 @@ export function BlogArticlePage({ slug }: { slug: string }): ReactElement {
         }
       : null;
 
+  const videoId = a.sourceVideo ? youTubeId(a.sourceVideo.url) : null;
+  const thumbnail = a.sourceVideo?.thumbnail ?? (videoId ? `https://img.youtube.com/vi/${videoId}/maxresdefault.jpg` : null);
+  const embedSrc = videoId ? `https://www.youtube.com/embed/${videoId}` : null;
+
   return (
-    <MarketingShell>
+    <div className="sf-mkt" style={{ minHeight: "100vh", background: MKT.paper, color: MKT.ink, fontFamily: MKT.fontSans, overflowX: "hidden" }}>
+      <MarketplaceStyles />
+      <GuideDiagramStyles />
       <script type="application/ld+json" dangerouslySetInnerHTML={{ __html: JSON.stringify(articleJsonLd) }} />
-      {faqJsonLd && (
-        <script type="application/ld+json" dangerouslySetInnerHTML={{ __html: JSON.stringify(faqJsonLd) }} />
-      )}
-      <article className="max-w-[720px] mx-auto px-5 md:px-12 py-16 md:py-24">
-        <header className="mb-12">
-          <p className="text-[12px] uppercase tracking-[0.12em] text-[#71717a] font-mono mb-3">
+      {faqJsonLd && <script type="application/ld+json" dangerouslySetInnerHTML={{ __html: JSON.stringify(faqJsonLd) }} />}
+      <MarketplaceNav />
+      <main style={{ maxWidth: 760, margin: "0 auto", padding: "34px 32px 70px", width: "100%" }}>
+        <nav aria-label="Breadcrumb" style={{ display: "flex", gap: 6, fontSize: 13.5, fontWeight: 600, color: "rgba(34,29,23,0.5)", marginBottom: 20 }}>
+          <Link href="/blog" className="sf-link" style={{ color: "rgba(34,29,23,0.55)", textDecoration: "none" }}>
+            Blog
+          </Link>
+          <span style={{ color: "rgba(34,29,23,0.3)" }}>/</span>
+          <span style={{ color: "rgba(34,29,23,0.7)" }}>{a.title}</span>
+        </nav>
+
+        <article>
+          <p style={{ margin: "0 0 12px", fontSize: 13, fontWeight: 700, letterSpacing: "0.04em", textTransform: "uppercase", color: "rgba(34,29,23,0.5)" }}>
             {formatDate(a.date)} · {authorName}
           </p>
-          <h1 className="text-[clamp(30px,4vw,46px)] font-bold tracking-[-0.035em] text-[#fafafa] mb-4 leading-[1.1]">
+
+          <h1 style={{ margin: 0, fontFamily: MKT.fontSerif, fontSize: "clamp(32px,5vw,52px)", fontWeight: 700, letterSpacing: "-0.03em", lineHeight: 1.1, color: MKT.ink }}>
             {a.title}
           </h1>
-          <p className="text-[17px] text-[#a1a1aa] leading-[1.7]">{renderInlineMarkup(a.dek)}</p>
-        </header>
 
-        {a.sourceVideo && (
-          <p className="text-[13.5px] text-[#a1a1aa] leading-[1.7] mb-10 -mt-6">
-            Source:{" "}
-            <a href={a.sourceVideo.url} target="_blank" rel="noopener noreferrer nofollow" className="text-[#1FAE85] hover:underline font-semibold">
-              {a.sourceVideo.title}
-            </a>{" "}
-            — {a.sourceVideo.channel}
-            {a.sourceVideo.timestamp ? ` (${a.sourceVideo.timestamp})` : ""}
+          <p style={{ margin: "20px 0 0", fontSize: 18, lineHeight: 1.6, color: "rgba(34,29,23,0.72)", fontWeight: 500 }}>
+            {renderInlineMarkup(a.dek)}
           </p>
-        )}
 
-        <div className="marketing-prose">
-          {a.sections.map((s) => (
-            <section key={s.h2}>
-              <h2>{s.h2}</h2>
+          {a.sourceVideo && embedSrc && thumbnail && (
+            <div style={{ marginTop: 30 }}>
+              <HeroVideoDialog videoSrc={embedSrc} thumbnailSrc={thumbnail} thumbnailAlt={a.sourceVideo.title} animationStyle="from-center" />
+              <p style={{ margin: "10px 0 0", fontSize: 13.5, color: "rgba(34,29,23,0.6)", lineHeight: 1.6 }}>
+                Source:{" "}
+                <a href={a.sourceVideo.url} target="_blank" rel="noopener noreferrer nofollow" className="sf-link" style={{ color: MKT.green, fontWeight: 700 }}>
+                  {a.sourceVideo.title}
+                </a>{" "}
+                — {a.sourceVideo.channel}
+                {a.sourceVideo.timestamp ? ` (${a.sourceVideo.timestamp})` : ""}
+              </p>
+            </div>
+          )}
+
+          {a.heroStats && a.heroStats.length > 0 && (
+            <div
+              style={{
+                marginTop: 28,
+                paddingTop: 22,
+                borderTop: `1.5px solid ${MKT.green10}`,
+                display: "grid",
+                gridTemplateColumns: `repeat(${a.heroStats.length}, minmax(0,1fr))`,
+                gap: 18,
+              }}
+            >
+              {a.heroStats.map((stat, i) => (
+                <div key={i}>
+                  <div style={{ fontFamily: MKT.fontMono, fontSize: 26, fontWeight: 700, color: MKT.ink, display: "flex", alignItems: "baseline", gap: 2 }}>
+                    <NumberTicker value={stat.value} className="text-[26px] font-bold" style={{ color: MKT.ink, fontFamily: MKT.fontMono }} />
+                  </div>
+                  <div style={{ marginTop: 2, fontSize: 13, fontWeight: 700, color: MKT.green }}>{stat.display}</div>
+                  <div style={{ marginTop: 4, fontSize: 12.5, lineHeight: 1.4, color: "rgba(34,29,23,0.6)" }}>{stat.label}</div>
+                </div>
+              ))}
+            </div>
+          )}
+
+          {a.sections.map((s, si) => (
+            <section key={s.h2} style={{ marginTop: 30 }}>
+              <h2 style={{ margin: "0 0 12px", fontSize: 23, fontWeight: 800, letterSpacing: "-0.02em" }}>
+                {si === 0 ? <Highlighter>{s.h2}</Highlighter> : s.h2}
+              </h2>
               {paragraphs(s.body).map((p, i) => (
-                <p key={i}>{renderInlineMarkup(p)}</p>
+                <p key={i} style={{ margin: "0 0 14px", fontSize: 16, lineHeight: 1.7, color: "rgba(34,29,23,0.82)" }}>
+                  {renderInlineMarkup(p)}
+                </p>
               ))}
               {s.callout && <CalloutBox callout={s.callout} />}
+              {s.diagram && <GuideDiagramView d={s.diagram} />}
             </section>
           ))}
-        </div>
 
-        {a.faq && a.faq.length > 0 && (
-          <section className="mt-14">
-            <h2 className="text-[22px] font-bold tracking-[-0.02em] text-[#fafafa] mb-4">Frequently asked questions</h2>
-            {a.faq.map((f) => (
-              <details key={f.q} className="border border-white/10 rounded-[12px] px-[18px] py-[14px] mb-2.5 bg-white/[0.02]">
-                <summary className="font-bold text-[15.5px] text-[#fafafa] cursor-pointer">{renderInlineMarkup(f.q)}</summary>
-                <p className="mt-2.5 mb-0 text-[14.5px] leading-[1.65] text-[#a1a1aa]">{renderInlineMarkup(f.a)}</p>
-              </details>
-            ))}
-          </section>
-        )}
+          {a.faq && a.faq.length > 0 && (
+            <section style={{ marginTop: 40 }}>
+              <h2 style={{ margin: "0 0 14px", fontSize: 23, fontWeight: 800, letterSpacing: "-0.02em" }}>Frequently asked questions</h2>
+              {a.faq.map((f) => (
+                <details key={f.q} style={{ border: `1px solid ${MKT.ink10}`, borderRadius: 12, padding: "14px 18px", marginBottom: 10, background: "rgba(255,255,255,0.55)" }}>
+                  <summary style={{ fontWeight: 700, fontSize: 15.5, cursor: "pointer" }}>{renderInlineMarkup(f.q)}</summary>
+                  <p style={{ margin: "10px 0 2px", fontSize: 14.5, lineHeight: 1.65, color: "rgba(34,29,23,0.72)" }}>{renderInlineMarkup(f.a)}</p>
+                </details>
+              ))}
+            </section>
+          )}
 
-        {a.sources.length > 0 && (
-          <section className="mt-10">
-            <h2 className="text-[18px] font-bold text-[#fafafa] mb-3">Sources</h2>
-            <ul className="pl-[18px] text-[14px] leading-[1.7] text-[#a1a1aa]">
-              {a.sources.map((src) => {
-                const domain = domainFromUrl(src.url);
-                return (
-                  <li key={src.url} className="mb-1">
-                    <a href={src.url} target="_blank" rel="noopener noreferrer nofollow" className="text-[#1FAE85] hover:underline font-semibold">
-                      {src.label}
-                    </a>
-                    {domain && <span className="text-[#71717a]"> ({domain})</span>}
-                  </li>
-                );
-              })}
-            </ul>
-          </section>
-        )}
+          {a.sources.length > 0 && (
+            <section style={{ marginTop: 34 }}>
+              <h2 style={{ margin: "0 0 12px", fontSize: 18, fontWeight: 800 }}>Sources</h2>
+              <ul style={{ margin: 0, paddingLeft: 18, fontSize: 14, lineHeight: 1.7, color: "rgba(34,29,23,0.7)" }}>
+                {a.sources.map((src) => {
+                  const domain = domainFromUrl(src.url);
+                  return (
+                    <li key={src.url} style={{ display: "flex", alignItems: "center", gap: 7, marginBottom: 4 }}>
+                      {domain && <img src={faviconUrl(domain)} width={16} height={16} loading="lazy" alt={`${domain} logo`} style={{ borderRadius: 3, flex: "0 0 auto" }} />}
+                      <a href={src.url} target="_blank" rel="noopener noreferrer nofollow" className="sf-link" style={{ color: MKT.green, fontWeight: 600 }}>
+                        {src.label}
+                      </a>
+                    </li>
+                  );
+                })}
+              </ul>
+            </section>
+          )}
 
-        {(a.relatedTool || a.relatedGuide) && (
-          <p className="mt-8 text-[14.5px] leading-[1.6] text-[#a1a1aa]">
-            {a.relatedTool && (
-              <>
-                Related free tool:{" "}
-                <Link href={a.relatedTool} className="text-[#1FAE85] hover:underline font-semibold">
-                  open it
-                </Link>
-                .{" "}
-              </>
-            )}
-            {a.relatedGuide && (
-              <>
-                Go deeper:{" "}
-                <Link href={a.relatedGuide} className="text-[#1FAE85] hover:underline font-semibold">
-                  the full guide
-                </Link>
-                .
-              </>
-            )}
-          </p>
-        )}
+          {(a.relatedTool || a.relatedGuide) && (
+            <p style={{ margin: "28px 0 0", fontSize: 14.5, lineHeight: 1.6, color: "rgba(34,29,23,0.65)" }}>
+              {a.relatedTool && (
+                <>
+                  Related free tool:{" "}
+                  <Link href={a.relatedTool} className="sf-link" style={{ color: MKT.green, fontWeight: 700 }}>
+                    open it
+                  </Link>
+                  .{" "}
+                </>
+              )}
+              {a.relatedGuide && (
+                <>
+                  Go deeper:{" "}
+                  <Link href={a.relatedGuide} className="sf-link" style={{ color: MKT.green, fontWeight: 700 }}>
+                    the full guide
+                  </Link>
+                  .
+                </>
+              )}
+            </p>
+          )}
 
-        <footer className="mt-16 pt-8 border-t border-white/5 flex items-center justify-between text-[14px]">
-          <Link href="/blog" className="text-[#71717a] hover:text-[#fafafa] transition-colors">
-            ← All posts
-          </Link>
-        </footer>
-      </article>
-    </MarketingShell>
+          <AuthorByline checked={formatDate(a.date)} />
+
+          <footer style={{ marginTop: 32, paddingTop: 24, borderTop: `1px solid ${MKT.ink10}` }}>
+            <Link href="/blog" className="sf-link" style={{ color: "rgba(34,29,23,0.55)", fontSize: 14, fontWeight: 600, textDecoration: "none" }}>
+              ← All posts
+            </Link>
+          </footer>
+        </article>
+      </main>
+      <MarketplaceFooter />
+    </div>
   );
 }
