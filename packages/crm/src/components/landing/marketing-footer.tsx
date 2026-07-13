@@ -30,6 +30,7 @@ const COLUMNS: readonly Column[] = [
     links: [
       { label: "Docs", href: "/docs" },
       { label: "Guides", href: "/guides" },
+      { label: "Blog", href: "/blog" },
       { label: "MCP / Claude Code", href: "https://github.com/seldonframe/crm#claude-code-mcp", external: true },
       { label: "API", href: "/docs" },
       { label: "Live demos", href: "#demos" },

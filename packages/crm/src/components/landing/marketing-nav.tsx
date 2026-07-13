@@ -28,6 +28,7 @@ const RESOURCE_LINKS = [
   { href: "/best", label: "Best-of guides" },
   { href: "/tools", label: "Free tools" },
   { href: "/ai-agents", label: "AI agent library" },
+  { href: "/blog", label: "Blog — build notes & founder stories" },
 ] as const;
 
 export function MarketingNav() {
