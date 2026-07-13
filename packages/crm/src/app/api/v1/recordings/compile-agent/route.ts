@@ -23,11 +23,13 @@ import { eq } from "drizzle-orm";
 import { db } from "@/db";
 import { recordingSessions, workflowRecordings } from "@/db/schema/recordings";
 import { isRecordToAgentOn } from "@/lib/recordings/policy";
-import { resolveCompileAgentGate } from "@/lib/recordings/route-guards";
+import { resolveCompileAgentGate, stampClaimedCompileOnboarded } from "@/lib/recordings/route-guards";
 import { findSessionByToken } from "@/lib/recordings/session-store";
 import { flowModelToBundle } from "@/lib/recordings/compile-agent";
 import type { FlowModel, WorkflowTrace } from "@/lib/recordings/trace-schema";
-import { getOrgId } from "@/lib/auth/helpers";
+import { getCurrentUser, getOrgId } from "@/lib/auth/helpers";
+import { markOperatorOnboarded } from "@/lib/web-onboarding/mark-operator-onboarded";
+import { logEvent } from "@/lib/observability/log";
 import {
   createAgentTemplate,
   updateAgentTemplate,
@@ -87,6 +89,23 @@ export async function POST(request: Request): Promise<Response> {
   // gate.kind === "ok" here — session is non-null (resolveCompileAgentGate
   // requires session.id === sessionIdFromBody to reach "ok").
   const sessionRow = session!;
+
+  // Record v3 (S4b root fix) — every "ok" outcome above already required a
+  // non-null orgId, so this IS the claimed-compile path: an operator who
+  // signed up/in and is compiling the session they recorded. Without this
+  // stamp, record-claimers stay soulCompleted=false forever (only
+  // /claim-build's link-owner route stamped it before), so proxy.ts's
+  // onboarding gate 307s them to /clients/new on every future dashboard
+  // link — the exact bug this slice fixes. Soft-fail: never blocks the
+  // compile response itself.
+  const currentUser = await getCurrentUser().catch(() => null);
+  await stampClaimedCompileOnboarded(orgId!, currentUser?.id ?? null, markOperatorOnboarded, (error) => {
+    logEvent(
+      "compile_agent_onboarding_stamp_failed",
+      { error: error instanceof Error ? error.message : String(error) },
+      { request, orgId: orgId!, severity: "warn" },
+    );
+  });
 
   if (gate.shouldApprove) {
     await db

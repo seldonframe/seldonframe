@@ -268,3 +268,30 @@ export function resolveCompileAgentGate(params: {
   }
   return { kind: "ok", shouldApprove: params.session.status === "recapped" };
 }
+
+// ─── claimed-compile onboarding stamp (record v3, S4b root fix) ───────────
+
+/**
+ * Soft-fail wrapper around markOperatorOnboarded for the compile-agent
+ * route. Every "ok" outcome of resolveCompileAgentGate is, by construction,
+ * an authenticated + claimed session (orgId is required to reach "ok") — so
+ * this always runs on the claim path, never for an anonymous/unauthorized
+ * caller (those never get past the gate). Idempotent (markOperatorOnboarded
+ * itself only writes when soulCompletedAt/planId are still NULL) and never
+ * throws — a stamp failure must never fail the compile response itself
+ * (Optimistic Path rule: the compile succeeding is the thing we promise,
+ * the onboarding stamp is a best-effort side-write). `markOperatorOnboarded`
+ * is DI'd so this is unit-testable without a DB.
+ */
+export async function stampClaimedCompileOnboarded(
+  orgId: string,
+  userId: string | null,
+  markOperatorOnboarded: (orgId: string, userId?: string) => Promise<void>,
+  onError?: (error: unknown) => void,
+): Promise<void> {
+  try {
+    await markOperatorOnboarded(orgId, userId ?? undefined);
+  } catch (error) {
+    onError?.(error);
+  }
+}
