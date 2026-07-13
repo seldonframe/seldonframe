@@ -224,6 +224,22 @@ export default async function WorkspaceLandingPage({ params }: PageProps) {
     home: workspaceUrls.home,
   });
 
+  // Re-skin from the LIVE org theme, not the archetype frozen into the payload
+  // at generation time. The ready-page "Change design" picker writes
+  // theme.aestheticArchetype (+ theme.mode) via setArchetypeForOrg; without this
+  // override /w/[slug] would keep rendering the original archetype forever
+  // (palette + font + hero variant all derive from this id). Falls back to the
+  // baked value for workspaces whose theme has no archetype yet (pre-1.54).
+  // payload.hero.archetype feeds SiteShell + Navbar + Hero + Map + LeadForm, so
+  // normalizing it here re-skins the whole page uniformly.
+  const liveArchetype =
+    r1.theme?.aestheticArchetype && r1.theme.aestheticArchetype in ARCHETYPES
+      ? (r1.theme.aestheticArchetype as AestheticArchetypeId)
+      : payload.hero.archetype;
+  if (liveArchetype !== payload.hero.archetype) {
+    payload.hero = { ...payload.hero, archetype: liveArchetype };
+  }
+
   const homeHref = `/w/${slug}`;
   const navServices = getServicePages(payload).map((p) => ({ slug: p.slug, name: p.name }));
   // Only link cards out to detail pages when this workspace actually has them.
@@ -232,7 +248,7 @@ export default async function WorkspaceLandingPage({ params }: PageProps) {
   return (
     <SiteShell
       archetype={payload.hero.archetype}
-      mode={payload.theme?.mode ?? "light"}
+      mode={r1.theme?.mode ?? payload.theme?.mode ?? "light"}
       workspaceId={ctx.orgId}
       orgTheme={r1.theme}
     >

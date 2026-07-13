@@ -24,10 +24,10 @@ function PickerBody({ value, onPick, onClose, title, designs, sectionLabel, auto
           <h3>{title || "Choose a landing design"}</h3>
           <p>Applies to this workspace's public site.</p>
         </div>
-        <button className="pk-x" aria-label="Close" onClick={onClose}><Icon.close /></button>
+        <button type="button" className="pk-x" aria-label="Close" onClick={onClose}><Icon.close /></button>
       </div>
       <div className="pk-body">
-        <button className="pk-auto" aria-pressed={autoSel} onClick={() => onPick("auto")}>
+        <button type="button" className="pk-auto" aria-pressed={autoSel} onClick={() => onPick("auto")}>
           <span className="pk-auto-ic"><Icon.spark /></span>
           <span className="pk-auto-main">
             <span className="pk-auto-top"><span className="pk-auto-name">{AUTO.name}</span><span className="pk-tag">Recommended</span></span>
@@ -39,7 +39,7 @@ function PickerBody({ value, onPick, onClose, title, designs, sectionLabel, auto
         <div className="pk-sec"><span>{heading}</span></div>
         <div className="pk-grid">
           {items.map((d) => (
-            <button className="pk-card" key={d.id} aria-pressed={value === d.id} onClick={() => onPick(d.id)}>
+            <button type="button" className="pk-card" key={d.id} aria-pressed={value === d.id} onClick={() => onPick(d.id)}>
               <span className="pk-check"><Icon.check /></span>
               <span className="pk-thumb"><Thumb src={d.thumb} name={d.name} cls="pk-thumb" /></span>
               <span className="pk-card-b">

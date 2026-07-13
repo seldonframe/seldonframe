@@ -20,7 +20,7 @@ export function DesignChip({ value, onChange, mobile }: DesignChipProps) {
 
   return (
     <span className="pk-anchor pk-scope">
-      <button className="pk-chip" aria-expanded={open} aria-haspopup="dialog" onClick={() => setOpen((o) => !o)}>
+      <button type="button" className="pk-chip" aria-expanded={open} aria-haspopup="dialog" onClick={() => setOpen((o) => !o)}>
         <span className="pk-chip-key">Design</span>
         <span className="pk-chip-val">
           {isAuto ? (

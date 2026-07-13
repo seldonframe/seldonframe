@@ -60,7 +60,7 @@ export function ReadyDesignModule({ value, autoResolvedId, autoReason, onChange,
           </div>
         </div>
         <span className="pk-anchor">
-          <button className="rdm-change" aria-expanded={open} aria-haspopup="dialog" onClick={() => setOpen((o) => !o)}>
+          <button type="button" className="rdm-change" aria-expanded={open} aria-haspopup="dialog" onClick={() => setOpen((o) => !o)}>
             Change design <Icon.chevron />
           </button>
           <DesignPicker open={open} mobile={mobile} placement="bottom-end" value={value} onPick={pick} onClose={() => setOpen(false)} title="Change landing design" designs={designs} sectionLabel={sectionLabel} autoNote={autoNote} />
