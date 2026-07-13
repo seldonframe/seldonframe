@@ -289,8 +289,8 @@ const CARD_INK = "#1F2B24";
 const CARD_INK_ACCENT = "#26352C";
 const CARD_PAPER = "#F6F2EA";
 const CARD_PAPER_MUTED = "rgba(246,242,234,0.72)";
-const CARD_GREEN = "#059669";
-const CARD_GREEN_GLOW = "rgba(5, 150, 105,0.45)";
+const CARD_GREEN = "#1F2B24";
+const CARD_GREEN_GLOW = "rgba(31, 43, 36,0.45)";
 
 /**
  * Shrink a font size until `text` fits within `maxWidth`, down to a floor.

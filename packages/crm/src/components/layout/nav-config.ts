@@ -59,7 +59,7 @@ export type BuildNavInput = {
   /** organizations.hiddenBlocks — block slugs the operator turned off
    *  in visibility settings. Filtered via hiddenSlugToHref below. */
   hiddenBlocks: string[];
-  /** SF_SUPERADMIN_EMAILS membership — surfaces the SF Admin entry. */
+  /** SF_SUPERADMIN_EMAILS membership — surfaces the Seldon Admin entry. */
   isSuperAdmin: boolean;
   /** The operator's PRIMARY org id (user.orgId). Used to build the
    *  "← Back to agency" switch link inside a client workspace. */
@@ -142,7 +142,7 @@ function applyModuleFilter(
     }
   }
   // Any href NOT present in MODULE_TO_HREFS at all (Settings, Back to
-  // agency, SF Admin) is never gated by a module and always stays.
+  // agency, Seldon Admin) is never gated by a module and always stays.
   const gatedHrefs = new Set(Object.values(MODULE_TO_HREFS).flat());
 
   const filtered = groups
@@ -179,7 +179,7 @@ export function buildNavGroups(input: BuildNavInput): NavGroup[] {
   const filterHidden = (items: NavItem[]): NavItem[] => items.filter((item) => !hiddenHrefs.has(item.href));
 
   const superAdminItems: NavItem[] = isSuperAdmin
-    ? [{ href: "/super-admin", label: "SF Admin", icon: "Shield" }]
+    ? [{ href: "/super-admin", label: "Seldon Admin", icon: "Shield" }]
     : [];
 
   // -------------------------------------------------------------------

@@ -55,9 +55,9 @@ import { VOICE_PROFILE_NOTE_PATH } from "@/lib/agents/voice-profile/ingest-sent-
 
 const MODEL = process.env.ANTHROPIC_AGENT_MODEL?.trim() || "claude-sonnet-4-5-20250929";
 const MAX_TURN_ITERATIONS = 6; // tool-call cap per single turn (catches loops)
-// v1.26.1 — these are SF's internal accounting markup for
+// v1.26.1 — these are Seldon's internal accounting markup for
 // billing-the-operator-for-agent-platform-usage. The OPERATOR pays
-// the LLM bill directly via their BYOK Anthropic key; SF makes money
+// the LLM bill directly via their BYOK Anthropic key; Seldon makes money
 // per agent turn (separate billing line). Numbers are deliberately
 // rough — the operator's exact LLM cost lives on their Anthropic
 // dashboard; ours is platform-usage metering.
@@ -158,7 +158,7 @@ export async function executeTurn(input: {
   }
 
   // v1.27.9 — daily token budget removed. Under BYOK the operator pays
-  // Anthropic directly; SF has no cost exposure to cap. Operators manage
+  // Anthropic directly; Seldon has no cost exposure to cap. Operators manage
   // spend in their own Anthropic billing dashboard. The artificial budget
   // halt was breaking valid conversations on busy days for no reason.
   // The agents.tokensUsedToday + dailyTokenBudget columns stay in the
@@ -193,7 +193,7 @@ export async function executeTurn(input: {
     .where(eq(agentTurns.conversationId, input.conversationId))
     .orderBy(asc(agentTurns.turnIndex));
 
-  // Convert SF turn shape → Anthropic Messages API shape.
+  // Convert Seldon turn shape → Anthropic Messages API shape.
   type AnthropicMessage = {
     role: "user" | "assistant";
     content:
@@ -307,9 +307,9 @@ export async function executeTurn(input: {
 
   // v1.26.1 — BYOK. Resolve the LLM client from the workspace's
   // configured key (organizations.integrations.anthropic.apiKey,
-  // encrypted at rest). Operator pays Anthropic directly; SF charges
+  // encrypted at rest). Operator pays Anthropic directly; Seldon charges
   // separately per agent turn. If no BYOK key is set AND no platform
-  // key is available (e.g. SF env not configured), gracefully degrade.
+  // key is available (e.g. Seldon env not configured), gracefully degrade.
   // 2026-07-08 pricing ladder — agency key inheritance (flag
   // SF_AGENCY_KEY_INHERIT): sub-account workspaces with no BYOK key of
   // their own inherit the owning agency's key instead of silently
@@ -432,7 +432,7 @@ export async function executeTurn(input: {
       return {
         ok: false,
         reason: errClass.reason,
-        // Test-mode = SF client testing in sandbox → return real diagnostic.
+        // Test-mode = Seldon client testing in sandbox → return real diagnostic.
         // Live/active = end customer talking to agent → return gentle fallback.
         fallbackMessage:
           conv.status === "test"
@@ -879,7 +879,7 @@ async function writeFirstTurnActivity(
 //   - operatorHint (specific guidance shown in test-mode sandbox)
 //
 // In live/active conversations the gentle fallback fires regardless;
-// only the test-mode sandbox surfaces these hints to the SF client.
+// only the test-mode sandbox surfaces these hints to the Seldon client.
 
 type AnthropicErrorClass = {
   reason:
@@ -932,7 +932,7 @@ function classifyAnthropicError(detail: string): AnthropicErrorClass {
       reason: "llm_model_unavailable",
       operatorHint:
         "The configured Claude model isn't available on your account tier. " +
-        "Contact SF support if this persists (model is platform-controlled).",
+        "Contact Seldon support if this persists (model is platform-controlled).",
     };
   }
   if (lower.includes("overloaded_error") || lower.includes("529")) {

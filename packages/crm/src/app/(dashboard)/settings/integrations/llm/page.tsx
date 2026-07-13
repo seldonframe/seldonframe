@@ -1,6 +1,6 @@
 // v1.27.6 — workspace-level LLM provider key UI.
 //
-// SF clients paste their Anthropic / OpenAI key here. Stored encrypted
+// Seldon clients paste their Anthropic / OpenAI key here. Stored encrypted
 // at rest in organizations.integrations[provider].apiKey, decrypted at
 // agent-turn time by lib/ai/client.getAIClient(). Same storage path as
 // the MCP `configure_llm_provider` tool — both surface this UI and the
@@ -76,7 +76,7 @@ export default async function LlmIntegrationPage({
         </h1>
         <p className="text-sm sm:text-base text-muted-foreground">
           Bring your own Anthropic or OpenAI key. Used by your agents at
-          customer chat time. Stored encrypted at rest. SF charges separately
+          customer chat time. Stored encrypted at rest. Seldon charges separately
           for agent platform usage — you pay the LLM provider directly.
         </p>
       </div>

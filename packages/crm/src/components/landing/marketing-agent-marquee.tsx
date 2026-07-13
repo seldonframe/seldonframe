@@ -3,10 +3,10 @@
 // The two on-ramps, made concrete (2026-07-13). SeldonFrame builds an agent
 // two ways, and this section shows the catalog for each as a scrolling
 // marquee:
-//   • Path A — DESCRIBE it → SF generates. Agents you want but don't have and
+//   • Path A — DESCRIBE it → Seldon generates. Agents you want but don't have and
 //     can't record because they don't exist yet (voice receptionist,
 //     speed-to-lead, review requester…).
-//   • Path B — RECORD it → SF compiles. Agents that replace a workflow you
+//   • Path B — RECORD it → Seldon compiles. Agents that replace a workflow you
 //     already do by hand or badly automate (inbox triage, a Sheets lead log,
 //     a scraper→CRM…).
 //
@@ -51,7 +51,7 @@ import { Marquee } from "@/components/ui/marquee";
 
 type Agent = { name: string; vertical: string; icon: LucideIcon };
 
-// Path A — describe it, SF generates it (customer-facing, real-time).
+// Path A — describe it, Seldon generates it (customer-facing, real-time).
 const DESCRIBE: Agent[] = [
   { name: "Voice receptionist", vertical: "for an HVAC company", icon: Phone },
   { name: "Speed-to-lead texter", vertical: "for a roofing company", icon: Zap },
@@ -65,7 +65,7 @@ const DESCRIBE: Agent[] = [
   { name: "Waitlist filler", vertical: "for a clinic", icon: CalendarClock },
 ];
 
-// Path B — record it, SF compiles it (back-office ops you do by hand).
+// Path B — record it, Seldon compiles it (back-office ops you do by hand).
 const RECORD: Agent[] = [
   { name: "Inbox triage & drafts", vertical: "for a real-estate team", icon: Inbox },
   { name: "Inbox organizer", vertical: "label · archive · zero-inbox", icon: Archive },
@@ -89,7 +89,7 @@ function AgentChip({ agent }: { agent: Agent }) {
   const Icon = agent.icon;
   return (
     <div className="flex w-[248px] shrink-0 items-center gap-3 rounded-[13px] border border-[rgba(255,255,255,.10)] bg-[#243830] px-4 py-3">
-      <span className="flex size-9 shrink-0 items-center justify-center rounded-[9px] bg-[rgba(52,211,153,.12)] text-[#34D399]">
+      <span className="flex size-9 shrink-0 items-center justify-center rounded-[9px] bg-[rgba(246, 242, 234,.12)] text-[#F6F2EA]">
         <Icon className="size-[18px]" aria-hidden />
       </span>
       <span className="min-w-0">
@@ -107,7 +107,7 @@ function AgentChip({ agent }: { agent: Agent }) {
 function RowLabel({ kicker, children }: { kicker: string; children: React.ReactNode }) {
   return (
     <p className="mb-2 flex items-center gap-2 text-[12px] font-[600] text-[rgba(246,242,234,.85)]">
-      <span className="rounded-full bg-[rgba(52,211,153,.14)] px-2 py-0.5 text-[10.5px] font-[700] uppercase tracking-[0.06em] text-[#34D399]">
+      <span className="rounded-full bg-[rgba(246, 242, 234,.14)] px-2 py-0.5 text-[10.5px] font-[700] uppercase tracking-[0.06em] text-[#F6F2EA]">
         {kicker}
       </span>
       {children}
@@ -119,7 +119,7 @@ export function MarketingAgentMarquee() {
   return (
     <div className="relative mt-10 flex flex-col gap-6">
       <div>
-        <RowLabel kicker="Describe it">Agents you&apos;re missing — SF builds them from a sentence</RowLabel>
+        <RowLabel kicker="Describe it">Agents you&apos;re missing — Seldon builds them from a sentence</RowLabel>
         <Marquee pauseOnHover className="[--duration:52s] [--gap:0.9rem] py-0">
           {DESCRIBE.map((a) => (
             <AgentChip key={a.name} agent={a} />
@@ -128,7 +128,7 @@ export function MarketingAgentMarquee() {
       </div>
 
       <div>
-        <RowLabel kicker="Record it">Workflows you do by hand — SF compiles them from one recording</RowLabel>
+        <RowLabel kicker="Record it">Workflows you do by hand — Seldon compiles them from one recording</RowLabel>
         <Marquee reverse pauseOnHover className="[--duration:64s] [--gap:0.9rem] py-0">
           {RECORD.map((a) => (
             <AgentChip key={a.name} agent={a} />

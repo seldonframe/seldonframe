@@ -119,7 +119,7 @@ export default function AiRecommendationIndexPage(): ReactElement {
 
         {/* ── disclosure ── */}
         <div style={{ marginTop: 24, display: "grid", gap: 12, maxWidth: 780 }}>
-          <div style={{ border: `1px solid ${MKT.ink10}`, borderLeftWidth: 3, borderLeftColor: MKT.green, borderRadius: 12, padding: "14px 18px", background: "rgba(5, 150, 105,0.05)" }}>
+          <div style={{ border: `1px solid ${MKT.ink10}`, borderLeftWidth: 3, borderLeftColor: MKT.green, borderRadius: 12, padding: "14px 18px", background: "rgba(31, 43, 36,0.05)" }}>
             <p style={{ margin: 0, fontSize: 14.5, lineHeight: 1.6, color: "rgba(34,29,23,0.8)" }}>
               <strong>Self-interest, disclosed:</strong> I build SeldonFrame, one of the tools these questions are
               about. SeldonFrame did not appear in any of the 10 Claude answers in this snapshot — we're publishing

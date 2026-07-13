@@ -154,7 +154,7 @@ export function VsPage({ pair, a, b }: { pair: VsPair; a: Competitor; b: Competi
                     <td style={{ ...TD, fontWeight: 700 }}>{row.label}</td>
                     <td style={{ ...TD, color: "rgba(34,29,23,0.66)" }}>{emphasize(a.them[row.key])}</td>
                     <td style={{ ...TD, color: "rgba(34,29,23,0.66)" }}>{emphasize(b.them[row.key])}</td>
-                    <td style={{ ...TD, background: "rgba(5, 150, 105,0.05)", color: "rgba(34,29,23,0.85)", fontWeight: 500 }}>{emphasize(SF_COLUMN[row.key])}</td>
+                    <td style={{ ...TD, background: "rgba(31, 43, 36,0.05)", color: "rgba(34,29,23,0.85)", fontWeight: 500 }}>{emphasize(SF_COLUMN[row.key])}</td>
                   </tr>
                 ))}
               </tbody>

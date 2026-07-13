@@ -12,7 +12,7 @@ import type { ReactNode } from "react";
 
 export default function BuyerLayout({ children }: { children: ReactNode }) {
   return (
-    <div className="min-h-screen bg-[#F6F2EA] text-[#221D17] font-sans antialiased selection:bg-[#059669]/20">
+    <div className="min-h-screen bg-[#F6F2EA] text-[#221D17] font-sans antialiased selection:bg-[#1F2B24]/20">
       {children}
     </div>
   );

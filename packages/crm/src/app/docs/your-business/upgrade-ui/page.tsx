@@ -1,6 +1,6 @@
 // v1.34.1 — Docs article: Upgrade your UI (for power users).
 //
-// Explains the SF UI-customization model: smart defaults, the four
+// Explains the Seldon UI-customization model: smart defaults, the four
 // levers, and the thin-harness/fat-skill philosophy. For operators
 // who want to push their site beyond the balanced preset.
 
@@ -171,7 +171,7 @@ pnpm dev`}</CodeBlock>
         registry IS the contract.
       </Step>
       <Step n={4} title="Use the motion primitives">
-        SF ships 8 composable motion primitives at{" "}
+        Seldon ships 8 composable motion primitives at{" "}
         <code>packages/crm/src/components/motion/</code> — RevealOnScroll,
         Stagger, HoverLift, Counter, TextReveal, Marquee, MagneticButton,
         Parallax. Mix into any custom block:

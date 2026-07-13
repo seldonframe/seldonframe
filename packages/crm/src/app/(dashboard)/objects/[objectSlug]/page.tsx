@@ -81,7 +81,7 @@ export default async function CustomObjectPage({
               const label = candidate.savedViews[0]?.label ?? candidate.name;
               const isActive = tableView?.name === candidate.name;
               return (
-                <Link key={candidate.name} href={`/${config.spec.routeBase}?${href.toString()}`} className={isActive ? "rounded-full border border-primary/30 bg-primary/15 px-2.5 py-1 text-primary" : "rounded-full border border-primary/20 bg-primary/10 px-2.5 py-1 text-primary"}>
+                <Link key={candidate.name} href={`/${config.spec.routeBase}?${href.toString()}`} className={isActive ? "rounded-[11px] border border-primary/30 bg-primary/15 px-2.5 py-1 text-primary" : "rounded-full border border-primary/20 bg-primary/10 px-2.5 py-1 text-primary"}>
                   {label}
                 </Link>
               );

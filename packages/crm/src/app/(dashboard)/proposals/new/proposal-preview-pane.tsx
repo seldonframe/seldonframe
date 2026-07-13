@@ -180,7 +180,7 @@ export function ProposalPreviewPane({
               type="button"
               disabled
               style={{ backgroundColor: agencyContext.brandColor }}
-              className="px-4 py-1.5 rounded-full text-white text-sm font-medium opacity-70 cursor-not-allowed"
+              className="px-4 py-1.5 rounded-[11px] text-white text-sm font-medium opacity-70 cursor-not-allowed"
             >
               Accept &amp; start →
             </button>

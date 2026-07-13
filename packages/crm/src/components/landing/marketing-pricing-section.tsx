@@ -48,7 +48,7 @@ export function LandingMarketingPricingSection({
     <section
       id="pricing"
       aria-labelledby="pricing-heading"
-      className="border-t border-[var(--lp-border-soft)] bg-[var(--lp-bg)] px-5 py-20 md:px-8 md:py-28 lg:px-12"
+      className="border-t border-[var(--lp-border-soft)] px-5 py-20 md:px-8 md:py-28 lg:px-12"
     >
       <div className="mx-auto max-w-[1120px]">
         {/* Section head */}
@@ -109,9 +109,8 @@ export function LandingMarketingPricingSection({
             <Link
               href="/signup"
               data-plan-cta="flat"
-              className="mt-6 inline-flex items-center justify-center gap-2.5 rounded-full bg-[var(--lp-cta-bg)] px-6 py-3.5 text-[14px] font-[500] text-[var(--lp-cta-ink)] shadow-[0_1px_2px_color-mix(in_oklab,var(--lp-ink)_10%,transparent),0_6px_16px_color-mix(in_oklab,var(--lp-ink)_10%,transparent),inset_0_1.5px_0_rgba(255,255,255,.12)] transition-all hover:-translate-y-px focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[var(--lp-accent)]"
+              className="mt-6 inline-flex items-center justify-center gap-2.5 rounded-[11px] bg-[var(--lp-cta-bg)] px-6 py-3.5 text-[14px] font-[500] text-[var(--lp-cta-ink)] shadow-[0_1px_2px_color-mix(in_oklab,var(--lp-ink)_10%,transparent),0_6px_16px_color-mix(in_oklab,var(--lp-ink)_10%,transparent),inset_0_1.5px_0_rgba(255,255,255,.12)] transition-all hover:-translate-y-px focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[var(--lp-accent)]"
             >
-              <span className="size-[7px] rounded-full bg-[var(--lp-accent)] shadow-[0_0_0_3px_var(--lp-accent-soft)]" aria-hidden />
               Build it free →
             </Link>
 

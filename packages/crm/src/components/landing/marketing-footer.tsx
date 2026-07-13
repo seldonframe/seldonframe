@@ -107,7 +107,7 @@ export function MarketingFooter() {
             <div className="flex flex-col gap-2.5">
               <Link
                 href="/signup"
-                className="inline-flex items-center gap-2 self-start rounded-full bg-[var(--lp-cta-bg)] px-4 py-2.5 text-[13px] font-[500] text-[var(--lp-cta-ink)] shadow-[0_1px_2px_color-mix(in_oklab,var(--lp-ink)_10%,transparent),0_4px_12px_color-mix(in_oklab,var(--lp-ink)_8%,transparent),inset_0_1.5px_0_rgba(255,255,255,.10)] transition-all hover:-translate-y-px"
+                className="inline-flex items-center gap-2 self-start rounded-[11px] bg-[var(--lp-cta-bg)] px-4 py-2.5 text-[13px] font-[500] text-[var(--lp-cta-ink)] shadow-[0_1px_2px_color-mix(in_oklab,var(--lp-ink)_10%,transparent),0_4px_12px_color-mix(in_oklab,var(--lp-ink)_8%,transparent),inset_0_1.5px_0_rgba(255,255,255,.10)] transition-all hover:-translate-y-px"
               >
                 <span className="size-1.5 rounded-full bg-[var(--lp-accent)]" aria-hidden />
                 Start building

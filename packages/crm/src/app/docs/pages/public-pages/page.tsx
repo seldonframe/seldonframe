@@ -48,7 +48,7 @@ export default function Page() {
       <Callout variant="tip" title="The chatbot follows you everywhere">
         Once you have a published agent, every public page automatically
         carries the chatbot bubble (toggleable per page in Settings). No
-        embed snippet needed for SF-hosted pages.
+        embed snippet needed for Seldon-hosted pages.
       </Callout>
 
       <h2>SEO basics</h2>

@@ -1,6 +1,6 @@
 <div align="center">
 
-<img src="https://seldonframe.com/brand/seldonframe-icon.svg" width="80" height="80" alt="SeldonFrame" />
+<img src=".github/assets/seldon-mark.svg" width="72" height="72" alt="Seldon" />
 
 # SeldonFrame
 

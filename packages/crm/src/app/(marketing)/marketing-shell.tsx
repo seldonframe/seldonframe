@@ -8,14 +8,14 @@ import type { ReactNode } from "react";
 
 const LogoSVG = () => (
   <svg viewBox="0 0 100 100" fill="none" className="w-[26px] h-[26px]">
-    <line x1="22" y1="22" x2="58" y2="22" stroke="#1FAE85" strokeWidth="3" strokeLinecap="round" />
-    <line x1="78" y1="42" x2="78" y2="78" stroke="#1FAE85" strokeWidth="3" strokeLinecap="round" />
-    <line x1="78" y1="78" x2="22" y2="78" stroke="#1FAE85" strokeWidth="3" strokeLinecap="round" />
-    <line x1="22" y1="78" x2="22" y2="22" stroke="#1FAE85" strokeWidth="3" strokeLinecap="round" />
-    <circle cx="22" cy="22" r="6" fill="#1FAE85" />
-    <circle cx="78" cy="22" r="6" fill="none" stroke="#1FAE85" strokeWidth="3" />
-    <circle cx="78" cy="78" r="6" fill="#1FAE85" />
-    <circle cx="22" cy="78" r="6" fill="#1FAE85" />
+    <line x1="22" y1="22" x2="58" y2="22" stroke="#F6F2EA" strokeWidth="3" strokeLinecap="round" />
+    <line x1="78" y1="42" x2="78" y2="78" stroke="#F6F2EA" strokeWidth="3" strokeLinecap="round" />
+    <line x1="78" y1="78" x2="22" y2="78" stroke="#F6F2EA" strokeWidth="3" strokeLinecap="round" />
+    <line x1="22" y1="78" x2="22" y2="22" stroke="#F6F2EA" strokeWidth="3" strokeLinecap="round" />
+    <circle cx="22" cy="22" r="6" fill="#F6F2EA" />
+    <circle cx="78" cy="22" r="6" fill="none" stroke="#F6F2EA" strokeWidth="3" />
+    <circle cx="78" cy="78" r="6" fill="#F6F2EA" />
+    <circle cx="22" cy="78" r="6" fill="#F6F2EA" />
   </svg>
 );
 

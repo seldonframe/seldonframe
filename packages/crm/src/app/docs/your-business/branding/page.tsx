@@ -25,10 +25,10 @@ export default function Page() {
       </p>
 
       <Callout variant="tip" title="Brand-isolated assets">
-        SeldonFrame's own brand (the SF icon you see when you're not in a
+        SeldonFrame's own brand (the Seldon icon you see when you're not in a
         specific workspace) is separated from per-workspace brand. If
         you're an agency, your client's chatbot/site shows their brand,
-        not SF's.
+        not Seldon's.
       </Callout>
 
       <h2>Per-page overrides</h2>

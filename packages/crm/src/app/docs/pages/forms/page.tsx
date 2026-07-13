@@ -37,7 +37,7 @@ export default function Page() {
         </ul>
       </Step>
       <Step n={4} title="Embed it">
-        Drop the form on any SF page (it's a block). Or copy the embed
+        Drop the form on any Seldon page (it's a block). Or copy the embed
         snippet and paste on an external site:
         <pre className="my-3 overflow-x-auto rounded-lg border bg-muted/30 px-3 py-2 text-xs">
           {`<iframe src="https://app.seldonframe.com/embed/form/frm_abc123" width="100%" height="500"></iframe>`}

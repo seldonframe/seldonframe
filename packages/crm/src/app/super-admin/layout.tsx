@@ -4,13 +4,13 @@
 // redirect to /dashboard before any UI hits the wire (no flash of
 // admin chrome). Sidebar mirrors the operator dashboard's left-nav
 // pattern (compact icons + labels, dark theme, sticky) so the look
-// stays consistent across SF surfaces.
+// stays consistent across Seldon surfaces.
 
 import { requireSuperAdmin } from "@/lib/auth/super-admin";
 import { SuperAdminSidebar } from "./super-admin-sidebar";
 
 export const metadata = {
-  title: "SF Admin · SeldonFrame",
+  title: "Seldon Admin · SeldonFrame",
 };
 
 export default async function SuperAdminLayout({ children }: { children: React.ReactNode }) {

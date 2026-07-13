@@ -1,6 +1,6 @@
 // /blog/why-mcp — first real launch-week blog post.
 // v1.31.3 — explains the MCP-native architecture choice that
-// differentiates SF from chatbot-wrapper startups.
+// differentiates Seldon from chatbot-wrapper startups.
 
 import type { Metadata } from "next";
 import { MarketingShell } from "../../marketing-shell";
@@ -103,7 +103,7 @@ export default function Post() {
             build experience gets better — without us shipping
             anything. The same is true for the runtime: agents in
             production that use better LLMs make better decisions,
-            with no SF-side changes. The architecture is antifragile
+            with no Seldon-side changes. The architecture is antifragile
             to model improvements.
           </p>
           <p>
@@ -174,7 +174,7 @@ export default function Post() {
             href="https://github.com/seldonframe/seldonframe"
             target="_blank"
             rel="noopener noreferrer"
-            className="text-[#1FAE85] hover:underline font-semibold"
+            className="text-[#F6F2EA] hover:underline font-semibold"
           >
             Browse the source on GitHub →
           </a>

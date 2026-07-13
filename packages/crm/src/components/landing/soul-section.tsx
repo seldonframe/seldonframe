@@ -26,7 +26,7 @@ export function LandingSoulSection() {
               "Who you work with best",
             ].map((item) => (
               <div key={item} className="flex items-center gap-3 text-sm text-zinc-300">
-                <div className="h-1.5 w-1.5 rounded-full bg-[#059669]" />
+                <div className="h-1.5 w-1.5 rounded-full bg-[#1F2B24]" />
                 {item}
               </div>
             ))}

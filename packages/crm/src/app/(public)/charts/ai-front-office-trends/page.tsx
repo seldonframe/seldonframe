@@ -100,7 +100,7 @@ export default function AiFrontOfficeChartPage(): ReactElement {
 
         {/* ── disclaimers, in Max's voice ── */}
         <div style={{ marginTop: 24, display: "grid", gap: 12, maxWidth: 780 }}>
-          <div style={{ border: `1px solid ${MKT.ink10}`, borderLeftWidth: 3, borderLeftColor: MKT.green, borderRadius: 12, padding: "14px 18px", background: "rgba(5, 150, 105,0.05)" }}>
+          <div style={{ border: `1px solid ${MKT.ink10}`, borderLeftWidth: 3, borderLeftColor: MKT.green, borderRadius: 12, padding: "14px 18px", background: "rgba(31, 43, 36,0.05)" }}>
             <p style={{ margin: 0, fontSize: 14.5, lineHeight: 1.6, color: "rgba(34,29,23,0.8)" }}>
               <strong>This is completely subjective.</strong> Every line on this chart is my belief, not a research
               finding. I run a company in this space, so I'm biased — I'm telling you that up front instead of hiding

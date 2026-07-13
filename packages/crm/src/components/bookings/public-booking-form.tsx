@@ -378,7 +378,7 @@ export function PublicBookingForm({
           {businessPhone ? (
             <a
               href={toTelLink(businessPhone)}
-              className="inline-flex items-center gap-2 rounded-full px-4 py-2 text-sm font-semibold hover:opacity-90 transition-opacity whitespace-nowrap"
+              className="inline-flex items-center gap-2 rounded-[11px] px-4 py-2 text-sm font-semibold hover:opacity-90 transition-opacity whitespace-nowrap"
               style={{
                 backgroundColor: "var(--sf-text, #0a0a0a)",
                 color: "var(--sf-bg, #ffffff)",
@@ -917,7 +917,7 @@ function StepIndicator<T extends string>({
             type="button"
             disabled={!isPast && !isActive}
             onClick={() => isPast && onClick(s.id)}
-            className="inline-flex items-center gap-2 rounded-full px-3.5 py-1.5 text-xs font-semibold transition-colors"
+            className="inline-flex items-center gap-2 rounded-[11px] px-3.5 py-1.5 text-xs font-semibold transition-colors"
             style={baseStyles}
           >
             <span

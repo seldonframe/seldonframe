@@ -42,7 +42,7 @@ export function QualityMarker(props: {
         type="button"
         disabled={isPending}
         onClick={() => save({ q: quality === "good" ? null : "good" })}
-        className={`rounded-full px-3 py-1 transition-colors ${
+        className={`rounded-[11px] px-3 py-1 transition-colors ${
           quality === "good"
             ? "bg-emerald-500/15 text-emerald-700 dark:text-emerald-400"
             : "border bg-card hover:bg-muted/50"
@@ -54,7 +54,7 @@ export function QualityMarker(props: {
         type="button"
         disabled={isPending}
         onClick={() => save({ q: quality === "bad" ? null : "bad" })}
-        className={`rounded-full px-3 py-1 transition-colors ${
+        className={`rounded-[11px] px-3 py-1 transition-colors ${
           quality === "bad"
             ? "bg-rose-500/15 text-rose-700 dark:text-rose-400"
             : "border bg-card hover:bg-muted/50"

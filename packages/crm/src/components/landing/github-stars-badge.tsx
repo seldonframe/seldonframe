@@ -46,7 +46,7 @@ export function GitHubStarsBadge({ stars }: { stars: number | null }) {
       // chip — transparent surface, thin border. Reads as proof of
       // existence, not a primary action. Vertical padding bumped to
       // py-2.5 so the click target clears WCAG 2.5.5 (>=44px).
-      className="inline-flex items-center gap-2 rounded-full border border-zinc-700/60 bg-transparent px-4 py-2.5 text-sm font-medium text-zinc-300 transition-colors hover:border-zinc-500 hover:text-zinc-100 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[#059669]"
+      className="inline-flex items-center gap-2 rounded-[11px] border border-zinc-700/60 bg-transparent px-4 py-2.5 text-sm font-medium text-zinc-300 transition-colors hover:border-zinc-500 hover:text-zinc-100 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[#1F2B24]"
     >
       <GitFork size={16} aria-hidden="true" />
       <span>seldonframe/crm</span>
@@ -55,7 +55,7 @@ export function GitHubStarsBadge({ stars }: { stars: number | null }) {
           className="flex items-center gap-1 text-zinc-400"
           aria-hidden="true"
         >
-          <Star size={12} className="text-[#059669]" />
+          <Star size={12} className="text-[#1F2B24]" />
           {formatStars(stars)}
         </span>
       ) : null}

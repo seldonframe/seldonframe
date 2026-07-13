@@ -206,7 +206,7 @@ export function HeroCinematicAura(props: HeroSectionContent) {
           {props.secondaryCta ? (
             <Link
               href={props.secondaryCta.link}
-              className="cin-liquid-glass inline-flex items-center gap-2 rounded-full px-5 py-3 text-sm font-medium text-white hover:bg-white/5"
+              className="cin-liquid-glass inline-flex items-center gap-2 rounded-[11px] px-5 py-3 text-sm font-medium text-white hover:bg-white/5"
             >
               <Play className="h-4 w-4 fill-white" />
               {props.secondaryCta.text}

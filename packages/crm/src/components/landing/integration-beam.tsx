@@ -63,7 +63,7 @@ export function IntegrationBeam() {
       <div className="relative z-10 flex flex-col items-center gap-1.5">
         <div
           ref={centerRef}
-          className="flex size-12 items-center justify-center rounded-full bg-[#059669] shadow-[0_2px_8px_rgba(5, 150, 105,.35)]"
+          className="flex size-12 items-center justify-center rounded-full bg-[#1F2B24] shadow-[0_2px_8px_rgba(31, 43, 36,.35)]"
           aria-hidden
         >
           {/* eslint-disable-next-line @next/next/no-img-element -- static brand asset */}
@@ -86,7 +86,7 @@ export function IntegrationBeam() {
                 // eslint-disable-next-line @next/next/no-img-element -- static vendored SVG
                 <img src={tool.logo} alt="" width={18} height={18} className="block" aria-hidden="true" />
               ) : (
-                <Phone className="size-[17px] text-[#059669]" aria-hidden="true" />
+                <Phone className="size-[17px] text-[#1F2B24]" aria-hidden="true" />
               )}
             </div>
           </div>
@@ -101,8 +101,8 @@ export function IntegrationBeam() {
           toRef={toolRefs[tool.id as keyof typeof toolRefs]}
           curvature={0}
           duration={4}
-          gradientStartColor="#059669"
-          gradientStopColor="#34d399"
+          gradientStartColor="#1F2B24"
+          gradientStopColor="#F6F2EA"
         />
       ))}
     </div>

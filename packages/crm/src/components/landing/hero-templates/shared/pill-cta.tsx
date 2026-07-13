@@ -24,7 +24,7 @@ export function DarkPillCTA({
     <Link
       href={href}
       className={
-        "group inline-flex items-center justify-center gap-2 rounded-full " +
+        "group inline-flex items-center justify-center gap-2 rounded-[11px] " +
         "bg-[#0a0a0a] text-white font-medium text-sm px-6 py-3 " +
         "transition-all hover:bg-[#1a1a1a] active:scale-[0.98] " +
         className
@@ -50,7 +50,7 @@ export function LightSecondaryCTA({
     <Link
       href={href}
       className={
-        "inline-flex items-center justify-center rounded-full " +
+        "inline-flex items-center justify-center rounded-[11px] " +
         "bg-white text-[#0a0a0a] font-medium text-sm px-6 py-3 " +
         "shadow-[0_4px_30px_rgba(0,0,0,0.08)] transition-all " +
         "hover:shadow-[0_4px_30px_rgba(0,0,0,0.12)] hover:-translate-y-[1px] active:scale-[0.98] " +
@@ -76,7 +76,7 @@ export function OutlinePillCTA({
     <Link
       href={href}
       className={
-        "inline-flex items-center justify-center rounded-full " +
+        "inline-flex items-center justify-center rounded-[11px] " +
         "border border-[#0a0a0a]/15 text-[#0a0a0a] font-medium text-sm px-6 py-3 " +
         "transition-all hover:border-[#0a0a0a]/40 hover:bg-[#0a0a0a]/[0.02] active:scale-[0.98] " +
         className

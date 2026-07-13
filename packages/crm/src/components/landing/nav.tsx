@@ -47,7 +47,7 @@ export function LandingNav() {
     >
       <a
         href="#main-content"
-        className="sr-only focus:not-sr-only focus:absolute focus:left-4 focus:top-2 focus:z-50 focus:rounded-lg focus:bg-[#059669] focus:px-4 focus:py-2 focus:text-sm focus:font-semibold focus:text-zinc-950 focus:outline focus:outline-2 focus:outline-offset-2 focus:outline-[#059669]"
+        className="sr-only focus:not-sr-only focus:absolute focus:left-4 focus:top-2 focus:z-50 focus:rounded-lg focus:bg-[#1F2B24] focus:px-4 focus:py-2 focus:text-sm focus:font-semibold focus:text-zinc-950 focus:outline focus:outline-2 focus:outline-offset-2 focus:outline-[#1F2B24]"
       >
         Skip to main content
       </a>
@@ -87,7 +87,7 @@ export function LandingNav() {
           )}
           <Link
             href="/signup"
-            className="rounded-lg bg-[#059669] px-4 py-1.5 font-semibold text-zinc-950 transition-opacity hover:opacity-90 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[#059669]"
+            className="rounded-lg bg-[#1F2B24] px-4 py-1.5 font-semibold text-zinc-950 transition-opacity hover:opacity-90 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[#1F2B24]"
           >
             Start free
           </Link>
@@ -99,7 +99,7 @@ export function LandingNav() {
         <div className="flex items-center gap-2 md:hidden">
           <Link
             href="/signup"
-            className="rounded-lg bg-[#059669] px-3 py-1.5 text-sm font-semibold text-zinc-950 transition-opacity hover:opacity-90"
+            className="rounded-lg bg-[#1F2B24] px-3 py-1.5 text-sm font-semibold text-zinc-950 transition-opacity hover:opacity-90"
             onClick={() => setOpen(false)}
           >
             Start free

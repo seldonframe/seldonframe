@@ -21,7 +21,7 @@
 //
 // No dashboard chrome, no auth imports — this must render for a fully
 // anonymous visitor. Palette matches marketing-hero.tsx's light/warm
-// tokens (#F6F2EA paper, #221D17 ink, #059669 green accent).
+// tokens (#F6F2EA paper, #221D17 ink, #1F2B24 green accent).
 "use client";
 
 import { useEffect, useRef, useState } from "react";
@@ -257,7 +257,7 @@ export function TryClient({ initialUrl }: { initialUrl: string }) {
              (dark) host values untouched. Values match the /try idle hero
              + reveal screen's existing light palette (marketing-hero.tsx
              tokens noted at the top of this file): #F6F2EA paper,
-             #221D17 ink, #059669 teal accent — not invented hexes. */
+             #221D17 ink, #1F2B24 teal accent — not invented hexes. */
           .sf-try-stage {
             --background: #f6f2ea;
             --foreground: #221d17;
@@ -265,7 +265,7 @@ export function TryClient({ initialUrl }: { initialUrl: string }) {
             --border: #e0d9cc;
             --muted: #efe9dd;
             --muted-foreground: #6e665a;
-            --primary: #059669;
+            --primary: #1F2B24;
           }
           /* The archetype brand-preview cards (e.g. the red "Bold urgency"
              hero card) stay brand-colored by design — only two archetypes
@@ -297,7 +297,7 @@ export function TryClient({ initialUrl }: { initialUrl: string }) {
           <div className="flex flex-col items-center text-center">
             <p className="inline-flex items-center gap-2.5 font-sans text-[12.5px] tracking-[0.04em] text-[#6E665A]">
               <span className="inline-block h-px w-4 bg-[#9A9183]" aria-hidden />
-              <span className="inline-block size-1.5 rounded-full bg-[#059669]" aria-hidden />
+              <span className="inline-block size-1.5 rounded-full bg-[#1F2B24]" aria-hidden />
               Watch it build — no signup required
             </p>
             <h1 className="mt-3 max-w-[20ch] text-balance font-sans text-[clamp(30px,4.4vw,48px)] font-[500] leading-[1.06] tracking-[-0.02em] text-[#221D17]">
@@ -317,7 +317,7 @@ export function TryClient({ initialUrl }: { initialUrl: string }) {
                 {rateLimited ? (
                   <a
                     href="/signup"
-                    className="mt-3 inline-flex items-center gap-1.5 rounded-full bg-[#059669] px-4 py-2 text-[13.5px] font-[600] text-[#FFFDFA]"
+                    className="mt-3 inline-flex items-center gap-1.5 rounded-[11px] bg-[#1F2B24] px-4 py-2 text-[13.5px] font-[600] text-[#FFFDFA]"
                   >
                     Sign up to keep building
                   </a>
@@ -325,7 +325,7 @@ export function TryClient({ initialUrl }: { initialUrl: string }) {
                   <button
                     type="button"
                     onClick={() => startBuild(url)}
-                    className="mt-3 rounded-full border border-[rgba(34,29,23,.16)] bg-[#FFFDFA] px-4 py-2 text-[13.5px] font-[500] text-[#221D17]"
+                    className="mt-3 rounded-[11px] border border-[rgba(34,29,23,.16)] bg-[#FFFDFA] px-4 py-2 text-[13.5px] font-[500] text-[#221D17]"
                   >
                     Try again
                   </button>
@@ -357,14 +357,14 @@ export function TryClient({ initialUrl }: { initialUrl: string }) {
                     spellCheck={false}
                     placeholder="https://your-business.com"
                     aria-label="Your website URL"
-                    className="h-14 w-full border-0 bg-transparent font-mono text-[15px] text-[#221D17] caret-[#059669] outline-none placeholder:text-[#9A9183]"
+                    className="h-14 w-full border-0 bg-transparent font-mono text-[15px] text-[#221D17] caret-[#1F2B24] outline-none placeholder:text-[#9A9183]"
                   />
                 </div>
                 <div className="flex items-center justify-end gap-3 px-3.5 pb-3.5 pt-3">
                   <button
                     type="submit"
                     disabled={!url.trim()}
-                    className="inline-flex h-10 items-center justify-center gap-2 rounded-[10px] bg-[#059669] px-4 text-[13.5px] font-[600] text-[#FFFDFA] shadow-[0_6px_20px_rgba(5, 150, 105,.28)] transition-all hover:-translate-y-px hover:bg-[#047857] disabled:cursor-not-allowed disabled:opacity-50 disabled:shadow-none"
+                    className="inline-flex h-10 items-center justify-center gap-2 rounded-[10px] bg-[#1F2B24] px-4 text-[13.5px] font-[600] text-[#FFFDFA] shadow-[0_6px_20px_rgba(31, 43, 36,.28)] transition-all hover:-translate-y-px hover:bg-[#16201B] disabled:cursor-not-allowed disabled:opacity-50 disabled:shadow-none"
                   >
                     Build it
                   </button>
@@ -437,7 +437,7 @@ function RevealPanel({ done, onStartOver }: { done: DoneData; onStartOver: () =>
   return (
     <div className="flex flex-col items-center text-center">
       <p className="inline-flex items-center gap-2.5 font-sans text-[12.5px] tracking-[0.04em] text-[#6E665A]">
-        <span className="inline-block size-1.5 rounded-full bg-[#059669]" aria-hidden />
+        <span className="inline-block size-1.5 rounded-full bg-[#1F2B24]" aria-hidden />
         It&apos;s live
       </p>
       {/* 2026-07-04 — Headline compressed one size down (was
@@ -456,9 +456,8 @@ function RevealPanel({ done, onStartOver }: { done: DoneData; onStartOver: () =>
 
       <a
         href={saveHref}
-        className="mt-5 inline-flex items-center gap-2.5 rounded-full bg-[#1F2B24] px-6 py-3.5 text-[15px] font-[500] text-[#F6F2EA] shadow-[0_1px_2px_rgba(34,29,23,.10),0_6px_16px_rgba(34,29,23,.10)] transition-all hover:-translate-y-[1.5px]"
+        className="mt-5 inline-flex items-center gap-2.5 rounded-[11px] bg-[#1F2B24] px-6 py-3.5 text-[15px] font-[500] text-[#F6F2EA] shadow-[0_1px_2px_rgba(34,29,23,.10),0_6px_16px_rgba(34,29,23,.10)] transition-all hover:-translate-y-[1.5px]"
       >
-        <span className="size-[7px] rounded-full bg-[#059669]" aria-hidden />
         Save your workspace — it&apos;s free
       </a>
 
@@ -492,15 +491,14 @@ function RevealPanel({ done, onStartOver }: { done: DoneData; onStartOver: () =>
       <div className="mt-8 flex flex-wrap items-center justify-center gap-3">
         <a
           href={saveHref}
-          className="inline-flex items-center gap-2.5 rounded-full bg-[#1F2B24] px-6 py-3.5 text-[15px] font-[500] text-[#F6F2EA] shadow-[0_1px_2px_rgba(34,29,23,.10),0_6px_16px_rgba(34,29,23,.10)] transition-all hover:-translate-y-[1.5px]"
+          className="inline-flex items-center gap-2.5 rounded-[11px] bg-[#1F2B24] px-6 py-3.5 text-[15px] font-[500] text-[#F6F2EA] shadow-[0_1px_2px_rgba(34,29,23,.10),0_6px_16px_rgba(34,29,23,.10)] transition-all hover:-translate-y-[1.5px]"
         >
-          <span className="size-[7px] rounded-full bg-[#059669]" aria-hidden />
           Save your workspace — it&apos;s free
         </a>
         <button
           type="button"
           onClick={onStartOver}
-          className="inline-flex items-center gap-2 rounded-full border border-[rgba(34,29,23,.16)] bg-[#FFFDFA] px-5 py-3.5 text-[15px] font-[500] text-[#221D17] transition-all hover:-translate-y-[1.5px]"
+          className="inline-flex items-center gap-2 rounded-[11px] border border-[rgba(34,29,23,.16)] bg-[#FFFDFA] px-5 py-3.5 text-[15px] font-[500] text-[#221D17] transition-all hover:-translate-y-[1.5px]"
         >
           Start over
         </button>

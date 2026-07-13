@@ -8,7 +8,7 @@
 import { useMemo, useState, type ReactElement } from "react";
 
 const INK = "#221D17";
-const GREEN = "#059669";
+const GREEN = "#1F2B24";
 const INK10 = "rgba(34,29,23,0.10)";
 const RED = "#C0392B";
 
@@ -178,7 +178,7 @@ export function GoogleReviewLinkGenerator(): ReactElement {
         {showHelp ? "Hide" : "How do I find my Place ID?"}
       </button>
       {showHelp && (
-        <div style={{ marginTop: 10, fontSize: 13.5, lineHeight: 1.6, color: "rgba(34,29,23,0.72)", background: "rgba(5, 150, 105,0.06)", borderRadius: 12, padding: "14px 16px" }}>
+        <div style={{ marginTop: 10, fontSize: 13.5, lineHeight: 1.6, color: "rgba(34,29,23,0.72)", background: "rgba(31, 43, 36,0.06)", borderRadius: 12, padding: "14px 16px" }}>
           <p style={{ margin: "0 0 8px" }}>
             Use Google's free{" "}
             <a
