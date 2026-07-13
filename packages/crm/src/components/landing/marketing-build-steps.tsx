@@ -21,6 +21,8 @@
 import { useEffect, useRef, useState, type ReactNode } from "react";
 import { motion, useInView, useReducedMotion } from "framer-motion";
 
+import { IntegrationBeam } from "@/components/landing/integration-beam";
+
 // Shared spring-ish ease used everywhere (the brief's cubic-bezier).
 const EASE = [0.22, 1, 0.36, 1] as const;
 
@@ -29,6 +31,8 @@ type Step = {
   title: string;
   body: string;
   mock: ReactNode;
+  /** Optional extra figure rendered below the mock (step 3's outward-integration beam). */
+  figure?: ReactNode;
 };
 
 const STEPS: readonly Step[] = [
@@ -66,6 +70,7 @@ const STEPS: readonly Step[] = [
         ]}
       />
     ),
+    figure: <IntegrationBeam />,
   },
 ];
 
@@ -122,6 +127,9 @@ export function MarketingBuildSteps() {
 
               {/* Animated build log */}
               <div className="mt-auto">{step.mock}</div>
+
+              {/* Optional figure (step 3: outward-integration beam) */}
+              {step.figure ? <div className="mt-1">{step.figure}</div> : null}
             </div>
           ))}
         </div>
