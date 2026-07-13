@@ -43,7 +43,6 @@ import { RestoredBanner } from "./record-ui/restored-banner";
 import { CaptureCard } from "./record-ui/capture-card";
 import { TracedList } from "./record-ui/traced-list";
 import { RecapPanel } from "./record-ui/recap-panel";
-import { AgentLoopDiagram } from "./record-ui/agent-loop-diagram";
 
 const STORAGE_KEY = "sf-record-session";
 
@@ -684,9 +683,6 @@ export function RecordClient({
           ) : null}
           <div className="w-full max-w-[720px]">
             <StepStrip current={currentStep(state)} />
-          </div>
-          <div className="mt-6 w-full">
-            <AgentLoopDiagram />
           </div>
         </header>
 

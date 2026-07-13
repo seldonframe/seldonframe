@@ -55,11 +55,15 @@ describe("<RecordClient> — initial landing-phase render", () => {
     assert.doesNotMatch(html, /Ask Seldon/);
   });
 
-  test("headline + slots section + agent-loop explainer render", () => {
+  test("headline + slots section render", () => {
     const html = renderInitial();
     assert.match(html, /Show Seldon how you work/);
     assert.match(html, /aria-label="Recording slots"/);
-    assert.match(html, /The agent loop/);
+  });
+
+  test("agent-loop explainer is removed", () => {
+    const html = renderInitial();
+    assert.doesNotMatch(html, /The agent loop/);
   });
 
   test('"Start fresh" is absent when no session exists yet (landing phase)', () => {
