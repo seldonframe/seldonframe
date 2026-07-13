@@ -12,6 +12,7 @@
 // env override (NEXT_PUBLIC_SITE_URL) wins for non-prod deploys.
 
 import type { MetadataRoute } from "next";
+import { isRecordToAgentOn } from "@/lib/recordings/policy";
 import { AGENT_JOBS, allJobVerticalPairs } from "@/lib/seo/agent-pages";
 import { COMPETITORS } from "@/lib/seo/alternative-pages";
 import { VS_PAIRS, vsSlug } from "@/lib/seo/alternative-pages-extras";
@@ -70,6 +71,12 @@ export default async function sitemap(): Promise<MetadataRoute.Sitemap> {
       changeFrequency: "monthly",
       priority: 0.6,
     });
+  }
+
+  // /record — indexable only when the record-to-agent flow is on (a 404ing
+  // route must never be sitemapped).
+  if (isRecordToAgentOn({ SF_RECORD_TO_AGENT: process.env.SF_RECORD_TO_AGENT })) {
+    entries.push({ url: `${base}/record`, lastModified: now, changeFrequency: "monthly", priority: 0.8 });
   }
 
   // The sell-agents hub (targets "sell ai agents").
