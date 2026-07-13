@@ -2205,3 +2205,42 @@ C4 close-out with empirical SLICE 11 data.
 ---
 
 - L-41 (2026-07-13): Subagent ran git in the WRONG checkout (bare `cd "<repo>"` → stale primary branch, not the feature worktree); pin dir hard + assert `rev-parse` before acting + run the covering test yourself — a cheap model's "done" is unverified. Also: `git stash drop` reads the SHARED repo-wide stack; list before dropping. See docs/learnings/2026-07-13-wrong-checkout-subagent.md
+
+---
+
+## L-41 — Smoke-verify (HTTP 200 + text present) is NOT vision-verify; render and LOOK before shipping any visual surface
+
+- **Trigger:** Shipped the new /blog article page and confirmed it with an
+  HTTP-200 + `grep`-the-text smoke check. It went to prod rendering **white
+  title text on the light parchment background** — unreadable. The page mirrored
+  the dark `why-mcp` post's `#fafafa` text but rendered on the light marketing
+  background (MarketingShell's `<main>` has no bg). Max caught it immediately;
+  the smoke check couldn't — a 200 with the right words says nothing about
+  contrast, layout, or whether an element is even visible.
+- **Rule:** For ANY change with a visual surface (a page, a component, a diagram,
+  a color/theme change), the acceptance gate is a REAL RENDER you look at, not a
+  status code. Minimum: (a) render the page (local `next start` + the browser
+  pane or Playwright, or a Vercel preview), (b) a computed-style / DOM assertion
+  on the thing that matters (`getComputedStyle(wrapper).backgroundColor` +
+  `h1.color` proves contrast far more precisely than a screenshot), and (c) a
+  screenshot when the tool cooperates. When the browser-pane screenshot hangs
+  (it does in this env), Playwright's `browser_take_screenshot` to a file +
+  `Read` the PNG is the reliable fallback; computed-style checks stand on their
+  own when neither works. Never claim a visual surface is done off a smoke check.
+  (This is the vision-verify gate the repo already has — USE it for content
+  surfaces, not just SeldonChat.)
+
+## L-42 — Horizontal `overflowX:auto` on content diagrams/tables is a left-right slider users hate; render sequences vertically
+
+- **Trigger:** The shared `guide-diagrams.tsx` FlowDiagram rendered its steps as
+  a horizontal card row inside `overflowX:auto` — on a narrow article column it
+  produced a left-right scrollbar. Max: "I hate the right-left slider … make sure
+  ALL articles, blog, guides, free tools don't have any right-left slider."
+- **Rule:** A linear sequence (a workflow/flow) belongs VERTICAL — full-width
+  cards stacked top→bottom joined by a down-connector — never a horizontal row
+  that overflows. Reserve `overflowX:auto` for genuinely wide data tables, and
+  even then prefer a mobile card-reflow. When touching a SHARED content component
+  (`GuideDiagramView` feeds guides + blog + tools), the fix lands everywhere at
+  once — audit `overflowX` across `components/seo/*` and kill the ones on
+  diagram/sequence wrappers. Keep the fix responsive (compare grids → 1 column
+  below ~520px) and reduced-motion aware.
