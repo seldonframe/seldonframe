@@ -588,3 +588,19 @@ Package the build → test → deploy → sell → get-paid loop as a distributi
 - [ ] Post-deploy: flag `SF_AGENT_LIFECYCLE=1` → live smoke + vision gate on the ladder + supervised-run real-key smoke
 
 **Review:** All production code was either independently reviewed (waves) or is a tested remediation of a reviewer finding (fix wave); verify-runner was maker-independent. Known deferred: live render smoke of flag-on ladder (no local next build possible), Connected-stage per-step "why" line (needs binding→step mapping persisted — follow-up), toolkit logos unrendered.
+
+---
+
+## 2026-07-13 — Circle MCP connector (feature/circle-mcp-connector, stacked on composio-live-discovery)
+
+Spec: docs/superpowers/specs/2026-07-13-circle-mcp-connector-design.md
+Plan: docs/superpowers/plans/2026-07-13-circle-mcp-connector.md
+
+- [ ] Task 1: OAuth protocol module (discovery/DCR/PKCE/exchange/refresh/envelope)
+- [ ] Task 2: OAuth-aware bearer resolver + runtime/bind-time wiring
+- [ ] Task 3: Registry — authType widening + circle entry + shared clamp
+- [ ] Task 4: Vetted discovery fill + fillAllBindingTools at 5 call sites
+- [ ] Task 5: Connect/disconnect actions + signed-state cookie + callback route
+- [ ] Task 6: tool-catalog circle entry (findability)
+- [ ] Task 7: /integrations card + editor OAuth branch
+- [ ] Task 8: Close-out — leak greps, review section, full sweep
