@@ -13,8 +13,24 @@
 // creating a cross-cutting shared import for a one-line list that changes
 // rarely. If the list ever drifts, the /build page + its IDE_INSTALLS array
 // remain the source of truth for the actual install snippets.
+//
+// 2026-07-13 (Motion Slice 1, Task 8) — augmented with a `Terminal` demo
+// (packages/crm/src/components/ui/magic/terminal.tsx) typing the real
+// connect command, so "works with your IDE" is shown, not just claimed.
+// The command string (`npx -y @seldonframe/mcp`) and the flavor line below
+// it are copied verbatim from the existing motion-lab demo
+// (app/(dev)/motion-lab/motion-lab-client.tsx's `TerminalDemo`) — same
+// literal string, not re-derived, per the repo's truth-pass convention.
+// This section never renders in "record" mode (it's buildStack-only, see
+// unified-landing.tsx), so it intentionally keeps this file's existing
+// hardcoded parchment hex values instead of the `--lp-*` tokens — those
+// values ARE the build-mode palette. The Terminal's default shadcn
+// `border-border`/`bg-background` classes are overridden via `className`
+// with the same local hex values so the terminal chrome matches this card
+// row regardless of the app shell's own light/dark class.
 
 import Link from "next/link";
+import { Terminal, TypingAnimation, AnimatedSpan } from "@/components/ui/magic/terminal";
 
 const IDE_NAMES = ["Claude Code", "Cursor", "Windsurf", "VS Code", "Zed", "Codex CLI"] as const;
 
@@ -46,6 +62,15 @@ export function MarketingIdeStrip() {
         >
           See the install snippet →
         </Link>
+      </div>
+
+      <div className="mx-auto mt-6 max-w-[420px]">
+        <Terminal className="w-full max-w-none border-[rgba(34,29,23,.14)] bg-[#FFFDFA] text-[#221D17] shadow-[0_1px_3px_rgba(34,29,23,.08)]">
+          <TypingAnimation className="text-[#221D17]">$ npx -y @seldonframe/mcp</TypingAnimation>
+          <AnimatedSpan delay={600} className="text-[#00897B]">
+            connected — workspace live on yourslug.app.seldonframe.com
+          </AnimatedSpan>
+        </Terminal>
       </div>
     </section>
   );
