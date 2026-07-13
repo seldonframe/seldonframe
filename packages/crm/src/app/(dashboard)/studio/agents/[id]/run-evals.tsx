@@ -18,13 +18,13 @@
 // copy now spans the real wait instead of a synchronous await.
 
 import { useEffect, useRef, useState, useTransition } from "react";
-import Link from "next/link";
 import { ClipboardCheck } from "lucide-react";
 import {
   runAgentEvalsAction,
   getEvalRunJobAction,
   type RunAgentEvalsOk,
 } from "@/lib/agent-templates/eval-actions";
+import { LlmKeyDialog } from "@/components/integrations/llm-key-dialog";
 
 type Ok = RunAgentEvalsOk;
 
@@ -49,6 +49,9 @@ export function RunEvalsCard({ templateId }: { templateId: string }) {
   const [result, setResult] = useState<Ok | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [needsKey, setNeedsKey] = useState(false);
+  // In-place BYOK modal (record-v3 S4a) — replaces the needs_byok Link to
+  // /settings/integrations/llm. onSaved re-runs the same run() call.
+  const [keyDialogOpen, setKeyDialogOpen] = useState(false);
   const pollTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   useEffect(() => {
@@ -170,14 +173,17 @@ export function RunEvalsCard({ templateId }: { templateId: string }) {
               your own agents runs on your Anthropic key.
             </p>
           </div>
-          <Link
-            href="/settings/integrations/llm"
+          <button
+            type="button"
+            onClick={() => setKeyDialogOpen(true)}
             className="shrink-0 rounded-md border border-current/30 px-3 py-1 text-xs font-medium hover:bg-current/10"
           >
             Add your key &rarr;
-          </Link>
+          </button>
         </div>
       )}
+
+      <LlmKeyDialog open={keyDialogOpen} onOpenChange={setKeyDialogOpen} onSaved={run} />
 
       {error && (
         <p className="rounded-lg bg-rose-50 px-3 py-2 text-[13px] text-rose-700 dark:bg-rose-950/40 dark:text-rose-300">

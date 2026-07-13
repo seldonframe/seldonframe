@@ -37,6 +37,7 @@ import {
   saveAgentTemplateBlueprintAction,
   generateAgentDraftAction,
 } from "@/lib/agent-templates/actions";
+import { LlmKeyDialog } from "@/components/integrations/llm-key-dialog";
 import { sendTestEventAgentAction } from "@/lib/agents/triggers/actions";
 import { recordGeneratorEditAction } from "@/lib/agents/generate/actions";
 import type { AgentBlueprint } from "@/db/schema/agents";
@@ -354,6 +355,10 @@ export function AgentTemplateEditor(props: Props) {
   const [isRefining, startRefine] = useTransition();
   const [refineError, setRefineError] = useState<React.ReactNode | null>(null);
   const [refined, setRefined] = useState(false);
+  // In-place BYOK modal (record-v3 S4a) — replaces the needs_byok Link to
+  // /settings/integrations/llm, which used to bounce the builder off this
+  // editor entirely. onSaved re-runs refine() with the same prompt.
+  const [keyDialogOpen, setKeyDialogOpen] = useState(false);
 
   // Rotating loader copy index for the Refine button. Resets to 0 when a
   // refinement starts, advances on an interval while pending, and clears the
@@ -465,12 +470,13 @@ export function AgentTemplateEditor(props: Props) {
             <span>
               {draft.message ??
                 "Add your Anthropic key to build + test agents — your first workspace stays free."}{" "}
-              <Link
-                href="/settings/integrations/llm"
+              <button
+                type="button"
+                onClick={() => setKeyDialogOpen(true)}
                 className="font-medium underline underline-offset-2 hover:opacity-80"
               >
                 Add your key &rarr;
-              </Link>
+              </button>
             </span>,
           );
         } else if (draft.error === "generation_failed") {
@@ -683,6 +689,15 @@ export function AgentTemplateEditor(props: Props) {
               {refineError}
             </p>
           )}
+          <LlmKeyDialog
+            open={keyDialogOpen}
+            onOpenChange={setKeyDialogOpen}
+            onSaved={() => {
+              // Re-run the same refinement now that a key exists — matches
+              // the plan's "re-trigger the blocked call" contract.
+              refine();
+            }}
+          />
         </div>
 
         {/* TTS voice — voice templates only (chat has no TTS) */}
