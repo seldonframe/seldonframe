@@ -72,7 +72,7 @@ export const BentoCard = ({
   <div
     className={cn(
       "group relative col-span-3 flex flex-col justify-between overflow-hidden rounded-xl",
-      "border-[var(--lp-border)] bg-[var(--lp-card)] [box-shadow:0_0_0_1px_var(--lp-border),0_2px_4px_rgba(0,0,0,.05),0_12px_24px_rgba(0,0,0,.05)]",
+      "border-[var(--lp-border)] bg-[var(--lp-card)] [box-shadow:0_0_0_1px_var(--lp-border),0_2px_4px_color-mix(in_oklab,var(--lp-ink)_5%,transparent),0_12px_24px_color-mix(in_oklab,var(--lp-ink)_5%,transparent)]",
       "transform-gpu border",
       className
     )}
