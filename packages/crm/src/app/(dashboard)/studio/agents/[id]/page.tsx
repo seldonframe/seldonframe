@@ -302,6 +302,7 @@ export default async function AgentTemplatePage({
               id: c.id,
               label: c.label,
               secretService: c.secretService,
+              authType: c.authType,
             }))}
           />
         </div>
@@ -473,6 +474,7 @@ export default async function AgentTemplatePage({
         id: c.id,
         label: c.label,
         secretService: c.secretService,
+        authType: c.authType,
       }))}
       collapsibleScript
     />

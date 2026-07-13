@@ -15,9 +15,13 @@ import { Plug } from "lucide-react";
 import { COMPOSIO_TOOLKITS } from "@/lib/integrations/composio/catalog";
 import { resolveComposioKey } from "@/lib/integrations/composio/keys";
 import { listConnections } from "@/lib/integrations/composio/client";
+import { getSecretValue } from "@/lib/secrets";
+import { VETTED_CONNECTORS } from "@/lib/agents/mcp/connectors";
+import { describeMcpConnectorStatus } from "@/lib/agents/mcp/connector-status";
 import {
   IntegrationsClient,
   type ToolkitConnectionView,
+  type McpConnectorView,
 } from "./integrations-client";
 
 export const runtime = "nodejs";
@@ -28,7 +32,12 @@ export default async function IntegrationsPage({
 }: {
   // `connect` — hotfix H4a — the win-ladder "connect calendar" deep link
   // (?connect=calendar) narrows the grid to calendar toolkits.
-  searchParams: Promise<{ connected?: string; status?: string; connect?: string }>;
+  searchParams: Promise<{
+    connected?: string;
+    status?: string;
+    connect?: string;
+    error?: string;
+  }>;
 }) {
   const orgId = await getOrgId();
   if (!orgId) redirect("/signin");
@@ -64,6 +73,28 @@ export default async function IntegrationsPage({
     primaryTrigger: t.primaryTrigger,
   }));
 
+  // Vetted OAuth connectors (Circle et al.) — one row per registry entry.
+  // Only booleans/labels/counts cross into the client (describeMcpConnectorStatus
+  // never returns the raw secret/envelope).
+  const oauthConnectors = VETTED_CONNECTORS.filter((c) => c.authType === "oauth");
+  const mcpConnectors: McpConnectorView[] = await Promise.all(
+    oauthConnectors.map(async (connector) => {
+      let raw: string | null = null;
+      try {
+        raw = await getSecretValue({ workspaceId: orgId, serviceName: connector.secretService });
+      } catch {
+        raw = null;
+      }
+      const status = describeMcpConnectorStatus(raw);
+      return {
+        id: connector.id,
+        label: connector.label,
+        accessLevels: (connector.accessLevels ?? []).map((l) => l.label),
+        ...status,
+      };
+    }),
+  );
+
   return (
     <section className="animate-page-enter space-y-5 sm:space-y-6">
       <header className="flex flex-wrap items-start gap-3">
@@ -92,6 +123,8 @@ export default async function IntegrationsPage({
         returnedToolkit={params.connected ?? null}
         returnedStatus={params.status ?? null}
         connectFilter={params.connect ?? null}
+        mcpConnectors={mcpConnectors}
+        mcpError={params.error ?? null}
       />
     </section>
   );
