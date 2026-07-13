@@ -11,6 +11,7 @@ import {
   MarketingStructuredData,
   shouldRenderMarketingStructuredData,
 } from "@/components/analytics/structured-data";
+import StyledJsxRegistry from "./styled-jsx-registry";
 import "./globals.css";
 
 const geistSans = Geist({
@@ -101,13 +102,17 @@ export default async function RootLayout({
       <body
         className={`${geistSans.variable} ${geistMono.variable} ${hankenGrotesk.variable} ${newsreader.variable} antialiased`}
       >
-        {renderGA && measurementId ? (
-          <GoogleAnalytics measurementId={measurementId} />
-        ) : null}
-        {renderMarketingSchema ? <MarketingStructuredData /> : null}
-        <ThemeProvider>
-          <DemoToastProvider>{children}</DemoToastProvider>
-        </ThemeProvider>
+        {/* StyledJsxRegistry flushes styled-jsx rules into the SSR <head> so the
+            public landing-r1 surfaces paint fully styled (no FOUC). */}
+        <StyledJsxRegistry>
+          {renderGA && measurementId ? (
+            <GoogleAnalytics measurementId={measurementId} />
+          ) : null}
+          {renderMarketingSchema ? <MarketingStructuredData /> : null}
+          <ThemeProvider>
+            <DemoToastProvider>{children}</DemoToastProvider>
+          </ThemeProvider>
+        </StyledJsxRegistry>
       </body>
     </html>
   );
