@@ -67,6 +67,18 @@ describe("<RecordClient> — initial landing-phase render", () => {
     assert.doesNotMatch(html, /Start fresh/);
   });
 
+  test('"Your recordings" heading anchors the recordings column even before a session/restore state exists (vision fix)', () => {
+    const html = renderInitial();
+    assert.match(html, /Your recordings/);
+  });
+
+  test('"Restored from earlier" never renders without the heading it anchors to', () => {
+    const html = renderInitial();
+    // No restore has happened on initial SSR, so the inline restored text
+    // must be absent even though the heading itself always renders.
+    assert.doesNotMatch(html, /Restored from earlier/);
+  });
+
   test("upload-a-recording affordance renders exactly once (single capture card, initial SSR state assumes desktop)", () => {
     const html = renderInitial();
     const uploadAffordanceCount = (html.match(/or upload a recording/g) ?? []).length;

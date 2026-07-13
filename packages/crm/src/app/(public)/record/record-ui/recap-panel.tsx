@@ -149,7 +149,11 @@ export function RecapPanel({
         </div>
       ) : null}
 
-      {edgeCasePrompt ? (
+      {/* Review minor #5: the edge-case prompt must not linger once the
+          flow has moved past recap (e.g. phase "approved") — gated here too,
+          not just at the record-client.tsx call site, so this component's
+          own contract holds regardless of caller. */}
+      {edgeCasePrompt && phase === "recap" ? (
         <div className="flex flex-col gap-2.5 rounded-[10px] border border-[rgba(20,184,166,.22)] bg-[#14B8A60D] p-3">
           <div>
             <p className="text-[13px] font-[600] text-[#F5F4F0]">Make it trustworthy</p>

@@ -179,4 +179,15 @@ describe("<RecapPanel> edgeCasePrompt row", () => {
     assert.doesNotMatch(html, /\+ Record an edge case/);
     assert.match(html, /or upload/);
   });
+
+  test("hidden in phase 'approved' even when edgeCasePrompt is provided (review minor #5)", () => {
+    const html = renderToString(
+      React.createElement(RecapPanel, {
+        ...baseProps,
+        phase: "approved",
+        edgeCasePrompt: { onRecord: noop, onFileChange: noop, supportsScreenCapture: true },
+      }),
+    );
+    assert.doesNotMatch(html, /Make it trustworthy/);
+  });
 });

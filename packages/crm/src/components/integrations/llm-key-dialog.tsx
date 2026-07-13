@@ -71,7 +71,16 @@ export function LlmKeyDialog({ open, onOpenChange, onSaved, action = saveLlmKeyI
     <Dialog
       open={open}
       onOpenChange={(next) => {
-        if (!pending) onOpenChange(next);
+        if (pending) return;
+        // Closing without saving (Escape / overlay click / any close that
+        // isn't the handleSave success path below) must not leave a typed
+        // key or a stale error sitting in state for the next open — review
+        // minor: previously only the save-success path cleared these.
+        if (!next) {
+          setApiKey("");
+          setError(null);
+        }
+        onOpenChange(next);
       }}
     >
       <DialogContent className="max-w-md">

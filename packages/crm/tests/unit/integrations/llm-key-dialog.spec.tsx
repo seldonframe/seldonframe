@@ -82,4 +82,51 @@ describe("<LlmKeyDialog>", () => {
     });
     assert.equal(openState, true, "dialog must stay open on error — no silent close");
   });
+
+  test("closing without saving clears the typed key and any error (review minor)", async () => {
+    const action = async (): Promise<SaveLlmKeyResult> => ({
+      ok: false,
+      error: "Anthropic keys start with sk-ant-",
+    });
+
+    function Harness() {
+      const [open, setOpen] = React.useState(true);
+      return (
+        <>
+          <button type="button" onClick={() => setOpen(true)}>
+            reopen
+          </button>
+          <LlmKeyDialog open={open} onOpenChange={setOpen} action={action} />
+        </>
+      );
+    }
+
+    render(<Harness />);
+
+    const input = screen.getByLabelText(/anthropic api key/i) as HTMLInputElement;
+    fireEvent.change(input, { target: { value: "bad-key" } });
+    fireEvent.click(screen.getByRole("button", { name: /save key/i }));
+
+    await waitFor(() => {
+      assert.ok(screen.getAllByText(/anthropic keys start with sk-ant-/i).length > 0);
+    });
+
+    // Close without saving via the dialog's own close control — the same
+    // onOpenChange(false) path Escape/overlay-click drive internally.
+    fireEvent.click(screen.getByRole("button", { name: /close/i }));
+
+    await waitFor(() => {
+      assert.equal(screen.queryAllByLabelText(/anthropic api key/i).length, 0, "dialog should be closed");
+    });
+
+    fireEvent.click(screen.getByRole("button", { name: /reopen/i }));
+
+    const reopenedInput = screen.getByLabelText(/anthropic api key/i) as HTMLInputElement;
+    assert.equal(reopenedInput.value, "", "typed key must be cleared after a non-save close");
+    assert.equal(
+      screen.queryAllByText(/anthropic keys start with sk-ant-/i).length,
+      0,
+      "stale error must be cleared after a non-save close",
+    );
+  });
 });

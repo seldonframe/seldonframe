@@ -7,8 +7,7 @@
 // understands in ~5 seconds what their recording becomes.
 //
 // Server-renderable (no hooks, no browser APIs) — animation is pure CSS
-// `@keyframes` inside an inline <style>, same idiom the repo already uses
-// for CSS-in-a-<style>-tag animation (see slot-card.tsx's spinner class).
+// `@keyframes` inside an inline <style>, so it works without JS.
 // `prefers-reduced-motion` gets a static diagram via a media query that
 // pins the animation to its 0% frame and disables the dot's motion path.
 

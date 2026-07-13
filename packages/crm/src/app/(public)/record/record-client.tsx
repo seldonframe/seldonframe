@@ -621,9 +621,20 @@ export function RecordClient({
   const canStart = state.activeSlot === null;
   const nextEmptySlot = pickFirstEmptySlot(state);
   // "Make it trustworthy" row (S1): only once something's traced, only when
-  // nothing is mid-capture, and only while a slot remains to fill.
+  // nothing is mid-capture, only while a slot remains to fill, and only in
+  // the "recap" phase (review minor #5 — it must not linger into "approved").
+  // Also suppressed whenever the capture card is showing a FAILED slot's
+  // re-record state (review minor #4): that state already offers its own
+  // record affordance, and showing both at once is two capture surfaces
+  // fighting for the same click. The capture card is only ever "empty" or
+  // busy/failed, so gating on captureSlot.status === "empty" is the whole
+  // rule — one recording affordance on screen at a time.
   const edgeCasePrompt =
-    tracedSlots.length > 0 && canStart && nextEmptySlot !== null
+    state.phase === "recap" &&
+    tracedSlots.length > 0 &&
+    canStart &&
+    nextEmptySlot !== null &&
+    captureSlot?.status === "empty"
       ? {
           onRecord: () => handleStart(nextEmptySlot),
           onFileChange: (e: ChangeEvent<HTMLInputElement>) => handleFileChange(nextEmptySlot, e),
@@ -689,9 +700,7 @@ export function RecordClient({
             aria-label="Recording slots"
             className="flex w-full flex-1 flex-col items-center gap-3 min-[720px]:items-stretch"
           >
-            {state.sessionId ? (
-              <RestoredBanner restored={restoredSession} onStartFresh={handleStartFresh} />
-            ) : null}
+            <RestoredBanner restored={restoredSession} onStartFresh={handleStartFresh} />
 
             {captureSlot ? (
               <CaptureCard

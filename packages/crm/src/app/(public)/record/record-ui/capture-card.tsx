@@ -9,9 +9,11 @@
 // reached via the recap panel's "+ Record an edge case" prompt rather than
 // always being visible.
 //
-// Visually bigger than the old per-slot card (record-ui/slot-card.tsx,
-// kept only as the v2 fallback / reference) — this is the single focal
-// action on the page, matching Record.dc.html's big Record / Upload button.
+// Visually bigger than the old per-slot card (the v2 6-card grid, removed
+// in this branch) — this is the single focal action on the page, matching
+// Record.dc.html's big Record / Upload button. Record renders OUTLINED
+// (transparent bg, 1px border, red dot) per the design — the teal fill is
+// reserved for the claim/compile primary CTA elsewhere on the page.
 //
 // Test-critical copy (record-page-render.spec.ts) — do not rename:
 //   - the Record button's text node must render as exactly "Record"
@@ -88,9 +90,9 @@ export function CaptureCard({
                 type="button"
                 disabled={!canStart || !sessionReady}
                 onClick={onRecord}
-                className="inline-flex h-14 items-center gap-2.5 rounded-full bg-[#14B8A6] px-7 text-[15px] font-[600] text-[#0B0F0E] disabled:cursor-not-allowed disabled:opacity-40"
+                className="inline-flex h-14 items-center gap-2.5 rounded-full border border-[rgba(231,229,222,.16)] bg-transparent px-7 text-[15px] font-[600] text-[#E7E5DE] hover:border-[rgba(231,229,222,.35)] disabled:cursor-not-allowed disabled:opacity-40"
               >
-                <span className="size-2.5 rounded-full bg-[#0B0F0E]" aria-hidden />
+                <span className="size-2 rounded-full bg-[#F87171]" aria-hidden />
                 Record
               </button>
               <label className="cursor-pointer text-[13px] text-[#9CA3AF] underline-offset-2 hover:text-[#E7E5DE] hover:underline">
@@ -100,7 +102,7 @@ export function CaptureCard({
             </div>
           ) : (
             <div className="flex w-full max-w-[360px] flex-col gap-2">
-              <label className="inline-flex h-12 cursor-pointer items-center justify-center rounded-full border border-[rgba(231,229,222,.16)] bg-transparent px-5 text-center text-[14px] font-[600] text-[#E7E5DE]">
+              <label className="inline-flex h-12 cursor-pointer items-center justify-center rounded-full border border-[rgba(231,229,222,.16)] bg-transparent px-5 text-center text-[14px] font-[600] text-[#E7E5DE] hover:border-[rgba(231,229,222,.35)]">
                 Upload a screen recording
                 <input type="file" accept="video/*" className="sr-only" onChange={onFileChange} />
               </label>
