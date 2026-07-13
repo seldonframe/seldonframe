@@ -30,6 +30,7 @@ import { ArrowRight, FileText, Globe } from "lucide-react";
 import { MarketingDemoMarquee } from "@/components/landing/marketing-demo-marquee";
 import { heroSubmitTarget } from "@/components/landing/hero-submit-target";
 import { HeroModeSwitch } from "@/components/landing/landing-mode";
+import { BorderBeam } from "@/components/ui/border-beam";
 
 // Re-exported for callers that only need the pure routing decision (e.g.
 // tests) without pulling in this "use client" component.
@@ -54,6 +55,18 @@ type TabKind = "url" | "biz";
 function prefersReducedMotion(): boolean {
   if (typeof window === "undefined") return false;
   return window.matchMedia("(prefers-reduced-motion: reduce)").matches;
+}
+
+function useReducedMotion(): boolean {
+  const [reduced, setReduced] = useState(false);
+  useEffect(() => {
+    const mediaQuery = window.matchMedia("(prefers-reduced-motion: reduce)");
+    setReduced(mediaQuery.matches);
+    const handleChange = (e: MediaQueryListEvent) => setReduced(e.matches);
+    mediaQuery.addEventListener("change", handleChange);
+    return () => mediaQuery.removeEventListener("change", handleChange);
+  }, []);
+  return reduced;
 }
 
 function useTypewriterPlaceholder(
@@ -133,6 +146,7 @@ export function MarketingHero({
   const [urlValue, setUrlValue] = useState("");
   const [bizValue, setBizValue] = useState("");
   const [submitting, setSubmitting] = useState(false);
+  const reducedMotion = useReducedMotion();
 
   const urlRef = useRef<HTMLInputElement | null>(null);
   const bizRef = useRef<HTMLTextAreaElement | null>(null);
@@ -241,6 +255,17 @@ export function MarketingHero({
         onSubmit={(e) => { e.preventDefault(); submit(); }}
         className="sf-prompt relative mt-10 w-full max-w-[720px] overflow-hidden rounded-[18px] border border-[rgba(34,29,23,.14)] bg-[#FFFDFA] shadow-[0_1px_2px_rgba(34,29,23,.06),0_10px_30px_rgba(34,29,23,.08)] transition-[border-color,box-shadow] duration-200 focus-within:border-[#00897B]/50 focus-within:shadow-[0_1px_2px_rgba(34,29,23,.06),0_10px_30px_rgba(34,29,23,.08),0_0_0_3px_rgba(0,137,123,.12)]"
       >
+        {/* Task 13: Live-state accent BorderBeam. Only render when reduced-motion is off. */}
+        {!reducedMotion && (
+          <BorderBeam
+            size={40}
+            duration={6}
+            colorFrom="#00897B"
+            colorTo="#00897B"
+            delay={0}
+            borderWidth={1}
+          />
+        )}
         {/* Mode switch: build vs record (Task 9). Null when the flag is
             off — the form is byte-identical to today. */}
         <div className="mx-2 mt-2">
