@@ -14,11 +14,30 @@
 //  - `className` passthrough via `cn` (unchanged from upstream).
 //  - Children are always rendered in the DOM (SSR/crawler visible) in both
 //    branches; only the animation classes/keyframes are swapped out.
+//  - The animated branch's `@keyframes orbit` is co-located in this file (a
+//    module-level constant emitted via a plain `<style>` tag once, inside
+//    the animated branch only) rather than assumed to exist in a global
+//    Tailwind theme file — a vendored component must animate standalone
+//    without any repo-wide CSS wiring.
+//  - Container-level HTML attrs (`{...props}`) are spread onto a single
+//    `display: contents` wrapper, not stamped onto every orbiting child.
 
 import React from "react"
 import { useReducedMotion } from "motion/react"
 
 import { cn } from "@/lib/utils"
+
+// Magic UI's orbit keyframes, co-located so this component animates without
+// any Tailwind theme/global CSS wiring. Rendered once, only in the animated
+// (non-reduced-motion) branch.
+const ORBIT_KEYFRAMES = `@keyframes orbit {
+  0% {
+    transform: rotate(calc(var(--angle) * 1deg)) translateY(calc(var(--radius) * 1px)) rotate(calc(var(--angle) * -1deg));
+  }
+  100% {
+    transform: rotate(calc(var(--angle) * 1deg + 360deg)) translateY(calc(var(--radius) * 1px)) rotate(calc((var(--angle) * -1deg) - 360deg));
+  }
+}`
 
 export interface OrbitingCirclesProps
   extends React.HTMLAttributes<HTMLDivElement> {
@@ -59,7 +78,7 @@ export function OrbitingCircles({
   // no `animate-orbit` class, no keyframe loop. Children stay in the DOM.
   if (isStatic) {
     return (
-      <>
+      <div className="contents" {...props}>
         {path && (
           <svg
             xmlns="http://www.w3.org/2000/svg"
@@ -94,18 +113,21 @@ export function OrbitingCircles({
                 "flex transform-gpu items-center justify-center rounded-full",
                 className
               )}
-              {...props}
             >
               {child}
             </div>
           )
         })}
-      </>
+      </div>
     )
   }
 
   return (
-    <>
+    <div className="contents" {...props}>
+      {/* Co-located keyframes: this component must animate standalone, so
+          the orbit keyframe isn't assumed to live in a global Tailwind
+          theme file. Rendered once per instance, animated branch only. */}
+      <style>{ORBIT_KEYFRAMES}</style>
       {path && (
         <svg
           xmlns="http://www.w3.org/2000/svg"
@@ -128,24 +150,30 @@ export function OrbitingCircles({
             key={index}
             style={
               {
-                "--duration": calculatedDuration,
+                position: "absolute",
+                top: "50%",
+                left: "50%",
+                width: `${iconSize}px`,
+                height: `${iconSize}px`,
+                marginTop: `${-iconSize / 2}px`,
+                marginLeft: `${-iconSize / 2}px`,
                 "--radius": radius,
                 "--angle": angle,
-                "--icon-size": `${iconSize}px`,
+                animation: `orbit ${calculatedDuration}s linear infinite${
+                  reverse ? " reverse" : ""
+                }`,
                 animationDelay: `${delay}s`,
               } as React.CSSProperties
             }
             className={cn(
-              "animate-orbit absolute flex size-(--icon-size) transform-gpu items-center justify-center rounded-full",
-              { "[animation-direction:reverse]": reverse },
+              "flex items-center justify-center rounded-full",
               className
             )}
-            {...props}
           >
             {child}
           </div>
         )
       })}
-    </>
+    </div>
   )
 }
