@@ -596,11 +596,21 @@ Package the build → test → deploy → sell → get-paid loop as a distributi
 Spec: docs/superpowers/specs/2026-07-13-circle-mcp-connector-design.md
 Plan: docs/superpowers/plans/2026-07-13-circle-mcp-connector.md
 
-- [ ] Task 1: OAuth protocol module (discovery/DCR/PKCE/exchange/refresh/envelope)
-- [ ] Task 2: OAuth-aware bearer resolver + runtime/bind-time wiring
-- [ ] Task 3: Registry — authType widening + circle entry + shared clamp
-- [ ] Task 4: Vetted discovery fill + fillAllBindingTools at 5 call sites
-- [ ] Task 5: Connect/disconnect actions + signed-state cookie + callback route
-- [ ] Task 6: tool-catalog circle entry (findability)
-- [ ] Task 7: /integrations card + editor OAuth branch
-- [ ] Task 8: Close-out — leak greps, review section, full sweep
+- [x] Task 1: OAuth protocol module (discovery/DCR/PKCE/exchange/refresh/envelope) — 23/23 tests
+- [x] Task 2: OAuth-aware bearer resolver + runtime/bind-time wiring — 9/9 new + 49/49 regression
+- [x] Task 3: Registry — authType widening + circle entry + shared clamp — 21/21 tests
+- [x] Task 4: Vetted discovery fill + fillAllBindingTools at all persist seams — 9/9 new + 36/36 regression
+- [x] Task 5: Connect/disconnect actions + signed-state cookie + callback route — 18/18 tests
+- [x] Task 6: tool-catalog circle entry (findability) — new tests pass; 2 PRE-EXISTING failures in bind-tools.spec.ts (log-to-Notion/Sheet composio defaults) confirmed unrelated, reproduced against the parent commit
+- [x] Task 7: /integrations card + editor OAuth branch — 6/6 new tests
+- [x] Task 8: Close-out — leak greps clean, full sweep zero-delta
+
+**Review:**
+- Baseline (pre-Task-1, this worktree): 9531 tests / 9440 pass / 78 fail.
+- Final (post-Task-8): 9606 tests / 9515 pass / 78 fail. Delta: +75 tests, +75 pass, fail count UNCHANGED (78 pre-existing DB-connection failures, judged by delta per L-06).
+- `tsc --noEmit`: one pre-existing, unrelated error in `src/app/api/copilot/turn/route.ts:315` (present before this branch's first commit; not touched by this slice).
+- `pnpm check:use-server`: PASS ("All 'use server' files export only async functions / types").
+- Leak greps: `access_token` never appears in a log/console/logger call; `client_secret` appears once in new code (`integrations/actions.ts`, feeding the SIGNED httpOnly state cookie payload per design — never returned to the client or logged) plus unrelated pre-existing Stripe `client_secret` code.
+- No DB migrations. No new npm dependencies.
+- Divergences from the plan (all documented in per-task commit messages and the implementer report): the bind-time bearer swap landed in `template-mcp-server.ts` (not `mcp-actions.ts`, which only holds the deps type); `page.tsx`'s undiscovered-composio guard was widened (not just swapped) to also catch an undiscovered vetted-OAuth binding; `fillBlueprintConnectorsForPersist`'s internal swap uses a dynamic import to avoid a circular static import.
+- Full report: `reports/2026-07-13-circle-implementer-report.md`.
