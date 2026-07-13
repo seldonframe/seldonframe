@@ -14,14 +14,16 @@ import type { GuideDiagram, GuideDiagramItem } from "@/lib/seo/guides/types";
 
 const DIAGRAM_CSS = `
   .sf-gd-flow-arrow path{stroke-dasharray:24;stroke-dashoffset:24;animation:sfGdDraw 1s ease forwards}
+  .sf-gd-flow-down path{stroke-dasharray:44;stroke-dashoffset:44;animation:sfGdDraw .9s ease forwards}
   .sf-gd-loop-arrow path{stroke-dasharray:120;stroke-dashoffset:120;animation:sfGdDraw 1.4s ease forwards}
   .sf-gd-bar-fill{animation:sfGdGrow .8s cubic-bezier(0.22,1,0.36,1) both}
   .sf-gd-loop-pulse{animation:sfGdPulse 2.4s ease-in-out infinite}
   @keyframes sfGdDraw{to{stroke-dashoffset:0}}
   @keyframes sfGdGrow{from{transform:scaleX(0)}to{transform:scaleX(1)}}
   @keyframes sfGdPulse{0%,100%{opacity:0.55}50%{opacity:1}}
+  @media (max-width:520px){.sf-gd-compare{grid-template-columns:1fr!important}}
   @media (prefers-reduced-motion: reduce){
-    .sf-gd-flow-arrow path,.sf-gd-loop-arrow path{animation:none;stroke-dashoffset:0}
+    .sf-gd-flow-arrow path,.sf-gd-flow-down path,.sf-gd-loop-arrow path{animation:none;stroke-dashoffset:0}
     .sf-gd-bar-fill{animation:none;transform:scaleX(1)}
     .sf-gd-loop-pulse{animation:none;opacity:1}
   }
@@ -63,7 +65,6 @@ function wrapperStyle(): React.CSSProperties {
     border: `1px solid ${MKT.ink10}`,
     borderRadius: 16,
     background: "rgba(255,255,255,0.55)",
-    overflowX: "auto",
   };
 }
 
@@ -73,11 +74,11 @@ function FlowDiagram({ d }: { d: Extract<GuideDiagram, { type: "flow" }> }): Rea
   return (
     <div style={wrapperStyle()} role="img" aria-label={d.title ?? `Flow diagram: ${d.steps.map((s) => s.label).join(" then ")}`}>
       <DiagramTitle title={d.title} />
-      <div style={{ display: "flex", alignItems: "center", flexWrap: "wrap", gap: 0, minWidth: "max-content" }}>
+      <div style={{ display: "flex", flexDirection: "column", alignItems: "stretch", gap: 0, maxWidth: 460, margin: "0 auto" }}>
         {d.steps.map((step, i) => (
-          <div key={i} style={{ display: "flex", alignItems: "center" }}>
+          <div key={i} style={{ display: "flex", flexDirection: "column", alignItems: "stretch" }}>
             <StepCard item={step} />
-            {i < d.steps.length - 1 && <FlowArrow />}
+            {i < d.steps.length - 1 && <FlowConnector />}
           </div>
         ))}
       </div>
@@ -89,11 +90,10 @@ function StepCard({ item }: { item: GuideDiagramItem }): ReactElement {
   return (
     <div
       style={{
-        minWidth: 148,
-        maxWidth: 190,
+        width: "100%",
         border: `1.5px solid ${MKT.ink10}`,
         borderRadius: 12,
-        padding: "12px 14px",
+        padding: "13px 16px",
         background: "#fff",
         display: "flex",
         flexDirection: "column",
@@ -109,11 +109,15 @@ function StepCard({ item }: { item: GuideDiagramItem }): ReactElement {
   );
 }
 
-function FlowArrow(): ReactElement {
+function FlowConnector(): ReactElement {
+  // Vertical down-beam between stacked step cards — no horizontal overflow, so
+  // the flow reads top-to-bottom and never needs a left-right scrollbar.
   return (
-    <svg width="40" height="24" viewBox="0 0 40 24" aria-hidden style={{ flex: "0 0 auto" }} className="sf-gd-flow-arrow">
-      <path d="M2 12 H32 M24 5 L32 12 L24 19" fill="none" stroke={MKT.green} strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" />
-    </svg>
+    <div aria-hidden style={{ display: "flex", justifyContent: "center", height: 30 }}>
+      <svg width="24" height="30" viewBox="0 0 24 30" className="sf-gd-flow-down">
+        <path d="M12 2 V22 M6 15 L12 22 L18 15" fill="none" stroke={MKT.green} strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" />
+      </svg>
+    </div>
   );
 }
 
@@ -187,7 +191,7 @@ function CompareDiagram({ d }: { d: Extract<GuideDiagram, { type: "compare" }> }
   return (
     <div style={wrapperStyle()} role="img" aria-label={d.title ?? `Comparison: ${d.left.heading} vs ${d.right.heading}`}>
       <DiagramTitle title={d.title} />
-      <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 14 }}>
+      <div className="sf-gd-compare" style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 14 }}>
         {[d.left, d.right].map((col, i) => (
           <div key={i} style={{ border: `1.5px solid ${MKT.ink10}`, borderRadius: 12, padding: "16px 16px", background: "#fff" }}>
             <div style={{ fontSize: 14.5, fontWeight: 800, marginBottom: 10, color: MKT.ink }}>{col.heading}</div>
