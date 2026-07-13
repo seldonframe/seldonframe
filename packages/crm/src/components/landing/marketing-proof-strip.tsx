@@ -5,6 +5,8 @@
 // the single most important being "I'm not technical" → you edit by chatting.
 // Server component — no client hooks needed.
 
+import { AvatarCircles } from "@/components/ui/magic/avatar-circles";
+
 const CHIPS = [
   "Build it free",
   "Live in 3 minutes",
@@ -48,6 +50,22 @@ export function MarketingProofStrip() {
             </li>
           ))}
         </ul>
+
+        {/* Founder proof accent — honest, no invented counts */}
+        <div className="flex items-center gap-2 pt-2">
+          <AvatarCircles
+            avatarUrls={[
+              {
+                imageUrl: "/brand/maxime-houle.png",
+                profileUrl: "https://twitter.com/maximehoule",
+              },
+            ]}
+            className="h-8 w-8"
+          />
+          <p className="text-[12.5px] leading-[1.4] text-[#6E665A]">
+            Built by the SeldonFrame founders
+          </p>
+        </div>
       </div>
     </section>
   );
