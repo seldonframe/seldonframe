@@ -22,10 +22,10 @@ import {
   DEFAULT_VOICE_RECEPTIONIST_VOICE,
   type AgentTemplateType,
 } from "@/lib/agent-templates/store";
-import { fillComposioBindingTools } from "@/lib/integrations/composio/discover-tools";
+import { fillAllBindingTools } from "@/lib/agents/mcp/discover-vetted-tools";
 import { resolveAgentTrigger } from "@/lib/agents/triggers/agent-trigger";
 import { getSellerListingContextAction } from "@/lib/marketplace/seller-actions";
-import { VETTED_CONNECTORS } from "@/lib/agents/mcp/connectors";
+import { VETTED_CONNECTORS, getVettedConnector } from "@/lib/agents/mcp/connectors";
 import { findSessionByTemplateId } from "@/lib/recordings/session-store";
 import type { FlowModel } from "@/lib/recordings/trace-schema";
 import type { EvalScenario } from "@/lib/agents/evals/eval-types";
@@ -360,8 +360,17 @@ export default async function AgentTemplatePage({
   const hasUndiscoveredComposioBinding = (blueprint.connectors ?? []).some(
     (c) => c.kind === "composio" && c.enabledTools.length === 0 && !c.discoveredAt,
   );
-  if (hasUndiscoveredComposioBinding) {
-    const filled = await fillComposioBindingTools(orgId, blueprint.connectors);
+  // Also cover an undiscovered vetted-OAuth binding (Circle) — same
+  // never-discovered marker guard, widened to the other rail this slice adds.
+  const hasUndiscoveredVettedOauthBinding = (blueprint.connectors ?? []).some(
+    (c) =>
+      c.kind === "vetted" &&
+      c.enabledTools.length === 0 &&
+      !c.discoveredAt &&
+      getVettedConnector(c.id)?.authType === "oauth",
+  );
+  if (hasUndiscoveredComposioBinding || hasUndiscoveredVettedOauthBinding) {
+    const filled = await fillAllBindingTools(orgId, blueprint.connectors);
     if (filled.changed) {
       await updateAgentTemplate({ id: template.id, patch: { connectors: filled.connectors } });
     }

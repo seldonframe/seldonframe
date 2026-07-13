@@ -296,6 +296,10 @@ export async function fillComposioBindingTools(
 export async function fillBlueprintConnectorsForPersist<
   T extends { connectors?: ConnectorBinding[] },
 >(orgId: string, blueprint: T): Promise<T> {
-  const { connectors } = await fillComposioBindingTools(orgId, blueprint.connectors);
+  // Sanctioned 2-line internal swap (feature/circle-mcp-connector): also fill
+  // any never-discovered vetted-OAuth binding (Circle) at this same persist
+  // seam — see lib/agents/mcp/discover-vetted-tools.ts's fillAllBindingTools.
+  const { fillAllBindingTools } = await import("@/lib/agents/mcp/discover-vetted-tools");
+  const { connectors } = await fillAllBindingTools(orgId, blueprint.connectors);
   return { ...blueprint, connectors };
 }

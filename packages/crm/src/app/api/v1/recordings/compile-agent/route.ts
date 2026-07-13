@@ -28,7 +28,7 @@ import { findSessionByToken } from "@/lib/recordings/session-store";
 import { flowModelToBundle } from "@/lib/recordings/compile-agent";
 import type { FlowModel, WorkflowTrace } from "@/lib/recordings/trace-schema";
 import { getOrgId } from "@/lib/auth/helpers";
-import { fillComposioBindingTools } from "@/lib/integrations/composio/discover-tools";
+import { fillAllBindingTools } from "@/lib/agents/mcp/discover-vetted-tools";
 import {
   createAgentTemplate,
   updateAgentTemplate,
@@ -116,7 +116,7 @@ export async function POST(request: Request): Promise<Response> {
   // for non-catalog toolkits (youtube, synthflow_ai, …). Never throws (T1
   // contract) — no new failure mode is introduced here.
   bundle.blueprint.connectors = (
-    await fillComposioBindingTools(orgId!, bundle.blueprint.connectors)
+    await fillAllBindingTools(orgId!, bundle.blueprint.connectors)
   ).connectors;
 
   const template = await createAgentTemplate({
