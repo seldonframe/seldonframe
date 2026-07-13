@@ -1,0 +1,74 @@
+# Publishes the self-host Docker image to GHCR so operators can
+# `docker compose up` WITHOUT a local build. Triggers on a published
+# GitHub release (tag the app, cut a release) and on manual dispatch.
+#
+# The image is multi-arch (amd64 + arm64) and pushed to
+# ghcr.io/seldonframe/seldonframe tagged :latest, :sha-<gitsha>, and the
+# release semver (e.g. :1.4.2, :1.4, :1). Auth uses the built-in
+# GITHUB_TOKEN — no PAT, no stored secret.
+#
+# ONE-TIME REPO SETUP (owner):
+#   Settings → Actions → General → Workflow permissions → allow
+#     GITHUB_TOKEN read/write (the job `permissions:` block below requests
+#     packages:write, but the repo must permit it or the first push 403s).
+#   After the first push, the package appears under the org's Packages;
+#     set its visibility to Public so anonymous `docker pull` works.
+#
+# NOTE (arm64): the linux/arm64 image is built under QEMU emulation on the
+# amd64 runner, which runs a full `next build`. This is slow and can OOM/
+# time out. If it proves flaky, either drop `linux/arm64` from `platforms`
+# or split into a native arm64 runner (ubuntu-24.04-arm) + manifest merge.
+name: publish-image
+
+on:
+  release:
+    types: [published]
+  workflow_dispatch: {}
+
+permissions:
+  contents: read
+  packages: write
+
+jobs:
+  build-and-push:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v7
+
+      - name: Set up QEMU
+        uses: docker/setup-qemu-action@v3
+
+      - name: Set up Buildx
+        uses: docker/setup-buildx-action@v3
+
+      - name: Log in to GHCR
+        uses: docker/login-action@v3
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Derive tags & labels
+        id: meta
+        uses: docker/metadata-action@v5
+        with:
+          images: ghcr.io/${{ github.repository }}
+          tags: |
+            type=raw,value=latest
+            type=sha
+            type=semver,pattern={{version}}
+            type=semver,pattern={{major}}.{{minor}}
+            type=semver,pattern={{major}}
+
+      - name: Build & push
+        uses: docker/build-push-action@v6
+        with:
+          context: .
+          file: ./Dockerfile
+          platforms: linux/amd64,linux/arm64
+          push: true
+          tags: ${{ steps.meta.outputs.tags }}
+          labels: ${{ steps.meta.outputs.labels }}
+          cache-from: type=gha
+          cache-to: type=gha,mode=max

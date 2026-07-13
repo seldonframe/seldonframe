@@ -1,0 +1,20 @@
+# Opt-in override: pull the prebuilt image from GHCR instead of building
+# locally. Use it alongside the base compose file:
+#
+#   docker compose -f docker-compose.yml -f docker-compose.ghcr.yml pull
+#   docker compose -f docker-compose.yml -f docker-compose.ghcr.yml up
+#
+# Pin a release instead of :latest by setting SELDONFRAME_IMAGE, e.g.
+#   SELDONFRAME_IMAGE=ghcr.io/seldonframe/seldonframe:1.4.2 docker compose ...
+#
+# `pull_policy: always` makes compose fetch the registry image rather than
+# fall back to building the local `build:` section inherited from the base
+# file. Both the migrate and app services share the one image (migrate runs
+# scripts/docker-migrate.sh out of it), so both are overridden here.
+services:
+  migrate:
+    image: ${SELDONFRAME_IMAGE:-ghcr.io/seldonframe/seldonframe:latest}
+    pull_policy: always
+  app:
+    image: ${SELDONFRAME_IMAGE:-ghcr.io/seldonframe/seldonframe:latest}
+    pull_policy: always
