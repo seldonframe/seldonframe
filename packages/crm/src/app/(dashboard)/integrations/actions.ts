@@ -28,6 +28,11 @@ import {
   type ToolkitConnection,
 } from "@/lib/integrations/composio/client";
 import { getComposioToolkit } from "@/lib/integrations/composio/catalog";
+import {
+  ingestSentMailVoiceProfile,
+  type VoiceIngestResult,
+} from "@/lib/agents/voice-profile/ingest-sent-mail";
+import { buildVoiceIngestDeps } from "@/lib/agents/voice-profile/build-deps";
 
 /** Where Composio sends the operator back after the hosted consent screen. */
 const INTEGRATIONS_BASE_URL = "https://app.seldonframe.com/integrations";
@@ -186,4 +191,22 @@ export async function enableComposioTriggerAction(
   } catch (err) {
     return { ok: false, error: err instanceof Error ? err.message : String(err) };
   }
+}
+
+/**
+ * Email-agent slice (Part A3) — manual refresh of the operator's sent-mail
+ * voice profile. Same org-guard pattern as enableComposioTriggerAction; wires
+ * the REAL Composio Gmail fetch + ONE Anthropic distill call + the Brain
+ * store upsert. Returns the ingestion result verbatim ({ok:true, notePath} |
+ * {ok:false, reason}) — never throws (ingestSentMailVoiceProfile is
+ * fail-soft end-to-end).
+ */
+export async function refreshVoiceProfileAction(): Promise<
+  VoiceIngestResult | { ok: false; reason: "unauthorized" }
+> {
+  assertWritable();
+  const orgId = await getOrgId();
+  if (!orgId) return { ok: false, reason: "unauthorized" };
+
+  return ingestSentMailVoiceProfile(buildVoiceIngestDeps(orgId), { orgId });
 }

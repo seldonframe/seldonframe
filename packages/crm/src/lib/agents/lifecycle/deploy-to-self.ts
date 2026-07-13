@@ -26,6 +26,7 @@
 import { resolveAgentTrigger, type AgentTrigger } from "@/lib/agents/triggers/agent-trigger";
 import { agentNeedsNumber } from "@/lib/agents/triggers/agent-trigger";
 import type { AgentBlueprint } from "@/db/schema/agents";
+import type { ConnectorBinding } from "@/lib/agents/mcp/connectors";
 
 export type DeploymentSurfaceLike = "phone" | "embed" | "link" | "sms" | "email";
 
@@ -75,7 +76,30 @@ export type DeployToSelfDeps = {
   /** The SAME store.updateDeployment status flip (no phone number) — only
    *  called for a phone-less trigger. */
   activateDeployment: (deploymentId: string) => Promise<{ ok: boolean }>;
+  /** Email-agent slice (Part A3) — best-effort sent-mail voice-profile
+   *  ingestion, fired ONLY when the deployed template is email-channel AND
+   *  binds a gmail toolkit connector. NEVER blocks or fails the deploy: a
+   *  throw is caught and swallowed (see deployToSelfCore). Absent → no-op
+   *  (every non-email / non-gmail deploy, byte-for-byte unchanged). */
+  ingestVoiceProfile?: (args: { orgId: string }) => Promise<unknown>;
 };
+
+/** True iff the blueprint binds a Composio "gmail" toolkit — the signal that
+ *  a record-compiled inbox-watch agent has a live Gmail connection worth
+ *  learning voice from. Pure + shape-tolerant (jsonb): a missing/malformed
+ *  `connectors` array → false. */
+export function blueprintHasGmailBinding(
+  blueprint: { connectors?: unknown } | null | undefined,
+): boolean {
+  const connectors = blueprint?.connectors;
+  if (!Array.isArray(connectors)) return false;
+  return connectors.some((c) => {
+    const binding = c as Partial<ConnectorBinding> | null;
+    if (!binding || binding.kind !== "composio") return false;
+    const toolkits = (binding as { enabledToolkits?: unknown }).enabledToolkits;
+    return Array.isArray(toolkits) && toolkits.includes("gmail");
+  });
+}
 
 export type DeployToSelfResult =
   | { ok: true; deploymentId: string; active: boolean; triggerSentence: string }
@@ -111,6 +135,24 @@ export async function deployToSelfCore(
     existingClientOrgId: input.orgId,
   });
   if (!created.ok) return { ok: false, error: "create_failed" };
+
+  // Email-agent slice (Part A3) — best-effort voice-profile ingestion. Fired
+  // ONLY for an email-channel deploy with a gmail binding; guarded so a
+  // throwing ingestion NEVER fails/blocks the deploy we already created.
+  if (
+    trigger.channel === "email" &&
+    blueprintHasGmailBinding(input.blueprint) &&
+    deps.ingestVoiceProfile
+  ) {
+    try {
+      await deps.ingestVoiceProfile({ orgId: input.orgId });
+    } catch (err) {
+      console.warn(
+        `[deploy-to-self] ingestVoiceProfile failed for org ${input.orgId}:`,
+        err instanceof Error ? err.message : String(err),
+      );
+    }
+  }
 
   const needsNumber = agentNeedsNumber(trigger);
   let active = false;
