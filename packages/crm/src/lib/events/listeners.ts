@@ -11,6 +11,13 @@ import { dispatchEventToDeployedAgents } from "@/lib/agents/dispatcher";
 // agent_templates lookup + the existing sendSms/sendEmail seam.
 import { runEventAgent, type RunEventAgentResult } from "@/lib/agents/triggers/run-event-agent";
 import { buildRunEventAgentDeps } from "@/lib/agents/triggers/run-event-agent-deps";
+// Email-agent slice (Part B1) — the SAME composio bridge additionally fans
+// events to record-compiled DEPLOYMENTS (agentTemplates/deployments — a
+// different population from the archetype agents dispatchEventToDeployedAgents
+// already covers). See composio-event-dispatch.ts for why this isn't
+// runEventAgent-shaped.
+import { dispatchComposioEventToDeployments } from "@/lib/deployments/composio-event-dispatch";
+import { buildDispatchComposioEventDeps } from "@/lib/deployments/composio-event-dispatch-deps";
 import { sendTriggeredEmailsForContactEvent, sendWelcomeEmailForContact } from "@/lib/emails/actions";
 import { syncContactToNewsletter } from "@/lib/integrations/newsletter-sync";
 // 2026-05-18 — Outbound messaging dispatch (plan v2, slice 2).
@@ -754,41 +761,91 @@ export function registerCrmEventListeners() {
   // is permissive (null) — composio triggers carry no natural resource-id like an
   // appointmentTypeId, so any deployed agent listening for the event fires.
   bus.onAny(async (event) => {
-    if (!event.type.startsWith("composio.")) return;
-
-    const data = (event.data ?? {}) as Record<string, unknown>;
-    const composioMeta =
-      (data._composio as Record<string, unknown> | undefined) ?? {};
-    const orgId =
-      typeof composioMeta.orgId === "string" ? composioMeta.orgId : null;
-    if (!orgId) {
-      console.warn(
-        JSON.stringify({ action: "event.composio.no_org", type: event.type }),
-      );
-      return;
-    }
-
-    console.log(
-      JSON.stringify({ action: "event.composio.dispatch", type: event.type, orgId }),
+    await handleComposioBridgeEvent(
+      {
+        dispatchToArchetypes: dispatchEventToDeployedAgents,
+        dispatchToDeployments: (args) =>
+          dispatchComposioEventToDeployments(buildDispatchComposioEventDeps(), args),
+      },
+      event as { type: string; data?: unknown },
     );
-
-    try {
-      await dispatchEventToDeployedAgents({
-        orgId,
-        triggerEventType: event.type,
-        triggerEventId: null,
-        triggerPayload: data,
-        // Permissive match: composio triggers have no resource-id matcher.
-        matcherPlaceholder: null,
-        matcherValue: null,
-      });
-    } catch (err) {
-      console.warn(
-        `[listeners] dispatchEventToDeployedAgents ${event.type} failed:`,
-        err,
-      );
-    }
   });
 
   listenersRegistered = true;
+}
+
+/** Injected deps for handleComposioBridgeEvent — the two sibling dispatchers
+ *  (archetype agents + record-compiled deployments) the composio bridge fans
+ *  every `composio.*` event to. Defaults (wired above) are the real
+ *  dispatchEventToDeployedAgents / dispatchComposioEventToDeployments; tests
+ *  inject fakes so this runs with no bus / DB / Composio. */
+export type ComposioBridgeDeps = {
+  dispatchToArchetypes: typeof dispatchEventToDeployedAgents;
+  dispatchToDeployments: (args: {
+    orgId: string;
+    eventType: string;
+    payload: Record<string, unknown>;
+  }) => Promise<unknown>;
+};
+
+/**
+ * The composio inbound-trigger bridge's handler, extracted so it's directly
+ * unit-testable (Part B1, Task 5). Fans a `composio.*` event to BOTH
+ * dispatchers — archetype agents (unchanged) AND record-compiled deployments
+ * (email-agent slice, Part B1) — each in its own try/catch so a throw from
+ * EITHER never breaks the other or the bus handler. Ignores non-`composio.*`
+ * events and events with no resolvable orgId (see the inline comments this
+ * mirrors from the original inline handler).
+ */
+export async function handleComposioBridgeEvent(
+  deps: ComposioBridgeDeps,
+  event: { type: string; data?: unknown },
+): Promise<void> {
+  if (!event.type.startsWith("composio.")) return;
+
+  const data = (event.data ?? {}) as Record<string, unknown>;
+  const composioMeta =
+    (data._composio as Record<string, unknown> | undefined) ?? {};
+  const orgId =
+    typeof composioMeta.orgId === "string" ? composioMeta.orgId : null;
+  if (!orgId) {
+    console.warn(
+      JSON.stringify({ action: "event.composio.no_org", type: event.type }),
+    );
+    return;
+  }
+
+  console.log(
+    JSON.stringify({ action: "event.composio.dispatch", type: event.type, orgId }),
+  );
+
+  try {
+    await deps.dispatchToArchetypes({
+      orgId,
+      triggerEventType: event.type,
+      triggerEventId: null,
+      triggerPayload: data,
+      // Permissive match: composio triggers have no resource-id matcher.
+      matcherPlaceholder: null,
+      matcherValue: null,
+    });
+  } catch (err) {
+    console.warn(
+      `[listeners] dispatchEventToDeployedAgents ${event.type} failed:`,
+      err,
+    );
+  }
+
+  // Email-agent slice (Part B1) — the SAME event, fanned to record-compiled
+  // DEPLOYMENTS (a different population from the archetype agents above; see
+  // composio-event-dispatch.ts). Its own try/catch: a throw here must never
+  // undo/break the archetype dispatch above.
+  try {
+    await deps.dispatchToDeployments({ orgId, eventType: event.type, payload: data });
+  } catch (err) {
+    console.warn(
+      `[listeners] dispatchComposioEventToDeployments ${event.type} failed:`,
+      err,
+    );
+  }
 }

@@ -1382,6 +1382,151 @@ export async function markDeploymentScheduleFired(
     .where(eq(deployments.id, deploymentId));
 }
 
+// ─── composio event -> deployment dispatch (email-agent slice, Part B1) ────
+//
+// Data layer for dispatchComposioEventToDeployments (lib/deployments/
+// composio-event-dispatch.ts). Mirrors listScheduledAgentDeployments's shape
+// (lazy DB import, org-scoped, resolveAgentTrigger-filtered) but for
+// `kind:"event"` triggers, and org-scoped to the ONE org the webhook resolved
+// (data._composio.orgId) rather than a global scan.
+
+/** The reserved customization jsonb key holding the last-N processed Gmail
+ *  messageIds per deployment (the idempotency guard for a webhook
+ *  redelivery). Mirrors SCHEDULE_LAST_FIRED_KEY's no-migration pattern. */
+export const COMPOSIO_PROCESSED_MESSAGE_IDS_KEY = "_composioProcessedMessageIds";
+
+/** Cap on how many recent messageIds we remember per deployment (bounded
+ *  jsonb growth — a redelivery race is only plausible for a very recent
+ *  message, not one from weeks ago). */
+const MAX_PROCESSED_MESSAGE_IDS = 20;
+
+/**
+ * List the ACTIVE deployments belonging to `orgId` (clientOrgId OR
+ * builderOrgId — the self-deploy path sets both to the same org) whose
+ * template's resolved trigger is `{kind:"event", event: eventType}`. Returns
+ * the shape dispatchComposioEventToDeployments consumes. Lazy DB import; DI'd
+ * in unit tests via the orchestrator's `listMatchingDeployments`.
+ */
+export async function listComposioEventDeploymentsForOrg(
+  orgId: string,
+  eventType: string,
+): Promise<import("@/lib/deployments/composio-event-dispatch").ComposioEventDeploymentMatch[]> {
+  if (!orgId) return [];
+  const { db } = await import("@/db");
+  const { deployments } = await import("@/db/schema/deployments");
+  const { agentTemplates } = await import("@/db/schema/agent-templates");
+  const { resolveAgentTrigger } = await import("@/lib/agents/triggers/agent-trigger");
+  const { and, eq, or } = await import("drizzle-orm");
+
+  const rows = await db
+    .select({
+      deploymentId: deployments.id,
+      builderOrgId: deployments.builderOrgId,
+      clientOrgId: deployments.clientOrgId,
+      agentTemplateId: deployments.agentTemplateId,
+      templateType: agentTemplates.type,
+      templateBlueprint: agentTemplates.blueprint,
+    })
+    .from(deployments)
+    .innerJoin(agentTemplates, eq(deployments.agentTemplateId, agentTemplates.id))
+    .where(
+      and(
+        eq(deployments.status, "active"),
+        or(eq(deployments.clientOrgId, orgId), eq(deployments.builderOrgId, orgId)),
+      ),
+    );
+
+  const out: import("@/lib/deployments/composio-event-dispatch").ComposioEventDeploymentMatch[] = [];
+  for (const r of rows) {
+    const blueprint = (r.templateBlueprint ?? {}) as Parameters<typeof resolveAgentTrigger>[0] & {
+      trigger?: unknown;
+    };
+    const trigger = resolveAgentTrigger(
+      blueprint.trigger as Parameters<typeof resolveAgentTrigger>[0],
+      r.templateType,
+    );
+    if (trigger.kind !== "event" || trigger.event !== eventType) continue;
+
+    out.push({
+      deploymentId: r.deploymentId,
+      orgId: r.clientOrgId ?? r.builderOrgId,
+      agentKey: r.agentTemplateId,
+      channel: trigger.channel,
+      blueprint: (r.templateBlueprint ?? {}) as import("@/db/schema/agents").AgentBlueprint,
+    });
+  }
+  return out;
+}
+
+/**
+ * Has this (deploymentId, messageId) pair already been processed? Reads the
+ * bounded last-N list off `customization[COMPOSIO_PROCESSED_MESSAGE_IDS_KEY]`.
+ * A read error / missing deployment → false (the safe direction — never
+ * silently drop a real trigger). Lazy DB import.
+ */
+export async function isComposioMessageProcessed(
+  deploymentId: string,
+  messageId: string,
+): Promise<boolean> {
+  if (!deploymentId || !messageId) return false;
+  const { db } = await import("@/db");
+  const { deployments } = await import("@/db/schema/deployments");
+  const { eq } = await import("drizzle-orm");
+
+  const [row] = await db
+    .select({ customization: deployments.customization })
+    .from(deployments)
+    .where(eq(deployments.id, deploymentId))
+    .limit(1);
+
+  const ids = (row?.customization as Record<string, unknown> | undefined)?.[
+    COMPOSIO_PROCESSED_MESSAGE_IDS_KEY
+  ];
+  return Array.isArray(ids) && ids.includes(messageId);
+}
+
+/**
+ * Record (deploymentId, messageId) as processed — prepends to the bounded
+ * last-N list (MAX_PROCESSED_MESSAGE_IDS), same read-modify-write jsonb idiom
+ * as markDeploymentScheduleFired (no migration — customization is the only
+ * generic jsonb column on deployments). Lazy DB import.
+ */
+export async function markComposioMessageProcessed(
+  deploymentId: string,
+  messageId: string,
+): Promise<void> {
+  if (!deploymentId || !messageId) return;
+  const { db } = await import("@/db");
+  const { deployments } = await import("@/db/schema/deployments");
+  const { eq } = await import("drizzle-orm");
+
+  const [row] = await db
+    .select({ customization: deployments.customization })
+    .from(deployments)
+    .where(eq(deployments.id, deploymentId))
+    .limit(1);
+
+  const current = (row?.customization ?? {}) as Record<string, unknown>;
+  const existing = Array.isArray(current[COMPOSIO_PROCESSED_MESSAGE_IDS_KEY])
+    ? (current[COMPOSIO_PROCESSED_MESSAGE_IDS_KEY] as unknown[]).filter(
+        (v): v is string => typeof v === "string",
+      )
+    : [];
+  const nextIds = [messageId, ...existing.filter((id) => id !== messageId)].slice(
+    0,
+    MAX_PROCESSED_MESSAGE_IDS,
+  );
+  const next = { ...current, [COMPOSIO_PROCESSED_MESSAGE_IDS_KEY]: nextIds };
+
+  await db
+    .update(deployments)
+    .set({
+      customization: next as Partial<DeploymentCustomization>,
+      updatedAt: new Date(),
+    })
+    .where(eq(deployments.id, deploymentId));
+}
+
 // ─── listSfManagedDeploymentsForRent (Task 7 — the monthly rent cron) ───────
 
 /** One row the rent cron plans against — see planMonthlyRent

@@ -21,6 +21,7 @@ function match(overrides: Partial<ComposioEventDeploymentMatch> = {}): ComposioE
     deploymentId: "dep_1",
     orgId: ORG,
     agentKey: "tmpl_1",
+    channel: "email",
     blueprint: { capabilities: [] } as never,
     ...overrides,
   };

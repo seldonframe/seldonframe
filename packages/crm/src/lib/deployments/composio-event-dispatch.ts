@@ -42,6 +42,10 @@ export type ComposioEventDeploymentMatch = {
   orgId: string;
   /** A stable key for observability (the agent template id). */
   agentKey: string;
+  /** The resolved trigger's channel ("sms" | "email") — lets the production
+   *  deps decide whether to splice the operator's voice profile (Part A2)
+   *  without re-deriving the trigger from the blueprint. */
+  channel: "sms" | "email";
   blueprint: AgentBlueprint;
 };
 
@@ -59,6 +63,7 @@ export type DispatchComposioEventDeps = {
   runAgenticTurn: (args: {
     orgId: string;
     deploymentId: string;
+    channel: "sms" | "email";
     blueprint: AgentBlueprint;
     payload: Record<string, unknown>;
   }) => Promise<{ ok: boolean }>;
@@ -138,6 +143,7 @@ export async function dispatchComposioEventToDeployments(
         await deps.runAgenticTurn({
           orgId: m.orgId,
           deploymentId: m.deploymentId,
+          channel: m.channel,
           blueprint: m.blueprint,
           payload: args.payload,
         });
