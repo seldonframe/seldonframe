@@ -95,7 +95,7 @@ const AGENTS = [
 // figure below — used by MarketingAgents only.
 const SURFACES = [
   { label: "Voice", icon: Phone },
-  { label: "Web chat", icon: MessageSquare },
+  { label: "web-chat", icon: MessageSquare },
   { label: "SMS", icon: Smartphone },
   { label: "Email", icon: Mail },
   { label: "DM", icon: Send },
@@ -224,22 +224,27 @@ export function MarketingAgents() {
               surface" composition claim concrete. Additive: doesn't touch
               any existing block above. */}
           <div
-            className="relative mx-auto size-[260px] shrink-0"
-            aria-label="One agent, deployed on every surface: voice, web chat, SMS, email, DM, and MCP-endpoint"
+            className="relative mx-auto size-[290px] shrink-0"
+            aria-label="One agent, deployed on every surface: voice, web-chat, SMS, email, DM, and MCP-endpoint"
           >
             <div className="absolute left-1/2 top-1/2 z-10 flex size-14 -translate-x-1/2 -translate-y-1/2 items-center justify-center rounded-full bg-[#6fc28f] text-[#1F2B24] shadow-[0_0_0_8px_rgba(111,194,143,.14)]">
               <Sparkles className="size-6" aria-hidden />
             </div>
+            {/* path={false}: OrbitingCircles' default ring is stroke-black/10
+                dark:stroke-white/10 — on this always-dark #1F2B24 slab (light-
+                only build, no dark: activation) that reads as invisible
+                black-on-dark, so the ring is dropped for restraint. */}
             <OrbitingCircles
-              radius={100}
+              radius={110}
               duration={28}
-              iconSize={50}
-              className="flex-col gap-0.5 border border-[rgba(255,255,255,.16)] bg-[#243830] text-[rgba(246,242,234,.92)]"
+              iconSize={60}
+              path={false}
+              className="flex-col gap-1 border border-[rgba(255,255,255,.16)] bg-[#243830] text-[rgba(246,242,234,.92)]"
             >
               {SURFACES.map((surface) => (
-                <div key={surface.label} className="flex flex-col items-center justify-center gap-0.5 text-center leading-none">
+                <div key={surface.label} className="flex flex-col items-center justify-center gap-1 text-center leading-none">
                   <surface.icon className="size-3.5" aria-hidden />
-                  <span className="text-[7px] font-[600] uppercase tracking-[0.04em]">
+                  <span className="text-[10px] font-[600] uppercase tracking-[0.02em]">
                     {surface.label}
                     {"full" in surface && <span className="sr-only">-endpoint</span>}
                   </span>
