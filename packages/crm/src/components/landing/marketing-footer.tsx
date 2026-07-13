@@ -7,6 +7,8 @@
 
 import Link from "next/link";
 
+import { BrandMark } from "./brand-mark";
+
 type FooterLink = { label: string; href: string; soon?: boolean; external?: boolean };
 type Column = { heading: string; links: readonly FooterLink[] };
 
@@ -86,7 +88,7 @@ export function MarketingFooter() {
   return (
     <footer
       aria-labelledby="footer-heading"
-      className="border-t border-[rgba(34,29,23,.08)] bg-[#EFE9DD] px-5 pb-12 pt-16 text-[#6E665A] md:px-8 md:pb-14 md:pt-20 lg:px-12 lg:pb-16 lg:pt-24"
+      className="border-t border-[var(--lp-border-soft)] bg-[#EFE9DD] px-5 pb-12 pt-16 text-[var(--lp-muted)] md:px-8 md:pb-14 md:pt-20 lg:px-12 lg:pb-16 lg:pt-24"
     >
       <h2 id="footer-heading" className="sr-only">Footer</h2>
 
@@ -94,38 +96,24 @@ export function MarketingFooter() {
         {/* Brand block */}
         <div className="grid grid-cols-1 gap-10 md:grid-cols-[1.4fr_repeat(5,1fr)] md:gap-8">
           <div className="flex max-w-[340px] flex-col gap-5">
-            <Link
-              href="/"
-              aria-label="SeldonFrame — home"
-              className="inline-flex items-center gap-2.5 text-[15px] font-[500] tracking-[-0.01em] text-[#221D17]"
-            >
-              <svg width="20" height="20" viewBox="0 0 100 100" fill="none" aria-hidden>
-                <line x1="22" y1="22" x2="58" y2="22" stroke="#00897B" strokeWidth="6" strokeLinecap="round" />
-                <line x1="78" y1="42" x2="78" y2="78" stroke="#00897B" strokeWidth="6" strokeLinecap="round" />
-                <line x1="78" y1="78" x2="22" y2="78" stroke="#00897B" strokeWidth="6" strokeLinecap="round" />
-                <line x1="22" y1="78" x2="22" y2="22" stroke="#00897B" strokeWidth="6" strokeLinecap="round" />
-                <circle cx="22" cy="22" r="7" fill="#00897B" />
-                <circle cx="78" cy="22" r="7" fill="none" stroke="#00897B" strokeWidth="6" />
-                <circle cx="78" cy="78" r="7" fill="#00897B" />
-                <circle cx="22" cy="78" r="7" fill="#00897B" />
-              </svg>
-              SeldonFrame
+            <Link href="/" aria-label="SeldonFrame — home" className="inline-flex items-center">
+              <BrandMark size={22} />
             </Link>
-            <p className="m-0 text-[13.5px] leading-[1.55] text-[#6E665A]">
+            <p className="m-0 text-[13.5px] leading-[1.55] text-[var(--lp-muted)]">
               Your complete front office — website, booking, AI receptionist, intake, and CRM —
               wired together so your business never misses a lead.
             </p>
             <div className="flex flex-col gap-2.5">
               <Link
                 href="/signup"
-                className="inline-flex items-center gap-2 self-start rounded-full bg-[#1F2B24] px-4 py-2.5 text-[13px] font-[500] text-[#F6F2EA] shadow-[0_1px_2px_rgba(34,29,23,.10),0_4px_12px_rgba(34,29,23,.08),inset_0_1.5px_0_rgba(255,255,255,.10)] transition-all hover:-translate-y-px"
+                className="inline-flex items-center gap-2 self-start rounded-full bg-[var(--lp-cta-bg)] px-4 py-2.5 text-[13px] font-[500] text-[var(--lp-cta-ink)] shadow-[0_1px_2px_color-mix(in_oklab,var(--lp-ink)_10%,transparent),0_4px_12px_color-mix(in_oklab,var(--lp-ink)_8%,transparent),inset_0_1.5px_0_rgba(255,255,255,.10)] transition-all hover:-translate-y-px"
               >
-                <span className="size-1.5 rounded-full bg-[#00897B]" aria-hidden />
+                <span className="size-1.5 rounded-full bg-[var(--lp-accent)]" aria-hidden />
                 Start building
               </Link>
               <Link
                 href="/agencies"
-                className="inline-flex items-center gap-1.5 self-start text-[13px] font-[500] text-[#00897B] transition-colors hover:text-[#00695C]"
+                className="inline-flex items-center gap-1.5 self-start text-[13px] font-[500] text-[var(--lp-accent)] transition-colors hover:text-[#00695C]"
               >
                 For agencies →
               </Link>
@@ -144,7 +132,7 @@ export function MarketingFooter() {
                       href={link.href}
                       target={link.external ? "_blank" : undefined}
                       rel={link.external ? "noopener noreferrer" : undefined}
-                      className="text-[13.5px] text-[#6E665A] transition-colors hover:text-[#221D17]"
+                      className="text-[13.5px] text-[var(--lp-muted)] transition-colors hover:text-[var(--lp-ink)]"
                     >
                       {link.label}
                       {link.soon ? (
@@ -160,14 +148,17 @@ export function MarketingFooter() {
           ))}
         </div>
 
-        <div className="mt-14 flex flex-wrap items-center justify-between gap-3.5 border-t border-[rgba(34,29,23,.10)] pt-5 font-mono text-[11.5px] text-[#9A9183]">
+        <div className="mt-14 flex flex-wrap items-center justify-between gap-3.5 border-t border-[var(--lp-border-soft)] pt-5 font-mono text-[11.5px] text-[#9A9183]">
           <span>© 2026 SeldonFrame, Inc. All rights reserved.</span>
+          <span className="lp-record-only items-center text-[13.5px] text-[var(--lp-muted)]">
+            Recordings stay private — they train your agent only.
+          </span>
           <span className="inline-flex gap-4">
             <Link
               href="https://x.com/seldonframe"
               target="_blank"
               rel="noopener noreferrer"
-              className="text-[#9A9183] transition-colors hover:text-[#221D17]"
+              className="text-[#9A9183] transition-colors hover:text-[var(--lp-ink)]"
             >
               X
             </Link>
@@ -175,7 +166,7 @@ export function MarketingFooter() {
               href="https://github.com/seldonframe/crm"
               target="_blank"
               rel="noopener noreferrer"
-              className="text-[#9A9183] transition-colors hover:text-[#221D17]"
+              className="text-[#9A9183] transition-colors hover:text-[var(--lp-ink)]"
             >
               GitHub
             </Link>
@@ -183,7 +174,7 @@ export function MarketingFooter() {
               href="https://linkedin.com/company/seldonframe"
               target="_blank"
               rel="noopener noreferrer"
-              className="text-[#9A9183] transition-colors hover:text-[#221D17]"
+              className="text-[#9A9183] transition-colors hover:text-[var(--lp-ink)]"
             >
               LinkedIn
             </Link>
