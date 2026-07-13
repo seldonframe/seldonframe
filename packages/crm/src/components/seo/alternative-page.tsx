@@ -183,7 +183,7 @@ export function AlternativePage({ competitor }: { competitor: Competitor }): Rea
                   <tr key={row.key}>
                     <td style={{ ...TD, fontWeight: 700 }}>{row.label}</td>
                     <td style={{ ...TD, color: "rgba(34,29,23,0.66)" }}>{emphasize(c.them[row.key])}</td>
-                    <td style={{ ...TD, background: "rgba(0,137,123,0.05)", color: "rgba(34,29,23,0.85)", fontWeight: 500 }}>
+                    <td style={{ ...TD, background: "rgba(5, 150, 105,0.05)", color: "rgba(34,29,23,0.85)", fontWeight: 500 }}>
                       {emphasize(SF_COLUMN[row.key])}
                     </td>
                   </tr>
@@ -390,7 +390,7 @@ function CtaButtons(): ReactElement {
 function ProsConsCard({ title, pros, cons, highlight }: { title: string; pros: string[]; cons: string[]; highlight?: boolean }): ReactElement {
   return (
     <div
-      style={{ border: `1px solid ${highlight ? "rgba(0,137,123,0.35)" : MKT.ink10}`, borderRadius: 16, padding: "20px 22px", background: highlight ? "rgba(0,137,123,0.05)" : "rgba(255,255,255,0.55)" }}
+      style={{ border: `1px solid ${highlight ? "rgba(5, 150, 105,0.35)" : MKT.ink10}`, borderRadius: 16, padding: "20px 22px", background: highlight ? "rgba(5, 150, 105,0.05)" : "rgba(255,255,255,0.55)" }}
     >
       <h3 style={{ margin: 0, fontSize: 18, fontWeight: 800 }}>{title}</h3>
       <div style={{ margin: "14px 0 6px", fontSize: 11.5, fontWeight: 800, letterSpacing: "0.1em", color: MKT.green }}>PROS</div>
@@ -418,7 +418,7 @@ function ProsConsCard({ title, pros, cons, highlight }: { title: string; pros: s
 function WhoCard({ title, items, highlight }: { title: string; items: string[]; highlight?: boolean }): ReactElement {
   return (
     <div
-      style={{ border: `1px solid ${highlight ? "rgba(0,137,123,0.35)" : MKT.ink10}`, borderRadius: 16, padding: "20px 22px", background: highlight ? "rgba(0,137,123,0.05)" : "rgba(255,255,255,0.55)" }}
+      style={{ border: `1px solid ${highlight ? "rgba(5, 150, 105,0.35)" : MKT.ink10}`, borderRadius: 16, padding: "20px 22px", background: highlight ? "rgba(5, 150, 105,0.05)" : "rgba(255,255,255,0.55)" }}
     >
       <h3 style={{ margin: "0 0 12px", fontSize: 17, fontWeight: 800 }}>{title}</h3>
       <ol style={{ margin: 0, padding: 0, listStyle: "none" }}>

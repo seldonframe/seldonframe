@@ -3,7 +3,7 @@
 // Marketplace buyer surface — the setup wizard (client island).
 //
 // A one-thing-per-screen wizard ported from the Claude Design onboarding export,
-// re-skinned to the real brand (teal `#00897B`, cream paper, mono numbers). It
+// re-skinned to the real brand (teal `#059669`, cream paper, mono numbers). It
 // drives the buyer through the ordered steps the engine produced for THEIR agent:
 //
 //   • a slim progress bar + "Step N of M" counter (the "endowed progress effect"

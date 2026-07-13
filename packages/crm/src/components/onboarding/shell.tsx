@@ -95,14 +95,14 @@ export function OnboardingShell({ step, total, title, showLogo = true }: Onboard
             className="inline-flex shrink-0 items-center gap-2 text-sm font-semibold leading-none tracking-tight text-foreground"
           >
             <svg width="18" height="18" viewBox="0 0 100 100" fill="none" aria-hidden>
-              <line x1="22" y1="22" x2="58" y2="22" stroke="#14b8a6" strokeWidth="3" strokeLinecap="round" />
-              <line x1="78" y1="42" x2="78" y2="78" stroke="#14b8a6" strokeWidth="3" strokeLinecap="round" />
-              <line x1="78" y1="78" x2="22" y2="78" stroke="#14b8a6" strokeWidth="3" strokeLinecap="round" />
-              <line x1="22" y1="78" x2="22" y2="22" stroke="#14b8a6" strokeWidth="3" strokeLinecap="round" />
-              <circle cx="22" cy="22" r="6" fill="#14b8a6" />
-              <circle cx="78" cy="22" r="6" fill="none" stroke="#14b8a6" strokeWidth="3" />
-              <circle cx="78" cy="78" r="6" fill="#14b8a6" />
-              <circle cx="22" cy="78" r="6" fill="#14b8a6" />
+              <line x1="22" y1="22" x2="58" y2="22" stroke="#059669" strokeWidth="3" strokeLinecap="round" />
+              <line x1="78" y1="42" x2="78" y2="78" stroke="#059669" strokeWidth="3" strokeLinecap="round" />
+              <line x1="78" y1="78" x2="22" y2="78" stroke="#059669" strokeWidth="3" strokeLinecap="round" />
+              <line x1="22" y1="78" x2="22" y2="22" stroke="#059669" strokeWidth="3" strokeLinecap="round" />
+              <circle cx="22" cy="22" r="6" fill="#059669" />
+              <circle cx="78" cy="22" r="6" fill="none" stroke="#059669" strokeWidth="3" />
+              <circle cx="78" cy="78" r="6" fill="#059669" />
+              <circle cx="22" cy="78" r="6" fill="#059669" />
             </svg>
             <span className="hidden sm:inline">
               Seldon<span className="font-medium text-muted-foreground">Frame</span>
@@ -125,7 +125,7 @@ export function OnboardingShell({ step, total, title, showLogo = true }: Onboard
             aria-label={`Onboarding progress: ${fillPercent}%`}
           >
             <div
-              className="h-full rounded-full bg-[#14b8a6] transition-[width] duration-[400ms] ease-out"
+              className="h-full rounded-full bg-[#059669] transition-[width] duration-[400ms] ease-out"
               style={{ width: `${fillPercent}%` }}
             />
           </div>

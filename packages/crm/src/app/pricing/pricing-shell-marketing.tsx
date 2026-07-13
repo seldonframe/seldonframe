@@ -15,7 +15,7 @@
 //   --ink:      #221D17  (warm near-black text)
 //   --ink-soft: #6E665A  (softer body text)
 //   --green:    #1F2B24  (deep green — dark rounded primary buttons)
-//   --sf-green: #00897B  (SeldonFrame brand green — accent dots, links)
+//   --sf-green: #059669  (SeldonFrame brand green — accent dots, links)
 //   Font: Hanken Grotesk (body/UI) + Newsreader italic (display accents)
 //
 // Kept from pricing-shell.tsx's TierLadder (do not regress):
@@ -184,10 +184,10 @@ export function PricingShellMarketing({ isAuthed, tiers }: PricingShellMarketing
       {/* ============= HERO — light marketing style, "Simple pricing" ========== */}
       <section className="px-5 pb-10 pt-8 text-center md:px-8 lg:px-12">
         <div className="mx-auto max-w-[700px]">
-          <div className="inline-flex items-center justify-center gap-2.5 text-[12px] font-[600] uppercase tracking-[0.09em] text-[#00897B]">
-            <span className="h-px w-4 bg-[#00897B] opacity-50" aria-hidden />
+          <div className="inline-flex items-center justify-center gap-2.5 text-[12px] font-[600] uppercase tracking-[0.09em] text-[#059669]">
+            <span className="h-px w-4 bg-[#059669] opacity-50" aria-hidden />
             Pricing
-            <span className="h-px w-4 bg-[#00897B] opacity-50" aria-hidden />
+            <span className="h-px w-4 bg-[#059669] opacity-50" aria-hidden />
           </div>
           <h1 className="mx-auto mt-3.5 max-w-[18ch] text-[clamp(30px,4.4vw,48px)] font-[500] leading-[1.06] tracking-[-0.025em] text-[#221D17]">
             Simple pricing.{" "}
@@ -269,7 +269,7 @@ export function PricingShellMarketing({ isAuthed, tiers }: PricingShellMarketing
                     </p>
                     <p className="text-[13.5px] leading-[1.5] text-[#6E665A]">{tier.tagline}</p>
                     {subLabel ? (
-                      <p className="text-[12.5px] font-[500] text-[#00897B]">{subLabel}</p>
+                      <p className="text-[12.5px] font-[500] text-[#059669]">{subLabel}</p>
                     ) : null}
                     {tier.fullWhiteLabel ? (
                       <p className="text-[12.5px] text-[#6E665A]">Full white-label</p>
@@ -294,7 +294,7 @@ export function PricingShellMarketing({ isAuthed, tiers }: PricingShellMarketing
                               key={item}
                               className="flex items-start gap-2 text-[13.5px] leading-[1.6] text-[#221D17]"
                             >
-                              <Check size={14} className="mt-[3px] shrink-0 text-[#00897B]" aria-hidden />
+                              <Check size={14} className="mt-[3px] shrink-0 text-[#059669]" aria-hidden />
                               <span>{item}</span>
                             </li>
                           ))}
@@ -310,9 +310,9 @@ export function PricingShellMarketing({ isAuthed, tiers }: PricingShellMarketing
                           target="_blank"
                           rel="noreferrer"
                           data-tier-cta={tier.id}
-                          className="inline-flex h-10 w-full items-center justify-center gap-2 rounded-full bg-[#1F2B24] px-4 text-[13.5px] font-[500] text-[#F6F2EA] shadow-[0_1px_2px_rgba(34,29,23,.10),0_6px_16px_rgba(34,29,23,.10),inset_0_1.5px_0_rgba(255,255,255,.12)] transition-all hover:-translate-y-px focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[#00897B]"
+                          className="inline-flex h-10 w-full items-center justify-center gap-2 rounded-full bg-[#1F2B24] px-4 text-[13.5px] font-[500] text-[#F6F2EA] shadow-[0_1px_2px_rgba(34,29,23,.10),0_6px_16px_rgba(34,29,23,.10),inset_0_1.5px_0_rgba(255,255,255,.12)] transition-all hover:-translate-y-px focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[#059669]"
                         >
-                          <span className="size-[7px] rounded-full bg-[#00897B]" aria-hidden />
+                          <span className="size-[7px] rounded-full bg-[#059669]" aria-hidden />
                           Book a demo
                         </a>
                       ) : isAuthed ? (
@@ -321,18 +321,18 @@ export function PricingShellMarketing({ isAuthed, tiers }: PricingShellMarketing
                           data-tier-cta={tier.id}
                           onClick={() => startTierCheckout(tier)}
                           disabled={starting !== null}
-                          className="inline-flex h-10 w-full items-center justify-center gap-2 rounded-full bg-[#1F2B24] px-4 text-[13.5px] font-[500] text-[#F6F2EA] shadow-[0_1px_2px_rgba(34,29,23,.10),0_6px_16px_rgba(34,29,23,.10),inset_0_1.5px_0_rgba(255,255,255,.12)] transition-all hover:-translate-y-px disabled:cursor-not-allowed disabled:opacity-60 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[#00897B]"
+                          className="inline-flex h-10 w-full items-center justify-center gap-2 rounded-full bg-[#1F2B24] px-4 text-[13.5px] font-[500] text-[#F6F2EA] shadow-[0_1px_2px_rgba(34,29,23,.10),0_6px_16px_rgba(34,29,23,.10),inset_0_1.5px_0_rgba(255,255,255,.12)] transition-all hover:-translate-y-px disabled:cursor-not-allowed disabled:opacity-60 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[#059669]"
                         >
-                          <span className="size-[7px] rounded-full bg-[#00897B]" aria-hidden />
+                          <span className="size-[7px] rounded-full bg-[#059669]" aria-hidden />
                           {starting === tier.id ? "Redirecting…" : "Get started"}
                         </button>
                       ) : (
                         <Link
                           href={`/signup?plan=${tier.id}`}
                           data-tier-cta={tier.id}
-                          className="inline-flex h-10 w-full items-center justify-center gap-2 rounded-full bg-[#1F2B24] px-4 text-[13.5px] font-[500] text-[#F6F2EA] shadow-[0_1px_2px_rgba(34,29,23,.10),0_6px_16px_rgba(34,29,23,.10),inset_0_1.5px_0_rgba(255,255,255,.12)] transition-all hover:-translate-y-px focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[#00897B]"
+                          className="inline-flex h-10 w-full items-center justify-center gap-2 rounded-full bg-[#1F2B24] px-4 text-[13.5px] font-[500] text-[#F6F2EA] shadow-[0_1px_2px_rgba(34,29,23,.10),0_6px_16px_rgba(34,29,23,.10),inset_0_1.5px_0_rgba(255,255,255,.12)] transition-all hover:-translate-y-px focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[#059669]"
                         >
-                          <span className="size-[7px] rounded-full bg-[#00897B]" aria-hidden />
+                          <span className="size-[7px] rounded-full bg-[#059669]" aria-hidden />
                           Get started
                         </Link>
                       )}
@@ -375,7 +375,7 @@ export function PricingShellMarketing({ isAuthed, tiers }: PricingShellMarketing
           <ul className="mt-5 grid grid-cols-1 gap-x-6 gap-y-3 sm:grid-cols-2">
             {INCLUDED.map((item) => (
               <li key={item} className="flex items-start gap-2.5 text-[13.5px] leading-[1.45] text-[#221D17]">
-                <Check size={16} className="mt-0.5 shrink-0 text-[#00897B]" aria-hidden />
+                <Check size={16} className="mt-0.5 shrink-0 text-[#059669]" aria-hidden />
                 {item}
               </li>
             ))}

@@ -11,7 +11,7 @@ import { useState, type FormEvent, type ReactElement } from "react";
 import { heroSubmitTarget } from "@/components/landing/hero-submit-target";
 
 const INK = "#221D17";
-const GREEN = "#00897B";
+const GREEN = "#059669";
 const INK10 = "rgba(34,29,23,0.10)";
 const AMBER = "#B8860B";
 const RED = "#C0392B";
@@ -239,7 +239,7 @@ export function WebsiteGrader({ ungatedBuildEnabled }: { ungatedBuildEnabled: bo
           </section>
 
           {/* ── Bridge / CTA ── */}
-          <section style={{ border: `1px solid ${INK10}`, borderRadius: 20, background: "rgba(0,137,123,0.06)", padding: "26px 28px" }}>
+          <section style={{ border: `1px solid ${INK10}`, borderRadius: 20, background: "rgba(5, 150, 105,0.06)", padding: "26px 28px" }}>
             <h2 style={{ margin: "0 0 8px", fontSize: 20, fontWeight: 800, letterSpacing: "-0.02em" }}>
               {state.result.score < 80 ? "Scored under 80?" : "Solid score — want it built even better?"}
             </h2>

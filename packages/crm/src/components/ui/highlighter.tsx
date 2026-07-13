@@ -21,7 +21,7 @@ interface HighlighterProps {
   forceStatic?: boolean
 }
 
-export function Highlighter({ children, color = "rgba(0,137,123,0.28)", className, forceStatic = false }: HighlighterProps) {
+export function Highlighter({ children, color = "rgba(5, 150, 105,0.28)", className, forceStatic = false }: HighlighterProps) {
   const ref = useRef<HTMLSpanElement>(null)
   const isInView = useInView(ref, { once: true, margin: "-10%" })
   const prefersReducedMotion = useReducedMotion()

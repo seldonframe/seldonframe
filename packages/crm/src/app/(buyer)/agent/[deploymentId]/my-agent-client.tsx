@@ -3,7 +3,7 @@
 // Marketplace buyer surface — the "My Agent" home (client island).
 //
 // Ported STRUCTURE from the Claude Design export's "MY AGENT HOME" section, re-
-// skinned to the real brand (teal #00897B, cream paper, DM Mono for the numbers
+// skinned to the real brand (teal #059669, cream paper, DM Mono for the numbers
 // the design sets in mono — NOT the export's violet). It renders the serializable
 // MyAgentHomeView the server assembled:
 //

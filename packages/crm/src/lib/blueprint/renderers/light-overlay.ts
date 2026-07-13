@@ -547,7 +547,7 @@ const LIGHT_TEMPLATE = `
 export function buildLightCss(tokens: DesignTokens): string {
   if (!isLightMode(tokens)) return "";
   return LIGHT_TEMPLATE
-    .replaceAll("{{accent}}", tokens.palette.accent || "#0d9488")
+    .replaceAll("{{accent}}", tokens.palette.accent || "#047857")
     .replaceAll("{{body}}", escapeFontName(tokens.typography.body));
 }
 

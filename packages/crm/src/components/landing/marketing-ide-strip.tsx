@@ -78,7 +78,7 @@ export function MarketingIdeStrip() {
 
           <Link
             href="/build#install"
-            className="mt-6 text-[13px] font-[600] text-[#00897B] transition-colors hover:text-[#00695C]"
+            className="mt-6 text-[13px] font-[600] text-[#059669] transition-colors hover:text-[#047857]"
           >
             See the install snippet →
           </Link>
@@ -89,8 +89,8 @@ export function MarketingIdeStrip() {
           <Terminal className="w-full max-w-none border-[rgba(34,29,23,.14)] bg-[#FFFDFA] text-[#221D17] shadow-[0_2px_10px_rgba(34,29,23,.10)]">
             <TypingAnimation className="text-[#6E665A]">$ claude mcp add seldonframe</TypingAnimation>
             <TypingAnimation delay={1400} className="text-[#221D17]">&gt; Build me an AI receptionist for an HVAC company.</TypingAnimation>
-            <AnimatedSpan delay={3200} className="text-[#00897B]">✓ workspace live on acme-hvac.app.seldonframe.com</AnimatedSpan>
-            <AnimatedSpan delay={3800} className="text-[#00897B]">✓ agent answering on chat · SMS · voice</AnimatedSpan>
+            <AnimatedSpan delay={3200} className="text-[#059669]">✓ workspace live on acme-hvac.app.seldonframe.com</AnimatedSpan>
+            <AnimatedSpan delay={3800} className="text-[#059669]">✓ agent answering on chat · SMS · voice</AnimatedSpan>
           </Terminal>
         </div>
       </div>

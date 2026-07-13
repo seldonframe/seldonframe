@@ -79,7 +79,7 @@ export function AgentPageCta({
         style={{
           position: "absolute",
           inset: 0,
-          background: "radial-gradient(circle at 50% 0%,rgba(0,137,123,0.22),transparent 60%)",
+          background: "radial-gradient(circle at 50% 0%,rgba(5, 150, 105,0.22),transparent 60%)",
           pointerEvents: "none",
         }}
       />
@@ -120,7 +120,7 @@ export function AgentPageCta({
               borderRadius: 14,
               cursor: "pointer",
               textDecoration: "none",
-              boxShadow: "0 10px 28px rgba(0,137,123,0.34)",
+              boxShadow: "0 10px 28px rgba(5, 150, 105,0.34)",
               display: "inline-flex",
               alignItems: "center",
               justifyContent: "center",

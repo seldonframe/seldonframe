@@ -126,7 +126,7 @@ export function BrowseClient({ agents, businessCount = 0, initialCategory = null
                   padding: "12px 20px",
                   borderRadius: 10,
                   cursor: "pointer",
-                  boxShadow: "0 6px 16px rgba(0,137,123,0.26)",
+                  boxShadow: "0 6px 16px rgba(5, 150, 105,0.26)",
                 }}
               >
                 Search
@@ -224,7 +224,7 @@ export function BrowseClient({ agents, businessCount = 0, initialCategory = null
                 style={{
                   textAlign: "left",
                   cursor: "pointer",
-                  background: active ? "rgba(0,137,123,0.08)" : "#fff",
+                  background: active ? "rgba(5, 150, 105,0.08)" : "#fff",
                   border: `1px solid ${active ? MKT.green : "rgba(34,29,23,0.10)"}`,
                   borderRadius: 16,
                   padding: "18px 16px 16px",
@@ -239,7 +239,7 @@ export function BrowseClient({ agents, businessCount = 0, initialCategory = null
                     width: 40,
                     height: 40,
                     borderRadius: 11,
-                    background: active ? MKT.green : "rgba(0,137,123,0.10)",
+                    background: active ? MKT.green : "rgba(5, 150, 105,0.10)",
                     color: active ? "#fff" : MKT.green,
                     display: "flex",
                     alignItems: "center",
@@ -362,7 +362,7 @@ const POPULAR: { label: string; category: CategoryKey }[] = [
 ];
 
 const HERO_AVATARS = [
-  { t: "PH", bg: "#00897B" },
+  { t: "PH", bg: "#059669" },
   { t: "RD", bg: "#B5651D" },
   { t: "VA", bg: "#3F6E54" },
   { t: "CP", bg: "#7A3B69" },
@@ -405,7 +405,7 @@ function HeroProofCard({ agent }: { agent: StorefrontAgent }): ReactElement {
             width: 44,
             height: 44,
             borderRadius: 13,
-            background: "rgba(0,137,123,0.11)",
+            background: "rgba(5, 150, 105,0.11)",
             color: MKT.green,
             display: "flex",
             alignItems: "center",
@@ -427,7 +427,7 @@ function HeroProofCard({ agent }: { agent: StorefrontAgent }): ReactElement {
             fontSize: 11.5,
             fontWeight: 700,
             color: MKT.green,
-            background: "rgba(0,137,123,0.10)",
+            background: "rgba(5, 150, 105,0.10)",
             padding: "5px 10px",
             borderRadius: 999,
           }}
@@ -469,7 +469,7 @@ function HeroProofCard({ agent }: { agent: StorefrontAgent }): ReactElement {
             {reply.text}
           </div>
         ) : null}
-        <div style={{ alignSelf: "flex-start", background: "rgba(0,137,123,0.10)", padding: "11px 16px", borderRadius: "15px 15px 15px 4px" }}>
+        <div style={{ alignSelf: "flex-start", background: "rgba(5, 150, 105,0.10)", padding: "11px 16px", borderRadius: "15px 15px 15px 4px" }}>
           <span className="sf-typing">
             <span />
             <span />

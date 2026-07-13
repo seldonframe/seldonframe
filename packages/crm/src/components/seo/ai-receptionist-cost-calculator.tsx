@@ -18,7 +18,7 @@ import {
 } from "./result-card";
 
 const INK = "#221D17";
-const GREEN = "#00897B";
+const GREEN = "#059669";
 const INK10 = "rgba(34,29,23,0.10)";
 const AMBER = "#B8860B";
 const RED = "#C0392B";

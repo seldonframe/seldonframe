@@ -3,7 +3,7 @@
 // Marketplace buyer surface — the go_live step (the finale).
 //
 // Two faces, ported STRUCTURE from the Claude Design export's "Go live" screen,
-// re-skinned to the real brand (teal `#00897B`, cream paper, confetti in the
+// re-skinned to the real brand (teal `#059669`, cream paper, confetti in the
 // brand palette — NOT the export's violet):
 //
 //   • NOT live yet → "Ready to go live": a summary of what the buyer set up + the

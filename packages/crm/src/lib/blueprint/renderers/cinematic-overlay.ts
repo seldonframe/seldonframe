@@ -886,7 +886,7 @@ const CINEMATIC_TEMPLATE = `
 export function buildCinematicCss(tokens: DesignTokens): string {
   if (!isCinematicMode(tokens)) return "";
   return CINEMATIC_TEMPLATE
-    .replaceAll("{{accent}}", tokens.palette.accent || "#14b8a6")
+    .replaceAll("{{accent}}", tokens.palette.accent || "#059669")
     .replaceAll("{{display}}", escapeFontName(tokens.typography.display))
     .replaceAll("{{body}}", escapeFontName(tokens.typography.body));
 }

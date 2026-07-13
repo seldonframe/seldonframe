@@ -39,7 +39,7 @@ const STATUS_LABEL: Record<TrendStatus, string> = {
 };
 
 const STATUS_COLOR: Record<TrendStatus, string> = {
-  rising: "#00897B",
+  rising: "#059669",
   peaking: "#B8860B",
   declining: "#C0392B",
   reborn: "#5B8DEF",
@@ -98,7 +98,7 @@ export function TrendChart(): ReactElement {
             onClick={() => applyStatusFilter(s)}
             style={{
               border: `1.5px solid ${statusFilter === s ? MKT.green : MKT.ink10}`,
-              background: statusFilter === s ? "rgba(0,137,123,0.1)" : "rgba(255,255,255,0.6)",
+              background: statusFilter === s ? "rgba(5, 150, 105,0.1)" : "rgba(255,255,255,0.6)",
               color: statusFilter === s ? MKT.green : MKT.ink,
               borderRadius: 999,
               padding: "7px 16px",

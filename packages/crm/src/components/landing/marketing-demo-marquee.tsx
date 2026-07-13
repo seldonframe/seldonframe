@@ -10,7 +10,7 @@
 // the visitor can still scroll/tab through).
 //
 // Design tokens: card #FFFDFA, paper #F6F2EA, ink #221D17, muted #6E665A,
-// faint #9A9183, accent green #00897B, border rgba(34,29,23,.10).
+// faint #9A9183, accent green #059669, border rgba(34,29,23,.10).
 
 "use client";
 
@@ -94,7 +94,7 @@ function DemoCard({ demo }: { demo: Demo }) {
           </span>
           <span className="block truncate text-[11px] leading-tight text-[#9A9183]">{demo.type}</span>
         </span>
-        <span className="shrink-0 font-mono text-[11.5px] font-[600] text-[#00897B] transition-transform duration-200 group-hover:translate-x-0.5">
+        <span className="shrink-0 font-mono text-[11.5px] font-[600] text-[#059669] transition-transform duration-200 group-hover:translate-x-0.5">
           Try it ↗
         </span>
       </div>
@@ -112,7 +112,7 @@ export function MarketingDemoMarquee() {
       aria-label="Live demo workspaces"
     >
       <div className="mb-3 flex items-center justify-center gap-2.5">
-        <span className="sf-demo-dot inline-block size-1.5 rounded-full bg-[#00897B]" aria-hidden />
+        <span className="sf-demo-dot inline-block size-1.5 rounded-full bg-[#059669]" aria-hidden />
         <span className="font-sans text-[11px] uppercase tracking-[0.12em] text-[#9A9183]">
           Live demos — built from a URL
         </span>
@@ -141,7 +141,7 @@ export function MarketingDemoMarquee() {
           animation-play-state: paused;
         }
         .sf-demo-dot {
-          box-shadow: 0 0 0 3px color-mix(in oklab, #00897b 22%, transparent);
+          box-shadow: 0 0 0 3px color-mix(in oklab, #059669 22%, transparent);
         }
         @keyframes sf-demo-marquee {
           from {

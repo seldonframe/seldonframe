@@ -2,7 +2,7 @@
 //
 // Redesign 2026-06-18 — warm light aesthetic matching seldonstudio.com.
 // Paper/parchment surface (--lp-card, brightens on scroll), Hanken Grotesk
-// sans, SeldonFrame green (--lp-accent) as accent (replaces teal #14b8a6).
+// sans, SeldonFrame green (--lp-accent) as accent (replaces teal #059669).
 //
 // Token migration 2026-07-13 — all landing colors moved to `--lp-*` CSS
 // vars (see landing-theme.css) so the nav is dark-capable for /record.

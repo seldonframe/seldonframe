@@ -125,7 +125,7 @@ function extractPrimaryColor(html: string): string {
     return max - min > 40;
   });
 
-  return colorful[0] || "#14b8a6";
+  return colorful[0] || "#059669";
 }
 
 function detectTools(html: string): DetectedTool[] {

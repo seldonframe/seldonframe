@@ -35,7 +35,7 @@ function normalizeHexColor(value: string) {
     return `#${r}${r}${g}${g}${b}${b}`;
   }
 
-  return "#14b8a6";
+  return "#059669";
 }
 
 function slugify(value: string) {
@@ -170,7 +170,7 @@ export async function POST(req: Request) {
 
   const nextTheme = normalizeTheme({
     ...readObject(org.theme),
-    primaryColor: normalizeHexColor(readString(claimedPreview.themeColor) || "#14b8a6"),
+    primaryColor: normalizeHexColor(readString(claimedPreview.themeColor) || "#059669"),
     accentColor: "#6366f1",
     fontFamily: "DM Sans",
     borderRadius: "rounded",

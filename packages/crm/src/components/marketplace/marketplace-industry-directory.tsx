@@ -148,7 +148,7 @@ export function MarketplaceIndustryDirectory(): ReactElement {
                   width: 38,
                   height: 38,
                   borderRadius: 11,
-                  background: "rgba(0,137,123,0.10)",
+                  background: "rgba(5, 150, 105,0.10)",
                   color: MKT.green,
                   display: "flex",
                   alignItems: "center",

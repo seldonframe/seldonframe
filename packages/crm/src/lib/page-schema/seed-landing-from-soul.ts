@@ -147,14 +147,14 @@ export async function seedLandingFromSoul(orgId: string): Promise<SeedLandingRes
   // override via update_theme; we only fall through to the personality
   // default when org.theme.accentColor is unset (the workspace just
   // got created and no operator customization happened yet). Without
-  // this, every workspace ships with the generic teal #14b8a6 accent
+  // this, every workspace ships with the generic teal #059669 accent
   // even when the personality has a clear brand archetype (medspa →
   // gold, dental → fresh blue, hvac → vivid orange).
   const personalityAccent = personalityDefaultAccent(crmPersonality.vertical);
   const accent =
     typeof org.theme?.accentColor === "string"
       ? org.theme.accentColor
-      : personalityAccent ?? "#14b8a6";
+      : personalityAccent ?? "#059669";
   const tokens = tokensForPersonality(personality, {
     palette: { accent },
   });
@@ -332,7 +332,7 @@ function personalityDefaultAccent(vertical: string | undefined): string | null {
     case "agency":
       return "#a855f7"; // creative violet
     case "coaching":
-      return "#14b8a6"; // teal
+      return "#059669"; // teal
     case "general":
       // v1.2.0 — generic trade / contractor accent. Saturated steel
       // blue reads professional + trustworthy without being any

@@ -35,10 +35,10 @@ export function MarketingFinalCta({
       className="border-t border-[var(--lp-border-soft)] bg-[var(--lp-cta-slab)] px-5 py-24 text-center md:px-8 md:py-36 lg:px-12"
     >
       <div className="mx-auto max-w-[880px]">
-        <div className="inline-flex items-center justify-center gap-2.5 text-[12px] font-[600] uppercase tracking-[0.09em] text-[rgba(111,194,143,.8)]">
-          <span className="h-px w-4 bg-[rgba(111,194,143,.5)]" aria-hidden />
+        <div className="inline-flex items-center justify-center gap-2.5 text-[12px] font-[600] uppercase tracking-[0.09em] text-[rgba(52, 211, 153,.8)]">
+          <span className="h-px w-4 bg-[rgba(52, 211, 153,.5)]" aria-hidden />
           Last thing
-          <span className="h-px w-4 bg-[rgba(111,194,143,.5)]" aria-hidden />
+          <span className="h-px w-4 bg-[rgba(52, 211, 153,.5)]" aria-hidden />
         </div>
 
         {variant === "record" ? (

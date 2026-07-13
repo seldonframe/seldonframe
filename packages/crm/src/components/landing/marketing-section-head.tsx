@@ -27,7 +27,7 @@ export function MarketingSectionHead({
       }`}
     >
       <div>
-        <p className="m-0 mb-5 inline-flex items-center gap-2.5 font-mono text-[11.5px] font-medium uppercase tracking-[0.16em] text-[#2dd4bf] before:block before:h-px before:w-4 before:bg-current before:opacity-55">
+        <p className="m-0 mb-5 inline-flex items-center gap-2.5 font-mono text-[11.5px] font-medium uppercase tracking-[0.16em] text-[#34d399] before:block before:h-px before:w-4 before:bg-current before:opacity-55">
           {eyebrow}
         </p>
         <h2 className="m-0 max-w-[900px] text-balance font-display text-[clamp(32px,4.4vw,52px)] font-semibold leading-[1.04] tracking-[-0.030em] text-zinc-50">

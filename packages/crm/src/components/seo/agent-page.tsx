@@ -178,7 +178,7 @@ export function AgentPage({ job, vertical }: AgentPageProps): ReactElement {
                 padding: "14px 24px",
                 borderRadius: 13,
                 textDecoration: "none",
-                boxShadow: "0 8px 20px rgba(0,137,123,0.28)",
+                boxShadow: "0 8px 20px rgba(5, 150, 105,0.28)",
               }}
             >
               <MarketplaceIcon name="package" size={19} />
@@ -247,7 +247,7 @@ export function AgentPage({ job, vertical }: AgentPageProps): ReactElement {
                     fontWeight: 700,
                     fontFamily: MKT.fontMono,
                     fontSize: 15,
-                    boxShadow: "0 6px 16px rgba(0,137,123,0.28)",
+                    boxShadow: "0 6px 16px rgba(5, 150, 105,0.28)",
                   }}
                 >
                   {i + 1}
@@ -255,7 +255,7 @@ export function AgentPage({ job, vertical }: AgentPageProps): ReactElement {
                 {/* connector arrow into the next step (desktop only — the scoped
                     CSS reveals it ≥640px and hides it when the grid stacks) */}
                 {i < steps.length - 1 ? (
-                  <span className="sf-ap-step-arrow" aria-hidden style={{ color: "rgba(0,137,123,0.5)" }}>
+                  <span className="sf-ap-step-arrow" aria-hidden style={{ color: "rgba(5, 150, 105,0.5)" }}>
                     <MarketplaceIcon name="arrowRight" size={18} stroke={2.4} />
                   </span>
                 ) : null}
@@ -375,7 +375,7 @@ export function AgentPage({ job, vertical }: AgentPageProps): ReactElement {
                     boxShadow: "0 1px 2px rgba(34,29,23,0.04)",
                   }}
                 >
-                  <span style={{ width: 42, height: 42, borderRadius: 12, background: "rgba(0,137,123,0.10)", color: MKT.green, display: "flex", alignItems: "center", justifyContent: "center", flex: "none" }}>
+                  <span style={{ width: 42, height: 42, borderRadius: 12, background: "rgba(5, 150, 105,0.10)", color: MKT.green, display: "flex", alignItems: "center", justifyContent: "center", flex: "none" }}>
                     <MarketplaceIcon name={surfaceIconFor(r)} size={20} />
                   </span>
                   <div style={{ flex: 1, minWidth: 0 }}>
@@ -448,7 +448,7 @@ const AGENT_PAGE_CSS = `
   .sf-ap-howit{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:14px}
   .sf-ap-works{display:flex;flex-wrap:wrap;gap:10px}
   .sf-ap-stepcard{transition:transform .2s cubic-bezier(0.22,1,0.36,1),box-shadow .2s,border-color .2s}
-  .sf-ap-stepcard:hover{transform:translateY(-3px);box-shadow:0 2px 4px rgba(34,29,23,0.05),0 18px 36px rgba(34,29,23,0.10);border-color:rgba(0,137,123,0.3)}
+  .sf-ap-stepcard:hover{transform:translateY(-3px);box-shadow:0 2px 4px rgba(34,29,23,0.05),0 18px 36px rgba(34,29,23,0.10);border-color:rgba(5, 150, 105,0.3)}
   /* connector arrow: hidden by default (stacked/mobile), shown + floated into the
      gutter between cards on desktop where the 3-col grid actually has a gutter. */
   .sf-ap-step-arrow{display:none}

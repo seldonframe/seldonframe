@@ -4,7 +4,7 @@
 //
 // The penultimate step: let the buyer experience their agent BEFORE going live.
 // Ported STRUCTURE from the Claude Design export's "Hear it work" screen, re-
-// skinned to the real brand (teal #00897B, cream, mono number — no violet):
+// skinned to the real brand (teal #059669, cream, mono number — no violet):
 //
 //   • Voice agents: show the agent's phone number as the "test line" with a big
 //     "Call this number now" tel: link, plus an honest "this is your real agent

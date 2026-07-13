@@ -199,7 +199,7 @@ export function CompetitorPricingPage({ slug }: { slug: string }): ReactElement 
             <Link
               href={`/compare/seldonframe-vs-${c.slug}`}
               className="sf-link"
-              style={{ fontSize: 13.5, fontWeight: 600, color: MKT.green, border: `1px solid rgba(0,137,123,0.35)`, borderRadius: 999, padding: "7px 14px", textDecoration: "none", background: "rgba(0,137,123,0.06)" }}
+              style={{ fontSize: 13.5, fontWeight: 600, color: MKT.green, border: `1px solid rgba(5, 150, 105,0.35)`, borderRadius: 999, padding: "7px 14px", textDecoration: "none", background: "rgba(5, 150, 105,0.06)" }}
             >
               {`SeldonFrame vs ${c.name} — full comparison →`}
             </Link>

@@ -5,7 +5,7 @@ export function LandingMarketplaceSection() {
         <p className="mb-2 text-xs font-semibold uppercase tracking-[0.2em] text-zinc-500">Marketplace</p>
         <div className="flex flex-col items-center gap-3">
           <h2 className="text-3xl font-bold text-zinc-100">Don&apos;t start from zero.</h2>
-          <span className="inline-flex items-center rounded-full border border-[#14b8a6]/30 bg-[#14b8a6]/10 px-3 py-1 text-xs font-semibold uppercase tracking-[0.12em] text-[#14b8a6]">
+          <span className="inline-flex items-center rounded-full border border-[#059669]/30 bg-[#059669]/10 px-3 py-1 text-xs font-semibold uppercase tracking-[0.12em] text-[#059669]">
             Coming soon
           </span>
         </div>
@@ -26,7 +26,7 @@ export function LandingMarketplaceSection() {
             className="flex items-center justify-between rounded-xl border border-zinc-800 bg-zinc-900 p-4 opacity-60"
           >
             <div className="text-sm font-semibold text-zinc-200">{soul.name}</div>
-            <div className="text-xs font-bold text-[#14b8a6]">{soul.price}</div>
+            <div className="text-xs font-bold text-[#059669]">{soul.price}</div>
           </div>
         ))}
       </div>

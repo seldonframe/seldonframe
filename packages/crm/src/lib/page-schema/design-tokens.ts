@@ -151,7 +151,7 @@ export const PERSONALITY_DEFAULTS: Record<PagePersonality, Partial<DesignTokens>
 export function tokensForPersonality(
   personality: PagePersonality,
   overrides: Partial<DesignTokens> = {},
-  defaultAccent = "#14b8a6"
+  defaultAccent = "#059669"
 ): DesignTokens {
   const personalityDefaults = PERSONALITY_DEFAULTS[personality];
 

@@ -92,10 +92,10 @@ export function LandingMarketingFaqSection() {
       <div className="mx-auto max-w-[760px]">
         {/* Section head */}
         <div className="text-center">
-          <div className="inline-flex items-center justify-center gap-2.5 text-[12px] font-[600] uppercase tracking-[0.09em] text-[#00897B]">
-            <span className="h-px w-4 bg-[#00897B] opacity-50" aria-hidden />
+          <div className="inline-flex items-center justify-center gap-2.5 text-[12px] font-[600] uppercase tracking-[0.09em] text-[#059669]">
+            <span className="h-px w-4 bg-[#059669] opacity-50" aria-hidden />
             FAQ
-            <span className="h-px w-4 bg-[#00897B] opacity-50" aria-hidden />
+            <span className="h-px w-4 bg-[#059669] opacity-50" aria-hidden />
           </div>
           <h2
             id="faq-heading"
@@ -119,8 +119,8 @@ export function LandingMarketingFaqSection() {
                   className="relative flex size-[22px] shrink-0 transition-transform duration-[300ms] group-open:rotate-[135deg]"
                 >
                   {/* + icon — two bars */}
-                  <span className="absolute left-1/2 top-[3px] bottom-[3px] w-[2px] -translate-x-1/2 rounded-sm bg-[#00897B]" />
-                  <span className="absolute top-1/2 left-[3px] right-[3px] h-[2px] -translate-y-1/2 rounded-sm bg-[#00897B]" />
+                  <span className="absolute left-1/2 top-[3px] bottom-[3px] w-[2px] -translate-x-1/2 rounded-sm bg-[#059669]" />
+                  <span className="absolute top-1/2 left-[3px] right-[3px] h-[2px] -translate-y-1/2 rounded-sm bg-[#059669]" />
                 </span>
               </summary>
               <p className="pb-6 pr-10 text-[15px] leading-[1.62] text-[#6E665A] max-w-[66ch]">

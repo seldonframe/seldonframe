@@ -23,7 +23,7 @@ import { useState, useEffect, useRef, type ReactElement } from "react";
 import { renderResultCard, buildShareUrl, copyToClipboard, downloadCanvasAsImage, shareResultCard } from "./result-card";
 
 const INK = "#221D17";
-const GREEN = "#00897B";
+const GREEN = "#059669";
 const INK10 = "rgba(34,29,23,0.10)";
 const AMBER = "#B8860B";
 
@@ -310,7 +310,7 @@ export function HubspotPricingCalculator(): ReactElement {
                   padding: "10px 16px",
                   borderRadius: 10,
                   border: tier === t ? `2px solid ${GREEN}` : `1.5px solid ${INK10}`,
-                  background: tier === t ? "rgba(0,137,123,0.08)" : "#fff",
+                  background: tier === t ? "rgba(5, 150, 105,0.08)" : "#fff",
                   color: INK,
                   fontWeight: 700,
                   fontSize: 14,

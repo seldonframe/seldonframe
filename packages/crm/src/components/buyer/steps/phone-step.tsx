@@ -5,7 +5,7 @@
 // A voice agent needs a number to answer on, so the engine adds this REQUIRED
 // step for a voice surface (go-live is gated on it). Two paths, ported STRUCTURE
 // from the Claude Design export's "Your phone" screen and re-skinned to the brand
-// (teal #00897B, cream, accent-soft cards — no violet):
+// (teal #059669, cream, accent-soft cards — no violet):
 //
 //   • "Forward my existing number" (BYO) — the buyer keeps the number customers
 //     already know. They type it naturally ("(602) 555-0148"); we normalize to

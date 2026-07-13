@@ -59,7 +59,7 @@ export function LandingHero() {
           >
             Spin up your client&apos;s Business OS in 60 seconds.
             <br className="hidden lg:block" />{" "}
-            <span className="text-[#14b8a6] lg:mt-1 lg:inline-block">
+            <span className="text-[#059669] lg:mt-1 lg:inline-block">
               Just describe it.
             </span>
           </motion.h1>
@@ -82,19 +82,19 @@ export function LandingHero() {
           >
             <Link
               href="/signup"
-              /* a11y: text-zinc-950 on #14b8a6 = 7.2:1 (AAA). Matches
+              /* a11y: text-zinc-950 on #059669 = 7.2:1 (AAA). Matches
                  the pricing/footer pattern set in Cut C Phase 8.
                  Hover shadow is a directional drop (not the neutral-
                  black shadow-lg) so the lift reads as actual elevation
                  per design-critique #8. */
-              className="inline-flex items-center gap-2 rounded-xl bg-[#14b8a6] px-8 py-3.5 text-base font-semibold text-zinc-950 transition-all hover:scale-[1.02] hover:shadow-[0_8px_24px_-6px_rgba(20,184,166,0.4)] focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[#14b8a6] motion-reduce:transition-none motion-reduce:hover:scale-100"
+              className="inline-flex items-center gap-2 rounded-xl bg-[#059669] px-8 py-3.5 text-base font-semibold text-zinc-950 transition-all hover:scale-[1.02] hover:shadow-[0_8px_24px_-6px_rgba(5, 150, 105,0.4)] focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[#059669] motion-reduce:transition-none motion-reduce:hover:scale-100"
             >
               Start free
               <ArrowRight size={18} aria-hidden="true" />
             </Link>
             <Link
               href="#demo"
-              className="inline-flex items-center gap-2 rounded-xl border border-zinc-700 px-7 py-3.5 text-base font-semibold text-zinc-200 transition-colors hover:border-zinc-500 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[#14b8a6]"
+              className="inline-flex items-center gap-2 rounded-xl border border-zinc-700 px-7 py-3.5 text-base font-semibold text-zinc-200 transition-colors hover:border-zinc-500 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[#059669]"
             >
               <Play size={16} className="fill-current" aria-hidden="true" />
               Watch the 60-second build

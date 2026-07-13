@@ -15,7 +15,7 @@ import { useMemo, useState, type ReactElement } from "react";
 import { copyToClipboard } from "@/components/seo/result-card";
 
 const INK = "#221D17";
-const GREEN = "#00897B";
+const GREEN = "#059669";
 const INK10 = "rgba(34,29,23,0.10)";
 
 type BizType =
@@ -472,7 +472,7 @@ export function ServiceBusinessFaqGenerator(): ReactElement {
           border: `1px solid ${INK10}`,
           borderRadius: 14,
           padding: "18px 20px",
-          background: "rgba(0,137,123,0.06)",
+          background: "rgba(5, 150, 105,0.06)",
         }}
       >
         <div style={{ fontWeight: 800, fontSize: 16, color: INK, marginBottom: 6 }}>
