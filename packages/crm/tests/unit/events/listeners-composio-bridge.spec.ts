@@ -8,10 +8,19 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
 import { handleComposioBridgeEvent, type ComposioBridgeDeps } from "../../../src/lib/events/listeners";
+import type { AgentDispatchResult } from "../../../src/lib/agents/dispatcher";
+
+/** A minimal, correctly-typed AgentDispatchResult — every
+ *  `dispatchToArchetypes` fake below returns this instead of `void`, so no
+ *  `as ComposioBridgeDeps[...]` cast is needed anywhere in this file
+ *  (verify-gate FIX 5: those casts were masking a type mismatch). */
+function emptyDispatchResult(): AgentDispatchResult {
+  return { attempted: 0, started: [], failed: [], blockedByLimit: [] };
+}
 
 function fakeDeps(overrides: Partial<ComposioBridgeDeps> = {}): ComposioBridgeDeps {
   return {
-    dispatchToArchetypes: (async () => {}) as ComposioBridgeDeps["dispatchToArchetypes"],
+    dispatchToArchetypes: async () => emptyDispatchResult(),
     dispatchToDeployments: async () => ({ attempted: 0, started: [], skipped: [] }),
     ...overrides,
   };
@@ -21,10 +30,10 @@ test("both dispatchers are called for a composio.* event with a resolvable orgId
   let archetypeCalled = false;
   let deploymentsCalled: unknown = null;
   const deps = fakeDeps({
-    dispatchToArchetypes: (async (args: unknown) => {
+    dispatchToArchetypes: async () => {
       archetypeCalled = true;
-      return args;
-    }) as ComposioBridgeDeps["dispatchToArchetypes"],
+      return emptyDispatchResult();
+    },
     dispatchToDeployments: async (args) => {
       deploymentsCalled = args;
       return { attempted: 1, started: ["dep_1"], skipped: [] };
@@ -47,9 +56,10 @@ test("both dispatchers are called for a composio.* event with a resolvable orgId
 test("non-composio events are ignored by both dispatchers", async () => {
   let called = false;
   const deps = fakeDeps({
-    dispatchToArchetypes: (async () => {
+    dispatchToArchetypes: async () => {
       called = true;
-    }) as ComposioBridgeDeps["dispatchToArchetypes"],
+      return emptyDispatchResult();
+    },
     dispatchToDeployments: async () => {
       called = true;
       return { attempted: 0, started: [], skipped: [] };
@@ -63,9 +73,10 @@ test("non-composio events are ignored by both dispatchers", async () => {
 test("no resolvable orgId -> neither dispatcher is called", async () => {
   let called = false;
   const deps = fakeDeps({
-    dispatchToArchetypes: (async () => {
+    dispatchToArchetypes: async () => {
       called = true;
-    }) as ComposioBridgeDeps["dispatchToArchetypes"],
+      return emptyDispatchResult();
+    },
     dispatchToDeployments: async () => {
       called = true;
       return { attempted: 0, started: [], skipped: [] };
@@ -79,9 +90,10 @@ test("no resolvable orgId -> neither dispatcher is called", async () => {
 test("dispatchToDeployments throwing does NOT break the archetype dispatch (or the handler)", async () => {
   let archetypeCalled = false;
   const deps = fakeDeps({
-    dispatchToArchetypes: (async () => {
+    dispatchToArchetypes: async () => {
       archetypeCalled = true;
-    }) as ComposioBridgeDeps["dispatchToArchetypes"],
+      return emptyDispatchResult();
+    },
     dispatchToDeployments: async () => {
       throw new Error("deployments dispatch down");
     },
@@ -99,9 +111,9 @@ test("dispatchToDeployments throwing does NOT break the archetype dispatch (or t
 test("dispatchToArchetypes throwing does NOT prevent the deployments dispatch from running", async () => {
   let deploymentsCalled = false;
   const deps = fakeDeps({
-    dispatchToArchetypes: (async () => {
+    dispatchToArchetypes: async () => {
       throw new Error("archetype dispatch down");
-    }) as ComposioBridgeDeps["dispatchToArchetypes"],
+    },
     dispatchToDeployments: async () => {
       deploymentsCalled = true;
       return { attempted: 0, started: [], skipped: [] };
