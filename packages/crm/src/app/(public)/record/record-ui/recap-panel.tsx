@@ -13,6 +13,7 @@
 // "approved", never on initial landing.
 "use client";
 
+import type { ChangeEvent } from "react";
 import type { CoverageEntry, CoverageTier, FlowModel } from "@/lib/recordings/trace-schema";
 import type { InterviewTurn, RecorderState } from "../recorder-machine";
 import { summarizeCoverage } from "../recorder-machine";
@@ -37,6 +38,7 @@ export function RecapPanel({
   onCompileNow,
   onCompileAgent,
   onApprove,
+  edgeCasePrompt,
 }: {
   phase: RecorderState["phase"];
   flowModel: FlowModel | null;
@@ -56,6 +58,15 @@ export function RecapPanel({
   onCompileNow: () => void;
   onCompileAgent: () => void;
   onApprove: () => void;
+  /** Record v3 (S1) — "Make it trustworthy" row. Absent (undefined) hides
+   *  the row entirely: no slot traced yet, a slot is mid-capture, or all
+   *  MAX_RECORDINGS_PER_SESSION slots are used. record-client.tsx computes
+   *  the visibility rule; this component just renders whatever it's given. */
+  edgeCasePrompt?: {
+    onRecord: () => void;
+    onFileChange: (e: ChangeEvent<HTMLInputElement>) => void;
+    supportsScreenCapture: boolean;
+  };
 }) {
   const summary = summarizeCoverage(coverage);
 
@@ -135,6 +146,38 @@ export function RecapPanel({
               </li>
             ))}
           </ul>
+        </div>
+      ) : null}
+
+      {edgeCasePrompt ? (
+        <div className="flex flex-col gap-2.5 rounded-[10px] border border-[rgba(20,184,166,.22)] bg-[#14B8A60D] p-3">
+          <div>
+            <p className="text-[13px] font-[600] text-[#F5F4F0]">Make it trustworthy</p>
+            <p className="mt-0.5 text-[12.5px] leading-[1.5] text-[#9CA3AF]">
+              Anything ever go differently? Record that too — edge cases make the agent trustworthy.
+            </p>
+          </div>
+          <div className="flex flex-wrap items-center gap-3">
+            {edgeCasePrompt.supportsScreenCapture ? (
+              <button
+                type="button"
+                onClick={edgeCasePrompt.onRecord}
+                className="inline-flex h-9 items-center gap-2 rounded-full border border-[rgba(231,229,222,.16)] bg-transparent px-4 text-[12.5px] font-[600] text-[#E7E5DE]"
+              >
+                <span className="size-1.5 rounded-full bg-[#EF4444]" aria-hidden />
+                + Record an edge case
+              </button>
+            ) : null}
+            <label className="cursor-pointer text-[12.5px] text-[#9CA3AF] underline-offset-2 hover:text-[#E7E5DE] hover:underline">
+              or upload
+              <input
+                type="file"
+                accept="video/*"
+                className="sr-only"
+                onChange={edgeCasePrompt.onFileChange}
+              />
+            </label>
+          </div>
         </div>
       ) : null}
 

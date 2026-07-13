@@ -27,6 +27,7 @@ import {
   MAX_FRAME_EDGE_PX,
   MAX_FRAMES_PER_RECORDING,
   MAX_RECORDING_SECONDS,
+  MAX_RECORDINGS_PER_SESSION,
 } from "@/lib/recordings/policy";
 // NOTE: never import lib/media/resolve-url here — its import chain reaches
 // next/cache (server-only) and breaks the client bundle at next build
@@ -39,8 +40,10 @@ import {
 import type { CoverageEntry, FlowModel, TranscriptSegment } from "@/lib/recordings/trace-schema";
 import { StepStrip } from "./record-ui/step-strip";
 import { RestoredBanner } from "./record-ui/restored-banner";
-import { SlotCard } from "./record-ui/slot-card";
+import { CaptureCard } from "./record-ui/capture-card";
+import { TracedList } from "./record-ui/traced-list";
 import { RecapPanel } from "./record-ui/recap-panel";
+import { AgentLoopDiagram } from "./record-ui/agent-loop-diagram";
 
 const STORAGE_KEY = "sf-record-session";
 
@@ -109,7 +112,7 @@ export function RecordClient({
   const [compiledTemplateId, setCompiledTemplateId] = useState<string | null>(null);
   const captureHandles = useRef<Record<number, CaptureHandle>>({});
 
-  // Presentation-only additions for the v2 slot card (record-ui/slot-card.tsx):
+  // Presentation-only additions for the capture card (record-ui/capture-card.tsx):
   // live elapsed-ms while a slot is recording (capture.ts's existing, previously
   // unused onTick option), and the settled clip length once known (from the
   // same CaptureResult/ExtractFromVideoFileResult the upload path already
@@ -308,7 +311,7 @@ export function RecordClient({
         maxSeconds: MAX_RECORDING_SECONDS,
         maxFrames: MAX_FRAMES_PER_RECORDING,
         maxEdgePx: MAX_FRAME_EDGE_PX,
-        // Live elapsed-ms for the slot card's timer (record-ui/slot-card.tsx)
+        // Live elapsed-ms for the capture card's timer (record-ui/capture-card.tsx)
         // — an already-existing capture.ts option, previously unwired.
         onTick: (ms) => setElapsedMs((prev) => ({ ...prev, [slotIndex]: ms })),
         // The browser's native "Stop sharing" bar (or the max-length cap)
@@ -607,6 +610,27 @@ export function RecordClient({
 
   const recapVisible = state.phase === "recap" || state.phase === "approved";
 
+  // Single-slot capture (record v3 S1) — exactly ONE capture card renders:
+  // the first slot that hasn't traced yet (empty/recording/uploading/
+  // compiling/failed). Once every slot has traced, there's nothing left to
+  // capture. Traced slots move to the compact <TracedList> below it.
+  const captureSlot = state.slots.find((slot) => slot.status !== "traced") ?? null;
+  const tracedSlots = state.slots.filter((slot) => slot.status === "traced");
+  // Also gates the traced/failed Re-record buttons (review #1b): no slot
+  // may start while any capture is in flight.
+  const canStart = state.activeSlot === null;
+  const nextEmptySlot = pickFirstEmptySlot(state);
+  // "Make it trustworthy" row (S1): only once something's traced, only when
+  // nothing is mid-capture, and only while a slot remains to fill.
+  const edgeCasePrompt =
+    tracedSlots.length > 0 && canStart && nextEmptySlot !== null
+      ? {
+          onRecord: () => handleStart(nextEmptySlot),
+          onFileChange: (e: ChangeEvent<HTMLInputElement>) => handleFileChange(nextEmptySlot, e),
+          supportsScreenCapture,
+        }
+      : undefined;
+
   return (
     <main className="min-h-screen bg-[#0B0F0E] px-5 py-10 text-[#E7E5DE] md:px-8 md:py-16">
       <div className="mx-auto flex w-full max-w-[1100px] flex-col gap-8">
@@ -634,52 +658,65 @@ export function RecordClient({
           <div className="w-full max-w-[720px]">
             <StepStrip current={currentStep(state)} />
           </div>
+          <div className="mt-6 w-full">
+            <AgentLoopDiagram />
+          </div>
         </header>
 
-        {/* Stacks to one column below ~900px (slots above, recap below) —
-            the two-column layout only kicks in once there's room for both. */}
-        <div className="flex flex-col gap-6 min-[900px]:flex-row">
-          <section aria-label="Recording slots" className="flex flex-1 flex-col gap-3">
+        {/* Stacks to one column below ~900px (capture above, recap below) —
+            the two-column layout only kicks in once there's room for both.
+            Below 720px (mobile), everything centers — see the `items-center
+            text-center min-[720px]:items-stretch min-[720px]:text-left`
+            pairs throughout this section (record v3 S3). */}
+        <div className="flex flex-col items-center gap-6 text-center min-[720px]:items-stretch min-[720px]:text-left min-[900px]:flex-row">
+          <section
+            aria-label="Recording slots"
+            className="flex w-full flex-1 flex-col items-center gap-3 min-[720px]:items-stretch"
+          >
             {state.sessionId ? (
               <RestoredBanner restored={restoredSession} onStartFresh={handleStartFresh} />
             ) : null}
-            {state.slots.map((slot) => {
-              const isActive = state.activeSlot === slot.slotIndex;
-              // Also gates the traced/failed Re-record buttons (review #1b):
-              // no slot may start while any capture is in flight. The empty-
-              // state Record button only renders on empty slots anyway.
-              const canStart = state.activeSlot === null;
-              return (
-                <SlotCard
-                  key={slot.slotIndex}
-                  slot={slot}
-                  isActive={isActive}
-                  canStart={canStart}
-                  sessionReady={!!state.sessionId}
-                  supportsScreenCapture={supportsScreenCapture}
-                  elapsedMs={slot.status === "recording" ? (elapsedMs[slot.slotIndex] ?? 0) : null}
-                  durationMs={slot.status === "traced" ? (slotDurationMs[slot.slotIndex] ?? null) : null}
-                  stepsFound={state.flowModel?.steps.length ?? 0}
-                  fallbackText={fallbackText[slot.slotIndex] ?? ""}
-                  pendingUpload={pendingUpload[slot.slotIndex]}
-                  uploadProgress={uploadProgress[slot.slotIndex]}
-                  onRecord={() => handleStart(slot.slotIndex)}
-                  onStop={() => handleStop(slot.slotIndex)}
-                  onFileChange={(e) => handleFileChange(slot.slotIndex, e)}
-                  onLabelChange={(label) => dispatch({ type: "SET_LABEL", slotIndex: slot.slotIndex, label })}
-                  onFallbackTextChange={(text) =>
-                    setFallbackText((prev) => ({ ...prev, [slot.slotIndex]: text }))
-                  }
-                  onProcessUpload={() => {
-                    const file = pendingUpload[slot.slotIndex];
-                    if (!file) return;
-                    cancelPendingUpload(slot.slotIndex);
-                    void handleFilePicked(slot.slotIndex, file);
-                  }}
-                  onCancelUpload={() => cancelPendingUpload(slot.slotIndex)}
-                />
-              );
-            })}
+
+            {captureSlot ? (
+              <CaptureCard
+                slot={captureSlot}
+                isActive={state.activeSlot === captureSlot.slotIndex}
+                canStart={canStart}
+                sessionReady={!!state.sessionId}
+                supportsScreenCapture={supportsScreenCapture}
+                elapsedMs={captureSlot.status === "recording" ? (elapsedMs[captureSlot.slotIndex] ?? 0) : null}
+                fallbackText={fallbackText[captureSlot.slotIndex] ?? ""}
+                pendingUpload={pendingUpload[captureSlot.slotIndex]}
+                uploadProgress={uploadProgress[captureSlot.slotIndex]}
+                onRecord={() => handleStart(captureSlot.slotIndex)}
+                onStop={() => handleStop(captureSlot.slotIndex)}
+                onFileChange={(e) => handleFileChange(captureSlot.slotIndex, e)}
+                onFallbackTextChange={(text) =>
+                  setFallbackText((prev) => ({ ...prev, [captureSlot.slotIndex]: text }))
+                }
+                onProcessUpload={() => {
+                  const file = pendingUpload[captureSlot.slotIndex];
+                  if (!file) return;
+                  cancelPendingUpload(captureSlot.slotIndex);
+                  void handleFilePicked(captureSlot.slotIndex, file);
+                }}
+                onCancelUpload={() => cancelPendingUpload(captureSlot.slotIndex)}
+              />
+            ) : (
+              <p className="text-[13px] text-[#9CA3AF]">
+                All {MAX_RECORDINGS_PER_SESSION} recording slots are used.
+              </p>
+            )}
+
+            <TracedList
+              slots={tracedSlots}
+              canStart={canStart}
+              sessionReady={!!state.sessionId}
+              stepsFound={state.flowModel?.steps.length ?? 0}
+              durationMsBySlot={slotDurationMs}
+              onLabelChange={(slotIndex, label) => dispatch({ type: "SET_LABEL", slotIndex, label })}
+              onRerecord={(slotIndex) => handleStart(slotIndex)}
+            />
           </section>
 
           {recapVisible ? (
@@ -702,6 +739,7 @@ export function RecordClient({
               onCompileNow={() => void handleCompileNow()}
               onCompileAgent={() => void handleCompileAgent()}
               onApprove={() => dispatch({ type: "APPROVED" })}
+              edgeCasePrompt={edgeCasePrompt}
             />
           ) : null}
         </div>
