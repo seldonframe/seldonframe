@@ -16,6 +16,10 @@ RUN corepack enable
 WORKDIR /app
 
 COPY . .
+# A Windows clone (core.autocrlf) checks shell scripts out as CRLF, which
+# breaks bash inside the Linux build. Normalize them so the image builds the
+# same on any host OS. (node_modules is not in the context — see .dockerignore.)
+RUN find . -name '*.sh' -type f -exec sed -i 's/\r$//' {} +
 RUN pnpm install --frozen-lockfile
 
 # `next build` should not need real secrets — pages are dynamic/authed. The

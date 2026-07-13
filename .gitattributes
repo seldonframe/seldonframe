@@ -8,3 +8,9 @@
 # report on Windows. The underlying fix is keeping these generated
 # files at LF wherever they live.
 packages/core/src/events/event-registry.json eol=lf
+
+# Shell scripts must stay LF or they break bash — notably inside the
+# Docker self-host build, where a Windows `core.autocrlf=true` checkout
+# would otherwise ship CRLF scripts into the Linux image and fail
+# `next build` with `$'\r': command not found`. eol=lf overrides autocrlf.
+*.sh text eol=lf
