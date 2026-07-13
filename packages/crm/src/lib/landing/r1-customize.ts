@@ -23,7 +23,13 @@ import type { R1LandingPayload } from "./r1-payload-prompt";
 const DEFAULT_MODEL =
   process.env.LANDING_PAYLOAD_MODEL?.trim() || "claude-haiku-4-5";
 
-const MAX_TOKENS = 4096;
+// The customize step re-emits the ENTIRE landing payload as JSON, not a diff.
+// A rich landing (services + testimonials + FAQ + footer) serializes well past
+// 4096 output tokens, so the old cap truncated the response mid-string — which
+// dropped the closing ``` fence and surfaced a cryptic "JSON parse failed" to
+// the operator (see the truncation-aware error below). 8192 comfortably fits a
+// full re-emitted payload for claude-haiku-4-5.
+const MAX_TOKENS = 8192;
 
 const R1_SLUG = "r1";
 const R1_STATUS = "published";
@@ -48,10 +54,16 @@ function isR1LandingPayload(v: unknown): v is R1LandingPayload {
 }
 
 function stripFences(text: string): string {
-  const trimmed = text.trim();
-  const fenceMatch = trimmed.match(/^```(?:json)?\s*\n?([\s\S]*?)\n?```\s*$/);
-  if (fenceMatch) return fenceMatch[1].trim();
-  return trimmed;
+  let t = text.trim();
+  // Strip a LEADING ```json / ``` fence independently of the closing one.
+  // The old fully-anchored regex required a matching closer; when the model
+  // hit max_tokens and its output was truncated mid-payload, the closing
+  // fence never arrived, the regex didn't match, and the leading ```json
+  // survived into JSON.parse — the exact cause of the "JSON parse failed.
+  // Preview: ```json {…" error operators saw. Strip each side on its own.
+  t = t.replace(/^```(?:json)?[ \t]*\r?\n?/i, "");
+  t = t.replace(/\r?\n?```$/, "");
+  return t.trim();
 }
 
 /** Fallback for prose-wrapped JSON (e.g. "Sure, here's the update: {...}
@@ -208,6 +220,7 @@ export async function customizeLandingR1(args: {
 
   // Step 3: Call LLM.
   let rawText: string;
+  let stopReason: string | null = null;
   try {
     const response = await client.messages.create({
       model: DEFAULT_MODEL,
@@ -216,6 +229,7 @@ export async function customizeLandingR1(args: {
       messages: [{ role: "user", content: userMessage }],
     });
 
+    stopReason = (response as { stop_reason?: string | null }).stop_reason ?? null;
     rawText = pickText(
       response.content as Array<{ type: string; text?: string }>,
     );
@@ -244,6 +258,14 @@ export async function customizeLandingR1(args: {
   }
 
   // Step 4: Parse + validate.
+  // When the model ran out of output tokens (stop_reason=max_tokens) the JSON
+  // is truncated and unbalanced — extractFirstJsonObject can't recover it — so
+  // give the operator an honest, actionable message instead of a raw preview.
+  const parseFailDetail = (): string =>
+    stopReason === "max_tokens"
+      ? "The edit was too large to apply in one step — the model's response was cut off. Try a more specific instruction (edit one section at a time)."
+      : `JSON parse failed. Preview: ${stripFences(rawText).slice(0, 200)}`;
+
   const cleaned = stripFences(rawText);
   let parsed: unknown;
   try {
@@ -251,20 +273,12 @@ export async function customizeLandingR1(args: {
   } catch {
     const extracted = extractFirstJsonObject(cleaned);
     if (extracted === null) {
-      return {
-        ok: false,
-        reason: "invalid_payload",
-        detail: `JSON parse failed. Preview: ${cleaned.slice(0, 200)}`,
-      };
+      return { ok: false, reason: "invalid_payload", detail: parseFailDetail() };
     }
     try {
       parsed = JSON.parse(extracted);
     } catch {
-      return {
-        ok: false,
-        reason: "invalid_payload",
-        detail: `JSON parse failed. Preview: ${cleaned.slice(0, 200)}`,
-      };
+      return { ok: false, reason: "invalid_payload", detail: parseFailDetail() };
     }
   }
 

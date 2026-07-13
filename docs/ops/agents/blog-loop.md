@@ -21,11 +21,11 @@ This is the **information-gain** article loop — the counterpart to the weekly 
 ## Step 1 — Source (information gain first, keyword second)
 Invoke the **`information-gain` skill** (`.claude/skills/information-gain`):
 1. Read `docs/strategy/youtube-sources.md` and pick a channel/cluster with fresh, specific founder stories.
-2. Check `docs/strategy/youtube-transcripts/` FIRST — if a human dropped a transcript, use it (the first line is the source URL).
+2. Check `docs/strategy/youtube-transcripts/` FIRST — use the first dropped transcript whose source video is NOT already published. **Dedup (never republish the same video):** for each dropped transcript, take its line-1 source URL and grep it across `packages/crm/src/lib/seo/blog/*.ts` — if any published `BlogArticle` already carries that `sourceVideo.url`, that transcript is DONE; skip it. This is the guard that stops a re-run (or the daily run after you merge an article) from duplicating a video you already shipped. Leaving a used transcript in the folder is fine — the dedup makes it a no-op.
 3. Otherwise fetch one: `node scripts/youtube-transcript.mjs "<video-url>" --json`.
 4. Pick the ONE video with the richest original material (real numbers, a real decision, a real failure).
 
-**If no real transcript is available today** (fetch blocked AND nothing in the drop folder): STOP. Send the recap email saying "no source today — no article" and exit 0. **Never invent a transcript or write a sourceless "founder story."** A dry day is a correct outcome, not a failure to paper over.
+**If no UNUSED transcript is available today** (every dropped transcript is already published AND the fetch is blocked): STOP. Send the recap email saying "no source today — no article" and exit 0. **Never invent a transcript or write a sourceless "founder story."** A dry day is a correct outcome, not a failure to paper over.
 
 ## Step 2 — Mine the non-commodity material
 From the transcript, extract ONLY what exists nowhere else in writing — for each, keep the **exact transcript snippet** it came from (you'll need it in Step 4):
@@ -51,9 +51,12 @@ This is the whole reason a daily YouTube loop is safe. For **every specific clai
 Then a machine-spun check: read it aloud in your head — if it reads like generic AI filler rather than a specific story, it fails; rewrite or drop.
 
 ## Step 5 — Draft-first publish (PR, do NOT auto-merge)
-If the gate is green: commit the article on `chore/blog-loop-YYYY-MM-DD`, push, `gh pr create` with a body that includes the source video + the Step-4 claim→snippet table. **STOP there — do not merge.** Max reviews the PR (a ~30-second glance at the claim→snippet table) and merges himself.
+The `/blog` surface is the data-driven article engine (mirrors `/guides`): a `BlogArticle` registry entry + one shared template + a `.md` twin, not hand-coded React. Instead of a bare markdown draft, this step publishes the article INTO the engine:
+1. Write `packages/crm/src/lib/seo/blog/<slug>.ts` exporting `article: BlogArticle` (see `packages/crm/src/lib/seo/blog/types.ts`). `sourceVideo` is **REQUIRED** for loop articles (the information-gain citation) — never omit it here (the omission is only valid for hand-authored, non-video posts like the seed article).
+2. Add the `.md` twin route folder `packages/crm/src/app/blog/<slug>.md/route.ts` (mirror an existing one, e.g. `why-original-content-wins-seo.md/route.ts`).
+3. Wire the new article into `packages/crm/src/lib/seo/blog/index.ts` (import + add to `BLOG_ARTICLES`).
+4. Commit all three files on `chore/blog-loop-YYYY-MM-DD`, push, `gh pr create` with a body that includes the source video + the Step-4 claim→snippet table. **STOP there — do not merge.** Max reviews the PR (a ~30-second glance at the claim→snippet table) and merges himself.
 - **Auto-merge flip (Max only):** once Max trusts the loop, he can change this step to `gh pr merge <n> --merge` for hands-off publishing. Until this line is edited, the loop never merges itself.
-- **Live-on-site note:** the `/blog` surface is hand-coded React per post today, so this loop writes a publish-ready markdown draft, not a live page. Making articles auto-live requires the small **data-driven `/blog` article engine** (the planned follow-up slice: a `BlogArticle` registry + one template + `.md` twin, like the guides engine). Until that ships, "publish" = merge the markdown draft; Max (or the engine, later) renders it.
 
 ## Step 6 — Recap email (Max's review channel)
 Send a recap via Resend on EVERY run — published-draft, dry-day, or gate-stopped (silence is the only failure Max can't see). Read `RESEND_SENDING_KEY` from `packages/crm/.env.local` (if missing, skip + say so). POST https://api.resend.com/emails, `Authorization: Bearer <key>`:

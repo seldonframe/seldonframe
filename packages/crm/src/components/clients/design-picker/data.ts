@@ -27,7 +27,35 @@ export const DESIGNS: DesignTemplate[] = [
     niche: ["massage", "bodywork", "recovery"], swatch: ["#7c5440", "#ece3d6"] },
 ];
 
+// Archetype track — the 8 aesthetic archetypes offered to trades/generic
+// (non-health) workspaces. These re-skin the landing-r1 render (palette + font
+// + hero variant); switching is content-safe. No thumbnails yet — the picker's
+// <Thumb> degrades to a named placeholder, and the swatches carry the color
+// cue. Ids/labels/swatches mirror ARCHETYPES in
+// lib/workspace/aesthetic-archetypes.ts (kept as a static list so the client
+// bundle doesn't pull in the full archetype registry).
+export const ARCHETYPE_DESIGNS: DesignTemplate[] = [
+  { id: "bold-urgency", name: "Bold Urgency",
+    niche: ["emergency HVAC", "plumbing", "electrical"], swatch: ["#cc2d2d", "#1a1a1a"] },
+  { id: "editorial-warm", name: "Editorial Warm",
+    niche: ["craft trades", "family-owned"], swatch: ["#9c2b1d", "#ece5d8"] },
+  { id: "soft-residential", name: "Soft Residential",
+    niche: ["cleaning", "landscaping", "lawn"], swatch: ["#3d6e4f", "#f2efe8"] },
+  { id: "clinical-trust", name: "Clinical Trust",
+    niche: ["medical", "dental", "legal"], swatch: ["#1e3a5f", "#eef2f6"] },
+  { id: "cinematic-aspirational", name: "Cinematic Luxe",
+    niche: ["medspa", "fitness", "wellness"], swatch: ["#a08562", "#1f1b16"] },
+  { id: "technical-restrained", name: "Technical",
+    niche: ["agency", "B2B", "SaaS"], swatch: ["#2a2a2a", "#f4f4f5"] },
+  { id: "brutalist", name: "Brutalist",
+    niche: ["creative studios", "concept-driven"], swatch: ["#0a0a0a", "#f5f5f5"] },
+  { id: "midnight-craft", name: "Midnight Craft",
+    niche: ["premium dark trades", "design-build"], swatch: ["#34d399", "#0b0f0d"] },
+];
+
+const ALL_DESIGNS = [...DESIGNS, ...ARCHETYPE_DESIGNS];
+
 export function templateById(id: DesignId): AnyTemplate {
   if (!id || id === "auto") return AUTO;
-  return DESIGNS.find((d) => d.id === id) || AUTO;
+  return ALL_DESIGNS.find((d) => d.id === id) || AUTO;
 }

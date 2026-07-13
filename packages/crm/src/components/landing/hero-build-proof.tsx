@@ -26,7 +26,9 @@ import { useState } from "react";
 import { Play } from "lucide-react";
 
 const VIDEO_SRC = "/marketing/walkthrough/spin-up-60-seconds.mp4";
-const POSTER_SRC = "/shots/rapid-rooter-plumbing-828a.jpg";
+// Poster = the first LIVE_DEMOS slug's screenshot (keep in sync with
+// marketing-demo-marquee.tsx's first entry).
+const POSTER_SRC = "/shots/j-marin-heating-air-conditioning-9599.jpg";
 
 export function HeroBuildProof({
   ungatedBuildEnabled = false,

@@ -2181,4 +2181,27 @@ C4 close-out with empirical SLICE 11 data.
   helper that passes an error body downstream launders it into a fabricated
   claim. Fail honestly (point to the manual route) rather than pass through.
 
-- L-40 (2026-07-13): Subagent ran git in the WRONG checkout (bare `cd "<repo>"` → stale primary branch, not the feature worktree); pin dir hard + assert `rev-parse` before acting + run the covering test yourself — a cheap model's "done" is unverified. Also: `git stash drop` reads the SHARED repo-wide stack; list before dropping. See docs/learnings/2026-07-13-wrong-checkout-subagent.md
+---
+
+## L-40 — "Full parity" between two surfaces means matching every structured-data TYPE, and mechanical gates won't catch a missing one
+
+- **Trigger:** Built a `/blog` engine required to have "full SEO/GEO parity"
+  with `/guides`. It emitted Article JSON-LD but MISSED FAQPage JSON-LD (guides
+  emit both). `blog.spec` 17/17, `guides.spec` 861/861, tsc clean, `pnpm build`
+  green — every mechanical gate passed. Only the opus review caught the gap.
+  Same class surfaced as nits: author name split ("Max Houle" vs the canonical
+  `AUTHOR.name` "Maxime Houle") desyncing JSON-LD from the Person `sameAs`.
+- **Rule:** When the requirement is *parity* with an existing surface, don't
+  trust green specs/tsc/build — they check the new surface in isolation, not
+  against the reference. Explicitly DIFF the reference component's
+  structured-data emission (every `@type`: Article, FAQPage, Person, …) against
+  the new one, and reconcile shared constants (`AUTHOR.name`, canonical host).
+  Add the parity items the reference has to the new surface's review checklist.
+  Divergence is fine WHEN principled (blog FAQ optional → FAQPage conditional;
+  `sourceVideo` optional → `isBasedOn` conditional) — but it must be a decision,
+  not an omission. Never emit structured data you can't substantiate (use
+  Article `isBasedOn` a real URL, not a `VideoObject` with fabricated fields).
+
+---
+
+- L-41 (2026-07-13): Subagent ran git in the WRONG checkout (bare `cd "<repo>"` → stale primary branch, not the feature worktree); pin dir hard + assert `rev-parse` before acting + run the covering test yourself — a cheap model's "done" is unverified. Also: `git stash drop` reads the SHARED repo-wide stack; list before dropping. See docs/learnings/2026-07-13-wrong-checkout-subagent.md

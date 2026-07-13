@@ -10,20 +10,24 @@ import { useEffect, useState, useTransition } from "react";
 
 import { ReadyDesignModule } from "@/components/clients/design-picker/ReadyDesignModule";
 import { PickerStyles } from "@/components/clients/design-picker/Styles";
-import type { DesignId } from "@/components/clients/design-picker/types";
+import type { DesignId, DesignTemplate } from "@/components/clients/design-picker/types";
 
 import { setLandingTemplateAction } from "./actions";
 
 type Props = {
   slug: string;
-  /** persisted choice: "auto" or a template id */
+  /** persisted choice: "auto" or a template/archetype id */
   initialValue: DesignId;
-  /** what Auto resolves to for this workspace (a concrete template id) */
+  /** what Auto resolves to for this workspace (a concrete template/archetype id) */
   autoResolvedId?: Exclude<DesignId, "auto">;
   autoReason?: string;
+  /** design options for this workspace's track (health templates vs archetypes) */
+  designs?: DesignTemplate[];
+  sectionLabel?: string;
+  autoNote?: string;
 };
 
-export function ReadyDesignPicker({ slug, initialValue, autoResolvedId, autoReason }: Props) {
+export function ReadyDesignPicker({ slug, initialValue, autoResolvedId, autoReason, designs, sectionLabel, autoNote }: Props) {
   const [value, setValue] = useState<DesignId>(initialValue);
   const [mobile, setMobile] = useState(false);
   const [, startTransition] = useTransition();
@@ -52,6 +56,9 @@ export function ReadyDesignPicker({ slug, initialValue, autoResolvedId, autoReas
         autoReason={autoReason}
         onChange={onChange}
         mobile={mobile}
+        designs={designs}
+        sectionLabel={sectionLabel}
+        autoNote={autoNote}
       />
     </>
   );

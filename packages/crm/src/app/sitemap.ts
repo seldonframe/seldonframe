@@ -18,6 +18,7 @@ import { COMPETITORS } from "@/lib/seo/alternative-pages";
 import { VS_PAIRS, vsSlug } from "@/lib/seo/alternative-pages-extras";
 import { allBestSlugs } from "@/lib/seo/best-pages";
 import { allGuideSlugs } from "@/lib/seo/guides";
+import { allBlogSlugs } from "@/lib/seo/blog";
 import { allPricingSlugs } from "@/lib/seo/competitor-pricing";
 import { listMarketplaceAgentsFromDb } from "@/lib/marketplace/agent-listings";
 import { MARKETPLACE_SEED } from "@/components/marketplace/marketplace-seed";
@@ -198,6 +199,12 @@ export default async function sitemap(): Promise<MetadataRoute.Sitemap> {
   entries.push({ url: `${base}/guides`, lastModified: now, changeFrequency: "weekly", priority: 0.7 });
   for (const slug of allGuideSlugs()) {
     entries.push({ url: `${base}/guides/${slug}`, lastModified: now, changeFrequency: "monthly", priority: 0.6 });
+  }
+
+  // Blog (original, sourced articles — the data-driven /blog engine).
+  entries.push({ url: `${base}/blog`, lastModified: now, changeFrequency: "weekly", priority: 0.6 });
+  for (const slug of allBlogSlugs()) {
+    entries.push({ url: `${base}/blog/${slug}`, lastModified: now, changeFrequency: "monthly", priority: 0.6 });
   }
 
   // Interactive data charts (/charts hub + the 4 flagship pages).

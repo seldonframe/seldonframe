@@ -53,6 +53,13 @@ export interface OrgTheme {
    *  archetype-curated Unsplash fallback. Optional for backward compat:
    *  workspaces created pre-1.54 lazy-reclassify on first hero persist. */
   aestheticArchetype?: AestheticArchetypeId;
+  /** The operator's *intent* for the archetype (non-health "design track"):
+   *  "auto" (system classifies per soul) or a specific archetype id. Mirrors
+   *  landingTemplateChoice for the health track — drives the ready-page
+   *  picker's "Auto-picked for X" vs "Chosen by you" copy for trades/generic
+   *  workspaces. `aestheticArchetype` holds the resolved id; this remembers
+   *  whether it was auto-classified or hand-picked. Absent → treated as auto. */
+  aestheticArchetypeChoice?: string;
   /** Health-vertical templates pilot — id of the premium full-page landing
    *  template to render at /w/[slug] (see components/landing-templates/
    *  registry.ts). When set + registered, the /w route renders that template
