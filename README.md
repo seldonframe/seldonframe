@@ -15,7 +15,7 @@ The open-source platform that gives your coding agent the primitives real produc
 [![X](https://img.shields.io/badge/follow-%40seldonframe-1d9bf0.svg)](https://x.com/seldonframe)
 [![smithery badge](https://smithery.ai/badge/maximehoule100/seldonframe)](https://smithery.ai/servers/maximehoule100/seldonframe)
 
-[Website](https://seldonframe.com) · [For builders](https://seldonframe.com/build) · [Docs](https://seldonframe.com/docs) · [Live demo](https://phoenix-ac-air-conditioning-heating-inc.app.seldonframe.com) · [Discord](https://discord.gg/sbVUu976NW)
+[Website](https://seldonframe.com) · [For builders](https://seldonframe.com/build) · [Docs](https://seldonframe.com/docs) · [Live demo](https://j-marin-heating-air-conditioning-9599.app.seldonframe.com/) · [Discord](https://discord.gg/sbVUu976NW)
 
 </div>
 
@@ -28,14 +28,31 @@ claude mcp add seldonframe -- npx -y @seldonframe/mcp
 ```
 
 ```
-> Build me an AI receptionist for an HVAC company in Phoenix.
+> Build me an AI receptionist for an HVAC company in New Orleans.
 
   ✓ Live at acme-hvac.app.seldonframe.com
 ```
 
 No API key. No signup form. **Your first workspace is free forever.** That one sentence stands up a hosted front office — website, booking page, intake form, CRM — with an AI agent already answering on chat and booking against the real calendar. Add a phone number and it answers calls too.
 
-**See a real one:** [this HVAC workspace](https://phoenix-ac-air-conditioning-heating-inc.app.seldonframe.com) was generated from a public Google Maps listing in about 3 minutes. The chatbot on it books real appointments.
+**See a real one — a live workspace, not a mockup:**
+
+<table>
+  <tr>
+    <td width="50%">
+      <a href="https://j-marin-heating-air-conditioning-9599.app.seldonframe.com/"><img src=".github/assets/demo-workspace.png" alt="A live SeldonFrame workspace — generated website with quote intake and the chat agent (bottom right)" /></a>
+    </td>
+    <td width="50%">
+      <a href="https://j-marin-heating-air-conditioning-9599.app.seldonframe.com/book"><img src=".github/assets/demo-booking.png" alt="The same workspace's booking page — the real calendar the agent books against" /></a>
+    </td>
+  </tr>
+  <tr>
+    <td align="center"><sub>The generated site — quote intake, reviews, and the chat agent (bottom right)</sub></td>
+    <td align="center"><sub>Its booking page — the real calendar the agent books against</sub></td>
+  </tr>
+</table>
+
+Click either screenshot — [this HVAC workspace](https://j-marin-heating-air-conditioning-9599.app.seldonframe.com/) is live, and the chatbot on it books real appointments. Eight more live demo workspaces are on [seldonframe.com](https://seldonframe.com).
 
 ---
 
@@ -280,6 +297,15 @@ Your builder hub is **[seldonframe.com/build](https://seldonframe.com/build)** �
 | **Hosted — unlimited workspaces** | $29/mo flat (white-label + voice included) |
 | **Your AI tokens** | Bring your own key — we never mark up usage |
 | **When you sell** | 5% only when the marketplace brings the buyer · ~2% through your own storefront · **$0 anywhere else** |
+## Tech stack
+
+- **Next.js 16** (App Router) + **React 19** + **TypeScript** — one deployable app: dashboard, generated public sites, and API
+- **Drizzle ORM** on **Postgres** (Neon in production; any Postgres 15+ when self-hosting)
+- **Tailwind CSS 4**
+- **pnpm workspaces + Turborepo** (monorepo)
+- **MCP server** — [`@seldonframe/mcp`](https://www.npmjs.com/package/@seldonframe/mcp), plain Node, runs locally inside your IDE
+- **Anthropic / OpenAI** (bring your own key) · **Stripe** payments · **Twilio** voice/SMS · **Resend** email
+
 ## Contributing
 
 The highest-leverage PR here is **an agent template or a vertical skill-pack** — merged templates ship to the marketplace where every SeldonFrame user can find them, and you can list your own paid variants alongside. Core, connector, and eval PRs are equally welcome.
