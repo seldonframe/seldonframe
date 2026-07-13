@@ -212,6 +212,33 @@ export function buildRunEventAgentDeps(orgId?: string): RunEventAgentDeps {
         "@/lib/agents/stateless-turn"
       );
 
+      // Email-agent slice (Part A2) — for an email-channel action-only agent
+      // (e.g. a record-compiled inbox-watch agent), read the operator's
+      // sent-mail voice profile by exact path so a scheduled/event fire
+      // drafts in the operator's voice too. Read error / missing note → null
+      // (no-op) — never blocks the fire.
+      let voiceProfileNote: string | null = null;
+      if (agent.channel === "email") {
+        try {
+          const { readBrainNote } = await import("@/lib/brain/store");
+          const { VOICE_PROFILE_NOTE_PATH } = await import(
+            "@/lib/agents/voice-profile/ingest-sent-mail"
+          );
+          const note = await readBrainNote({
+            orgId,
+            scope: "workspace",
+            path: VOICE_PROFILE_NOTE_PATH,
+          });
+          voiceProfileNote = note?.body ?? null;
+        } catch (err) {
+          console.warn(
+            `[run-event-agent-deps] voice-profile note read failed for org ${orgId}:`,
+            err instanceof Error ? err.message : String(err),
+          );
+          voiceProfileNote = null;
+        }
+      }
+
       const turn = await runStatelessAgentTurn({
         orgId,
         orgSlug: org.slug,
@@ -222,6 +249,7 @@ export function buildRunEventAgentDeps(orgId?: string): RunEventAgentDeps {
             : null,
         timezone: org.timezone ?? "UTC",
         blueprint,
+        voiceProfileNote,
         // The synthetic trigger: a scheduled/event poster has no customer message,
         // so we hand it a "go do your job" nudge that drives it to USE its tool.
         messages: [

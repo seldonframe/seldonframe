@@ -118,6 +118,11 @@ export type RunStatelessAgentTurnInput = {
    *  and every other caller leave it unset (real connector execution,
    *  unchanged). Default false/undefined. */
   sandboxConnectors?: boolean;
+  /** Email-agent slice (Part A2) — the operator's sent-mail voice profile
+   *  (Brain note `voice-profiles/email.md`), for an email-channel event/
+   *  schedule run. The caller (a DB-coupled deps builder) resolves it, since
+   *  this module stays DB-free; absent/null → no-op, byte-for-byte unchanged. */
+  voiceProfileNote?: string | null;
 };
 
 /**
@@ -252,6 +257,7 @@ export async function runStatelessAgentTurn(
     testMode: input.testMode,
     now: input.now ?? new Date(),
     timezone: input.timezone || "UTC",
+    voiceProfileNote: input.voiceProfileNote,
   });
 
   // Same seam as production: native (capability-filtered) tools plus any MCP

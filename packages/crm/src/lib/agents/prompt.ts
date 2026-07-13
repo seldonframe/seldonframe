@@ -42,6 +42,12 @@ export type ComposeSystemPromptInput = {
   archetype: string;
   /** Optional brain notes loaded for this conversation context. */
   brainNotes?: string[];
+  /** Email-agent slice (Part A2) — the operator's sent-mail voice profile
+   *  (Brain note `voice-profiles/email.md`), when this is an email-channel
+   *  turn/run and the note exists. Rendered as its OWN section, distinct
+   *  from `brainNotes`, so the model treats it as a style directive rather
+   *  than a learned fact. Absent/null → no-op (byte-for-byte unchanged). */
+  voiceProfileNote?: string | null;
   /** Whether this is a test-mode conversation. Affects tool guidance
    *  ("note: any booking actions in test mode are sandboxed"). */
   testMode?: boolean;
@@ -149,6 +155,7 @@ export async function composeSystemPrompt(input: ComposeSystemPromptInput): Prom
     blueprint,
     archetype,
     brainNotes,
+    voiceProfileNote,
     testMode,
     now,
     timezone,
@@ -421,6 +428,14 @@ export async function composeSystemPrompt(input: ComposeSystemPromptInput): Prom
     sections.push(
       `## Patterns we've learned from past conversations\n${brainNotes.join("\n")}`,
     );
+  }
+
+  // Email-agent slice (Part A2) — the operator's sent-mail voice profile, when
+  // present. A SEPARATE section from brainNotes (above): that section frames
+  // learned patterns as facts to reuse, this one is a STYLE directive — how to
+  // write, not what happened. No-op when absent (byte-for-byte unchanged).
+  if (voiceProfileNote && voiceProfileNote.trim().length > 0) {
+    sections.push(`## Write in the operator's voice\n\n${voiceProfileNote.trim()}`);
   }
 
   // Hard rules from skill-pack — emitted AFTER dynamic operator content
