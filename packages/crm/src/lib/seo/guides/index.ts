@@ -48,6 +48,9 @@ import { guide as onlineBookingOptionsForServiceBusinesses } from "./online-book
 import { guide as howToGetMoreGoogleReviews } from "./how-to-get-more-google-reviews";
 import { guide as howToRespondToANegativeReview } from "./how-to-respond-to-a-negative-review";
 import { guide as missedCallTextBack } from "./missed-call-text-back";
+import { guide as howToAskForAGoogleReview } from "./how-to-ask-for-a-google-review";
+import { guide as reviewResponseTemplates } from "./review-response-templates";
+import { guide as howToChooseAnAiPhoneAnsweringService } from "./how-to-choose-an-ai-phone-answering-service";
 import { guide as onePersonCompanyOs } from "./one-person-company-os";
 import { guide as howMuchDoesGohighlevelCost } from "./how-much-does-gohighlevel-cost";
 import { guide as gohighlevelPricingPlansExplained } from "./gohighlevel-pricing-plans-explained";
@@ -210,6 +213,9 @@ export const GUIDES: Guide[] = [
   howDoAiAgentsGetPaid,
   howToMakeAnAiAgentReliable,
   aiAgentStatistics,
+  howToChooseAnAiPhoneAnsweringService,
+  howToAskForAGoogleReview,
+  reviewResponseTemplates,
 ];
 
 export function getGuide(slug: string): Guide {
