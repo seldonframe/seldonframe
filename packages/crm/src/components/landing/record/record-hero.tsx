@@ -36,7 +36,7 @@ export function RecordHero({
 }) {
   return (
     <section
-      id="top"
+      id="record-top"
       aria-label="Record how you work"
       className="relative flex flex-col items-center px-5 pb-16 pt-[100px] md:px-8 md:pb-20 md:pt-[120px]"
     >

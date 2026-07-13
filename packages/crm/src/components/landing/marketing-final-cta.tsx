@@ -63,7 +63,7 @@ export function MarketingFinalCta({
         <div className="mt-9 flex flex-wrap items-center justify-center gap-4">
           {variant === "record" ? (
             <a
-              href="#top"
+              href="#record-top"
               className="inline-flex items-center gap-2.5 rounded-full bg-[var(--lp-cta-slab-ink)] px-7 py-4 text-[15px] font-[500] text-[var(--lp-cta-slab)] shadow-[0_1px_2px_rgba(0,0,0,.2),0_12px_30px_rgba(0,0,0,.25),inset_0_1.5px_0_rgba(255,255,255,.6)] transition-all hover:-translate-y-[1.5px] active:translate-y-px focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[var(--lp-accent)]"
             >
               <span className="size-[7px] rounded-full bg-[var(--lp-accent)]" aria-hidden />

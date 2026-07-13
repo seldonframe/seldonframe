@@ -130,7 +130,11 @@ describe("<LandingModeShell> SSR", () => {
 
 describe("<UnifiedLanding> composition (Task 9)", () => {
   test("record mode: record-stack copy present, data-mode=record, build stack mounted-but-hidden", () => {
-    const html = renderUnifiedLanding({ initialMode: "record", recordEnabled: true });
+    const html = renderUnifiedLanding({
+      initialMode: "record",
+      recordEnabled: true,
+      urlStrategy: "replace-state",
+    });
 
     // Record-stack copy is in the SSR HTML.
     assert.match(html, /No signup to start/);
@@ -157,5 +161,21 @@ describe("<UnifiedLanding> composition (Task 9)", () => {
     const html = renderUnifiedLanding({ initialMode: "record", recordEnabled: false });
     assert.doesNotMatch(html, /Record yourself working/);
     assert.match(html, /data-mode="build"/);
+  });
+
+  test("/record (navigate-home): build stack not mounted at all — single FAQPage, no build hero copy", () => {
+    const html = renderUnifiedLanding({
+      initialMode: "record",
+      recordEnabled: true,
+      urlStrategy: "navigate-home",
+      tierLadderOn: false,
+      ungatedBuildEnabled: false,
+      recordFaqWithSchema: true,
+    });
+
+    const faqPageMatches = html.match(/FAQPage/g) ?? [];
+    assert.equal(faqPageMatches.length, 1, "expected exactly one FAQPage schema on /record");
+
+    assert.doesNotMatch(html, /Start a service business/);
   });
 });

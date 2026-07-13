@@ -77,10 +77,20 @@ export function LandingModeShell({
         <main id="main-content">
           {/* Build stack stays mounted-but-hidden so hero input state
               survives a round-trip flip; record stack mounts on demand
-              so its client bundle doesn't hydrate on the default view. */}
-          <div hidden={mode !== "build"} className="lp-stack">
-            {buildStack}
-          </div>
+              so its client bundle doesn't hydrate on the default view.
+              This mounted-but-hidden trick only makes sense where the
+              in-place flip exists (urlStrategy === "replace-state", i.e.
+              on `/`). On `/record`, flipping to build is a full
+              navigation (setMode("build") calls window.location.assign
+              and `mode` never becomes "build" there), so mounting the
+              build stack on that route is provably dead weight — and it
+              was producing a duplicate FAQPage schema + duplicate
+              element ids on an indexable page. */}
+          {urlStrategy === "replace-state" ? (
+            <div hidden={mode !== "build"} className="lp-stack">
+              {buildStack}
+            </div>
+          ) : null}
           {mode === "record" ? <div className="lp-stack">{recordStack}</div> : null}
         </main>
         {footer}

@@ -77,7 +77,7 @@ export function RecapPanel({
       style={{ borderColor: "var(--lp-border-soft)", background: "#12171533" }}
     >
       <div>
-        <p className="text-[10px] font-[600] uppercase tracking-[0.12em]" style={{ color: "var(--lp-accent)" }}>
+        <p className="text-[13.5px] font-[600] uppercase tracking-[0.12em]" style={{ color: "var(--lp-accent)" }}>
           What Seldon understood
         </p>
         <h2 className="mt-2.5 text-[15px] font-[600]" style={{ color: "var(--lp-ink)" }}>
@@ -112,7 +112,7 @@ export function RecapPanel({
                 <div className="flex flex-wrap items-center gap-2">
                   <p className="text-[13.5px]" style={{ color: "var(--lp-ink)" }}>{step.action}</p>
                   <span
-                    className="rounded-[4px] border px-1.5 py-px text-[10px]"
+                    className="rounded-[4px] border px-2 py-0.5 text-[13.5px]"
                     style={{ borderColor: "var(--lp-border-soft)", color: "var(--lp-body)" }}
                   >
                     {step.app}
@@ -167,7 +167,10 @@ export function RecapPanel({
       {edgeCasePrompt && phase === "recap" ? (
         <div
           className="flex flex-col gap-2.5 rounded-[10px] border p-3"
-          style={{ borderColor: "rgba(20,184,166,.22)", background: "var(--lp-accent-soft)" }}
+          style={{
+            borderColor: "color-mix(in oklab, var(--lp-accent) 22%, transparent)",
+            background: "var(--lp-accent-soft)",
+          }}
         >
           <div>
             <p className="text-[13.5px] font-[600]" style={{ color: "var(--lp-ink)" }}>Make it trustworthy</p>

@@ -28,9 +28,17 @@ export function StepStrip({ current }: { current: 1 | 2 | 3 }) {
             <div
               className="mt-0.5 flex size-7 shrink-0 items-center justify-center rounded-full border text-[13px] font-[600] tabular-nums"
               style={{
-                background: isDone ? "var(--lp-accent)" : isCurrent ? "rgba(20,184,166,.14)" : "transparent",
+                background: isDone
+                  ? "var(--lp-accent)"
+                  : isCurrent
+                    ? "color-mix(in oklab, var(--lp-accent) 14%, transparent)"
+                    : "transparent",
                 color: isDone ? "var(--lp-on-accent)" : isCurrent ? "var(--lp-accent-strong)" : "var(--lp-muted)",
-                borderColor: isDone ? "var(--lp-accent)" : isCurrent ? "rgba(20,184,166,.5)" : "var(--lp-border)",
+                borderColor: isDone
+                  ? "var(--lp-accent)"
+                  : isCurrent
+                    ? "color-mix(in oklab, var(--lp-accent) 50%, transparent)"
+                    : "var(--lp-border)",
               }}
             >
               {isDone ? (

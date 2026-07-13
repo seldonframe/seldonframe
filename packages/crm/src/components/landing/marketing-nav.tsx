@@ -118,7 +118,7 @@ export function MarketingNav() {
           </div>
           <Link
             href="/login"
-            className="hidden h-[34px] items-center whitespace-nowrap rounded-full border border-[var(--lp-border)] bg-transparent px-4 text-[13.5px] font-medium text-[var(--lp-muted)] transition-colors hover:border-[var(--lp-border)] hover:text-[var(--lp-ink)] sm:inline-flex"
+            className="hidden h-[34px] items-center whitespace-nowrap rounded-full border border-[var(--lp-border)] bg-transparent px-4 text-[13.5px] font-medium text-[var(--lp-muted)] transition-colors hover:border-[color-mix(in_oklab,var(--lp-ink)_28%,transparent)] hover:text-[var(--lp-ink)] sm:inline-flex"
           >
             Log in
           </Link>
