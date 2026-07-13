@@ -232,25 +232,29 @@ export function RecapPanel({
         </div>
       </div>
 
-      {phase === "recap" && isAuthed ? (
-        <button
-          type="button"
-          disabled={compiling}
-          onClick={onCompileNow}
-          className="mt-1 inline-flex items-center justify-center gap-2.5 rounded-full bg-[#14B8A6] px-5 py-3 text-[14px] font-[600] text-[#0B0F0E] disabled:opacity-50"
-        >
-          {compiling ? "Compiling..." : "Looks right — compile my agent"}
-        </button>
-      ) : null}
-
-      {phase === "recap" && !isAuthed ? (
-        <a
-          href={claimHref}
-          onClick={onApprove}
-          className="mt-1 inline-flex items-center justify-center gap-2.5 rounded-full bg-[#14B8A6] px-5 py-3 text-[14px] font-[600] text-[#0B0F0E]"
-        >
-          Looks right — claim &amp; compile my agent
-        </a>
+      {/* record v3 S3 — sticky bottom claim/compile CTA on mobile (<720px)
+          once the recap is ready; desktop keeps it inline in the panel. */}
+      {phase === "recap" ? (
+        <div className="sticky bottom-0 -mx-5 -mb-5 border-t border-[rgba(231,229,222,.08)] bg-[#0B0F0E]/95 px-5 py-3 backdrop-blur min-[720px]:static min-[720px]:m-0 min-[720px]:border-0 min-[720px]:bg-transparent min-[720px]:p-0 min-[720px]:backdrop-blur-none">
+          {isAuthed ? (
+            <button
+              type="button"
+              disabled={compiling}
+              onClick={onCompileNow}
+              className="mt-1 inline-flex w-full items-center justify-center gap-2.5 rounded-full bg-[#14B8A6] px-5 py-3 text-[14px] font-[600] text-[#0B0F0E] disabled:opacity-50 min-[720px]:w-auto"
+            >
+              {compiling ? "Compiling..." : "Looks right — compile my agent"}
+            </button>
+          ) : (
+            <a
+              href={claimHref}
+              onClick={onApprove}
+              className="mt-1 inline-flex w-full items-center justify-center gap-2.5 rounded-full bg-[#14B8A6] px-5 py-3 text-[14px] font-[600] text-[#0B0F0E] min-[720px]:w-auto"
+            >
+              Looks right — claim &amp; compile my agent
+            </a>
+          )}
+        </div>
       ) : null}
 
       {phase === "approved" && !compiledTemplateId ? (

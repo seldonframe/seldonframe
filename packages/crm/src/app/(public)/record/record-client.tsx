@@ -632,9 +632,25 @@ export function RecordClient({
       : undefined;
 
   return (
-    <main className="min-h-screen bg-[#0B0F0E] px-5 py-10 text-[#E7E5DE] md:px-8 md:py-16">
+    <div className="flex min-h-screen flex-col bg-[#0B0F0E] text-[#E7E5DE]">
+      <header className="border-b border-[rgba(231,229,222,.07)]">
+        <div className="mx-auto flex w-full max-w-[1180px] flex-wrap items-center gap-3 px-5 py-4 md:px-8">
+          <div className="flex items-center gap-2.5">
+            <span className="grid size-[22px] shrink-0 place-items-center rounded-[5px] bg-[#14B8A6]" aria-hidden>
+              <span className="size-2 rounded-[2px] bg-[#0B0F0E]" />
+            </span>
+            <span className="text-[15px] font-[600] tracking-[-0.01em]">SeldonFrame</span>
+            <span className="font-mono text-[13px] text-[rgba(231,229,222,.45)]">/record</span>
+          </div>
+        </div>
+      </header>
+
+      <main className="flex-1 px-5 py-10 md:px-8 md:py-16">
       <div className="mx-auto flex w-full max-w-[1100px] flex-col gap-8">
-        <header className="flex flex-col items-center text-center">
+        {/* Mobile (<720px) centers the hero + step strip (record v3 S3);
+            desktop matches the design (Record.dc.html's <main> is
+            align-items: flex-start — left-aligned, not centered). */}
+        <header className="flex flex-col items-center text-center min-[720px]:items-start min-[720px]:text-left">
           <p className="inline-flex items-center gap-2.5 font-sans text-[12.5px] tracking-[0.04em] text-[#9CA3AF]">
             <span className="inline-block size-1.5 rounded-full bg-[#14B8A6]" aria-hidden />
             No signup to start
@@ -642,7 +658,7 @@ export function RecordClient({
           <h1 className="mt-3 max-w-[26ch] text-balance font-sans text-[clamp(26px,3.6vw,40px)] font-[500] leading-[1.08] tracking-[-0.02em] text-[#F5F4F0]">
             Show Seldon how you work. It builds the agent.
           </h1>
-          <p className="mx-auto mt-3 max-w-[58ch] text-pretty text-[15px] leading-[1.55] text-[#9CA3AF]">
+          <p className="mx-auto mt-3 max-w-[58ch] text-pretty text-[15px] leading-[1.55] text-[#9CA3AF] min-[720px]:mx-0">
             Screen-record yourself doing the job once — talking out loud, narration is half the
             signal. Seldon watches, asks about what it didn&apos;t understand, and compiles a
             working agent.
@@ -744,6 +760,14 @@ export function RecordClient({
           ) : null}
         </div>
       </div>
-    </main>
+      </main>
+
+      <footer className="border-t border-[rgba(231,229,222,.07)]">
+        <div className="mx-auto flex w-full max-w-[1180px] flex-wrap items-center gap-4 px-5 py-5 text-[12px] text-[rgba(231,229,222,.35)] md:px-8">
+          <span>SeldonFrame</span>
+          <span>Recordings stay private — they train your agent only.</span>
+        </div>
+      </footer>
+    </div>
   );
 }
