@@ -38,6 +38,7 @@ import {
   type GenerateDeps,
 } from "@/lib/agents/generate/run-generate";
 import { makeBrainMemoryStoreForOrg } from "@/lib/agents/memory/brain-memory-store";
+import { fillBlueprintConnectorsForPersist } from "@/lib/integrations/composio/discover-tools";
 import {
   createAgentTemplate,
   updateAgentTemplate,
@@ -179,9 +180,17 @@ async function defaultCreate(
       type: input.type,
     });
 
+    // Widen any never-discovered composio binding's enabledTools with real
+    // tools before the first persist — catalog defaults, then live discovery
+    // for non-catalog toolkits (youtube, synthflow_ai, …). Never throws.
+    const filledBlueprint = await fillBlueprintConnectorsForPersist(
+      input.builderOrgId,
+      input.blueprint,
+    );
+
     const saved = await updateAgentTemplate({
       id: template.id,
-      patch: input.blueprint as unknown as TemplateBlueprintPatch,
+      patch: filledBlueprint as unknown as TemplateBlueprintPatch,
     });
     if (!saved.ok) return { ok: false, error: saved.error };
 

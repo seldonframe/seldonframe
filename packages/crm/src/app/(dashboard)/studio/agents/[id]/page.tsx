@@ -16,14 +16,16 @@ import { organizations } from "@/db/schema";
 import { getOrgId } from "@/lib/auth/helpers";
 import {
   getAgentTemplate,
+  updateAgentTemplate,
   surfaceForType,
   capabilitiesForSurface,
   DEFAULT_VOICE_RECEPTIONIST_VOICE,
   type AgentTemplateType,
 } from "@/lib/agent-templates/store";
+import { fillAllBindingTools } from "@/lib/agents/mcp/discover-vetted-tools";
 import { resolveAgentTrigger } from "@/lib/agents/triggers/agent-trigger";
 import { getSellerListingContextAction } from "@/lib/marketplace/seller-actions";
-import { VETTED_CONNECTORS } from "@/lib/agents/mcp/connectors";
+import { VETTED_CONNECTORS, getVettedConnector } from "@/lib/agents/mcp/connectors";
 import { findSessionByTemplateId } from "@/lib/recordings/session-store";
 import type { FlowModel } from "@/lib/recordings/trace-schema";
 import type { EvalScenario } from "@/lib/agents/evals/eval-types";
@@ -310,6 +312,7 @@ export default async function AgentTemplatePage({
               id: c.id,
               label: c.label,
               secretService: c.secretService,
+              authType: c.authType,
             }))}
           />
         </div>
@@ -358,6 +361,33 @@ export default async function AgentTemplatePage({
   }
 
   // ── Lifecycle ladder (SF_AGENT_LIFECYCLE=1) ────────────────────────────
+  // Self-heal: widen any never-discovered composio binding's enabledTools
+  // with real tools (composio live-tool-discovery slice, 2026-07-11) BEFORE
+  // deriving the Connected stage's required toolkits, so an agent authored
+  // before this slice (or one whose live discovery had no key at the time)
+  // gets a real allowlist on next view. Idempotent by T1's guards (a re-
+  // render after a successful fill is a no-op); no key → unchanged, no
+  // write attempted.
+  const hasUndiscoveredComposioBinding = (blueprint.connectors ?? []).some(
+    (c) => c.kind === "composio" && c.enabledTools.length === 0 && !c.discoveredAt,
+  );
+  // Also cover an undiscovered vetted-OAuth binding (Circle) — same
+  // never-discovered marker guard, widened to the other rail this slice adds.
+  const hasUndiscoveredVettedOauthBinding = (blueprint.connectors ?? []).some(
+    (c) =>
+      c.kind === "vetted" &&
+      c.enabledTools.length === 0 &&
+      !c.discoveredAt &&
+      getVettedConnector(c.id)?.authType === "oauth",
+  );
+  if (hasUndiscoveredComposioBinding || hasUndiscoveredVettedOauthBinding) {
+    const filled = await fillAllBindingTools(orgId, blueprint.connectors);
+    if (filled.changed) {
+      await updateAgentTemplate({ id: template.id, patch: { connectors: filled.connectors } });
+    }
+    blueprint.connectors = filled.connectors;
+  }
+
   const requiredToolkits = requiredToolkitSlugs(blueprint.connectors);
   const composioConfigured =
     requiredToolkits.length > 0 ? (await composioForOrg(orgId)) !== null : true;
@@ -375,7 +405,9 @@ export default async function AgentTemplatePage({
         }),
       },
     ),
-    requiredToolkits.length > 0 && composioConfigured ? listConnections(orgId) : Promise.resolve([]),
+    requiredToolkits.length > 0 && composioConfigured
+      ? listConnections(orgId, { extraToolkits: requiredToolkits })
+      : Promise.resolve([]),
     findLatestSupervisedRun(orgId, template.id),
     listDeployments(orgId),
     // T4 — the Verified stage's collapsed summary wants the actual pass
@@ -463,6 +495,7 @@ export default async function AgentTemplatePage({
         id: c.id,
         label: c.label,
         secretService: c.secretService,
+        authType: c.authType,
       }))}
       collapsibleScript
     />

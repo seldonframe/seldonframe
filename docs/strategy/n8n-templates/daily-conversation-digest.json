@@ -1,0 +1,90 @@
+{
+  "name": "SeldonFrame — Daily Conversation Digest",
+  "nodes": [
+    {
+      "parameters": {
+        "rule": {
+          "interval": [
+            { "field": "cronExpression", "expression": "0 8 * * *" }
+          ]
+        }
+      },
+      "id": "e1b2c3d4-0001-4000-8000-000000000001",
+      "name": "Daily 8am",
+      "type": "n8n-nodes-base.scheduleTrigger",
+      "typeVersion": 1.2,
+      "position": [240, 300],
+      "notes": "SF has no outbound webhooks, so this digest POLLS GET /api/v1/agents on a schedule instead of reacting to a push event. Honest tradeoff: up to 24h latency, acceptable for a daily summary."
+    },
+    {
+      "parameters": {
+        "method": "GET",
+        "url": "https://app.seldonframe.com/api/v1/agents",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            { "name": "x-org-id", "value": "={{ $env.SF_ORG_ID }}" },
+            { "name": "x-api-key", "value": "={{ $env.SF_API_KEY }}" }
+          ]
+        }
+      },
+      "id": "e1b2c3d4-0002-4000-8000-000000000002",
+      "name": "SF List Agent Conversations",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [460, 300]
+    },
+    {
+      "parameters": {
+        "jsCode": "const agents = Array.isArray($input.first().json) ? $input.first().json : ($input.first().json.agents || $input.first().json.data || []);\nconst lines = agents.map((a) => {\n  const name = a.name || a.slug || a.id || 'agent';\n  const count = a.conversations_24h ?? a.conversationCount ?? a.count ?? 'n/a';\n  return `- *${name}*: ${count} conversation(s) in the last 24h`;\n});\nconst text = lines.length\n  ? `SeldonFrame daily digest\\n${lines.join('\\n')}`\n  : 'SeldonFrame daily digest\\nNo agent conversation data returned for this period.';\nreturn [{ json: { text } }];"
+      },
+      "id": "e1b2c3d4-0003-4000-8000-000000000003",
+      "name": "Format Digest",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [680, 300]
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "={{ $env.SF_SLACK_WEBHOOK_URL }}",
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={\n  \"text\": {{ JSON.stringify($json.text) }}\n}"
+      },
+      "id": "e1b2c3d4-0004-4000-8000-000000000004",
+      "name": "Post to Slack (Incoming Webhook)",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [900, 300],
+      "notes": "Uses a generic HTTP POST to a Slack incoming-webhook URL (via $env.SF_SLACK_WEBHOOK_URL) to avoid requiring a configured Slack OAuth credential. Swap for the native n8n-nodes-base.slack node (typeVersion 2.2) if you already have a Slack credential set up in your instance."
+    }
+  ],
+  "connections": {
+    "Daily 8am": {
+      "main": [
+        [
+          { "node": "SF List Agent Conversations", "type": "main", "index": 0 }
+        ]
+      ]
+    },
+    "SF List Agent Conversations": {
+      "main": [
+        [
+          { "node": "Format Digest", "type": "main", "index": 0 }
+        ]
+      ]
+    },
+    "Format Digest": {
+      "main": [
+        [
+          { "node": "Post to Slack (Incoming Webhook)", "type": "main", "index": 0 }
+        ]
+      ]
+    }
+  },
+  "active": false,
+  "settings": { "executionOrder": "v1" },
+  "pinData": {},
+  "meta": { "templateCredsSetupCompleted": false }
+}

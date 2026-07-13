@@ -90,8 +90,16 @@ const REFINE_STATUS_INTERVAL_MS = 1500;
 type FaqRow = { q: string; a: string };
 type QuoteRange = { service: string; low: string; high: string };
 
-/** Minimal serializable vetted-connector descriptor passed from the server. */
-type VettedConnectorOption = { id: string; label: string; secretService: string };
+/** Minimal serializable vetted-connector descriptor passed from the server.
+ *  `authType:"oauth"` (Circle) renders a "Connect on the Integrations page"
+ *  link instead of the paste-a-bearer field — there's no operator-typed key
+ *  for an OAuth connector. */
+type VettedConnectorOption = {
+  id: string;
+  label: string;
+  secretService: string;
+  authType?: "bearer" | "oauth";
+};
 
 type Props = {
   templateId: string;
@@ -1591,6 +1599,10 @@ function ConnectorsCard({
   const [bindError, setBindError] = useState<string | null>(null);
 
   const isByo = choice === "byo";
+  const selectedVetted = !isByo ? vettedConnectors.find((c) => c.id === choice) : undefined;
+  // An OAuth vetted connector (Circle) has no operator-typed key — it's
+  // connected on the Integrations page, not through this form's apiKey field.
+  const isOauthVetted = selectedVetted?.authType === "oauth";
   const byoValid = (() => {
     const v = byoEndpoint.trim();
     if (!v) return false;
@@ -1601,7 +1613,7 @@ function ConnectorsCard({
     }
   })();
   const canConnect =
-    apiKey.trim().length > 0 && (!isByo || byoValid) && !isBinding;
+    !isOauthVetted && apiKey.trim().length > 0 && (!isByo || byoValid) && !isBinding;
 
   const connect = () => {
     setBindError(null);
@@ -1780,21 +1792,35 @@ function ConnectorsCard({
               </div>
             )}
 
-            <div className="space-y-1.5">
-              <span className="text-xs font-medium text-foreground">API key</span>
-              <input
-                type="password"
-                autoComplete="off"
-                value={apiKey}
-                onChange={(e) => setApiKey(e.target.value)}
-                disabled={isBinding}
-                placeholder="Paste the connector's API key"
-                className="w-full rounded-md border bg-background px-3 py-2 text-sm focus:border-primary focus:outline-none disabled:opacity-60"
-              />
-              <p className="text-[11px] text-muted-foreground">
-                Stored encrypted. We never show it again after you connect.
-              </p>
-            </div>
+            {isOauthVetted ? (
+              <div className="space-y-1.5 rounded-md border border-dashed bg-muted/30 px-3 py-2">
+                <p className="text-xs text-muted-foreground">
+                  {selectedVetted?.label} connects via OAuth, not a pasted key.
+                </p>
+                <Link
+                  href="/integrations"
+                  className="text-xs font-medium text-primary underline underline-offset-4"
+                >
+                  Connect on the Integrations page
+                </Link>
+              </div>
+            ) : (
+              <div className="space-y-1.5">
+                <span className="text-xs font-medium text-foreground">API key</span>
+                <input
+                  type="password"
+                  autoComplete="off"
+                  value={apiKey}
+                  onChange={(e) => setApiKey(e.target.value)}
+                  disabled={isBinding}
+                  placeholder="Paste the connector's API key"
+                  className="w-full rounded-md border bg-background px-3 py-2 text-sm focus:border-primary focus:outline-none disabled:opacity-60"
+                />
+                <p className="text-[11px] text-muted-foreground">
+                  Stored encrypted. We never show it again after you connect.
+                </p>
+              </div>
+            )}
 
             {bindError && (
               <p className="text-xs text-rose-600 dark:text-rose-400">
@@ -1803,15 +1829,17 @@ function ConnectorsCard({
             )}
 
             <div className="flex flex-wrap items-center gap-2">
-              <button
-                type="button"
-                onClick={connect}
-                disabled={!canConnect}
-                className="crm-button-primary inline-flex h-9 items-center gap-1.5 px-4 text-sm"
-              >
-                <Plug className={`size-4 ${isBinding ? "animate-pulse" : ""}`} />
-                {isBinding ? "Connecting…" : "Connect"}
-              </button>
+              {!isOauthVetted && (
+                <button
+                  type="button"
+                  onClick={connect}
+                  disabled={!canConnect}
+                  className="crm-button-primary inline-flex h-9 items-center gap-1.5 px-4 text-sm"
+                >
+                  <Plug className={`size-4 ${isBinding ? "animate-pulse" : ""}`} />
+                  {isBinding ? "Connecting…" : "Connect"}
+                </button>
+              )}
               <button
                 type="button"
                 onClick={() => {

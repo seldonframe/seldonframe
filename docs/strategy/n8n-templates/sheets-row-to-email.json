@@ -1,0 +1,84 @@
+{
+  "name": "SeldonFrame — Sheets Row to Email",
+  "nodes": [
+    {
+      "parameters": {
+        "rule": {
+          "interval": [
+            { "field": "minutes", "minutesInterval": 15 }
+          ]
+        }
+      },
+      "id": "c1b2c3d4-0001-4000-8000-000000000001",
+      "name": "Every 15 Minutes",
+      "type": "n8n-nodes-base.scheduleTrigger",
+      "typeVersion": 1.2,
+      "position": [240, 300]
+    },
+    {
+      "parameters": {
+        "resource": "sheet",
+        "operation": "read",
+        "documentId": {
+          "__rl": true,
+          "value": "={{ $env.SF_LEADS_SHEET_ID }}",
+          "mode": "id"
+        },
+        "sheetName": {
+          "__rl": true,
+          "value": "={{ $env.SF_LEADS_SHEET_TAB || 'Sheet1' }}",
+          "mode": "list"
+        },
+        "options": {}
+      },
+      "id": "c1b2c3d4-0002-4000-8000-000000000002",
+      "name": "Read New Rows (Google Sheets)",
+      "type": "n8n-nodes-base.googleSheets",
+      "typeVersion": 4,
+      "position": [460, 300],
+      "notes": "Minimal read config — requires a Google Sheets OAuth2 credential configured in n8n. Add a filter/marker column (e.g. 'emailed') and a Filter node if you need to skip already-processed rows; kept out of this template to stay dependency-light. See README."
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "https://app.seldonframe.com/api/v1/emails",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            { "name": "x-org-id", "value": "={{ $env.SF_ORG_ID }}" },
+            { "name": "x-api-key", "value": "={{ $env.SF_API_KEY }}" },
+            { "name": "Content-Type", "value": "application/json" }
+          ]
+        },
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={\n  \"to\": \"{{ $json.email }}\",\n  \"subject\": \"Following up on your request\",\n  \"body\": \"Hi {{ $json.name }}, thanks for filling out the sheet — we're on it and will follow up shortly.\"\n}"
+      },
+      "id": "c1b2c3d4-0003-4000-8000-000000000003",
+      "name": "SF Send Email",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [680, 300]
+    }
+  ],
+  "connections": {
+    "Every 15 Minutes": {
+      "main": [
+        [
+          { "node": "Read New Rows (Google Sheets)", "type": "main", "index": 0 }
+        ]
+      ]
+    },
+    "Read New Rows (Google Sheets)": {
+      "main": [
+        [
+          { "node": "SF Send Email", "type": "main", "index": 0 }
+        ]
+      ]
+    }
+  },
+  "active": false,
+  "settings": { "executionOrder": "v1" },
+  "pinData": {},
+  "meta": { "templateCredsSetupCompleted": false }
+}

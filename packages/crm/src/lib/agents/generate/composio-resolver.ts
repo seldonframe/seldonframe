@@ -269,22 +269,18 @@ export function resolveCapabilitiesToToolkits(
 
 /**
  * PURE. Map each toolkit slug onto a real composio `ConnectorBinding`
- * (`{ id, kind:"composio", enabledToolkits:[slug], enabledTools:[the
- * toolkit's curated default tools, or [] for a long-tail toolkit outside
- * the curated catalog] }`) — the exact shape a hand-bound composio connector
- * produces, so every binding parses through `connectorBindingSchema`.
+ * (`{ id, kind:"composio", enabledToolkits:[slug], enabledTools }`) — the
+ * exact shape a hand-bound composio connector produces, so every binding parses
+ * through `connectorBindingSchema`. `enabledTools` is SEEDED with the
+ * toolkit's curated catalog defaults (T6 parity / F-C — the same
+ * empty-allowlist bug class fixed in bind-tools.ts's bindingForEntry and
+ * compile-agent.ts's bindingForToolkit): a catalog slug (gmail, slack, …) gets
+ * its default tool list; a non-catalog slug (the long-tail case this module
+ * exists for — youtube, synthflow_ai) still yields `[]` here and stays `[]`
+ * until the persist-time live-discovery fill
+ * (lib/integrations/composio/discover-tools.ts, 2026-07-11 slice) widens it.
  * De-duplicated by id, order-stable. Empty/invalid slugs are dropped. Never
  * throws.
- *
- * F-C (closes the empty-allowlist bug class — same as compile-agent.ts's
- * bindingForToolkit and bind-tools.ts's bindingForEntry): a generated agent
- * has no later discovery/picker step to fill `enabledTools` in, so leaving
- * it empty meant zero real tools at runtime for any capability resolved
- * through this long-tail path. `defaultToolsForToolkits` only knows the 8
- * curated `COMPOSIO_TOOLKITS` slugs — a live Composio-only toolkit outside
- * that set (the whole point of this resolver: "the long tail... the day
- * Composio lists it") still resolves to `[]` here, same as before; there's
- * no curated default to seed for a toolkit we don't otherwise know about.
  */
 export function bindComposioToolkits(slugs: string[]): ConnectorBinding[] {
   if (!Array.isArray(slugs)) return [];

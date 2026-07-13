@@ -23,6 +23,7 @@ import {
   type ContinueInterviewResult,
   type PersistableAnswer,
 } from "@/lib/recordings/continue-interview";
+import { fillAllBindingTools } from "@/lib/agents/mcp/discover-vetted-tools";
 import { updateAgentTemplate, type TemplateBlueprintPatch } from "./store";
 
 export type { ContinueInterviewResult } from "@/lib/recordings/continue-interview";
@@ -109,6 +110,8 @@ export async function continueInterviewAction(input: {
         return { ok: result.ok };
       },
       persistSession: persistSessionReal,
+      fillConnectors: async (connectors) =>
+        (await fillAllBindingTools(orgId, connectors)).connectors,
     },
     { orgId, templateId, message },
   );

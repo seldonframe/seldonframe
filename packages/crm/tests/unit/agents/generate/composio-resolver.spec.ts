@@ -170,19 +170,34 @@ describe("bindComposioToolkits — binding shape", () => {
     });
   });
 
-  // F-C (2026-07-11, closes the empty-allowlist bug class — same as T1's
-  // compile-agent.ts fix and T6's bind-tools.ts fix): a generated agent has
-  // no later discovery step to fill `enabledTools` in, so a CURATED-catalog
-  // slug (one of the 8 in COMPOSIO_TOOLKITS) resolved through this long-tail
-  // path must ALSO be seeded with its curated default tools — never [].
-  test("a curated-catalog slug (notion) is seeded with its curated default tools, never an empty allowlist", () => {
-    const [binding] = bindComposioToolkits(["notion"]);
-    assert.ok(binding && binding.kind === "composio");
-    assert.deepEqual(
-      (binding as { enabledTools: string[] }).enabledTools,
-      defaultToolsForToolkits(["notion"]),
+  // Folds two independently-authored tests for the same fix (T6 parity on the
+  // circle stack + F-C on main, both 2026-07-11): a curated-catalog slug is
+  // seeded with its EXACT curated defaults (never []); a non-catalog long-tail
+  // slug stays [] until the persist-time live-discovery fill (discover-tools.ts §2.2).
+  test("a catalog slug seeds its exact curated default tools; a non-catalog slug stays [] (widened later by live discovery at persist time)", () => {
+    const bindings = bindComposioToolkits(["notion", "googlebusiness"]);
+
+    const notion = bindings.find((b) => b.id === "notion");
+    assert.ok(notion, "notion binding present");
+    assert.ok(
+      notion!.enabledTools.length > 0,
+      "catalog toolkit seeds its curated default tools",
     );
-    assert.notDeepEqual((binding as { enabledTools: string[] }).enabledTools, []);
+    assert.deepEqual(
+      notion!.enabledTools,
+      defaultToolsForToolkits(["notion"]),
+      "seeded tools match the curated defaults exactly",
+    );
+    assertValidBinding(notion);
+
+    const gb = bindings.find((b) => b.id === "googlebusiness");
+    assert.ok(gb, "googlebusiness binding present");
+    assert.deepEqual(
+      gb!.enabledTools,
+      [],
+      "non-catalog toolkit stays [] until the persist-time live-discovery fill",
+    );
+    assertValidBinding(gb);
   });
 
   test("duplicate slugs collapse to one binding", () => {
