@@ -2180,3 +2180,5 @@ C4 close-out with empirical SLICE 11 data.
   source / an honest failure. Especially in a never-lies content pipeline: a
   helper that passes an error body downstream launders it into a fabricated
   claim. Fail honestly (point to the manual route) rather than pass through.
+
+- L-40 (2026-07-13): Subagent ran git in the WRONG checkout (bare `cd "<repo>"` → stale primary branch, not the feature worktree); pin dir hard + assert `rev-parse` before acting + run the covering test yourself — a cheap model's "done" is unverified. Also: `git stash drop` reads the SHARED repo-wide stack; list before dropping. See docs/learnings/2026-07-13-wrong-checkout-subagent.md
