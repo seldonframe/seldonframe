@@ -47,6 +47,13 @@ export type UpgradeInboxTriggerDeps = {
   ) => Promise<{ orgId: string; agentTemplateId: string } | null>;
   /** Load the template's current blueprint. */
   getTemplateBlueprint: (agentTemplateId: string) => Promise<AgentBlueprint | null>;
+  /** Verify-gate FIX 4 — how many deployments (of ANY status) point at this
+   *  template? Since the trigger is flipped at the TEMPLATE level (see the
+   *  file header), a template with more than one deployment must refuse the
+   *  flip — a future second client deploying the same template would
+   *  silently inherit an event trigger it never registered its own
+   *  Composio createTrigger for. */
+  countDeploymentsForTemplate: (agentTemplateId: string) => Promise<number>;
   /** Is `COMPOSIO_WEBHOOK_SECRET` configured? (Sync — an env read.) */
   hasWebhookSecret: () => boolean;
   /** Does this org have a live, connected Gmail toolkit connection? */
@@ -97,6 +104,25 @@ export async function maybeUpgradeInboxTriggerToPush(
 
     if (!blueprintHasGmailBinding(blueprint)) {
       return { upgraded: false, reason: "no_gmail_binding" };
+    }
+
+    // Verify-gate FIX 4 — refuse the flip when the template is shared by
+    // more than one deployment (a future multi-client deploy of the SAME
+    // template must never silently inherit an event trigger it never
+    // registered its own Composio createTrigger for). A count error fails
+    // CLOSED (treated as multi_deployment — the safe direction).
+    let deploymentCount: number;
+    try {
+      deploymentCount = await deps.countDeploymentsForTemplate(deployment.agentTemplateId);
+    } catch (err) {
+      console.warn(
+        `[upgrade-inbox-trigger] countDeploymentsForTemplate failed for template ${deployment.agentTemplateId}:`,
+        err instanceof Error ? err.message : String(err),
+      );
+      return { upgraded: false, reason: "multi_deployment" };
+    }
+    if (deploymentCount > 1) {
+      return { upgraded: false, reason: "multi_deployment" };
     }
 
     if (!deps.hasWebhookSecret()) {

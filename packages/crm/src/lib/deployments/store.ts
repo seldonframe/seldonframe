@@ -1743,6 +1743,26 @@ export async function releaseComposioPushRunClaim(
  *  trigger was upgraded from poll to push (audit trail; no migration). */
 export const TRIGGER_UPGRADED_AT_KEY = "triggerUpgradedAt";
 
+/**
+ * Verify-gate FIX 4 — how many deployments (any status) point at this
+ * template. maybeUpgradeInboxTriggerToPush refuses the poll->push flip when
+ * this is > 1 (the trigger lives on the TEMPLATE, so a shared multi-client
+ * template must never silently inherit an event trigger a second client's
+ * deploy never registered). Lazy DB import.
+ */
+export async function countDeploymentsForTemplate(agentTemplateId: string): Promise<number> {
+  if (!agentTemplateId) return 0;
+  const { db } = await import("@/db");
+  const { deployments } = await import("@/db/schema/deployments");
+  const { eq, sql } = await import("drizzle-orm");
+
+  const [row] = await db
+    .select({ count: sql<number>`count(*)::int` })
+    .from(deployments)
+    .where(eq(deployments.agentTemplateId, agentTemplateId));
+  return row?.count ?? 0;
+}
+
 /** Resolve a deployment's org (clientOrgId ?? builderOrgId) + template id —
  *  the lookup maybeUpgradeInboxTriggerToPush's `getDeployment` dep needs.
  *  Lazy DB import; returns null when the deployment doesn't exist. */

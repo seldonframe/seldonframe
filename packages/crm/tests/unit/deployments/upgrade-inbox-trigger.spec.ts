@@ -35,6 +35,7 @@ function fakeDeps(overrides: Partial<UpgradeInboxTriggerDeps> = {}): UpgradeInbo
   return {
     getDeployment: async () => ({ orgId: ORG, agentTemplateId: TEMPLATE }),
     getTemplateBlueprint: async () => inboxWatchBlueprint(),
+    countDeploymentsForTemplate: async () => 1,
     hasWebhookSecret: () => true,
     isGmailConnected: async () => true,
     createTrigger: async () => ({ triggerId: "trig_1" }),
@@ -146,4 +147,28 @@ test("deployment belongs to a different org -> not upgraded (org-scoped)", async
   const deps = fakeDeps({ getDeployment: async () => ({ orgId: "other_org", agentTemplateId: TEMPLATE }) });
   const r = await maybeUpgradeInboxTriggerToPush(deps, { orgId: ORG, deploymentId: DEPLOYMENT });
   assert.equal(r.upgraded, false);
+});
+
+// verify-gate FIX 4 — a shared multi-client template must never inherit an
+// event trigger it never registered its own Composio createTrigger for.
+test("FIX 4 — template has >1 deployment -> refuse the flip, reason multi_deployment", async () => {
+  let updateCalled = false;
+  const deps = fakeDeps({
+    countDeploymentsForTemplate: async (agentTemplateId) => {
+      assert.equal(agentTemplateId, TEMPLATE);
+      return 2;
+    },
+    updateTemplateTrigger: async () => {
+      updateCalled = true;
+    },
+  });
+  const r = await maybeUpgradeInboxTriggerToPush(deps, { orgId: ORG, deploymentId: DEPLOYMENT });
+  assert.deepEqual(r, { upgraded: false, reason: "multi_deployment" });
+  assert.equal(updateCalled, false);
+});
+
+test("FIX 4 — template has exactly 1 deployment -> upgrade proceeds normally", async () => {
+  const deps = fakeDeps({ countDeploymentsForTemplate: async () => 1 });
+  const r = await maybeUpgradeInboxTriggerToPush(deps, { orgId: ORG, deploymentId: DEPLOYMENT });
+  assert.deepEqual(r, { upgraded: true });
 });

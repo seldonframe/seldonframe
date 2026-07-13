@@ -17,6 +17,7 @@ import {
   updateDeployment,
   getDeploymentOrgAndTemplate,
   stampDeploymentTriggerUpgraded,
+  countDeploymentsForTemplate,
 } from "@/lib/deployments/store";
 import { deployToSelfCore, type DeployToSelfDeps } from "@/lib/agents/lifecycle/deploy-to-self";
 import { ingestSentMailVoiceProfile } from "@/lib/agents/voice-profile/ingest-sent-mail";
@@ -86,6 +87,7 @@ export async function deployToSelfAction(templateId: string): Promise<DeployToSe
             const tmpl = await getAgentTemplate(agentTemplateId);
             return (tmpl?.blueprint ?? null) as AgentBlueprint | null;
           },
+          countDeploymentsForTemplate,
           hasWebhookSecret: () => Boolean(process.env.COMPOSIO_WEBHOOK_SECRET?.trim()),
           isGmailConnected: async (checkOrgId) => {
             const connections = await listConnections(checkOrgId);
