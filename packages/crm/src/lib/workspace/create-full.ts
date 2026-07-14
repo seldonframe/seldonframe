@@ -536,12 +536,11 @@ export async function createFullWorkspace(
   // primitives, just operator-orchestrated instead of server-orchestrated.
   //
   // See: docs/superpowers/specs/2026-05-15-ops-stack-only-workspace-creation-design.md
-  console.warn(
-    JSON.stringify({
-      event: "landing_page_skipped_default",
-      workspace_id: createResult.orgId,
-    }),
-  );
+  // NOTE: no "landing_page_skipped_default" log here. It used to fire
+  // UNCONDITIONALLY on every successful build (a v1.55.0 vestige of the removed
+  // enhanceLandingForWorkspace step) and actively misled log-based diagnosis —
+  // it reads as "the landing was skipped" when in fact the real landing is
+  // generated downstream (R1 landing step / operator SKILL), not skipped.
 
   // v1.37.0 — Step 12.8: STAMP google_place_url on soul for audit trail.
   // Cheap O(1) write; if the operator ever wants to re-sync from the

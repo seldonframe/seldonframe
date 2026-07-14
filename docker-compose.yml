@@ -14,6 +14,9 @@
 #
 # Everything is bring-your-own-key: no data leaves your machine except the
 # LLM calls you configure.
+#
+# Prefer a prebuilt image (no local `next build`)? Add the GHCR override:
+#   docker compose -f docker-compose.yml -f docker-compose.ghcr.yml up
 
 name: seldonframe
 

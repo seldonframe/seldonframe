@@ -39,6 +39,20 @@ export function normalizeTheme(raw: unknown): OrgTheme {
   // merge produced. Absent/non-string input omits the field entirely (matches
   // every other optional OrgTheme field's "absent → not customized" default).
   const customizedAt = typeof value.customizedAt === "string" ? value.customizedAt : undefined;
+  // v1.56.0 — carry the aesthetic-archetype fields through untouched. These are
+  // the operator's live "design" choice (set by setArchetypeForOrg when they
+  // switch design on /ready). normalizeTheme previously dropped them, so the
+  // public /w landing read `undefined` and fell back to the FROZEN archetype
+  // baked at generation time — i.e. "Change design" was a silent no-op. We
+  // pass the id through permissively (any string) because the sole consumer
+  // (app/(public)/w/[slug]/page.tsx) already guards with `... in ARCHETYPES`
+  // before using it, so an unknown value can never reach the renderer.
+  const aestheticArchetype =
+    typeof value.aestheticArchetype === "string"
+      ? (value.aestheticArchetype as OrgTheme["aestheticArchetype"])
+      : undefined;
+  const aestheticArchetypeChoice =
+    typeof value.aestheticArchetypeChoice === "string" ? value.aestheticArchetypeChoice : undefined;
 
   return {
     primaryColor,
@@ -47,6 +61,8 @@ export function normalizeTheme(raw: unknown): OrgTheme {
     mode,
     borderRadius,
     logoUrl,
+    ...(aestheticArchetype !== undefined ? { aestheticArchetype } : {}),
+    ...(aestheticArchetypeChoice !== undefined ? { aestheticArchetypeChoice } : {}),
     ...(customizedAt !== undefined ? { customizedAt } : {}),
   };
 }
