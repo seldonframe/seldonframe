@@ -35,7 +35,7 @@ type ToolNode = {
 const TOOLS: readonly ToolNode[] = [
   { id: "calendar", label: "Calendar", logo: "/brand/integrations/google-calendar.svg" },
   { id: "gmail", label: "Gmail", logo: "/brand/integrations/gmail.svg" },
-  { id: "phone", label: "Phone" },
+  { id: "phone", label: "Twilio", logo: "/brand/integrations/twilio.svg" },
   { id: "slack", label: "Slack", logo: "/brand/integrations/slack.svg" },
 ];
 

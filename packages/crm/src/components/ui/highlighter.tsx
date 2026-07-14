@@ -8,42 +8,49 @@
 // end-state instantly, per the motion-initiative guardrail.
 "use client"
 
-import { useRef, type ReactNode } from "react"
-import { motion, useInView, useReducedMotion } from "motion/react"
+import { useRef, type CSSProperties, type ReactNode } from "react"
+import { useInView, useReducedMotion } from "motion/react"
 import { cn } from "@/lib/utils"
 
 interface HighlighterProps {
   children: ReactNode
-  /** Marker color — defaults to the SeldonFrame accent green at low opacity. */
+  /** Marker color — defaults to the Seldon accent (deep forest) at low opacity. */
   color?: string
   className?: string
   /** Skip the draw-in sweep and render fully highlighted immediately. */
   forceStatic?: boolean
+  /** When true, the marker draws in on scroll-into-view AND retracts on
+   *  scroll-out (appears/disappears each pass) instead of drawing once. */
+  repeat?: boolean
 }
 
-export function Highlighter({ children, color = "rgba(5, 150, 105,0.28)", className, forceStatic = false }: HighlighterProps) {
+export function Highlighter({ children, color = "rgba(31, 43, 36,0.18)", className, forceStatic = false, repeat = false }: HighlighterProps) {
   const ref = useRef<HTMLSpanElement>(null)
-  const isInView = useInView(ref, { once: true, margin: "-10%" })
+  const isInView = useInView(ref, { once: !repeat, margin: "-12%" })
   const prefersReducedMotion = useReducedMotion()
   const skipAnimation = forceStatic || Boolean(prefersReducedMotion)
+  const drawn = skipAnimation || isInView
+
+  // The highlight is a background painted BEHIND the text and cloned per line
+  // (box-decoration-break), so on wrapped/multi-line text it hugs each line
+  // like a real marker instead of one block over the whole bounding box. The
+  // draw-in sweep is a CSS transition on background-size (0%→100% width).
+  const style: CSSProperties = {
+    backgroundImage: `linear-gradient(${color}, ${color})`,
+    backgroundRepeat: "no-repeat",
+    backgroundPosition: "0 62%",
+    backgroundSize: drawn ? "100% 74%" : "0% 74%",
+    WebkitBoxDecorationBreak: "clone",
+    boxDecorationBreak: "clone",
+    borderRadius: 3,
+    padding: "0.02em 0.08em",
+    margin: "0 -0.08em",
+    transition: skipAnimation ? "none" : "background-size 0.6s cubic-bezier(0.22, 1, 0.36, 1)",
+  }
 
   return (
-    <span ref={ref} className={cn("relative inline-block", className)}>
-      <motion.span
-        aria-hidden
-        initial={{ scaleX: skipAnimation ? 1 : 0 }}
-        animate={{ scaleX: skipAnimation || isInView ? 1 : 0 }}
-        transition={skipAnimation ? { duration: 0 } : { duration: 0.6, ease: [0.22, 1, 0.36, 1] }}
-        style={{
-          position: "absolute",
-          inset: "12% -3% 6%",
-          background: color,
-          borderRadius: 3,
-          transformOrigin: "left",
-          zIndex: 0,
-        }}
-      />
-      <span style={{ position: "relative", zIndex: 1 }}>{children}</span>
+    <span ref={ref} className={cn("box-decoration-clone", className)} style={style}>
+      {children}
     </span>
   )
 }

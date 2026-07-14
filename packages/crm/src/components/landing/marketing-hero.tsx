@@ -31,6 +31,8 @@ import { MarketingAgentOrbit } from "@/components/landing/marketing-agent-orbit"
 import { MarketingDemoMarquee } from "@/components/landing/marketing-demo-marquee";
 import { heroSubmitTarget } from "@/components/landing/hero-submit-target";
 import { BorderBeam } from "@/components/ui/border-beam";
+import { Highlighter } from "@/components/ui/highlighter";
+import { AnimatedShinyText } from "@/components/ui/magic/animated-shiny-text";
 
 // Re-exported for callers that only need the pure routing decision (e.g.
 // tests) without pulling in this "use client" component.
@@ -242,8 +244,11 @@ export function MarketingHero({
 
       {/* Subhead — what runs on autopilot, concretely, then the openness line */}
       <p className="mx-auto mt-4 max-w-[68ch] text-pretty text-[clamp(15.5px,1.6vw,17.5px)] leading-[1.55] text-[#6E665A]">
-        Answer every call, text back every lead, book the job, and ask for the
-        review — automatically, across{" "}
+        <Highlighter repeat color="rgba(31, 43, 36,0.18)">
+          Answer every call, text back every lead, book the job, and ask for the
+          review — automatically
+        </Highlighter>
+        , across{" "}
         <strong className="font-[500] text-[#221D17]">
           voice, SMS, email, and web chat
         </strong>{" "}
@@ -393,7 +398,7 @@ export function MarketingHero({
             aria-label="Build workspace"
             className="group inline-flex h-10 items-center justify-center gap-2 rounded-[10px] bg-[#1F2B24] px-4 text-[13.5px] font-[600] text-[#FFFDFA] shadow-[0_6px_20px_rgba(31, 43, 36,.28)] transition-all hover:-translate-y-px hover:bg-[#16201B] hover:shadow-[0_8px_24px_rgba(31, 43, 36,.34)] active:translate-y-px disabled:cursor-not-allowed disabled:opacity-50 disabled:shadow-none focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[#1F2B24]"
           >
-            <span>Build workspace</span>
+            <AnimatedShinyText base="rgba(246,242,234,.82)" shine="#FFFFFF" shimmerWidth={90}>Build workspace</AnimatedShinyText>
             <ArrowRight size={14} className="transition-transform group-hover:translate-x-0.5" aria-hidden />
           </button>
         </div>

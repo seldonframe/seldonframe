@@ -89,7 +89,7 @@ export const BentoCard = ({
         {Icon ? (
           <Icon
             className={cn(
-              "h-12 w-12 origin-left transform-gpu text-[var(--lp-ink)]",
+              "h-9 w-9 origin-left transform-gpu text-[var(--lp-ink)]",
               !forceStatic && "transition-all duration-300 ease-in-out group-hover:scale-75"
             )}
           />
