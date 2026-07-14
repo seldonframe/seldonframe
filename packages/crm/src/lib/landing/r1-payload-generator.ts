@@ -24,6 +24,7 @@ import {
   resolveServicePhoto,
   type ServicePhoto,
 } from "./service-photo-resolver";
+import { resolveExternalMedia } from "@/lib/media/resolve-url";
 
 // Prefer a smaller model for payload generation — the prompt is highly
 // structured (JSON schema is fully specified), so Haiku is sufficient
@@ -141,6 +142,101 @@ export function pickHeroPhotoFromFacts(
   return { src: pick.src, alt: (pick.alt ?? "").trim() };
 }
 
+// ── Blob re-host (part 3) ─────────────────────────────────────────────────────
+
+/** Replace a source image URL with a permanent Blob URL. Returns the original
+ *  URL on any failure — re-hosting is best-effort and never blocks the build. */
+export type RehostImageFn = (url: string) => Promise<string>;
+
+// Hosts we NEVER re-host: already-permanent Blob storage, and the stock CDNs
+// (Unsplash/Pexels) which are hotlink-friendly by their own API terms.
+const BLOB_HOST_RE = /\.blob\.vercel-storage\.com$/i;
+const STOCK_HOST_RE = /(?:^|\.)(?:unsplash\.com|pexels\.com)$/i;
+
+/**
+ * Only the CLIENT's OWN scraped images get re-hosted — not stock, not
+ * already-Blob URLs. Exported for unit testing.
+ */
+export function isRehostableSourceUrl(url: string | null | undefined): url is string {
+  if (typeof url !== "string" || !url.trim()) return false;
+  let u: URL;
+  try {
+    u = new URL(url);
+  } catch {
+    return false;
+  }
+  if (u.protocol !== "http:" && u.protocol !== "https:") return false;
+  if (BLOB_HOST_RE.test(u.host)) return false; // already permanent
+  if (STOCK_HOST_RE.test(u.host)) return false; // stock CDN — hotlink-friendly
+  return true;
+}
+
+const REHOST_TIMEOUT_MS = 8000;
+
+/** Production re-host: SSRF-guarded fetch → Blob put (resolveExternalMedia),
+ *  bounded by a timeout, degrading to the original URL on any failure. */
+const defaultRehostImage: RehostImageFn = async (url) => {
+  try {
+    const result = await Promise.race([
+      resolveExternalMedia(url, "image"),
+      new Promise<null>((resolve) => setTimeout(() => resolve(null), REHOST_TIMEOUT_MS)),
+    ]);
+    if (result && result.ok) return result.url;
+  } catch {
+    // fall through to the original URL
+  }
+  return url;
+};
+
+/**
+ * Re-host the client's own captured images used in the payload (hero photo,
+ * service photos, logo) to permanent Blob URLs. Mutates the payload in place.
+ * Stock/Blob URLs are skipped (isRehostableSourceUrl). Best-effort per image.
+ * Exported for unit testing. Returns counts for observability.
+ */
+export async function rehostCapturedImages(
+  payload: R1LandingPayload,
+  rehostFn: RehostImageFn,
+): Promise<{ attempted: number; rehosted: number }> {
+  const targets = new Set<string>();
+  if (isRehostableSourceUrl(payload.hero.heroImage?.src)) {
+    targets.add(payload.hero.heroImage.src);
+  }
+  for (const service of payload.services.services) {
+    if (isRehostableSourceUrl(service.photo?.src)) targets.add(service.photo.src);
+  }
+  if (isRehostableSourceUrl(payload.logo)) targets.add(payload.logo);
+
+  if (targets.size === 0) return { attempted: 0, rehosted: 0 };
+
+  const pairs = await Promise.all(
+    [...targets].map(async (u) => [u, await rehostFn(u)] as const),
+  );
+  const map = new Map(pairs);
+  let rehosted = 0;
+  const swap = (src: string): string => {
+    const next = map.get(src);
+    if (next && next !== src) {
+      rehosted++;
+      return next;
+    }
+    return src;
+  };
+
+  if (payload.hero.heroImage && isRehostableSourceUrl(payload.hero.heroImage.src)) {
+    payload.hero.heroImage.src = swap(payload.hero.heroImage.src);
+  }
+  for (const service of payload.services.services) {
+    if (service.photo && isRehostableSourceUrl(service.photo.src)) {
+      service.photo.src = swap(service.photo.src);
+    }
+  }
+  if (isRehostableSourceUrl(payload.logo)) {
+    payload.logo = swap(payload.logo);
+  }
+  return { attempted: targets.size, rehosted };
+}
+
 // ── Public API ────────────────────────────────────────────────────────────────
 
 /**
@@ -163,6 +259,11 @@ export async function generateR1Payload(args: {
    * Defaults to the real resolveServicePhoto (which may call Unsplash).
    */
   resolveServicePhotoFn?: ResolveServicePhotoFn;
+  /**
+   * Test seam — inject a fake image re-host fn to keep tests offline.
+   * Defaults to the real Blob re-host (resolveExternalMedia).
+   */
+  rehostImageFn?: RehostImageFn;
 }): Promise<R1LandingPayload> {
   const client = (args.anthropicClient ??
     new Anthropic({ apiKey: args.byokKey })) as AnthropicLike;
@@ -360,6 +461,29 @@ export async function generateR1Payload(args: {
       logo_present: !!args.facts.logo,
     }),
   );
+
+  // Blob re-host the client's OWN captured images (hero/service/logo) → permanent
+  // URLs, so the public site never depends on a hotlink that can 403/expire.
+  // Stock (Unsplash/Pexels) + already-Blob URLs are skipped. Best-effort — a
+  // failed re-host keeps the original URL; workspace creation never blocks.
+  try {
+    const { attempted, rehosted } = await rehostCapturedImages(
+      parsed,
+      args.rehostImageFn ?? defaultRehostImage,
+    );
+    if (attempted > 0) {
+      console.warn(
+        JSON.stringify({
+          event: "landing_images_rehosted",
+          business_name: args.facts.business_name,
+          attempted,
+          rehosted,
+        }),
+      );
+    }
+  } catch {
+    // Re-hosting must never block the build.
+  }
 
   return parsed;
 }
