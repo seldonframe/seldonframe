@@ -2,6 +2,7 @@ import Anthropic from "@anthropic-ai/sdk";
 import { and, eq } from "drizzle-orm";
 import { db } from "@/db";
 import { organizations, soulSources, soulWiki } from "@/db/schema";
+import { DEFAULT_SONNET_MODEL } from "@/lib/ai/models";
 
 type WikiCategory = {
   slug: string;
@@ -121,7 +122,7 @@ async function compileArticle(client: Anthropic, category: WikiCategory, rawBund
   const soulRecord = soul && typeof soul === "object" ? (soul as Record<string, unknown>) : null;
 
   const response = await client.messages.create({
-    model: "claude-sonnet-4-20250514",
+    model: DEFAULT_SONNET_MODEL,
     max_tokens: 4096,
     system: `You are a business knowledge compiler. Your job is to read raw source material about a business and compile a specific wiki article from it.
 
@@ -192,7 +193,7 @@ export async function incrementalCompile(orgId: string, newSourceId: string) {
     const existing = existingArticles.find((article) => article.slug === category.slug) as WikiRow | undefined;
 
     const response = await client.messages.create({
-      model: "claude-sonnet-4-20250514",
+      model: DEFAULT_SONNET_MODEL,
       max_tokens: 4096,
       system: `You are a wiki editor. You have an existing article and new source material. Update the article if the new material adds relevant information. If nothing new is relevant, return the existing article unchanged.
 
