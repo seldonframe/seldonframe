@@ -28,9 +28,27 @@ Pricing for paid tiers: $29/mo (Pro) or $99/mo (Agency, white-label). See [seldo
 
 Run the entire stack on your own infrastructure. AGPL-3.0-licensed source code; full control over data, deploy target, and customization.
 
-### Fastest path — Docker Compose
+### Fastest path — prebuilt image (no local build)
 
-One command brings up Postgres, the database proxy, migrations, and the app:
+Pull the published multi-arch image (amd64 + arm64) — no `next build` on your machine:
+
+```bash
+git clone https://github.com/seldonframe/seldonframe.git
+cd seldonframe
+cp .env.docker.example .env.docker     # then add your ANTHROPIC_API_KEY or OPENAI_API_KEY
+docker compose -f docker-compose.yml -f docker-compose.ghcr.yml up   # → http://localhost:3000
+```
+
+This pulls [`ghcr.io/seldonframe/seldonframe:latest`](https://github.com/seldonframe/seldonframe/pkgs/container/seldonframe). To pin a release instead of `latest`:
+
+```bash
+SELDONFRAME_IMAGE=ghcr.io/seldonframe/seldonframe:1.1.0 \
+  docker compose -f docker-compose.yml -f docker-compose.ghcr.yml up
+```
+
+### Build from source
+
+Or build the image locally — same one command brings up Postgres, the database proxy, migrations, and the app:
 
 ```bash
 git clone https://github.com/seldonframe/seldonframe.git
@@ -39,7 +57,7 @@ cp .env.docker.example .env.docker     # then add your ANTHROPIC_API_KEY or OPEN
 docker compose up --build              # → http://localhost:3000
 ```
 
-That's it — data lives in a local Postgres volume, and nothing leaves your machine except the LLM calls you configure. Compose runs the schema migrations for you before the app starts.
+Either way, data lives in a local Postgres volume, and nothing leaves your machine except the LLM calls you configure. Compose runs the schema migrations for you before the app starts.
 
 > Why the extra `neon-proxy` service? In production SeldonFrame runs on Neon, whose driver speaks SQL-over-HTTP. The proxy lets that same runtime talk to your own plain Postgres — see [`packages/crm/src/db/index.ts`](packages/crm/src/db/index.ts). Migrations connect to Postgres directly.
 
