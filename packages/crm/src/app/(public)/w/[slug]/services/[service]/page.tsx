@@ -100,6 +100,7 @@ export default async function WorkspaceServicePage({ params }: PageProps) {
         servicePages={navServices}
         homeHref={homeHref}
         cta={payload.nav?.cta}
+        logoUrl={payload.logo}
       />
       <ServicePageTemplate
         archetype={payload.hero.archetype}
