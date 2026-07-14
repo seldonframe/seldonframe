@@ -40,6 +40,7 @@ import {
 } from "./extraction-prompt";
 import { parseExtraction } from "./extraction-parser";
 import { firecrawlScrape, type ScrapeDeps } from "./firecrawl-scrape";
+import { harvestImagesFromHtml } from "./html-image-harvester";
 import { WebFetchError, type WebFetchErrorReason } from "./web-fetch-extractor";
 
 // Re-export the error type so callers can import it from either path
@@ -233,5 +234,56 @@ export async function extractBusinessFactsFromUrl(params: {
     );
   }
 
-  return parsed.data;
+  const facts = parsed.data;
+
+  // Deterministically enrich with images harvested straight from the page
+  // HTML. Firecrawl markdown only carries ![](...) images; the real hero /
+  // gallery photos live in CSS background / srcset / lazy attrs and the logo
+  // + og:image live in <head>. We merge these ourselves rather than trusting
+  // the LLM to surface them from markdown (which it structurally cannot).
+  if (scrape.html || scrape.ogImage) {
+    const harvest = harvestImagesFromHtml(scrape.html ?? "", scrape.finalUrl);
+    facts.logo = harvest.logo ?? scrape.favicon ?? facts.logo ?? null;
+
+    const keyOf = (src: string): string => {
+      try {
+        const u = new URL(src);
+        return u.origin + u.pathname;
+      } catch {
+        return src;
+      }
+    };
+    const existing = Array.isArray(facts.photos) ? facts.photos : [];
+    const seen = new Set(existing.map((p) => keyOf(p.src)));
+    const additions: NonNullable<ExtractedBusinessFacts["photos"]> = [];
+
+    // og:image first — the strongest hero candidate.
+    const ogSrc = scrape.ogImage ?? harvest.ogImage;
+    if (ogSrc && !seen.has(keyOf(ogSrc))) {
+      additions.push({ src: ogSrc, alt: "", section: "hero" });
+      seen.add(keyOf(ogSrc));
+    }
+    for (const img of harvest.images) {
+      const k = keyOf(img.src);
+      if (seen.has(k)) continue;
+      seen.add(k);
+      additions.push({ src: img.src, alt: img.alt, section: img.section });
+    }
+
+    // Real source photos go FIRST so the R1 generator prefers them over stock.
+    facts.photos = [...additions, ...existing].slice(0, 12);
+
+    console.warn(
+      JSON.stringify({
+        event: "source_images_harvested",
+        url: params.url,
+        from_html: harvest.images.length,
+        og_image: !!ogSrc,
+        logo: !!facts.logo,
+        total_photos: facts.photos.length,
+      }),
+    );
+  }
+
+  return facts;
 }
