@@ -8,6 +8,7 @@ import { getCurrentUser, getOrgId } from "@/lib/auth/helpers";
 import { canSeldonIt, resolvePlanFromPlanId } from "@/lib/billing/entitlements";
 import { assertWritable } from "@/lib/demo/server";
 import { getAIClient, getSeldonUsageStats, recordSeldonUsage } from "@/lib/ai/client";
+import { DEFAULT_SONNET_MODEL } from "@/lib/ai/models";
 import { exportWorkspaceAsAgentAction } from "@/lib/ai/export-workspace-as-agent";
 import { writeEvent } from "@/lib/brain";
 import { buildProgressiveBrainContext } from "@/lib/brain-manifest";
@@ -175,7 +176,7 @@ function toSeldonErrorMessage(cause: unknown) {
   }
 
   if (normalized.includes("model") || normalized.includes("not found")) {
-    return "Seldon It model configuration failed. Check SELDON_MODEL (expected claude-sonnet-4-20250514).";
+    return "Seldon It model configuration failed. Check that SELDON_MODEL is a valid Anthropic model id (default claude-sonnet-4-5-20250929).";
   }
 
   if (
@@ -1303,7 +1304,7 @@ export async function runSeldonItAction(_prev: SeldonRunState, formData: FormDat
     const systemPrompt = buildSystemPrompt(soul, integrations, wikiContent);
 
     const response = await aiResolution.client.messages.create({
-      model: process.env.SELDON_MODEL?.trim() || "claude-sonnet-4-20250514",
+      model: process.env.SELDON_MODEL?.trim() || DEFAULT_SONNET_MODEL,
       max_tokens: 4096,
       system: systemPrompt,
       messages: [

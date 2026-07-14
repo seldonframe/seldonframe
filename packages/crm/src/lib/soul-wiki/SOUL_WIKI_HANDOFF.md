@@ -57,8 +57,8 @@ This runbook covers Soul Wiki ingestion, compilation, retrieval, onboarding auto
 
 ## AI/Env Requirements
 - `ANTHROPIC_API_KEY` is required for compile/query behavior.
-- Default model currently used in Soul Wiki compile/query paths:
-  - `claude-sonnet-4-20250514`
+- Default model currently used in Soul Wiki compile/query paths (from `DEFAULT_SONNET_MODEL` in `src/lib/ai/models.ts`):
+  - `claude-sonnet-4-5-20250929`
 
 ## Safety and Failure Behavior
 - Demo mode write guards are active on write routes/actions.

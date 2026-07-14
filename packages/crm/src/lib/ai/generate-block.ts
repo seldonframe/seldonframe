@@ -1,12 +1,13 @@
 import { getAnthropicClient } from "@/lib/ai/client";
 import { assembleBlockContext } from "@/lib/ai/context";
+import { DEFAULT_SONNET_MODEL } from "@/lib/ai/models";
 import { validateMigrationSQL } from "@/lib/db/migration-safety";
 import { generateMarketplaceBlockCodeFromBlockMd, type GeneratedBlockCode } from "@/lib/marketplace/actions";
 import { db } from "@/db";
 import { marketplaceBlocks } from "@/db/schema";
 import { and, desc, eq, ilike, or } from "drizzle-orm";
 
-const SELDON_MODEL = process.env.SELDON_MODEL?.trim() || "claude-sonnet-4-20250514";
+const SELDON_MODEL = process.env.SELDON_MODEL?.trim() || DEFAULT_SONNET_MODEL;
 
 export type ClarifyingQuestion = {
   id: string;
