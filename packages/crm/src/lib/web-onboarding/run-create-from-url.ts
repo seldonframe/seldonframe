@@ -257,7 +257,24 @@ export async function runCreateFromUrl(input: RunInput): Promise<RunResult> {
         facts = await input.deps.extractBusinessFactsFromUrl({ url: validation.url, byokKey: extraction.key });
       } catch (err: unknown) {
         const reason = (err as { reason?: string }).reason ?? "extraction_failed";
-        sse.error(422, { reason });
+        // 2026-07-14 — extraction-failed honesty fix. extraction_failed is a
+        // PERMANENT condition for that URL (no phone/name/location found
+        // anywhere on the site) — retrying can never succeed. Without a
+        // `message`, the UI falls back to "Something broke on our end. Give
+        // it another try." and shows a Try again button, which burns the
+        // visitor's rate limit on a build that will fail identically every
+        // time. Other reasons (anthropic_unauthorized, credits_exhausted,
+        // internal_error) are untouched — those ARE sometimes transient.
+        sse.error(
+          422,
+          reason === "extraction_failed"
+            ? {
+                reason,
+                message:
+                  "We read that site but couldn't find the basics we need — a business name, location, and phone number. Try a different URL, or describe your business instead.",
+              }
+            : { reason },
+        );
         sse.close();
         return;
       }
