@@ -183,7 +183,7 @@ export function RecapPanel({
               <button
                 type="button"
                 onClick={edgeCasePrompt.onRecord}
-                className="inline-flex h-9 items-center gap-2 rounded-full border bg-transparent px-4 text-[13.5px] font-[600]"
+                className="inline-flex h-9 items-center gap-2 rounded-[11px] border bg-transparent px-4 text-[13.5px] font-[600]"
                 style={{ borderColor: "var(--lp-border)", color: "var(--lp-ink)" }}
               >
                 <span className="size-1.5 rounded-full bg-[#EF4444]" aria-hidden />
@@ -279,7 +279,7 @@ export function RecapPanel({
               type="button"
               disabled={compiling}
               onClick={onCompileNow}
-              className="mt-1 inline-flex w-full items-center justify-center gap-2.5 rounded-full px-5 py-3 text-[14px] font-[600] disabled:opacity-50 min-[720px]:w-auto"
+              className="mt-1 inline-flex w-full items-center justify-center gap-2.5 rounded-[11px] px-5 py-3 text-[14px] font-[600] disabled:opacity-50 min-[720px]:w-auto"
               style={{ background: "var(--lp-accent)", color: "var(--lp-on-accent)" }}
             >
               {compiling ? "Compiling..." : "Looks right — compile my agent"}
@@ -288,7 +288,7 @@ export function RecapPanel({
             <a
               href={claimHref}
               onClick={onApprove}
-              className="mt-1 inline-flex w-full items-center justify-center gap-2.5 rounded-full px-5 py-3 text-[14px] font-[600] min-[720px]:w-auto"
+              className="mt-1 inline-flex w-full items-center justify-center gap-2.5 rounded-[11px] px-5 py-3 text-[14px] font-[600] min-[720px]:w-auto"
               style={{ background: "var(--lp-accent)", color: "var(--lp-on-accent)" }}
             >
               Looks right — claim &amp; compile my agent
@@ -302,7 +302,7 @@ export function RecapPanel({
           type="button"
           disabled={compiling}
           onClick={onCompileAgent}
-          className="mt-1 inline-flex items-center justify-center gap-2.5 rounded-full px-5 py-3 text-[14px] font-[600] disabled:opacity-50"
+          className="mt-1 inline-flex items-center justify-center gap-2.5 rounded-[11px] px-5 py-3 text-[14px] font-[600] disabled:opacity-50"
           style={{ background: "var(--lp-accent)", color: "var(--lp-on-accent)" }}
         >
           {compiling ? "Compiling..." : "Compile my agent"}
@@ -314,7 +314,7 @@ export function RecapPanel({
           <p className="text-[13.5px] font-[600]" style={{ color: "var(--lp-ink)" }}>Your agent is compiled</p>
           <a
             href={`/studio/agents/${compiledTemplateId}`}
-            className="inline-flex items-center justify-center gap-2.5 rounded-full px-5 py-3 text-[14px] font-[600]"
+            className="inline-flex items-center justify-center gap-2.5 rounded-[11px] px-5 py-3 text-[14px] font-[600]"
             style={{ background: "var(--lp-accent)", color: "var(--lp-on-accent)" }}
           >
             Open your agent

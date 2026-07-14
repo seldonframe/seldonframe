@@ -1927,7 +1927,7 @@ function ConnectToolsBanner({
               <li key={t.key}>
                 <Link
                   href="/integrations"
-                  className="inline-flex items-center gap-1.5 rounded-full border border-amber-500/40 bg-background px-3 py-1 text-xs font-medium text-amber-800 transition-colors hover:bg-amber-500/10 dark:text-amber-300"
+                  className="inline-flex items-center gap-1.5 rounded-[11px] border border-amber-500/40 bg-background px-3 py-1 text-xs font-medium text-amber-800 transition-colors hover:bg-amber-500/10 dark:text-amber-300"
                 >
                   Connect {t.label} in Integrations
                   <ArrowRight className="size-3.5" aria-hidden />
@@ -2128,7 +2128,7 @@ function AppToolChip({
       onClick={onClick}
       disabled={disabled}
       aria-pressed={on}
-      className={`inline-flex items-center gap-1.5 rounded-full border px-3 py-1.5 text-xs font-medium transition-colors disabled:opacity-60 ${
+      className={`inline-flex items-center gap-1.5 rounded-[11px] border px-3 py-1.5 text-xs font-medium transition-colors disabled:opacity-60 ${
         on
           ? "border-indigo-500/40 bg-indigo-500/10 text-indigo-600 dark:text-indigo-300"
           : "bg-background text-muted-foreground hover:bg-muted/50"

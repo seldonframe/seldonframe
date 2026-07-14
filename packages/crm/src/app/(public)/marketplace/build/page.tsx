@@ -7,7 +7,7 @@
 //
 // Server component — no "use client": all static content, navigation is plain
 // <Link>. Matches the marketplace design system exactly (paper #F6F2EA / ink
-// #221D17 / green #059669, Hanken Grotesk + Newsreader), reusing the shared
+// #221D17 / green #1F2B24, Hanken Grotesk + Newsreader), reusing the shared
 // chrome (MarketplaceNav/Footer/Styles) and icon system.
 //
 // SEO/GEO: per-page Metadata (title/description/canonical/OG) + schema.org
@@ -158,7 +158,7 @@ export default function MarketplaceBuildPage(): ReactElement {
               letterSpacing: "0.12em",
               textTransform: "uppercase",
               color: MKT.green,
-              background: "rgba(5, 150, 105,0.10)",
+              background: "rgba(31, 43, 36,0.10)",
               padding: "5px 12px",
               borderRadius: 999,
               marginBottom: 18,
@@ -355,7 +355,7 @@ export default function MarketplaceBuildPage(): ReactElement {
                       width: 44,
                       height: 44,
                       borderRadius: 12,
-                      background: "rgba(5, 150, 105,0.10)",
+                      background: "rgba(31, 43, 36,0.10)",
                       color: MKT.green,
                       display: "flex",
                       alignItems: "center",
@@ -380,8 +380,8 @@ export default function MarketplaceBuildPage(): ReactElement {
           className="sf-build-cta"
           style={{
             marginTop: 52,
-            background: "rgba(5, 150, 105,0.07)",
-            border: "1px solid rgba(5, 150, 105,0.18)",
+            background: "rgba(31, 43, 36,0.07)",
+            border: "1px solid rgba(31, 43, 36,0.18)",
             borderRadius: 22,
             padding: "36px 40px",
             display: "flex",

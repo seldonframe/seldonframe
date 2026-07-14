@@ -20,14 +20,14 @@ import type { ListingTrustStats } from "@/db/schema/marketplace";
 export const MKT = {
   paper: "#F6F2EA",
   ink: "#221D17",
-  green: "#059669",
-  greenLight: "#34D399",
+  green: "#1F2B24",
+  greenLight: "#F6F2EA",
   dark: "#1F2B24",
   // common alpha-on-ink helpers used all over the design
   ink05: "rgba(34,29,23,0.05)",
   ink08: "rgba(34,29,23,0.08)",
   ink10: "rgba(34,29,23,0.10)",
-  green10: "rgba(5, 150, 105,0.10)",
+  green10: "rgba(31, 43, 36,0.10)",
   fontSans: "'Hanken Grotesk',system-ui,sans-serif",
   fontSerif: "'Newsreader',serif",
   fontMono: "'DM Mono',monospace",

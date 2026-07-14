@@ -560,7 +560,7 @@ export function ListOnMarketplace(props: Props) {
                   aria-checked={priceMode === mode}
                   onClick={() => setPriceMode(mode)}
                   disabled={isSaving}
-                  className={`inline-flex h-8 items-center rounded-full border px-3 text-xs font-medium transition disabled:opacity-60 ${
+                  className={`inline-flex h-8 items-center rounded-[11px] border px-3 text-xs font-medium transition disabled:opacity-60 ${
                     priceMode === mode
                       ? "border-primary bg-primary/10 text-primary"
                       : "border-border bg-background text-muted-foreground hover:text-foreground"

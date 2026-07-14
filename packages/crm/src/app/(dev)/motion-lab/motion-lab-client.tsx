@@ -96,7 +96,7 @@ function AnimatedBeamDemo({ forceStatic }: { forceStatic: boolean }) {
           background: "var(--lp-card, #fff)",
         }}
       >
-        SF
+        Seldon
       </div>
       <div
         ref={toRef}
@@ -317,7 +317,7 @@ export function MotionLabClient() {
           <LabCard
             name="AnimatedBeam"
             purpose={
-              '"SF is the source of truth that pushes outward" — SF core → client tools, the no-Zapier claim.'
+              '"Seldon is the source of truth that pushes outward" — Seldon core → client tools, the no-Zapier claim.'
             }
           >
             <AnimatedBeamDemo forceStatic={reducedMotion} />

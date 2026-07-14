@@ -35,10 +35,10 @@ export function MarketingFinalCta({
       className="border-t border-[var(--lp-border-soft)] bg-[var(--lp-cta-slab)] px-5 py-24 text-center md:px-8 md:py-36 lg:px-12"
     >
       <div className="mx-auto max-w-[880px]">
-        <div className="inline-flex items-center justify-center gap-2.5 text-[12px] font-[600] uppercase tracking-[0.09em] text-[rgba(52, 211, 153,.8)]">
-          <span className="h-px w-4 bg-[rgba(52, 211, 153,.5)]" aria-hidden />
+        <div className="inline-flex items-center justify-center gap-2.5 text-[12px] font-[600] uppercase tracking-[0.09em] text-[rgba(246, 242, 234,.8)]">
+          <span className="h-px w-4 bg-[rgba(246, 242, 234,.5)]" aria-hidden />
           Last thing
-          <span className="h-px w-4 bg-[rgba(52, 211, 153,.5)]" aria-hidden />
+          <span className="h-px w-4 bg-[rgba(246, 242, 234,.5)]" aria-hidden />
         </div>
 
         {variant === "record" ? (
@@ -64,23 +64,21 @@ export function MarketingFinalCta({
           {variant === "record" ? (
             <a
               href="#record-top"
-              className="inline-flex items-center gap-2.5 rounded-full bg-[var(--lp-cta-slab-ink)] px-7 py-4 text-[15px] font-[500] text-[var(--lp-cta-slab)] shadow-[0_1px_2px_rgba(0,0,0,.2),0_12px_30px_rgba(0,0,0,.25),inset_0_1.5px_0_rgba(255,255,255,.6)] transition-all hover:-translate-y-[1.5px] active:translate-y-px focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[var(--lp-accent)]"
+              className="inline-flex items-center gap-2.5 rounded-[11px] bg-[var(--lp-cta-slab-ink)] px-7 py-4 text-[15px] font-[500] text-[var(--lp-cta-slab)] shadow-[0_1px_2px_rgba(0,0,0,.2),0_12px_30px_rgba(0,0,0,.25),inset_0_1.5px_0_rgba(255,255,255,.6)] transition-all hover:-translate-y-[1.5px] active:translate-y-px focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[var(--lp-accent)]"
             >
-              <span className="size-[7px] rounded-full bg-[var(--lp-accent)]" aria-hidden />
               Record your first run →
             </a>
           ) : (
             <Link
               href="/signup"
-              className="inline-flex items-center gap-2.5 rounded-full bg-[var(--lp-cta-slab-ink)] px-7 py-4 text-[15px] font-[500] text-[var(--lp-cta-slab)] shadow-[0_1px_2px_rgba(0,0,0,.2),0_12px_30px_rgba(0,0,0,.25),inset_0_1.5px_0_rgba(255,255,255,.6)] transition-all hover:-translate-y-[1.5px] active:translate-y-px focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[var(--lp-accent)]"
+              className="inline-flex items-center gap-2.5 rounded-[11px] bg-[var(--lp-cta-slab-ink)] px-7 py-4 text-[15px] font-[500] text-[var(--lp-cta-slab)] shadow-[0_1px_2px_rgba(0,0,0,.2),0_12px_30px_rgba(0,0,0,.25),inset_0_1.5px_0_rgba(255,255,255,.6)] transition-all hover:-translate-y-[1.5px] active:translate-y-px focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[var(--lp-accent)]"
             >
-              <span className="size-[7px] rounded-full bg-[var(--lp-accent)]" aria-hidden />
               Build it free →
             </Link>
           )}
           <Link
             href="/agencies"
-            className="inline-flex items-center gap-2 rounded-full border border-[rgba(255,255,255,.16)] bg-transparent px-6 py-4 text-[15px] font-[500] text-[color-mix(in_oklab,var(--lp-cta-slab-ink)_88%,transparent)] transition-all hover:bg-[rgba(255,255,255,.08)] active:translate-y-px"
+            className="inline-flex items-center gap-2 rounded-[11px] border border-[rgba(255,255,255,.16)] bg-transparent px-6 py-4 text-[15px] font-[500] text-[color-mix(in_oklab,var(--lp-cta-slab-ink)_88%,transparent)] transition-all hover:bg-[rgba(255,255,255,.08)] active:translate-y-px"
           >
             For agencies →
           </Link>

@@ -23,7 +23,7 @@
 // than a broken button.
 //
 // Ported STRUCTURE from the Claude Design export's "Connect your calendar" /
-// "Calendar connected" screens; re-skinned to the brand (teal #059669, cream,
+// "Calendar connected" screens; re-skinned to the brand (teal #1F2B24, cream,
 // accent-soft/positive-soft state chips — no violet).
 
 import { useState, useTransition } from "react";

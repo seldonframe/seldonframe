@@ -15,6 +15,7 @@
 import { createContext, useCallback, useContext, useState, type ReactNode } from "react";
 import { Globe } from "lucide-react";
 import type { LandingMode } from "@/app/(public)/landing-mode";
+import { FlickerGrid } from "@/components/landing/flicker-grid";
 
 // Theme tokens live in ./landing-theme.css, imported by the page-level
 // composition (unified-landing.tsx) — NOT here, so this client component
@@ -71,8 +72,16 @@ export function LandingModeShell({
     <LandingModeContext.Provider value={{ mode, recordEnabled, setMode }}>
       <div
         data-mode={mode}
-        className="lp-root min-h-screen bg-[var(--lp-bg)] text-[var(--lp-ink)] selection:bg-[var(--lp-accent)]/20 selection:text-[var(--lp-accent)]"
+        className="lp-root relative min-h-screen bg-[var(--lp-bg)] text-[var(--lp-ink)] selection:bg-[var(--lp-accent)]/20 selection:text-[var(--lp-accent)]"
       >
+        {/* Page-wide flickering-grid backdrop — one fixed layer behind every
+            section. Transparent (parchment) sections reveal it; alt bands and
+            dark slabs stay opaque and cover it. Themed via --lp-fg-color. */}
+        <div className="pointer-events-none fixed inset-0 z-0" aria-hidden>
+          <FlickerGrid color="var(--lp-fg-color)" />
+        </div>
+
+        <div className="relative z-10">
         {nav}
         <main id="main-content">
           {/* Build stack stays mounted-but-hidden so hero input state
@@ -94,6 +103,7 @@ export function LandingModeShell({
           {mode === "record" ? <div className="lp-stack">{recordStack}</div> : null}
         </main>
         {footer}
+        </div>
       </div>
     </LandingModeContext.Provider>
   );

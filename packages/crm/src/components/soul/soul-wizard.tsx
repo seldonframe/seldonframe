@@ -269,7 +269,7 @@ function ClientsStep({
                 key={label}
                 type="button"
                 onClick={() => onClientLabelSelect(label)}
-                className={`rounded-full border px-4 py-2 text-sm transition ${
+                className={`rounded-[11px] border px-4 py-2 text-sm transition ${
                   active ? "border-teal-300 bg-teal-500/15 text-foreground" : "border-white/20 text-slate-200 hover:border-white/40"
                 }`}
               >
@@ -368,7 +368,7 @@ function ProcessStep({
           </div>
         </div>
 
-        <button type="button" className="mt-4 rounded-full border border-white/20 px-4 py-2 text-sm text-foreground" onClick={onAddStage}>
+        <button type="button" className="mt-4 rounded-[11px] border border-white/20 px-4 py-2 text-sm text-foreground" onClick={onAddStage}>
           + Add stage
         </button>
 

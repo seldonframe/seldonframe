@@ -88,7 +88,7 @@ export function OverviewActions({
         <div
           role="radiogroup"
           aria-label="Agent status"
-          className="flex flex-wrap gap-1 rounded-full border bg-muted/50 p-1"
+          className="flex flex-wrap gap-1 rounded-[13px] border bg-muted/50 p-1"
         >
           {STATUSES.map((s) => {
             const isActive = s.value === status;
@@ -103,7 +103,7 @@ export function OverviewActions({
                 disabled={isPending}
                 onClick={() => setStatus(s.value)}
                 title={s.tooltip}
-                className={`relative inline-flex items-center gap-1.5 rounded-full px-3 py-1 text-xs font-medium transition-all duration-150 ease-out focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring disabled:cursor-not-allowed ${
+                className={`relative inline-flex items-center gap-1.5 rounded-[11px] px-3 py-1 text-xs font-medium transition-all duration-150 ease-out focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring disabled:cursor-not-allowed ${
                   isActive
                     ? "bg-primary text-primary-foreground shadow-(--shadow-xs)"
                     : "text-muted-foreground hover:bg-card hover:text-foreground hover:scale-[1.02]"

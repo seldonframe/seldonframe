@@ -82,7 +82,7 @@ export function HeroBuildProof({
 
       <a
         href={ungatedBuildEnabled ? "/try" : "/signup"}
-        className="text-[13.5px] font-[500] text-[#059669] transition-colors hover:text-[#047857]"
+        className="text-[13.5px] font-[500] text-[#1F2B24] transition-colors hover:text-[#16201B]"
       >
         Try it with your URL →
       </a>

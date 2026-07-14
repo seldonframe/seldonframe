@@ -13,7 +13,7 @@ import { useMemo, useState, type ReactElement } from "react";
 import { copyToClipboard } from "@/components/seo/result-card";
 
 const INK = "#221D17";
-const GREEN = "#059669";
+const GREEN = "#1F2B24";
 const INK10 = "rgba(34,29,23,0.10)";
 
 type BizType =

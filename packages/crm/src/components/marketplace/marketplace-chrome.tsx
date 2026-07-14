@@ -92,7 +92,7 @@ export function MarketplaceNav({
   defaultQuery?: string;
 }): ReactElement {
   const navColor = (tab: NavTab) => (active === tab ? MKT.green : "rgba(34,29,23,0.62)");
-  const navBg = (tab: NavTab) => (active === tab ? "rgba(5, 150, 105,0.10)" : "transparent");
+  const navBg = (tab: NavTab) => (active === tab ? "rgba(31, 43, 36,0.10)" : "transparent");
 
   return (
     <header
@@ -207,22 +207,10 @@ export function MarketplaceNav({
         <Link
           href="/studio/agents"
           title="Your workspace"
-          style={{
-            width: 38,
-            height: 38,
-            borderRadius: 999,
-            background: MKT.dark,
-            color: MKT.paper,
-            display: "flex",
-            alignItems: "center",
-            justifyContent: "center",
-            fontWeight: 700,
-            fontSize: 14,
-            flex: "none",
-            textDecoration: "none",
-          }}
+          style={{ display: "flex", flex: "none", textDecoration: "none" }}
         >
-          SF
+          {/* eslint-disable-next-line @next/next/no-img-element -- static brand mark */}
+          <img src="/brand/seldon-mark.svg" alt="Seldon" width={38} height={38} style={{ borderRadius: 11 }} />
         </Link>
       </div>
     </header>

@@ -302,7 +302,7 @@ export function BookingPolicyEditor({
                 onClick={() => toggleField(field)}
                 aria-pressed={on}
                 disabled={isSaving}
-                className={`inline-flex items-center gap-1 rounded-full border px-3 py-1 text-xs font-medium capitalize transition-colors disabled:opacity-60 ${
+                className={`inline-flex items-center gap-1 rounded-[11px] border px-3 py-1 text-xs font-medium capitalize transition-colors disabled:opacity-60 ${
                   on
                     ? "border-indigo-500/40 bg-indigo-500/10 text-indigo-600 dark:text-indigo-300"
                     : "bg-background text-muted-foreground hover:bg-muted/50"

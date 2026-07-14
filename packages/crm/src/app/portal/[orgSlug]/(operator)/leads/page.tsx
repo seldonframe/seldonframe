@@ -76,14 +76,14 @@ export default async function OperatorLeadsPage({
                   <div className="mt-3 flex gap-2">
                     <a
                       href={tel}
-                      className="flex-1 rounded-full py-2 text-center text-[12px] font-semibold text-white"
+                      className="flex-1 rounded-[11px] py-2 text-center text-[12px] font-semibold text-white"
                       style={{ backgroundColor: "#5b21b6" }}
                     >
                       Call
                     </a>
                     <a
                       href={sms}
-                      className="flex-1 rounded-full py-2 text-center text-[12px] font-semibold"
+                      className="flex-1 rounded-[11px] py-2 text-center text-[12px] font-semibold"
                       style={{ border: "1px solid #5b21b6", color: "#5b21b6" }}
                     >
                       Text

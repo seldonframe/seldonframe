@@ -271,7 +271,7 @@ function SuggestionChips({ suggestions, onPick }: { suggestions: string[]; onPic
         <button
           key={suggestion}
           type="button"
-          className="rounded-full border border-border px-3 py-1.5 text-xs hover:bg-accent"
+          className="rounded-[11px] border border-border px-3 py-1.5 text-xs hover:bg-accent"
           onClick={() => onPick(suggestion)}
         >
           {suggestion}
@@ -759,14 +759,14 @@ export function SeldonPageClient({
                         </button>
                         <button
                           type="button"
-                          className="gap-1.5 h-7 rounded-full border border-border dark:border-input bg-card dark:bg-secondary hover:bg-accent px-3 inline-flex items-center"
+                          className="gap-1.5 h-7 rounded-[11px] border border-border dark:border-input bg-card dark:bg-secondary hover:bg-accent px-3 inline-flex items-center"
                         >
                           <CircleDashedIcon className="size-4 text-muted-foreground" />
                           <span className="hidden sm:inline text-sm text-muted-foreground/70">Deep Search</span>
                         </button>
                         <button
                           type="button"
-                          className="gap-1.5 h-7 rounded-full border border-border dark:border-input bg-card dark:bg-secondary hover:bg-accent px-3 inline-flex items-center"
+                          className="gap-1.5 h-7 rounded-[11px] border border-border dark:border-input bg-card dark:bg-secondary hover:bg-accent px-3 inline-flex items-center"
                         >
                           <SparklesIcon className="size-4 text-muted-foreground" />
                           <span className="hidden sm:inline text-sm text-muted-foreground/70">Think</span>

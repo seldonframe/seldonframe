@@ -53,7 +53,7 @@ function renderInlineMarkup(text: string): ReactNode[] {
 export { stripInlineMarkup };
 
 const CALLOUT_META: Record<BlogCallout["kind"], { label: string; icon: string; bg: string; border: string }> = {
-  analogy: { label: "Kind of like…", icon: "💡", bg: MKT.green10, border: "rgba(5, 150, 105,0.28)" },
+  analogy: { label: "Kind of like…", icon: "💡", bg: MKT.green10, border: "rgba(31, 43, 36,0.28)" },
   tip: { label: "Tip", icon: "✅", bg: "rgba(34,29,23,0.04)", border: MKT.ink10 },
   warning: { label: "Watch out", icon: "⚠️", bg: "rgba(196,132,30,0.10)", border: "rgba(196,132,30,0.32)" },
 };

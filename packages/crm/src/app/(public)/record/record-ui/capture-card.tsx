@@ -90,7 +90,7 @@ export function CaptureCard({
                 type="button"
                 disabled={!canStart || !sessionReady}
                 onClick={onRecord}
-                className="inline-flex h-14 items-center gap-2.5 rounded-full border border-[color:var(--lp-border)] bg-transparent px-7 text-[15px] font-[600] text-[color:var(--lp-ink)] hover:border-[color:var(--lp-ink)] disabled:cursor-not-allowed disabled:opacity-40"
+                className="inline-flex h-14 items-center gap-2.5 rounded-[11px] border border-[color:var(--lp-border)] bg-transparent px-7 text-[15px] font-[600] text-[color:var(--lp-ink)] hover:border-[color:var(--lp-ink)] disabled:cursor-not-allowed disabled:opacity-40"
               >
                 <span className="size-2 rounded-full bg-[#F87171]" aria-hidden />
                 Record
@@ -105,7 +105,7 @@ export function CaptureCard({
             </div>
           ) : (
             <div className="flex w-full max-w-[360px] flex-col gap-2">
-              <label className="inline-flex h-12 cursor-pointer items-center justify-center rounded-full border border-[color:var(--lp-border)] bg-transparent px-5 text-center text-[14px] font-[600] text-[color:var(--lp-ink)] hover:border-[color:var(--lp-ink)]">
+              <label className="inline-flex h-12 cursor-pointer items-center justify-center rounded-[11px] border border-[color:var(--lp-border)] bg-transparent px-5 text-center text-[14px] font-[600] text-[color:var(--lp-ink)] hover:border-[color:var(--lp-ink)]">
                 Upload a screen recording
                 <input type="file" accept="video/*" className="sr-only" onChange={onFileChange} />
               </label>
@@ -131,7 +131,7 @@ export function CaptureCard({
               type="button"
               disabled={!fallbackText.trim()}
               onClick={onProcessUpload}
-              className="inline-flex h-11 items-center justify-center rounded-full px-5 text-[13.5px] font-[600] disabled:cursor-not-allowed disabled:opacity-40"
+              className="inline-flex h-11 items-center justify-center rounded-[11px] px-5 text-[13.5px] font-[600] disabled:cursor-not-allowed disabled:opacity-40"
               style={{ background: "var(--lp-accent)", color: "var(--lp-on-accent)" }}
             >
               Process recording
@@ -176,7 +176,7 @@ export function CaptureCard({
           <button
             type="button"
             onClick={onStop}
-            className="inline-flex h-12 items-center justify-center rounded-full border-none px-6 text-[14px] font-[600]"
+            className="inline-flex h-12 items-center justify-center rounded-[11px] border-none px-6 text-[14px] font-[600]"
             style={{ background: "var(--lp-ink)", color: "var(--lp-bg)" }}
           >
             Stop &amp; compile
@@ -210,7 +210,7 @@ export function CaptureCard({
             type="button"
             disabled={!canStart || !sessionReady}
             onClick={onRecord}
-            className="inline-flex h-12 items-center justify-center gap-2 rounded-full border bg-transparent px-6 text-[13.5px] font-[600] disabled:cursor-not-allowed disabled:opacity-40"
+            className="inline-flex h-12 items-center justify-center gap-2 rounded-[11px] border bg-transparent px-6 text-[13.5px] font-[600] disabled:cursor-not-allowed disabled:opacity-40"
             style={{ borderColor: "var(--lp-border)", color: "var(--lp-ink)" }}
           >
             <span className="size-2 rounded-full bg-[#EF4444]" aria-hidden />

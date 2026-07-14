@@ -14,7 +14,7 @@
 //   --ink:      #221D17  (warm near-black)
 //   --ink-soft: #6E665A  (softer body text)
 //   --green:    #1F2B24  (deep green — dark blocks, nav pill bg)
-//   --sf-green: #059669  (SeldonFrame brand green — accent dots, CTAs)
+//   --sf-green: #1F2B24  (SeldonFrame brand green — accent dots, CTAs)
 //   Font: Hanken Grotesk (body/UI) + Newsreader italic (display accents)
 //
 // Functional input (URL/biz paste) is preserved — the hero's main job
@@ -28,7 +28,6 @@ import { useRouter } from "next/navigation";
 import { ArrowRight, FileText, Globe } from "lucide-react";
 
 import { MarketingAgentOrbit } from "@/components/landing/marketing-agent-orbit";
-import { FlickerGrid } from "@/components/landing/flicker-grid";
 import { MarketingDemoMarquee } from "@/components/landing/marketing-demo-marquee";
 import { heroSubmitTarget } from "@/components/landing/hero-submit-target";
 import { BorderBeam } from "@/components/ui/border-beam";
@@ -200,38 +199,13 @@ export function MarketingHero({
     return () => clearTimeout(t);
   }, []);
 
-  // Flickering-grid backdrop fades out as the hero scrolls away.
-  const [gridOpacity, setGridOpacity] = useState(1);
-  useEffect(() => {
-    const onScroll = () => {
-      const y = window.scrollY;
-      // Full at top, gone by ~520px of scroll.
-      setGridOpacity(Math.max(0, 1 - y / 520));
-    };
-    onScroll();
-    window.addEventListener("scroll", onScroll, { passive: true });
-    return () => window.removeEventListener("scroll", onScroll);
-  }, []);
-
   return (
     <section
       id="top"
-      aria-label="SeldonFrame hero"
+      aria-label="Seldon hero"
       className="relative flex flex-col items-center justify-center overflow-hidden px-5 pb-24 pt-[100px] text-center md:px-8 md:pb-32 md:pt-[120px] lg:px-12"
     >
-      {/* Flickering-grid backdrop — same parchment field, subtle ink squares,
-          fades on scroll. Decorative + reduced-motion-safe (static grid). A
-          bottom mask keeps text legible and blends into the page below. */}
-      <div
-        className="pointer-events-none absolute inset-0 z-0"
-        style={{ opacity: gridOpacity, transition: "opacity 120ms linear" }}
-        aria-hidden
-      >
-        <FlickerGrid
-          className="[mask-image:radial-gradient(ellipse_at_center,black,transparent_78%)]"
-          color="#1F2B24"
-        />
-      </div>
+      {/* Backdrop grid now lives page-wide on the shell (landing-mode.tsx). */}
 
       {/* Single centered column (video panel removed — the chatbox/form is
           the focal point). */}
@@ -241,7 +215,7 @@ export function MarketingHero({
           record on-ramp in one line. */}
       <a
         href="/record"
-        className="mb-4 inline-flex items-center gap-2 rounded-full border border-[rgba(34,29,23,.12)] bg-[#FFFDFA] px-3.5 py-1.5 text-[12.5px] font-[500] text-[#221D17] shadow-[0_1px_2px_rgba(34,29,23,.06)] transition-colors hover:border-[#059669]/40"
+        className="mb-4 inline-flex items-center gap-2 rounded-[11px] border border-[rgba(34,29,23,.12)] bg-[#FFFDFA] px-3.5 py-1.5 text-[12.5px] font-[500] text-[#221D17] shadow-[0_1px_2px_rgba(34,29,23,.06)] transition-colors hover:border-[#1F2B24]/40"
       >
         <span className="sf-rec-dot inline-block size-[7px] rounded-full bg-[#E5484D]" aria-hidden />
         <strong className="font-[700]">NEW</strong>
@@ -253,7 +227,7 @@ export function MarketingHero({
       {/* Eyebrow */}
       <p className="inline-flex items-center gap-2.5 font-sans text-[12.5px] tracking-[0.04em] text-[#6E665A]">
         <span className="inline-block h-px w-4 bg-[#9A9183]" aria-hidden />
-        <span className="sf-blink-dot inline-block size-1.5 rounded-full bg-[#059669]" aria-hidden />
+        <span className="sf-blink-dot inline-block size-1.5 rounded-full bg-[#1F2B24]" aria-hidden />
         Built in 3 minutes — No coding
       </p>
 
@@ -287,9 +261,8 @@ export function MarketingHero({
       <div className="mt-7 flex flex-wrap items-center justify-center gap-3">
         <a
           href="/signup"
-          className="inline-flex items-center gap-2.5 rounded-full bg-[#1F2B24] px-6 py-3.5 text-[15px] font-[500] text-[#F6F2EA] shadow-[0_1px_2px_rgba(34,29,23,.10),0_6px_16px_rgba(34,29,23,.10),0_18px_40px_rgba(34,29,23,.06),inset_0_1.5px_0_rgba(255,255,255,.12)] transition-all hover:-translate-y-[1.5px] hover:shadow-[0_2px_4px_rgba(34,29,23,.12),0_12px_26px_rgba(34,29,23,.14),inset_0_1.5px_0_rgba(255,255,255,.14)] active:translate-y-px"
+          className="inline-flex items-center gap-2.5 rounded-[11px] bg-[#1F2B24] px-6 py-3.5 text-[15px] font-[500] text-[#F6F2EA] shadow-[0_1px_2px_rgba(34,29,23,.10),0_6px_16px_rgba(34,29,23,.10),0_18px_40px_rgba(34,29,23,.06),inset_0_1.5px_0_rgba(255,255,255,.12)] transition-all hover:-translate-y-[1.5px] hover:shadow-[0_2px_4px_rgba(34,29,23,.12),0_12px_26px_rgba(34,29,23,.14),inset_0_1.5px_0_rgba(255,255,255,.14)] active:translate-y-px"
         >
-          <span className="size-[7px] rounded-full bg-[#059669] shadow-[0_0_0_4px_rgba(5, 150, 105,.22)]" aria-hidden />
           Build it free →
         </a>
       </div>
@@ -323,15 +296,15 @@ export function MarketingHero({
         id="hero-form"
         aria-label="Start a workspace"
         onSubmit={(e) => { e.preventDefault(); submit(); }}
-        className="sf-prompt relative mt-10 w-full max-w-[720px] overflow-hidden rounded-[18px] border border-[rgba(34,29,23,.14)] bg-[#FFFDFA] shadow-[0_1px_2px_rgba(34,29,23,.06),0_10px_30px_rgba(34,29,23,.08)] transition-[border-color,box-shadow] duration-200 focus-within:border-[#059669]/50 focus-within:shadow-[0_1px_2px_rgba(34,29,23,.06),0_10px_30px_rgba(34,29,23,.08),0_0_0_3px_rgba(5, 150, 105,.12)]"
+        className="sf-prompt relative mt-10 w-full max-w-[720px] overflow-hidden rounded-[18px] border border-[rgba(34,29,23,.14)] bg-[#FFFDFA] shadow-[0_1px_2px_rgba(34,29,23,.06),0_10px_30px_rgba(34,29,23,.08)] transition-[border-color,box-shadow] duration-200 focus-within:border-[#1F2B24]/50 focus-within:shadow-[0_1px_2px_rgba(34,29,23,.06),0_10px_30px_rgba(34,29,23,.08),0_0_0_3px_rgba(31, 43, 36,.12)]"
       >
         {/* Task 13: Live-state accent BorderBeam. Only render when reduced-motion is off. */}
         {!reducedMotion && (
           <BorderBeam
             size={40}
             duration={6}
-            colorFrom="#059669"
-            colorTo="#059669"
+            colorFrom="#1F2B24"
+            colorTo="#1F2B24"
             delay={0}
             borderWidth={1}
           />
@@ -374,7 +347,7 @@ export function MarketingHero({
 
         {/* URL pane — terminal-style prompt prefix */}
         <div className={`items-center gap-2.5 px-4 pt-3.5 ${tab === "url" ? "flex" : "hidden"}`}>
-          <span className="select-none font-mono text-[16px] font-[600] text-[#059669]" aria-hidden>&gt;</span>
+          <span className="select-none font-mono text-[16px] font-[600] text-[#1F2B24]" aria-hidden>&gt;</span>
           <input
             ref={urlRef}
             type="text"
@@ -388,7 +361,7 @@ export function MarketingHero({
             spellCheck={false}
             placeholder="https://your-hvac-company.com"
             aria-label="Paste your website URL"
-            className="h-14 w-full border-0 bg-transparent font-mono text-[15px] text-[#221D17] caret-[#059669] outline-none placeholder:text-[#9A9183]"
+            className="h-14 w-full border-0 bg-transparent font-mono text-[15px] text-[#221D17] caret-[#1F2B24] outline-none placeholder:text-[#9A9183]"
           />
         </div>
 
@@ -403,7 +376,7 @@ export function MarketingHero({
             spellCheck={false}
             placeholder="Family-owned HVAC in Stockton, CA. 24/7 emergency service. Licensed C-20, bonded, insured. 4.8 stars on Google with 412 reviews."
             aria-label="Describe your business"
-            className="block max-h-60 min-h-[110px] w-full resize-none border-0 bg-transparent font-sans text-[15px] leading-[1.55] tracking-[-0.005em] text-[#221D17] caret-[#059669] outline-none placeholder:text-[#9A9183]"
+            className="block max-h-60 min-h-[110px] w-full resize-none border-0 bg-transparent font-sans text-[15px] leading-[1.55] tracking-[-0.005em] text-[#221D17] caret-[#1F2B24] outline-none placeholder:text-[#9A9183]"
           />
         </div>
 
@@ -418,7 +391,7 @@ export function MarketingHero({
             type="submit"
             disabled={!canSubmit || submitting}
             aria-label="Build workspace"
-            className="group inline-flex h-10 items-center justify-center gap-2 rounded-[10px] bg-[#059669] px-4 text-[13.5px] font-[600] text-[#FFFDFA] shadow-[0_6px_20px_rgba(5, 150, 105,.28)] transition-all hover:-translate-y-px hover:bg-[#047857] hover:shadow-[0_8px_24px_rgba(5, 150, 105,.34)] active:translate-y-px disabled:cursor-not-allowed disabled:opacity-50 disabled:shadow-none focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[#059669]"
+            className="group inline-flex h-10 items-center justify-center gap-2 rounded-[10px] bg-[#1F2B24] px-4 text-[13.5px] font-[600] text-[#FFFDFA] shadow-[0_6px_20px_rgba(31, 43, 36,.28)] transition-all hover:-translate-y-px hover:bg-[#16201B] hover:shadow-[0_8px_24px_rgba(31, 43, 36,.34)] active:translate-y-px disabled:cursor-not-allowed disabled:opacity-50 disabled:shadow-none focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[#1F2B24]"
           >
             <span>Build workspace</span>
             <ArrowRight size={14} className="transition-transform group-hover:translate-x-0.5" aria-hidden />
@@ -429,10 +402,10 @@ export function MarketingHero({
       {/* The second on-ramp, at the point of action: record instead of describe. */}
       <a
         href="/record"
-        className="group mt-3.5 inline-flex items-center gap-2 text-[13.5px] font-[500] text-[#6E665A] transition-colors hover:text-[#059669]"
+        className="group mt-3.5 inline-flex items-center gap-2 text-[13.5px] font-[500] text-[#6E665A] transition-colors hover:text-[#1F2B24]"
       >
         <span className="size-[7px] rounded-full bg-[#E5484D]" aria-hidden />
-        or <span className="font-[600] text-[#221D17] group-hover:text-[#059669]">record a workflow</span> you already do
+        or <span className="font-[600] text-[#221D17] group-hover:text-[#1F2B24]">record a workflow</span> you already do
         <ArrowRight size={13} className="transition-transform group-hover:translate-x-0.5" aria-hidden />
       </a>
       </div>
@@ -449,7 +422,7 @@ export function MarketingHero({
       <ul className="mt-6 flex flex-wrap items-center justify-center gap-x-5 gap-y-2">
         {["Build it free", "Live in 3 minutes", "$29/mo flat", "Cancel anytime"].map((item) => (
           <li key={item} className="flex items-center gap-2 text-[13.5px] text-[#6E665A]">
-            <span className="flex size-[17px] items-center justify-center rounded-full bg-[rgba(5, 150, 105,.12)] text-[10px] font-[700] text-[#059669]" aria-hidden>✓</span>
+            <span className="flex size-[17px] items-center justify-center rounded-full bg-[rgba(31, 43, 36,.12)] text-[10px] font-[700] text-[#1F2B24]" aria-hidden>✓</span>
             {item}
           </li>
         ))}
@@ -464,7 +437,7 @@ export function MarketingHero({
           className="fixed inset-0 z-[60] flex flex-col items-center justify-center gap-4 bg-[#F6F2EA]/85 backdrop-blur-md"
           aria-live="polite"
         >
-          <div className="size-7 animate-spin rounded-full border-2 border-[#059669]/20 border-t-[#059669]" aria-hidden />
+          <div className="size-7 animate-spin rounded-full border-2 border-[#1F2B24]/20 border-t-[#1F2B24]" aria-hidden />
           <div className="font-sans text-xs uppercase tracking-[0.12em] text-[#6E665A]">
             Spinning up your workspace…
           </div>
@@ -473,7 +446,7 @@ export function MarketingHero({
 
       <style jsx>{`
         .sf-blink-dot {
-          box-shadow: 0 0 0 3px color-mix(in oklab, #059669 22%, transparent);
+          box-shadow: 0 0 0 3px color-mix(in oklab, #1F2B24 22%, transparent);
           animation: sf-blink 2.4s ease-in-out infinite;
         }
         @media (prefers-reduced-motion: reduce) {

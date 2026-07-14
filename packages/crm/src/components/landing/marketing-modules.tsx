@@ -4,7 +4,7 @@
 //
 // Redesign 2026-06-18 — warm light aesthetic + ANIMATED product demos.
 // "What you get" — feature cards. White card surfaces on paper background,
-// SeldonFrame green (#059669) accent icons, Newsreader italic headline.
+// SeldonFrame green (#1F2B24) accent icons, Newsreader italic headline.
 //
 // Each feature card holds a faithful, self-contained animated replica of the
 // real product surface (CRM table row, booking page + operator calendar, intake
@@ -83,15 +83,15 @@ export function MarketingModules() {
     <section
       id="modules"
       aria-label="Features"
-      className="border-t border-[rgba(34,29,23,.08)] bg-[#F6F2EA] px-5 py-20 md:px-8 md:py-28 lg:px-12"
+      className="border-t border-[rgba(34,29,23,.08)] px-5 py-20 md:px-8 md:py-28 lg:px-12"
     >
       <div className="mx-auto max-w-[1120px]">
         {/* Section head */}
         <div className="section-head-center text-center">
-          <div className="inline-flex items-center justify-center gap-2.5 text-[12px] font-[600] uppercase tracking-[0.09em] text-[#059669]">
-            <span className="h-px w-4 bg-[#059669] opacity-50" aria-hidden />
+          <div className="inline-flex items-center justify-center gap-2.5 text-[12px] font-[600] uppercase tracking-[0.09em] text-[#1F2B24]">
+            <span className="h-px w-4 bg-[#1F2B24] opacity-50" aria-hidden />
             Run your business
-            <span className="h-px w-4 bg-[#059669] opacity-50" aria-hidden />
+            <span className="h-px w-4 bg-[#1F2B24] opacity-50" aria-hidden />
           </div>
           <h2 className="mx-auto mt-3.5 max-w-[20ch] text-[clamp(27px,4.2vw,42px)] font-[500] leading-[1.08] tracking-[-0.025em] text-[#221D17]">
             Your whole front office —{" "}
@@ -144,16 +144,16 @@ export function MarketingAgents() {
       <div className="mx-auto max-w-[1120px]">
         {/* Section head — the two on-ramps */}
         <div className="mx-auto max-w-[680px] text-center">
-          <div className="inline-flex items-center gap-2.5 text-[12px] font-[600] uppercase tracking-[0.09em] text-[rgba(52, 211, 153,.9)]">
-            <span className="h-px w-4 bg-[rgba(52, 211, 153,.5)]" aria-hidden />
+          <div className="inline-flex items-center gap-2.5 text-[12px] font-[600] uppercase tracking-[0.09em] text-[rgba(246, 242, 234,.9)]">
+            <span className="h-px w-4 bg-[rgba(246, 242, 234,.5)]" aria-hidden />
             Hire agents
           </div>
           <h2 className="mt-3.5 text-[clamp(27px,4.2vw,42px)] font-[500] leading-[1.08] tracking-[-0.025em] text-[#F6F2EA]">
             Two ways to build an agent.
           </h2>
           <p className="mx-auto mt-4 max-w-[58ch] text-[clamp(15.5px,1.9vw,18px)] leading-[1.55] text-[rgba(246,242,234,.78)]">
-            <strong className="font-[500] text-[#FFFDFA]">Describe what you&apos;re missing</strong> and SF generates it,
-            or <strong className="font-[500] text-[#FFFDFA]">record what you already do</strong> and SF compiles it. Either
+            <strong className="font-[500] text-[#FFFDFA]">Describe what you&apos;re missing</strong> and Seldon generates it,
+            or <strong className="font-[500] text-[#FFFDFA]">record what you already do</strong> and Seldon compiles it. Either
             way you get a 24/7 worker for pennies — not an employee or an agency.
           </p>
         </div>
@@ -165,13 +165,13 @@ export function MarketingAgents() {
         <div className="mt-10 flex flex-wrap justify-center gap-3">
           <Link
             href="/marketplace"
-            className="inline-flex items-center gap-2 rounded-full bg-[#F6F2EA] px-5 py-3 text-[14px] font-[600] text-[#1F2B24] transition-transform hover:-translate-y-px"
+            className="inline-flex items-center gap-2 rounded-[11px] bg-[#F6F2EA] px-5 py-3 text-[14px] font-[600] text-[#1F2B24] transition-transform hover:-translate-y-px"
           >
             Browse the agent marketplace →
           </Link>
           <Link
             href="/build"
-            className="inline-flex items-center gap-2 rounded-full border border-[rgba(255,255,255,.22)] bg-transparent px-5 py-3 text-[14px] font-[500] text-[rgba(246,242,234,.9)] transition-colors hover:border-[rgba(255,255,255,.4)]"
+            className="inline-flex items-center gap-2 rounded-[11px] border border-[rgba(255,255,255,.22)] bg-transparent px-5 py-3 text-[14px] font-[500] text-[rgba(246,242,234,.9)] transition-colors hover:border-[rgba(255,255,255,.4)]"
           >
             Or build your own in the Studio →
           </Link>
@@ -260,7 +260,7 @@ const CRM_TAG: Record<CrmTone, string> = {
   // text, mirroring contacts-table-view STAGE_PALETTE.
   new: "bg-[rgba(2,132,199,.12)] text-[#0369a1]",
   warm: "bg-[rgba(234,179,8,.14)] text-[#a16207]",
-  book: "bg-[rgba(16,185,129,.14)] text-[#047857]",
+  book: "bg-[rgba(16,185,129,.14)] text-[#16201B]",
 };
 
 function crmTagLabel(tone: CrmTone) {
@@ -376,7 +376,7 @@ function BookingMock() {
                 key={day.d}
                 className={`flex flex-col items-center gap-0.5 rounded-md border py-1 transition-colors duration-300 ${
                   isWed
-                    ? "border-[rgba(5, 150, 105,.45)] bg-[rgba(5, 150, 105,.10)]"
+                    ? "border-[rgba(31, 43, 36,.45)] bg-[rgba(31, 43, 36,.10)]"
                     : "border-[rgba(34,29,23,.07)] bg-[#F6F2EA]"
                 }`}
               >
@@ -415,7 +415,7 @@ function BookingMock() {
                 transition={{ duration: 0.3, ease: EASE, delay: reduce ? 0 : i * 0.06 }}
                 className={`flex items-center justify-center rounded-md border py-1 font-mono text-[11px] font-[500] transition-colors duration-300 ${
                   filled
-                    ? "border-[#059669] bg-[#059669] text-[#F6F2EA]"
+                    ? "border-[#1F2B24] bg-[#1F2B24] text-[#F6F2EA]"
                     : "border-[rgba(34,29,23,.14)] bg-[#FFFDFA] text-[#221D17]"
                 }`}
               >
@@ -432,7 +432,7 @@ function BookingMock() {
               initial={reduce ? false : { opacity: 0, scale: 0.96 }}
               animate={{ opacity: 1, scale: 1 }}
               transition={{ duration: 0.34, ease: EASE }}
-              className="flex h-[28px] items-center justify-center gap-1.5 rounded-md bg-[rgba(5, 150, 105,.12)] font-sans text-[11px] font-[600] text-[#0F6E56]"
+              className="flex h-[28px] items-center justify-center gap-1.5 rounded-md bg-[rgba(31, 43, 36,.12)] font-sans text-[11px] font-[600] text-[#0F6E56]"
             >
               <CheckMark className="size-3" />
               Booked — Wed 4:15 PM
@@ -441,8 +441,8 @@ function BookingMock() {
             <div
               className={`flex h-[28px] items-center justify-center rounded-md font-sans text-[11px] font-[600] transition-colors duration-300 ${
                 selected
-                  ? "bg-[#059669] text-[#FFFDFA]"
-                  : "bg-[rgba(5, 150, 105,.45)] text-[#FFFDFA]"
+                  ? "bg-[#1F2B24] text-[#FFFDFA]"
+                  : "bg-[rgba(31, 43, 36,.45)] text-[#FFFDFA]"
               }`}
             >
               Confirm booking
@@ -496,12 +496,12 @@ function BookingMock() {
                       initial={reduce ? false : { opacity: 0, scale: 0.9, y: -4 }}
                       animate={{ opacity: 1, scale: 1, y: 0 }}
                       transition={{ duration: 0.4, ease: EASE }}
-                      className="absolute inset-x-0.5 rounded-[5px] border border-l-[3px] border-[rgba(34,29,23,.10)] border-l-[#059669] bg-[#FFFDFA] px-1 py-0.5 shadow-[0_1px_3px_rgba(34,29,23,.10)]"
+                      className="absolute inset-x-0.5 rounded-[5px] border border-l-[3px] border-[rgba(34,29,23,.10)] border-l-[#1F2B24] bg-[#FFFDFA] px-1 py-0.5 shadow-[0_1px_3px_rgba(34,29,23,.10)]"
                       style={{
                         top: 8, // ~quarter past the 4 o'clock row
                         height: 30,
                         boxShadow: justArrived
-                          ? "0 0 0 3px rgba(5, 150, 105,.30), 0 1px 3px rgba(34,29,23,.10)"
+                          ? "0 0 0 3px rgba(31, 43, 36,.30), 0 1px 3px rgba(34,29,23,.10)"
                           : undefined,
                       }}
                     >
@@ -575,7 +575,7 @@ function FormMock() {
                 <div
                   className={`flex h-7 items-center rounded-md border px-2.5 font-mono text-[11px] transition-colors duration-200 ${
                     active
-                      ? "border-[#059669] bg-[#FFFDFA] text-[#221D17] shadow-[0_0_0_2px_rgba(5, 150, 105,.15)]"
+                      ? "border-[#1F2B24] bg-[#FFFDFA] text-[#221D17] shadow-[0_0_0_2px_rgba(31, 43, 36,.15)]"
                       : filled
                       ? "border-[rgba(34,29,23,.12)] bg-[#FFFDFA] text-[#221D17]"
                       : "border-[rgba(34,29,23,.08)] bg-[#FFFDFA] text-[#9A9183]"
@@ -589,7 +589,7 @@ function FormMock() {
                   {active ? (
                     <motion.span
                       aria-hidden
-                      className="ml-0.5 inline-block h-3.5 w-px bg-[#059669]"
+                      className="ml-0.5 inline-block h-3.5 w-px bg-[#1F2B24]"
                       animate={{ opacity: [1, 0, 1] }}
                       transition={{ duration: 0.7, repeat: Infinity, ease: "linear" }}
                     />
@@ -601,7 +601,7 @@ function FormMock() {
           <motion.div
             animate={sending ? { scale: [1, 1.04, 1] } : { scale: 1 }}
             transition={{ duration: 0.5, ease: EASE }}
-            className="mt-1 flex h-[30px] items-center justify-center rounded-md bg-[#059669] font-sans text-[11px] font-[600] text-[#FFFDFA]"
+            className="mt-1 flex h-[30px] items-center justify-center rounded-md bg-[#1F2B24] font-sans text-[11px] font-[600] text-[#FFFDFA]"
           >
             {sending ? "Sending…" : "Send"}
           </motion.div>
@@ -614,7 +614,7 @@ function FormMock() {
 function FormSuccess() {
   return (
     <div className="flex min-h-[150px] flex-col items-center justify-center gap-2 py-4 text-center">
-      <span className="inline-flex size-10 items-center justify-center rounded-full bg-[rgba(5, 150, 105,.12)]">
+      <span className="inline-flex size-10 items-center justify-center rounded-full bg-[rgba(31, 43, 36,.12)]">
         <CheckMark className="size-5" />
       </span>
       <p className="m-0 font-sans text-[13px] font-[600] text-[#221D17]">Lead captured</p>
@@ -767,7 +767,7 @@ function ThreadMock({
           initial={false}
           animate={{ opacity: footerShown ? 1 : 0 }}
           transition={{ duration: 0.3, ease: EASE }}
-          className="mt-2 text-center font-sans text-[10.5px] font-[500] text-[#059669]"
+          className="mt-2 text-center font-sans text-[10.5px] font-[500] text-[#1F2B24]"
         >
           {footer}
         </motion.div>
@@ -914,7 +914,7 @@ function CheckMark({ className = "" }: { className?: string }) {
     <svg viewBox="0 0 24 24" fill="none" className={className} aria-hidden>
       <path
         d="M5 13l4 4L19 7"
-        stroke="#059669"
+        stroke="#1F2B24"
         strokeWidth={2.5}
         strokeLinecap="round"
         strokeLinejoin="round"

@@ -83,7 +83,7 @@ export function MarketingAgentOrbit() {
     >
       <p className="inline-flex items-center gap-2.5 font-sans text-[12.5px] tracking-[0.04em] text-[#6E665A]">
         <span className="inline-block h-px w-4 bg-[#9A9183]" aria-hidden />
-        <span className="inline-block size-1.5 rounded-full bg-[#059669]" aria-hidden />
+        <span className="inline-block size-1.5 rounded-full bg-[#1F2B24]" aria-hidden />
         One agent — your whole stack
       </p>
 

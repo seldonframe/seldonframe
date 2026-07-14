@@ -2,7 +2,7 @@
 //
 // Redesign 2026-06-18 — warm light aesthetic matching seldonstudio.com.
 // Paper/parchment surface (--lp-card, brightens on scroll), Hanken Grotesk
-// sans, SeldonFrame green (--lp-accent) as accent (replaces teal #059669).
+// sans, SeldonFrame green (--lp-accent) as accent (replaces teal #1F2B24).
 //
 // Token migration 2026-07-13 — all landing colors moved to `--lp-*` CSS
 // vars (see landing-theme.css) so the nav is dark-capable for /record.
@@ -119,15 +119,14 @@ export function MarketingNav() {
           </div>
           <Link
             href="/login"
-            className="hidden h-[34px] items-center whitespace-nowrap rounded-full border border-[var(--lp-border)] bg-transparent px-4 text-[13.5px] font-medium text-[var(--lp-muted)] transition-colors hover:border-[color-mix(in_oklab,var(--lp-ink)_28%,transparent)] hover:text-[var(--lp-ink)] sm:inline-flex"
+            className="hidden h-[34px] items-center whitespace-nowrap rounded-[11px] border border-[var(--lp-border)] bg-transparent px-4 text-[13.5px] font-medium text-[var(--lp-muted)] transition-colors hover:border-[color-mix(in_oklab,var(--lp-ink)_28%,transparent)] hover:text-[var(--lp-ink)] sm:inline-flex"
           >
             Log in
           </Link>
           <Link
             href="/signup"
-            className="inline-flex h-9 items-center justify-center gap-2 whitespace-nowrap rounded-full bg-[var(--lp-cta-bg)] px-4 text-[13.5px] font-semibold text-[var(--lp-cta-ink)] shadow-[0_1px_2px_color-mix(in_oklab,var(--lp-ink)_10%,transparent),0_6px_16px_color-mix(in_oklab,var(--lp-ink)_10%,transparent),0_18px_40px_color-mix(in_oklab,var(--lp-ink)_6%,transparent),inset_0_1.5px_0_rgba(255,255,255,.12)] transition-all hover:-translate-y-px hover:shadow-[0_2px_4px_color-mix(in_oklab,var(--lp-ink)_12%,transparent),0_12px_26px_color-mix(in_oklab,var(--lp-ink)_14%,transparent),inset_0_1.5px_0_rgba(255,255,255,.14)] active:translate-y-px focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[var(--lp-accent)]"
+            className="inline-flex h-9 items-center justify-center gap-2 whitespace-nowrap rounded-[11px] bg-[var(--lp-cta-bg)] px-4 text-[13.5px] font-semibold text-[var(--lp-cta-ink)] shadow-[0_1px_2px_color-mix(in_oklab,var(--lp-ink)_10%,transparent),0_6px_16px_color-mix(in_oklab,var(--lp-ink)_10%,transparent),0_18px_40px_color-mix(in_oklab,var(--lp-ink)_6%,transparent),inset_0_1.5px_0_rgba(255,255,255,.12)] transition-all hover:-translate-y-px hover:shadow-[0_2px_4px_color-mix(in_oklab,var(--lp-ink)_12%,transparent),0_12px_26px_color-mix(in_oklab,var(--lp-ink)_14%,transparent),inset_0_1.5px_0_rgba(255,255,255,.14)] active:translate-y-px focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[var(--lp-accent)]"
           >
-            <span className="size-1.5 rounded-full bg-[var(--lp-accent)]" aria-hidden />
             Start for free
           </Link>
         </div>

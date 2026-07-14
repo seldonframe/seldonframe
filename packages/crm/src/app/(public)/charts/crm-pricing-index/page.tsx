@@ -139,8 +139,8 @@ export default function CrmPricingIndexPage(): ReactElement {
           <div style={{ overflowX: "auto", border: `1px solid ${MKT.ink10}`, borderRadius: 12 }}>
             <table style={{ width: "100%", borderCollapse: "collapse", fontSize: 13.5 }}>
               <thead>
-                <tr style={{ background: "rgba(5, 150, 105,0.06)" }}>
-                  {["Vendor", "Est. monthly cost", "Assumption", "SF comparison band", "Last verified", "Source"].map((h) => (
+                <tr style={{ background: "rgba(31, 43, 36,0.06)" }}>
+                  {["Vendor", "Est. monthly cost", "Assumption", "Seldon comparison band", "Last verified", "Source"].map((h) => (
                     <th key={h} style={{ textAlign: "left", padding: "10px 14px", fontWeight: 700, color: MKT.ink, borderBottom: `1px solid ${MKT.ink10}` }}>
                       {h}
                     </th>

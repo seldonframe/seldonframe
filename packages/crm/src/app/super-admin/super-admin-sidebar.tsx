@@ -47,9 +47,8 @@ export function SuperAdminSidebar({
       {/* Top: brand + label */}
       <div className="px-4 py-5 border-b">
         <div className="flex items-center gap-2">
-          <div className="size-7 rounded-md bg-gradient-to-br from-[#1FAE85] to-[#0e8364] flex items-center justify-center text-[#09090b] text-xs font-bold">
-            SF
-          </div>
+          {/* eslint-disable-next-line @next/next/no-img-element -- static brand mark */}
+          <img src="/brand/seldon-mark.svg" alt="Seldon" width={28} height={28} className="size-7 rounded-md" />
           <div className="min-w-0">
             <p className="text-sm font-semibold text-foreground leading-tight">SeldonFrame</p>
             <p className="text-[10px] text-muted-foreground tracking-wide uppercase">Admin</p>

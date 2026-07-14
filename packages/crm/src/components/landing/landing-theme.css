@@ -13,9 +13,10 @@
   --lp-body: #6E665A;
   --lp-muted: #6E665A;
   --lp-faint: #9A9183;
-  --lp-accent: #059669;
-  --lp-accent-strong: #047857;
-  --lp-accent-soft: rgba(5, 150, 105, 0.12);
+  --lp-accent: #1F2B24;
+  --lp-accent-strong: #14201A;
+  --lp-accent-soft: rgba(31, 43, 36, 0.09);
+  --lp-fg-color: #1F2B24;
   --lp-on-accent: #FFFDFA;
   --lp-cta-bg: #1F2B24;
   --lp-cta-ink: #F6F2EA;
@@ -34,9 +35,10 @@
   --lp-body: #C9C2B6;   /* ~9:1 on --lp-bg */
   --lp-muted: #A39B8D;  /* ~6.5:1 — the contrast floor */
   --lp-faint: #8A8275;  /* kbd hints only, ~4.9:1 */
-  --lp-accent: #1FAE85;
-  --lp-accent-strong: #27C495;
-  --lp-accent-soft: rgba(31, 174, 133, 0.16);
+  --lp-accent: #F6F2EA;
+  --lp-accent-strong: #FFFFFF;
+  --lp-accent-soft: rgba(246, 242, 234, 0.16);
+  --lp-fg-color: #F6F2EA;
   --lp-on-accent: #14110D;
   --lp-cta-bg: #F6F2EA;
   --lp-cta-ink: #1F2B24;

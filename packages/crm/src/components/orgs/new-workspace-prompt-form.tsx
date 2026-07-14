@@ -154,7 +154,7 @@ export function NewWorkspacePromptForm({ action, initialUpgradeRequired = false 
           <button
             key={prompt}
             type="button"
-            className="rounded-full border border-border/80 bg-background/45 px-3 py-1.5 text-xs text-muted-foreground transition-all hover:border-border hover:bg-accent hover:text-foreground"
+            className="rounded-[11px] border border-border/80 bg-background/45 px-3 py-1.5 text-xs text-muted-foreground transition-all hover:border-border hover:bg-accent hover:text-foreground"
             onClick={() => setDescription(prompt)}
           >
             {prompt}

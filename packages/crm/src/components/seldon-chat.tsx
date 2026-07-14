@@ -421,7 +421,7 @@ export function SeldonChat({ enabled, previewUrl, hideLauncher }: SeldonChatProp
                           key={chip}
                           type="button"
                           onClick={() => void sendMessage(chip)}
-                          className="rounded-full border border-border bg-muted/40 px-3 py-1.5 text-xs text-foreground transition-colors hover:bg-muted"
+                          className="rounded-[11px] border border-border bg-muted/40 px-3 py-1.5 text-xs text-foreground transition-colors hover:bg-muted"
                         >
                           {chip}
                         </button>
@@ -434,7 +434,7 @@ export function SeldonChat({ enabled, previewUrl, hideLauncher }: SeldonChatProp
                           key={prompt}
                           type="button"
                           onClick={() => setInput(prompt)}
-                          className="rounded-full border border-border bg-muted/40 px-3 py-1.5 text-xs text-foreground transition-colors hover:bg-muted"
+                          className="rounded-[11px] border border-border bg-muted/40 px-3 py-1.5 text-xs text-foreground transition-colors hover:bg-muted"
                         >
                           {prompt}
                         </button>
@@ -491,7 +491,7 @@ export function SeldonChat({ enabled, previewUrl, hideLauncher }: SeldonChatProp
                         type="button"
                         disabled={pending}
                         onClick={() => void sendMessage(chip.applyPayload, chip.applyText)}
-                        className="flex items-center gap-1.5 rounded-full border border-border bg-muted/40 px-3 py-1.5 text-xs text-foreground transition-colors hover:bg-muted disabled:cursor-not-allowed disabled:opacity-50"
+                        className="flex items-center gap-1.5 rounded-[11px] border border-border bg-muted/40 px-3 py-1.5 text-xs text-foreground transition-colors hover:bg-muted disabled:cursor-not-allowed disabled:opacity-50"
                       >
                         {chip.swatch ? (
                           <span

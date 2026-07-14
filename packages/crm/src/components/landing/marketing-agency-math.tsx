@@ -41,8 +41,8 @@ export function MarketingAgencyMath() {
       <div className="mx-auto max-w-[1120px]">
         {/* Audience divider — the supply-side / builder rung (where "agencies" live). */}
         <div className="mb-12 border-b border-[rgba(255,255,255,.12)] pb-8 text-center md:mb-14">
-          <span className="inline-flex items-center gap-2.5 rounded-full border border-[rgba(52, 211, 153,.30)] bg-[rgba(52, 211, 153,.10)] px-4 py-1.5 text-[11.5px] font-[700] uppercase tracking-[0.14em] text-[#34d399]">
-            <span className="size-1.5 rounded-full bg-[#34d399]" aria-hidden />
+          <span className="inline-flex items-center gap-2.5 rounded-full border border-[rgba(246, 242, 234,.30)] bg-[rgba(246, 242, 234,.10)] px-4 py-1.5 text-[11.5px] font-[700] uppercase tracking-[0.14em] text-[#F6F2EA]">
+            <span className="size-1.5 rounded-full bg-[#F6F2EA]" aria-hidden />
             For builders &amp; agencies
           </span>
           <p className="mx-auto mt-4 max-w-[48ch] font-[Newsreader,Georgia,serif] text-[clamp(18px,2.4vw,24px)] italic leading-[1.35] text-[rgba(246,242,234,.82)]">
@@ -53,8 +53,8 @@ export function MarketingAgencyMath() {
         {/* Section head */}
         <div className="grid grid-cols-1 items-start gap-10 min-[900px]:grid-cols-[1.1fr_.9fr] min-[900px]:gap-14">
           <div>
-            <div className="inline-flex items-center gap-2.5 text-[12px] font-[600] uppercase tracking-[0.09em] text-[rgba(52, 211, 153,.9)]">
-              <span className="h-px w-4 bg-[rgba(52, 211, 153,.5)]" aria-hidden />
+            <div className="inline-flex items-center gap-2.5 text-[12px] font-[600] uppercase tracking-[0.09em] text-[rgba(246, 242, 234,.9)]">
+              <span className="h-px w-4 bg-[rgba(246, 242, 234,.5)]" aria-hidden />
               Build &amp; sell
             </div>
             <h2 className="mt-3.5 text-[clamp(27px,4.2vw,40px)] font-[500] leading-[1.08] tracking-[-0.025em] text-[#F6F2EA]">
@@ -81,8 +81,8 @@ export function MarketingAgencyMath() {
                 "Onboard a new client in 3 minutes from a URL",
               ].map((item) => (
                 <li key={item} className="flex items-start gap-3 text-[14px] leading-[1.5] text-[rgba(246,242,234,.82)]">
-                  <span className="mt-0.5 flex size-[18px] shrink-0 items-center justify-center rounded-full bg-[#1F2B24] border border-[rgba(52, 211, 153,.35)]">
-                    <span className="text-[10px] font-[700] text-[#34d399]">✓</span>
+                  <span className="mt-0.5 flex size-[18px] shrink-0 items-center justify-center rounded-full bg-[#1F2B24] border border-[rgba(246, 242, 234,.35)]">
+                    <span className="text-[10px] font-[700] text-[#F6F2EA]">✓</span>
                   </span>
                   {item}
                 </li>
@@ -91,16 +91,15 @@ export function MarketingAgencyMath() {
 
             <a
               href="/signup?plan=agency"
-              className="mt-8 inline-flex items-center gap-2.5 rounded-full bg-[#F6F2EA] px-6 py-3.5 text-[15px] font-[500] text-[#1F2B24] shadow-[0_1px_2px_rgba(0,0,0,.2),0_12px_30px_rgba(0,0,0,.25),inset_0_1.5px_0_rgba(255,255,255,.6)] transition-all hover:-translate-y-[1.5px]"
+              className="mt-8 inline-flex items-center gap-2.5 rounded-[11px] bg-[#F6F2EA] px-6 py-3.5 text-[15px] font-[500] text-[#1F2B24] shadow-[0_1px_2px_rgba(0,0,0,.2),0_12px_30px_rgba(0,0,0,.25),inset_0_1.5px_0_rgba(255,255,255,.6)] transition-all hover:-translate-y-[1.5px]"
             >
-              <span className="size-[7px] rounded-full bg-[#059669]" aria-hidden />
               Start the Agency plan
             </a>
           </div>
 
           {/* Calculator */}
           <div className="rounded-[24px] border border-[rgba(255,255,255,.08)] bg-[rgba(255,255,255,.05)] p-6 shadow-[0_24px_60px_rgba(0,0,0,.25)]">
-            <p className="m-0 font-sans text-[11px] font-[600] uppercase tracking-[0.12em] text-[rgba(52, 211, 153,.8)]">
+            <p className="m-0 font-sans text-[11px] font-[600] uppercase tracking-[0.12em] text-[rgba(246, 242, 234,.8)]">
               The agency math
             </p>
             <p className="mt-1 text-[13px] text-[rgba(246,242,234,.55)]">
@@ -168,16 +167,16 @@ export function MarketingAgencyMath() {
           appearance: none;
           width: 22px;
           height: 22px;
-          background: #059669;
+          background: #1F2B24;
           border: 3px solid #1F2B24;
           border-radius: 50%;
           cursor: pointer;
-          box-shadow: 0 4px 14px rgba(5, 150, 105,.4);
+          box-shadow: 0 4px 14px rgba(31, 43, 36,.4);
         }
         .roi-slider::-moz-range-thumb {
           width: 22px;
           height: 22px;
-          background: #059669;
+          background: #1F2B24;
           border: 3px solid #1F2B24;
           border-radius: 50%;
           cursor: pointer;
@@ -240,7 +239,7 @@ function ResultCell({
       <span className="font-sans text-[10px] font-[500] uppercase tracking-[0.08em] text-[rgba(246,242,234,.45)]">
         {label}
       </span>
-      <span className={`font-sans text-[clamp(22px,3vw,28px)] font-[600] leading-none tracking-[-0.02em] tabular-nums ${positive ? "text-[#34d399]" : "text-[#FFFDFA]"}`}>
+      <span className={`font-sans text-[clamp(22px,3vw,28px)] font-[600] leading-none tracking-[-0.02em] tabular-nums ${positive ? "text-[#F6F2EA]" : "text-[#FFFDFA]"}`}>
         {value}
       </span>
       <span className="font-sans text-[11px] text-[rgba(246,242,234,.40)]">{sub}</span>

@@ -163,14 +163,14 @@ export function HeroVelorahEditorial(props: HeroSectionContent) {
         >
           <Link
             href={props.ctaLink}
-            className="cin-liquid-glass rounded-full px-12 py-4 text-sm font-medium text-white transition-all hover:bg-white/5"
+            className="cin-liquid-glass rounded-[11px] px-12 py-4 text-sm font-medium text-white transition-all hover:bg-white/5"
           >
             {props.ctaText}
           </Link>
           {props.secondaryCta ? (
             <Link
               href={props.secondaryCta.link}
-              className="inline-flex items-center rounded-full px-6 py-4 text-sm font-medium text-white/70 transition-colors hover:text-white"
+              className="inline-flex items-center rounded-[11px] px-6 py-4 text-sm font-medium text-white/70 transition-colors hover:text-white"
             >
               {props.secondaryCta.text}
             </Link>

@@ -48,7 +48,7 @@ export function RecordHero({
         className="pointer-events-none absolute inset-0 top-0 z-0 h-[520px] [mask-image:radial-gradient(ellipse_at_top,black,transparent_75%)]"
         aria-hidden
       >
-        <FlickerGrid color="#34D399" />
+        <FlickerGrid color="#F6F2EA" />
       </div>
 
       <div className="relative z-10 flex w-full max-w-[860px] flex-col items-center text-center">

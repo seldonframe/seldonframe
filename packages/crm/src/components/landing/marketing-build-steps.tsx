@@ -2,7 +2,7 @@
 //
 // Redesign 2026-06-18 — warm light aesthetic + ANIMATED build log.
 // "How it works" — 3-step flow. Paper/card surface, Newsreader italic
-// accent numbers, SeldonFrame green (#059669) for active/done dots.
+// accent numbers, SeldonFrame green (#1F2B24) for active/done dots.
 //
 // Each step card's terminal-style "mock" rows now animate, mirroring the
 // motion idiom shipped in marketing-modules.tsx:
@@ -26,8 +26,8 @@ import { IntegrationBeam } from "@/components/landing/integration-beam";
 // Shared spring-ish ease used everywhere (the brief's cubic-bezier).
 const EASE = [0.22, 1, 0.36, 1] as const;
 
-// Two on-ramps. Path A: describe the agent you're MISSING → SF generates it.
-// Path B: record the workflow you already DO → SF compiles it.
+// Two on-ramps. Path A: describe the agent you're MISSING → Seldon generates it.
+// Path B: record the workflow you already DO → Seldon compiles it.
 type Path = {
   kicker: string;
   arrow: string;
@@ -48,7 +48,7 @@ const PATHS: readonly Path[] = [
         <em className="font-[Newsreader,Georgia,serif] font-normal not-italic">Describe it.</em>
       </>
     ),
-    body: "For the agents you don't have yet — a voice receptionist, speed-to-lead, a review requester. Paste your website or describe the business; SF generates the whole front office and wires the agent in.",
+    body: "For the agents you don't have yet — a voice receptionist, speed-to-lead, a review requester. Paste your website or describe the business; Seldon generates the whole front office and wires the agent in.",
     steps: ["Paste a URL or describe the business", "Watch it build — site, booking, CRM, agent", "Go live on your domain"],
     mock: <ScanMock />,
     figure: <IntegrationBeam />,
@@ -62,7 +62,7 @@ const PATHS: readonly Path[] = [
         <em className="font-[Newsreader,Georgia,serif] font-normal not-italic">Record it.</em>
       </>
     ),
-    body: "For the workflows you run by hand — inbox triage, a Google-Sheets lead log, a scraper → CRM. Screen-record yourself doing it once; SF watches, asks about what it missed, and compiles a working agent.",
+    body: "For the workflows you run by hand — inbox triage, a Google-Sheets lead log, a scraper → CRM. Screen-record yourself doing it once; Seldon watches, asks about what it missed, and compiles a working agent.",
     steps: ["Screen-record the workflow once", "Answer what the recording didn't show", "Get a tested agent you can switch on"],
     mock: <RecordMock />,
     figure: <RecordFigure />,
@@ -74,13 +74,13 @@ export function MarketingBuildSteps() {
     <section
       id="build"
       aria-label="How it works"
-      className="border-t border-[rgba(34,29,23,.08)] bg-[#F6F2EA] px-5 py-20 md:px-8 md:py-28 lg:px-12"
+      className="border-t border-[rgba(34,29,23,.08)] px-5 py-20 md:px-8 md:py-28 lg:px-12"
     >
       <div className="mx-auto max-w-[1120px]">
         {/* Section head */}
         <div className="mx-auto max-w-[680px] text-center">
-          <div className="inline-flex items-center gap-2.5 text-[12px] font-[600] uppercase tracking-[0.09em] text-[#059669]">
-            <span className="h-px w-4 bg-[#059669] opacity-50" aria-hidden />
+          <div className="inline-flex items-center gap-2.5 text-[12px] font-[600] uppercase tracking-[0.09em] text-[#1F2B24]">
+            <span className="h-px w-4 bg-[#1F2B24] opacity-50" aria-hidden />
             How it works
           </div>
           <h2 className="mt-3.5 text-[clamp(27px,4.2vw,42px)] font-[500] leading-[1.08] tracking-[-0.025em] text-[#221D17]">
@@ -90,8 +90,8 @@ export function MarketingBuildSteps() {
             </em>
           </h2>
           <p className="mx-auto mt-4 max-w-[60ch] text-[clamp(15.5px,1.9vw,18px)] leading-[1.55] text-[#6E665A]">
-            Describe the agent you&apos;re missing and SF generates it — or record the workflow
-            you already do by hand and SF compiles it. All you need is a URL (or a recording) and
+            Describe the agent you&apos;re missing and Seldon generates it — or record the workflow
+            you already do by hand and Seldon compiles it. All you need is a URL (or a recording) and
             an AI key you probably already have.
           </p>
         </div>
@@ -105,7 +105,7 @@ export function MarketingBuildSteps() {
             >
               {/* Path badge */}
               <div className="flex items-center gap-2">
-                <span className="rounded-full bg-[rgba(5,150,105,.1)] px-2.5 py-1 text-[11px] font-[700] uppercase tracking-[0.06em] text-[#059669]">
+                <span className="rounded-full bg-[rgba(31, 43, 36,.1)] px-2.5 py-1 text-[11px] font-[700] uppercase tracking-[0.06em] text-[#1F2B24]">
                   {path.kicker}
                 </span>
                 <span className="text-[12px] font-[500] text-[#9A9183]">→ {path.arrow}</span>
@@ -120,7 +120,7 @@ export function MarketingBuildSteps() {
               <ol className="m-0 flex flex-col gap-2 p-0">
                 {path.steps.map((s, i) => (
                   <li key={s} className="flex items-center gap-2.5 text-[13px] text-[#221D17]">
-                    <span className="flex size-5 shrink-0 items-center justify-center rounded-full bg-[rgba(5,150,105,.1)] text-[11px] font-[700] text-[#059669]">
+                    <span className="flex size-5 shrink-0 items-center justify-center rounded-full bg-[rgba(31, 43, 36,.1)] text-[11px] font-[700] text-[#1F2B24]">
                       {i + 1}
                     </span>
                     {s}
@@ -135,11 +135,39 @@ export function MarketingBuildSteps() {
           ))}
         </div>
 
+        {/* Reassurance — either path ships the whole front office, not just an agent. */}
+        <div className="mx-auto mt-10 max-w-[880px] rounded-[16px] border border-[rgba(34,29,23,.1)] bg-[#FFFDFA] px-6 py-5 text-center shadow-[0_1px_2px_rgba(34,29,23,.05)]">
+          <p className="text-[13px] font-[600] uppercase tracking-[0.08em] text-[#1F2B24]">
+            Either way, you get the whole front office
+          </p>
+          <ul className="mt-3 flex flex-wrap items-center justify-center gap-x-2.5 gap-y-2 text-[13.5px] text-[#221D17]">
+            {[
+              "High-converting multi-page website",
+              "Booking page",
+              "Lead-capture forms",
+              "CRM",
+              "Payments",
+              "Reviews",
+            ].map((item, i) => (
+              <li key={item} className="inline-flex items-center gap-2.5">
+                {i > 0 && <span className="text-[#9A9183]" aria-hidden>·</span>}
+                <span className="inline-flex items-center gap-1.5">
+                  <span className="text-[#1F2B24]" aria-hidden>✓</span>
+                  {item}
+                </span>
+              </li>
+            ))}
+          </ul>
+          <p className="mt-3 text-[13px] text-[#6E665A]">
+            Wired together and live in minutes — not a pile of disconnected tools.
+          </p>
+        </div>
+
       </div>
 
       <style jsx>{`
         .sf-blink-dot {
-          box-shadow: 0 0 0 3px color-mix(in oklab, #059669 22%, transparent);
+          box-shadow: 0 0 0 3px color-mix(in oklab, #1F2B24 22%, transparent);
           animation: sf-blink 1.4s ease-in-out infinite;
         }
         @keyframes sf-blink {
@@ -228,9 +256,9 @@ function StatusDot({ tone }: { tone: "idle" | "active" | "done" }) {
     <span
       className={`size-1.5 shrink-0 rounded-sm ${
         tone === "done"
-          ? "bg-[#059669] shadow-[0_0_6px_rgba(5, 150, 105,.5)]"
+          ? "bg-[#1F2B24] shadow-[0_0_6px_rgba(31, 43, 36,.5)]"
           : tone === "active"
-          ? "sf-blink-dot bg-[#059669]"
+          ? "sf-blink-dot bg-[#1F2B24]"
           : "bg-[#9A9183]/40"
       }`}
       aria-hidden
@@ -275,7 +303,7 @@ function ScanMock() {
           {!reduce && step === 1 ? (
             <motion.span
               aria-hidden
-              className="ml-0.5 inline-block h-3 w-px translate-y-[2px] bg-[#059669] align-middle"
+              className="ml-0.5 inline-block h-3 w-px translate-y-[2px] bg-[#1F2B24] align-middle"
               animate={{ opacity: [1, 0, 1] }}
               transition={{ duration: 0.7, repeat: Infinity, ease: "linear" }}
             />
@@ -385,15 +413,15 @@ function RecordFigure() {
       <div className="flex flex-col gap-1.5 font-mono text-[11.5px] text-[#6E665A]">
         {CAPTURED.map((c) => (
           <div key={c} className="flex items-center gap-2">
-            <span className="size-1.5 shrink-0 rounded-sm bg-[#059669]" aria-hidden />
+            <span className="size-1.5 shrink-0 rounded-sm bg-[#1F2B24]" aria-hidden />
             <span className="truncate">{c}</span>
           </div>
         ))}
       </div>
 
       {/* compiled result */}
-      <div className="flex items-center gap-2 rounded-[9px] border border-[rgba(5,150,105,.28)] bg-[rgba(5,150,105,.06)] px-3 py-2">
-        <span className="flex size-5 shrink-0 items-center justify-center rounded-full bg-[#059669] text-[11px] font-[800] text-[#FFFDFA]" aria-hidden>✓</span>
+      <div className="flex items-center gap-2 rounded-[9px] border border-[rgba(31, 43, 36,.28)] bg-[rgba(31, 43, 36,.06)] px-3 py-2">
+        <span className="flex size-5 shrink-0 items-center justify-center rounded-full bg-[#1F2B24] text-[11px] font-[800] text-[#FFFDFA]" aria-hidden>✓</span>
         <span className="text-[12.5px] font-[600] text-[#221D17]">Inbox-triage agent — compiled, ready to test</span>
       </div>
     </div>

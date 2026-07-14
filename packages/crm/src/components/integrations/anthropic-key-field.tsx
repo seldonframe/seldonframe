@@ -129,7 +129,7 @@ export function EncryptionNotice({ trailing, variant = "muted" }: EncryptionNoti
   if (variant === "footer-text") {
     return (
       <p className="text-xs text-muted-foreground">
-        Keys are encrypted with AES-256-GCM before storage. SF cannot read your
+        Keys are encrypted with AES-256-GCM before storage. Seldon cannot read your
         raw keys — they&apos;re only decrypted in memory at agent-turn time.
         {trailing ? <> {trailing}</> : null}
       </p>
@@ -138,7 +138,7 @@ export function EncryptionNotice({ trailing, variant = "muted" }: EncryptionNoti
 
   return (
     <div className="rounded-md border border-border bg-muted/20 px-3 py-2 text-xs text-muted-foreground">
-      Keys are encrypted with AES-256-GCM before storage. SF cannot read your
+      Keys are encrypted with AES-256-GCM before storage. Seldon cannot read your
       raw keys — they&apos;re only decrypted in memory at agent-turn time.
       {trailing ? <> {trailing}</> : null}
     </div>

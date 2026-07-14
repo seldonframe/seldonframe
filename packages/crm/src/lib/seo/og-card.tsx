@@ -9,7 +9,7 @@
 // every card like a YouTube thumbnail, not a print ad.
 //
 // Palette (MKT, matches components/marketplace/marketplace-data.ts):
-//   ink   #221D17   paper  #F6F2EA   green  #059669   dark  #1F2B24
+//   ink   #221D17   paper  #F6F2EA   green  #1F2B24   dark  #1F2B24
 //
 // SECURITY: every field rendered by these layouts may originate from a public
 // query string (app/api/og/route.tsx is an unauthenticated GET route). Every
@@ -26,7 +26,7 @@ export const OG_HEIGHT = 630;
 export const OG_COLORS = {
   ink: "#221D17",
   paper: "#F6F2EA",
-  green: "#059669",
+  green: "#1F2B24",
   dark: "#1F2B24",
 } as const;
 

@@ -28,7 +28,7 @@ import { useState, useEffect, useRef, type ReactElement } from "react";
 import { renderResultCard, buildShareUrl, copyToClipboard, downloadCanvasAsImage, shareResultCard } from "./result-card";
 
 const INK = "#221D17";
-const GREEN = "#059669";
+const GREEN = "#1F2B24";
 const INK10 = "rgba(34,29,23,0.10)";
 const AMBER = "#B8860B";
 
@@ -340,7 +340,7 @@ export function KlaviyoCostCalculator(): ReactElement {
         </p>
         <p style={{ margin: 0 }}>
           <strong>SeldonFrame:</strong> $29/mo flat — {money(SELDONFRAME_YEARLY)}/yr, same price no matter how big your
-          list gets. Different product scope (SF is a front office with CRM/booking/agent, not ecommerce email
+          list gets. Different product scope (Seldon is a front office with CRM/booking/agent, not ecommerce email
           marketing) — so weigh this as "what flat pricing looks like," not a like-for-like swap.
         </p>
       </div>

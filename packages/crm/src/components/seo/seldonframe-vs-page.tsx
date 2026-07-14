@@ -166,7 +166,7 @@ export function SeldonFrameVsPage({ competitor }: { competitor: Competitor }): R
 
         {/* ── THE TWO CONTENDERS ── */}
         <section className="sf-sfvs-cards" style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 16, padding: "10px 0 8px" }}>
-          <div style={{ border: "1.5px solid rgba(5, 150, 105,0.4)", borderRadius: 16, padding: "22px 24px", background: "rgba(5, 150, 105,0.05)" }}>
+          <div style={{ border: "1.5px solid rgba(31, 43, 36,0.4)", borderRadius: 16, padding: "22px 24px", background: "rgba(31, 43, 36,0.05)" }}>
             <span style={{ fontSize: 10.5, fontWeight: 800, letterSpacing: "0.1em", textTransform: "uppercase", color: MKT.green }}>★ SeldonFrame</span>
             <h2 style={{ margin: "6px 0 0", fontSize: 20, fontWeight: 800 }}>SeldonFrame</h2>
             <p style={{ margin: "8px 0 12px", fontSize: 14.5, lineHeight: 1.6, color: "rgba(34,29,23,0.75)" }}>
@@ -237,7 +237,7 @@ export function SeldonFrameVsPage({ competitor }: { competitor: Competitor }): R
                 {COMPARISON_LABELS.map((row) => (
                   <tr key={row.key}>
                     <td style={{ ...TD, fontWeight: 700 }}>{row.label}</td>
-                    <td style={{ ...TD, background: "rgba(5, 150, 105,0.05)", color: "rgba(34,29,23,0.85)", fontWeight: 500 }}>
+                    <td style={{ ...TD, background: "rgba(31, 43, 36,0.05)", color: "rgba(34,29,23,0.85)", fontWeight: 500 }}>
                       {emphasize(SF_COLUMN[row.key])}
                     </td>
                     <td style={{ ...TD, color: "rgba(34,29,23,0.66)" }}>{emphasize(c.them[row.key])}</td>
@@ -367,7 +367,7 @@ export function SeldonFrameVsPage({ competitor }: { competitor: Competitor }): R
             <Link
               href={`/alternative-to-${c.slug}`}
               className="sf-link"
-              style={{ fontSize: 13.5, fontWeight: 600, color: MKT.green, border: `1px solid rgba(5, 150, 105,0.35)`, borderRadius: 999, padding: "7px 14px", textDecoration: "none", background: "rgba(5, 150, 105,0.06)" }}
+              style={{ fontSize: 13.5, fontWeight: 600, color: MKT.green, border: `1px solid rgba(31, 43, 36,0.35)`, borderRadius: 999, padding: "7px 14px", textDecoration: "none", background: "rgba(31, 43, 36,0.06)" }}
             >
               {`Prefer the switching guide? Full ${c.name} alternative breakdown →`}
             </Link>
@@ -421,7 +421,7 @@ function CtaRow(): ReactElement {
 function ProsConsCard({ title, pros, cons, highlight }: { title: string; pros: string[]; cons: string[]; highlight?: boolean }): ReactElement {
   return (
     <div
-      style={{ border: `1px solid ${highlight ? "rgba(5, 150, 105,0.35)" : MKT.ink10}`, borderRadius: 16, padding: "20px 22px", background: highlight ? "rgba(5, 150, 105,0.05)" : "rgba(255,255,255,0.55)" }}
+      style={{ border: `1px solid ${highlight ? "rgba(31, 43, 36,0.35)" : MKT.ink10}`, borderRadius: 16, padding: "20px 22px", background: highlight ? "rgba(31, 43, 36,0.05)" : "rgba(255,255,255,0.55)" }}
     >
       <h3 style={{ margin: 0, fontSize: 18, fontWeight: 800 }}>{title}</h3>
       <div style={{ margin: "14px 0 6px", fontSize: 11.5, fontWeight: 800, letterSpacing: "0.1em", color: MKT.green }}>PROS</div>

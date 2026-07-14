@@ -13,7 +13,7 @@ import { useState, type ReactElement, type CSSProperties } from "react";
 import { heroSubmitTarget } from "@/components/landing/hero-submit-target";
 
 const INK = "#221D17";
-const GREEN = "#059669";
+const GREEN = "#1F2B24";
 const PAPER = "#F6F2EA";
 
 /** Loosely normalize what people paste: bare domains get https://. */
@@ -57,7 +57,7 @@ export function BuildWidget({
         border: `2px solid ${GREEN}`,
         borderRadius: 20,
         padding: "26px 26px",
-        background: "rgba(5, 150, 105,0.06)",
+        background: "rgba(31, 43, 36,0.06)",
       }}
     >
       <h2 style={{ margin: 0, fontSize: 22, fontWeight: 800, letterSpacing: "-0.02em", color: INK }}>{heading}</h2>

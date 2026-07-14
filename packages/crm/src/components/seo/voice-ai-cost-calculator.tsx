@@ -32,7 +32,7 @@ import { useState, useEffect, useRef, type ReactElement } from "react";
 import { renderResultCard, buildShareUrl, copyToClipboard, downloadCanvasAsImage, shareResultCard } from "./result-card";
 
 const INK = "#221D17";
-const GREEN = "#059669";
+const GREEN = "#1F2B24";
 const INK10 = "rgba(34,29,23,0.10)";
 const AMBER = "#B8860B";
 const RED = "#C0392B";
@@ -325,7 +325,7 @@ export function VoiceAiCostCalculator(): ReactElement {
                   padding: "10px 16px",
                   borderRadius: 10,
                   border: platform === p ? `2px solid ${GREEN}` : `1.5px solid ${INK10}`,
-                  background: platform === p ? "rgba(5, 150, 105,0.08)" : "#fff",
+                  background: platform === p ? "rgba(31, 43, 36,0.08)" : "#fff",
                   color: INK,
                   fontWeight: 700,
                   fontSize: 14,
