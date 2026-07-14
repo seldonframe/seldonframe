@@ -22,6 +22,7 @@ import { useEffect, useRef, useState, type ReactNode } from "react";
 import { motion, useInView, useReducedMotion } from "framer-motion";
 
 import { IntegrationBeam } from "@/components/landing/integration-beam";
+import { AnimatedShinyText } from "@/components/ui/magic/animated-shiny-text";
 
 // Shared spring-ish ease used everywhere (the brief's cubic-bezier).
 const EASE = [0.22, 1, 0.36, 1] as const;
@@ -62,8 +63,8 @@ const PATHS: readonly Path[] = [
         <em className="font-[Newsreader,Georgia,serif] font-normal not-italic">Record it.</em>
       </>
     ),
-    body: "For the workflows you run by hand — inbox triage, a Google-Sheets lead log, a scraper → CRM. Screen-record yourself doing it once; Seldon watches, asks about what it missed, and compiles a working agent.",
-    steps: ["Screen-record the workflow once", "Answer what the recording didn't show", "Get a tested agent you can switch on"],
+    body: "For the workflows you run by hand — inbox triage, a Google-Sheets lead log, a scraper → CRM. Screen-record yourself doing it once — works on desktop and mobile — and Seldon watches, asks about what it missed, and compiles a working agent.",
+    steps: ["Screen-record the workflow — on desktop or mobile", "Answer what the recording didn't show", "Get a tested agent you can switch on"],
     mock: <RecordMock />,
     figure: <RecordFigure />,
   },
@@ -90,9 +91,11 @@ export function MarketingBuildSteps() {
             </em>
           </h2>
           <p className="mx-auto mt-4 max-w-[60ch] text-[clamp(15.5px,1.9vw,18px)] leading-[1.55] text-[#6E665A]">
-            Describe the agent you&apos;re missing and Seldon generates it — or record the workflow
-            you already do by hand and Seldon compiles it. All you need is a URL (or a recording) and
-            an AI key you probably already have.
+            <AnimatedShinyText base="rgba(110,102,90,1)" shine="#221D17">
+              Describe the agent you&apos;re missing and Seldon generates it
+            </AnimatedShinyText>{" "}
+            — or record the workflow you already do by hand and Seldon compiles it. All you need is a
+            URL (or a recording) and an AI key you probably already have.
           </p>
         </div>
 

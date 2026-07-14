@@ -34,6 +34,7 @@ import {
 } from "lucide-react";
 import { BentoGrid, BentoCard } from "@/components/ui/magic/bento-grid";
 import { MarketingAgentMarquee } from "@/components/landing/marketing-agent-marquee";
+import { AnimatedShinyText } from "@/components/ui/magic/animated-shiny-text";
 
 // Shared spring-ish ease used everywhere (the brief's cubic-bezier).
 const EASE = [0.22, 1, 0.36, 1] as const;
@@ -100,9 +101,11 @@ export function MarketingModules() {
             </em>
           </h2>
           <p className="mx-auto mt-4 max-w-[56ch] text-[clamp(15.5px,1.9vw,18px)] leading-[1.55] text-[#6E665A]">
-            A multi-page website, booking page, intake form, CRM, payments, and a
-            24/7 receptionist that <strong className="font-[500] text-[#221D17]">books the job</strong> — one
-            connected system, so you never miss a lead. Change a phone number once
+            <AnimatedShinyText base="rgba(110,102,90,1)" shine="#221D17">
+              A multi-page website, booking page, intake form, CRM, payments, and a 24/7
+              receptionist that books the job
+            </AnimatedShinyText>{" "}
+            — one connected system, so you never miss a lead. Change a phone number once
             and everything updates, instantly.
           </p>
         </div>
@@ -144,14 +147,14 @@ export function MarketingAgents() {
       <div className="mx-auto max-w-[1120px]">
         {/* Section head — the two on-ramps */}
         <div className="mx-auto max-w-[680px] text-center">
-          <div className="inline-flex items-center gap-2.5 text-[12px] font-[600] uppercase tracking-[0.09em] text-[rgba(246, 242, 234,.9)]">
-            <span className="h-px w-4 bg-[rgba(246, 242, 234,.5)]" aria-hidden />
+          <div className="inline-flex items-center gap-2.5 text-[12px] font-[700] uppercase tracking-[0.09em] text-[#F6F2EA]">
+            <span className="h-px w-4 bg-[rgba(246, 242, 234,.6)]" aria-hidden />
             Hire agents
           </div>
           <h2 className="mt-3.5 text-[clamp(27px,4.2vw,42px)] font-[500] leading-[1.08] tracking-[-0.025em] text-[#F6F2EA]">
             Two ways to build an agent.
           </h2>
-          <p className="mx-auto mt-4 max-w-[58ch] text-[clamp(15.5px,1.9vw,18px)] leading-[1.55] text-[rgba(246,242,234,.78)]">
+          <p className="mx-auto mt-4 max-w-[58ch] text-[clamp(15.5px,1.9vw,18px)] leading-[1.55] text-[rgba(246,242,234,.9)]">
             <strong className="font-[500] text-[#FFFDFA]">Describe what you&apos;re missing</strong> and Seldon generates it,
             or <strong className="font-[500] text-[#FFFDFA]">record what you already do</strong> and Seldon compiles it. Either
             way you get a 24/7 worker for pennies — not an employee or an agency.

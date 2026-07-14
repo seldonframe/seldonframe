@@ -12,7 +12,7 @@
 
 "use client";
 
-import { createContext, useCallback, useContext, useState, type ReactNode } from "react";
+import { createContext, useCallback, useContext, useEffect, useState, type ReactNode } from "react";
 import { Globe } from "lucide-react";
 import type { LandingMode } from "@/app/(public)/landing-mode";
 import { FlickerGrid } from "@/components/landing/flicker-grid";
@@ -68,6 +68,36 @@ export function LandingModeShell({
     [recordEnabled, urlStrategy],
   );
 
+  // Grid intensity: a 25%-dimmed baseline (0.75) that additionally FADES on
+  // scroll — full through the hero, down to 0 at the "how it works" (#build)
+  // section, then ramping slowly back up from "wired together" (#modules).
+  const BASE = 0.75;
+  const [gridOpacity, setGridOpacity] = useState(BASE);
+  useEffect(() => {
+    const onScroll = () => {
+      const y = window.scrollY;
+      const build = document.getElementById("build");
+      const modules = document.getElementById("modules");
+      let f = 1;
+      if (build) {
+        const bTop = build.offsetTop - window.innerHeight * 0.5;
+        const mTop = modules ? modules.offsetTop - window.innerHeight * 0.3 : bTop + 1400;
+        if (y <= 0) f = 1;
+        else if (y < bTop) f = 1 - y / bTop; // hero → how-it-works: 1 → 0
+        else if (y < mTop) f = 0; // how-it-works → wired-together: hidden
+        else f = Math.min(1, (y - mTop) / 1600); // wired-together onward: 0 → 1 (slow)
+      }
+      setGridOpacity(BASE * Math.max(0, Math.min(1, f)));
+    };
+    onScroll();
+    window.addEventListener("scroll", onScroll, { passive: true });
+    window.addEventListener("resize", onScroll, { passive: true });
+    return () => {
+      window.removeEventListener("scroll", onScroll);
+      window.removeEventListener("resize", onScroll);
+    };
+  }, []);
+
   return (
     <LandingModeContext.Provider value={{ mode, recordEnabled, setMode }}>
       <div
@@ -77,7 +107,11 @@ export function LandingModeShell({
         {/* Page-wide flickering-grid backdrop — one fixed layer behind every
             section. Transparent (parchment) sections reveal it; alt bands and
             dark slabs stay opaque and cover it. Themed via --lp-fg-color. */}
-        <div className="pointer-events-none fixed inset-0 z-0" aria-hidden>
+        <div
+          className="pointer-events-none fixed inset-0 z-0 transition-opacity duration-150"
+          style={{ opacity: gridOpacity }}
+          aria-hidden
+        >
           <FlickerGrid color="var(--lp-fg-color)" />
         </div>
 

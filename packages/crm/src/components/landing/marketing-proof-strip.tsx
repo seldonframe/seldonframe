@@ -6,6 +6,7 @@
 // Server component — no client hooks needed.
 
 import { AvatarCircles } from "@/components/ui/magic/avatar-circles";
+import { EditByChatDemo } from "@/components/landing/edit-by-chat-demo";
 
 const CHIPS = [
   "Build it free",
@@ -32,6 +33,9 @@ export function MarketingProofStrip() {
             like you&rsquo;d text ChatGPT.
           </span>
         </p>
+
+        {/* Show, don't tell — a live loop of editing the site by chatting. */}
+        <EditByChatDemo />
 
         {/* Reassurance chips */}
         <ul className="flex flex-wrap items-center justify-center gap-2 md:gap-2.5">

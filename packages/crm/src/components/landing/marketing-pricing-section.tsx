@@ -73,8 +73,9 @@ export function LandingMarketingPricingSection({
           </p>
         </div>
 
-        {/* The two-up layout: the flat plan card + the GMV explainer. */}
-        <div className="mt-12 grid grid-cols-1 gap-5 lg:grid-cols-[1.15fr_.85fr]">
+        {/* Single centered flat-price card; the 2% GMV fee is now a quiet link
+            below it (was a full right-side panel). */}
+        <div className="mx-auto mt-12 max-w-[640px]">
           {/* ── Primary flat-price card ─────────────────────────────────── */}
           <article
             data-plan="flat"
@@ -147,39 +148,17 @@ export function LandingMarketingPricingSection({
             </div>
           </article>
 
-          {/* ── GMV explainer — only when SeldonFrame is your sales channel ─── */}
-          <aside
-            aria-label="How the GMV fee works"
-            className="flex flex-col rounded-[20px] border border-[var(--lp-border-soft)] bg-[var(--lp-bg-alt)] p-7 md:p-8"
-          >
-            <p className="text-[11px] font-[600] uppercase tracking-[0.08em] text-[var(--lp-accent)]">
-              + A flat 2% fee
-            </p>
-            <h3 className="mt-2 max-w-[22ch] font-[Newsreader,Georgia,serif] text-[clamp(20px,2.6vw,26px)] not-italic leading-[1.2] text-[var(--lp-ink)]">
-              We only make money when you do.
-            </h3>
-            <p className="mt-3 text-[13.5px] leading-[1.55] text-[var(--lp-muted)]">
-              SeldonFrame doesn&rsquo;t just build your site — it helps you send proposals,
-              take payments, and close the deal in the same place you booked the job. When
-              money comes in through SeldonFrame, we keep a flat 2%. That&rsquo;s the only
-              time we charge it. Get paid any other way, and we take nothing.
-            </p>
-
-            <p className="mt-5 rounded-[12px] border border-[var(--lp-border-soft)] bg-[var(--lp-card)] px-4 py-3 text-[13px] leading-[1.45] text-[var(--lp-muted)]">
-              You keep 98% of every dollar we help you collect — and 100% of everything else.
-            </p>
-
-            <p className="mt-4 text-[13.5px] leading-[1.55] text-[var(--lp-muted)]">
-              On agency tiers ($99+) there&rsquo;s no fee at all — 0%. Processing more than
-              ~$3,500/mo through SeldonFrame? The agency tier already saves you money.
-            </p>
-
-            <p className="mt-auto pt-5 text-[12.5px] leading-[1.5] text-[var(--lp-muted)]">
-              No metered AI bills. No per-workspace tax. You only ever pay more when you&rsquo;re
-              already making more.
-            </p>
-          </aside>
         </div>
+
+        {/* The GMV fee, demoted from a full panel to a quiet line + link. */}
+        <p className="mx-auto mt-5 max-w-[640px] text-center text-[13px] leading-[1.55] text-[var(--lp-muted)]">
+          + a flat <strong className="font-[600] text-[var(--lp-ink)]">2%</strong> only when Seldon is your
+          sales channel — you keep 98% of what we help you collect, 100% of everything else, and 0% on
+          agency tiers.{" "}
+          <Link href="/pricing" className="font-[600] text-[var(--lp-accent)] underline underline-offset-2">
+            How the 2% works →
+          </Link>
+        </p>
       </div>
     </section>
   );
