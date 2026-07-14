@@ -122,6 +122,25 @@ export type ResolveServicePhotoFn = (input: {
   businessName: string;
 }) => Promise<ServicePhoto | null>;
 
+/**
+ * Pick the best real hero photo the pipeline captured from the source site.
+ * og:image + hero-classified images are merged into facts.photos FIRST (see
+ * markdown-extractor.ts / html-image-harvester.ts), so the first usable one is
+ * the intended hero. Returns null when the site had no scrapeable photo.
+ */
+export function pickHeroPhotoFromFacts(
+  facts: ExtractedBusinessFacts,
+): { src: string; alt: string } | null {
+  const photos = Array.isArray(facts.photos) ? facts.photos : [];
+  const usable = (src: string): boolean =>
+    /^https?:\/\//i.test(src) && !/\.svg(?:[?#]|$)/i.test(src);
+  const hero = photos.find((p) => p.section === "hero" && usable(p.src));
+  const any = photos.find((p) => usable(p.src));
+  const pick = hero ?? any;
+  if (!pick) return null;
+  return { src: pick.src, alt: (pick.alt ?? "").trim() };
+}
+
 // ── Public API ────────────────────────────────────────────────────────────────
 
 /**
@@ -275,31 +294,66 @@ export async function generateR1Payload(args: {
   // name). Real extracted hero photos are left untouched.
   const heroSrc = (parsed.hero.heroImage?.src ?? "").trim();
   const heroIsGenericFallback = !heroSrc || heroSrc.includes(GENERIC_HERO_PHOTO_ID);
+  let heroSource: "extracted" | "scraped" | "stock" = heroIsGenericFallback
+    ? "stock"
+    : "extracted";
   if (heroIsGenericFallback) {
-    try {
-      const resolved = await photoFn({
-        realSrc: null, // ignore the generic hardcoded URL — force the relevant fallback
-        realAlt: parsed.hero.heroImage?.alt ?? null,
-        // Empty serviceName → the resolver's `${serviceName} ${vertical}` query is
-        // just the vertical (e.g. "hvac"); when the vertical is unknown, the
-        // resolver falls to the archetype's curated fallbackImageQueries.
-        serviceName: "",
-        vertical,
-        archetype: args.archetype,
-        businessName: args.facts.business_name,
-      });
-      if (resolved?.src) {
-        parsed.hero.heroImage = {
-          src: resolved.src,
-          alt:
-            parsed.hero.heroImage?.alt ||
-            `${args.facts.business_name} — professional at work`,
-        };
+    // (2) Prefer the business's OWN captured photo before any stock image —
+    // world-class means the client's real hero shows, not a generic template.
+    const realHero = pickHeroPhotoFromFacts(args.facts);
+    if (realHero) {
+      parsed.hero.heroImage = {
+        src: realHero.src,
+        alt:
+          realHero.alt ||
+          parsed.hero.heroImage?.alt ||
+          `${args.facts.business_name} — hero`,
+      };
+      heroSource = "scraped";
+    } else {
+      // (3) No scrapeable photo — resolve a vertical/archetype-relevant HD stock
+      // image via the same resolver + DI seam the service cards use.
+      try {
+        const resolved = await photoFn({
+          realSrc: null, // ignore the generic hardcoded URL — force the relevant fallback
+          realAlt: parsed.hero.heroImage?.alt ?? null,
+          // Empty serviceName → the resolver's `${serviceName} ${vertical}` query is
+          // just the vertical (e.g. "hvac"); when the vertical is unknown, the
+          // resolver falls to the archetype's curated fallbackImageQueries.
+          serviceName: "",
+          vertical,
+          archetype: args.archetype,
+          businessName: args.facts.business_name,
+        });
+        if (resolved?.src) {
+          parsed.hero.heroImage = {
+            src: resolved.src,
+            alt:
+              parsed.hero.heroImage?.alt ||
+              `${args.facts.business_name} — professional at work`,
+          };
+        }
+      } catch {
+        // Network / rate-limit — keep the prompt's fallback rather than abort.
       }
-    } catch {
-      // Network / rate-limit — keep the prompt's fallback rather than abort.
     }
   }
+
+  // Observability — never let an all-stock result look silently "green".
+  // Records how the hero was sourced + how many of the client's own photos
+  // were available (CLAUDE.md §3.1 Optimistic-Path rule).
+  console.warn(
+    JSON.stringify({
+      event: "landing_images_sourced",
+      business_name: args.facts.business_name,
+      archetype: args.archetype,
+      photos_available: Array.isArray(args.facts.photos)
+        ? args.facts.photos.length
+        : 0,
+      hero_source: heroSource,
+      logo_present: !!args.facts.logo,
+    }),
+  );
 
   return parsed;
 }

@@ -78,6 +78,14 @@ test("rejects data: URIs, tracking pixels, and SVGs from photos", () => {
   assert.equal(r.images[0].src, "https://dallasheatingac.com/img/real-photo.jpg");
 });
 
+test("drops absolute http:// URLs (mixed-content safety)", () => {
+  const html =
+    '<img src="http://old.example.com/a.jpg"><img src="https://ok.example.com/b.jpg">';
+  const r = harvestImagesFromHtml(html, BASE);
+  assert.equal(r.images.length, 1);
+  assert.equal(r.images[0].src, "https://ok.example.com/b.jpg");
+});
+
 test("dedupes the same image path ignoring the query string", () => {
   const html =
     '<img src="/p/hero.jpg?w=400"><img src="/p/hero.jpg?w=1600"><img src="/p/other.jpg">';

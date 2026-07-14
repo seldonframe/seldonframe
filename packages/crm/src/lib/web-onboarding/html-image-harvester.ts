@@ -57,7 +57,10 @@ function resolveAbs(candidate: string, baseUrl: string): string | null {
   try {
     // Handles relative, root-relative, and protocol-relative (//cdn/x.jpg).
     const u = new URL(raw, baseUrl);
-    if (u.protocol !== "http:" && u.protocol !== "https:") return null;
+    // https ONLY — an http image on the https public /w page is blocked as
+    // mixed content and renders broken. (A future Blob re-host step can fetch
+    // http sources server-side and re-serve them over https.)
+    if (u.protocol !== "https:") return null;
     return u.toString();
   } catch {
     return null;
