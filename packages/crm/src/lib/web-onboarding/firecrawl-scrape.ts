@@ -23,7 +23,19 @@ export type FirecrawlScrapeReason =
   | "rate_limited";
 
 export type FirecrawlScrapeResult =
-  | { ok: true; markdown: string; finalUrl: string; title?: string }
+  | {
+      ok: true;
+      markdown: string;
+      finalUrl: string;
+      title?: string;
+      /** Cleaned page HTML (requested alongside markdown) — the source the
+       *  image harvester reads. May be absent if the SDK returns MD only. */
+      html?: string;
+      /** og:image from page metadata — the strongest hero candidate. */
+      ogImage?: string;
+      /** Site favicon / touch-icon — a last-resort logo candidate. */
+      favicon?: string;
+    }
   | { ok: false; reason: FirecrawlScrapeReason; detail?: string };
 
 /**
@@ -64,12 +76,15 @@ const WAIT_FOR_MS = 2500;
  */
 type DocumentLike = {
   markdown?: string;
+  html?: string;
   metadata?: {
     sourceURL?: string;
     url?: string;
     title?: string;
     statusCode?: number;
     error?: string;
+    ogImage?: string;
+    favicon?: string;
   };
 };
 
@@ -112,7 +127,9 @@ export async function firecrawlScrape(
   let doc: DocumentLike;
   try {
     doc = (await client.scrape(url, {
-      formats: ["markdown"],
+      // markdown for the LLM extractor; html so the image harvester can pull
+      // the real hero/gallery/logo images that markdown structurally omits.
+      formats: ["markdown", "html"],
       // Keep header/footer/nav — business facts (phone, address, hours,
       // "Family-owned since 1998") frequently live there, not in <main>.
       onlyMainContent: false,
@@ -202,5 +219,8 @@ export async function firecrawlScrape(
     // defaulting to the input URL.
     finalUrl: doc.metadata?.sourceURL ?? doc.metadata?.url ?? url,
     title: doc.metadata?.title,
+    html: typeof doc.html === "string" ? doc.html : undefined,
+    ogImage: doc.metadata?.ogImage,
+    favicon: doc.metadata?.favicon,
   };
 }
