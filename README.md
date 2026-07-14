@@ -262,6 +262,18 @@ See the same six snippets, kept in sync, at [seldonframe.com/build](https://seld
 
 ---
 
+## Self-host the whole thing
+
+Prefer to run it yourself? The entire monorepo is AGPL-3.0 — and there's a **prebuilt image**, so you don't even build it:
+
+```bash
+git clone https://github.com/seldonframe/seldonframe.git && cd seldonframe
+cp .env.docker.example .env.docker   # add your ANTHROPIC_API_KEY or OPENAI_API_KEY
+docker compose -f docker-compose.yml -f docker-compose.ghcr.yml up   # pulls the prebuilt image
+```
+
+Brings up Postgres, migrations, and the app on `localhost:3000` — the same dashboard, generated public sites, and API as the hosted version. Multi-arch image (amd64 + arm64) at [`ghcr.io/seldonframe/seldonframe`](https://github.com/seldonframe/seldonframe/pkgs/container/seldonframe); or `docker compose up --build` to build from source. Bring your own LLM key (Anthropic or OpenAI); SMS/voice (Twilio), email (Resend), and 1,000+ integrations (Composio) are add-your-own-key. Full guide: **[QUICKSTART.md](QUICKSTART.md#self-host)**.
+
 ---
 
 ## When you're ready to sell
