@@ -12,7 +12,7 @@ import { ReadyDesignModule } from "@/components/clients/design-picker/ReadyDesig
 import { PickerStyles } from "@/components/clients/design-picker/Styles";
 import type { DesignId, DesignTemplate } from "@/components/clients/design-picker/types";
 
-import { setLandingTemplateAction } from "./actions";
+import { setLandingTemplateAction } from "@/app/(dashboard)/clients/[slug]/ready/actions";
 
 type Props = {
   slug: string;

@@ -54,12 +54,10 @@ import { GenerateWebsiteButton } from "./generate-website-button";
 // the welcome email when the operator clicks "Maybe later" on step 3.
 import { dismissOnboardingAction } from "./actions";
 // 2026-06-03 — Health/wellness landing-design picker (ready-page swap).
-import { ReadyDesignPicker } from "./ready-design-picker";
-import { isLandingTemplateId } from "@/components/landing-templates/registry";
-import { isHealthVertical, resolveHealthTemplate } from "@/lib/landing/template-selection";
-import type { DesignId } from "@/components/clients/design-picker/types";
-import { ARCHETYPE_DESIGNS } from "@/components/clients/design-picker/data";
-import { classifyArchetypeFromSoul } from "@/lib/workspace/apply-archetype-theme";
+// 2026-07-14 — moved to the shared design-picker folder so the claimed
+// dashboard can reuse it too; prop derivation lives in resolveDesignModuleProps.
+import { ReadyDesignPicker } from "@/components/clients/design-picker/ReadyDesignPicker";
+import { resolveDesignModuleProps } from "@/components/clients/design-picker/resolve-module-props";
 
 export const dynamic = "force-dynamic";
 
@@ -241,44 +239,18 @@ export default async function WorkspaceReadyPage({ params, searchParams }: Ready
   // was already switchable via the SeldonChat copilot; this surfaces the same
   // capability as a click-to-apply picker. `value` is the operator's intent
   // ("auto" or an id); `autoResolvedId` is what Auto maps to for this workspace.
-  const wsTheme =
-    (workspace.theme as unknown as {
-      landingTemplate?: string;
-      landingTemplateChoice?: string;
-      aestheticArchetype?: string;
-      aestheticArchetypeChoice?: string;
-    } | null) ?? null;
-  const wsVertical = ((workspace.soul as unknown as { industry?: string } | null)?.industry ?? "").toString();
-  const currentTemplateId = wsTheme?.landingTemplate;
-  const onHealthTrack =
-    isLandingTemplateId(currentTemplateId) || isHealthVertical(wsVertical);
-
-  let designChoice: DesignId;
-  let designAutoResolved: Exclude<DesignId, "auto"> | undefined;
-  let designAutoReason: string;
-  let designOptions: typeof ARCHETYPE_DESIGNS | undefined;
-  let designSectionLabel: string | undefined;
-  let designAutoNote: string | undefined;
-
-  if (onHealthTrack) {
-    designChoice = (wsTheme?.landingTemplateChoice as DesignId | undefined) ?? "auto";
-    designAutoResolved = (
-      isLandingTemplateId(currentTemplateId)
-        ? currentTemplateId
-        : resolveHealthTemplate(wsVertical)
-    ) as Exclude<DesignId, "auto">;
-    designAutoReason = wsVertical ? `Auto-picked for ${wsVertical}` : "Auto-picked for this business";
-    // health options + copy = the picker defaults; leave undefined.
-  } else {
-    // Archetype track — trades/generic. Auto resolves via soul classification.
-    designChoice = (wsTheme?.aestheticArchetypeChoice as DesignId | undefined) ?? "auto";
-    designAutoResolved = (wsTheme?.aestheticArchetype ??
-      classifyArchetypeFromSoul(workspace.soul, workspace.settings)) as Exclude<DesignId, "auto">;
-    designAutoReason = wsVertical ? `Auto-picked for ${wsVertical}` : "Auto-picked for this business";
-    designOptions = ARCHETYPE_DESIGNS;
-    designSectionLabel = "Design styles";
-    designAutoNote = "Auto matches a style to your business. Pick any style to override it — your site re-skins instantly.";
-  }
+  const {
+    initialValue: designChoice,
+    autoResolvedId: designAutoResolved,
+    autoReason: designAutoReason,
+    designs: designOptions,
+    sectionLabel: designSectionLabel,
+    autoNote: designAutoNote,
+  } = resolveDesignModuleProps({
+    theme: workspace.theme,
+    soul: workspace.soul,
+    settings: workspace.settings,
+  });
 
   const publicBookingUrl = bookingTemplateRow
     ? `${APP_BASE}/book/${workspace.slug}/${bookingTemplateRow.slug}`
