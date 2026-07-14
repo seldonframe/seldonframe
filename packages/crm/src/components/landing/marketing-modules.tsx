@@ -22,7 +22,6 @@
 //     via useReducedMotion() so no motion components mount at all.
 
 import { useEffect, useRef, useState, type ReactNode } from "react";
-import Link from "next/link";
 import { motion, useInView, useReducedMotion } from "framer-motion";
 import {
   Calendar,
@@ -149,22 +148,6 @@ export function MarketingAgents() {
             carry the framing now that the standalone heading is retired (the
             "two ways" idea is already made by the How-it-works section above). */}
         <MarketingAgentMarquee />
-
-        {/* CTAs */}
-        <div className="mt-10 flex flex-wrap justify-center gap-3">
-          <Link
-            href="/marketplace"
-            className="inline-flex items-center gap-2 rounded-[11px] bg-[#F6F2EA] px-5 py-3 text-[14px] font-[600] text-[#1F2B24] transition-transform hover:-translate-y-px"
-          >
-            Browse the agent marketplace →
-          </Link>
-          <Link
-            href="/build"
-            className="inline-flex items-center gap-2 rounded-[11px] border border-[rgba(255,255,255,.22)] bg-transparent px-5 py-3 text-[14px] font-[500] text-[rgba(246,242,234,.9)] transition-colors hover:border-[rgba(255,255,255,.4)]"
-          >
-            Or build your own in the Studio →
-          </Link>
-        </div>
       </div>
     </section>
   );
