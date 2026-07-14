@@ -174,6 +174,7 @@ export default async function PublicSPage({ params }: PageProps) {
             servicePages={navServices}
             homeHref="/"
             cta={payload.nav?.cta}
+            logoUrl={payload.logo}
           />
           <ServicePageTemplate
             archetype={payload.hero.archetype}
@@ -234,6 +235,7 @@ export default async function PublicSPage({ params }: PageProps) {
             servicePages={navServices}
             homeHref="/"
             cta={payload.nav?.cta}
+            logoUrl={payload.logo}
           />
           {payload.emergency && <EmergencyStrip {...payload.emergency} />}
           <Hero {...payload.hero} orgSlug={orgSlug} leadForm={payload.leadForm} />

@@ -261,6 +261,7 @@ export default async function WorkspaceLandingPage({ params }: PageProps) {
         servicePages={navServices}
         homeHref={homeHref}
         cta={payload.nav?.cta}
+        logoUrl={payload.logo}
       />
       {payload.emergency && <EmergencyStrip {...payload.emergency} />}
       <Hero {...payload.hero} orgSlug={slug} leadForm={payload.leadForm} />

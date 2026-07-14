@@ -243,6 +243,12 @@ export async function generateR1Payload(args: {
     );
   }
 
+  // Thread the client's own captured logo (part 1) onto the payload so the
+  // nav renders their real brand mark instead of a text wordmark.
+  if (typeof args.facts.logo === "string" && args.facts.logo.trim()) {
+    parsed.logo = args.facts.logo.trim();
+  }
+
   // ── Photo post-process ─────────────────────────────────────────────────────
   // After the payload is validated, enrich each service with an HD photo.
   // Infer the vertical from facts (same source as classifyArchetype in the

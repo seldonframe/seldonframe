@@ -198,6 +198,10 @@ export type R1LandingPayload = {
   testimonials: R1TestimonialsSection;
   faq: R1FaqSection;
   footer: R1FooterSection;
+  /** The client's own logo, captured from their site during URL onboarding
+   *  (html-image-harvester). Optional — absent on paste/manual builds.
+   *  Rendered in the nav brand slot in place of the text wordmark. */
+  logo?: string;
   emergency?: R1EmergencySection;
   sticky?: R1StickySection;
   /** Speed-to-Lead bottom section (optional). */
