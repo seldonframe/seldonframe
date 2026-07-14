@@ -22,7 +22,6 @@
 //     via useReducedMotion() so no motion components mount at all.
 
 import { useEffect, useRef, useState, type ReactNode } from "react";
-import Link from "next/link";
 import { motion, useInView, useReducedMotion } from "framer-motion";
 import {
   Calendar,
@@ -91,13 +90,13 @@ export function MarketingModules() {
         <div className="section-head-center text-center">
           <div className="inline-flex items-center justify-center gap-2.5 text-[12px] font-[600] uppercase tracking-[0.09em] text-[#1F2B24]">
             <span className="h-px w-4 bg-[#1F2B24] opacity-50" aria-hidden />
-            Run your business
+            Either way
             <span className="h-px w-4 bg-[#1F2B24] opacity-50" aria-hidden />
           </div>
           <h2 className="mx-auto mt-3.5 max-w-[20ch] text-[clamp(27px,4.2vw,42px)] font-[500] leading-[1.08] tracking-[-0.025em] text-[#221D17]">
-            Your whole front office —{" "}
+            You get the whole{" "}
             <em className="font-[Newsreader,Georgia,serif] font-normal not-italic">
-              wired together.
+              front office.
             </em>
           </h2>
           <p className="mx-auto mt-4 max-w-[56ch] text-[clamp(15.5px,1.9vw,18px)] leading-[1.55] text-[#6E665A]">
@@ -142,43 +141,13 @@ export function MarketingAgents() {
     <section
       id="agents"
       aria-label="Hire agents"
-      className="overflow-hidden border-t border-[rgba(34,29,23,.08)] bg-[#1F2B24] px-5 py-20 md:px-8 md:py-28 lg:px-12"
+      className="overflow-hidden border-t border-[rgba(34,29,23,.08)] bg-[#1F2B24] px-5 py-14 md:px-8 md:py-16 lg:px-12"
     >
       <div className="mx-auto max-w-[1120px]">
-        {/* Section head — the two on-ramps */}
-        <div className="mx-auto max-w-[680px] text-center">
-          <div className="inline-flex items-center gap-2.5 text-[12px] font-[700] uppercase tracking-[0.09em] text-[#F6F2EA]">
-            <span className="h-px w-4 bg-[rgba(246, 242, 234,.6)]" aria-hidden />
-            Hire agents
-          </div>
-          <h2 className="mt-3.5 text-[clamp(27px,4.2vw,42px)] font-[500] leading-[1.08] tracking-[-0.025em] text-[#F6F2EA]">
-            Two ways to build an agent.
-          </h2>
-          <p className="mx-auto mt-4 max-w-[58ch] text-[clamp(15.5px,1.9vw,18px)] leading-[1.55] text-[rgba(246,242,234,.9)]">
-            <strong className="font-[500] text-[#FFFDFA]">Describe what you&apos;re missing</strong> and Seldon generates it,
-            or <strong className="font-[500] text-[#FFFDFA]">record what you already do</strong> and Seldon compiles it. Either
-            way you get a 24/7 worker for pennies — not an employee or an agency.
-          </p>
-        </div>
-
-        {/* The two catalogs, scrolling */}
+        {/* The two catalogs, scrolling — the DESCRIBE IT / RECORD IT row labels
+            carry the framing now that the standalone heading is retired (the
+            "two ways" idea is already made by the How-it-works section above). */}
         <MarketingAgentMarquee />
-
-        {/* CTAs */}
-        <div className="mt-10 flex flex-wrap justify-center gap-3">
-          <Link
-            href="/marketplace"
-            className="inline-flex items-center gap-2 rounded-[11px] bg-[#F6F2EA] px-5 py-3 text-[14px] font-[600] text-[#1F2B24] transition-transform hover:-translate-y-px"
-          >
-            Browse the agent marketplace →
-          </Link>
-          <Link
-            href="/build"
-            className="inline-flex items-center gap-2 rounded-[11px] border border-[rgba(255,255,255,.22)] bg-transparent px-5 py-3 text-[14px] font-[500] text-[rgba(246,242,234,.9)] transition-colors hover:border-[rgba(255,255,255,.4)]"
-          >
-            Or build your own in the Studio →
-          </Link>
-        </div>
       </div>
     </section>
   );

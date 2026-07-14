@@ -27,7 +27,6 @@ import { useCallback, useEffect, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 import { ArrowRight, FileText, Globe } from "lucide-react";
 
-import { MarketingAgentOrbit } from "@/components/landing/marketing-agent-orbit";
 import { MarketingDemoMarquee } from "@/components/landing/marketing-demo-marquee";
 import { heroSubmitTarget } from "@/components/landing/hero-submit-target";
 import { BorderBeam } from "@/components/ui/border-beam";
@@ -254,14 +253,6 @@ export function MarketingHero({
         </strong>{" "}
         — then see it all in one dashboard: website, bookings, CRM.
       </p>
-      <p className="mx-auto mt-2.5 max-w-[68ch] text-pretty text-[14.5px] leading-[1.55] text-[#6E665A]">
-        Build from any agent:{" "}
-        <strong className="font-[500] text-[#221D17]">
-          Claude Code / Cursor / Codex / Windsurf / VS Code / Zed
-        </strong>{" "}
-        — or no IDE at all.
-      </p>
-
       {/* Primary CTA */}
       <div className="mt-7 flex flex-wrap items-center justify-center gap-3">
         <a
@@ -425,16 +416,13 @@ export function MarketingHero({
 
       {/* Proof checklist */}
       <ul className="mt-6 flex flex-wrap items-center justify-center gap-x-5 gap-y-2">
-        {["Build it free", "Live in 3 minutes", "$29/mo flat", "Cancel anytime"].map((item) => (
+        {["Start free", "Live in 3 minutes", "Cancel anytime"].map((item) => (
           <li key={item} className="flex items-center gap-2 text-[13.5px] text-[#6E665A]">
             <span className="flex size-[17px] items-center justify-center rounded-full bg-[rgba(31, 43, 36,.12)] text-[10px] font-[700] text-[#1F2B24]" aria-hidden>✓</span>
             {item}
           </li>
         ))}
       </ul>
-
-      {/* The agent at work: SF mark orbited by the real model + app logos */}
-      <MarketingAgentOrbit />
 
       {/* Loading overlay */}
       {submitting ? (

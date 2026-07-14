@@ -136,7 +136,7 @@ function RowLabel({ kicker, children }: { kicker: string; children: React.ReactN
 
 export function MarketingAgentMarquee() {
   return (
-    <div className="relative mt-10 flex flex-col gap-6">
+    <div className="relative flex flex-col gap-6">
       <div>
         <RowLabel kicker="Describe it">Agents you&apos;re missing — Seldon builds them from a sentence</RowLabel>
         <Marquee pauseOnHover className="[--duration:52s] [--gap:0.9rem] py-0">

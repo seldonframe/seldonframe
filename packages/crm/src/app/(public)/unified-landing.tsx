@@ -14,6 +14,7 @@ import { MarketingHero } from "@/components/landing/marketing-hero";
 import { MarketingProofStrip } from "@/components/landing/marketing-proof-strip";
 import { MarketingBuildSteps } from "@/components/landing/marketing-build-steps";
 import { MarketingIdeStrip } from "@/components/landing/marketing-ide-strip";
+import { MarketingAgentOrbit } from "@/components/landing/marketing-agent-orbit";
 import { MarketingModules, MarketingAgents } from "@/components/landing/marketing-modules";
 import { MarketingSmbCta } from "@/components/landing/marketing-smb-cta";
 import { LandingMarketingPricingSection } from "@/components/landing/marketing-pricing-section";
@@ -61,11 +62,17 @@ export function UnifiedLanding({
       buildStack={
         <>
           <MarketingHero ungatedBuildEnabled={ungatedBuildEnabled} />
-          <MarketingBuildSteps />
+          {/* IDE strip sits right above the orbit — "build it with one command"
+              then "one agent, your whole stack". */}
           <MarketingIdeStrip />
+          <MarketingAgentOrbit />
+          {/* How it works → the payoff ("Either way, you get the whole front
+              office") → the agent catalog, kept adjacent so the two-ways idea
+              pays off immediately. */}
+          <MarketingBuildSteps />
           <MarketingModules />
-          <MarketingSmbCta />
           <MarketingAgents />
+          <MarketingSmbCta />
           <LandingMarketingPricingSection tierLadderOn={tierLadderOn} />
           <MarketingProofStrip />
           <LandingMarketingFaqSection />
