@@ -16,6 +16,8 @@
 // without displacing the $29 anchor. Ships as part of the flip-time
 // commit alongside the SF_COLUMN comparison-registry edit.
 
+import Link from "next/link";
+
 type FaqItem = { question: string; answer: string };
 
 // Updated 2026-06-22 to the flat $29/mo + GMV model. The FAQPage JSON-LD
@@ -23,49 +25,59 @@ type FaqItem = { question: string; answer: string };
 // structured data can never drift — edit here and the schema regenerates.
 const FAQS: readonly FaqItem[] = [
   {
-    question: "Who is SeldonFrame for?",
+    question: "Can an AI agent really run my front office — without dropping the ball?",
     answer:
-      "Service-business owners — plumbers, estheticians, contractors, clinics, coaches — who want a complete AI front office (website, booking, intake, CRM, and a 24/7 agent across voice, chat, SMS, and email) for their own business. It's also for builders and agencies, who are simply the top rung of the same ladder: power users whose product is agents — they build one in the Studio and resell it, or run it for clients under their own brand.",
+      "Yes, because it's grounded in your real business, not making things up. It answers from your actual services, prices, and hours, reads back what it heard before it books or quotes anything, and stays inside the guardrails you set — so it never invents a price or a promise you can't keep. You can review every call and message it handles. Most owners find it more consistent than a tired human at 9pm, because it never forgets to follow up.",
+  },
+  {
+    question: "I'm not technical. Can I actually run this myself?",
+    answer:
+      "If you can text, you can run it. Change your hours, add a service, or tune what your receptionist says just by typing it in plain English — like you'd text ChatGPT. There's no code, no builder to learn, and nothing to wire together. Your website, booking page, CRM, and agent are already connected on day one.",
+  },
+  {
+    question: "Which plan is right for me?",
+    answer:
+      "Three simple paths. If you run your OWN business (or a few) and you already use ChatGPT, Claude, or Gemini, choose Builder — $29/mo, unlimited workspaces on your own AI key. If you'd rather we handle the keys and just run it for you, choose Managed — $49/mo for one workspace on SeldonFrame's keys, nothing to set up. If you build sites and agents for CLIENTS under your own brand, choose an Agency plan — $99/mo for 10 client sub-accounts, $199 for 30, or $299 for unlimited, whitelabel included. Not sure? Start free on Builder — you can move up in a click once you outgrow it.",
   },
   {
     question: "Do I need my own AI key?",
     answer:
-      "Yes — and if you use ChatGPT, Claude, or Gemini, you already have what you need. Your agents run on your own key (and Twilio for calls/texts), billed by the provider at cost. That's why it's a flat $29 with no usage markup. The website, booking, and CRM build with no key; you connect a key when you switch an agent on (we show you how).",
+      "On Builder, yes — and if you use ChatGPT, Claude, or Gemini you already have one. Your agents run on your own key (and Twilio for calls/texts), billed by the provider at cost — that's exactly why the price stays flat with no usage markup. Don't want to touch keys at all? The Managed plan ($49/mo) runs everything on our keys. Either way, your website, booking, and CRM build with no key at all.",
   },
   {
-    question: "How much is it?",
+    question: "It's really a flat price? What's the catch?",
     answer:
-      "$29/mo flat, unlimited workspaces, cancel anytime. Plus 2% only on what you sell through SeldonFrame (payments, proposals, packages) — sell anywhere else and we take nothing. Agency tiers ($99+) pay no GMV fee — 0% on everything you bill your clients.",
+      "No catch. Flat monthly, no metered AI bills, no per-seat tax, no surprise invoices. The only variable is a flat 2% on what you actually SELL through SeldonFrame (payments and proposals) on the solo plans — collect any other way and we take nothing, and agency plans pay 0%. We only make money when you do.",
   },
   {
     question: "Is it free to start?",
     answer:
-      "Yes — we build your first workspace on our AI key so you can see it work instantly, no card required. You're only charged $29/mo flat once you connect through Stripe, and you can cancel anytime.",
+      "Yes. We build your first workspace and let you watch it answer a call and book a job before you pay a cent — no card to look. You're only charged when you switch it on for real through Stripe, and you can cancel anytime. One booked job pays for the whole year.",
   },
   {
-    question: "How many workspaces can I run?",
+    question: "Why not just hire someone, or use GoHighLevel?",
     answer:
-      "Unlimited of your own, on the flat $29/mo — there's no per-workspace tax and no per-seat pricing. Running client sub-accounts under your own brand is a separate agency ladder starting at $99/mo (whitelabel included from the first tier).",
-  },
-  {
-    question: "Can I white-label this for my clients?",
-    answer:
-      "Yes — whitelabel is included on every agency plan, starting at $99/mo. Your brand appears on the entire platform; clients never see SeldonFrame. You set your own per-client pricing and keep the spread. Reselling to your own clients goes through your brand, so it isn't subject to the GMV fee.",
-  },
-  {
-    question: "What if a client wants their own domain?",
-    answer:
-      "Every workspace can map to its own custom domain. Your client visits booking.theirbusiness.com, not a SeldonFrame subdomain.",
-  },
-  {
-    question: "How does this compare to GoHighLevel?",
-    answer:
-      "SeldonFrame builds a website, CRM, booking page, intake form, and a multi-surface AI agent in 3 minutes from a URL — no 2–4 week onboarding and no Zapier glue. It's $29/mo flat vs. GoHighLevel Agency Pro at $497/mo, the agents answer across voice, chat, SMS, and email, and you own it (AGPL-3.0 — self-host or use the cloud).",
+      "A part-time receptionist costs more in a week than SeldonFrame does in a month, and still sleeps. GoHighLevel Agency Pro is $497/mo and takes 2–4 weeks of setup plus Zapier glue. SeldonFrame builds the whole front office — website, CRM, booking, intake, and an agent across voice, chat, SMS, and email — in 3 minutes from your URL, for $29/mo, and you own it (open source, AGPL-3.0: self-host or use the cloud).",
   },
   {
     question: "Do I still need Zapier, Calendly, or Typeform?",
     answer:
-      "No. CRM, scheduling, intake forms, and the AI agents are all native and wired together. No Zapier task fees, no broken integrations, no tab-switching between five tools.",
+      "No. CRM, scheduling, intake forms, and the AI agents are all native and wired together from the start. No Zapier task fees, no broken integrations, no tab-switching between five tools that don't talk to each other.",
+  },
+  {
+    question: "Can I white-label it for my clients?",
+    answer:
+      "Yes — whitelabel is included on every agency plan, from $99/mo. Your brand is on the entire platform and every client sub-account; clients never see SeldonFrame. You set your own per-client pricing and keep the spread, and because it's your brand there's no GMV fee — 0% on everything you bill them. Each workspace can map to its own domain (booking.theirbusiness.com), too.",
+  },
+  {
+    question: "Should I wait until the AI gets better?",
+    answer:
+      "It already does — automatically. SeldonFrame is a thin harness over the frontier models, so every time Claude, GPT, or Gemini gets better, your agent does too, with nothing to migrate. Waiting doesn't get you a better product; it just sends more of this week's missed calls to voicemail. The best time to have an agent answering was last month. The next best time is today — and building it is free.",
+  },
+  {
+    question: "Can I cancel, and do I own my work?",
+    answer:
+      "Cancel anytime, no lock-in and no penalty. And because SeldonFrame is open source (AGPL-3.0), you can export everything or self-host it whenever you want. Your customers, your content, and your agents are yours — we never hold them hostage.",
   },
 ];
 
@@ -128,6 +140,28 @@ export function LandingMarketingFaqSection() {
               </p>
             </details>
           ))}
+        </div>
+
+        {/* Route to the plan picker — the "which plan is right for me" answer,
+            made actionable. */}
+        <div className="mt-10 flex flex-col items-center gap-3 text-center">
+          <p className="text-[15px] leading-[1.55] text-[#6E665A]">
+            Still deciding? Compare every plan side by side and pick the one that fits.
+          </p>
+          <div className="flex flex-wrap items-center justify-center gap-3">
+            <Link
+              href="/pricing"
+              className="inline-flex items-center gap-2 rounded-[11px] bg-[#1F2B24] px-5 py-3 text-[14px] font-[600] text-[#F6F2EA] transition-transform hover:-translate-y-px"
+            >
+              Compare all plans →
+            </Link>
+            <Link
+              href="/signup"
+              className="inline-flex items-center gap-2 rounded-[11px] border border-[rgba(34,29,23,.18)] px-5 py-3 text-[14px] font-[500] text-[#221D17] transition-colors hover:border-[#1F2B24]/50"
+            >
+              Start free
+            </Link>
+          </div>
         </div>
       </div>
 

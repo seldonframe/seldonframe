@@ -79,7 +79,7 @@ export function MarketingAgentOrbit() {
   return (
     <section
       aria-label="One agent working across your tools"
-      className="mt-14 flex w-full flex-col items-center"
+      className="flex w-full flex-col items-center px-5 pb-6 pt-4 md:px-8"
     >
       <p className="inline-flex items-center gap-2.5 font-sans text-[12.5px] tracking-[0.04em] text-[#6E665A]">
         <span className="inline-block h-px w-4 bg-[#9A9183]" aria-hidden />

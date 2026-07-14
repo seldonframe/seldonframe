@@ -22,7 +22,6 @@ import { useEffect, useRef, useState, type ReactNode } from "react";
 import { motion, useInView, useReducedMotion } from "framer-motion";
 
 import { IntegrationBeam } from "@/components/landing/integration-beam";
-import { AnimatedShinyText } from "@/components/ui/magic/animated-shiny-text";
 
 // Shared spring-ish ease used everywhere (the brief's cubic-bezier).
 const EASE = [0.22, 1, 0.36, 1] as const;
@@ -33,7 +32,6 @@ type Path = {
   kicker: string;
   arrow: string;
   title: ReactNode;
-  body: string;
   steps: readonly string[];
   mock: ReactNode;
   figure?: ReactNode;
@@ -49,7 +47,6 @@ const PATHS: readonly Path[] = [
         <em className="font-[Newsreader,Georgia,serif] font-normal not-italic">Describe it.</em>
       </>
     ),
-    body: "For the agents you don't have yet — a voice receptionist, speed-to-lead, a review requester. Paste your website or describe the business; Seldon generates the whole front office and wires the agent in.",
     steps: ["Paste a URL or describe the business", "Watch it build — site, booking, CRM, agent", "Go live on your domain"],
     mock: <ScanMock />,
     figure: <IntegrationBeam />,
@@ -63,7 +60,6 @@ const PATHS: readonly Path[] = [
         <em className="font-[Newsreader,Georgia,serif] font-normal not-italic">Record it.</em>
       </>
     ),
-    body: "For the workflows you run by hand — inbox triage, a Google-Sheets lead log, a scraper → CRM. Screen-record yourself doing it once — works on desktop and mobile — and Seldon watches, asks about what it missed, and compiles a working agent.",
     steps: ["Screen-record the workflow — on desktop or mobile", "Answer what the recording didn't show", "Get a tested agent you can switch on"],
     mock: <RecordMock />,
     figure: <RecordFigure />,
@@ -90,13 +86,6 @@ export function MarketingBuildSteps() {
               Both live in minutes.
             </em>
           </h2>
-          <p className="mx-auto mt-4 max-w-[60ch] text-[clamp(15.5px,1.9vw,18px)] leading-[1.55] text-[#6E665A]">
-            <AnimatedShinyText base="rgba(110,102,90,1)" shine="#221D17">
-              Describe the agent you&apos;re missing and Seldon generates it
-            </AnimatedShinyText>{" "}
-            — or record the workflow you already do by hand and Seldon compiles it. All you need is a
-            URL (or a recording) and an AI key you probably already have.
-          </p>
         </div>
 
         {/* Two path cards */}
@@ -117,7 +106,6 @@ export function MarketingBuildSteps() {
               <h3 className="m-0 text-[clamp(19px,2.4vw,23px)] font-[500] leading-[1.12] tracking-[-0.02em] text-[#221D17]">
                 {path.title}
               </h3>
-              <p className="m-0 max-w-[46ch] text-[14px] leading-[1.55] text-[#6E665A]">{path.body}</p>
 
               {/* Three mini-steps */}
               <ol className="m-0 flex flex-col gap-2 p-0">
@@ -136,34 +124,6 @@ export function MarketingBuildSteps() {
               {path.figure ? <div className="mt-2">{path.figure}</div> : null}
             </div>
           ))}
-        </div>
-
-        {/* Reassurance — either path ships the whole front office, not just an agent. */}
-        <div className="mx-auto mt-10 max-w-[880px] rounded-[16px] border border-[rgba(34,29,23,.1)] bg-[#FFFDFA] px-6 py-5 text-center shadow-[0_1px_2px_rgba(34,29,23,.05)]">
-          <p className="text-[13px] font-[600] uppercase tracking-[0.08em] text-[#1F2B24]">
-            Either way, you get the whole front office
-          </p>
-          <ul className="mt-3 flex flex-wrap items-center justify-center gap-x-2.5 gap-y-2 text-[13.5px] text-[#221D17]">
-            {[
-              "High-converting multi-page website",
-              "Booking page",
-              "Lead-capture forms",
-              "CRM",
-              "Payments",
-              "Reviews",
-            ].map((item, i) => (
-              <li key={item} className="inline-flex items-center gap-2.5">
-                {i > 0 && <span className="text-[#9A9183]" aria-hidden>·</span>}
-                <span className="inline-flex items-center gap-1.5">
-                  <span className="text-[#1F2B24]" aria-hidden>✓</span>
-                  {item}
-                </span>
-              </li>
-            ))}
-          </ul>
-          <p className="mt-3 text-[13px] text-[#6E665A]">
-            Wired together and live in minutes — not a pile of disconnected tools.
-          </p>
         </div>
 
       </div>
