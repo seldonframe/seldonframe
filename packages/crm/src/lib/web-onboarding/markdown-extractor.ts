@@ -42,6 +42,7 @@ import { parseExtraction } from "./extraction-parser";
 import { firecrawlScrape, type ScrapeDeps } from "./firecrawl-scrape";
 import { harvestImagesFromHtml } from "./html-image-harvester";
 import { WebFetchError, type WebFetchErrorReason } from "./web-fetch-extractor";
+import { findContactPageCandidates } from "./contact-page-candidates";
 
 // Re-export the error type so callers can import it from either path
 // during the cutover period without breaking.
@@ -89,6 +90,126 @@ function pickText(content: Array<AnthropicContentBlock>): string {
     .map((part) => (part.type === "text" ? part.text ?? "" : ""))
     .join("\n")
     .trim();
+}
+
+// Contact-page fallback (2026-07-14): each additional candidate page's MD is
+// truncated to this many chars before being appended to the retry prompt —
+// keeps the combined message bounded even if a /contact page is unusually
+// large (it's supplementary context, not the primary document).
+const CANDIDATE_MD_MAX_CHARS = 20_000;
+
+// Up to 2 Firecrawl scrapes of contact-shaped candidate pages, only on the
+// previously-dead extraction-failure path.
+const MAX_CONTACT_FALLBACK_CANDIDATES = 2;
+
+/**
+ * One Anthropic extraction call: system + user-message-with-MD -> parsed
+ * JSON. Pure refactor of the original steps 2+3 — same error mapping, same
+ * log event names/fields, with an added `attempt` field on the two warn
+ * logs so a contact-page-fallback retry (attempt 2) is distinguishable from
+ * the first pass in Vercel logs.
+ */
+async function runExtractionOnce(args: {
+  client: AnthropicLike;
+  model: string;
+  md: string;
+  url: string;
+  attempt: number;
+}): Promise<ExtractedBusinessFacts> {
+  const { client, model, md, url, attempt } = args;
+
+  let response: { content: Array<AnthropicContentBlock>; stop_reason?: string };
+  try {
+    response = await client.messages.create({
+      model,
+      max_tokens: MAX_TOKENS,
+      // Static across every call for this deployment (same SYSTEM_PROMPT
+      // string every time) — hoisted into a cached `system` array entry
+      // per the enhance-blocks.ts:722-748 pattern. Only the per-request
+      // Markdown + URL stay in the uncached user message.
+      system: [
+        { type: "text", text: SYSTEM_PROMPT, cache_control: { type: "ephemeral" } },
+      ],
+      messages: [
+        {
+          role: "user",
+          content: `${EXTRACTION_INSTRUCTIONS_MD}\n\nURL: ${url}\n\nPage content (Markdown):\n${md}`,
+        },
+      ],
+    });
+  } catch (err: unknown) {
+    const status = (err as { status?: number } | null)?.status;
+    const message = err instanceof Error ? err.message : String(err);
+    console.error(
+      JSON.stringify({
+        event: "markdown_extractor_anthropic_error",
+        url,
+        model,
+        status: status ?? null,
+        message: message.slice(0, 500),
+      }),
+    );
+    if (status === 401 || status === 403) {
+      throw new WebFetchError(
+        "anthropic_unauthorized",
+        "Anthropic rejected the BYOK key.",
+        err,
+      );
+    }
+    if (status === 402 || status === 429) {
+      throw new WebFetchError(
+        "credits_exhausted",
+        "BYOK Anthropic key has no remaining credits.",
+        err,
+      );
+    }
+    throw new WebFetchError(
+      "internal_error",
+      err instanceof Error ? err.message : "Anthropic SDK call failed.",
+      err,
+    );
+  }
+
+  const text = pickText(response.content);
+  if (!text) {
+    console.warn(
+      JSON.stringify({
+        event: "markdown_extractor_empty_text",
+        url,
+        model,
+        attempt,
+        stop_reason: response.stop_reason ?? null,
+        content_types: response.content.map((b) => b.type),
+      }),
+    );
+    throw new WebFetchError(
+      "extraction_failed",
+      "LLM returned no text content block.",
+    );
+  }
+
+  const parsed = parseExtraction(text);
+  if (!parsed.ok) {
+    console.warn(
+      JSON.stringify({
+        event: "markdown_extractor_parse_failed",
+        url,
+        model,
+        attempt,
+        // stop_reason="max_tokens" + a large text_len ⇒ truncation (raise
+        // MAX_TOKENS); "end_turn" with valid-looking text ⇒ malformed JSON.
+        stop_reason: response.stop_reason ?? null,
+        text_len: text.length,
+        text_preview: text.slice(0, 500),
+      }),
+    );
+    throw new WebFetchError(
+      "extraction_failed",
+      "The model returned no usable JSON.",
+    );
+  }
+
+  return parsed.data;
 }
 
 /**
@@ -142,99 +263,92 @@ export async function extractBusinessFactsFromUrl(params: {
 
   const md = scrape.markdown;
 
-  // Step 2: Anthropic call — NO TOOLS, NO web_fetch. Just system +
-  // user-message-with-MD -> JSON response.
-  let response: { content: Array<AnthropicContentBlock>; stop_reason?: string };
+  // Step 2: attempt 1 — Anthropic call — NO TOOLS, NO web_fetch. Just
+  // system + user-message-with-MD -> JSON response.
+  let facts: ExtractedBusinessFacts;
   try {
-    response = await client.messages.create({
-      model: modelInUse,
-      max_tokens: MAX_TOKENS,
-      // Static across every call for this deployment (same SYSTEM_PROMPT
-      // string every time) — hoisted into a cached `system` array entry
-      // per the enhance-blocks.ts:722-748 pattern. Only the per-request
-      // Markdown + URL stay in the uncached user message.
-      system: [
-        { type: "text", text: SYSTEM_PROMPT, cache_control: { type: "ephemeral" } },
-      ],
-      messages: [
-        {
-          role: "user",
-          content: `${EXTRACTION_INSTRUCTIONS_MD}\n\nURL: ${params.url}\n\nPage content (Markdown):\n${md}`,
-        },
-      ],
-    });
+    facts = await runExtractionOnce({ client, model: modelInUse, md, url: params.url, attempt: 1 });
   } catch (err: unknown) {
-    const status = (err as { status?: number } | null)?.status;
-    const message = err instanceof Error ? err.message : String(err);
-    console.error(
-      JSON.stringify({
-        event: "markdown_extractor_anthropic_error",
-        url: params.url,
-        model: modelInUse,
-        status: status ?? null,
-        message: message.slice(0, 500),
-      }),
-    );
-    if (status === 401 || status === 403) {
-      throw new WebFetchError(
-        "anthropic_unauthorized",
-        "Anthropic rejected the BYOK key.",
-        err,
-      );
+    // Only a parse/empty-text failure (reason "extraction_failed") is
+    // retryable via the contact-page fallback below. Anthropic API errors
+    // (anthropic_unauthorized / credits_exhausted / internal_error) rethrow
+    // immediately — a bad key or exhausted credits won't be fixed by
+    // scraping a different page.
+    if (!(err instanceof WebFetchError) || err.reason !== "extraction_failed") {
+      throw err;
     }
-    if (status === 402 || status === 429) {
-      throw new WebFetchError(
-        "credits_exhausted",
-        "BYOK Anthropic key has no remaining credits.",
-        err,
-      );
-    }
-    throw new WebFetchError(
-      "internal_error",
-      err instanceof Error ? err.message : "Anthropic SDK call failed.",
-      err,
-    );
-  }
 
-  // Step 3: extract and parse the JSON text.
-  const text = pickText(response.content);
-  if (!text) {
+    // Step 2b: contact-page fallback. Homepage extraction failed to parse
+    // (most commonly a required field like `phone` living on a /contact
+    // page the homepage never surfaced). Harvest up to 2 same-host
+    // contact-shaped candidates and retry once with their MD appended.
+    const candidates = findContactPageCandidates(md, scrape.finalUrl).slice(
+      0,
+      MAX_CONTACT_FALLBACK_CANDIDATES,
+    );
+
+    const scrapeResults = await Promise.allSettled(
+      candidates.map((candidateUrl) =>
+        firecrawlScrape(candidateUrl, { firecrawlClient: params.firecrawlClient }).then(
+          (result) => ({ candidateUrl, result }),
+        ),
+      ),
+    );
+
+    const scrapedOk: Array<{ url: string; md: string }> = [];
+    for (const settled of scrapeResults) {
+      if (settled.status !== "fulfilled") continue;
+      const { candidateUrl, result } = settled.value;
+      if (result.ok) {
+        scrapedOk.push({ url: candidateUrl, md: result.markdown });
+      }
+    }
+
     console.warn(
       JSON.stringify({
-        event: "markdown_extractor_empty_text",
+        event: "markdown_extractor_contact_fallback",
         url: params.url,
-        model: modelInUse,
-        stop_reason: response.stop_reason ?? null,
-        content_types: response.content.map((b) => b.type),
+        candidates,
+        scraped_ok: scrapedOk.map((c) => c.url),
       }),
     );
-    throw new WebFetchError(
-      "extraction_failed",
-      "LLM returned no text content block.",
-    );
-  }
 
-  const parsed = parseExtraction(text);
-  if (!parsed.ok) {
-    console.warn(
-      JSON.stringify({
-        event: "markdown_extractor_parse_failed",
-        url: params.url,
+    if (scrapedOk.length === 0) {
+      // No candidate scraped ok — nothing new to retry with. Surface the
+      // same extraction_failed error as before.
+      throw new WebFetchError(
+        "extraction_failed",
+        "The model returned no usable JSON.",
+      );
+    }
+
+    const combinedMd =
+      md +
+      scrapedOk
+        .map(
+          (c) =>
+            `\n\n--- Additional page: ${c.url} ---\n${c.md.slice(0, CANDIDATE_MD_MAX_CHARS)}`,
+        )
+        .join("");
+
+    try {
+      facts = await runExtractionOnce({
+        client,
         model: modelInUse,
-        // stop_reason="max_tokens" + a large text_len ⇒ truncation (raise
-        // MAX_TOKENS); "end_turn" with valid-looking text ⇒ malformed JSON.
-        stop_reason: response.stop_reason ?? null,
-        text_len: text.length,
-        text_preview: text.slice(0, 500),
-      }),
-    );
-    throw new WebFetchError(
-      "extraction_failed",
-      "The model returned no usable JSON.",
-    );
+        md: combinedMd,
+        url: params.url,
+        attempt: 2,
+      });
+    } catch {
+      // Second attempt also failed (parse failure OR an Anthropic API
+      // error) — either way, surface the standard extraction_failed error
+      // as today rather than a fallback-specific reason.
+      throw new WebFetchError(
+        "extraction_failed",
+        "The model returned no usable JSON.",
+      );
+    }
   }
-
-  const facts = parsed.data;
 
   // Deterministically enrich with images harvested straight from the page
   // HTML. Firecrawl markdown only carries ![](...) images; the real hero /
