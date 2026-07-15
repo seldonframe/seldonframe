@@ -26,6 +26,9 @@ export const OG_HEIGHT = 630;
 export const OG_COLORS = {
   ink: "#221D17",
   paper: "#F6F2EA",
+  // CAUTION: green === dark since the forest rebrand (#68). Green is safe as
+  // a background/fill or on light surfaces only — text colored `green` on a
+  // `dark`/`ink` card is invisible. Use `paper` for text accents on dark.
   green: "#1F2B24",
   dark: "#1F2B24",
 } as const;
@@ -362,7 +365,10 @@ export function ToolCard({ name, hook }: { name: string; hook: string }): ReactE
           {safeName}
         </div>
         {safeHook ? (
-          <div style={{ display: "flex", fontSize: 40, fontWeight: 700, fontFamily: "Inter-Bold", color: OG_COLORS.green, lineHeight: 1.2 }}>
+          // paper, not green: since the forest rebrand green === dark, so
+          // green text on a dark card is invisible (the rebrand rule is
+          // forest on light surfaces, cream on dark ones).
+          <div style={{ display: "flex", fontSize: 40, fontWeight: 700, fontFamily: "Inter-Bold", color: OG_COLORS.paper, lineHeight: 1.2 }}>
             {safeHook}
           </div>
         ) : null}
