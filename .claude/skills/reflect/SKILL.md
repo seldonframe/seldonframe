@@ -29,6 +29,12 @@ status is still `open`. Surface them before anything else:
 > evidence you can check yourself). This is the calibration flywheel; skipping it
 > makes the whole system decorative.
 
+When an entry resolves as a **miss**, distill it into ONE transferable line and
+append it to `docs/decisions/LESSONS.md` (create on first miss):
+`- YYYY-MM-DD — <prediction> missed because <root cause>. Rule: <one-line rule>.`
+Load LESSONS.md at the start of every reflect and apply it before any lens —
+Max's own misses outrank any essay.
+
 ### 1. Frame the decision (decision-anatomy)
 State, in 2-4 sentences:
 - **The actual decision** — often not the question as asked. Ask "what problem is
@@ -86,14 +92,25 @@ Work through, loading each reference as you use it:
 8. **Decision matrix** — only if genuinely 3+ options × 3+ criteria; weight
    criteria before scoring options (else the matrix launders a pre-made choice).
 
-### 4. Recommend (always, both paths)
-End with, in this order:
-1. **The call** — one sentence, opinionated. No option menus without a pick.
-2. **Confidence** — a number (e.g., "~75%"), not an adverb.
-3. **What would change my mind** (mandatory) — 1-3 specific observations that
-   would flip the recommendation. This is the anti-rationalization tripwire.
-4. **Cheap tests** — anything under a day's effort that would raise confidence
-   before committing (only if such tests exist).
+### 4. Answer (always, both paths) — the ANSWER CARD comes FIRST
+Max should get the answer in 10 seconds without scrolling. Open the final
+output with this card, in plain words a 12-year-old understands:
+
+> **THE CALL:** <one plain sentence — what I'd do>
+> **HOW SURE:** ~X% (<coin-flip / leaning / confident / near-certain>)
+> **DO THIS NEXT:** <the single concrete next step, incl. any <1-day test>
+> **BECAUSE:** <max 3 short bullets. Each: plain reason — "so you <benefit>">
+> **THIS FLIPS IF:** <1-3 things that would change the answer — watch for them>
+
+Then a divider, then the full thinking (framing, door check, each lens and what
+it surfaced) for when Max wants to check the work. Never make him hunt for the
+verdict.
+
+**Plain-words rule (whole output, not just the card):** famous names stay
+(Bezos, Munger); every other framework term must carry its meaning in the
+sentence — "you can undo this in a week, so we move fast", not "Type 2 with
+contained blast radius". "THIS FLIPS IF" is mandatory — if nothing would flip
+the call, the analysis was rationalization; say so and redo it.
 
 ### 5. Log (always)
 Append to `docs/decisions/LOG.md`:
