@@ -4,7 +4,7 @@
 // inline by an MCP Apps host (ChatGPT, or any other MCP Apps client) alongside
 // the matching tool's result. Both documents are:
 //   - typographic only — NO remote images, NO external requests (empty CSP)
-//   - inline CSS/JS, system font stack, dark theme (#1F2B24 / #F6F2EA / green)
+//   - inline CSS/JS, brand look (paper #F6F2EA cards, ink #221D17, forest #1F2B24)
 //   - defensive about untrusted data: every value from structuredContent is
 //     written via textContent, never innerHTML
 //   - tolerant of the "no input yet" state (approval-gated tools may mount the
@@ -44,24 +44,24 @@ const BUILD_RESULT_WIDGET_HTML = `<!doctype html>
 <head>
 <meta charset="utf-8" />
 <style>
-  :root { color-scheme: dark; }
+  :root { color-scheme: light dark; }
   * { box-sizing: border-box; }
   body {
     margin: 0;
-    font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+    font-family: "Hanken Grotesk", "Segoe UI", system-ui, -apple-system, sans-serif;
     background: transparent;
   }
-  .card { background: #1F2B24; color: #F6F2EA; border-radius: 16px; padding: 20px 22px; max-width: 480px; }
-  .biz { font-size: 12px; opacity: .7; margin: 0 0 6px; letter-spacing: .04em; text-transform: uppercase; }
-  .hero { display: block; font-size: 19px; font-weight: 600; color: #4ade80; text-decoration: none; word-break: break-all; margin-bottom: 14px; }
-  .hero:hover { text-decoration: underline; }
-  .chips { display: flex; flex-wrap: wrap; gap: 8px; margin-bottom: 18px; }
-  .chip { background: rgba(74,222,128,.12); color: #4ade80; border: 1px solid rgba(74,222,128,.35); border-radius: 999px; padding: 4px 12px; font-size: 12px; font-weight: 500; }
+  .card { background: #F6F2EA; color: #221D17; border: 1px solid rgba(34,29,23,0.12); border-radius: 16px; padding: 22px 24px; max-width: 480px; }
+  .biz { font-size: 11.5px; font-family: "DM Mono", ui-monospace, Consolas, monospace; font-weight: 500; color: #1F2B24; opacity: .8; margin: 0 0 8px; letter-spacing: .12em; text-transform: uppercase; }
+  .hero { display: block; font-size: 17px; font-weight: 700; color: #1F2B24; letter-spacing: -0.01em; text-decoration: underline; text-decoration-color: rgba(31,43,36,0.35); text-underline-offset: 3px; word-break: break-all; margin-bottom: 16px; }
+  .hero:hover { text-decoration-color: #1F2B24; }
+  .chips { display: flex; flex-wrap: wrap; gap: 8px; margin-bottom: 20px; }
+  .chip { background: rgba(31,43,36,0.06); color: #1F2B24; border: 1px solid rgba(31,43,36,0.16); border-radius: 7px; padding: 4px 11px; font-size: 11px; font-weight: 600; font-family: "DM Mono", ui-monospace, Consolas, monospace; text-transform: uppercase; letter-spacing: .08em; }
   .ctas { display: flex; gap: 10px; flex-wrap: wrap; }
-  .btn { display: inline-block; text-decoration: none; font-size: 14px; font-weight: 600; border-radius: 10px; padding: 10px 16px; }
-  .btn-primary { background: #4ade80; color: #0f1a12; }
-  .btn-secondary { background: transparent; color: #F6F2EA; border: 1px solid rgba(246,242,234,.25); }
-  .empty { opacity: .65; font-size: 14px; margin: 0; }
+  .btn { display: inline-block; text-decoration: none; font-size: 14px; font-weight: 700; border-radius: 9px; padding: 11px 18px; letter-spacing: -0.01em; }
+  .btn-primary { background: #221D17; color: #F6F2EA; }
+  .btn-secondary { background: transparent; color: #221D17; border: 1.5px solid rgba(34,29,23,0.22); }
+  .empty { color: rgba(34,29,23,0.6); font-size: 14px; margin: 0; }
 </style>
 </head>
 <body>
@@ -166,23 +166,23 @@ const AGENT_CAROUSEL_WIDGET_HTML = `<!doctype html>
 <head>
 <meta charset="utf-8" />
 <style>
-  :root { color-scheme: dark; }
+  :root { color-scheme: light dark; }
   * { box-sizing: border-box; }
   body {
     margin: 0;
-    font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+    font-family: "Hanken Grotesk", "Segoe UI", system-ui, -apple-system, sans-serif;
     background: transparent;
   }
-  .row { display: flex; gap: 12px; overflow-x: auto; padding: 4px 2px 10px; -webkit-overflow-scrolling: touch; }
+  .row { display: flex; gap: 12px; overflow-x: auto; padding: 4px 2px 12px; -webkit-overflow-scrolling: touch; }
   .row::-webkit-scrollbar { height: 6px; }
-  .row::-webkit-scrollbar-thumb { background: rgba(246,242,234,.2); border-radius: 3px; }
-  .card { flex: 0 0 220px; background: #1F2B24; color: #F6F2EA; border-radius: 14px; padding: 16px; display: flex; flex-direction: column; gap: 8px; }
-  .badge { align-self: flex-start; background: rgba(74,222,128,.12); color: #4ade80; border: 1px solid rgba(74,222,128,.35); border-radius: 999px; padding: 2px 10px; font-size: 11px; font-weight: 600; text-transform: uppercase; letter-spacing: .03em; }
-  .name { font-size: 15px; font-weight: 600; margin: 0; }
-  .desc { font-size: 13px; opacity: .75; margin: 0; line-height: 1.4; flex: 1; }
-  .cta { margin-top: auto; background: #4ade80; color: #0f1a12; border: none; border-radius: 10px; padding: 9px 12px; font-size: 13px; font-weight: 600; cursor: pointer; }
+  .row::-webkit-scrollbar-thumb { background: rgba(127,127,127,0.35); border-radius: 3px; }
+  .card { flex: 0 0 232px; background: #F6F2EA; color: #221D17; border: 1px solid rgba(34,29,23,0.12); border-radius: 16px; padding: 18px 18px 16px; display: flex; flex-direction: column; gap: 9px; }
+  .badge { align-self: flex-start; background: rgba(31,43,36,0.06); color: #1F2B24; border: 1px solid rgba(31,43,36,0.16); border-radius: 6px; padding: 3px 9px; font-size: 10.5px; font-weight: 600; font-family: "DM Mono", ui-monospace, Consolas, monospace; text-transform: uppercase; letter-spacing: .09em; }
+  .name { font-size: 16px; font-weight: 700; letter-spacing: -0.01em; margin: 0; }
+  .desc { font-size: 13px; color: rgba(34,29,23,0.72); margin: 0; line-height: 1.5; flex: 1; }
+  .cta { margin-top: auto; background: #221D17; color: #F6F2EA; border: none; border-radius: 9px; padding: 10px 12px; font-size: 13.5px; font-weight: 700; letter-spacing: -0.01em; cursor: pointer; font-family: inherit; }
   .cta:active { opacity: .85; }
-  .empty { opacity: .65; font-size: 14px; padding: 8px 2px; margin: 0; }
+  .empty { opacity: .7; font-size: 14px; padding: 8px 2px; margin: 0; }
 </style>
 </head>
 <body>
