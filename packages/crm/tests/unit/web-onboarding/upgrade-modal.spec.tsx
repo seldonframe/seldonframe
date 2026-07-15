@@ -1,8 +1,9 @@
 // packages/crm/tests/unit/web-onboarding/upgrade-modal.spec.tsx
 //
-// Bootstrap: run with `node --import tsx --import ./tests/setup-dom.ts --test ...`
-// (see packages/crm/tests/setup-dom.ts) — jsdom is mounted before React imports
-// so the Dialog/Card/Button shadcn primitives render into a real DOM.
+// Bootstrap: the setup-dom import below MUST stay first — it mounts jsdom
+// before React imports so the Dialog/Card/Button shadcn primitives render
+// into a real DOM (the CI runner passes no --import flag, so the spec pulls
+// the bootstrap in itself).
 //
 // Query discipline: base-ui's Dialog mirrors title/description into both the
 // visible content and a screen-reader-only node, so plain `getByText` matches
@@ -24,6 +25,8 @@
 // never reaches the tier-comparison view) — its copy assertions were
 // already drifted from the live component before this branch; fixed
 // here to match the real strings.
+import "../../setup-dom";
+
 import { describe, test, beforeEach, afterEach } from "node:test";
 import assert from "node:assert/strict";
 import { render, screen, fireEvent, cleanup } from "@testing-library/react";

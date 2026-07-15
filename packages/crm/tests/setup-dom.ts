@@ -1,7 +1,12 @@
 // packages/crm/tests/setup-dom.ts
 //
-// JSDOM bootstrap for `@testing-library/react` component tests under
-// `node --import tsx --import <this file> --test ...`. Existing TSX tests
+// JSDOM bootstrap for `@testing-library/react` component tests. Import it
+// as the FIRST import of any spec that calls render()/fireEvent — the CI
+// runner (scripts/run-unit-tests.js) invokes `node --import tsx --test`
+// with no extra --import flag, so a spec must pull this in itself to have
+// a DOM. (Loading via `--import <this file>` also works for one-off local
+// runs.) Each spec file runs as its own child process under node:test, so
+// mutating globalThis here cannot leak into other specs. Existing TSX tests
 // that use `renderToString` from `react-dom/server` (e.g.
 // customer-action-form.spec.tsx) do not need a DOM and are unaffected by
 // loading this file — jsdom installs harmless globals.
@@ -89,6 +94,35 @@ if (typeof (globalThis as Record<string, unknown>).requestIdleCallback !== "func
 }
 if (typeof (globalThis as Record<string, unknown>).cancelIdleCallback !== "function") {
   (globalThis as Record<string, unknown>).cancelIdleCallback = (id: number) => clearTimeout(id);
+}
+
+// jsdom does not implement window.matchMedia (it has no real layout
+// engine to evaluate media queries against). Components that branch on
+// `prefers-reduced-motion` etc. (e.g. the /clients/new build-animation's
+// idle-scene) call it unconditionally in an effect, so provide a minimal
+// stub that always reports "no match" and a no-op listener API.
+if (typeof (dom.window as unknown as { matchMedia?: unknown }).matchMedia !== "function") {
+  const matchMedia = (query: string) => ({
+    matches: false,
+    media: query,
+    onchange: null,
+    addListener: () => {},
+    removeListener: () => {},
+    addEventListener: () => {},
+    removeEventListener: () => {},
+    dispatchEvent: () => false,
+  });
+  Object.defineProperty(dom.window, "matchMedia", {
+    value: matchMedia,
+    writable: true,
+    configurable: true,
+  });
+  Object.defineProperty(globalThis, "matchMedia", {
+    value: matchMedia,
+    writable: true,
+    configurable: true,
+    enumerable: false,
+  });
 }
 
 // Mark the test environment so React doesn't print "act()" warnings

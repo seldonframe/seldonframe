@@ -11,6 +11,20 @@ import {
 } from "../../src/lib/hvac/archetypes";
 import { postServiceFollowupArchetype } from "../../src/lib/hvac/archetypes/post-service-followup";
 
+// The 6 original baseline archetypes SLICE 9 must not remove. Named-presence
+// superset check rather than an exact count or an import-time snapshot: a
+// count rots as the registry grows (missed-call-text-back already made it 7),
+// and a snapshot taken after the import can't catch what that import already
+// leaked. Leakage of THIS archetype is caught by the named absence check.
+const BASELINE_IDS = [
+  "speed-to-lead",
+  "win-back",
+  "review-requester",
+  "daily-digest",
+  "weather-aware-booking",
+  "appointment-confirm-sms",
+];
+
 describe("post-service-followup archetype — registry isolation (G-9-7)", () => {
   test("appears in HVAC workspace-scoped registry", () => {
     const a = getHvacArchetype("hvac-post-service-followup");
@@ -21,8 +35,10 @@ describe("post-service-followup archetype — registry isolation (G-9-7)", () =>
     assert.equal(archetypes["hvac-post-service-followup"], undefined);
   });
 
-  test("global archetype count remains 6 (SLICE 9 isolation invariant)", () => {
-    assert.equal(Object.keys(archetypes).length, 6);
+  test("global registry still has the 6 baseline archetypes (SLICE 9 isolation invariant)", () => {
+    for (const id of BASELINE_IDS) {
+      assert.ok(archetypes[id], `baseline archetype "${id}" must still be present`);
+    }
   });
 
   test("hvac-archetypes registry now has all 4 SLICE 9 archetypes", () => {

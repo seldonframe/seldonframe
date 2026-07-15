@@ -171,9 +171,12 @@ describe("integration (shallow-plus) — theme propagation on customer surfaces"
         <CustomerDataView schema={BookingSchema} rows={rows} />
       </PortalLayout>,
     );
-    assert.match(html, /--sf-primary:#14b8a6/);
-    assert.match(html, /--sf-accent:#0d9488/);
-    assert.match(html, /--sf-font:Inter/);
+    // Derived from DEFAULT_ORG_THEME so this stays correct as the
+    // default palette evolves — the invariant is "the full var set
+    // is emitted from the theme", not any particular hex value.
+    assert.match(html, new RegExp(`--sf-primary:${DEFAULT_ORG_THEME.primaryColor}`));
+    assert.match(html, new RegExp(`--sf-accent:${DEFAULT_ORG_THEME.accentColor}`));
+    assert.match(html, new RegExp(`--sf-font:${DEFAULT_ORG_THEME.fontFamily}`));
     assert.match(html, /--sf-radius:8px/);
     assert.match(html, /--sf-bg:/);
     assert.match(html, /--sf-text:/);

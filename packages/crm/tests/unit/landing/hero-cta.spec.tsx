@@ -48,12 +48,14 @@ describe("LandingHero — onboarding-pivot rewrite", () => {
     assert.match(html, /href="#demo"/);
   });
 
-  test("hero mounts the dashboard mockup (role='img' with workspace aria-label)", () => {
+  test("hero mounts the live workspace screenshot with a descriptive alt", () => {
     const html = renderToString(React.createElement(LandingHero));
-    // LandingHeroMockup wraps its tree in role="img" + a sentence-long
-    // aria-label that names the Acme HVAC workspace.
-    assert.match(html, /role="img"/);
-    assert.match(html, /Acme HVAC/);
+    // The rendered LandingHeroMockup was replaced with a real workspace
+    // screenshot (workspace-head.png) so the hero shows the actual
+    // product, not a stylized render — verify by checking for the img
+    // src and its non-empty descriptive alt text.
+    assert.match(html, /src="\/marketing\/workspace-head\.png"/);
+    assert.match(html, /A live SeldonFrame workspace/);
   });
 
   test("renders the user-dictated risk-reversal line verbatim", () => {

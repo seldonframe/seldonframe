@@ -226,10 +226,14 @@ describe("integration — theme propagation through <AdminThemeProvider>", () =>
       </AdminThemeProvider>,
     );
     // All four overrides present in the wrapper's inline style.
+    // Derived from DEFAULT_ORG_THEME so this stays correct as the
+    // default palette evolves — the invariant is "the provider emits
+    // the curated var set from the default theme", not any particular
+    // hex value.
     assert.match(html, /data-admin-theme-provider=""/);
-    assert.match(html, /--primary:#14b8a6/);
-    assert.match(html, /--ring:#14b8a6/);
-    assert.match(html, /--accent:#0d9488/);
+    assert.match(html, new RegExp(`--primary:${DEFAULT_ORG_THEME.primaryColor}`));
+    assert.match(html, new RegExp(`--ring:${DEFAULT_ORG_THEME.primaryColor}`));
+    assert.match(html, new RegExp(`--accent:${DEFAULT_ORG_THEME.accentColor}`));
     assert.match(html, /--radius:0\.75rem/);
     // The wrapped content is still rendered inside.
     assert.match(html, /Alice/);

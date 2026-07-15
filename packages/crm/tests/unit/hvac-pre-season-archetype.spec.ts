@@ -26,12 +26,22 @@ describe("pre-season-maintenance archetype — registry isolation (G-9-7)", () =
     );
   });
 
-  test("global registry still has the 6 baseline archetypes (count unchanged by SLICE 9)", () => {
-    assert.equal(
-      Object.keys(archetypes).length,
-      6,
-      "SLICE 9 must preserve the 6 global baselines — speed-to-lead, win-back, review-requester, daily-digest, weather-aware-booking, appointment-confirm-sms",
-    );
+  test("global registry still has the 6 baseline archetypes (superset check — SLICE 9 must not remove any)", () => {
+    // Named-presence superset check rather than an exact count: the
+    // registry has since grown (missed-call-text-back added), and the
+    // SLICE 9 invariant under test is "the 6 original baselines are
+    // still present", not "the registry has exactly 6 entries".
+    const BASELINE_IDS = [
+      "speed-to-lead",
+      "win-back",
+      "review-requester",
+      "daily-digest",
+      "weather-aware-booking",
+      "appointment-confirm-sms",
+    ];
+    for (const id of BASELINE_IDS) {
+      assert.ok(archetypes[id], `baseline archetype "${id}" must still be present`);
+    }
   });
 
   test("hvac-archetypes registry grows as archetypes ship (>= 1 in PR 1; PR 2 adds 2 more)", () => {

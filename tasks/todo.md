@@ -7,6 +7,50 @@ with a checkable plan, gets ticked off as it ships, and ends with a review block
 
 ## In flight
 
+### Task — Green-main slices 2+3: stale UI expectations + archetype invariant (2026-07-10, branch fix/ci-stale-test-expectations)
+
+Baseline: main run 29097414557 — 107 unique failing spec names (0 new failures allowed; judge by delta).
+Slice 1 (~50 DB-bound E2E, Neon ECONNREFUSED) is GATED on Max's decision (CI database vs
+skip-if-no-DATABASE_URL contract) — untouched here. PR #49 (booking fixtures + emit gates) is
+OPEN and owns booking-policy-tools + blocks/emit failures — untouched here.
+
+Verified root causes (from CI log run 29097414557 + local repro):
+- 16 failures = `document is not defined`: upgrade-modal / clients-new-form / create-client-cta
+  specs use @testing-library/react render() with no DOM in node:test. Harness gap, NOT stale
+  assertions. Fix: tests/unit/helpers/dom.ts (jsdom, already a devDep) imported first.
+- Stale-but-intentional drift: hero-cta (role="img" mockup → real <img>), how-it-works (step
+  screenshot count), render-home-markdown (trial removed), theme specs ×3 (DEFAULT_ORG_THEME
+  flipped v1.40.0: #14b8a6/Inter → #1f2421/#3d6e4f/Geist — documented in src/lib/theme/types.ts).
+- 7 archetype failures: registry now has 7 (missed-call-text-back added); 4 hvac specs hardcode
+  count===6. Fix: import-time key snapshot (rot-proof isolation invariant).
+
+- [x] Baseline captured (scratchpad/baseline-failing.txt)
+- [x] Root causes verified per class (CI log + local repro + git history for intent)
+- [x] Implementer A: DOM harness + 3 web-onboarding specs green locally
+- [x] Implementer B: hero/how-it-works/markdown/theme/archetype specs green locally
+- [x] Full local unit run: stash-delta vs main state = **0 new, 38 fixed** (8297 tests, 63
+      remaining pre-existing fails = DB-bound slice-1 + PR #49 scope + env-dependent)
+- [x] Reviewer pass on diff — no blockers; both should-fixes applied (tautological archetype
+      snapshot → named-presence; phase-0 assertion → real phase-transition proof), plus
+      consolidation: duplicate jsdom helper deleted, existing tests/setup-dom.ts reused
+      (matchMedia stub folded in) — it existed all along but was never wired into the CI runner
+- [x] tsc: 0 errors in touched files (35 pre-existing worktree phantoms in src/**)
+- [x] Learnings notes written (docs/learnings/2026-07-10-diagnose-before-updating-tests.md,
+      -guard-assertions-that-cannot-fail.md) + tasks/lessons.md appended
+- [x] Commit + push + PR to main
+- [ ] Post-merge: confirm next main run drops ~38 failing names; then slice 1 (Max decision:
+      CI database vs skip-if-no-DATABASE_URL contract — recommendation: skip-contract +
+      scheduled DB job, reversible, no secret provisioning)
+
+#### Review
+Tests-only diff (13 specs + tests/setup-dom.ts + docs). The briefing's "stale assertions"
+diagnosis was wrong for 16/38: those specs crashed on `document is not defined` (harness gap,
+not drift). Genuine drift was all intentional-and-documented product movement: marketing hero
+real <img>, /marketing/ screenshot paths, no-trial pricing copy, v1.40.0 default-theme flip
+(#1f2421/#3d6e4f/Geist), archetype registry growth to 7. Theme specs now derive expected
+values from DEFAULT_ORG_THEME (var-name contract stays hardcoded); archetype invariants are
+named-presence + named-absence (rot-proof, still catch leaks).
+
 ### Task — Supply-side content Wave 1: marketplace offer side (2026-07-10, branch feat/seo-supply-wave-1)
 
 Seed the builder/seller ("offer side") SEO/GEO cluster so /marketplace and /build rank for
