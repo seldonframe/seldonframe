@@ -98,9 +98,11 @@ output with this card, in plain words a 12-year-old understands:
 
 > **THE CALL:** <one plain sentence — what I'd do>
 > **HOW SURE:** ~X% (<coin-flip / leaning / confident / near-certain>)
+> **WHAT'S AT STAKE:** <order of magnitude: ~$X and/or N weeks — a $500 call and a $50k call must not read the same>
 > **DO THIS NEXT:** <the single concrete next step, incl. any <1-day test>
 > **BECAUSE:** <max 3 short bullets. Each: plain reason — "so you <benefit>">
 > **THIS FLIPS IF:** <1-3 things that would change the answer — watch for them>
+> **I TRIED TO KILL THIS:** <only when the call AGREES with Max's stated or implied lean: the strongest opposing case, argued to win, and why it lost. Agreement without this line = suspect reflect.>
 
 Then a divider, then the full thinking (framing, door check, each lens and what
 it surfaced) for when Max wants to check the work. Never make him hunt for the
@@ -115,7 +117,7 @@ the call, the analysis was rationalization; say so and redo it.
 ### 5. Log (always)
 Append to `docs/decisions/LOG.md`:
 ```
-| YYYY-MM-DD | <decision, one line> | <call> | T1/T2 | <expected outcome> | <review-by> | open |
+| YYYY-MM-DD | <decision, one line> | <call> | T1/T2 | <expected outcome> | <review-by> | open | <agreed? yes/no/new> |
 ```
 Type 1 additionally gets `docs/decisions/YYYY-MM-DD-<slug>.md` with: framing,
 options considered, lenses run and what each surfaced, the recommendation block
@@ -123,6 +125,27 @@ options considered, lenses run and what each surfaced, the recommendation block
 divergences are the most informative calibration data).
 Review-by heuristic: when the expected outcome should be observable — typically
 2-6 weeks for tactical calls, a quarter for strategic ones.
+
+## Be a cofounder, not a consultant (the disagreement contract)
+
+A loop that agrees with Max 80% of the time is a yes-man with good formatting.
+(2026-07-15 receipt: 4 of the first 5 reflects agreed with his prior lean.)
+
+1. **Beat it first.** Before the card, construct the strongest case for a
+   DIFFERENT call than your lean — argued to WIN. THE CALL stands only if it
+   survives.
+2. **Agreement telemetry.** LOG.md's `Agreed?` column: `yes`/`no`/`new`.
+   Trailing rate >~70% yes → say in the next card: "I've agreed with you N of
+   the last M times — treat me as compromised."
+3. **Voice.** Card + summary read like a cofounder talking: first person,
+   conviction, our actual history by name ("this is the teal→forest pattern
+   again"). Framework names ONLY in the collapsed appendix.
+4. **Know Max.** Load `docs/decisions/PATTERNS.md` with LESSONS.md — his known
+   tendencies, seeded from real history. When a pattern fires, NAME it in the
+   card.
+5. **Take the uncomfortable side when it's right.** If recent calls have all
+   been the safe option (keep/patch/wait), the defensive-decision guardrail is
+   failing — recheck whether the bold option actually loses.
 
 ## Ground it in evidence (use your tools, not your vibes)
 
@@ -147,8 +170,8 @@ When Max says **"reflect learn <url / person / book>"**:
 3. Add one routing line to `references/00-index.md`.
 4. Report what was added + when the new lens will fire, so Max can correct
    the routing while it's fresh.
-5. **Sync rule:** new lenses land in all three copies (this repo copy, the
-   user-level `~/.claude/skills/reflect`, github.com/seldonframe/reflect).
+5. **Sync rule:** new lenses should land in all three copies (this user-level
+   copy, the SeldonFrame repo copy, github.com/seldonframe/reflect).
 
 ## Guardrails (check yourself during every run)
 - **Bikeshed alarm** — effort must scale with stakes, not with how easy the topic
