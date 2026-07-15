@@ -348,6 +348,10 @@ export type LookUpAvailabilityDeps = {
     },
   ) => CalendarBackend;
   listSlots?: NativeBackendListSlots;
+  /** Clock seam for the lead-time cutoff in generateCandidateSlots. Tests pin
+   *  a frozen date so frozen fixtures never slide into the past; production
+   *  passes nothing and gets the real clock. */
+  now?: () => Date;
 };
 
 export const lookUpAvailability: AgentTool<
@@ -387,6 +391,7 @@ export const lookUpAvailability: AgentTool<
   },
   execute: async (input, ctx, deps: LookUpAvailabilityDeps = {}) => {
     const listSlots = deps.listSlots ?? ((a) => listPublicBookingSlotsAction(a));
+    const now = deps.now ?? (() => new Date());
     // ── booking-mode branch (ICP-3, deployed agents only) ──
     // Workspace/operator agents never set ctx.booking → mode is 'native' and the
     // existing availability chain below runs byte-for-byte unchanged. A deployed
@@ -465,7 +470,7 @@ export const lookUpAvailability: AgentTool<
           )
             .toISOString()
             .slice(0, 10);
-          const dayCandidates = generateCandidateSlots(policy, dayISO, new Date());
+          const dayCandidates = generateCandidateSlots(policy, dayISO, now());
           if (dayCandidates.length === 0) continue; // off-policy weekday / all past
 
           // Prefer the explicit free-windows surface (P1); fall back to deriving
@@ -573,7 +578,7 @@ export const lookUpAvailability: AgentTool<
         // that day (weekday window + duration cadence + lead time).
         if (!hasPolicy) return result.slots;
         const dayCandidates = new Set(
-          generateCandidateSlots(policy, dayISO, new Date()),
+          generateCandidateSlots(policy, dayISO, now()),
         );
         return result.slots.filter((iso) => dayCandidates.has(iso));
       },
@@ -591,7 +596,7 @@ export const lookUpAvailability: AgentTool<
     // booking config (the action returned empty everywhere) should still offer
     // its policy window for the requested day — the candidates, capped at
     // maxPerDay. Workspace agents skip this (they have no policy window to offer).
-    const fallbackCandidates = generateCandidateSlots(policy, input.date, new Date());
+    const fallbackCandidates = generateCandidateSlots(policy, input.date, now());
     if (
       hasPolicy &&
       slots.length === 0 &&
