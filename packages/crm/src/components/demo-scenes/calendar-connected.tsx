@@ -49,11 +49,21 @@ export function CalendarConnectedScene({ loop = true }: { loop?: boolean }) {
   const toRef = useRef<HTMLDivElement>(null);
 
   const [cycle, setCycle] = useState(0);
-  const [connected, setConnected] = useState(reducedMotion);
-  const [cardIn, setCardIn] = useState(reducedMotion);
+  const [connected, setConnected] = useState(false);
+  const [cardIn, setCardIn] = useState(false);
 
+  // reducedMotion resolves asynchronously (motion's useReducedMotion reads
+  // matchMedia in an effect, after hydration) — so it must be re-checked on
+  // every dependency change, not just baked into a useState initializer
+  // that only runs once at mount. Without this, a user whose OS preference
+  // flips true after mount would be stuck on the bare beam forever (state
+  // seeded false, and the early return below never sets it true).
   useEffect(() => {
-    if (reducedMotion) return undefined;
+    if (reducedMotion) {
+      setConnected(true);
+      setCardIn(true);
+      return undefined;
+    }
     const t1 = setTimeout(() => setConnected(true), CONNECT_AT_MS);
     const t2 = setTimeout(() => setCardIn(true), CARD_AT_MS);
     let t3: ReturnType<typeof setTimeout> | undefined;
