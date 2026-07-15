@@ -15,6 +15,7 @@ import {
   type ChatGptMcpDeps,
 } from "../../../src/lib/chatgpt-app/chatgpt-mcp-handler";
 import { MCP_PROTOCOL_VERSION, JSONRPC_INVALID_PARAMS, JSONRPC_METHOD_NOT_FOUND } from "../../../src/lib/marketplace/agent-mcp-rpc";
+import { BUILD_RESULT_WIDGET_URI, AGENT_CAROUSEL_WIDGET_URI } from "../../../src/lib/chatgpt-app/widgets";
 import type { MarketplaceAgentRow } from "../../../src/lib/marketplace/agent-listings";
 
 const NOW = new Date("2026-06-23T12:00:00Z");
@@ -151,6 +152,70 @@ describe("handleChatGptRpc — lifecycle", () => {
   });
 });
 
+// ─── resources/list + resources/read (v2 widgets) ────────────────────────────
+
+describe("handleChatGptRpc — resources", () => {
+  test("resources/list → both widget URIs, no auth required", async () => {
+    const { deps } = makeHarness();
+    const out = await handleChatGptRpc(rpc("resources/list"), deps);
+    assert.equal(out.status, 200);
+    const resources =
+      (out.body as { result?: { resources?: Array<{ uri: string; mimeType: string }> } }).result?.resources ?? [];
+    assert.deepEqual(
+      resources.map((r) => r.uri).sort(),
+      [AGENT_CAROUSEL_WIDGET_URI, BUILD_RESULT_WIDGET_URI].sort(),
+    );
+    for (const r of resources) {
+      assert.equal(r.mimeType, "text/html;profile=mcp-app");
+    }
+  });
+
+  test("resources/read round-trips the build-result widget HTML with mimeType + _meta", async () => {
+    const { deps } = makeHarness();
+    const out = await handleChatGptRpc(rpc("resources/read", { uri: BUILD_RESULT_WIDGET_URI }), deps);
+    assert.equal(out.status, 200);
+    const contents =
+      (out.body as { result?: { contents?: Array<Record<string, unknown>> } }).result?.contents ?? [];
+    assert.equal(contents.length, 1);
+    const content = contents[0];
+    assert.equal(content.uri, BUILD_RESULT_WIDGET_URI);
+    assert.equal(content.mimeType, "text/html;profile=mcp-app");
+    assert.match(content.text as string, /<!doctype html>/i);
+    // no iframes and no <img src> (typographic-only, no remote images/requests)
+    assert.doesNotMatch(content.text as string, /<iframe/i);
+    assert.doesNotMatch(content.text as string, /<img/i);
+    const meta = content._meta as Record<string, unknown>;
+    assert.deepEqual((meta.ui as { csp?: unknown }).csp, { connectDomains: [], resourceDomains: [] });
+    assert.deepEqual(meta["openai/widgetCSP"], { connect_domains: [], resource_domains: [] });
+  });
+
+  test("resources/read round-trips the agent-carousel widget HTML", async () => {
+    const { deps } = makeHarness();
+    const out = await handleChatGptRpc(rpc("resources/read", { uri: AGENT_CAROUSEL_WIDGET_URI }), deps);
+    const contents =
+      (out.body as { result?: { contents?: Array<Record<string, unknown>> } }).result?.contents ?? [];
+    assert.equal(contents[0].uri, AGENT_CAROUSEL_WIDGET_URI);
+    assert.equal(contents[0].mimeType, "text/html;profile=mcp-app");
+    assert.match(contents[0].text as string, /Add to my workspace/);
+  });
+
+  test("resources/read with an unknown URI → a JSON-RPC error, not a crash", async () => {
+    const { deps } = makeHarness();
+    const out = await handleChatGptRpc(rpc("resources/read", { uri: "ui://widget/does-not-exist.html" }), deps);
+    assert.equal(out.status, 200);
+    const error = (out.body as { error?: { code?: number; message?: string } }).error;
+    assert.equal(error?.code, JSONRPC_INVALID_PARAMS);
+    assert.match(error?.message ?? "", /Unknown resource/);
+  });
+
+  test("resources/read with a missing uri param → a JSON-RPC error", async () => {
+    const { deps } = makeHarness();
+    const out = await handleChatGptRpc(rpc("resources/read", {}), deps);
+    const error = (out.body as { error?: { code?: number } }).error;
+    assert.equal(error?.code, JSONRPC_INVALID_PARAMS);
+  });
+});
+
 // ─── tools/call: build_workspace ─────────────────────────────────────────────
 
 describe("handleChatGptRpc — build_workspace", () => {
@@ -223,6 +288,26 @@ describe("handleChatGptRpc — build_workspace", () => {
     assert.equal(result.isError, true);
     const content = result.content as Array<{ text: string }>;
     assert.match(content[0].text, /limited to 3 per hour/);
+  });
+
+  test("carries the workspace token in the widget-only result._meta, while structuredContent stays a valid outputSchema instance", async () => {
+    const h = makeHarness();
+    const out = await handleChatGptRpc(
+      rpc("tools/call", { name: "build_workspace", arguments: { business_name: "Acme HVAC" } }),
+      h.deps,
+    );
+    const result = (out.body as { result?: Record<string, unknown> }).result!;
+
+    // Widget-only channel: the token lives at the top-level result._meta,
+    // namespaced so it can never collide with a future openai/* key.
+    const meta = result._meta as Record<string, unknown>;
+    assert.equal(meta["seldonframe/workspaceToken"], "wst_fake_token");
+
+    // structuredContent still satisfies the declared outputSchema (url +
+    // workspaceToken required) — model-visible fields are untouched.
+    const structured = result.structuredContent as { url?: string; workspaceToken?: string };
+    assert.equal(structured.url, "https://acme.app.seldonframe.com");
+    assert.equal(structured.workspaceToken, "wst_fake_token");
   });
 });
 

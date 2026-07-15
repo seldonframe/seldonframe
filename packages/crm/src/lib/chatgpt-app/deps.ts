@@ -185,6 +185,9 @@ async function buildWorkspace(
     url: withChatGptRef(publicUrl),
     claimUrl: structured.admin_url ? withChatGptRef(structured.admin_url) : undefined,
     workspaceToken: result.bearerToken,
+    // Additive (2026-07-15 widgets v2) — the business name, rendered on the
+    // build-result widget alongside the live URL.
+    name: args.business_name,
   };
 }
 

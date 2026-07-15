@@ -45,6 +45,7 @@ import {
   type BuildWorkspaceArgs,
   type OpenAiCallMeta,
 } from "./chatgpt-mcp-rpc";
+import { CHATGPT_WIDGET_RESOURCES, getChatGptWidgetResourceContent } from "./widgets";
 import type { MarketplaceAgentRow } from "@/lib/marketplace/agent-listings";
 import { captureMcpToolCall } from "@/lib/analytics/mcp-capture";
 
@@ -61,6 +62,9 @@ export type BuildWorkspaceResult = {
   url: string;
   claimUrl?: string;
   workspaceToken: string;
+  /** The business name, as given. Additive field (2026-07-15 widgets v2) —
+   *  rendered on the build-result widget alongside the live URL. */
+  name?: string;
 };
 
 /** The result of deploying an agent. Free agents instantiate inline (url).
@@ -96,9 +100,20 @@ export type RpcOutcome = {
 };
 
 /** Shape an MCP tools/call success: a human text block PLUS structuredContent
- *  (the raw machine-readable object) for Apps-SDK clients that render rich UI. */
-function toolResult(text: string, structured: Record<string, unknown>): Record<string, unknown> {
-  return { ...toolTextResult(text), structuredContent: structured };
+ *  (the raw machine-readable object) for Apps-SDK clients that render rich UI,
+ *  PLUS an optional top-level `_meta` — the WIDGET-ONLY channel (delivered to
+ *  the rendered component, never to the model — unlike structuredContent,
+ *  which is model-visible and must mirror the declared outputSchema exactly). */
+function toolResult(
+  text: string,
+  structured: Record<string, unknown>,
+  meta?: Record<string, unknown>,
+): Record<string, unknown> {
+  return {
+    ...toolTextResult(text),
+    structuredContent: structured,
+    ...(meta ? { _meta: meta } : {}),
+  };
 }
 
 /**
@@ -124,6 +139,12 @@ export async function handleChatGptRpc(rawBody: string, deps: ChatGptMcpDeps): P
         status: 200,
         body: jsonRpcResult(id, {
           ...buildInitializeResult({ agentName: "SeldonFrame" }),
+          // This server ALSO speaks resources/list + resources/read (the two
+          // widget resources) — advertise the capability. buildInitializeResult
+          // is shared with the agent-marketplace rental endpoint (which does
+          // NOT support resources), so we add it here rather than in the
+          // shared helper.
+          capabilities: { tools: {}, prompts: {}, resources: {} },
           instructions: CHATGPT_SERVER_INSTRUCTIONS,
         }),
       };
@@ -137,6 +158,33 @@ export async function handleChatGptRpc(rawBody: string, deps: ChatGptMcpDeps): P
 
     case "tools/call":
       return handleToolsCall(id, params, deps);
+
+    case "resources/list":
+      // Public — no auth gate, same as tools/list. The two widget resources
+      // (build-result card + agent carousel).
+      return {
+        status: 200,
+        body: jsonRpcResult(id, {
+          resources: CHATGPT_WIDGET_RESOURCES.map(({ uri, name, description, mimeType }) => ({
+            uri,
+            name,
+            description,
+            mimeType,
+          })),
+        }),
+      };
+
+    case "resources/read": {
+      const uri = typeof params.uri === "string" ? params.uri : "";
+      const content = getChatGptWidgetResourceContent(uri);
+      if (!content) {
+        return {
+          status: 200,
+          body: jsonRpcError(id, JSONRPC_INVALID_PARAMS, `Unknown resource: ${uri || "(none)"}`),
+        };
+      }
+      return { status: 200, body: jsonRpcResult(id, { contents: [content] }) };
+    }
 
     default:
       return { status: 200, body: jsonRpcError(id, JSONRPC_METHOD_NOT_FOUND, `Method not found: ${method}`) };
@@ -165,7 +213,14 @@ async function handleToolsCall(
       }
       return runTool(id, toolName, args, meta, deps, async () => {
         const result = await deps.buildWorkspace(parsed.value, meta);
-        return toolResult(formatBuildResult(result), { ...result });
+        // The widget reads the token from result._meta (widget-only channel,
+        // hidden from the model). structuredContent ALSO carries workspaceToken
+        // (an existing, required outputSchema field) — kept for backward
+        // compatibility per the additive-only contract; see the task report
+        // for the tradeoff.
+        return toolResult(formatBuildResult(result), { ...result }, {
+          "seldonframe/workspaceToken": result.workspaceToken,
+        });
       });
     }
 

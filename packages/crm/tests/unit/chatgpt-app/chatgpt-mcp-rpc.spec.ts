@@ -20,6 +20,7 @@ import {
   formatBuildResult,
   formatDeployResult,
 } from "../../../src/lib/chatgpt-app/chatgpt-mcp-rpc";
+import { BUILD_RESULT_WIDGET_URI, AGENT_CAROUSEL_WIDGET_URI } from "../../../src/lib/chatgpt-app/widgets";
 import type { MarketplaceAgentRow } from "../../../src/lib/marketplace/agent-listings";
 
 // ─── tools/list ──────────────────────────────────────────────────────────────
@@ -92,6 +93,57 @@ describe("buildChatGptToolsList", () => {
       assert.ok(tool.outputSchema, `${tool.name} is missing outputSchema`);
       assert.equal((tool.outputSchema as { type?: string }).type, "object");
     }
+  });
+
+  // ─── v2 widgets: invocation strings + widget wiring ─────────────────────
+
+  test("every tool declares ≤64-char openai/toolInvocation invoking + invoked strings", () => {
+    const expected: Record<string, [string, string]> = {
+      build_workspace: ["Building your workspace…", "Workspace live."],
+      browse_marketplace: ["Browsing free agents…", "Agents found."],
+      deploy_agent: ["Installing agent…", "Agent installed."],
+    };
+    for (const tool of buildChatGptToolsList().tools) {
+      const meta = tool._meta as Record<string, unknown>;
+      assert.ok(meta, `${tool.name} is missing _meta`);
+      const invoking = meta["openai/toolInvocation/invoking"];
+      const invoked = meta["openai/toolInvocation/invoked"];
+      assert.equal(invoking, expected[tool.name][0]);
+      assert.equal(invoked, expected[tool.name][1]);
+      assert.ok((invoking as string).length <= 64, `${tool.name} invoking string too long`);
+      assert.ok((invoked as string).length <= 64, `${tool.name} invoked string too long`);
+    }
+  });
+
+  test("build_workspace + browse_marketplace wire ui.resourceUri + the openai/outputTemplate alias + a widgetDescription", () => {
+    const tools = buildChatGptToolsList().tools;
+    const build = tools.find((t) => t.name === "build_workspace")!;
+    const browse = tools.find((t) => t.name === "browse_marketplace")!;
+
+    const buildMeta = build._meta as Record<string, unknown>;
+    assert.equal((buildMeta.ui as { resourceUri?: string }).resourceUri, BUILD_RESULT_WIDGET_URI);
+    assert.equal(buildMeta["openai/outputTemplate"], BUILD_RESULT_WIDGET_URI);
+    assert.ok((buildMeta["openai/widgetDescription"] as string).length > 0);
+
+    const browseMeta = browse._meta as Record<string, unknown>;
+    assert.equal((browseMeta.ui as { resourceUri?: string }).resourceUri, AGENT_CAROUSEL_WIDGET_URI);
+    assert.equal(browseMeta["openai/outputTemplate"], AGENT_CAROUSEL_WIDGET_URI);
+    assert.ok((browseMeta["openai/widgetDescription"] as string).length > 0);
+  });
+
+  test("build_workspace outputSchema additively gains `name` without dropping the existing required fields", () => {
+    const tool = buildChatGptToolsList().tools.find((t) => t.name === "build_workspace")!;
+    const schema = tool.outputSchema as { properties: Record<string, unknown>; required?: string[] };
+    assert.ok("name" in schema.properties, "outputSchema should declare `name`");
+    assert.deepEqual(schema.required, ["url", "workspaceToken"]);
+  });
+
+  test("deploy_agent stays text-only (no widget resourceUri) but is openai/widgetAccessible", () => {
+    const tool = buildChatGptToolsList().tools.find((t) => t.name === "deploy_agent")!;
+    const meta = tool._meta as Record<string, unknown>;
+    assert.equal(meta["openai/widgetAccessible"], true);
+    assert.equal(meta.ui, undefined);
+    assert.equal(meta["openai/outputTemplate"], undefined);
   });
 });
 
