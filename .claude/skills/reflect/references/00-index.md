@@ -46,5 +46,12 @@ follows the sequence in SKILL.md §3b.
 - **steve-wozniak** — craft and elegance calls (fewer parts, simpler design); build-for-joy vs build-for-money; solo design vs committee; open vs walled.
 - **outliers-best-2025** — adversity-to-advantage collection (Dyson, Firestone, Blumkin, Singleton, Price, Schwab): persistence economics, trust as strategy, contrarian capital allocation.
 
+### The Musk pack (from The Book of Elon Musk — deepens the first-principles lens)
+- **musk-physics-thinking** — cost or feasibility assumptions taken on faith ("industry standard", "that's impossible"); compute the physics floor and the theoretical limit; run the Idiot Index on anything expensive.
+- **musk-algorithm** — feature, process, or requirement creep; before optimizing or automating ANYTHING: question the requirement (with a named owner), then delete — in that order.
+- **musk-speed** — setting deadlines; choosing what to optimize next (attack THE constraint, not everything); speed as offense and defense; runway math.
+- **musk-truth-loop** — you're avoiding a metric, a post-mortem, or bad news; everyone around you agrees with you.
+- **musk-founder-hardness** — quit-the-job, found-vs-join, and persist-vs-fold calls when the stakes are existential.
+
 ## Meta
 - **mental-models-general** — the latticework: multi-model thinking, circle of competence, second-order thinking, and the quick lens list for models without a dedicated file.
