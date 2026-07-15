@@ -6,6 +6,10 @@ Dates = first commit touching the flag on main. ⚠️ Runtime (Vercel env) stat
 NOT verifiable from this machine — "verify env" means check Vercel → crm project
 → env vars before acting. Sorted oldest-dark first.
 
+**2026-07-15 CORRECTION (same day):** two rows below were wrong — the MEMORY INDEX was
+stale while detail files had flip receipts. WIN_LADDER + WEB_UNGATED_BUILD are ON.
+Lesson: trust detail memories over index lines; verify env before acting on any row.
+
 | Flag | On main since | Days | Blocker (from memory) | Triage call |
 | --- | --- | --- | --- | --- |
 | SF_PARALLEL_ENHANCE | 05-12 | 64 | none recorded | verify env; if ON → delete flag (cleanup); if dark 64d → flip or kill |
@@ -15,10 +19,10 @@ NOT verifiable from this machine — "verify env" means check Vercel → crm pro
 | SF_VOICE_MANAGED | 07-01 | 14 | A2P campaign (EXTERNAL, real) | keep dark; review at A2P resolution |
 | SF_DEPLOY_ENABLED | 07-01 | 14 | none recorded (deploys work in prod?) | verify env — likely already ON → delete from queue |
 | SF_OAUTH_ENABLED | 07-03 | 12 | none — memory says "⏳ flip" | **FLIP** (top candidate, no recorded blocker) |
-| SF_WEB_UNGATED_BUILD | 07-03 | 12 | none — built to fix the activation wall (22 signups→0 paying) | **FLIP** (highest business value in the queue) |
+| SF_WEB_UNGATED_BUILD | 07-03 | — | **CORRECTED: ON since 07-08** (wedge doc update block) | remove from queue; weekly funnel report is the follow-through |
 | SF_REFERRALS_ENABLED | 07-03 | 12 | unknown | 30-min investigate → flip or kill |
 | SF_AGENT_TASTE_MODE | 07-03 | 12 | unknown | 30-min investigate → flip or kill |
-| SF_WIN_LADDER | 07-04 | 11 | Upstash + calendar-push smoke | run smoke (≤1h) → flip |
+| SF_WIN_LADDER | 07-04 | — | **CORRECTED: ON since 07-04** (stale index; detail memory has flip receipt) | remaining: calendar-push smoke + $29 checkout env |
 | SF_SIMPLE_HOME | 07-05 | 10 | fresh-claim smoke | run smoke → flip |
 | SF_VISION_VERIFY | 07-05 | 10 | none hard; internal quality gate, caught 2 real bugs | **FLIP** (zero user-facing risk) |
 | SF_AUTOPAY_CONSOLE | 07-08 | 7 | flip drill | do drill → flip (agency-tier selling point) |
