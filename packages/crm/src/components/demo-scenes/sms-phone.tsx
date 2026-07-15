@@ -54,7 +54,9 @@ export function SmsPhoneScene({ loop = true }: { loop?: boolean }) {
         }
       `}</style>
 
-      {/* Phone slab */}
+      {/* Phone slab — flex column so the screen body gets exactly the space
+          below the status bar; a plain height:100% here overflowed the slab
+          by the status-bar height and clipped the bubble's last line. */}
       <div
         style={{
           width: 300,
@@ -65,6 +67,8 @@ export function SmsPhoneScene({ loop = true }: { loop?: boolean }) {
           boxShadow: "0 24px 60px rgba(0,0,0,.35)",
           position: "relative",
           overflow: "hidden",
+          display: "flex",
+          flexDirection: "column",
         }}
       >
         {/* Notch */}
@@ -97,17 +101,33 @@ export function SmsPhoneScene({ loop = true }: { loop?: boolean }) {
           <span>📶 🔋</span>
         </div>
 
-        {/* Screen body */}
+        {/* Screen body — flex:1 fills the slab below the status bar exactly */}
         <div
           style={{
-            height: "100%",
+            flex: 1,
+            minHeight: 0,
             background: "#221D17",
-            padding: "48px 16px 16px",
+            padding: "20px 16px 40px",
             display: "flex",
             flexDirection: "column",
             justifyContent: "flex-end",
           }}
         >
+          {/* Sender header — reads like a real Messages thread on camera */}
+          <div
+            style={{
+              position: "absolute",
+              top: 52,
+              left: 0,
+              right: 0,
+              textAlign: "center",
+              fontSize: 12.5,
+              letterSpacing: "0.02em",
+              color: "rgba(246,242,234,.55)",
+            }}
+          >
+            Zen Flow Hydration
+          </div>
           <div
             key={cycle}
             className="demo-scene-sms-bubble"

@@ -29,14 +29,20 @@ interface Particle {
 }
 
 // Deterministic — computed once at module load from index math only, so
-// this is safe to reuse verbatim on the server and the client.
+// this is safe to reuse verbatim on the server and the client. The trig
+// results are rounded to 2 decimals: Math.cos/sin are NOT guaranteed
+// bit-identical across JS engines (Node vs browser differ in the last ulp),
+// and an unrounded value serialized into the --tx/--ty style strings caused
+// a real hydration mismatch at the 15th decimal in dev.
+const round2 = (n: number): number => Math.round(n * 100) / 100;
+
 const PARTICLES: Particle[] = Array.from({ length: PARTICLE_COUNT }, (_, i) => {
   const angleRad = ((i * GOLDEN_ANGLE) % 360) * (Math.PI / 180);
   const distance = 18 + ((i * 53) % 55); // 18-73
   return {
     id: i,
-    txVw: Math.cos(angleRad) * distance * 0.55,
-    tyVh: Math.sin(angleRad) * distance * 0.35 + 22, // downward bias, confetti falls
+    txVw: round2(Math.cos(angleRad) * distance * 0.55),
+    tyVh: round2(Math.sin(angleRad) * distance * 0.35 + 22), // downward bias, confetti falls
     rotateDeg: (i * 47) % 360,
     delayMs: (i % 12) * 35,
     sizePx: 6 + (i % 4) * 2,
