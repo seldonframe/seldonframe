@@ -12,12 +12,21 @@ import type { ComponentType } from "react";
 
 import { DEMO_SCENES } from "./registry";
 import { StatPayoffScene } from "./stat-payoff";
+import { BookingCascadeScene } from "./booking-cascade";
+import { CalendarConnectedScene } from "./calendar-connected";
 
-export const SCENE_COMPONENTS: Record<string, ComponentType> = {
+// Every scene component accepts the same `loop` prop — whether it re-plays
+// once it reaches its resting frame, or holds there (see scene-stage.tsx's
+// ?loop=1 control).
+export type DemoSceneComponent = ComponentType<{ loop?: boolean }>;
+
+export const SCENE_COMPONENTS: Record<string, DemoSceneComponent> = {
+  "booking-cascade": BookingCascadeScene,
+  "calendar-connected": CalendarConnectedScene,
   "stat-payoff": StatPayoffScene,
 };
 
-export function getSceneComponent(id: string): ComponentType | null {
+export function getSceneComponent(id: string): DemoSceneComponent | null {
   return SCENE_COMPONENTS[id] ?? null;
 }
 

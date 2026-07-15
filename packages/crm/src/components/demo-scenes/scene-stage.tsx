@@ -83,7 +83,7 @@ export function SceneStage({ scene }: { scene: DemoSceneMeta }) {
           justifyContent: "center",
         }}
       >
-        {Component ? <Component key={loop ? "loop" : "once"} /> : null}
+        {Component ? <Component loop={loop} /> : null}
       </div>
 
       <div

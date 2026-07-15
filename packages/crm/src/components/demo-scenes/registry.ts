@@ -19,6 +19,16 @@ export interface DemoSceneMeta {
 
 export const DEMO_SCENES: DemoSceneMeta[] = [
   {
+    id: "booking-cascade",
+    title: "Booking cascade",
+    blurb: "The money-loop B-roll: booking → SMS → CRM → review, staggered.",
+  },
+  {
+    id: "calendar-connected",
+    title: "Calendar connected",
+    blurb: "Seldon and Google Calendar joined by a beam, then a booking synced.",
+  },
+  {
     id: "stat-payoff",
     title: "Stat payoff",
     blurb: "One URL, four counted wins, and the pricing anchor line.",
