@@ -22,8 +22,10 @@
 // with NO claim/purchase URL, NO price, and NO purchase CTA — deploy NEVER
 // charges a card and never directs the user out to buy anything.
 //
-// This route is a THIN wrapper: it reads the IP for the build rate-limit, binds
-// the real deps (lib/chatgpt-app/deps), and maps the DI'd handler's
+// This route is a THIN wrapper: it reads the IP for the build rate-limit
+// BACKSTOP (the strict limit keys on _meta["openai/subject"], extracted from
+// the JSON-RPC body by the handler — ChatGPT calls share OpenAI's egress IPs),
+// binds the real deps (lib/chatgpt-app/deps), and maps the DI'd handler's
 // { status, body } onto NextResponse. All dispatch logic lives in
 // lib/chatgpt-app/chatgpt-mcp-handler (unit-tested with fakes).
 
@@ -33,8 +35,8 @@ import { buildRealDeps } from "@/lib/chatgpt-app/deps";
 
 // CORS: an MCP client (ChatGPT) is server-hosted; mirror the rental endpoint's
 // permissive stance. The server exposes only the three high-level tools and
-// build_workspace is IP-rate-limited, so a permissive Origin doesn't loosen
-// anything (there's no per-user auth to leak).
+// build_workspace is rate-limited (per-subject + per-IP backstop), so a
+// permissive Origin doesn't loosen anything (there's no per-user auth to leak).
 const CORS_HEADERS = {
   "Access-Control-Allow-Origin": "*",
   "Access-Control-Allow-Methods": "GET, POST, OPTIONS",
@@ -62,8 +64,8 @@ export async function GET() {
   );
 }
 
-/** The caller IP for the build_workspace rate-limit (matches the anonymous
- *  /api/v1/workspace/create route's resolution). */
+/** The caller IP for the build_workspace rate-limit backstop (matches the
+ *  anonymous /api/v1/workspace/create route's resolution). */
 function resolveRequestIp(request: NextRequest): string {
   const forwarded = request.headers.get("x-forwarded-for");
   if (forwarded) {

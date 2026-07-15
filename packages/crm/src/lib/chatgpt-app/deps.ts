@@ -53,7 +53,13 @@ import type {
   BuildWorkspaceResult,
   DeployAgentResult,
 } from "./chatgpt-mcp-handler";
-import { assembleWorkspaceSource, type BuildWorkspaceArgs } from "./chatgpt-mcp-rpc";
+import {
+  assembleWorkspaceSource,
+  withChatGptRef,
+  type BuildWorkspaceArgs,
+  type OpenAiCallMeta,
+} from "./chatgpt-mcp-rpc";
+import { buildWorkspaceRateLimitChecks } from "./rate-limit-plan";
 
 const WORKSPACE_BASE_DOMAIN =
   process.env.WORKSPACE_BASE_DOMAIN?.trim() || "app.seldonframe.com";
@@ -85,15 +91,28 @@ const STARTER_IDS = new Set(STARTER_TEMPLATES.map((s) => s.id));
 class FriendlyToolError extends Error {}
 
 /**
- * Build a workspace from the parsed build args. Applies the SAME IP rate-limit
- * the anonymous /api/v1/workspace/create route uses (3/hr, 10/day per IP). On
- * limit, throws a friendly Error → the handler turns it into a tool isError so
+ * Build a workspace from the parsed build args. Rate-limits 3/hr + 10/day per
+ * ChatGPT USER (_meta["openai/subject"] — ChatGPT calls share OpenAI's egress
+ * IPs, so an IP key alone would collapse the channel) with a coarse per-IP
+ * backstop; calls without a subject keep the strict per-IP keys the anonymous
+ * /api/v1/workspace/create route uses. Plan in rate-limit-plan.ts. On limit,
+ * throws a friendly Error → the handler turns it into a tool isError so
  * ChatGPT shows the message instead of failing the connection.
  */
-async function buildWorkspace(ip: string, args: BuildWorkspaceArgs): Promise<BuildWorkspaceResult> {
-  const hourOk = await checkRateLimit(`anon-workspace-create:hour:${ip}`, 3, 60 * 60 * 1000);
-  const dayOk = await checkRateLimit(`anon-workspace-create:day:${ip}`, 10, 24 * 60 * 60 * 1000);
-  if (!hourOk || !dayOk) {
+async function buildWorkspace(
+  ip: string,
+  args: BuildWorkspaceArgs,
+  meta: OpenAiCallMeta,
+): Promise<BuildWorkspaceResult> {
+  // Funnel correlation: subject ties builds to one anonymized ChatGPT user,
+  // session to one conversation. Never PII — both are OpenAI-minted opaque ids.
+  console.log(
+    `[chatgpt-mcp] build_workspace subject=${meta.subject ?? "-"} session=${meta.session ?? "-"} ip=${ip}`,
+  );
+
+  const checks = buildWorkspaceRateLimitChecks(ip, meta.subject);
+  const results = await Promise.all(checks.map((c) => checkRateLimit(c.key, c.limit, c.windowMs)));
+  if (results.some((ok) => !ok)) {
     throw new FriendlyToolError(
       "Workspace creation is limited to 3 per hour and 10 per day. Please try again later, or sign up at app.seldonframe.com to create more.",
     );
@@ -161,9 +180,10 @@ async function buildWorkspace(ip: string, args: BuildWorkspaceArgs): Promise<Bui
   // (which still serves the seed landing, never a 404).
   const publicUrl = r1Ok ? `${APP_URL}/w/${result.slug}` : urls.home;
 
+  // ref=chatgpt on both URLs → ChatGPT-attributed visits/claims are measurable.
   return {
-    url: publicUrl,
-    claimUrl: structured.admin_url ?? undefined,
+    url: withChatGptRef(publicUrl),
+    claimUrl: structured.admin_url ? withChatGptRef(structured.admin_url) : undefined,
     workspaceToken: result.bearerToken,
   };
 }
@@ -223,7 +243,9 @@ async function deploy(input: { workspaceToken: string; slug: string }): Promise<
     return {
       ok: true,
       name: starter.name,
-      url: `${APP_URL}/admin/${encodeURIComponent(orgId)}?token=${encodeURIComponent(input.workspaceToken)}`,
+      url: withChatGptRef(
+        `${APP_URL}/admin/${encodeURIComponent(orgId)}?token=${encodeURIComponent(input.workspaceToken)}`,
+      ),
     };
   }
 
@@ -290,18 +312,20 @@ async function deploy(input: { workspaceToken: string; slug: string }): Promise<
   return {
     ok: true,
     name: listing.name,
-    url: `${APP_URL}/admin/${encodeURIComponent(orgId)}?token=${encodeURIComponent(input.workspaceToken)}`,
+    url: withChatGptRef(
+      `${APP_URL}/admin/${encodeURIComponent(orgId)}?token=${encodeURIComponent(input.workspaceToken)}`,
+    ),
   };
 }
 
 /**
- * Build the real deps for one request. `ip` is read from the request headers so
- * the build_workspace rate-limit keys on the caller's IP (matching the
- * anonymous route).
+ * Build the real deps for one request. `ip` is read from the request headers
+ * and serves as the build_workspace rate-limit BACKSTOP; the strict limit keys
+ * on the per-user _meta["openai/subject"] the handler extracts per call.
  */
 export function buildRealDeps(ip: string): ChatGptMcpDeps {
   return {
-    buildWorkspace: (args) => buildWorkspace(ip, args),
+    buildWorkspace: (args, meta) => buildWorkspace(ip, args, meta),
     browse: async (filters) => {
       const q = filters.query?.trim().toLowerCase();
       const niche = filters.niche?.trim().toLowerCase();
