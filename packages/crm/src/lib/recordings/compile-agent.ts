@@ -16,6 +16,7 @@ import type { EvalScenario } from "@/lib/agents/evals/eval-types";
 import { coverFlowModel } from "@/lib/recordings/coverage";
 import type { CoverageEntry, CoverageTier, FlowModel, WorkflowStep, WorkflowTrace } from "@/lib/recordings/trace-schema";
 import { defaultToolsForToolkits } from "@/lib/integrations/composio/catalog";
+import { DRAFT_FOR_APPROVAL_CAPABILITY } from "@/lib/agents/tools";
 
 const CUSTOM_SKILL_MD_MAX_CHARS = 8000;
 const SCENARIO_ARRAY_CAP = 6;
@@ -64,6 +65,84 @@ function mayNotDoSection(model: FlowModel): string {
   return `## What you may NOT do\n${lines.join("\n")}`;
 }
 
+// ─── never-fail-compile: autonomy + draft-for-approval sections ────────────
+// Spec: docs/superpowers/specs/2026-07-15-never-fail-compile-design.md.
+// Everything below is additive and only reached when `draftApprovals` is
+// true — the legacy functions above (mayNotDoSection, flowModelToSkillMd's
+// un-optioned call) are NEVER edited, so flag-off output stays byte-identical.
+
+export type AutonomyScore = {
+  green: number;
+  yellow: number;
+  red: number;
+  total: number;
+  autonomousPct: number;
+};
+
+/** Honest autonomy math straight from coverage: green runs itself, yellow +
+ *  red arrive as drafts. Missing coverage entries count as red (same default
+ *  as tierForStep). Pure. */
+export function autonomyForModel(model: FlowModel): AutonomyScore {
+  let green = 0;
+  let yellow = 0;
+  let red = 0;
+  for (const step of model.steps) {
+    const tier = tierForStep(model.coverage, step.index);
+    if (tier === "green") green++;
+    else if (tier === "yellow") yellow++;
+    else red++;
+  }
+  const total = model.steps.length;
+  return {
+    green,
+    yellow,
+    red,
+    total,
+    autonomousPct: total === 0 ? 0 : Math.round((green / total) * 100),
+  };
+}
+
+const DRAFT_KIND_KEYWORDS: Array<{ kind: "email" | "message" | "invoice" | "data_entry"; keywords: string[] }> = [
+  { kind: "invoice", keywords: ["invoice", "quote", "estimate", "bill"] },
+  { kind: "email", keywords: ["email", "gmail", "outlook", "reply"] },
+  { kind: "message", keywords: ["sms", "text", "message", "whatsapp", "dm"] },
+  { kind: "data_entry", keywords: ["enter", "log", "record", "desktop", "quickbooks", "type into"] },
+];
+
+/** Kind for a drafted step — keyword map over "<app> <action>", first match
+ *  wins, "other" fallback. Order matters: invoice before email so "email the
+ *  invoice" drafts as an invoice. Pure. */
+export function inferDraftKind(step: WorkflowStep): "email" | "message" | "invoice" | "data_entry" | "other" {
+  const haystack = `${step.app} ${step.action}`.toLowerCase();
+  for (const { kind, keywords } of DRAFT_KIND_KEYWORDS) {
+    if (keywords.some((k) => haystack.includes(k))) return kind;
+  }
+  return "other";
+}
+
+function draftForApprovalSection(model: FlowModel): string {
+  const lines: string[] = [];
+  for (const step of model.steps) {
+    const tier = tierForStep(model.coverage, step.index);
+    if (tier === "green") continue;
+    lines.push(
+      `- ${step.action} (${step.app}): prepare the complete work product and file it with draft_for_approval (kind: ${inferDraftKind(step)}). It is DONE only when a human approves it.`,
+    );
+  }
+  if (lines.length === 0) {
+    lines.push("- Nothing — every step is bound to a tool.");
+  }
+  return `## What you draft for approval\n${lines.join("\n")}`;
+}
+
+function mayNotDoSectionWithDrafts(): string {
+  return [
+    "## What you may NOT do",
+    "- Never execute or claim to have executed a drafted step. Filing a draft ≠ doing the action.",
+    "- Never invent a value not present in the workflow or the conversation.",
+  ].join("\n");
+}
+
 function evalScenariosSection(scenarios: EvalScenario[]): string {
   if (scenarios.length === 0) return "";
   const lines = scenarios.map(
@@ -84,22 +163,26 @@ function evalScenariosSection(scenarios: EvalScenario[]): string {
  * dropped — silently losing a step or a safety boundary is exactly the
  * Optimistic Path failure mode this module must not commit.
  */
-export function flowModelToSkillMd(model: FlowModel): string {
+export function flowModelToSkillMd(model: FlowModel, opts?: { draftApprovals?: boolean }): string {
+  const draftApprovals = opts?.draftApprovals ?? false;
   const scenarios = deriveEvalScenarios(
     // The recap-time skill-md doesn't have per-recording traces separated
     // out — derive one scenario from the merged model itself so the section
     // is non-empty and consistent with deriveEvalScenarios' own shape.
     [{ label: model.title, trace: model }],
+    { draftApprovals },
   );
 
   const header = `# ${model.title}\n${model.goal}`;
   const workflow = workflowSection(model);
   const rules = rulesSection(model);
   const branches = branchesSection(model);
-  const mayNotDo = mayNotDoSection(model);
+  const mayNotDo = draftApprovals ? mayNotDoSectionWithDrafts() : mayNotDoSection(model);
   const evalSection = evalScenariosSection(scenarios);
 
-  const required = [header, workflow, rules, mayNotDo].filter(Boolean).join("\n\n");
+  const required = draftApprovals
+    ? [header, workflow, rules, draftForApprovalSection(model), mayNotDo].filter(Boolean).join("\n\n")
+    : [header, workflow, rules, mayNotDo].filter(Boolean).join("\n\n");
 
   // Try: everything, then drop eval scenarios, then drop branches too.
   const withEval = [required, branches, evalSection].filter(Boolean).join("\n\n");
@@ -139,7 +222,9 @@ function finalStepDataOut(steps: WorkflowStep[]): string[] {
  */
 export function deriveEvalScenarios(
   recordings: Array<{ label: string | null; trace: WorkflowTrace }>,
+  opts?: { draftApprovals?: boolean },
 ): EvalScenario[] {
+  const draftApprovals = opts?.draftApprovals ?? false;
   return recordings.map((recording, index) => {
     const { trace } = recording;
     const coverage = coverFlowModel({ ...trace, recordingsSeen: 1, coverage: [] });
@@ -149,17 +234,27 @@ export function deriveEvalScenarios(
       ...finalStepDataOut(trace.steps),
     ].slice(0, SCENARIO_ARRAY_CAP);
 
-    const mustDo = trace.steps
-      .filter((s) => tierForStep(coverage, s.index) === "green")
-      .map((s) => s.action)
-      .slice(0, SCENARIO_ARRAY_CAP);
+    const mustDo = [
+      ...trace.steps
+        .filter((s) => tierForStep(coverage, s.index) === "green")
+        .map((s) => s.action),
+      ...(draftApprovals
+        ? trace.steps
+            .filter((s) => tierForStep(coverage, s.index) !== "green")
+            .map((s) => `file a draft for: ${s.action}`)
+        : []),
+    ].slice(0, SCENARIO_ARRAY_CAP);
 
     const mustNotDo = [
       "invent data not present in the workflow",
       "skip a required check",
-      ...trace.steps
-        .filter((s) => tierForStep(coverage, s.index) === "red")
-        .map((s) => `attempt: ${s.action}`),
+      ...(draftApprovals
+        ? trace.steps
+            .filter((s) => tierForStep(coverage, s.index) !== "green")
+            .map((s) => `claim executed: ${s.action}`)
+        : trace.steps
+            .filter((s) => tierForStep(coverage, s.index) === "red")
+            .map((s) => `attempt: ${s.action}`)),
     ].slice(0, SCENARIO_ARRAY_CAP);
 
     const scenario: EvalScenario = {
@@ -358,12 +453,15 @@ function dedupeConnectors(connectors: ConnectorBinding[]): ConnectorBinding[] {
 export function flowModelToBundle(params: {
   model: FlowModel;
   recordings: Array<{ label: string | null; trace: WorkflowTrace }>;
+  /** SF_DRAFT_APPROVALS — false/absent (the default) reproduces today's
+   *  output byte-for-byte (enforced by a deep-equal regression test). */
+  draftApprovals?: boolean;
 }): { bundle: AgentBundle; scenarios: EvalScenario[]; warnings: string[] } {
-  const { model, recordings } = params;
+  const { model, recordings, draftApprovals = false } = params;
 
   const intent = heuristicIntent(model.goal);
   const bundle = assembleAgentBundle(intent);
-  bundle.blueprint.customSkillMd = flowModelToSkillMd(model);
+  bundle.blueprint.customSkillMd = flowModelToSkillMd(model, { draftApprovals });
   // The compiled agent's identity is the recorded workflow, never the
   // starter blueprint heuristicIntent fell through to on an unrecognized
   // goal (e.g. "Forward SeldonFrame Weekly Emails to Personal Gmail" — no
@@ -382,6 +480,12 @@ export function flowModelToBundle(params: {
   bundle.blueprint.greeting = `Hi — I'm your "${model.title}" agent. Tell me what you need, or say "run it" to start.`;
   bundle.blueprint.faq = [];
   bundle.blueprint.capabilities = filterCapabilitiesForModel(bundle.blueprint.capabilities, model);
+  if (draftApprovals) {
+    bundle.blueprint.capabilities = Array.from(
+      new Set([...(bundle.blueprint.capabilities ?? []), DRAFT_FOR_APPROVAL_CAPABILITY]),
+    );
+    bundle.blueprint.autonomy = autonomyForModel(model);
+  }
   bundle.blueprint.quoteRanges = undefined;
   bundle.blueprint.pricingFacts = undefined;
   bundle.blueprint.missedCallTextBack = undefined;
@@ -396,12 +500,16 @@ export function flowModelToBundle(params: {
     bundle.blueprint.connectors = mergedConnectors;
   }
 
-  const scenarios = deriveEvalScenarios(recordings);
+  const scenarios = deriveEvalScenarios(recordings, { draftApprovals });
 
   const warnings = [...bundle.warnings];
   for (const step of model.steps) {
     if (tierForStep(model.coverage, step.index) === "red") {
-      warnings.push(`No tool binding for "${step.action}" (${step.app}) — stays with the human.`);
+      warnings.push(
+        draftApprovals
+          ? `"${step.action}" (${step.app}) has no tool binding — the agent will draft it for your approval.`
+          : `No tool binding for "${step.action}" (${step.app}) — stays with the human.`,
+      );
     }
   }
 

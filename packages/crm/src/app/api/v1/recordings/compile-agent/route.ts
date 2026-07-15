@@ -23,6 +23,7 @@ import { eq } from "drizzle-orm";
 import { db } from "@/db";
 import { recordingSessions, workflowRecordings } from "@/db/schema/recordings";
 import { isRecordToAgentOn } from "@/lib/recordings/policy";
+import { isDraftApprovalsOn } from "@/lib/agent-drafts/policy";
 import { resolveCompileAgentGate, stampClaimedCompileOnboarded } from "@/lib/recordings/route-guards";
 import { findSessionByToken } from "@/lib/recordings/session-store";
 import { flowModelToBundle } from "@/lib/recordings/compile-agent";
@@ -128,7 +129,11 @@ export async function POST(request: Request): Promise<Response> {
     .filter((r) => r.status === "traced" && r.trace)
     .map((r) => ({ label: r.label, trace: r.trace as WorkflowTrace }));
 
-  const { bundle, scenarios, warnings } = flowModelToBundle({ model: flowModel, recordings });
+  const { bundle, scenarios, warnings } = flowModelToBundle({
+    model: flowModel,
+    recordings,
+    draftApprovals: isDraftApprovalsOn({ SF_DRAFT_APPROVALS: process.env.SF_DRAFT_APPROVALS }),
+  });
 
   // Widen any never-discovered composio binding's enabledTools with real
   // tools before the first persist — catalog defaults, then live discovery

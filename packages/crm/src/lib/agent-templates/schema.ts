@@ -35,6 +35,17 @@ export const TemplateBlueprintPatchSchema = z
     customSkillMd: z.string().max(8000).optional(),
     voice: z.enum(VOICE_OPTIONS).optional(),
     capabilities: z.array(z.string()).optional(),
+    // Never-fail-compile: honest autonomy math from the recording's coverage.
+    // Mirrors AgentBlueprint.autonomy (db/schema/agents.ts).
+    autonomy: z
+      .object({
+        green: z.number().int().min(0),
+        yellow: z.number().int().min(0),
+        red: z.number().int().min(0),
+        total: z.number().int().min(0),
+        autonomousPct: z.number().int().min(0).max(100),
+      })
+      .optional(),
     faq: z.array(FaqRow).optional(),
     // The operator-configured price ranges for the get_quote_range tool (voice
     // R1 quote guard). A service with no entry returns { hasRange:false } and

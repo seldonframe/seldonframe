@@ -5,9 +5,11 @@ import { describe, test } from "node:test";
 import assert from "node:assert/strict";
 
 import {
+  autonomyForModel,
   deriveEvalScenarios,
   flowModelToBundle,
   flowModelToSkillMd,
+  inferDraftKind,
   inferTriggerFromModel,
 } from "@/lib/recordings/compile-agent";
 import type { CoverageEntry, FlowModel, WorkflowStep, WorkflowTrace } from "@/lib/recordings/trace-schema";
@@ -396,5 +398,104 @@ describe("inferTriggerFromModel", () => {
       cron: "0 9 * * *",
       channel: "email",
     });
+  });
+});
+
+// ── never-fail-compile: autonomy + draft approvals ──────────────────────────
+// 2 green, 1 yellow, 1 red — steps: "Open the job in Jobber"(green), "Look up
+// availability"(green), "Post the update"(yellow), "Enter the job record" in
+// "QuickBooks Desktop"(red).
+function mixedCoverageModel() {
+  const steps = [
+    step(0, { app: "Jobber", action: "Open the job in Jobber" }),
+    step(1, { app: "Jobber", action: "Look up availability" }),
+    step(2, { app: "Slack", action: "Post the update" }),
+    step(3, { app: "QuickBooks Desktop", action: "Enter the job record" }),
+  ];
+  return baseModel({
+    steps,
+    apps: ["Jobber", "Slack", "QuickBooks Desktop"],
+    coverage: [
+      { stepIndex: 0, tier: "green", toolkit: "jobber", reason: "matched jobber" },
+      { stepIndex: 1, tier: "green", toolkit: "jobber", reason: "matched jobber" },
+      { stepIndex: 2, tier: "yellow", reason: "likely API-doable — needs approval gate" },
+      { stepIndex: 3, tier: "red", reason: "no tool binding — stays with the human" },
+    ],
+  });
+}
+
+describe("autonomyForModel", () => {
+  test("mixed coverage counts and pct", () => {
+    const model = mixedCoverageModel();
+    const a = autonomyForModel(model);
+    assert.deepEqual(a, { green: 2, yellow: 1, red: 1, total: 4, autonomousPct: 50 });
+  });
+  test("missing coverage entries count as red", () => {
+    const model = { ...mixedCoverageModel(), coverage: [] };
+    const a = autonomyForModel(model);
+    assert.equal(a.green, 0);
+    assert.equal(a.red, a.total);
+    assert.equal(a.autonomousPct, 0);
+  });
+});
+
+describe("flowModelToSkillMd — draft approvals flag", () => {
+  test("flag OFF: output byte-identical to the un-optioned call", () => {
+    const model = mixedCoverageModel();
+    assert.equal(flowModelToSkillMd(model), flowModelToSkillMd(model, { draftApprovals: false }));
+  });
+  test("flag ON: red/yellow steps render in 'What you draft for approval' with kind + done-only-when-approved", () => {
+    const md = flowModelToSkillMd(mixedCoverageModel(), { draftApprovals: true });
+    assert.ok(md.includes("## What you draft for approval"));
+    assert.ok(md.includes("draft_for_approval"));
+    assert.ok(md.includes("DONE only when a human approves"));
+  });
+  test("flag ON: may-NOT-do keeps the filing≠doing floor", () => {
+    const md = flowModelToSkillMd(mixedCoverageModel(), { draftApprovals: true });
+    assert.ok(md.includes("## What you may NOT do"));
+    assert.ok(md.includes("Never execute or claim to have executed a drafted step"));
+  });
+});
+
+describe("flowModelToBundle — draft approvals flag", () => {
+  test("flag ON grants the capability; flag OFF does not", () => {
+    const recordings = [{ label: null, trace: baseTrace() }];
+    const on = flowModelToBundle({ model: mixedCoverageModel(), recordings, draftApprovals: true });
+    const off = flowModelToBundle({ model: mixedCoverageModel(), recordings });
+    assert.ok(on.bundle.blueprint.capabilities?.includes("draft_for_approval"));
+    assert.equal(off.bundle.blueprint.capabilities?.includes("draft_for_approval"), false);
+  });
+  test("flag ON persists the autonomy score on the blueprint", () => {
+    const on = flowModelToBundle({ model: mixedCoverageModel(), recordings: [], draftApprovals: true });
+    assert.equal(on.bundle.blueprint.autonomy?.total, 4);
+  });
+  test("flag OFF: bundle deep-equal to today's output (byte-parity regression)", () => {
+    const recordings = [{ label: null, trace: baseTrace() }];
+    const a = flowModelToBundle({ model: mixedCoverageModel(), recordings });
+    const b = flowModelToBundle({ model: mixedCoverageModel(), recordings, draftApprovals: false });
+    assert.deepEqual(a, b);
+  });
+});
+
+describe("deriveEvalScenarios — draft approvals flag", () => {
+  test("flag ON: red step yields mustDo file-a-draft + mustNotDo claim-executed", () => {
+    const scenarios = deriveEvalScenarios([{ label: null, trace: baseTrace() }], { draftApprovals: true });
+    const s = scenarios[0]!;
+    assert.ok(s.mustDo.some((l) => l.startsWith("file a draft for:")));
+    assert.ok(s.mustNotDo.some((l) => l.startsWith("claim executed:")));
+  });
+  test("flag OFF: legacy 'attempt:' shape preserved", () => {
+    const scenarios = deriveEvalScenarios([{ label: null, trace: baseTrace() }]);
+    assert.ok(scenarios[0]!.mustNotDo.some((l) => l.startsWith("attempt:")));
+  });
+});
+
+describe("inferDraftKind", () => {
+  test("maps by keywords with 'other' fallback", () => {
+    assert.equal(inferDraftKind(step(0, { app: "Gmail", action: "Send the follow-up email" })), "email");
+    assert.equal(inferDraftKind(step(0, { action: "Send the invoice" })), "invoice");
+    assert.equal(inferDraftKind(step(0, { app: "Twilio", action: "Text the customer" })), "message");
+    assert.equal(inferDraftKind(step(0, { app: "QuickBooks Desktop", action: "Enter the job record" })), "data_entry");
+    assert.equal(inferDraftKind(step(0, { app: "Camera", action: "Review the photos" })), "other");
   });
 });

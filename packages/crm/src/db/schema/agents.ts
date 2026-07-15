@@ -65,6 +65,16 @@ export type AgentBlueprint = {
    *  can't blow up the system prompt budget. Empty/undefined → no
    *  override, runtime composes the prompt as it did before. */
   customSkillMd?: string;
+  /** Never-fail-compile: honest autonomy math from the recording's coverage
+   *  (green runs itself; yellow+red arrive as drafts). Absent on non-recording
+   *  templates. */
+  autonomy?: {
+    green: number;
+    yellow: number;
+    red: number;
+    total: number;
+    autonomousPct: number;
+  };
   /** 2026-06-10 — when true, the post-call follow-up SMS uses the SeldonFrame
    *  "META loop" pitch (the text is itself the demo) and links to the demo
    *  qualifier form. Default false: client workspaces send a clean booking
