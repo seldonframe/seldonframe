@@ -18,10 +18,10 @@ test("flag off → byte-identical current behavior", () => {
   assert.equal(heroSubmitTarget("biz", "Family plumbing in Reno", false), "/signup?intent=build");
 });
 
-test("flag on → /try carries the url; biz tab still goes to /try", () => {
+test("flag on → /try carries the url; biz tab routes to signup (description build is signup-gated, /try is URL-only)", () => {
   assert.equal(
     heroSubmitTarget("url", "https://acme.com", true),
     "/try?url=https%3A%2F%2Facme.com",
   );
-  assert.equal(heroSubmitTarget("biz", "Family plumbing in Reno", true), "/try");
+  assert.equal(heroSubmitTarget("biz", "Family plumbing in Reno", true), "/signup?intent=build");
 });
