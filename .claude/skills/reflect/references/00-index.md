@@ -36,5 +36,15 @@ follows the sequence in SKILL.md §3b.
 - **break-the-chain** — the option creates obligation/dependency (gifts, favors, lifestyle debt, channel or vendor reliance) that compounds; independence is at stake.
 - **hemingway-suitcase** — lost work or a scrapped effort; deciding whether/how to redo something (the redo is often better).
 
+## Builders (people, not models — how specific great builders think)
+- **dhh** — adding a dependency, layer, or tool ("is this a merchant of complexity?"); boring defaults vs novelty; process/meeting creep; VC-vs-bootstrap; protecting maker flow.
+- **tobi-lutke** — calm long-game product calls; what to subtract rather than add; earning legitimacy/trust with users; infinite-game vs quarterly-win framing.
+- **mark-pincus** — founder instinct vs consensus; the proven/better/new test for a product bet; one-goal focus; sub-MVP speed; platform-dependency risk.
+- **winston-weinberg** — decision speed in fast AI markets; validating quality with domain experts before scaling; single-focus prioritization; selling into conservative buyers.
+- **vlad-tenev** — building for the current environment, not the one you wish for; surviving a narrative crisis; founder conviction under public pressure; rigor on product math.
+- **peter-kaufman** — partnership and pricing fairness (win-win is the only durable play); going positive and going first with counterparties; the largest base rates; compounding patience.
+- **steve-wozniak** — craft and elegance calls (fewer parts, simpler design); build-for-joy vs build-for-money; solo design vs committee; open vs walled.
+- **outliers-best-2025** — adversity-to-advantage collection (Dyson, Firestone, Blumkin, Singleton, Price, Schwab): persistence economics, trust as strategy, contrarian capital allocation.
+
 ## Meta
 - **mental-models-general** — the latticework: multi-model thinking, circle of competence, second-order thinking, and the quick lens list for models without a dedicated file.

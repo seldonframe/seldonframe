@@ -124,6 +124,32 @@ divergences are the most informative calibration data).
 Review-by heuristic: when the expected outcome should be observable — typically
 2-6 weeks for tactical calls, a quarter for strategic ones.
 
+## Ground it in evidence (use your tools, not your vibes)
+
+- **Base rates come from search, not memory.** When the analysis leans on a
+  market fact, a failure rate, or a "most companies…" claim and web search is
+  available, search before asserting — and label what's sourced vs. estimated.
+- **Chesterton's fence is enforced by reading, not remembering.** If the
+  decision touches the codebase — remove X, rewrite Y, build-vs-buy Z — read
+  the code, its git history, and its callers FIRST. "Why does this exist?" is
+  answered by `git log`, not assumption.
+- **Prefer running the cheap test over describing it.** If the <1-day test in
+  DO THIS NEXT is something you can do right now (benchmark, grep, checking
+  real analytics), offer to run it — and fold the result into the answer.
+
+## Growing the library — `reflect learn <source>`
+
+When Max says **"reflect learn <url / person / book>"**:
+1. **Fetch the source live** — never from memory (the 2-of-24-titles-misled
+   lesson). Fetch fails → say so, offer a `fetched: false` distillation.
+2. Compact into `references/<slug>.md` (house template, 50-90 lines,
+   paraphrase, max one quote <15 words).
+3. Add one routing line to `references/00-index.md`.
+4. Report what was added + when the new lens will fire, so Max can correct
+   the routing while it's fresh.
+5. **Sync rule:** new lenses land in all three copies (this repo copy, the
+   user-level `~/.claude/skills/reflect`, github.com/seldonframe/reflect).
+
 ## Guardrails (check yourself during every run)
 - **Bikeshed alarm** — effort must scale with stakes, not with how easy the topic
   is to have opinions about. If the discussion is vivid but the dollars are small, stop.
