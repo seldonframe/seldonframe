@@ -30,6 +30,7 @@ export function RecapPanel({
   interviewError,
   isAuthed,
   compiling,
+  compileError = null,
   compiledTemplateId,
   claimHref,
   onInterviewInputChange,
@@ -51,6 +52,11 @@ export function RecapPanel({
   interviewError: string | null;
   isAuthed: boolean;
   compiling: boolean;
+  /** 2026-07-15 — claim-flow origin fix (Task 3 audit): a failed compile
+   *  must render its error adjacent to the compile CTA, not only at the top
+   *  of the page (record-client.tsx's `message` state, which is far above
+   *  this panel once slots/recap have rendered). Absent/null renders nothing. */
+  compileError?: string | null;
   compiledTemplateId: string | null;
   claimHref: string;
   onInterviewInputChange: (value: string) => void;
@@ -282,6 +288,16 @@ export function RecapPanel({
           </button>
         </div>
       </div>
+
+      {/* 2026-07-15 — claim-flow origin fix (Task 3): compile failures render
+          here, directly above the CTA, with the CTA itself already re-enabled
+          (disabled={compiling} clears on failure) — retrying is just another
+          click, never a lost slot or a silent failure. */}
+      {compileError ? (
+        <p role="alert" className="text-[13px] text-[#EF4444]">
+          {compileError} — nothing was lost; fix the issue or try again.
+        </p>
+      ) : null}
 
       {/* record v3 S3 — sticky bottom claim/compile CTA on mobile (<720px)
           once the recap is ready; desktop keeps it inline in the panel. */}

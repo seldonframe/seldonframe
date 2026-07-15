@@ -111,6 +111,11 @@ export function RecordClient({
   const lastInterviewMessage = useRef<string | null>(null);
   const [fallbackText, setFallbackText] = useState<Record<number, string>>({});
   const [compiling, setCompiling] = useState(false);
+  // 2026-07-15 — claim-flow origin fix (Task 3 audit): a compile failure gets
+  // its own state, rendered by RecapPanel right next to the CTA, distinct from
+  // the top-of-page `message` (which stays for session-mint failures, where
+  // it's the only content on screen). Never-lies at the funnel's money moment.
+  const [compileError, setCompileError] = useState<string | null>(null);
   const [compiledTemplateId, setCompiledTemplateId] = useState<string | null>(null);
   const captureHandles = useRef<Record<number, CaptureHandle>>({});
 
@@ -563,6 +568,7 @@ export function RecordClient({
   async function handleCompileAgent() {
     if (!state.sessionId || !state.token) return;
     setCompiling(true);
+    setCompileError(null);
     try {
       const res = await fetch("/api/v1/recordings/compile-agent", {
         method: "POST",
@@ -573,7 +579,7 @@ export function RecordClient({
       const data = (await res.json()) as { template_id: string };
       setCompiledTemplateId(data.template_id);
     } catch (err) {
-      setMessage(err instanceof Error ? err.message : "Could not compile your agent yet.");
+      setCompileError(err instanceof Error ? err.message : "Could not compile your agent yet.");
     } finally {
       setCompiling(false);
     }
@@ -726,6 +732,7 @@ export function RecordClient({
               interviewError={interviewError}
               isAuthed={isAuthed}
               compiling={compiling}
+              compileError={compileError}
               compiledTemplateId={compiledTemplateId}
               claimHref={claimHref}
               onInterviewInputChange={setInterviewInput}
