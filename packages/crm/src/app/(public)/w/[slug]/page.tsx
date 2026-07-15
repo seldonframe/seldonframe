@@ -36,7 +36,6 @@ import { buildWorkspaceUrls } from "@/lib/billing/anonymous-workspace";
 import { getPublicChatbotEmbed } from "@/lib/agents/public-embed";
 import { submittedSoulToTemplateData } from "@/lib/landing/r1-payload-to-template";
 import { renderLandingTemplate } from "@/lib/landing/render-landing-template";
-import { ARCHETYPES, type AestheticArchetypeId } from "@/lib/workspace/aesthetic-archetypes";
 import { WEB_UNGATED_ORIGIN } from "@/lib/web-build/policy";
 
 type PageProps = {
