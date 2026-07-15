@@ -7,6 +7,25 @@ with a checkable plan, gets ticked off as it ships, and ends with a review block
 
 ## In flight
 
+### Task — /reflect decision loop (2026-07-15, branch feat/reflect-decision-loop)
+
+Compact ~24 FS.blog/Bezos decision articles into `.claude/skills/reflect/` (core loop +
+per-lens reference files) + `docs/decisions/LOG.md` calibration log.
+Spec (approved in chat): docs/superpowers/specs/2026-07-15-reflect-decision-loop-design.md
+
+- [x] Design approved by Max (8 decisions locked via Q&A)
+- [x] Spec written + self-reviewed
+- [x] Worktree off origin/main
+- [x] 7 fetch agents dispatched (24 URLs → 23 reference files)
+- [x] SKILL.md (the loop) + references/00-index.md + docs/decisions/LOG.md written
+- [x] All reference files landed (agents 7/7, all 24 URLs fetched live, 0 fallbacks)
+- [x] Review pass: structural check 23/23 green + spot-read (bezos, break-the-chain) — 2 fidelity
+      corrections applied (break-the-chain = obligation chains, not mistake cascades;
+      algorithms-bias = bias-in-algorithms framing, not Meehl)
+- [x] End-to-end verify: reflect ran on "wire reflect into ship-feature?" — quick-pass routing,
+      output shape, and LOG.md write all confirmed (first real entry logged)
+- [ ] Commit → push → PR to main
+
 ### Task — Green-main slices 2+3: stale UI expectations + archetype invariant (2026-07-10, branch fix/ci-stale-test-expectations)
 
 Baseline: main run 29097414557 — 107 unique failing spec names (0 new failures allowed; judge by delta).
