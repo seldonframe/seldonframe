@@ -2244,3 +2244,22 @@ C4 close-out with empirical SLICE 11 data.
   once — audit `overflowX` across `components/seo/*` and kill the ones on
   diagram/sequence wrappers. Keep the fix responsive (compare grids → 1 column
   below ~520px) and reduced-motion aware.
+
+## L-43 — Never delta-check a baseline with `git checkout <ref> -- .` in the working repo; it STAGES the ref's content
+
+- **Trigger:** To prove 10 landing-spec failures were pre-existing, I ran
+  `git checkout origin/main -- .` → ran the specs → `git checkout -- .` →
+  `git stash pop`. Two traps fired at once: (1) `checkout <ref> -- <path>`
+  updates the INDEX as well as the worktree, so the follow-up `checkout -- .`
+  restored from the index (still main's content) and silently left the branch's
+  own commit reverted-but-staged; (2) the earlier `git stash` had nothing to
+  save (post-rebase tree was clean), so `stash pop` grabbed an UNRELATED
+  months-old stash entry. Recovery needed `git restore --source=HEAD --staged
+  --worktree .` plus verifying the old stash list was untouched.
+- **Rule:** For "does this test fail on main too?" use a THROWAWAY checkout —
+  `git worktree add <tmp> origin/main`, run the spec there, `git worktree
+  remove <tmp>` — never mutate the working repo's index. If you must stash,
+  first confirm `git stash` actually created an entry (clean trees make the
+  later `pop` land on someone else's stash). Cheapest of all when the specs
+  don't import your changed files: prove isolation by grepping the failing
+  specs' imports against your diff, and skip the baseline run entirely.

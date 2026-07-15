@@ -7,6 +7,20 @@ export const WEB_BUILD_RATE_WINDOW_MS = 24 * 60 * 60 * 1000;
 /** organizations.settings.origin marker for anonymous web builds (no schema column). */
 export const WEB_UNGATED_ORIGIN = "web_ungated";
 
+/**
+ * Task 8: unclaimed anonymous web-build workspaces (created via the /try
+ * paste-box flow, no owner attached yet) stay out of the search index until
+ * claimed via signup. Claimed workspaces and every non-web-build workspace
+ * keep the existing indexable behavior. Shared by the /w and /s public
+ * routes so subdomain metadata can never drift from the /w rule again.
+ */
+export function shouldIndexWorkspace(
+  ownerId: string | null,
+  settings: Record<string, unknown>,
+): boolean {
+  return !(ownerId === null && settings["origin"] === WEB_UNGATED_ORIGIN);
+}
+
 export function isWebUngatedBuildOn(env: {
   SF_WEB_UNGATED_BUILD?: string | undefined;
 }): boolean {

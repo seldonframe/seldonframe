@@ -3,6 +3,7 @@ import assert from "node:assert/strict";
 import {
   isWebUngatedBuildOn,
   isAutopayConsoleOn,
+  shouldIndexWorkspace,
   WEB_BUILD_RATE_LIMIT,
   WEB_BUILD_RATE_WINDOW_MS,
   WEB_UNGATED_ORIGIN,
@@ -26,6 +27,18 @@ test("flag: SF_AUTOPAY_CONSOLE — on only for exact '1' (trimmed); everything e
   assert.equal(isAutopayConsoleOn({ SF_AUTOPAY_CONSOLE: "true" }), false);
   assert.equal(isAutopayConsoleOn({ SF_AUTOPAY_CONSOLE: "0" }), false);
   assert.equal(isAutopayConsoleOn({}), false);
+});
+
+test("shouldIndexWorkspace: noindex ONLY for unclaimed anonymous web builds (Task 8)", () => {
+  // The one noindex case: no owner AND web_ungated origin.
+  assert.equal(shouldIndexWorkspace(null, { origin: WEB_UNGATED_ORIGIN }), false);
+  // Claimed web-build workspace → indexable again.
+  assert.equal(shouldIndexWorkspace("user_123", { origin: WEB_UNGATED_ORIGIN }), true);
+  // Unowned but not a web build (e.g. MCP-created) → indexable.
+  assert.equal(shouldIndexWorkspace(null, {}), true);
+  assert.equal(shouldIndexWorkspace(null, { origin: "mcp" }), true);
+  // Fully ordinary workspace → indexable.
+  assert.equal(shouldIndexWorkspace("user_123", {}), true);
 });
 
 test("constants", () => {
