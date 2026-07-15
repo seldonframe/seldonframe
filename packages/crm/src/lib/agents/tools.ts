@@ -32,6 +32,7 @@ import {
   slotFitsFreeWindows,
 } from "@/lib/agents/booking/booking-policy";
 import { COPILOT_CAPABILITY } from "@/lib/agents/copilot/tools";
+import { DRAFT_FOR_APPROVAL_CAPABILITY } from "@/lib/agent-drafts/policy";
 
 export type ToolExecuteContext = {
   orgId: string;
@@ -1853,7 +1854,12 @@ export const getQuoteRange: AgentTool<
 // the compiled skill-md both say so, and the never-lies fallback regex
 // treats an unapproved claim of completion as a violation.
 
-export const DRAFT_FOR_APPROVAL_CAPABILITY = "draft_for_approval";
+// Canonical const now lives in lib/agent-drafts/policy.ts (a pure, DB-free
+// module — imported above) so non-tools-runtime code doesn't need to
+// value-import this whole file just for the constant. Re-exported here so
+// existing `import { DRAFT_FOR_APPROVAL_CAPABILITY } from "@/lib/agents/
+// tools"` call sites keep working unchanged.
+export { DRAFT_FOR_APPROVAL_CAPABILITY };
 
 const draftForApprovalInput = z.object({
   stepAction: z.string().min(3),

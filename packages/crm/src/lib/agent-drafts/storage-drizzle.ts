@@ -30,7 +30,27 @@ export function createDrizzleDraftStore(dbi: typeof db = db): AgentDraftStore {
             eq(agentActionDrafts.conversationId, input.conversationId),
           ),
         );
-      if (Number(total) >= MAX_DRAFTS_PER_CONVERSATION) return { outcome: "capped" };
+      if (Number(total) >= MAX_DRAFTS_PER_CONVERSATION) {
+        // Twin parity (review fix): a retry of an ALREADY-PENDING step must
+        // dedupe, never report capped, even when the conversation is at the
+        // cap — spec §5 forbids telling the model filing failed when the
+        // draft already exists. The memory twin checks dedupe before cap;
+        // mirror that ordering here with an explicit re-select.
+        const [existingAtCap] = await dbi
+          .select({ id: agentActionDrafts.id })
+          .from(agentActionDrafts)
+          .where(
+            and(
+              eq(agentActionDrafts.orgId, input.orgId),
+              eq(agentActionDrafts.conversationId, input.conversationId),
+              eq(agentActionDrafts.stepAction, input.stepAction),
+              eq(agentActionDrafts.status, "pending"),
+            ),
+          )
+          .limit(1);
+        if (existingAtCap) return { outcome: "deduped", draftId: existingAtCap.id };
+        return { outcome: "capped" };
+      }
 
       const inserted = await dbi
         .insert(agentActionDrafts)

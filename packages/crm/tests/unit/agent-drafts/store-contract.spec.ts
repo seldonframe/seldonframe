@@ -73,6 +73,19 @@ describe("agent-draft store contract", () => {
     assert.equal(over.outcome, "capped");
   });
 
+  test("at cap, re-filing an ALREADY-PENDING step dedupes rather than reporting capped (spec §5: never tell the model filing failed when the draft exists)", async () => {
+    const store = createMemoryDraftStore();
+    const filedIds: string[] = [];
+    for (let i = 0; i < MAX_DRAFTS_PER_CONVERSATION; i++) {
+      const r = await store.fileDraft({ ...base, stepAction: `step ${i}` });
+      assert.equal(r.outcome, "filed");
+      filedIds.push((r as { draftId: string }).draftId);
+    }
+    const retry = await store.fileDraft({ ...base, stepAction: "step 0", title: "retry, same step" });
+    assert.equal(retry.outcome, "deduped");
+    assert.equal((retry as { draftId: string }).draftId, filedIds[0]);
+  });
+
   test("listDrafts never crosses orgs", async () => {
     const store = createMemoryDraftStore();
     await store.fileDraft(base);

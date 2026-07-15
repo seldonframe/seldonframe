@@ -16,7 +16,7 @@ import type { EvalScenario } from "@/lib/agents/evals/eval-types";
 import { coverFlowModel } from "@/lib/recordings/coverage";
 import type { CoverageEntry, CoverageTier, FlowModel, WorkflowStep, WorkflowTrace } from "@/lib/recordings/trace-schema";
 import { defaultToolsForToolkits } from "@/lib/integrations/composio/catalog";
-import { DRAFT_FOR_APPROVAL_CAPABILITY } from "@/lib/agents/tools";
+import { DRAFT_FOR_APPROVAL_CAPABILITY } from "@/lib/agent-drafts/policy";
 
 const CUSTOM_SKILL_MD_MAX_CHARS = 8000;
 const SCENARIO_ARRAY_CAP = 6;

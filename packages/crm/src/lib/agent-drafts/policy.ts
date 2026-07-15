@@ -12,3 +12,11 @@ export function isDraftApprovalsOn(env: {
  *  uniqueness guarantee lives in the DB partial index; this cap is the
  *  belt-and-suspenders volume bound (Max amendment 2026-07-15). */
 export const MAX_DRAFTS_PER_CONVERSATION = 10;
+
+/** The capability id for the draft_for_approval native tool. Canonical home
+ *  is this pure policy module (no DB imports) so non-tools-runtime code
+ *  (e.g. lib/recordings/compile-agent.ts) doesn't need to value-import
+ *  tools.ts just for this constant. Re-exported from tools.ts so existing
+ *  `import { DRAFT_FOR_APPROVAL_CAPABILITY } from "@/lib/agents/tools"`
+ *  call sites keep working unchanged. */
+export const DRAFT_FOR_APPROVAL_CAPABILITY = "draft_for_approval";
