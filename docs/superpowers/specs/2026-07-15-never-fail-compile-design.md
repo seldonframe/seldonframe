@@ -51,7 +51,7 @@ New Drizzle schema `packages/crm/src/db/schema/agent-action-drafts.ts`:
 | `resolved_at` | timestamptz nullable | |
 | `created_at` | timestamptz default now | |
 
-Indexes: `(org_id, status, created_at desc)` for the inbox query; `(org_id, agent_id)` for later per-agent views.
+Indexes: `(org_id, status, created_at desc)` for the inbox query; `(org_id, agent_id)` for later per-agent views; **unique partial index `(org_id, conversation_id, step_action) WHERE status = 'pending'`** — the atomic dedupe claim (Max amendment, 2026-07-15): a conversation can never hold two pending drafts for the same step. Pending-only on purpose: once a draft is approved/dismissed, the same step may legitimately recur later in the conversation and file again.
 
 Resolution is CAS: `UPDATE agent_action_drafts SET status=$s, resolved_by_user_id=$u, resolved_at=now() WHERE id=$id AND org_id=$org AND status='pending' RETURNING *` — 0 rows → 409 to the caller. Rows are **kept** after resolution (forensics, matching Max's SLICE 10 preference). No cascade delete from templates (`on delete set null`).
 
@@ -63,6 +63,9 @@ New `AgentTool` in `packages/crm/src/lib/agents/tools.ts`, sibling of `escalateT
 - **Output:** `{ ok: boolean, draftId?: string }`
 - **Description (model-facing):** "File a prepared piece of work for human approval. Use for any workflow step you are NOT allowed to execute yourself. Include the COMPLETE work product in body — ready to send/paste as-is. Filing a draft is NOT doing the action: after calling this, tell the user it's been prepared and sent for approval, never that it's done."
 - **execute:** `ctx.testMode` → `{ ok:true, draftId: "test-draft-…" }` (evals). Otherwise insert the row from `ctx.orgId` + `ctx.agentId` + `ctx.conversationId` (`ToolExecuteContext`, tools.ts:36); lazy `@/db` import inside execute (matches file convention).
+- **Idempotency (Max amendment, 2026-07-15 — same bug class as the email-agent one-atomic-UPDATE claim):**
+  1. *Atomic dedupe:* insert with `ON CONFLICT DO NOTHING` against the pending-only unique partial index (§4); on conflict, select the existing pending row for `(org_id, conversation_id, step_action)` and return `{ ok: true, draftId: <existing>, deduped: true }` — filing is idempotent-success, the model's retry never spams the inbox and never gets told the filing failed when the draft exists.
+  2. *Per-conversation cap:* `MAX_DRAFTS_PER_CONVERSATION = 10` (module constant). Before insert, count rows for `(org_id, conversation_id)` (all statuses); at/over cap → `{ ok: false, error: "draft cap reached for this conversation — escalate_to_human instead" }` — an explicit honest failure, never a silent pass (Optimistic Path rule). The count→insert pair is not fully race-proof, and that's accepted: turns within one conversation are effectively serialized, and the hard uniqueness guarantee (the thing that must never break) lives in the index, not the cap.
 - **Registration:** append to the same exported tool list `escalate_to_human` lives in (`ALL_TOOLS`); capability id `draft_for_approval`; add to `gate.ts` HANDOFF class; add the synthetic short-circuit in both eval runners; check `select-turn-model.ts`'s native-tool list and add if the pattern requires it.
 - **L-30 note:** we are NOT making the tool-set seam async or per-agent — this is the well-trodden "add a native tool" path. No dispatch-loop surgery. The stateless twin (`stateless-turn.ts`) picks it up through the same registry automatically; the implementer must verify with a stateless-turn unit test that the tool is dispatchable there too.
 
@@ -92,6 +95,7 @@ New `AgentTool` in `packages/crm/src/lib/agents/tools.ts`, sibling of `escalateT
 - Skill-md rendering — red/yellow → draft section lines + may-not-do floor; flag off → current strings byte-identical; 8k-cap priority order with the new required section.
 - Kind inference map — one case per kind + fallback.
 - Draft tool — zod validation, testMode short-circuit, org-scoping of insert (mock db), output shape.
+- Idempotency — duplicate filing of same (conversation, step) → one row, second call returns same draftId with `deduped: true`; refiling allowed after the pending row is approved/dismissed (partial-index semantics); cap reached → `ok: false` with the explicit error; cap counts all statuses.
 - Stateless twin — `draft_for_approval` resolvable + dispatchable via `runStatelessAgentTurn` path (L-30 regression).
 - CAS — concurrent approve/approve → one winner, one 409; dismiss after approve → 409; cross-org id probe → 0 rows (org-scope).
 - Eval scenario derivation — red step yields the new mustDo/mustNotDo pair (flag on) and legacy shape (flag off).
