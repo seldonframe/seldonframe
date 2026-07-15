@@ -32,6 +32,10 @@ export type RecordSurfaceProps = {
   claimed: boolean;
   isAuthed: boolean;
   sharedFlag?: "1" | "miss" | null;
+  /** SF_DRAFT_APPROVALS (never-fail-compile) — recap-panel is a client
+   *  component, so the flag must arrive as a prop from this server
+   *  boundary (L-18). Absent/false → today's recap output, unchanged. */
+  draftApprovals?: boolean;
 };
 
 export function UnifiedLanding({

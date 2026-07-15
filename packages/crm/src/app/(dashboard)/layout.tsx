@@ -18,6 +18,7 @@ import { HelpButton } from "@/components/layout/help-button";
 import { SeldonChat } from "@/components/seldon-chat";
 import { CommandBar } from "@/components/command-bar";
 import { isWinLadderOn, isSimpleHomeOn } from "@/lib/web-build/policy";
+import { isDraftApprovalsOn } from "@/lib/agent-drafts/policy";
 import { readEnabledModules } from "@/lib/workspace/surface";
 import { hasLiveSms } from "@/lib/telephony/config";
 import { buildWorkspaceUrls } from "@/lib/billing/anonymous-workspace";
@@ -340,6 +341,7 @@ export default async function DashboardLayout({
               primaryOrgId={user?.orgId ?? null}
               enabledModules={enabledModules}
               smsLive={smsLive}
+              draftApprovalsOn={isDraftApprovalsOn({ SF_DRAFT_APPROVALS: process.env.SF_DRAFT_APPROVALS })}
             />
             {/* overflow-x-clip (not overflow-x-hidden): overflow-y-auto here
                 also computes overflow-x to `auto` per CSS's overflow

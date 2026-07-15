@@ -80,6 +80,12 @@ export type BuildNavInput = {
    *  Ignored when enabledModules is null/undefined (grandfathered / flag
    *  off — nothing is filtered either way). */
   smsLive?: boolean;
+  /** Never-fail-compile (2026-07-15) — SF_DRAFT_APPROVALS. This module is
+   *  framework-free (no env reads), so the flag arrives as an explicit
+   *  input, same pattern as isSuperAdmin: the caller (sidebar.tsx's server
+   *  layout) resolves it and threads it through. Surfaces the Approvals
+   *  nav entry when true; absent/false → today's nav, unchanged. */
+  draftApprovalsOn?: boolean;
 };
 
 // Block-slug → href map for visibility filtering. Lifted verbatim from
@@ -171,8 +177,17 @@ function applyModuleFilter(
  * so the six-noun contract is unit-testable.
  */
 export function buildNavGroups(input: BuildNavInput): NavGroup[] {
-  const { sessionType, workspaceCount, hiddenBlocks, isSuperAdmin, primaryOrgId, labels, enabledModules, smsLive } =
-    input;
+  const {
+    sessionType,
+    workspaceCount,
+    hiddenBlocks,
+    isSuperAdmin,
+    primaryOrgId,
+    labels,
+    enabledModules,
+    smsLive,
+    draftApprovalsOn = false,
+  } = input;
 
   const hiddenHrefs = new Set(hiddenBlocks.map((slug) => hiddenSlugToHref[slug]).filter(Boolean));
 
@@ -302,6 +317,13 @@ export function buildNavGroups(input: BuildNavInput): NavGroup[] {
         { href: "/contacts", label: labels.contact.plural, icon: "Users" },
         { href: "/bookings", label: "Bookings", icon: "Calendar", indent: true },
         { href: "/forms", label: labels.intakeForm.plural, icon: "FileText", indent: true },
+        // Never-fail-compile (SF_DRAFT_APPROVALS) — the drafts inbox for
+        // work a compiled agent prepared but can't execute itself. Count
+        // badge SKIPPED in v1 (no badge mechanism exists on NavItem today —
+        // see build-report for the conscious cut).
+        ...(draftApprovalsOn
+          ? [{ href: "/approvals", label: "Approvals", icon: "CheckSquare" }]
+          : []),
       ]),
     },
     {

@@ -18,3 +18,13 @@ export const TIER_LABEL: Record<CoverageTier, string> = {
   yellow: "Needs approval",
   red: "Stays with you",
 };
+
+/** Flag-on copy (SF_DRAFT_APPROVALS): red steps aren't "stays with you"
+ *  anymore — the agent drafts them. Same keys/colors; recap picks the map by
+ *  its draftApprovals prop. Kept as a SEPARATE map (not a mutation of
+ *  TIER_LABEL) so flag-off surfaces stay byte-stable. */
+export const TIER_LABEL_DRAFTS: Record<CoverageTier, string> = {
+  green: "Automatable",
+  yellow: "Needs approval",
+  red: "Drafted for you",
+};

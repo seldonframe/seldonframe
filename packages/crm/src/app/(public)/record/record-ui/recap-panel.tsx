@@ -17,7 +17,7 @@ import type { ChangeEvent } from "react";
 import type { CoverageEntry, CoverageTier, FlowModel } from "@/lib/recordings/trace-schema";
 import type { InterviewTurn, RecorderState } from "../recorder-machine";
 import { summarizeCoverage } from "../recorder-machine";
-import { TIER_COLOR, TIER_LABEL } from "./tiers";
+import { TIER_COLOR, TIER_LABEL, TIER_LABEL_DRAFTS } from "./tiers";
 
 export function RecapPanel({
   phase,
@@ -39,6 +39,7 @@ export function RecapPanel({
   onCompileAgent,
   onApprove,
   edgeCasePrompt,
+  draftApprovals = false,
 }: {
   phase: RecorderState["phase"];
   flowModel: FlowModel | null;
@@ -67,8 +68,13 @@ export function RecapPanel({
     onFileChange: (e: ChangeEvent<HTMLInputElement>) => void;
     supportsScreenCapture: boolean;
   };
+  /** SF_DRAFT_APPROVALS (never-fail-compile) — read server-side and threaded
+   *  down through record-client.tsx. Absent/false → today's recap output,
+   *  unchanged (red label stays "Stays with you", no autonomy line). */
+  draftApprovals?: boolean;
 }) {
   const summary = summarizeCoverage(coverage);
+  const tierLabels = draftApprovals ? TIER_LABEL_DRAFTS : TIER_LABEL;
 
   return (
     <section
@@ -91,6 +97,16 @@ export function RecapPanel({
           {" · "}
           <span style={{ color: TIER_COLOR.red }}>{summary.staysWithYou} stay with you</span>
         </p>
+        {draftApprovals && flowModel ? (
+          <p className="mt-2.5 text-[13px] text-white/80">
+            <span className="font-semibold">
+              {summary.automatable} of {flowModel.steps.length} steps run autonomously.
+            </span>{" "}
+            {flowModel.steps.length - summary.automatable > 0
+              ? `${flowModel.steps.length - summary.automatable} arrive as drafts for your approval.`
+              : "Fully autonomous."}
+          </p>
+        ) : null}
       </div>
 
       <ol className="flex flex-col gap-2">
@@ -118,7 +134,7 @@ export function RecapPanel({
                     {step.app}
                   </span>
                   <span className="text-[11px] font-[600]" style={{ color: TIER_COLOR[tier] }}>
-                    {TIER_LABEL[tier]}
+                    {tierLabels[tier]}
                   </span>
                 </div>
                 {entry?.reason ? (

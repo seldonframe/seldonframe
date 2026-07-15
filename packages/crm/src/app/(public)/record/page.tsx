@@ -25,6 +25,7 @@ import type { Metadata } from "next";
 import { auth } from "@/auth";
 import { isRecordToAgentOn } from "@/lib/recordings/policy";
 import { isWebUngatedBuildOn } from "@/lib/web-build/policy";
+import { isDraftApprovalsOn } from "@/lib/agent-drafts/policy";
 import { UnifiedLanding } from "../unified-landing";
 
 /** SF_TIER_LADDER (2026-07-08) — same strict-"1" contract as the other
@@ -80,6 +81,7 @@ export default async function RecordPage({
         claimed: params.claimed === "1",
         isAuthed,
         sharedFlag: params.shared === "1" ? "1" : params.shared === "miss" ? "miss" : null,
+        draftApprovals: isDraftApprovalsOn({ SF_DRAFT_APPROVALS: process.env.SF_DRAFT_APPROVALS }),
       }}
     />
   );

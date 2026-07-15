@@ -88,6 +88,7 @@ export function RecordClient({
   claimed,
   isAuthed,
   sharedFlag = null,
+  draftApprovals = false,
 }: {
   claimedSessionId: string | null;
   claimed: boolean;
@@ -97,6 +98,9 @@ export function RecordClient({
    *  the no-service-worker fallback route (share-target/route.ts) redirected
    *  here instead, null on an ordinary page load. */
   sharedFlag?: "1" | "miss" | null;
+  /** SF_DRAFT_APPROVALS — read server-side (page.tsx) and threaded down
+   *  since this is a client component (L-18). */
+  draftApprovals?: boolean;
 }) {
   const [state, dispatch] = useReducer(recorderReducer, undefined, initialRecorderState);
   const [message, setMessage] = useState<string | null>(null);
@@ -731,6 +735,7 @@ export function RecordClient({
               onCompileAgent={() => void handleCompileAgent()}
               onApprove={() => dispatch({ type: "APPROVED" })}
               edgeCasePrompt={edgeCasePrompt}
+              draftApprovals={draftApprovals}
             />
           ) : null}
         </div>

@@ -30,11 +30,13 @@ export function RecordHero({
   claimed,
   isAuthed,
   sharedFlag,
+  draftApprovals,
 }: {
   claimedSessionId: string | null;
   claimed: boolean;
   isAuthed: boolean;
   sharedFlag?: "1" | "miss" | null;
+  draftApprovals?: boolean;
 }) {
   return (
     <section
@@ -80,6 +82,7 @@ export function RecordHero({
               claimed={claimed}
               isAuthed={isAuthed}
               sharedFlag={sharedFlag}
+              draftApprovals={draftApprovals}
             />
           </div>
         </div>
