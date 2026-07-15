@@ -48,7 +48,7 @@ export const metadata: Metadata = {
     description:
       "Show Seldon how you work. It builds the agent — compiled from your real workflow, testable before you switch it on.",
     type: "website",
-    url: "https://www.seldonframe.com/record",
+    url: "https://app.seldonframe.com/record",
     images: [{ url: "/brand/og-image.png", width: 1200, height: 630 }],
   },
 };
