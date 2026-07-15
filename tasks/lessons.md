@@ -2267,3 +2267,46 @@ C4 close-out with empirical SLICE 11 data.
 - **2026-07-10 — read the error, not the test name, before "updating stale tests."** 16 of ~30 CI failures briefed as "stale UI expectations" were `document is not defined` — a DOM bootstrap (tests/setup-dom.ts) existed but was never wired into the CI runner, so the fix was `import "../../setup-dom"` first-line in the affected specs, not assertion rewrites. Classify by error type (ReferenceError/MODULE_NOT_FOUND = harness bug; AssertionError value-diff = candidate stale expectation, confirm intent via git/in-code comments first). See docs/learnings/2026-07-10-diagnose-before-updating-tests.md.
 - **2026-07-10 — an invariant captured after the event it guards cannot fail.** Snapshotting registry keys at module top to detect import-time leakage is tautological when the import happens above the snapshot; assert named absence (leak) + named presence (baselines) instead, and litmus-test every invariant with "what code change makes this fire?" See docs/learnings/2026-07-10-guard-assertions-that-cannot-fail.md.
 - **2026-07-15 — grep the target branch for the PR's load-bearing artifact before calling it superseded.** A memory note claimed PRs #49/#54's key fixes were "re-landed on main by other work"; four greps for the artifacts themselves (the `deps.now` seam, the matchMedia stub, the `contract:throw-ok` markers) showed none had landed — only a base file with the same NAME pre-existed. File existence and session notes both lie; rebase + generator-re-run + stash-delta decide what survives. See docs/learnings/2026-07-15-stale-pr-triage-grep-the-seam.md.
+
+---
+
+## L-33 — Model-invoked filing/write tools need atomic idempotency + a volume cap AT SPEC TIME, and twin/SQL store pairs need ordering-pinning contract tests
+
+- **Trigger:** never-fail-compile slice (2026-07-15). The draft_for_approval
+  spec initially shipped without dedupe; Max's reflect loop caught it and
+  amended (pending-only unique partial index + per-conversation cap). Then
+  the Opus review caught the twin/SQL divergence the amendment created: the
+  memory store checked dedupe-before-cap, the drizzle store checked
+  cap-before-dedupe — so at the cap, a retry of an already-pending step got
+  told "failed" while the draft existed (exactly what the spec forbade). The
+  contract suite ran only against the twin, so nothing could catch it.
+- **Rule:** (1) Any tool a MODEL can invoke that writes rows (drafts, claims,
+  messages, tickets) specs its idempotency key (usually a pending-only
+  partial unique index) and a volume cap in the same section as the tool —
+  models retry, and a retry must be idempotent-success, never a duplicate
+  and never a false failure. (2) When a store ships as memory-twin + SQL
+  pair, every RESULT-ORDERING decision (which check wins when two conditions
+  are both true: dedupe vs cap, not-found vs conflict) gets a contract test
+  that encodes the winner — passing on the twin is NOT evidence the SQL
+  store agrees; the SQL path's branch order must be read side-by-side
+  against the twin's at review time.
+
+---
+
+## L-34 — Scouts dispatched into a worktree must echo `pwd` + `git rev-parse HEAD` first; cross-check one known fact before using any scout report
+
+- **Trigger:** Same slice. The plan-grounding scout was told to work in the
+  never-fail-compile worktree but read the stale primary checkout
+  (feat/guides-rewrite-all, which predates the record feature) and returned
+  five false claims — "recap-panel.tsx doesn't exist", "no gate.ts", "no
+  SF_RECORD_TO_AGENT flag", "compile route missing", journal idx 43 (real:
+  48). All five contradicted facts already verified firsthand, which is the
+  only reason the report was caught and discarded instead of encoded into
+  the plan (L-16's exact failure mode, worktree edition).
+- **Rule:** Every scout/subagent prompt that targets a worktree opens with a
+  mandatory first step: run `pwd` and `git rev-parse HEAD` and include both
+  in the report; the controller checks the sha against the intended branch
+  before reading further. Additionally, before USING any scout report, the
+  controller verifies ONE load-bearing claim it already knows the answer to
+  — a report that fails its canary is discarded wholesale, not partially
+  trusted.
