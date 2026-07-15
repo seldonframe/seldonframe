@@ -14,6 +14,7 @@ import { monthYearToIso } from "@/lib/seo/month-iso";
 import { GuideDiagramView, GuideDiagramStyles, faviconUrl } from "@/components/seo/guide-diagrams";
 import type { GuideCallout } from "@/lib/seo/guides/types";
 import { tokenizeInlineMarkup, stripInlineMarkup, startsWithKindOfLike } from "@/lib/seo/guide-inline";
+import { ChatGptCtaButton } from "@/components/seo/chatgpt-cta";
 
 /** Split a section body into paragraphs on blank lines. */
 function paragraphs(body: string): string[] {
@@ -182,6 +183,7 @@ export function GuidePage({ slug }: { slug: string }): ReactElement {
               <Link href="/signup" className="sf-link" style={{ border: `1.5px solid ${MKT.ink10}`, color: MKT.ink, padding: "11px 22px", borderRadius: 12, fontWeight: 700, fontSize: 15, textDecoration: "none", background: "rgba(255,255,255,0.5)" }}>
                 Build free
               </Link>
+              <ChatGptCtaButton />
             </div>
           </div>
 

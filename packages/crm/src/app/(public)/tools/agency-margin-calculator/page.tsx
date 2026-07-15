@@ -9,6 +9,7 @@ import { MarketplaceStyles } from "@/components/marketplace/marketplace-styles";
 import { MKT } from "@/components/marketplace/marketplace-data";
 import { AgencyMarginCalculator } from "@/components/seo/agency-margin-calculator";
 import { BuildWidget } from "@/components/seo/build-widget";
+import { ChatGptCtaCard } from "@/components/seo/chatgpt-cta";
 import { buildOgUrl } from "@/lib/seo/og-card";
 import { isWebUngatedBuildOn } from "@/lib/web-build/policy";
 
@@ -134,6 +135,7 @@ export default function AgencyMarginCalculatorPage(): ReactElement {
         </section>
 
         <BuildWidget ungatedBuildEnabled={isWebUngatedBuildOn({ SF_WEB_UNGATED_BUILD: process.env.SF_WEB_UNGATED_BUILD })} />
+        <ChatGptCtaCard />
       </main>
       <MarketplaceFooter />
     </div>

@@ -18,6 +18,7 @@ import type { ReactElement } from "react";
 import Link from "next/link";
 import { MarketplaceIcon } from "@/components/marketplace/marketplace-icons";
 import { MKT } from "@/components/marketplace/marketplace-data";
+import { ChatGptCtaButton } from "@/components/seo/chatgpt-cta";
 
 export type AgentPageCtaProps = {
   /** Display name of the agent (for the deploy headline). */
@@ -158,6 +159,8 @@ export function AgentPageCta({
             <MarketplaceIcon name="terminal" size={17} />
             Rent via MCP
           </button>
+
+          <ChatGptCtaButton dark />
         </div>
 
         {mcpOpen ? (

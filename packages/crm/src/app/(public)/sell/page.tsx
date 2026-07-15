@@ -12,6 +12,7 @@ import { MarketplaceNav, MarketplaceFooter } from "@/components/marketplace/mark
 import { MarketplaceStyles } from "@/components/marketplace/marketplace-styles";
 import { MKT } from "@/components/marketplace/marketplace-data";
 import { guidesInCluster } from "@/lib/seo/guides";
+import { ChatGptCtaButton } from "@/components/seo/chatgpt-cta";
 
 export const metadata: Metadata = {
   title: "Sell AI Agents: Direct, White-Label, Marketplace, or MCP | SeldonFrame",
@@ -105,6 +106,7 @@ export default function SellHubPage(): ReactElement {
           <Link href="/guides" className="sf-link" style={{ border: `1.5px solid ${MKT.ink10}`, color: MKT.ink, padding: "11px 22px", borderRadius: 12, fontWeight: 700, fontSize: 15, textDecoration: "none", background: "rgba(255,255,255,0.5)" }}>
             Browse all guides
           </Link>
+          <ChatGptCtaButton />
         </div>
 
         <section style={{ marginTop: 44 }}>
