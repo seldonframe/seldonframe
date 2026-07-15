@@ -87,6 +87,12 @@ export function TryClient({ initialUrl }: { initialUrl: string }) {
   const [done, setDone] = useState<DoneData | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [rateLimited, setRateLimited] = useState(false);
+  // 2026-07-14 — extraction-failed honesty fix. extraction_failed is a
+  // PERMANENT condition for that URL (the site genuinely has no phone/name/
+  // location we could find) — "Try again" would just fail identically and
+  // burn the visitor's rate limit. See run-create-from-url.ts's step-5 catch
+  // for the server-side `message` this reads.
+  const [extractionFailed, setExtractionFailed] = useState(false);
   const esRef = useRef<EventSource | null>(null);
   const autoSubmittedRef = useRef(false);
 
@@ -133,7 +139,7 @@ export function TryClient({ initialUrl }: { initialUrl: string }) {
 
     es.addEventListener("error", (raw) => {
       const payload = (raw as MessageEvent).data;
-      let data: { code?: string; message?: string } = {};
+      let data: { code?: string; reason?: string; message?: string } = {};
       try {
         if (typeof payload === "string" && payload.length > 0) {
           data = JSON.parse(payload);
@@ -143,8 +149,15 @@ export function TryClient({ initialUrl }: { initialUrl: string }) {
       }
       es.close();
       setEventSource(null);
+      const isExtractionFailed = data.reason === "extraction_failed";
       setRateLimited(data.code === "rate_limited");
-      setError(data.message ?? "Something broke on our end. Give it another try.");
+      setExtractionFailed(isExtractionFailed);
+      setError(
+        data.message ??
+          (isExtractionFailed
+            ? "We read that site but couldn't find the basics we need — a business name, location, and phone number. Try a different URL, or describe your business instead."
+            : "Something broke on our end. Give it another try."),
+      );
       setPhase("error");
     });
   }
@@ -168,6 +181,7 @@ export function TryClient({ initialUrl }: { initialUrl: string }) {
     setDone(null);
     setError(null);
     setRateLimited(false);
+    setExtractionFailed(false);
     setBuildInput(null);
   }
 
@@ -321,6 +335,28 @@ export function TryClient({ initialUrl }: { initialUrl: string }) {
                   >
                     Sign up to keep building
                   </a>
+                ) : extractionFailed ? (
+                  // extraction_failed is a permanent condition for this URL —
+                  // no "Try again" (it would just fail identically). Offer
+                  // the two honest paths instead: pick a different URL, or
+                  // sign up to describe the business instead (the anonymous
+                  // paste/describe path isn't public — see the file-header
+                  // deviation note).
+                  <div className="mt-3 flex flex-wrap items-center gap-3">
+                    <button
+                      type="button"
+                      onClick={reset}
+                      className="rounded-[11px] border border-[rgba(34,29,23,.16)] bg-[#FFFDFA] px-4 py-2 text-[13.5px] font-[500] text-[#221D17]"
+                    >
+                      Try a different URL
+                    </button>
+                    <a
+                      href="/signup"
+                      className="inline-flex items-center gap-1.5 rounded-[11px] bg-[#1F2B24] px-4 py-2 text-[13.5px] font-[600] text-[#FFFDFA]"
+                    >
+                      Describe your business instead
+                    </a>
+                  </div>
                 ) : (
                   <button
                     type="button"

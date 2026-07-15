@@ -202,6 +202,26 @@ describe("runCreateFromUrl", () => {
     const text = await readAll(sse.stream);
     assert.match(text, /event: error\n.*"code":422.*extraction_failed/);
   });
+
+  // 2026-07-14 — extraction-failed honesty fix. The extraction_failed 422
+  // is a PERMANENT condition for that URL (no phone/name/location found on
+  // the site at all) — retrying is futile, so the SSE payload must carry an
+  // honest `message` the client can show instead of "Something broke on our
+  // end. Give it another try." Other reasons are untouched.
+  test("extraction_failed 422 carries a `message` explaining what's missing", async () => {
+    const deps = { ...baseDeps(), extractBusinessFactsFromUrl: async () => { const e = new Error("bad output"); (e as any).reason = "extraction_failed"; (e as any).name = "WebFetchError"; throw e; } };
+    const sse = await runCreateFromUrl({ deps, body: { url: "https://x.com" }, sessionUser: { id: "u1", primaryOrgId: "o1" } });
+    const text = await readAll(sse.stream);
+    assert.match(text, /event: error\n.*"code":422.*"reason":"extraction_failed".*"message":"/);
+  });
+
+  test("a different reason (e.g. anthropic_unauthorized) carries no `message`", async () => {
+    const deps = { ...baseDeps(), extractBusinessFactsFromUrl: async () => { const e = new Error("bad key"); (e as any).reason = "anthropic_unauthorized"; (e as any).name = "WebFetchError"; throw e; } };
+    const sse = await runCreateFromUrl({ deps, body: { url: "https://x.com" }, sessionUser: { id: "u1", primaryOrgId: "o1" } });
+    const text = await readAll(sse.stream);
+    assert.match(text, /event: error\n.*"code":422.*"reason":"anthropic_unauthorized"/);
+    assert.ok(!text.includes('"message"'), "non-extraction_failed reasons must not carry a message");
+  });
 });
 
 // 2026-06-23 — Deploy-CTA → instantiate-the-clicked-agent wiring. The
