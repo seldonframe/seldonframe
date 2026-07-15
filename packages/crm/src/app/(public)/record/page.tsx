@@ -26,6 +26,7 @@ import { auth } from "@/auth";
 import { isRecordToAgentOn } from "@/lib/recordings/policy";
 import { isWebUngatedBuildOn } from "@/lib/web-build/policy";
 import { isDraftApprovalsOn } from "@/lib/agent-drafts/policy";
+import { redirectToAppHostIfNeeded } from "@/lib/auth/app-host-redirect";
 import { UnifiedLanding } from "../unified-landing";
 
 /** SF_TIER_LADDER (2026-07-08) — same strict-"1" contract as the other
@@ -41,7 +42,7 @@ export const metadata: Metadata = {
   description:
     "Screen-record yourself doing the job once. Seldon watches, asks about what it didn't understand, and compiles a working agent — free to try, no signup.",
   robots: { index: true, follow: true },
-  alternates: { canonical: "https://www.seldonframe.com/record" },
+  alternates: { canonical: "https://app.seldonframe.com/record" },
   openGraph: {
     title: "Turn a screen recording into a working AI agent — SeldonFrame",
     description:
@@ -59,6 +60,16 @@ export default async function RecordPage({
 }) {
   if (!isRecordToAgentOn({ SF_RECORD_TO_AGENT: process.env.SF_RECORD_TO_AGENT })) notFound();
   const params = await searchParams;
+
+  // 2026-07-15 — claim-flow origin fix: pin to the app host BEFORE the
+  // auth() call so the session cookie read happens on the right host (the
+  // host-only session cookie is otherwise invisible on www — see
+  // docs/superpowers/specs/2026-07-15-claim-flow-origin-fix-design.md).
+  const search = new URLSearchParams(
+    Object.entries({ session: params.session, claimed: params.claimed, shared: params.shared })
+      .filter((pair): pair is [string, string] => typeof pair[1] === "string"),
+  ).toString();
+  await redirectToAppHostIfNeeded("/record", search ? `?${search}` : "");
 
   // 2026-07-10 — live-test fix: an already-signed-in visitor clicking the
   // claim CTA was hopped through /signup, which 307's a signed-in user

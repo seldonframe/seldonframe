@@ -433,3 +433,21 @@ describe("toInternalRedirectPath", () => {
     assert.equal(toInternalRedirectPath(42), null);
   });
 });
+
+describe("SAFE_REDIRECT_PREFIXES — /record (claim-flow origin fix)", () => {
+  test("accepts /record and /record with claim query", () => {
+    assert.equal(toInternalRedirectPath("/record"), "/record");
+    assert.equal(
+      toInternalRedirectPath("/record?session=abc&claimed=1"),
+      "/record?session=abc&claimed=1",
+    );
+  });
+  test("segment boundary: /recordings and /recordx still rejected", () => {
+    assert.equal(toInternalRedirectPath("/recordings"), null);
+    assert.equal(toInternalRedirectPath("/recordx?session=a"), null);
+  });
+  test("traversal and protocol-relative still rejected", () => {
+    assert.equal(toInternalRedirectPath("//record"), null);
+    assert.equal(toInternalRedirectPath("/record/../oauth/authorize"), null);
+  });
+});

@@ -75,9 +75,17 @@ export default async function sitemap(): Promise<MetadataRoute.Sitemap> {
   }
 
   // /record — indexable only when the record-to-agent flow is on (a 404ing
-  // route must never be sitemapped).
+  // route must never be sitemapped). 2026-07-15 — claim-flow origin fix moved
+  // /record's canonical to the app host (page.tsx now host-pins www → app), so
+  // the sitemap entry is emitted against the app origin explicitly rather than
+  // `base` (which stays the marketing host for every other entry).
   if (isRecordToAgentOn({ SF_RECORD_TO_AGENT: process.env.SF_RECORD_TO_AGENT })) {
-    entries.push({ url: `${base}/record`, lastModified: now, changeFrequency: "monthly", priority: 0.8 });
+    entries.push({
+      url: "https://app.seldonframe.com/record",
+      lastModified: now,
+      changeFrequency: "monthly",
+      priority: 0.8,
+    });
   }
 
   // The sell-agents hub (targets "sell ai agents").
