@@ -24,7 +24,14 @@ Spec (approved in chat): docs/superpowers/specs/2026-07-15-reflect-decision-loop
       algorithms-bias = bias-in-algorithms framing, not Meehl)
 - [x] End-to-end verify: reflect ran on "wire reflect into ship-feature?" — quick-pass routing,
       output shape, and LOG.md write all confirmed (first real entry logged)
-- [ ] Commit → push → PR to main
+- [x] Commit → push → PR #84 to main
+
+**Review:** Shipped in one pass. 7 parallel fetch agents, 24/24 URLs fetched live (no
+paywalls, no fallbacks). Two fidelity catches from fetching the real articles instead of
+trusting title-based assumptions: break-the-chain is about obligation/dependency chains
+(not mistake cascades) and algorithms-bias is Fry-style bias-in-algorithms (not Meehl) —
+SKILL.md + index corrected to match. Loop verified end-to-end with a real logged decision.
+Lesson: when compacting external sources, fetch before framing — 2 of 24 titles lied.
 
 ### Task — Green-main slices 2+3: stale UI expectations + archetype invariant (2026-07-10, branch fix/ci-stale-test-expectations)
 
