@@ -9,6 +9,7 @@ import { MarketplaceStyles } from "@/components/marketplace/marketplace-styles";
 import { MKT } from "@/components/marketplace/marketplace-data";
 import { HubspotPricingCalculator } from "@/components/seo/hubspot-pricing-calculator";
 import { BuildWidget } from "@/components/seo/build-widget";
+import { ChatGptCtaCard } from "@/components/seo/chatgpt-cta";
 import { isWebUngatedBuildOn } from "@/lib/web-build/policy";
 import { buildOgUrl } from "@/lib/seo/og-card";
 import { getCompetitorPricing } from "@/lib/seo/competitor-pricing";
@@ -147,6 +148,7 @@ export default function HubspotPricingCalculatorPage(): ReactElement {
         </section>
 
         <BuildWidget ungatedBuildEnabled={isWebUngatedBuildOn({ SF_WEB_UNGATED_BUILD: process.env.SF_WEB_UNGATED_BUILD })} />
+        <ChatGptCtaCard />
       </main>
       <MarketplaceFooter />
     </div>

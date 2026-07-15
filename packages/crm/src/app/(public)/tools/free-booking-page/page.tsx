@@ -15,6 +15,7 @@ import { MarketplaceStyles } from "@/components/marketplace/marketplace-styles";
 import { MKT } from "@/components/marketplace/marketplace-data";
 import { AuthorByline, articleLd } from "@/components/seo/author-byline";
 import { BuildWidget } from "@/components/seo/build-widget";
+import { ChatGptCtaCard } from "@/components/seo/chatgpt-cta";
 import { isWebUngatedBuildOn } from "@/lib/web-build/policy";
 import { buildOgUrl } from "@/lib/seo/og-card";
 
@@ -108,6 +109,7 @@ export default function FreeBookingPagePage(): ReactElement {
         </p>
 
         <BuildWidget ungatedBuildEnabled={ungatedBuildEnabled} heading="Get your booking page free" />
+        <ChatGptCtaCard />
 
         <section style={{ padding: "40px 0 0" }}>
           <h2 style={{ margin: "0 0 14px", fontSize: 24, fontWeight: 800, letterSpacing: "-0.02em" }}>What's included</h2>
