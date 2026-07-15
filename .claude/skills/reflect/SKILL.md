@@ -69,9 +69,9 @@ Your call stands only if it survives.
 
 > **THE CALL:** one plain sentence — what I'd do
 > **HOW SURE:** ~X%
-> **DO THIS NEXT:** the single next step (a runnable test beats more analysis)
+> **DO THIS NEXT:** the single next step — at least one probe runnable TODAY (a runnable test beats more analysis)
 > **THE CASE AGAINST:** the best opposing argument — it earned this line by losing
-> **THIS FLIPS IF:** the 1-3 things that would change this answer
+> **THIS FLIPS IF:** the 1-3 things that would change this answer — each a complete tripwire: a number or date, a forcing mechanism, and who acts
 
 Full reasoning below the card. Plain words; famous names fine (Bezos, Munger),
 framework jargon never. If nothing would flip the call, the analysis was
