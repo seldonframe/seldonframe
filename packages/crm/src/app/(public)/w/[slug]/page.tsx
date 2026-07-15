@@ -36,19 +36,11 @@ import { buildWorkspaceUrls } from "@/lib/billing/anonymous-workspace";
 import { getPublicChatbotEmbed } from "@/lib/agents/public-embed";
 import { submittedSoulToTemplateData } from "@/lib/landing/r1-payload-to-template";
 import { renderLandingTemplate } from "@/lib/landing/render-landing-template";
-import { WEB_UNGATED_ORIGIN } from "@/lib/web-build/policy";
+import { shouldIndexWorkspace } from "@/lib/web-build/policy";
 
 type PageProps = {
   params: Promise<{ slug: string }>;
 };
-
-// Task 8: unclaimed anonymous web-build workspaces (created via the /try
-// paste-box flow, no owner attached yet) stay out of the search index until
-// claimed via signup. Claimed workspaces and every non-web-build workspace
-// keep the existing indexable behavior.
-function shouldIndexWorkspace(ownerId: string | null, settings: Record<string, unknown>): boolean {
-  return !(ownerId === null && settings["origin"] === WEB_UNGATED_ORIGIN);
-}
 
 export async function generateMetadata({ params }: PageProps): Promise<Metadata> {
   const { slug } = await params;
