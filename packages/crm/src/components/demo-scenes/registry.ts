@@ -33,6 +33,26 @@ export const DEMO_SCENES: DemoSceneMeta[] = [
     title: "Stat payoff",
     blurb: "One URL, four counted wins, and the pricing anchor line.",
   },
+  {
+    id: "grounded-chat",
+    title: "Grounded chat",
+    blurb: "A grounded reply and a real booking confirmation, played back.",
+  },
+  {
+    id: "sms-phone",
+    title: "SMS phone",
+    blurb: "A booking-confirmation text arriving on a CSS-only phone frame.",
+  },
+  {
+    id: "live-confetti",
+    title: "Live confetti",
+    blurb: "The workspace-is-live headline with a confetti burst.",
+  },
+  {
+    id: "docker-terminal",
+    title: "Docker terminal",
+    blurb: "docker compose up -d, staggered to SeldonFrame running locally.",
+  },
 ];
 
 export function getDemoScene(id: string): DemoSceneMeta | null {

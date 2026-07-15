@@ -14,6 +14,10 @@ import { DEMO_SCENES } from "./registry";
 import { StatPayoffScene } from "./stat-payoff";
 import { BookingCascadeScene } from "./booking-cascade";
 import { CalendarConnectedScene } from "./calendar-connected";
+import { GroundedChatScene } from "./grounded-chat";
+import { SmsPhoneScene } from "./sms-phone";
+import { LiveConfettiScene } from "./live-confetti";
+import { DockerTerminalScene } from "./docker-terminal";
 
 // Every scene component accepts the same `loop` prop — whether it re-plays
 // once it reaches its resting frame, or holds there (see scene-stage.tsx's
@@ -24,6 +28,10 @@ export const SCENE_COMPONENTS: Record<string, DemoSceneComponent> = {
   "booking-cascade": BookingCascadeScene,
   "calendar-connected": CalendarConnectedScene,
   "stat-payoff": StatPayoffScene,
+  "grounded-chat": GroundedChatScene,
+  "sms-phone": SmsPhoneScene,
+  "live-confetti": LiveConfettiScene,
+  "docker-terminal": DockerTerminalScene,
 };
 
 export function getSceneComponent(id: string): DemoSceneComponent | null {
