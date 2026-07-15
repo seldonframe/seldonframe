@@ -35,6 +35,7 @@ import {
   parseBuildWorkspaceArgs,
   parseBrowseArgs,
   parseDeployArgs,
+  extractOpenAiMeta,
   formatMarketplaceList,
   formatBuildResult,
   formatDeployResult,
@@ -42,6 +43,7 @@ import {
   BROWSE_MARKETPLACE_TOOL,
   DEPLOY_AGENT_TOOL,
   type BuildWorkspaceArgs,
+  type OpenAiCallMeta,
 } from "./chatgpt-mcp-rpc";
 import type { MarketplaceAgentRow } from "@/lib/marketplace/agent-listings";
 import { captureMcpToolCall } from "@/lib/analytics/mcp-capture";
@@ -74,10 +76,11 @@ export type DeployAgentResult = {
 };
 
 export type ChatGptMcpDeps = {
-  /** Create a complete anonymous workspace from the parsed build args. Applies
-   *  the same IP rate-limit the anonymous route uses (throws a friendly Error on
-   *  limit → surfaces as a tool isError). */
-  buildWorkspace: (args: BuildWorkspaceArgs) => Promise<BuildWorkspaceResult>;
+  /** Create a complete anonymous workspace from the parsed build args. Rate-
+   *  limits per ChatGPT user via meta.subject (_meta["openai/subject"]) with a
+   *  coarse per-IP backstop — see rate-limit-plan.ts (throws a friendly Error
+   *  on limit → surfaces as a tool isError). */
+  buildWorkspace: (args: BuildWorkspaceArgs, meta: OpenAiCallMeta) => Promise<BuildWorkspaceResult>;
   /** List published marketplace agents, filtered. Public — no auth. */
   browse: (filters: { query?: string; niche?: string }) => Promise<MarketplaceAgentRow[]>;
   /** Deploy an agent into the workspace identified by the bearer token. */
@@ -150,6 +153,9 @@ async function handleToolsCall(
     typeof params.arguments === "object" && params.arguments !== null && !Array.isArray(params.arguments)
       ? (params.arguments as Record<string, unknown>)
       : {};
+  // OpenAI stamps _meta["openai/subject"] (anonymized per-user id — the
+  // rate-limit + analytics key) and _meta["openai/session"] on tool calls.
+  const meta = extractOpenAiMeta(params);
 
   switch (toolName) {
     case BUILD_WORKSPACE_TOOL: {
@@ -157,8 +163,8 @@ async function handleToolsCall(
       if (!parsed.ok) {
         return { status: 200, body: jsonRpcError(id, JSONRPC_INVALID_PARAMS, `Invalid params: ${parsed.error}`) };
       }
-      return runTool(id, toolName, args, deps, async () => {
-        const result = await deps.buildWorkspace(parsed.value);
+      return runTool(id, toolName, args, meta, deps, async () => {
+        const result = await deps.buildWorkspace(parsed.value, meta);
         return toolResult(formatBuildResult(result), { ...result });
       });
     }
@@ -168,7 +174,7 @@ async function handleToolsCall(
       if (!parsed.ok) {
         return { status: 200, body: jsonRpcError(id, JSONRPC_INVALID_PARAMS, `Invalid params: ${parsed.error}`) };
       }
-      return runTool(id, toolName, args, deps, async () => {
+      return runTool(id, toolName, args, meta, deps, async () => {
         const rows = await deps.browse(parsed.value);
         // structuredContent mirrors the DECLARED output schema exactly — the
         // raw MarketplaceAgentRow carries extra columns (price, rating, …)
@@ -188,7 +194,7 @@ async function handleToolsCall(
       if (!parsed.ok) {
         return { status: 200, body: jsonRpcError(id, JSONRPC_INVALID_PARAMS, `Invalid params: ${parsed.error}`) };
       }
-      return runTool(id, toolName, args, deps, async () => {
+      return runTool(id, toolName, args, meta, deps, async () => {
         const result = await deps.deploy({ workspaceToken: parsed.value.workspace_token, slug: parsed.value.agent_slug });
         if (!result.ok) {
           // A handled failure (e.g. expired token, unknown slug) → tool-level
@@ -224,6 +230,7 @@ async function runTool(
   id: JsonRpcId,
   toolName: string,
   args: Record<string, unknown>,
+  meta: OpenAiCallMeta,
   deps: ChatGptMcpDeps,
   body: () => Promise<Record<string, unknown>>,
 ): Promise<RpcOutcome> {
@@ -231,13 +238,14 @@ async function runTool(
   // PostHog MCP-analytics ($mcp_tool_call) — fire-and-silent, no-op without a
   // configured key, never blocks/throws into this response path. This server
   // is public/keyless (no bearer, no resolvable org at call time — see the
-  // file header), so distinctId/orgId fall back to "anonymous" per the
-  // helper's documented contract.
+  // file header). OpenAI's anonymized per-user subject (when present) becomes
+  // the distinct id so one ChatGPT user's build→browse→deploy funnel
+  // correlates; otherwise fall back to "anonymous" per the helper's contract.
   const capture = (success: boolean, errorCode?: string) =>
     captureMcpToolCall({
       surface: "chatgpt",
       tool: toolName,
-      distinctId: "anonymous",
+      distinctId: meta.subject ? `openai_${meta.subject}` : "anonymous",
       orgId: null,
       success,
       durationMs: Date.now() - startedAt,

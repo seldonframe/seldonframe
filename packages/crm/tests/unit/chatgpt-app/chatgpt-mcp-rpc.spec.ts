@@ -14,6 +14,8 @@ import {
   parseBrowseArgs,
   parseDeployArgs,
   assembleWorkspaceSource,
+  extractOpenAiMeta,
+  withChatGptRef,
   formatMarketplaceList,
   formatBuildResult,
   formatDeployResult,
@@ -238,6 +240,68 @@ describe("assembleWorkspaceSource", () => {
 
   test("returns an empty string when nothing is provided", () => {
     assert.equal(assembleWorkspaceSource({}), "");
+  });
+});
+
+// ─── extractOpenAiMeta ───────────────────────────────────────────────────────
+
+describe("extractOpenAiMeta", () => {
+  test("reads openai/subject + openai/session from params._meta", () => {
+    const meta = extractOpenAiMeta({
+      name: "build_workspace",
+      arguments: { business_name: "Acme" },
+      _meta: { "openai/subject": "sub_abc123", "openai/session": "sess_xyz789" },
+    });
+    assert.equal(meta.subject, "sub_abc123");
+    assert.equal(meta.session, "sess_xyz789");
+  });
+
+  test("missing _meta → both undefined (a non-ChatGPT MCP caller)", () => {
+    const meta = extractOpenAiMeta({ name: "build_workspace", arguments: {} });
+    assert.equal(meta.subject, undefined);
+    assert.equal(meta.session, undefined);
+  });
+
+  test("blank / non-string / non-object shapes never yield a subject", () => {
+    assert.equal(extractOpenAiMeta({ _meta: { "openai/subject": "   " } }).subject, undefined);
+    assert.equal(extractOpenAiMeta({ _meta: { "openai/subject": 42 } }).subject, undefined);
+    assert.equal(extractOpenAiMeta({ _meta: "not-an-object" }).subject, undefined);
+    assert.equal(extractOpenAiMeta({ _meta: ["openai/subject"] }).subject, undefined);
+  });
+
+  test("trims and caps runaway ids (they become rate-limit keys)", () => {
+    const meta = extractOpenAiMeta({ _meta: { "openai/subject": `  ${"s".repeat(500)}  ` } });
+    assert.ok(meta.subject);
+    assert.ok(meta.subject!.length <= 128, "subject must be length-capped");
+    assert.equal(meta.subject, "s".repeat(128));
+  });
+});
+
+// ─── withChatGptRef ──────────────────────────────────────────────────────────
+
+describe("withChatGptRef", () => {
+  test("appends ref=chatgpt to a bare URL", () => {
+    assert.equal(
+      withChatGptRef("https://acme.app.seldonframe.com"),
+      "https://acme.app.seldonframe.com/?ref=chatgpt",
+    );
+  });
+
+  test("preserves existing query params (the token-bearing claim URL)", () => {
+    const out = withChatGptRef("https://app.seldonframe.com/admin/org-1?token=tok_abc");
+    const u = new URL(out);
+    assert.equal(u.searchParams.get("token"), "tok_abc");
+    assert.equal(u.searchParams.get("ref"), "chatgpt");
+  });
+
+  test("is idempotent (never stacks a second ref param)", () => {
+    const once = withChatGptRef("https://app.seldonframe.com/w/acme");
+    const twice = withChatGptRef(once);
+    assert.equal(twice, once);
+  });
+
+  test("an unparseable URL is returned unchanged (never throws)", () => {
+    assert.equal(withChatGptRef("not a url"), "not a url");
   });
 });
 

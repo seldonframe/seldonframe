@@ -40,6 +40,7 @@ const ROWS: MarketplaceAgentRow[] = [
 type Harness = {
   deps: ChatGptMcpDeps;
   built: Array<Record<string, unknown>>;
+  builtMeta: Array<{ subject?: string; session?: string }>;
   browsed: Array<{ query?: string; niche?: string }>;
   deployed: Array<{ workspaceToken: string; slug: string }>;
 };
@@ -50,14 +51,16 @@ function makeHarness(overrides?: {
   deploy?: ChatGptMcpDeps["deploy"];
 }): Harness {
   const built: Array<Record<string, unknown>> = [];
+  const builtMeta: Array<{ subject?: string; session?: string }> = [];
   const browsed: Array<{ query?: string; niche?: string }> = [];
   const deployed: Array<{ workspaceToken: string; slug: string }> = [];
 
   const deps: ChatGptMcpDeps = {
     buildWorkspace:
       overrides?.buildWorkspace ??
-      (async (args) => {
+      (async (args, meta) => {
         built.push(args as unknown as Record<string, unknown>);
+        builtMeta.push(meta);
         return {
           url: "https://acme.app.seldonframe.com",
           claimUrl: "https://app.seldonframe.com/admin/org-1?token=tok",
@@ -79,7 +82,7 @@ function makeHarness(overrides?: {
     now: () => NOW,
   };
 
-  return { deps, built, browsed, deployed };
+  return { deps, built, builtMeta, browsed, deployed };
 }
 
 function rpc(method: string, params?: unknown, id: number | string | null = 1) {
@@ -168,6 +171,34 @@ describe("handleChatGptRpc — build_workspace", () => {
     const structured = result.structuredContent as { url?: string; workspaceToken?: string };
     assert.equal(structured.url, "https://acme.app.seldonframe.com");
     assert.equal(structured.workspaceToken, "wst_fake_token");
+  });
+
+  test("_meta openai/subject + openai/session flow through to deps.buildWorkspace (per-user rate limiting)", async () => {
+    const h = makeHarness();
+    const out = await handleChatGptRpc(
+      rpc("tools/call", {
+        name: "build_workspace",
+        arguments: { business_name: "Acme HVAC" },
+        _meta: { "openai/subject": "sub_user_1", "openai/session": "sess_42" },
+      }),
+      h.deps,
+    );
+    assert.equal(out.status, 200);
+    assert.equal(h.builtMeta.length, 1);
+    assert.equal(h.builtMeta[0].subject, "sub_user_1");
+    assert.equal(h.builtMeta[0].session, "sess_42");
+  });
+
+  test("no _meta (a non-ChatGPT MCP caller) → empty meta, build still works", async () => {
+    const h = makeHarness();
+    const out = await handleChatGptRpc(
+      rpc("tools/call", { name: "build_workspace", arguments: { business_name: "Acme HVAC" } }),
+      h.deps,
+    );
+    assert.equal(out.status, 200);
+    assert.equal(h.builtMeta.length, 1);
+    assert.equal(h.builtMeta[0].subject, undefined);
+    assert.equal(h.builtMeta[0].session, undefined);
   });
 
   test("missing business_name → -32602 (validation), dep not called", async () => {
