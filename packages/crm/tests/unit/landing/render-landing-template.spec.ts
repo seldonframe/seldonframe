@@ -35,9 +35,21 @@ before(() => {
   process.env.WORKSPACE_BASE_DOMAIN = "app.seldonframe.com";
 });
 
+import type { ReactElement } from "react";
+
 import { renderLandingTemplate } from "../../../src/lib/landing/render-landing-template";
 import { LANDING_TEMPLATES } from "../../../src/components/landing-templates/registry";
 import type { R1LandingPayload } from "../../../src/lib/landing/r1-payload-prompt";
+import type { TemplateProps } from "../../../src/components/landing-templates/_contract/types";
+
+// The function returns a plain (untyped-at-the-call-site) ReactElement | null
+// per its signature; this helper narrows it to the template's known props
+// shape so tests can read `.props.data` / `.props.ctas` / `.props.theme`
+// without `unknown` errors, and asserts non-null in one place.
+function props(el: ReactElement | null): TemplateProps {
+  assert.ok(el, "expected a non-null element");
+  return (el as ReactElement<TemplateProps>).props;
+}
 
 // ── Representative r1 fixture (mirrors r1-payload-to-template.spec.ts) ────────
 const fullPayload: R1LandingPayload = {
@@ -153,17 +165,17 @@ describe("renderLandingTemplate — case 2: registered id + r1 payload", () => {
   });
 
   test("props.data.business_name comes from the r1 payload", () => {
-    assert.equal(result!.props.data.business_name, "Austin Family Chiropractic");
+    assert.equal(props(result).data.business_name, "Austin Family Chiropractic");
   });
 
   test("props.ctas.bookUrl/intakeUrl are workspace-scoped", () => {
-    assert.match(result!.props.ctas.bookUrl, /austin-family-chiro/);
-    assert.ok(result!.props.ctas.intakeUrl, "expected an intakeUrl");
-    assert.match(result!.props.ctas.intakeUrl, /austin-family-chiro/);
+    assert.match(props(result).ctas.bookUrl, /austin-family-chiro/);
+    assert.ok(props(result).ctas.intakeUrl, "expected an intakeUrl");
+    assert.match(props(result).ctas.intakeUrl!, /austin-family-chiro/);
   });
 
   test("props.ctas.callHref is tel-normalized from the payload phone", () => {
-    assert.equal(result!.props.ctas.callHref, "tel:5125550182");
+    assert.equal(props(result).ctas.callHref, "tel:5125550182");
   });
 });
 
@@ -178,13 +190,12 @@ describe("renderLandingTemplate — case 3: r1 null + soul fallback", () => {
   });
 
   test("returns an element mapped via submittedSoulToTemplateData", () => {
-    assert.ok(result);
-    assert.equal(result!.props.data.business_name, "Riverside Physiotherapy");
-    assert.equal(result!.props.data.tagline, "Move better, live stronger");
+    assert.equal(props(result).data.business_name, "Riverside Physiotherapy");
+    assert.equal(props(result).data.tagline, "Move better, live stronger");
   });
 
   test("ctas.callHref derives from the soul's phone", () => {
-    assert.equal(result!.props.ctas.callHref, "tel:6045550144");
+    assert.equal(props(result).ctas.callHref, "tel:6045550144");
   });
 });
 
@@ -198,8 +209,8 @@ describe("renderLandingTemplate — case 4: explicit archetype re-skin", () => {
       soul: null,
       themeArchetype: undefined,
     });
-    assert.ok(result!.props.theme, "expected a theme object");
-    assert.ok(result!.props.theme.primary, "expected a primary color token");
+    assert.ok(props(result).theme, "expected a theme object");
+    assert.ok(props(result).theme!.primary, "expected a primary color token");
   });
 
   test("themeArchetype used when r1.archetype absent (r1: null case)", () => {
@@ -211,7 +222,7 @@ describe("renderLandingTemplate — case 4: explicit archetype re-skin", () => {
       soul: rawSoul,
       themeArchetype: "cinematic-aspirational",
     });
-    assert.ok(result!.props.theme, "expected a theme object");
+    assert.ok(props(result).theme, "expected a theme object");
   });
 
   test("r1.archetype wins over themeArchetype when both present", () => {
@@ -235,7 +246,7 @@ describe("renderLandingTemplate — case 4: explicit archetype re-skin", () => {
     // the palettes happen to collide, which bold-urgency/clinical-trust do
     // not in this registry) — proves r1.archetype (not themeArchetype) drove
     // the first result even though themeArchetype was also present.
-    assert.notDeepEqual(winsWithBoldUrgency!.props.theme, clinicalTrustOnly!.props.theme);
+    assert.notDeepEqual(props(winsWithBoldUrgency).theme, props(clinicalTrustOnly).theme);
   });
 });
 
@@ -249,7 +260,7 @@ describe("renderLandingTemplate — case 5: no archetype / unknown archetype", (
       soul: rawSoul,
       themeArchetype: undefined,
     });
-    assert.equal(result!.props.theme, undefined);
+    assert.equal(props(result).theme, undefined);
   });
 
   test("unknown archetype string → props.theme is undefined", () => {
@@ -261,7 +272,7 @@ describe("renderLandingTemplate — case 5: no archetype / unknown archetype", (
       soul: rawSoul,
       themeArchetype: "not-a-real-archetype",
     });
-    assert.equal(result!.props.theme, undefined);
+    assert.equal(props(result).theme, undefined);
   });
 });
 
@@ -275,7 +286,7 @@ describe("renderLandingTemplate — case 6: withTemplateDefaults fills empty pho
       soul: null,
       themeArchetype: undefined,
     });
-    const photos = result!.props.data.photos as Array<{ role?: string; url: string }> | undefined;
+    const photos = props(result).data.photos;
     assert.ok(Array.isArray(photos) && photos.length > 1, "expected multiple photos after default fill");
     const roles = new Set(photos!.map((p) => p.role));
     assert.ok(roles.has("hero"), "expected a hero photo");
