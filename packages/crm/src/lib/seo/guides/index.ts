@@ -102,6 +102,7 @@ import { guide as whatIsByokAi } from "./what-is-byok-ai";
 import { guide as howDoAiAgentsGetPaid } from "./how-do-ai-agents-get-paid";
 import { guide as howToMakeAnAiAgentReliable } from "./how-to-make-an-ai-agent-reliable";
 import { guide as aiAgentStatistics } from "./ai-agent-statistics";
+import { guide as isGeoLegit } from "./is-geo-legit";
 
 export { LAST_UPDATED };
 export type { Guide, GuideCluster, GuideSection, GuideFaq, GuideSource, GuideIntent } from "./types";
@@ -216,6 +217,7 @@ export const GUIDES: Guide[] = [
   howToChooseAnAiPhoneAnsweringService,
   howToAskForAGoogleReview,
   reviewResponseTemplates,
+  isGeoLegit,
 ];
 
 export function getGuide(slug: string): Guide {
