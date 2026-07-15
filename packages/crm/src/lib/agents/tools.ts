@@ -1846,6 +1846,85 @@ export const getQuoteRange: AgentTool<
   execute: (input, ctx) => runGetQuoteRange(input, ctx),
 };
 
+// ─── draft_for_approval ────────────────────────────────────────────────────
+// Never-fail-compile slice: the honest floor for red/yellow recorded steps.
+// The agent PREPARES the complete work product and files it for a human to
+// approve from /approvals. Filing is NOT doing — the tool description and
+// the compiled skill-md both say so, and the never-lies fallback regex
+// treats an unapproved claim of completion as a violation.
+
+export const DRAFT_FOR_APPROVAL_CAPABILITY = "draft_for_approval";
+
+const draftForApprovalInput = z.object({
+  stepAction: z.string().min(3),
+  kind: z.enum(["email", "message", "invoice", "data_entry", "other"]),
+  title: z.string().min(3),
+  body: z.string().min(1),
+  fields: z.record(z.string(), z.string()).optional(),
+});
+
+export const draftForApproval: AgentTool<
+  z.infer<typeof draftForApprovalInput>,
+  { ok: boolean; draftId?: string; deduped?: boolean; error?: string }
+> = {
+  name: "draft_for_approval",
+  description:
+    "File a prepared piece of work for human approval. Use for any workflow step you are NOT allowed to execute yourself. Put the COMPLETE work product in body — ready to send/paste as-is (the full email text, the full invoice lines, the exact data to enter). Filing a draft is NOT doing the action: afterwards, tell the user it has been prepared and sent for approval — never that it is done.",
+  inputSchema: draftForApprovalInput,
+  jsonSchema: {
+    type: "object",
+    properties: {
+      stepAction: {
+        type: "string",
+        description: "The workflow step this draft fulfills, e.g. 'Send the invoice'",
+      },
+      kind: {
+        type: "string",
+        enum: ["email", "message", "invoice", "data_entry", "other"],
+      },
+      title: { type: "string", description: "Short inbox line, e.g. 'Invoice for ACME — $450'" },
+      body: {
+        type: "string",
+        description: "The COMPLETE work product, ready to use as-is",
+      },
+      fields: {
+        type: "object",
+        additionalProperties: { type: "string" },
+        description: "Structured values (amount, recipient, due date, ...)",
+      },
+    },
+    required: ["stepAction", "kind", "title", "body"],
+  },
+  execute: async (input, ctx) => {
+    if (ctx.testMode) {
+      return { ok: true, draftId: `test-draft-${Date.now()}` };
+    }
+    const { createDrizzleDraftStore } = await import("@/lib/agent-drafts/storage-drizzle");
+    const store = createDrizzleDraftStore();
+    const result = await store.fileDraft({
+      orgId: ctx.orgId,
+      agentId: ctx.agentId,
+      conversationId: ctx.conversationId,
+      stepAction: input.stepAction,
+      kind: input.kind,
+      title: input.title,
+      content: { body: input.body, fields: input.fields },
+      // Tier is informational on the row; the tool can't see coverage at run
+      // time, so file as "red" (the conservative bucket) — the inbox renders
+      // both identically in v1.
+      tier: "red",
+    });
+    if (result.outcome === "capped") {
+      return {
+        ok: false,
+        error:
+          "draft cap reached for this conversation — use escalate_to_human instead",
+      };
+    }
+    return { ok: true, draftId: result.draftId, deduped: result.outcome === "deduped" };
+  },
+};
+
 // ─── allowlist ─────────────────────────────────────────────────────────────
 
 export const ALL_TOOLS: AgentTool[] = [
@@ -1980,6 +2059,14 @@ export async function getToolsForCapabilities(
   if (capabilities?.includes(COPILOT_CAPABILITY)) {
     const { buildCopilotTools } = await import("./copilot/tools");
     native = [...native, ...buildCopilotTools()];
+  }
+
+  // Never-fail-compile: draft_for_approval is opt-in only — it is NOT in
+  // ALL_TOOLS, so empty-capabilities agents (which get the full native list)
+  // never see it. Same pattern + same spread-into-new-array reason as the
+  // copilot block above.
+  if (capabilities?.includes(DRAFT_FOR_APPROVAL_CAPABILITY)) {
+    native = [...native, draftForApproval as AgentTool];
   }
 
   const connectors = opts?.connectors;

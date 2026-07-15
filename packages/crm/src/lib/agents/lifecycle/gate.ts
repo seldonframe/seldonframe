@@ -20,6 +20,7 @@ const NON_ACTION_CAPABILITIES = new Set<string>([
   "escalate_to_human",
   "provide_faq_answer",
   "get_quote_range",
+  "draft_for_approval",
 ]);
 
 /**
