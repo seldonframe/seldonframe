@@ -24,6 +24,48 @@ import {
   VsCard,
 } from "../../../src/lib/seo/og-card";
 
+// Minimal element-tree walker for the layout components: expands function
+// components (they're pure — no hooks/state) and collects every text node
+// with its nearest inherited `style.color`, plus the root backgroundColor.
+// This lets us assert VISIBILITY (text color ≠ card background), which is
+// how the tool-card hook regressed in the forest rebrand: the hook was
+// still rendered, but in green #1F2B24 on a #1F2B24 background.
+type TextNode = { text: string; color: string | undefined };
+
+type ElementLike = {
+  type?: unknown;
+  props?: { style?: { color?: string; backgroundColor?: string }; children?: unknown };
+};
+
+function collectTextNodes(node: unknown, inheritedColor: string | undefined, out: TextNode[]): void {
+  if (node == null || typeof node === "boolean") return;
+  if (typeof node === "string" || typeof node === "number") {
+    out.push({ text: String(node), color: inheritedColor });
+    return;
+  }
+  if (Array.isArray(node)) {
+    for (const child of node) collectTextNodes(child, inheritedColor, out);
+    return;
+  }
+  const el = node as ElementLike;
+  if (typeof el.type === "function") {
+    collectTextNodes((el.type as (props: unknown) => unknown)(el.props), inheritedColor, out);
+    return;
+  }
+  const color = el.props?.style?.color ?? inheritedColor;
+  collectTextNodes(el.props?.children, color, out);
+}
+
+/** Expand function components until the first host element and return its
+ *  backgroundColor — the card's background. */
+function rootBackground(node: unknown): string | undefined {
+  let el = node as ElementLike;
+  while (el && typeof el.type === "function") {
+    el = (el.type as (props: unknown) => unknown)(el.props) as ElementLike;
+  }
+  return el?.props?.style?.backgroundColor;
+}
+
 describe("clamp", () => {
   test("returns the string unchanged when under the limit", () => {
     assert.equal(clamp("hello", 10), "hello");
@@ -192,6 +234,49 @@ describe("layout components render without throwing", () => {
 
   test("DefaultCard renders with no input", () => {
     assert.doesNotThrow(() => DefaultCard());
+  });
+});
+
+describe("tool-card hook renders VISIBLY", () => {
+  // Regression: the forest rebrand set OG_COLORS.green = #1F2B24 — identical
+  // to OG_COLORS.dark, the ToolCard background — so the hook line was drawn
+  // in background-colored text and every live tool card showed no hook.
+  // Presence in the tree is not enough; the color must differ from the
+  // card's background.
+  test("a provided hook appears in the tree with a color that differs from the background", () => {
+    const hook = "What do missed calls cost you?";
+    const card = ToolCard({ name: "Missed Call Calculator", hook });
+    const background = rootBackground(card);
+    assert.ok(background, "expected the card root to declare a backgroundColor");
+
+    const texts: TextNode[] = [];
+    collectTextNodes(card, undefined, texts);
+    const hookNode = texts.find((t) => t.text === hook);
+    assert.ok(hookNode, "hook text is missing from the rendered element tree");
+    assert.ok(hookNode.color, "hook text has no explicit color");
+    assert.notEqual(
+      hookNode.color.toLowerCase(),
+      background.toLowerCase(),
+      `hook is rendered in the card's own background color (${background}) — invisible`,
+    );
+  });
+
+  test("an overlong hook is ellipsized within the component cap", () => {
+    const card = ToolCard({ name: "Free Tool", hook: "y".repeat(200) });
+    const texts: TextNode[] = [];
+    collectTextNodes(card, undefined, texts);
+    const hookNode = texts.find((t) => t.text.startsWith("yyy"));
+    assert.ok(hookNode, "clamped hook text missing from the tree");
+    assert.ok(hookNode.text.length <= 70, `hook not clamped: ${hookNode.text.length} chars`);
+    assert.ok(hookNode.text.endsWith("…"), "overlong hook should end with an ellipsis");
+  });
+
+  test("an empty hook renders no dangling hook element", () => {
+    const card = ToolCard({ name: "Free Tool", hook: "" });
+    const texts: TextNode[] = [];
+    collectTextNodes(card, undefined, texts);
+    // Only the name, the pill copy, and the brand mark should remain.
+    assert.ok(texts.every((t) => t.text.trim().length > 0));
   });
 });
 
