@@ -61,6 +61,11 @@ import { ShareRow } from "@/components/activation/share-row";
 import { suggestAgentsForIndustry } from "@/lib/activation/suggest-agents";
 import { AgentPicks } from "@/components/activation/agent-picks";
 import { agentTemplates } from "@/db/schema/agent-templates";
+// 2026-07-14 — Landing-design picker card on the fresh-claimed hero. Same
+// module the ready page + SeldonChat copilot already surface; this is a
+// third surface of the same setLandingTemplateForOrg capability.
+import { ReadyDesignPicker } from "@/components/clients/design-picker/ReadyDesignPicker";
+import { resolveDesignModuleProps } from "@/components/clients/design-picker/resolve-module-props";
 
 /*
   Square UI class reference (source of truth):
@@ -700,6 +705,22 @@ export default async function DashboardPage({
       ? `${APP_BASE}/forms/${activeWorkspace.slug}/${activeIntakeForm.slug}`
       : null;
 
+    // 2026-07-14 — Landing-design picker card, fresh-claimed hero only.
+    // `theme`/`settings` aren't selected on the workspaceRows query above
+    // (only used here), so this scoped one-off select keeps every other
+    // dashboard render (populated view, operator sessions) at zero added
+    // cost. `soul` is already loaded above (getSoul()).
+    const [designRow] = await db
+      .select({ theme: organizations.theme, settings: organizations.settings })
+      .from(organizations)
+      .where(eq(organizations.id, activeWorkspace.id))
+      .limit(1);
+    const designProps = resolveDesignModuleProps({
+      theme: designRow?.theme ?? null,
+      soul,
+      settings: designRow?.settings ?? null,
+    });
+
     return (
       // Top-aligned, full-width — the (dashboard) layout column already pads
       // (px/py 4→8), so no extra padding or vertical centering here (the old
@@ -777,6 +798,27 @@ export default async function DashboardPage({
               </p>
             </a>
           </div>
+
+          {/* 2026-07-14 — Landing-design picker card. Reuses the same
+              module the ready page + SeldonChat copilot already surface
+              (setLandingTemplateForOrg) so a claimed owner can re-skin their
+              site without asking SeldonChat. */}
+          <section className="rounded-2xl border border-border/70 bg-card/40 p-4">
+            <p className="text-xs font-semibold uppercase tracking-[0.16em] text-muted-foreground">
+              Landing design
+            </p>
+            <div className="mt-2">
+              <ReadyDesignPicker
+                slug={activeWorkspace.slug}
+                initialValue={designProps.initialValue}
+                autoResolvedId={designProps.autoResolvedId}
+                autoReason={designProps.autoReason}
+                designs={designProps.designs}
+                sectionLabel={designProps.sectionLabel}
+                autoNote={designProps.autoNote}
+              />
+            </div>
+          </section>
 
           {/* Tertiary link — keeps the agency-builder path discoverable
               for owners who also want to build workspaces for others. */}
