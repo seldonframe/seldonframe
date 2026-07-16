@@ -7,6 +7,24 @@ with a checkable plan, gets ticked off as it ships, and ends with a review block
 
 ## In flight
 
+### Task — Agency repositioning of homepage (2026-07-15, branch feat/agency-homepage-positioning)
+
+Max's direction: keep marketing-page structure, reword for AGENCIES; everything true per §1b
+(Builder $29 / Managed $49 / Agency $99·$199·$299; 2% GMV solo-only when SF is channel; 0% agency;
+white-label + sub-accounts + portal start at $99). Plus CTA anchor fix + agency-content pricing audit.
+NOTE: another session shares this working tree (clobbered hero edits once + this todo section) —
+edits re-applied and committed promptly to pin them.
+
+- [x] Reword 5 sections (hero · build-steps · modules · smb-cta · pricing) + final-cta + footer
+      (commit 4a5ae1656)
+- [x] CTA route-by-promise: all "Build it free" pills + footer "Start building" → /#hero-form
+      (scroll + focus); nav "Start for free" + FAQ "Start free" stay /signup (label promises signup)
+- [x] BYOK hero line demoted to value framing (§1b)
+- [x] Targeted specs green (landing-mode-shell · marketing-pricing · render-home-markdown = 19/19)
+- [x] /agencies metadata pricing-truth fix (commit d8e8cc7f0)
+- [ ] Audit agency-facing content for stale pricing claims (Explore agent running) → fix FALSE ones
+- [ ] verify-build (verify-runner, maker≠checker) + reviewer diff pass → PR for Max's merge gate
+
 ### Task — /reflect decision loop (2026-07-15, branch feat/reflect-decision-loop)
 
 Compact ~24 FS.blog/Bezos decision articles into `.claude/skills/reflect/` (core loop +

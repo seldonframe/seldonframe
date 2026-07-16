@@ -8,28 +8,31 @@ export default function Page() {
       category="Billing & plans"
       categoryHref="/docs"
       title="Pricing"
-      lede="Three flat, seat-based plans. AI is managed and included on every one — no key to paste, no per-token markup, no metered usage wallet. You always know what the bill is."
+      lede="Five flat plans, no metered usage wallet — BYOK on Builder/Agency keeps AI cost at provider price, Managed runs on SeldonFrame's keys (fair use). You always know what the bill is."
       githubPath="app/docs/billing/pricing/page.tsx"
     >
       <h2>The plans</h2>
       <ul>
-        <li><strong>Builder — $19/mo.</strong> Up to 10 landing pages on your own domain, with your branding. A fast, polished website — no CRM, booking, or AI agents.</li>
-        <li><strong>Workspace — $49/mo.</strong> One full AI front office: website + booking + intake + CRM + chatbot, wired together, with managed AI included.</li>
-        <li><strong>Agency — $297/mo.</strong> White-label and resell. 10 client workspaces included (+$10/mo each beyond), your brand everywhere, plus an optional AI voice receptionist at +$99/mo per agent.</li>
+        <li><strong>Builder — $29/mo.</strong> Unlimited workspaces for businesses you operate: website + booking + intake + CRM + AI agents, BYOK. No client sub-accounts, no white-label, no client portal.</li>
+        <li><strong>Managed — $49/mo.</strong> One workspace, same full front office, runs on SeldonFrame's keys (fair use) — no key to paste.</li>
+        <li><strong>Agency Starter — $99/mo.</strong> Everything in Builder, plus full white-label, a branded client portal, and 10 client sub-accounts.</li>
+        <li><strong>Agency Growth — $199/mo.</strong> 30 client sub-accounts, one-click deploy to all clients, priority support.</li>
+        <li><strong>Agency Scale — $299/mo.</strong> Unlimited client sub-accounts, API + MCP access, marketplace rent-out.</li>
       </ul>
 
-      <Callout variant="tip" title="AI is included">
-        Every hosted plan ships with managed AI — your chatbot, copy,
-        and automations just work, with no provider key to paste and no
-        token bill to watch. Pricing is flat and seat-based: predictable
-        every month, with no metered usage wallet to top up.
+      <Callout variant="tip" title="Flat, no per-workspace overage">
+        Every plan is a flat monthly price — no per-client-workspace add-on
+        fee and no per-agent voice-receptionist surcharge. The voice
+        receptionist is included; usage runs on your own AI/Twilio keys
+        (Builder/Agency) or SeldonFrame's keys under fair use (Managed), at
+        provider cost.
       </Callout>
 
       <h2>What's included</h2>
       <ul>
-        <li>Managed AI on every plan — no key, no markup, no usage wallet.</li>
-        <li>Your website on your own domain, with your branding.</li>
-        <li>On Workspace and Agency: full CRM (contacts, deals, custom fields, kanban), booking, intake, and a website chatbot.</li>
+        <li>Full CRM (contacts, deals, custom fields, kanban), booking, intake, and AI agents on every plan.</li>
+        <li>Your website on your own domain, with your branding (custom domain + remove-branding on every plan).</li>
+        <li>On Agency Starter and above: full white-label, branded client portal, client sub-accounts.</li>
         <li>Forms, booking pages, automations, and durable workflows.</li>
         <li>Stripe / Twilio / Resend / Google Calendar integrations.</li>
         <li>Claude Code / MCP access — edit your whole site by chatting.</li>
@@ -38,7 +41,9 @@ export default function Page() {
 
       <h2>What you bring</h2>
       <p>
-        AI is on us. The only bring-your-own bits are:
+        Builder and Agency plans are BYOK — you bring your own AI and (optionally)
+        Twilio keys, so cost stays at provider price. Managed runs on
+        SeldonFrame's keys under fair use. The other bring-your-own bits are:
       </p>
       <ul>
         <li><strong>Stripe</strong> — your connected account, so payouts land in your bank. Stripe takes its standard 2.9% + 30¢ per transaction.</li>
@@ -52,9 +57,8 @@ export default function Page() {
       </p>
 
       <Callout variant="info" title="Self-hosting? Bring your own key">
-        The hosted plans include managed AI. If you self-host SeldonFrame
-        instead (free, under AGPL-3.0), you supply your own Anthropic or
-        OpenAI key — that's the only path where BYOK applies. See{" "}
+        If you self-host SeldonFrame instead (free, under AGPL-3.0), you
+        supply your own Anthropic or OpenAI key regardless of tier. See{" "}
         <a href="/docs/integrations/llm">Anthropic / OpenAI</a>.
       </Callout>
 
@@ -62,8 +66,8 @@ export default function Page() {
       <p>
         Plans are month-to-month — upgrade, downgrade, or cancel anytime.
         Your front office is live in 60 seconds from a URL, and you only
-        move up a plan when you want more (a CRM, more client workspaces,
-        a voice receptionist).
+        move up a plan when you want more (client sub-accounts, white-label,
+        higher sub-account limits).
       </p>
 
       <h2>Next</h2>

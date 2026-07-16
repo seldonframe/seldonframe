@@ -94,8 +94,8 @@ export function LandingMarketingPricingSection({
               SeldonFrame
             </h3>
             <p className="mt-1.5 text-[13.5px] leading-[1.5] text-[var(--lp-muted)]">
-              Everything you need to build and run client front offices — in one place, on
-              one flat bill.
+              Everything you need to build and run front offices for the clients you
+              operate — in one place, on one flat bill.
             </p>
 
             <div className="mt-5 flex items-baseline gap-1.5">
@@ -158,10 +158,17 @@ export function LandingMarketingPricingSection({
         </div>
 
         {/* The GMV fee, demoted from a full panel to a quiet line + link.
-            Agency-first order (2026-07-15): lead with the 0% agency truth. */}
+            Agency-first order (2026-07-15): lead with the 0% agency truth —
+            but only while the tier ladder is sellable (tierLadderOn), so a
+            flag-off render never advertises plans checkout can't offer. */}
         <p className="mx-auto mt-5 max-w-[640px] text-center text-[13px] leading-[1.55] text-[var(--lp-muted)]">
-          Agency plans pay <strong className="font-[600] text-[var(--lp-ink)]">0% GMV</strong> — we
-          don&apos;t tax your client work. Solo plans: a flat{" "}
+          {tierLadderOn ? (
+            <>
+              Agency plans pay <strong className="font-[600] text-[var(--lp-ink)]">0% GMV</strong> —
+              we don&apos;t tax your client work. Solo plans:{" "}
+            </>
+          ) : null}
+          {tierLadderOn ? "a" : "+ a"} flat{" "}
           <strong className="font-[600] text-[var(--lp-ink)]">2%</strong> only when Seldon is your
           sales channel — keep 98% of what we help you collect, 100% of everything else.{" "}
           <Link href="/pricing" className="font-[600] text-[var(--lp-accent)] underline underline-offset-2">

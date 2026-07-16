@@ -21,7 +21,7 @@ export const metadata: Metadata = {
   // "unlimited client workspaces under your own brand for $29" claim
   // described the retired grandfathered agency tier.
   description:
-    "Build an AI agent once, list it on the marketplace, or run white-label client workspaces under your own brand. Flat pricing from $29/mo; agency plans from $99/mo with 0% GMV.",
+    "Build an AI agent once, list it on the marketplace, or run client front offices. Build from $29/mo; white-label client workspaces + branded portals on agency plans from $99/mo with 0% GMV.",
 };
 
 export default function AgenciesPage() {

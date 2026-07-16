@@ -143,7 +143,7 @@ export function renderVsMarkdown(pair: VsPair, a: Competitor, b: Competitor): st
   L.push(`## If you need what BOTH do`);
   L.push("");
   L.push(
-    `Most people comparing ${a.name} and ${b.name} actually need the outcome underneath both: calls and chats answered, leads qualified, jobs booked into a real calendar and CRM, on a site the client owns. SeldonFrame ships that whole front office from one conversation at $29/mo flat (unlimited workspaces, bring-your-own AI keys), with whitelabel included for agencies.`,
+    `Most people comparing ${a.name} and ${b.name} actually need the outcome underneath both: calls and chats answered, leads qualified, jobs booked into a real calendar and CRM, on a site the client owns. SeldonFrame ships that whole front office from one conversation at $29/mo flat (unlimited workspaces, bring-your-own AI keys), with agency white-label from $99/mo.`,
   );
   L.push("");
   L.push(`- Honest deep-dives: ${BASE}/alternative-to-${a.slug} and ${BASE}/alternative-to-${b.slug}`);

@@ -9,10 +9,12 @@
 
 import { useMemo, useState } from "react";
 
-// Flat platform price (finalized 2026-06-21): $29/mo, unlimited workspaces.
-// The GMV fee only applies when SeldonFrame is the sales channel — reselling
-// to your own clients goes through your brand, so it isn't taxed here.
-const SF_PLAN_COST = 29; // $29/mo flat
+// Agency pitch prices from Agency Starter (2026-07-10 GMV restructure):
+// $99/mo — white-label, branded client portal, 10 client sub-accounts
+// ($199 for 30, $299 unlimited). Agency-tier plans pay 0% GMV — the 2%
+// solo-tier fee only applies when SeldonFrame is the sales channel on
+// Builder/Managed, so it never taxes agency resale here.
+const SF_PLAN_COST = 99; // Agency Starter, $99/mo flat
 
 function fmtUsd(n: number): string {
   return "$" + Math.round(n).toLocaleString();
@@ -46,7 +48,7 @@ export function MarketingAgencyMath() {
             For builders &amp; agencies
           </span>
           <p className="mx-auto mt-4 max-w-[48ch] font-[Newsreader,Georgia,serif] text-[clamp(18px,2.4vw,24px)] italic leading-[1.35] text-[rgba(246,242,234,.82)]">
-            Build agents for a living? List them — or run unlimited client workspaces under your own brand.
+            Build agents for a living? List them — or run client workspaces under your own brand on the Agency plan.
           </p>
         </div>
 
@@ -65,9 +67,10 @@ export function MarketingAgencyMath() {
             </h2>
             <p className="mt-4 max-w-[50ch] text-[15.5px] leading-[1.55] text-[rgba(246,242,234,.74)]">
               Build an AI agent for your business — then list it so other businesses can install it.
-              The marketplace puts it in front of them; you earn without marketing it. Run unlimited
-              client workspaces under your brand for one flat{" "}
-              <strong className="font-[600] text-[#F6F2EA]">$29/mo</strong>.
+              The marketplace puts it in front of them; you earn without marketing it. On the Agency
+              plan (from{" "}
+              <strong className="font-[600] text-[#F6F2EA]">$99/mo</strong>), run client workspaces
+              under your own brand — white-label, branded client portal, 10 sub-accounts included.
             </p>
 
             {/* Builder perks list */}
@@ -75,9 +78,9 @@ export function MarketingAgencyMath() {
               {[
                 "List your agent on the marketplace — earn without marketing it",
                 "Build any agent in the Studio, in plain English — voice, SMS, chat & email",
-                "Your brand on the entire platform — clients never see SeldonFrame",
+                "From $99/mo: your brand on the entire platform — clients never see SeldonFrame",
                 "Set your own per-client pricing and keep the spread",
-                "Unlimited client workspaces on the flat $29/mo — no per-seat tax",
+                "10 client sub-accounts on Agency Starter ($99/mo) — 30 on Growth, unlimited on Scale",
                 "Onboard a new client in 3 minutes from a URL",
               ].map((item) => (
                 <li key={item} className="flex items-start gap-3 text-[14px] leading-[1.5] text-[rgba(246,242,234,.82)]">
@@ -90,10 +93,10 @@ export function MarketingAgencyMath() {
             </ul>
 
             <a
-              href="/signup?plan=agency"
+              href="/pricing"
               className="mt-8 inline-flex items-center gap-2.5 rounded-[11px] bg-[#F6F2EA] px-6 py-3.5 text-[15px] font-[500] text-[#1F2B24] shadow-[0_1px_2px_rgba(0,0,0,.2),0_12px_30px_rgba(0,0,0,.25),inset_0_1.5px_0_rgba(255,255,255,.6)] transition-all hover:-translate-y-[1.5px]"
             >
-              Start the Agency plan
+              See agency plans &rarr;
             </a>
           </div>
 
@@ -140,7 +143,7 @@ export function MarketingAgencyMath() {
               <ResultCell label="Monthly recurring" value={fmtUsd(results.mrr)} sub={`${fmtUsd(results.mrr * 12)} / year`} />
               <ResultCell label="Setup pool" value={fmtUsd(results.setupPool)} sub="One-time" />
               <ResultCell label="Year-1 total" value={fmtUsd(results.year1)} sub="MRR × 12 + setup" positive />
-              <ResultCell label="Gross margin" value={`${Math.round(results.margin * 100)}%`} sub={`after $${SF_PLAN_COST}/mo + 2% on SeldonFrame sales`} positive />
+              <ResultCell label="Gross margin" value={`${Math.round(results.margin * 100)}%`} sub={`after $${SF_PLAN_COST}/mo — agency plans pay 0% GMV`} positive />
             </div>
 
             <p className="mt-3 text-[11.5px] leading-[1.5] text-[rgba(246,242,234,.35)]">

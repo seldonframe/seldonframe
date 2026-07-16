@@ -55,7 +55,7 @@ export function MarketingFinalCta({
         )}
 
         <p className="mx-auto mt-5 max-w-[50ch] text-[16.5px] leading-[1.55] text-[color-mix(in_oklab,var(--lp-cta-slab-ink)_74%,transparent)]">
-          Paste their URL or describe the business. We build the website, booking,
+          Paste a client&rsquo;s URL or describe the business. We build the website, booking,
           AI receptionist, intake, and CRM — all wired together and live in 3 minutes.
           For your clients&rsquo; businesses, or your own.
         </p>
