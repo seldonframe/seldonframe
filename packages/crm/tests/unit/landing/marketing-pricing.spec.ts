@@ -1,12 +1,11 @@
 // Snapshot-shape test for LandingMarketingPricingSection.
 //
-// 2026-07-08 pricing ladder (Task 4): the homepage keeps the single
-// $29 flat-price card (one-number rule) always. The ONLY thing that
-// changes behind SF_TIER_LADDER is one quiet line under the card
-// pointing agency operators at /pricing for the ladder. Flag OFF (the
-// current default) renders byte-identical to today's single-card view
-// — this pins the $29 card content + the ABSENCE of any tier-ladder
-// vocabulary. Flag ON adds the one line; nothing else moves.
+// 2026-07-16 agency repositioning (Max's call): flag ON now renders the
+// THREE AGENCY TIER cards ($99 Starter / $199 Growth / $299 Scale) with
+// 0% GMV framing and NO 2% talk (the solo GMV story lives on /pricing +
+// the FAQ). Flag OFF (SF_TIER_LADDER unset) still renders the single $29
+// flat card with no tier-ladder vocabulary — that contract is unchanged
+// from the 2026-07-08 one-number rule.
 
 import { describe, test } from "node:test";
 import assert from "node:assert/strict";
@@ -69,26 +68,46 @@ describe("LandingMarketingPricingSection — flag OFF (default) — single $29 c
   });
 });
 
-describe("LandingMarketingPricingSection — flag ON (SF_TIER_LADDER) — adds one quiet line", () => {
-  test("still renders exactly one plan card (one-number rule preserved)", () => {
+describe("LandingMarketingPricingSection — flag ON (SF_TIER_LADDER) — three agency tiers", () => {
+  test("renders exactly the three agency tier cards, in ladder order", () => {
     const result = LandingMarketingPricingSection({ tierLadderOn: true });
     const cols = flatten(result).filter(
       (el) => typeof (el.props as { "data-plan"?: string })?.["data-plan"] === "string",
     );
     assert.deepEqual(
       cols.map((c) => (c.props as { "data-plan": string })["data-plan"]),
-      ["flat"],
+      ["agency_starter", "agency_growth", "agency_scale"],
     );
   });
 
-  test("adds the sub-accounts line linking to /pricing", () => {
+  test("shows the catalog-true prices and sub-account counts", () => {
     const result = LandingMarketingPricingSection({ tierLadderOn: true });
     const text = safeText(result);
-    assert.match(text, /sub-accounts/i);
     assert.match(text, /\$99/);
-    const links = flatten(result).filter(
-      (el) => (el.props as { href?: string })?.href === "/pricing",
-    );
-    assert.ok(links.length >= 1, "expected a /pricing link");
+    assert.match(text, /\$199/);
+    assert.match(text, /\$299/);
+    assert.match(text, /10 client sub-accounts/);
+    assert.match(text, /30 client sub-accounts/);
+    assert.match(text, /Unlimited client sub-accounts/);
+  });
+
+  test("leads with 0% GMV and never mentions the solo 2% fee", () => {
+    const result = LandingMarketingPricingSection({ tierLadderOn: true });
+    const text = safeText(result);
+    assert.match(text, /0% GMV/);
+    assert.doesNotMatch(text, /2%/);
+  });
+
+  test("links to /pricing (comparison) and /#hero-form (free build)", () => {
+    const result = LandingMarketingPricingSection({ tierLadderOn: true });
+    const links = flatten(result).map((el) => (el.props as { href?: string })?.href);
+    assert.ok(links.filter((h) => h === "/pricing").length >= 1, "expected a /pricing link");
+    assert.ok(links.filter((h) => h === "/#hero-form").length >= 1, "expected the free-build anchor");
+  });
+
+  test("never claims popularity we haven't measured", () => {
+    const result = LandingMarketingPricingSection({ tierLadderOn: true });
+    const text = safeText(result);
+    assert.doesNotMatch(text, /most popular|best value/i);
   });
 });
