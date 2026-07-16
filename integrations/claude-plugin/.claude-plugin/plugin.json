@@ -1,0 +1,9 @@
+{
+  "name": "seldonframe",
+  "description": "Build, deploy, and sell AI agents from your IDE. One install connects the SeldonFrame MCP: describe a business and get a real hosted workspace — website, booking page, intake form, CRM, and an AI agent — on its own subdomain. First workspace is free, no API key needed.",
+  "author": { "name": "SeldonFrame" },
+  "homepage": "https://seldonframe.com",
+  "repository": "https://github.com/seldonframe/seldonframe",
+  "license": "MIT",
+  "keywords": ["agents", "crm", "business-os", "voice", "booking", "mcp"]
+}
