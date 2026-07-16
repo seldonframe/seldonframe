@@ -63,7 +63,7 @@ const FAQS: readonly FaqItem[] = [
   {
     question: "Why not just use GoHighLevel?",
     answer:
-      "GoHighLevel's white-label tier (Agency Pro) is $497/mo, and a typical build-out takes 2–4 weeks of snapshot setup and Zapier glue per client. SeldonFrame builds a client's whole front office — website, CRM, booking, intake, and an agent across voice, chat, SMS, and email — in about 3 minutes from their URL, with white-label from $99/mo for your entire agency. And you own it: open source, AGPL-3.0, self-host or use the cloud.",
+      "Reselling GoHighLevel as your own product (SaaS Mode) requires its $497/mo Agency Pro tier — the white-label mobile app is another $497/mo add-on, usage is metered per email and SMS segment on top, and reviewers report build-outs take 2–4 weeks per client. SeldonFrame builds a client's whole front office — website, CRM, booking, intake, and an agent across voice, chat, SMS, and email — in about 3 minutes from their URL, with white-label from $99/mo flat for your entire agency. And you own it: open source, AGPL-3.0, self-host or use the cloud — GoHighLevel's own docs say its websites can't be exported.",
   },
   {
     question: "Do my clients still need Zapier, Calendly, or Typeform?",
