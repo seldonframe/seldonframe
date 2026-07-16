@@ -144,12 +144,15 @@ describe("<RecapPanel> edgeCasePrompt row", () => {
     compiling: false,
     compiledTemplateId: null,
     claimHref: "/signup",
+    questionIndex: 0,
     onInterviewInputChange: noop,
     onInterviewSend: noop,
     onInterviewRetry: noop,
     onCompileNow: noop,
     onCompileAgent: noop,
     onApprove: noop,
+    onQuestionAnswer: noop,
+    onQuestionSkip: noop,
   };
 
   test("hidden when edgeCasePrompt is undefined (busy slot / all 6 used / nothing traced yet)", () => {
@@ -189,5 +192,91 @@ describe("<RecapPanel> edgeCasePrompt row", () => {
       }),
     );
     assert.doesNotMatch(html, /Make it trustworthy/);
+  });
+});
+
+describe("<RecapPanel> question card (interview-one-question)", () => {
+  const baseProps = {
+    phase: "recap" as const,
+    flowModel: null,
+    coverage: [],
+    openQuestions: [],
+    interview: [],
+    interviewInput: "",
+    interviewPending: false,
+    interviewError: null,
+    isAuthed: true,
+    compiling: false,
+    compiledTemplateId: null,
+    claimHref: "/signup",
+    questionIndex: 0,
+    onInterviewInputChange: noop,
+    onInterviewSend: noop,
+    onInterviewRetry: noop,
+    onCompileNow: noop,
+    onCompileAgent: noop,
+    onApprove: noop,
+    onQuestionAnswer: noop,
+    onQuestionSkip: noop,
+  };
+
+  test("empty openQuestions renders no question card at all", () => {
+    const html = renderToString(React.createElement(RecapPanel, baseProps));
+    assert.doesNotMatch(html, /Question <!-- -->/);
+    assert.doesNotMatch(html, />Yes</);
+  });
+
+  test("exactly ONE question renders when there are 6 open questions — 'Question 1 of 6', not a wall", () => {
+    const html = renderToString(
+      React.createElement(RecapPanel, {
+        ...baseProps,
+        openQuestions: ["Q1?", "Q2?", "Q3?", "Q4?", "Q5?", "Q6?"],
+      }),
+    );
+    assert.match(html, /Question <!-- -->1<!-- --> of <!-- -->6/);
+    assert.doesNotMatch(html, />Q2\?</);
+    assert.doesNotMatch(html, />Q6\?</);
+  });
+
+  test("questionIndex advances which single question shows", () => {
+    const html = renderToString(
+      React.createElement(RecapPanel, {
+        ...baseProps,
+        openQuestions: ["Q1?", "Q2?", "Q3?"],
+        questionIndex: 2,
+      }),
+    );
+    assert.match(html, /Question <!-- -->3<!-- --> of <!-- -->3/);
+    assert.match(html, />Q3\?</);
+  });
+
+  test("the question card carries no #EAB308 amber (token hierarchy only)", () => {
+    const html = renderToString(
+      React.createElement(RecapPanel, {
+        ...baseProps,
+        openQuestions: ["Q1?", "Q2?"],
+      }),
+    );
+    // Isolate the question-card markup (between the "Question 1 of 2" label
+    // and the closing of its wrapper) rather than the whole panel — the
+    // per-step coverage summary line legitimately still uses #EAB308 for the
+    // "needs approval" tier badge, which is out of scope for this slice.
+    const cardStart = html.indexOf("Question <!-- -->1");
+    assert.ok(cardStart >= 0, "question card did not render");
+    const cardMarkup = html.slice(cardStart, cardStart + 1500);
+    assert.doesNotMatch(cardMarkup, /#EAB308/i);
+  });
+
+  test("Yes/No chips and Skip render alongside the free-text input", () => {
+    const html = renderToString(
+      React.createElement(RecapPanel, {
+        ...baseProps,
+        openQuestions: ["Q1?"],
+      }),
+    );
+    assert.match(html, />Yes</);
+    assert.match(html, />No</);
+    assert.match(html, />Skip</);
+    assert.match(html, /<input/);
   });
 });
