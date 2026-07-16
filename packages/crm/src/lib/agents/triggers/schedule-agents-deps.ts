@@ -25,6 +25,7 @@ import {
   listScheduledAgentDeployments,
   markDeploymentScheduleFired,
 } from "@/lib/deployments/store";
+import { writeRunReceipt } from "@/lib/agent-receipts/write";
 import type { RunDueScheduledAgentsDeps } from "@/lib/agents/triggers/schedule-agents";
 
 /** Build the production deps for the schedule cron. The 15-min `windowMinutes`
@@ -39,5 +40,17 @@ export function buildRunDueScheduledAgentsDeps(): RunDueScheduledAgentsDeps {
       runEventAgent(event, buildRunEventAgentDeps(event.orgId)),
     markFired: markDeploymentScheduleFired,
     windowMinutes: 15,
+    // Agent receipts slice (Task 2b) — record every scheduled fire (ok/
+    // error) so a scheduled agent's runs are queryable, not just its sends.
+    // writeRunReceipt is itself fail-soft (never throws).
+    writeReceipt: ({ orgId, deploymentId, status, sourceRef, summary }) =>
+      writeRunReceipt({
+        orgId,
+        deploymentId,
+        triggerKind: "schedule",
+        sourceRef,
+        status,
+        summary,
+      }),
   };
 }

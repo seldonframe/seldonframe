@@ -76,14 +76,21 @@ export type DispatchComposioEventDeps = {
   /** Run the matched deployment's agent ONE turn with its bound tools,
    *  NON-testMode (prod = runStatelessAgentTurn via a synthetic "you have a
    *  new email" trigger message). Never assumed to throw-free by the
-   *  orchestrator — guarded below. */
+   *  orchestrator — guarded below. `toolCalls`/`replyText` (agent receipts
+   *  slice, Task 2a) are OPTIONAL, additive fields the prod deps populate
+   *  from the turn's onToolEvent stream — every existing fake returning just
+   *  `{ok}` stays valid. */
   runAgenticTurn: (args: {
     orgId: string;
     deploymentId: string;
     channel: "sms" | "email";
     blueprint: AgentBlueprint;
     payload: Record<string, unknown>;
-  }) => Promise<{ ok: boolean }>;
+  }) => Promise<{
+    ok: boolean;
+    toolCalls?: Array<{ tool: string; ok: boolean; note?: string }>;
+    replyText?: string;
+  }>;
   /** Verify-gate FIX 1 + FIX 2 — ONE atomic statement that both dedupes
    *  (deploymentId, messageId) AND gates/increments the per-deployment daily
    *  run cap (prod = store.ts::claimComposioPushRun). `messageId` is null
@@ -102,6 +109,21 @@ export type DispatchComposioEventDeps = {
    *  otherwise). Guarded — a throw here is logged and swallowed. */
   releaseClaim: (deploymentId: string, messageId: string) => Promise<void>;
   log?: (event: string, data: Record<string, unknown>) => void;
+  /** Agent receipts slice (Task 2a) — optional DI hook, called once per
+   *  STARTED run (never for a skip) with the run's outcome. Default no-op:
+   *  every existing caller/test constructing a DispatchComposioEventDeps
+   *  literal is byte-for-byte unaffected. In prod this is writeRunReceipt
+   *  (lib/agent-receipts/write.ts), itself fail-soft — but this hook is
+   *  ALSO guarded in the orchestrator (a throw is swallowed) so an injected
+   *  writer can never affect the dispatch loop or a claim's release. */
+  writeReceipt?: (args: {
+    orgId: string;
+    deploymentId: string;
+    status: "ok" | "error";
+    sourceRef: string | null;
+    toolCalls: Array<{ tool: string; ok: boolean; note?: string }>;
+    replyText?: string;
+  }) => Promise<void>;
 };
 
 export type DispatchComposioEventResult = {
@@ -195,6 +217,8 @@ export async function dispatchComposioEventToDeployments(
       result.started.push(m.deploymentId);
 
       let ok = false;
+      let toolCalls: Array<{ tool: string; ok: boolean; note?: string }> = [];
+      let replyText: string | undefined;
       try {
         const turnResult = await deps.runAgenticTurn({
           orgId: m.orgId,
@@ -204,12 +228,36 @@ export async function dispatchComposioEventToDeployments(
           payload: args.payload,
         });
         ok = turnResult?.ok === true;
+        toolCalls = turnResult?.toolCalls ?? [];
+        replyText = turnResult?.replyText;
       } catch (err) {
         console.warn(
           `[composio-event-dispatch] runAgenticTurn failed for deployment ${m.deploymentId}:`,
           err instanceof Error ? err.message : String(err),
         );
         ok = false;
+      }
+
+      // Agent receipts slice (Task 2a) — record this STARTED run's outcome
+      // (ok/error), summarizing from the turn result available in this
+      // scope. Guarded: a throw from an injected writer never affects the
+      // dispatch loop or the claim-release decision below.
+      if (deps.writeReceipt) {
+        try {
+          await deps.writeReceipt({
+            orgId: m.orgId,
+            deploymentId: m.deploymentId,
+            status: ok ? "ok" : "error",
+            sourceRef: messageId,
+            toolCalls,
+            replyText,
+          });
+        } catch (err) {
+          console.warn(
+            `[composio-event-dispatch] writeReceipt failed for deployment ${m.deploymentId}:`,
+            err instanceof Error ? err.message : String(err),
+          );
+        }
       }
 
       // FIX 3 — a FAILED run releases its claim so a webhook redelivery can

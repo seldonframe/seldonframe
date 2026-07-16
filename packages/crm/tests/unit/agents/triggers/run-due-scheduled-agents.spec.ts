@@ -223,6 +223,61 @@ describe("runDueScheduledAgents — fail-soft isolation", () => {
   });
 });
 
+// Agent receipts slice (Task 2b) — the optional writeReceipt DI hook.
+describe("runDueScheduledAgents — writeReceipt DI hook (agent receipts)", () => {
+  test("a successful fire calls writeReceipt with status ok + a summary of the run result", async () => {
+    const receipts: Array<Record<string, unknown>> = [];
+    const { deps } = makeDeps([dep({ deploymentId: "ok-1", orgId: "org-9" })]);
+    deps.writeReceipt = async (args) => {
+      receipts.push(args as unknown as Record<string, unknown>);
+    };
+    await runDueScheduledAgents(NOW_MS, deps);
+    assert.equal(receipts.length, 1);
+    assert.equal(receipts[0].orgId, "org-9");
+    assert.equal(receipts[0].deploymentId, "ok-1");
+    assert.equal(receipts[0].status, "ok");
+    assert.match(receipts[0].summary as string, /matched 1/);
+  });
+
+  test("a throwing runEventAgent calls writeReceipt with status error", async () => {
+    const receipts: Array<Record<string, unknown>> = [];
+    const { deps } = makeDeps([dep({ deploymentId: "bad-1" })], {
+      throwRunFor: new Set(["bad-1"]),
+    });
+    deps.writeReceipt = async (args) => {
+      receipts.push(args as unknown as Record<string, unknown>);
+    };
+    await withSilencedWarn(() => runDueScheduledAgents(NOW_MS, deps));
+    assert.equal(receipts.length, 1);
+    assert.equal(receipts[0].status, "error");
+    assert.match(receipts[0].summary as string, /failed:/);
+  });
+
+  test("a skipped deployment (not due) never calls writeReceipt", async () => {
+    const receipts: Array<Record<string, unknown>> = [];
+    const { deps } = makeDeps([dep({ deploymentId: "skip-1", cron: "0 0 1 1 *" })]);
+    deps.writeReceipt = async (args) => {
+      receipts.push(args as unknown as Record<string, unknown>);
+    };
+    await runDueScheduledAgents(NOW_MS, deps);
+    assert.equal(receipts.length, 0);
+  });
+
+  test("no writeReceipt dep provided → run still completes (default no-op)", async () => {
+    const { deps } = makeDeps([dep({ deploymentId: "no-hook" })]);
+    await assert.doesNotReject(() => runDueScheduledAgents(NOW_MS, deps));
+  });
+
+  test("a throwing writeReceipt is swallowed — never affects the run's result/errors count", async () => {
+    const { deps } = makeDeps([dep({ deploymentId: "hook-throws" })]);
+    deps.writeReceipt = async () => {
+      throw new Error("receipt db down");
+    };
+    const result = await withSilencedWarn(() => runDueScheduledAgents(NOW_MS, deps));
+    assert.deepEqual(result, { scanned: 1, fired: 1, skipped: 0, errors: 0 });
+  });
+});
+
 describe("firedWithinWindow — the idempotency predicate (pure)", () => {
   test("a stamp inside the window → true (skip the re-fire)", () => {
     assert.equal(firedWithinWindow(new Date(NOW_MS - 5 * 60_000).toISOString(), NOW_MS, 15), true);
