@@ -34,6 +34,10 @@ const DISPLAY_CAP = 5;
 const KEEP_FULL = 4;
 const CYCLE_S = 0.9;
 
+// Exported so the legibility regression test asserts against the ACTUAL
+// render-path value, never a duplicated literal that can drift silently.
+export const LABEL_FONT_SIZE = 14;
+
 // Brand colors (forest rebrand, PR #68 / #91) — never the retired emerald.
 const NODE_FILL = "#1A1713"; // elevated dark surface
 const NODE_FILL_MORE = "#1A1713";
@@ -126,6 +130,14 @@ export function SharePipelineSvg({ steps }: { steps: SharePipelineStep[] }) {
     <svg
       viewBox={`0 0 ${viewBox.width} ${viewBox.height}`}
       width="100%"
+      // MOBILE FIX (2026-07-16): width="100%" with no floor lets a narrow
+      // viewport (the /a page wraps this in overflow-x-auto) scale the
+      // WHOLE graphic down below its designed size — at 375px, labels hit
+      // ~6px. min-width pins the SVG to its viewBox width (1 unit == 1px by
+      // design, see STEP_WIDTH/STEP_HEIGHT), so on narrow screens the
+      // parent's overflow-x-auto scrolls horizontally instead of the SVG
+      // shrinking past its 12px legibility floor.
+      style={{ minWidth: `${viewBox.width}px` }}
       role="img"
       aria-label={`Agent workflow: ${nodes.map((n) => n.fullLabel).join(" → ")}`}
       xmlns="http://www.w3.org/2000/svg"
@@ -181,7 +193,7 @@ export function SharePipelineSvg({ steps }: { steps: SharePipelineStep[] }) {
               y={node.y + node.height / 2 + 5}
               textAnchor="middle"
               fontFamily="ui-sans-serif, system-ui, sans-serif"
-              fontSize={14}
+              fontSize={LABEL_FONT_SIZE}
               fontWeight={600}
               fill={node.isMore ? TEXT_FILL_MORE : TEXT_FILL}
             >

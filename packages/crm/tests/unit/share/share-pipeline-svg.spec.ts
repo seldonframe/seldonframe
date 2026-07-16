@@ -14,6 +14,7 @@ import { describe, test } from "node:test";
 import assert from "node:assert/strict";
 
 import {
+  LABEL_FONT_SIZE,
   layoutPipeline,
   SharePipelineSvg,
   STEP_HEIGHT,
@@ -95,11 +96,57 @@ describe("layoutPipeline", () => {
     const layout = layoutPipeline(steps(9)); // 5 displayed nodes, 2 rows — the worst case
     const containerWidth = 640;
     const scale = containerWidth / layout.viewBox.width;
-    const renderedFontPx = 14 * scale; // SharePipelineSvg's text fontSize is 14 viewBox-units
+    const renderedFontPx = LABEL_FONT_SIZE * scale;
     assert.ok(
       renderedFontPx >= 12,
       `rendered label size ${renderedFontPx.toFixed(2)}px is below the 12px legibility floor (viewBox width ${layout.viewBox.width})`,
     );
+  });
+
+  // MOBILE REGRESSION (2026-07-16): the /a page wraps this SVG in an
+  // overflow-x-auto container. Without a min-width floor, a narrow (375px)
+  // viewport would scale the WHOLE svg down using containerWidth/viewBoxWidth
+  // as the ratio — the same bug class as the original 640px-container fix,
+  // just triggered by a NARROWER container instead of a wider viewBox. The
+  // SVG's `style.minWidth` (asserted below, on the render, not just here)
+  // pins the rendered width to the viewBox width, so the browser can never
+  // scale it below its designed size — the parent scrolls horizontally
+  // instead. Model that behavior here: with min-width engaged, the
+  // EFFECTIVE render width is max(containerWidth, viewBoxWidth), never less.
+  test("375px-wide container: min-width holds geometry, label size never drops below its designed 14px", () => {
+    const layout = layoutPipeline(steps(9)); // 5 displayed nodes, 2 rows — the worst case
+    const containerWidth = 375;
+    // What width="100%" WOULD scale to, absent min-width (the pre-fix bug):
+    const unfloored = (LABEL_FONT_SIZE * containerWidth) / layout.viewBox.width;
+    assert.ok(
+      unfloored < 12,
+      `test fixture no longer reproduces the bug at 375px (would render ${unfloored.toFixed(2)}px) — widen the fixture`,
+    );
+    // With min-width: viewBoxWidth engaged, the browser can't render narrower
+    // than the SVG's natural (viewBox-derived) size — the effective width is
+    // floored at viewBox.width, so scale never drops below 1.
+    const effectiveWidth = Math.max(containerWidth, layout.viewBox.width);
+    const scale = effectiveWidth / layout.viewBox.width;
+    const renderedFontPx = LABEL_FONT_SIZE * scale;
+    assert.ok(scale >= 1, "min-width should never let the SVG scale below its natural size");
+    assert.ok(
+      renderedFontPx >= LABEL_FONT_SIZE,
+      `rendered label size ${renderedFontPx.toFixed(2)}px dropped below its designed ${LABEL_FONT_SIZE}px at a 375px container`,
+    );
+    assert.ok(renderedFontPx >= 12, "still clears the 12px legibility floor at 375px");
+  });
+
+  test("SVG declares style.minWidth == its own viewBox width in px (the actual mobile fix)", () => {
+    for (const n of [3, 9]) {
+      const layout = layoutPipeline(steps(n));
+      const svg = SharePipelineSvg({ steps: steps(n) }) as unknown as { props?: { style?: { minWidth?: string } } };
+      const minWidth = svg.props?.style?.minWidth;
+      assert.equal(
+        minWidth,
+        `${layout.viewBox.width}px`,
+        `expected svg style.minWidth to equal the viewBox width (${layout.viewBox.width}px), got ${String(minWidth)}`,
+      );
+    }
   });
 
   test("zero steps still returns a single-node layout (defensive floor, no divide-by-zero)", () => {
