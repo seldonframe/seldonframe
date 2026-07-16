@@ -16,8 +16,12 @@ import { MarketingFooter } from "@/components/landing/marketing-footer";
 
 export const metadata: Metadata = {
   title: "For builders & agencies — SeldonFrame",
+  // Pricing-truth fix 2026-07-15: white-label client sub-accounts are the
+  // agency tiers ($99/$199/$299), not the $29 Builder tier — the old
+  // "unlimited client workspaces under your own brand for $29" claim
+  // described the retired grandfathered agency tier.
   description:
-    "Build an AI agent once, list it on the marketplace, or run unlimited client workspaces under your own brand — all for one flat $29/mo.",
+    "Build an AI agent once, list it on the marketplace, or run white-label client workspaces under your own brand. Flat pricing from $29/mo; agency plans from $99/mo with 0% GMV.",
 };
 
 export default function AgenciesPage() {
