@@ -217,7 +217,8 @@ const realDeps: ApplyChangePlanDeps = {
   },
 
   // ── Step 4: apply brand theme ─────────────────────────────────────────────
-  // Direct DB write — mirrors saveThemeSettingsAction but without session
+  // Direct DB write — mirrors the retired settings-form action (theme writes
+  // now flow through saveThemeForOrg) but without session
   // auth or revalidatePath (those are HTTP-only concerns).
   // No-op when plan has no theme (avoids resetting to defaults).
   async applyTheme(orgId, plan) {

@@ -1,7 +1,8 @@
-// Core theme-write logic, extracted from saveThemeSettingsAction
-// (lib/theme/actions.ts) so it can be called from a NON-server-action
-// context — specifically the copilot's update_theme tool, which invokes
-// it directly (no FormData, no redirect) from an API route handler.
+// Core theme-write logic, originally extracted from the settings form's
+// server action (lib/theme/actions.ts, since retired) so it could be called
+// from a NON-server-action context — specifically the copilot's update_theme
+// tool, which invokes it directly (no FormData, no redirect) from an API
+// route handler. This is now the only write path.
 //
 // This file intentionally does NOT have a "use server" directive: a
 // "use server" file may only export async functions (see
@@ -19,7 +20,7 @@ import { organizations } from "@/db/schema";
 import { normalizeTheme } from "@/lib/theme/normalize-theme";
 import { DEFAULT_ORG_THEME, type OrgTheme } from "@/lib/theme/types";
 
-const REVALIDATE_PATHS = ["/settings", "/settings/theme", "/l", "/book", "/forms"] as const;
+const REVALIDATE_PATHS = ["/settings", "/l", "/book", "/forms"] as const;
 
 /** Pure merge step, extracted so the "customizedAt gets stamped and survives
  *  a subsequent partial merge" decision is unit-testable without touching the

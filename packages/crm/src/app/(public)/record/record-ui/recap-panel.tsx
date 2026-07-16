@@ -18,6 +18,7 @@ import type { CoverageEntry, CoverageTier, FlowModel } from "@/lib/recordings/tr
 import type { InterviewTurn, RecorderState } from "../recorder-machine";
 import { summarizeCoverage } from "../recorder-machine";
 import { TIER_COLOR, TIER_LABEL, TIER_LABEL_DRAFTS } from "./tiers";
+import { QuestionCard, selectVisibleQuestion } from "./question-card";
 
 export function RecapPanel({
   phase,
@@ -33,12 +34,15 @@ export function RecapPanel({
   compileError = null,
   compiledTemplateId,
   claimHref,
+  skippedQuestions,
   onInterviewInputChange,
   onInterviewSend,
   onInterviewRetry,
   onCompileNow,
   onCompileAgent,
   onApprove,
+  onQuestionAnswer,
+  onQuestionSkip,
   edgeCasePrompt,
   draftApprovals = false,
 }: {
@@ -59,12 +63,22 @@ export function RecapPanel({
   compileError?: string | null;
   compiledTemplateId: string | null;
   claimHref: string;
+  /** interview-one-question — question texts the operator has locally
+   *  skipped, excluded from the one-question card's queue selector. Owned by
+   *  record-client.tsx; never cleared automatically (see question-card.tsx's
+   *  selectVisibleQuestion for why this is a queue, not an index). */
+  skippedQuestions: ReadonlySet<string>;
   onInterviewInputChange: (value: string) => void;
   onInterviewSend: () => void;
   onInterviewRetry: () => void;
   onCompileNow: () => void;
   onCompileAgent: () => void;
   onApprove: () => void;
+  /** A chip ("Yes"/"No") or the question card's free-text Send. */
+  onQuestionAnswer: (question: string, answer: string) => void;
+  /** The question card's Skip link — adds the given question text to the
+   *  local skip set. No merge attempted, nothing sent to the server. */
+  onQuestionSkip: (question: string) => void;
   /** Record v3 (S1) — "Make it trustworthy" row. Absent (undefined) hides
    *  the row entirely: no slot traced yet, a slot is mid-capture, or all
    *  MAX_RECORDINGS_PER_SESSION slots are used. record-client.tsx computes
@@ -167,20 +181,19 @@ export function RecapPanel({
         </div>
       ) : null}
 
-      {openQuestions.length > 0 ? (
-        <div>
-          <h3 className="text-[13.5px] font-[600] uppercase tracking-[0.05em]" style={{ color: "var(--lp-body)" }}>
-            Open questions ({openQuestions.length})
-          </h3>
-          <ul className="mt-1.5 flex flex-col gap-1">
-            {openQuestions.map((q, i) => (
-              <li key={i} className="text-[13.5px] text-[#EAB308]">
-                {q}
-              </li>
-            ))}
-          </ul>
-        </div>
-      ) : null}
+      {/* interview-one-question — replaces the old amber (#EAB308) 6-question
+          <ul> wall with exactly ONE question at a time (record-client.tsx
+          owns skippedQuestions/onQuestionAnswer/onQuestionSkip). Keyed by
+          the currently-visible question text (queue selector, not an
+          index) so the free-text input resets between questions. */}
+      <QuestionCard
+        key={selectVisibleQuestion(openQuestions, skippedQuestions)?.question ?? "none"}
+        questions={openQuestions}
+        skippedQuestions={skippedQuestions}
+        pending={interviewPending}
+        onAnswer={onQuestionAnswer}
+        onSkip={onQuestionSkip}
+      />
 
       {/* Review minor #5: the edge-case prompt must not linger once the
           flow has moved past recap (e.g. phase "approved") — gated here too,

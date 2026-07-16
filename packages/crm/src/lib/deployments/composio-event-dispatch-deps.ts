@@ -18,6 +18,7 @@ import {
   claimComposioPushRun,
   releaseComposioPushRunClaim,
 } from "@/lib/deployments/store";
+import { writeRunReceipt } from "@/lib/agent-receipts/write";
 import type { DispatchComposioEventDeps } from "@/lib/deployments/composio-event-dispatch";
 
 /** Build the production deps for dispatchComposioEventToDeployments.
@@ -30,6 +31,19 @@ export function buildDispatchComposioEventDeps(): DispatchComposioEventDeps {
     claimRun: (deploymentId, orgId, messageId) =>
       claimComposioPushRun(deploymentId, orgId, messageId),
     releaseClaim: releaseComposioPushRunClaim,
+    // Agent receipts slice (Task 2a) — record every STARTED push run
+    // (ok/error) so a webhook-triggered agent's runs are queryable.
+    // writeRunReceipt is itself fail-soft (never throws).
+    writeReceipt: ({ orgId, deploymentId, status, sourceRef, toolCalls, replyText }) =>
+      writeRunReceipt({
+        orgId,
+        deploymentId,
+        triggerKind: "push",
+        sourceRef,
+        status,
+        toolCalls,
+        replyText,
+      }),
 
     runAgenticTurn: async ({ orgId, channel, blueprint }) => {
       const { db } = await import("@/db");
@@ -78,6 +92,13 @@ export function buildDispatchComposioEventDeps(): DispatchComposioEventDeps {
         }
       }
 
+      // Agent receipts slice (Task 2a) — collect a secret-safe tool-call
+      // trail via the SAME onToolEvent seam the supervised-run action log
+      // uses (stateless-turn.ts: `line` is already a summarized, no-secrets
+      // gloss — never the raw tool input/output). Only "result" events are
+      // kept (start events would double the list with no extra info).
+      const toolCalls: Array<{ tool: string; ok: boolean; note?: string }> = [];
+
       const turn = await runStatelessAgentTurn({
         orgId,
         orgSlug: org.slug,
@@ -98,9 +119,17 @@ export function buildDispatchComposioEventDeps(): DispatchComposioEventDeps {
         ],
         testMode: false,
         client: resolution.client,
+        onToolEvent: (event) => {
+          if (event.phase !== "result") return;
+          toolCalls.push({ tool: event.tool, ok: event.ok === true, note: event.line });
+        },
       });
 
-      return { ok: turn.ok === true };
+      return {
+        ok: turn.ok === true,
+        toolCalls,
+        replyText: turn.ok === true ? turn.reply : undefined,
+      };
     },
   };
 }

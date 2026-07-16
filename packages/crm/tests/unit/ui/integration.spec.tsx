@@ -3,8 +3,8 @@
 //
 // Scope (per PR 3 spec):
 //   1. All 7 patterns render without throwing on happy-path input.
-//   2. Theme propagation through <AdminThemeProvider> surfaces on
-//      the DOM as CSS custom properties.
+//   2. (retired 2026-07-15) Theme propagation — the admin theme
+//      bridge was removed; the dashboard always uses SF brand tokens.
 //   3. Scaffold-generated admin UI composes with every PR 1 + PR 2
 //      pattern in a single render tree without conflict.
 //   4. No console.error during renderToString on any happy-path
@@ -40,8 +40,6 @@ import { BlockDetailPage } from "../../../src/components/ui-composition/block-de
 import { EntityFormDrawer } from "../../../src/components/ui-composition/entity-form-drawer";
 import { ActivityFeed } from "../../../src/components/ui-composition/activity-feed";
 import { CompositionCard } from "../../../src/components/ui-composition/composition-card";
-import { AdminThemeProvider } from "../../../src/components/theme/admin-theme-provider";
-import { DEFAULT_ORG_THEME } from "../../../src/lib/theme/types";
 
 // ---------------------------------------------------------------------
 // Shared fixtures
@@ -215,70 +213,14 @@ describe("integration — all PR 1 + PR 2 patterns render on happy-path input", 
 });
 
 // ---------------------------------------------------------------------
-// 2. Theme propagation
-// ---------------------------------------------------------------------
-
-describe("integration — theme propagation through <AdminThemeProvider>", () => {
-  test("default theme injects the curated CSS var override set", () => {
-    const html = renderToString(
-      <AdminThemeProvider theme={DEFAULT_ORG_THEME}>
-        <BlockListPage title="Contacts" schema={ContactSchema} rows={contactRows} />
-      </AdminThemeProvider>,
-    );
-    // All four overrides present in the wrapper's inline style.
-    // Derived from DEFAULT_ORG_THEME so this stays correct as the
-    // default palette evolves — the invariant is "the provider emits
-    // the curated var set from the default theme", not any particular
-    // hex value.
-    assert.match(html, /data-admin-theme-provider=""/);
-    assert.match(html, new RegExp(`--primary:${DEFAULT_ORG_THEME.primaryColor}`));
-    assert.match(html, new RegExp(`--ring:${DEFAULT_ORG_THEME.primaryColor}`));
-    assert.match(html, new RegExp(`--accent:${DEFAULT_ORG_THEME.accentColor}`));
-    assert.match(html, /--radius:0\.75rem/);
-    // The wrapped content is still rendered inside.
-    assert.match(html, /Alice/);
-    assertNoConsoleIssues();
-  });
-
-  test("null theme passes children through unchanged (no wrapper div)", () => {
-    const html = renderToString(
-      <AdminThemeProvider theme={null}>
-        <BlockListPage title="x" schema={ContactSchema} rows={contactRows} />
-      </AdminThemeProvider>,
-    );
-    assert.ok(!html.includes("data-admin-theme-provider"));
-    assert.match(html, /Alice/);
-    assertNoConsoleIssues();
-  });
-
-  test("custom theme maps primary + accent to --primary / --accent", () => {
-    const brand = {
-      ...DEFAULT_ORG_THEME,
-      primaryColor: "#ff5722",
-      accentColor: "#3f51b5",
-      borderRadius: "sharp" as const,
-    };
-    const html = renderToString(
-      <AdminThemeProvider theme={brand}>
-        <PageShell title="x">body</PageShell>
-      </AdminThemeProvider>,
-    );
-    assert.match(html, /--primary:#ff5722/);
-    assert.match(html, /--accent:#3f51b5/);
-    assert.match(html, /--radius:0px/);
-    assertNoConsoleIssues();
-  });
-});
-
-// ---------------------------------------------------------------------
 // 3. Scaffold + patterns compose end-to-end
 // ---------------------------------------------------------------------
 //
 // The scaffold → UI bridge smoke test (admin-bridge-smoke.spec.tsx)
 // already proves a scaffolded admin page dynamically imports + renders.
 // This test locks down that the patterns themselves compose in the
-// same tree: scaffolded schema → BlockListPage → EntityTable, wrapped
-// by AdminThemeProvider, sibling to a CompositionCard + ActivityFeed.
+// same tree: scaffolded schema → BlockListPage → EntityTable,
+// sibling to a CompositionCard + ActivityFeed.
 
 describe("integration — scaffold schema + all patterns compose in one tree", () => {
   test("renders full admin dashboard tree without errors", () => {
@@ -291,7 +233,7 @@ describe("integration — scaffold schema + all patterns compose in one tree", (
     });
 
     const html = renderToString(
-      <AdminThemeProvider theme={DEFAULT_ORG_THEME}>
+      <>
         <BlockListPage
           title="Notes"
           schema={NoteSchema}
@@ -309,11 +251,10 @@ describe("integration — scaffold schema + all patterns compose in one tree", (
           items={[{ id: "1", type: "note", subject: "x", createdAt: "2026-04-24T00:00:00Z" }]}
           now={FIXED_NOW}
         />
-      </AdminThemeProvider>,
+      </>,
     );
 
     // All three pattern markers land in one string.
-    assert.match(html, /data-admin-theme-provider=""/);
     assert.match(html, /First note/);
     assert.match(html, /Recent activity/);
     assert.match(html, /data-activity-feed=""/);
@@ -333,7 +274,7 @@ describe("integration — scaffold schema + all patterns compose in one tree", (
 describe("integration — zero console noise across the pattern suite", () => {
   test("rendering all 7 patterns in one tree produces zero console output", () => {
     const html = renderToString(
-      <AdminThemeProvider theme={DEFAULT_ORG_THEME}>
+      <>
         <PageShell title="Dashboard">
           <EntityFormDrawer
             open
@@ -354,7 +295,7 @@ describe("integration — zero console noise across the pattern suite", () => {
           <ActivityFeed items={[]} now={FIXED_NOW} />
           <CompositionCard title="Card" state="empty" />
         </PageShell>
-      </AdminThemeProvider>,
+      </>,
     );
     assert.ok(html.length > 0);
     assertNoConsoleIssues();

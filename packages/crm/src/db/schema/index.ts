@@ -51,6 +51,7 @@ export * from "./message-triggers";
 // SLICE 10 PR 1 C2 — request_approval persistence.
 export * from "./workflow-approvals";
 export * from "./agent-action-drafts";
+export * from "./agent-run-receipts";
 // May 1, 2026 — Measurement Layers 2 + 3.
 export * from "./seldonframe-events";
 export * from "./brain-outcomes";

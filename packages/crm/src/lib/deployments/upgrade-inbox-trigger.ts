@@ -58,19 +58,47 @@ export type UpgradeInboxTriggerDeps = {
   hasWebhookSecret: () => boolean;
   /** Does this org have a live, connected Gmail toolkit connection? */
   isGmailConnected: (orgId: string) => Promise<boolean>;
-  /** Register the live Composio trigger (client.ts:275's createTrigger). */
-  createTrigger: (orgId: string) => Promise<{ triggerId: string | null }>;
+  /** Register the live Composio trigger (client.ts:275's createTrigger).
+   *  Agent receipts slice (Task 4) — `connectedAccountId` is threaded
+   *  through when the connected-account pin (below) resolves one. */
+  createTrigger: (
+    orgId: string,
+    connectedAccountId?: string | null,
+  ) => Promise<{ triggerId: string | null }>;
   /** Persist the flipped trigger onto the TEMPLATE's blueprint. */
   updateTemplateTrigger: (agentTemplateId: string, trigger: AgentTrigger) => Promise<void>;
   /** Stamp the audit marker on the DEPLOYMENT (not the template — this is
    *  per-deployment observability, not a shared trigger property). */
   stampUpgraded: (deploymentId: string, at: Date) => Promise<void>;
+  /** Agent receipts slice (Task 4) — the connected-account pin. OPTIONAL:
+   *  when absent, the upgrade proceeds exactly as before (no pin attempt,
+   *  createTrigger called with no connectedAccountId — today's behavior).
+   *  List this org's connected Gmail account ids (client.ts's
+   *  listConnectedAccountIds). */
+  listConnectedAccounts?: (orgId: string) => Promise<string[]>;
+  /** Persist the CHOSEN connected-account id onto the deployment (the audit
+   *  record — see store.ts). Only called when `listConnectedAccounts`
+   *  returned >=1 id; a failure here is fail-soft (logged, upgrade still
+   *  proceeds — the trigger itself is the important part). */
+  persistConnectedAccountId?: (deploymentId: string, connectedAccountId: string) => Promise<void>;
   now?: () => Date;
 };
 
 export type UpgradeInboxTriggerResult =
   | { upgraded: true }
   | { upgraded: false; reason?: string };
+
+/**
+ * Resolve WHICH connected account a live trigger should pin to, from the
+ * org's connected-account ids for the toolkit: 0 → null (nothing to pin —
+ * the caller proceeds without one, matching today's behavior), 1 → that id
+ * (unambiguous — pinning it is free), >1 → the FIRST id (matches the SDK's
+ * own default-pick behavior — see client.ts's createTrigger doc — but NOW
+ * RECORDED instead of silently re-chosen per call). Pure; never throws.
+ */
+export function resolveConnectedAccountId(accountIds: string[]): string | null {
+  return accountIds.length > 0 ? accountIds[0] : null;
+}
 
 /**
  * Attempt the poll->push upgrade for one deployment. NEVER throws — every
@@ -134,9 +162,38 @@ export async function maybeUpgradeInboxTriggerToPush(
       return { upgraded: false, reason: "gmail_not_connected" };
     }
 
+    // Agent receipts slice (Task 4) — the connected-account pin. Resolve +
+    // persist BEFORE createTrigger so the trigger call itself can pass the
+    // pinned id (never guesses). Best-effort: any failure here (list or
+    // persist) is swallowed — the upgrade still proceeds with NO pin,
+    // exactly today's behavior, never a regression.
+    let connectedAccountId: string | null = null;
+    if (deps.listConnectedAccounts) {
+      try {
+        const accountIds = await deps.listConnectedAccounts(args.orgId);
+        connectedAccountId = resolveConnectedAccountId(accountIds);
+      } catch (err) {
+        console.warn(
+          `[upgrade-inbox-trigger] listConnectedAccounts failed for org ${args.orgId}:`,
+          err instanceof Error ? err.message : String(err),
+        );
+        connectedAccountId = null;
+      }
+      if (connectedAccountId && deps.persistConnectedAccountId) {
+        try {
+          await deps.persistConnectedAccountId(args.deploymentId, connectedAccountId);
+        } catch (err) {
+          console.warn(
+            `[upgrade-inbox-trigger] persistConnectedAccountId failed for deployment ${args.deploymentId}:`,
+            err instanceof Error ? err.message : String(err),
+          );
+        }
+      }
+    }
+
     let triggerId: string | null;
     try {
-      const created = await deps.createTrigger(args.orgId);
+      const created = await deps.createTrigger(args.orgId, connectedAccountId);
       triggerId = created.triggerId;
     } catch (err) {
       return {

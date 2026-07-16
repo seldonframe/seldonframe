@@ -45,6 +45,8 @@ import { supervisedRuns, type SupervisedRun } from "@/db/schema/agent-lifecycle"
 import { composioForOrg, listConnections } from "@/lib/integrations/composio/client";
 import { getComposioToolkit } from "@/lib/integrations/composio/catalog";
 import { listDeployments } from "@/lib/deployments/store";
+import { getDeploymentLiveStatus } from "@/lib/agent-receipts/store";
+import { DeploymentLiveBanner } from "@/components/agent-receipts/live-banner";
 import {
   deriveLifecycleStages,
   defaultOpenStageId,
@@ -188,12 +190,24 @@ export default async function AgentTemplatePage({
       })()
     : null;
 
-  // Agent lifecycle slice — flag off is BYTE-FOR-BYTE the existing page
-  // below (early return, no extra queries run). Flag on renders the
-  // five-stage ladder instead.
+  // Agent lifecycle slice — flag off is otherwise BYTE-FOR-BYTE the existing
+  // page below (early return). Flag on renders the five-stage ladder
+  // instead. Agent receipts slice (Task 3) adds ONE extra query here (this
+  // template's most relevant deployment + its LIVE status) so the banner
+  // below can render — the only query this early-return path now runs
+  // beyond what was already loaded above.
   const lifecycleEnabled = isAgentLifecycleEnabled({ SF_AGENT_LIFECYCLE: process.env.SF_AGENT_LIFECYCLE });
 
   if (!lifecycleEnabled) {
+  const templateDeployments = await listDeployments(orgId);
+  const primaryDeployment =
+    templateDeployments.find((d) => d.agentTemplateId === template.id && d.status === "active") ??
+    templateDeployments.find((d) => d.agentTemplateId === template.id) ??
+    null;
+  const liveStatus = primaryDeployment
+    ? await getDeploymentLiveStatus(primaryDeployment.id, orgId)
+    : null;
+
   return (
     <section className="animate-page-enter">
       {/* ── Sticky header (Claude Design, direction A) ──────────────────────
@@ -275,6 +289,11 @@ export default async function AgentTemplatePage({
           {formatTemplateType(template.type)} template. Configure it once here,
           test it in the sandbox, then deploy it to as many clients as you like.
         </p>
+
+        {/* Agent receipts slice (Task 3) — LIVE status for this template's
+            deployment (renders nothing when there's no deployment, or it's
+            not active — see DeploymentLiveBanner). */}
+        <DeploymentLiveBanner status={liveStatus} />
 
         <div className="pt-6">
           {/* Sections 01–04 + Save live inside the editor island (they need

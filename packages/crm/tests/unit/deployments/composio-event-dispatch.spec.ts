@@ -267,6 +267,125 @@ test("claimRun throwing -> treated as not-claimed, never throws the dispatcher",
   assert.deepEqual(r.started, []);
 });
 
+// Agent receipts slice (Task 2a) — the optional writeReceipt DI hook.
+test("a successful run calls writeReceipt with status ok + the turn's toolCalls/sourceRef", async () => {
+  const receipts: Array<Record<string, unknown>> = [];
+  const deps = fakeDeps({
+    runAgenticTurn: async () => ({
+      ok: true,
+      toolCalls: [{ tool: "GMAIL_SEND_EMAIL", ok: true, note: "Sent." }],
+      replyText: "Replied to the lead.",
+    }),
+    writeReceipt: async (args) => {
+      receipts.push(args as unknown as Record<string, unknown>);
+    },
+  });
+
+  await dispatchComposioEventToDeployments(deps, {
+    orgId: ORG,
+    eventType: EVENT,
+    payload: { messageId: "msg_1" },
+  });
+
+  assert.equal(receipts.length, 1);
+  assert.equal(receipts[0].orgId, ORG);
+  assert.equal(receipts[0].deploymentId, "dep_1");
+  assert.equal(receipts[0].status, "ok");
+  assert.equal(receipts[0].sourceRef, "msg_1");
+  assert.deepEqual(receipts[0].toolCalls, [{ tool: "GMAIL_SEND_EMAIL", ok: true, note: "Sent." }]);
+  assert.equal(receipts[0].replyText, "Replied to the lead.");
+});
+
+test("a failed run (ok:false) calls writeReceipt with status error", async () => {
+  const receipts: Array<Record<string, unknown>> = [];
+  const deps = fakeDeps({
+    runAgenticTurn: async () => ({ ok: false }),
+    writeReceipt: async (args) => {
+      receipts.push(args as unknown as Record<string, unknown>);
+    },
+  });
+
+  await dispatchComposioEventToDeployments(deps, {
+    orgId: ORG,
+    eventType: EVENT,
+    payload: { messageId: "msg_1" },
+  });
+
+  assert.equal(receipts.length, 1);
+  assert.equal(receipts[0].status, "error");
+});
+
+test("a THROWING run also calls writeReceipt with status error (never blocks the release-claim path)", async () => {
+  const receipts: Array<Record<string, unknown>> = [];
+  let releaseArgs: unknown = null;
+  const deps = fakeDeps({
+    runAgenticTurn: async () => {
+      throw new Error("timeout");
+    },
+    releaseClaim: async (deploymentId, messageId) => {
+      releaseArgs = { deploymentId, messageId };
+    },
+    writeReceipt: async (args) => {
+      receipts.push(args as unknown as Record<string, unknown>);
+    },
+  });
+
+  await dispatchComposioEventToDeployments(deps, {
+    orgId: ORG,
+    eventType: EVENT,
+    payload: { messageId: "msg_1" },
+  });
+
+  assert.equal(receipts.length, 1);
+  assert.equal(receipts[0].status, "error");
+  assert.deepEqual(releaseArgs, { deploymentId: "dep_1", messageId: "msg_1" });
+});
+
+test("a SKIPPED deployment (claim not granted) never calls writeReceipt", async () => {
+  const receipts: Array<Record<string, unknown>> = [];
+  const deps = fakeDeps({
+    claimRun: async () => ({ claimed: false, reason: "already_processed" }),
+    writeReceipt: async (args) => {
+      receipts.push(args as unknown as Record<string, unknown>);
+    },
+  });
+
+  await dispatchComposioEventToDeployments(deps, {
+    orgId: ORG,
+    eventType: EVENT,
+    payload: { messageId: "msg_1" },
+  });
+
+  assert.equal(receipts.length, 0);
+});
+
+test("no writeReceipt dep provided -> dispatch still completes (default no-op, existing callers unaffected)", async () => {
+  const deps = fakeDeps();
+  const r = await dispatchComposioEventToDeployments(deps, {
+    orgId: ORG,
+    eventType: EVENT,
+    payload: { messageId: "msg_1" },
+  });
+  assert.deepEqual(r.started, ["dep_1"]);
+});
+
+test("a throwing writeReceipt is swallowed — never affects the dispatch result or claim release", async () => {
+  const deps = fakeDeps({
+    runAgenticTurn: async () => ({ ok: false }),
+    writeReceipt: async () => {
+      throw new Error("receipt db down");
+    },
+  });
+
+  const r = await dispatchComposioEventToDeployments(deps, {
+    orgId: ORG,
+    eventType: EVENT,
+    payload: { messageId: "msg_1" },
+  });
+
+  assert.deepEqual(r.started, ["dep_1"]);
+});
+
 // Type-level sanity: ClaimRunResult is the discriminated union claimRun deps
 // return — exercised implicitly by the fakes above, asserted here so the
 // exported type stays part of the module's public contract.

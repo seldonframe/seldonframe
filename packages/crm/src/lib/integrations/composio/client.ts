@@ -296,21 +296,55 @@ export async function disconnect(
 /**
  * Register an inbound-event trigger for this workspace's user_id. The webhook
  * (Phase 4) routes the resulting events back into the archetype dispatcher.
+ *
+ * Agent receipts slice (Task 4) — `connectedAccountId` pins WHICH connected
+ * account the trigger (and the downstream tool calls it drives) reads from,
+ * when the workspace has more than one for the toolkit. Absent → the SDK's
+ * own default (the first connected account, emitting its "Multiple
+ * connected accounts found ... using the first one" warning) — today's
+ * behavior, unchanged for a caller that doesn't pass it.
  */
 export async function createTrigger(
   orgId: string,
   triggerSlug: string,
   triggerConfig?: Record<string, unknown>,
-  opts?: { client?: Composio | null },
+  opts?: { client?: Composio | null; connectedAccountId?: string | null },
 ): Promise<{ triggerId: string | null }> {
   const composio =
     opts?.client !== undefined ? opts.client : await composioForOrg(orgId);
   if (!composio) return { triggerId: null };
   const res = await composio.triggers.create(orgId, triggerSlug, {
     triggerConfig: triggerConfig ?? {},
+    ...(opts?.connectedAccountId ? { connectedAccountId: opts.connectedAccountId } : {}),
   });
   // The upsert response carries the trigger instance id under `triggerId`.
   const triggerId =
     (res as { triggerId?: string } | null | undefined)?.triggerId ?? null;
   return { triggerId };
+}
+
+/**
+ * List this workspace's connected-account ids for one toolkit (e.g.
+ * "gmail"), newest first per the API's default order. Agent receipts slice
+ * (Task 4) — the connected-account pin: when this returns >1 id, the caller
+ * (upgrade-inbox-trigger.ts's resolveConnectedAccountId) picks the first and
+ * persists the choice, so a later live run reads from the SAME account
+ * instead of the SDK silently picking one per-call. Returns [] when the
+ * workspace has no Composio key or no connections for the toolkit.
+ */
+export async function listConnectedAccountIds(
+  orgId: string,
+  toolkitSlug: string,
+  opts?: { client?: Composio | null },
+): Promise<string[]> {
+  const composio =
+    opts?.client !== undefined ? opts.client : await composioForOrg(orgId);
+  if (!composio) return [];
+  const res = await composio.connectedAccounts.list({
+    userIds: [orgId],
+    toolkitSlugs: [toolkitSlug],
+  });
+  return (res.items ?? [])
+    .map((item) => (item as { id?: string } | null | undefined)?.id)
+    .filter((id): id is string => typeof id === "string" && id.trim().length > 0);
 }

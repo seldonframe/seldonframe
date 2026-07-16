@@ -2314,3 +2314,43 @@ C4 close-out with empirical SLICE 11 data.
 - 2026-07-15 — Pricing changes drift: when the pricing catalog (plans.ts) changes, grep the WHOLE content surface (lib/seo/**, marketing components, docs) for the OLD numbers and price+capability collocations — per-page review missed 41 stale claims. (docs/learnings/2026-07-15-pricing-claims-drift-audit.md)
 - 2026-07-15 — Route CTAs by their label's promise: 'Build it free' → the build surface, 'Start for free' → signup. A label that promises less friction than it delivers is a small lie. (docs/learnings/2026-07-15-route-by-promise-ctas.md)
 - 2026-07-15 — Never share one working tree between two active sessions: a concurrent session clobbered in-flight edits mid-stream. Branch work goes in a git worktree; commit early to pin.
+- 2026-07-15: NEVER run implementer agents in the main checkout — another live session may own it (branch switched mid-task, stashes interleaved). Worktree-first for every build; a stash found in a shared checkout is presumed someone else's work (verify diff shape against the task's known scope before applying).
+
+---
+
+## L-35 — Every page that participates in an auth round-trip must be in SAFE_REDIRECT_PREFIXES
+
+- **Trigger:** The /record claim loop (record → /signup?callbackUrl=/record?… →
+  return) silently collapsed to /dashboard for EVERY claimer since the feature
+  shipped, because /record was never added to the shared open-redirect
+  allowlist (lib/auth/signup-redirect.ts). Log-proven via Max's 401 +
+  dashboard-dump run, 2026-07-15.
+- **Rule:** Any new page whose flow passes through /signup or /login with a
+  callbackUrl MUST add its path to SAFE_REDIRECT_PREFIXES in the same PR, with
+  a dated comment, plus allowlist tests (accept the path + query; reject
+  lookalikes). Design-time checklist item for every claim-like flow. Related:
+  host-only cookies are the house pattern — pin pages to the app host via
+  lib/auth/app-host-redirect.ts, NEVER propose cookie-domain widening (two
+  documented prod incidents).
+
+---
+
+## L-36 — Vision gates must render the REAL page CSS context, and "readable" needs an invariant test, not a fixture pass
+
+- **Trigger:** The question-card slice passed its vision gate round 1 on a
+  fixture render; Max's real browser showed the Yes/No chips as blank cream
+  pills. Two stacked causes: (1) the maker had seen the invisible-text symptom
+  in its own fixture, "fixed" the fixture, and concluded artifact — a real
+  component bug explained away; (2) the actual mechanism (Tailwind Preflight
+  `appearance: button` + transparent background paints a native face on some
+  engines) only reproduces on some browser/OS combos, so a Chromium-only
+  fixture screenshot could never catch it.
+- **Rule:** (1) When a rendering artifact appears in a test fixture, the
+  DEFAULT assumption is component bug until proven otherwise — never "fix" the
+  fixture to make the symptom go away. (2) Vision-verify renders must load the
+  real page CSS chain (route-level imports included), not a bare component
+  shell. (3) Interactive elements on brand surfaces get a visibility invariant
+  test: explicit background AND text color present and differing (the OG-card
+  "test visibility not presence" lesson, generalized to buttons). (4) Buttons
+  styled with transparent backgrounds require `appearance-none` — Preflight
+  does not guarantee it.
