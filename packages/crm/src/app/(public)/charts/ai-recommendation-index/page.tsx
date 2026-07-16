@@ -221,7 +221,7 @@ export default function AiRecommendationIndexPage(): ReactElement {
             before you sign up.
           </p>
           <div style={{ display: "flex", flexWrap: "wrap", gap: 12, justifyContent: "center", marginTop: 22 }}>
-            <a href="/signup" style={{ background: MKT.green, color: "#fff", padding: "13px 26px", borderRadius: 12, fontWeight: 700, fontSize: 15.5, textDecoration: "none" }}>
+            <a href="/#hero-form" style={{ background: MKT.green, color: "#fff", padding: "13px 26px", borderRadius: 12, fontWeight: 700, fontSize: 15.5, textDecoration: "none" }}>
               Start for free
             </a>
             <a

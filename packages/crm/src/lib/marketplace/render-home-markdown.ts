@@ -140,7 +140,7 @@ export function renderHomeMarkdown(baseUrl: string = HOME_BASE_URL): string {
   lines.push(`- Pricing: ${base}/pricing`);
   lines.push(`- Agent marketplace: ${base}/marketplace`);
   lines.push(`- AI agent library: ${base}/ai-agents`);
-  lines.push(`- Start free: ${base}/signup`);
+  lines.push(`- Start free (builds from the homepage chatbox): ${base}/#hero-form`);
   lines.push("");
   lines.push(`See the full homepage: ${base}/`);
   lines.push("");

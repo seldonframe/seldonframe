@@ -8,7 +8,7 @@
 
 import { getCompetitor, type Competitor } from "@/lib/seo/alternative-pages";
 
-export const START_HREF = "/signup";
+export const START_HREF = "/#hero-form";
 /** SeldonFrame-branded 15-min demo booking (bookings template row on the
  *  seldonframe workspace — see the booking_slug='default' template). */
 export const DEMO_HREF = "https://app.seldonframe.com/book/seldonframes-workspace-7798/default";
