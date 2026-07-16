@@ -68,11 +68,12 @@ export default async function FormsPage() {
           single-question-at-a-time rendering picks up logo / primary
           color / font from the workspace theme. We surface that here
           so operators don't think they need a separate visual editor.
-          Clicking "Customize design" lands on /settings/theme where
-          they can upload a logo, pick fonts, and tune the brand color
-          — every saved field cascades to all intake forms automatically. */}
+          Clicking "Customize design" lands on /settings/branding for
+          the logo; colors/fonts are changed by asking the copilot
+          (update_theme) — every saved field cascades to all intake
+          forms automatically. */}
       <Link
-        href="/settings/theme"
+        href="/settings/branding"
         className="flex items-center gap-4 rounded-xl border border-border bg-card p-4 hover:bg-accent/30 transition-colors"
       >
         <div
@@ -94,8 +95,8 @@ export default async function FormsPage() {
           </p>
           <p className="text-xs text-muted-foreground mt-0.5">
             {themeLogoUrl
-              ? "Logo, primary color, and font cascade automatically. Tweak anytime in Brand & Theme."
-              : "Upload a logo and pick brand colors / fonts in Brand & Theme. Every intake form picks them up automatically."}
+              ? "Logo, primary color, and font cascade automatically. Tweak your logo in Branding, or ask the copilot to change colors."
+              : "Upload a logo in Branding — or ask the copilot to change colors and fonts. Every intake form picks them up automatically."}
           </p>
         </div>
         <span className="text-xs font-medium text-foreground shrink-0">Customize design →</span>

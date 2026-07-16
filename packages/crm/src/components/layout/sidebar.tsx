@@ -230,7 +230,7 @@ export function Sidebar(props: {
               <div className="flex size-8 items-center justify-center overflow-hidden rounded-lg border border-border/70 bg-muted/30 shrink-0">
                 {/* 2026-05-18 — per-workspace logo (theme.logoUrl) now
                     wins over the default SeldonFrame icon. When the
-                    operator uploads a logo at /settings/theme, that
+                    operator uploads a logo (theme.logoUrl, set via /settings/branding or the copilot), that
                     image becomes the workspace's identity in the
                     sidebar tile (and emails / public pages already
                     consume it). Falls back to the SF icon when unset. */}
