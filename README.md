@@ -29,6 +29,13 @@ The open-source platform that gives your coding agent the primitives real produc
 claude mcp add seldonframe -- npx -y @seldonframe/mcp
 ```
 
+Or as an auto-updating Claude Code plugin:
+
+```
+/plugin marketplace add seldonframe/seldonframe
+/plugin install seldonframe@seldonframe
+```
+
 ```
 > Build me an AI receptionist for an HVAC company in New Orleans.
 
@@ -160,6 +167,13 @@ One npm package — [`@seldonframe/mcp`](https://www.npmjs.com/package/@seldonfr
 
 ```bash
 claude mcp add seldonframe -- npx -y @seldonframe/mcp
+```
+
+Or as a plugin (auto-updates, one-liner via the marketplace):
+
+```
+/plugin marketplace add seldonframe/seldonframe
+/plugin install seldonframe@seldonframe
 ```
 
 </details>
