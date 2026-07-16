@@ -136,7 +136,7 @@ export function ClaudeProjectBriefGenerator(): ReactElement {
           plus the website, CRM, booking calendar and AI receptionist the brief can only describe.
         </p>
         <div style={{ display: "flex", flexWrap: "wrap", gap: 12, marginTop: 14 }}>
-          <a href="/signup" style={{ background: INK, color: "#F6F2EA", padding: "12px 24px", borderRadius: 12, fontWeight: 700, fontSize: 14.5, textDecoration: "none" }}>
+          <a href="/#hero-form" style={{ background: INK, color: "#F6F2EA", padding: "12px 24px", borderRadius: 12, fontWeight: 700, fontSize: 14.5, textDecoration: "none" }}>
             Build it free in 3 minutes
           </a>
           <a

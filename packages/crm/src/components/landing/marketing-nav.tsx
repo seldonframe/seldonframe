@@ -10,7 +10,10 @@
 // Shopify-homepage redesign (2026-07-06) — single CTA, minimal nav. The
 // center nav links, the "For agencies →" button, and the mobile drawer
 // (now unnecessary with no nav links) are removed. Right cluster is just
-// a subtle "Log in" link + one primary CTA ("Start for free" → /signup).
+// a subtle "Log in" link + one primary CTA ("Start for free" → /#hero-form,
+// the hero chatbox — Max 2026-07-16: every free-start CTA enters through the
+// chatbox so all visitors get the build-first onboarding; /signup stays for
+// Log in-adjacent and auth flows only).
 
 "use client";
 
@@ -124,7 +127,7 @@ export function MarketingNav() {
             Log in
           </Link>
           <Link
-            href="/signup"
+            href="/#hero-form"
             className="inline-flex h-9 items-center justify-center gap-2 whitespace-nowrap rounded-[11px] bg-[var(--lp-cta-bg)] px-4 text-[13.5px] font-semibold text-[var(--lp-cta-ink)] shadow-[0_1px_2px_color-mix(in_oklab,var(--lp-ink)_10%,transparent),0_6px_16px_color-mix(in_oklab,var(--lp-ink)_10%,transparent),0_18px_40px_color-mix(in_oklab,var(--lp-ink)_6%,transparent),inset_0_1.5px_0_rgba(255,255,255,.12)] transition-all hover:-translate-y-px hover:shadow-[0_2px_4px_color-mix(in_oklab,var(--lp-ink)_12%,transparent),0_12px_26px_color-mix(in_oklab,var(--lp-ink)_14%,transparent),inset_0_1.5px_0_rgba(255,255,255,.14)] active:translate-y-px focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[var(--lp-accent)]"
           >
             Start for free

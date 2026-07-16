@@ -162,7 +162,7 @@ export function LandingMarketingFaqSection() {
               Compare all plans →
             </Link>
             <Link
-              href="/signup"
+              href="/#hero-form"
               className="inline-flex items-center gap-2 rounded-[11px] border border-[rgba(34,29,23,.18)] px-5 py-3 text-[14px] font-[500] text-[#221D17] transition-colors hover:border-[#1F2B24]/50"
             >
               Start free

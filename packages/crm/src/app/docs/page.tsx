@@ -253,7 +253,7 @@ export default function DocsHome() {
           </p>
           <div className="flex flex-wrap justify-center gap-3 pt-2">
             <Link
-              href="/signup"
+              href="/#hero-form"
               className="inline-flex h-10 items-center px-5 rounded-md bg-primary text-primary-foreground text-sm font-medium hover:bg-primary/90 transition-colors"
             >
               Start building
