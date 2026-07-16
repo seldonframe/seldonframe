@@ -2355,3 +2355,22 @@ C4 close-out with empirical SLICE 11 data.
   styled with transparent backgrounds require `appearance-none` — Preflight
   does not guarantee it.
 - 2026-07-16 — When rewriting a component, grep the test dir for the COMPONENT/MODULE NAME (marketing-faq) and run every spec that imports it — grepping for copy strings missed a stale spec that asserted concept regexes, not literals. The reviewer caught it; the grep should have.
+
+---
+
+## L-37 — Windows junction removal must be unlink-only; recursive deletes FOLLOW junctions into the target
+
+- **Trigger:** Share-card slice (2026-07-16). Cleaning up a node_modules test
+  junction with PowerShell `.Delete($true)` recursed THROUGH the junction and
+  wiped the guardian worktree's real packages/crm/node_modules (an unrelated
+  worktree). Restored via `pnpm install --filter ./packages/crm` (100%
+  store-reuse, 85s) + parity verification; no lasting damage, but only because
+  the pnpm store made restoration cheap.
+- **Rule:** Junctions/symlinks on Windows are removed with `cmd /c rmdir
+  <path>` (unlink-only — never deletes contents) — NEVER
+  `Remove-Item -Recurse`, PowerShell `.Delete($true)`, or `rm -rf`, all of
+  which traverse into the link target. Before ANY recursive delete of a path
+  under a worktree, check `(Get-Item $p).LinkType` (or `fsutil reparsepoint
+  query`) — reparse point ⇒ unlink-only. This is the destructive twin of the
+  worktree-junction setup memory: junctions are cheap to make and catastrophic
+  to delete wrong.
