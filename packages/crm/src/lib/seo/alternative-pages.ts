@@ -147,7 +147,7 @@ export const SHARED_FAQ: AltFaqItem[] = [
   },
   {
     q: "Do you take a cut of what I charge my clients?",
-    a: "SeldonFrame works like Shopify: $29/mo flat, plus 2% on sales made through SeldonFrame checkout, plus 5% when you sell agents on the SeldonFrame marketplace. Client retainers you bill outside SeldonFrame cost nothing extra.",
+    a: "SeldonFrame works like Shopify: Builder is $29/mo flat, and agency plans run $99–$299/mo with white-label and client sub-accounts included. Solo plans add a flat 2% only on sales made through SeldonFrame checkout — agency plans pay 0%. Selling agents on the marketplace carries 5%. Client retainers you bill outside SeldonFrame cost nothing extra.",
   },
   {
     q: "How fast can I see it working?",
@@ -165,7 +165,7 @@ export const COMPETITORS: Competitor[] = [
     oneLiner:
       "GoHighLevel is an all-in-one white-label CRM and marketing-automation platform. Agencies use it to run funnels, email/SMS, and pipelines for local-business clients.",
     heroSub:
-      "Stop paying extra fees for AI that's just an add-on. SeldonFrame gives every client a complete AI front office — receptionist, website, CRM, booking — for $29/mo flat, on your own AI keys.",
+      "Stop paying extra fees for AI that's just an add-on. SeldonFrame gives every client a complete AI front office — receptionist, website, CRM, booking — white-label agency plans from $99/mo (0% GMV); solo builders from $29/mo flat.",
     intro: [
       "Most people looking for a GoHighLevel alternative hit the same wall: the AI isn't the platform, it's an add-on. Plans run $97–$497/mo. The AI Employee costs another $50–$97/mo per location. Outbound Voice AI is still billed per minute on top. Users say it takes 2–4 weeks to learn before the platform earns its keep. The costs are real, and they add up — for every single client.",
       "That said, GoHighLevel is impressive. It's the most complete agency toolbox ever built, with funnels, email, courses, a huge template library, and true white-label reselling. If your business is funnels and email campaigns, it's hard to beat. But if your clients just need an AI that answers the phone, qualifies the lead, and books the job into a real calendar and CRM, you're buying a whole toolbox to get one receptionist.",
@@ -1353,7 +1353,7 @@ export const COMPETITORS: Competitor[] = [
     oneLiner:
       "SharpSpring is an agency-focused marketing automation platform, now operating under Constant Contact and reported to be in maintenance mode after the acquisition.",
     heroSub:
-      "A platform in maintenance mode with quote-gated pricing is a place to migrate FROM, not to. SeldonFrame gives every client an AI receptionist, website, CRM, and booking system for $29/mo flat, publicly priced.",
+      "A platform in maintenance mode with quote-gated pricing is a place to migrate FROM, not to. SeldonFrame is publicly priced: white-label agency plans from $99/mo (0% GMV), solo from $29/mo flat — AI receptionist, website, CRM, and booking included.",
     intro: [
       "Most people looking for a SharpSpring alternative hit the same wall: nobody publishes the price, and the brand's future is unclear. Pricing is quote-gated — the number commonly cited by agencies is around $449/mo per 1,000 contacts, but SharpSpring won't confirm it publicly. Since the Constant Contact acquisition, the brand has been reported as being phased toward retirement, with little visible product investment, and there's no local-business toolkit at all — no phone answering, no booking system, no intake forms.",
       "That said, SharpSpring is impressive. Unlimited users on a flat agency plan and VisitorID website tracking were genuinely ahead of their time, and its agency roots run deep. But a platform being wound down under its acquirer isn't where you want to build a client's front office for the next five years.",

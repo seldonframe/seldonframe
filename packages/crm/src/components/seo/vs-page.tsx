@@ -37,7 +37,7 @@ export function composeVsFaq(a: Competitor, b: Competitor): AltFaqItem[] {
     },
     {
       q: "Is there an alternative to both?",
-      a: `Yes — SeldonFrame ships the AI receptionist plus the website, CRM and booking calendar it books into, at ${sfPriceAnchor(pairAudience(a, b))}. See how it compares: /alternatives.`,
+      a: `Yes — SeldonFrame ships the AI receptionist plus the website, CRM and booking calendar it books into, at ${sfPriceAnchor(pairAudience(a.audience, b.audience))}. See how it compares: /alternatives.`,
     },
     {
       q: `Can I switch from ${a.name} or ${b.name}?`,
@@ -50,7 +50,7 @@ export function VsPage({ pair, a, b }: { pair: VsPair; a: Competitor; b: Competi
   const xa = getExtras(a.slug);
   const xb = getExtras(b.slug);
   const vsFaq = composeVsFaq(a, b);
-  const audience = pairAudience(a, b);
+  const audience = pairAudience(a.audience, b.audience);
 
   const faqLd = {
     "@context": "https://schema.org",

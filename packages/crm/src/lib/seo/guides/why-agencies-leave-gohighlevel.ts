@@ -83,7 +83,7 @@ export const guide: Guide = {
     },
     {
       q: "What do agencies switch to?",
-      a: "Many move to a flat-priced, AI-first front office like SeldonFrame. It is 29 dollars a month flat with unlimited workspaces and the first workspace free forever, so adding clients does not add per-location AI fees. The whitelabel AI receptionist, website, CRM, booking, reviews, and custom domains are included, it runs on your own AI keys and Twilio at raw provider cost, and a full client workspace is built from one conversation in about three minutes.",
+      a: "Many move to a flat-priced, AI-first front office like SeldonFrame. Agency plans are 99 to 299 dollars a month flat with white-label and client sub-accounts included (0% GMV), and solo builders pay 29 dollars a month — so adding clients never adds per-location AI fees. The AI receptionist, website, CRM, booking, reviews, and custom domains are included, it runs on your own AI keys and Twilio at raw provider cost, and a full client workspace is built from one conversation in about three minutes.",
     },
     {
       q: "Is GoHighLevel worth it for a small agency?",
