@@ -177,4 +177,97 @@ describe("ClientsNewForm", () => {
     assert.ok(screen.getByRole("alert"), "Error banner rendered with role=alert");
     assert.equal(input.value, "https://acme.com", "URL preserved on error");
   });
+
+  // 2026-07-16 — credits_exhausted honesty fix (same class as the /try fix in
+  // PR #112). Out-of-credits is NOT an unreadable site: showing "We couldn't
+  // read that site. Try a different URL" sends the operator hunting for a
+  // better homepage when the real fix is adding credits to the Anthropic key.
+  // The server's 422 payload carries an honest `message` — show it verbatim.
+  test("on 422 credits_exhausted the banner shows the server's honest message, not the extraction copy", async () => {
+    render(<ClientsNewForm />);
+    fireEvent.change(screen.getByPlaceholderText(/https:\/\//i), {
+      target: { value: "https://acme.com" },
+    });
+    fireEvent.click(screen.getByRole("button", { name: /build workspace/i }));
+
+    const serverMessage =
+      "The AI account powering this build is out of credits, so retrying won't help right now.";
+    const es = FakeEventSource.last;
+    act(() =>
+      es!.fire("error", {
+        code: 422,
+        reason: "credits_exhausted",
+        message: serverMessage,
+      }),
+    );
+
+    const banner = screen.getByRole("alert");
+    assert.ok(
+      banner.textContent!.includes(serverMessage),
+      `banner must show the server message; got: ${banner.textContent}`,
+    );
+    assert.ok(
+      !banner.textContent!.includes("couldn't read that site"),
+      "the extraction_failed copy must NOT appear for credits_exhausted",
+    );
+  });
+
+  test("on 422 credits_exhausted WITHOUT a message the banner falls back to dedicated credits copy", async () => {
+    render(<ClientsNewForm />);
+    fireEvent.change(screen.getByPlaceholderText(/https:\/\//i), {
+      target: { value: "https://acme.com" },
+    });
+    fireEvent.click(screen.getByRole("button", { name: /build workspace/i }));
+
+    const es = FakeEventSource.last;
+    act(() => es!.fire("error", { code: 422, reason: "credits_exhausted" }));
+
+    const banner = screen.getByRole("alert");
+    // The operator here may be on their own BYOK key — the fallback copy must
+    // point at adding credits to their Anthropic key, not at trying a new URL.
+    assert.match(
+      banner.textContent!,
+      /credits/i,
+      "fallback copy must mention credits",
+    );
+    assert.match(
+      banner.textContent!,
+      /anthropic/i,
+      "fallback copy must point at the Anthropic key",
+    );
+    assert.ok(
+      !banner.textContent!.includes("couldn't read that site"),
+      "the extraction_failed copy must NOT appear for credits_exhausted",
+    );
+  });
+
+  test("paste path: on 422 credits_exhausted the banner shows the server's honest message", async () => {
+    render(<ClientsNewForm />);
+    // Switch to the paste tab and submit ≥20 chars (idle-scene's biz minimum).
+    fireEvent.click(screen.getByRole("tab", { name: /no website/i }));
+    fireEvent.change(screen.getByLabelText(/business information/i), {
+      target: { value: "Acme Plumbing in Phoenix, AZ. Drain cleaning. (602) 555-0100." },
+    });
+    fireEvent.click(screen.getByRole("button", { name: /build workspace/i }));
+
+    const es = FakeEventSource.last;
+    assert.ok(es, "EventSource was constructed");
+    assert.match(es!.url, /\/api\/v1\/web\/workspaces\/create-from-paste\?/);
+
+    const serverMessage =
+      "The AI account powering this build is out of credits, so retrying won't help right now.";
+    act(() =>
+      es!.fire("error", {
+        code: 422,
+        reason: "credits_exhausted",
+        message: serverMessage,
+      }),
+    );
+
+    const banner = screen.getByRole("alert");
+    assert.ok(
+      banner.textContent!.includes(serverMessage),
+      `paste-path banner must show the server message; got: ${banner.textContent}`,
+    );
+  });
 });

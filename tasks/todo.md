@@ -7,6 +7,24 @@ with a checkable plan, gets ticked off as it ships, and ends with a review block
 
 ## In flight
 
+### Task — credits_exhausted honesty on /clients/new (2026-07-16, branch claude/zen-sutherland-c96203, extends PR #112)
+
+Problem: clients-new-form.tsx maps EVERY 422 to the extraction_failed copy ("We couldn't
+read that site…") in both SSE error listeners. Since #112 the server emits
+`reason: "credits_exhausted"` + honest `message` on the URL path; the paste path
+(run-create-from-paste.ts:119) still emits bare `{reason}`. Merged #112's branch
+(`claude/intelligent-nightingale-771275`, fast-forward to 59bfa0dee) as the base.
+
+- [ ] RED: extend clients-new-form.spec.tsx — (a) 422 credits_exhausted + message shows
+      server message; (b) no message → dedicated fallback copy mentioning adding credits
+      to their Anthropic key; (c) paste path shows server message too
+- [ ] RED: new run-create-from-paste.spec.ts — credits_exhausted 422 carries honest
+      `message`; other reasons stay bare
+- [ ] GREEN: CREDITS_EXHAUSTED_UI_MESSAGE exported from anthropic-error-map.ts (single
+      source, both run-* files use it) + COPY.errors.credits_exhausted + both listeners
+- [ ] verify-build gate (verify-runner, maker ≠ checker)
+- [ ] Commit + PR (stacked on #112)
+
 ### Task — Agency repositioning of homepage (2026-07-15, branch feat/agency-homepage-positioning)
 
 Max's direction: keep marketing-page structure, reword for AGENCIES; everything true per §1b
