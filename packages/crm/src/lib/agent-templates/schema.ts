@@ -163,6 +163,24 @@ export const TemplateBlueprintPatchSchema = z
       .strict()
       .nullable()
       .optional(),
+    // 2026-07-16 (marketplace generalize) — the template's declared fill-in
+    // variables (see AgentBlueprint.templateVariables, db/schema/agents.ts).
+    // `name` must be the snake_case TOKEN_RE key the generalization pass writes
+    // into customSkillMd; capped at 12 so a template can't blow up the deploy
+    // form. LOOSE on description/example beyond a length cap — they're just UI
+    // copy, not executed.
+    templateVariables: z
+      .array(
+        z
+          .object({
+            name: z.string().regex(/^[a-z0-9_]{2,40}$/),
+            description: z.string().max(500),
+            example: z.string().max(500),
+          })
+          .strict(),
+      )
+      .max(12)
+      .optional(),
   })
   .strict();
 

@@ -286,6 +286,105 @@ describe("resolveDeploymentPersona — script/faq/services overrides (P2.1)", ()
   });
 });
 
+// ─── templateVarValues merge (2026-07-16 — marketplace generalize, Task 1) ────
+//
+// `customization.templateVarValues` fills the template's DECLARED
+// `templateVariables` tokens. It merges OVER the businessInfo-derived vars
+// (business_name/hours/address/phone/email) before fillPlaceholders, winning
+// on token-name collision. Absent → byte-identical to today's behavior
+// (regression-proofed by the exact fixtures from the describe block above).
+describe("resolveDeploymentPersona — templateVarValues merge (marketplace generalize)", () => {
+  test("a declared template var fills its token in the script", () => {
+    const r = resolveDeploymentPersona({
+      templateScript: "Forward interested replies to {contact_email}.",
+      customization: { templateVarValues: { contact_email: "sales@acme.test" } },
+    });
+    assert.equal(r.prompt, "Forward interested replies to sales@acme.test.");
+  });
+
+  test("templateVarValues wins OVER businessInfo-derived vars on token-name collision", () => {
+    // business_name is normally derived from businessInfo.name; an explicit
+    // templateVarValues.business_name (however unusual) wins — it's explicit.
+    const r = resolveDeploymentPersona({
+      templateGreeting: "Thanks for calling {business_name}!",
+      customization: {
+        businessInfo: { name: "Acme Plumbing" },
+        templateVarValues: { business_name: "Acme Override Co" },
+      },
+    });
+    assert.equal(r.greeting, "Thanks for calling Acme Override Co!");
+  });
+
+  test("templateVarValues fills a token businessInfo has no field for", () => {
+    const r = resolveDeploymentPersona({
+      templateScript: "Reply-to: {reply_to_email}. Tag: {internal_tag}.",
+      customization: {
+        businessInfo: { name: "Acme Plumbing" },
+        templateVarValues: { reply_to_email: "ops@acme.test", internal_tag: "vip" },
+      },
+    });
+    assert.equal(r.prompt, "Reply-to: ops@acme.test. Tag: vip.");
+  });
+
+  test("blank template var value is dropped like any other blank var (no literal brace leak)", () => {
+    const r = resolveDeploymentPersona({
+      templateScript: "Contact {contact_email} for details.",
+      customization: { templateVarValues: { contact_email: "   " } },
+    });
+    assert.equal(r.prompt, "Contact for details.");
+    assert.ok(!r.prompt!.includes("{"));
+  });
+
+  test("REGRESSION — absent templateVarValues → deep-equal to current behavior (full fixture)", () => {
+    // A fixture exercising every existing field, with NO templateVarValues at
+    // all. This must resolve identically to how it did before this feature
+    // existed — the never-lies invariant that generalizing the merge point
+    // never changes an ungeneralized deployment's live behavior.
+    const args = {
+      templateGreeting: "Thanks for calling {business_name}!",
+      templateScript: "We are open {hours} at {address}. Call {phone} or email {email}.",
+      templateVoiceId: "cedar",
+      templateFaq: [{ q: "Template Q", a: "Template A" }],
+      templateServices: [{ name: "Template Service", price: "$99" }],
+      customization: {
+        businessInfo: {
+          name: "Acme Plumbing",
+          hours: "Mon-Fri 9-5",
+          address: "123 Main St",
+          phone: "555-1234",
+          email: "hi@acme.test",
+        },
+      },
+      clientName: "Ignored Client",
+    };
+    const withUndefinedField = resolveDeploymentPersona(args);
+    // Same fixture but with an explicit `templateVarValues: undefined` (the
+    // shape a caller reading a legacy row from the DB would see) must produce
+    // the exact same result.
+    const withExplicitUndefined = resolveDeploymentPersona({
+      ...args,
+      customization: { ...args.customization, templateVarValues: undefined },
+    });
+    assert.deepEqual(withExplicitUndefined, withUndefinedField);
+    assert.deepEqual(withUndefinedField, {
+      greeting: "Thanks for calling Acme Plumbing!",
+      prompt: "We are open Mon-Fri 9-5 at 123 Main St. Call 555-1234 or email hi@acme.test.",
+      voiceId: "cedar",
+      businessName: "Acme Plumbing",
+      faq: [{ q: "Template Q", a: "Template A" }],
+      services: [{ name: "Template Service", price: "$99" }],
+    });
+  });
+
+  test("empty-object templateVarValues is a no-op (no vars added, no crash)", () => {
+    const r = resolveDeploymentPersona({
+      templateGreeting: "Thanks for calling {business_name}!",
+      customization: { businessInfo: { name: "Acme Plumbing" }, templateVarValues: {} },
+    });
+    assert.equal(r.greeting, "Thanks for calling Acme Plumbing!");
+  });
+});
+
 // ─── resolveReviewUrl (R1 — per-client review link precedence) ────────────────
 //
 // The Google review link is CLIENT-specific (it's the client's GBP "get more

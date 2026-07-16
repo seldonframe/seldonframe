@@ -197,6 +197,18 @@ export type AgentBlueprint = {
    *  when present, this overrides them. Stored in the jsonb blueprint — no
    *  migration. See lib/agents/guardrails/agent-guardrails.ts. */
   guardrails?: import("@/lib/agents/guardrails/agent-guardrails").Guardrails;
+  /** 2026-07-16 (marketplace generalize) — the template's DECLARED fill-in
+   *  variables: the personal/org-specific facts a "make it fit anybody" pass
+   *  (applyTemplateGeneralization) extracted out of `customSkillMd` into
+   *  `{token}` placeholders (TOKEN_RE, deployment-customization.ts). `name` is
+   *  the snake_case token key (matches TOKEN_RE's normalization); `description`
+   *  and `example` guide whoever fills the deploy-time form. Absent/empty on
+   *  every template that predates this feature or was never generalized — a
+   *  template with no declared variables behaves exactly as before (no fill
+   *  form is shown; resolveDeploymentPersona's templateVarValues merge is a
+   *  no-op). Stored in the jsonb blueprint — no migration. Capped at 12 entries
+   *  by TemplateBlueprintPatchSchema. */
+  templateVariables?: Array<{ name: string; description: string; example: string }>;
 };
 
 export const agents = pgTable(
