@@ -14,6 +14,7 @@
 import Anthropic from "@anthropic-ai/sdk";
 import { EXTRACTION_INSTRUCTIONS_MD, type ExtractedBusinessFacts } from "./extraction-prompt";
 import { parseExtraction } from "./extraction-parser";
+import { mapAnthropicSdkError } from "./anthropic-error-map";
 import { WebFetchError } from "./web-fetch-extractor";
 
 // Mirrors the AnthropicLike shim used in markdown-extractor.ts — narrows the
@@ -103,25 +104,7 @@ export async function extractBusinessFactsFromPaste(args: {
         message: message.slice(0, 500),
       }),
     );
-    if (status === 401 || status === 403) {
-      throw new WebFetchError(
-        "anthropic_unauthorized",
-        "Anthropic rejected the BYOK key.",
-        err,
-      );
-    }
-    if (status === 402 || status === 429) {
-      throw new WebFetchError(
-        "credits_exhausted",
-        "BYOK Anthropic key has no remaining credits.",
-        err,
-      );
-    }
-    throw new WebFetchError(
-      "internal_error",
-      err instanceof Error ? err.message : "Anthropic SDK call failed.",
-      err,
-    );
+    throw mapAnthropicSdkError(err);
   }
 
   const text = pickText(response.content);

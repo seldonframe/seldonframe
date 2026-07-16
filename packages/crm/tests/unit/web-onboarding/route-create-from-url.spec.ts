@@ -215,6 +215,19 @@ describe("runCreateFromUrl", () => {
     assert.match(text, /event: error\n.*"code":422.*"reason":"extraction_failed".*"message":"/);
   });
 
+  // 2026-07-16 — credits_exhausted honesty fix (same class as the
+  // extraction_failed fix above). Out-of-credits is non-retryable from the
+  // visitor's side: retrying can never succeed until credits are added, so
+  // the payload must carry an honest `message` instead of letting the UI
+  // fall back to "Something broke on our end. Give it another try."
+  test("credits_exhausted 422 carries an honest non-retryable `message`", async () => {
+    const deps = { ...baseDeps(), extractBusinessFactsFromUrl: async () => { const e = new Error("credit balance too low"); (e as any).reason = "credits_exhausted"; (e as any).name = "WebFetchError"; throw e; } };
+    const sse = await runCreateFromUrl({ deps, body: { url: "https://x.com" }, sessionUser: { id: "u1", primaryOrgId: "o1" } });
+    const text = await readAll(sse.stream);
+    assert.match(text, /event: error\n.*"code":422.*"reason":"credits_exhausted".*"message":"/);
+    assert.match(text, /out of credits/i, "the message must say credits ran out, not a generic failure");
+  });
+
   test("a different reason (e.g. anthropic_unauthorized) carries no `message`", async () => {
     const deps = { ...baseDeps(), extractBusinessFactsFromUrl: async () => { const e = new Error("bad key"); (e as any).reason = "anthropic_unauthorized"; (e as any).name = "WebFetchError"; throw e; } };
     const sse = await runCreateFromUrl({ deps, body: { url: "https://x.com" }, sessionUser: { id: "u1", primaryOrgId: "o1" } });
