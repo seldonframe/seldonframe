@@ -170,6 +170,33 @@ describe("extractBusinessFactsFromUrl (markdown-extractor)", () => {
     );
   });
 
+  // 2026-07-16 — Anthropic reports "Your credit balance is too low to access
+  // the Anthropic API" as HTTP 400 (invalid_request_error), NOT 402/429, so
+  // it used to fall through to internal_error and the /try UI lied with
+  // "Something broke on our end. Give it another try." (observed live on
+  // flowtechac.com). It must map to credits_exhausted like the 402/429 cases.
+  test("Anthropic 400 'credit balance is too low' -> WebFetchError(credits_exhausted)", async () => {
+    const firecrawl = makeFakeFirecrawl(async () => ({
+      markdown: SAMPLE_MARKDOWN,
+      metadata: { sourceURL: "https://acme.com/", statusCode: 200 },
+    }));
+    const client = makeThrowingAnthropic(
+      400,
+      '400 {"type":"error","error":{"type":"invalid_request_error","message":"Your credit balance is too low to access the Anthropic API. Please go to Plans & Billing to upgrade or purchase credits."}}',
+    );
+    await assert.rejects(
+      () =>
+        extractBusinessFactsFromUrl({
+          url: "https://acme.com",
+          byokKey: "sk-ant-test",
+          firecrawlClient: firecrawl,
+          anthropicClient: client,
+        }),
+      (err: unknown) =>
+        err instanceof WebFetchError && err.reason === "credits_exhausted",
+    );
+  });
+
   test("LLM returns prose, not JSON -> parse fails -> WebFetchError(extraction_failed)", async () => {
     const firecrawl = makeFakeFirecrawl(async () => ({
       markdown: SAMPLE_MARKDOWN,

@@ -126,9 +126,16 @@ describe("runStatelessAgentTurn — tool allowlist", () => {
     const tools = fake.requests[0].tools as Array<{ name: string }>;
     const names = tools.map((t) => t.name);
     assert.deepEqual(names, ["look_up_availability"], "only the allowed tool is exposed");
-    // System prompt must be present (composeSystemPrompt was used).
-    assert.equal(typeof fake.requests[0].system, "string");
-    assert.ok((fake.requests[0].system as string).length > 0);
+    // System prompt must be present (composeSystemPrompt was used). Token
+    // economy (2026-07-16): it now ships as ONE cache-marked text block.
+    const systemBlocks = fake.requests[0].system as Array<{
+      type: string;
+      text: string;
+      cache_control?: { type: string };
+    }>;
+    assert.ok(Array.isArray(systemBlocks) && systemBlocks.length === 1);
+    assert.ok(systemBlocks[0].text.length > 0);
+    assert.deepEqual(systemBlocks[0].cache_control, { type: "ephemeral" });
   });
 
   test("system prompt is built from the blueprint (FAQ answer appears)", async () => {
@@ -136,7 +143,9 @@ describe("runStatelessAgentTurn — tool allowlist", () => {
       { content: [{ type: "text", text: "ok" }], stop_reason: "end_turn" },
     ]);
     await runStatelessAgentTurn(baseInput({ client: fake.client }));
-    const system = fake.requests[0].system as string;
+    const system = (fake.requests[0].system as Array<{ text: string }>)
+      .map((b) => b.text)
+      .join("\n");
     // The FAQ answer text from the blueprint must be embedded in the prompt.
     assert.match(system, /9 to 5, Mon–Fri\./);
     // Acme name is woven into the persona.

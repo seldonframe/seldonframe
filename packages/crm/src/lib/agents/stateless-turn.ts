@@ -38,6 +38,14 @@ import {
   type ToolExecuteContext,
 } from "./tools";
 import { resolveTurnModel } from "./runtime/turn-model";
+import {
+  cachedSystemBlocks,
+  cachedToolParams,
+  withMovingCacheBreakpoint,
+  serializeToolResultCapped,
+  capErrorText,
+  type LooseMessage,
+} from "./turn-token-economy";
 
 // Mirror runtime.ts exactly so a template test behaves like the live agent.
 const MODEL =
@@ -302,16 +310,24 @@ export async function runStatelessAgentTurn(
     });
     let response: Anthropic.Messages.Message;
     try {
+      // Token economy (2026-07-16): system + tools are static across the loop
+      // → one cache breakpoint each; the moving breakpoint on the last message
+      // block makes iteration N+1's growing prefix a cache READ instead of
+      // full-price input. Three markers total (≤ the API's limit of 4).
       response = await input.client.messages.create({
         model: turnModel,
         max_tokens: input.maxTokensOverride ?? MAX_TOKENS,
-        system: systemPrompt,
-        tools: tools.map((t) => ({
-          name: t.name,
-          description: t.description,
-          input_schema: t.jsonSchema as Anthropic.Messages.Tool.InputSchema,
-        })),
-        messages: messages as Anthropic.Messages.MessageParam[],
+        system: cachedSystemBlocks(systemPrompt) as Anthropic.Messages.MessageCreateParams["system"],
+        tools: cachedToolParams(
+          tools.map((t) => ({
+            name: t.name,
+            description: t.description,
+            input_schema: t.jsonSchema as Anthropic.Messages.Tool.InputSchema,
+          })),
+        ) as Anthropic.Messages.ToolUnion[],
+        messages: withMovingCacheBreakpoint(
+          messages as LooseMessage[],
+        ) as Anthropic.Messages.MessageParam[],
       });
     } catch (err) {
       const detail = err instanceof Error ? err.message : String(err);
@@ -420,7 +436,10 @@ export async function runStatelessAgentTurn(
         toolResultsForThisIter.push({
           type: "tool_result",
           tool_use_id: tu.id,
-          content: JSON.stringify(output ?? null),
+          // Hard-capped (token economy, 2026-07-16): an unbounded connector
+          // payload (e.g. GMAIL_FETCH_EMAILS) must never ride the loop at
+          // full size — it gets re-sent every remaining iteration.
+          content: serializeToolResultCapped(output),
         });
         // F-F item 2 — a short target/proof suffix when the result has a
         // cheap id field (never the raw payload; extractToolProof caps
@@ -443,7 +462,8 @@ export async function runStatelessAgentTurn(
         toolResultsForThisIter.push({
           type: "tool_result",
           tool_use_id: tu.id,
-          content: `Error: ${message}`,
+          // Capped: connector errors can embed whole upstream response bodies.
+          content: `Error: ${capErrorText(message)}`,
           is_error: true,
         });
         emitToolEvent(input.onToolEvent, {

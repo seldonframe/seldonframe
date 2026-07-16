@@ -55,6 +55,56 @@ suites 206/206; learnings note docs/learnings/2026-07-16-intake-semantics-from-s
 pick the "Technical" look, confirm /book still shows dispatch questions + intakeFields present on
 the template row. Max's merge gate: PR opened from claude/youthful-panini-ffb749.
 
+### Task — credits_exhausted honesty on /clients/new (2026-07-16, branch claude/zen-sutherland-c96203, extends PR #112)
+
+Problem: clients-new-form.tsx maps EVERY 422 to the extraction_failed copy ("We couldn't
+read that site…") in both SSE error listeners. Since #112 the server emits
+`reason: "credits_exhausted"` + honest `message` on the URL path; the paste path
+(run-create-from-paste.ts:119) still emits bare `{reason}`. Merged #112's branch
+(`claude/intelligent-nightingale-771275`, fast-forward to 59bfa0dee) as the base.
+
+- [x] RED: extend clients-new-form.spec.tsx — (a) 422 credits_exhausted + message shows
+      server message; (b) no message → dedicated fallback copy mentioning adding credits
+      to their Anthropic key; (c) paste path shows server message too (all 3 watched fail)
+- [x] RED: new run-create-from-paste.spec.ts — credits_exhausted 422 carries honest
+      `message` (watched fail); other reasons stay bare (guard, green by design)
+- [x] GREEN: CREDITS_EXHAUSTED_UI_MESSAGE exported from anthropic-error-map.ts (single
+      source, both run-* files use it) + COPY.errors.credits_exhausted + both listeners
+      — 46/46 across the 7 affected suites
+- [x] verify-build gate: PASS via verify-runner (web-onboarding 95/95, tsc delta 0,
+      use-server clean, no migrations, regression grep empty; smoke = post-deploy)
+- [x] Commit fe18a8a68 + PR #113 (stacked on #112 — merge #112 first)
+
+Review: shipped as spec'd; only deviation from minimal-diff was hoisting the message
+string into anthropic-error-map.ts (prevents the exact drift class that caused #112).
+Learnings appended to docs/learnings/2026-07-16-credits-exhausted-400-mapping.md
+(corollary: sweep ALL consumer surfaces of an error payload). ⏳ Max: merge #112 → #113.
+
+### Task — Token-smart agent runtime (2026-07-16, worktree hungry-jang)
+
+Context: Max's $20 Anthropic top-up burned in 34 min by 3 duplicate Gmail push agents
+(untruncated GMAIL_FETCH_EMAILS JSON re-sent every loop iteration, uncached, always-premium
+Sonnet). Prod deployments canceled directly (ed050e3a, a37115e4, 2e14ba00 → status=canceled).
+This slice = make the runtime cheap by construction. Max's explicit ask: caching + tool-result
+cap + duplicate-deployment guard.
+
+- [x] 1. Shared helpers in `lib/agents/turn-token-economy.ts` + 15-test spec (cap 20k chars
+      w/ explicit truncation marker; error cap 2k; cache helpers; moving breakpoint).
+- [x] 2. Cap applied in BOTH tool loops + runtime.ts HISTORY REBUILD (historical tool
+      outputs re-tax every later turn — capped at read time; full output still persisted).
+- [x] 3. Prompt caching in both loops: system + last-tool + moving message breakpoint
+      (3 markers ≤ API's 4). Regen call deliberately UNCACHED (no-tools prefix ≠ loop
+      prefix → marker would be pure write premium).
+- [x] 4. Duplicate guard: createDeployment rejects same builder+template+surface+client
+      (non-canceled) w/ duplicate_deployment + duplicateOfDeploymentId; allowDuplicate
+      escape hatch; deploy-to-self → already_deployed; wizard shows honest copy.
+      Both real incidents (Zen Flow ×3, J. Marin ×2) share template id → key catches them.
+- [x] 5. Unit: 60/60 deployments + 56/56 loop specs + 15/15 helpers; tsc delta = 0 new
+      (baseline = 1 pre-existing copilot 'persist' error, present on clean tree too).
+      verify-runner gate DISPATCHED (commit 89ca653d8).
+- [ ] 6. Push + PR after gate PASS (Max merges).
+
+
 ### Task — Agency repositioning of homepage (2026-07-15, branch feat/agency-homepage-positioning)
 
 Max's direction: keep marketing-page structure, reword for AGENCIES; everything true per §1b
