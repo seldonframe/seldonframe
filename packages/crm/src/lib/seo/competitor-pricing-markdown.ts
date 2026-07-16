@@ -3,7 +3,7 @@
 // folders (<slug>-pricing.md/route.ts); mirrors alternative-markdown.ts.
 
 import { getCompetitorPricing, type CompetitorPricing } from "@/lib/seo/competitor-pricing";
-import { getCompetitor } from "@/lib/seo/alternative-pages";
+import { getCompetitor, sfPriceAnchor, type CompetitorAudience } from "@/lib/seo/alternative-pages";
 import { emphasizeMd } from "@/lib/seo/emphasize";
 
 const BASE = "https://www.seldonframe.com";
@@ -25,7 +25,7 @@ export function renderCompetitorPricingMarkdown(slug: string): string {
   L.push("");
   L.push(`- **Starts at:** ${emphasizeMd(startsAt(p))}`);
   L.push(`- **What stacks on top:** ${emphasizeMd(p.stacks[0]?.detail ?? "no published add-ons")}`);
-  L.push(`- **SeldonFrame comparison:** ${emphasizeMd("$29/mo flat, unlimited workspaces — no meters")}`);
+  L.push(`- **SeldonFrame comparison:** ${emphasizeMd(`${sfPriceAnchor(c.audience)} — no meters`)}`);
   if (p.freeTier) L.push(`- **Free tier:** ${emphasizeMd(p.freeTier)}`);
   L.push("");
   L.push(`## Plans`);
@@ -61,12 +61,12 @@ export function renderCompetitorPricingMarkdown(slug: string): string {
   L.push(`## How this compares to SeldonFrame`);
   L.push("");
   L.push(
-    `SeldonFrame is ${emphasizeMd("$29/mo flat")}, unlimited workspaces, with AI and telephony on your own keys at raw provider cost — no meters to track. See the full comparison: ${BASE}/compare/seldonframe-vs-${c.slug} and ${BASE}/alternative-to-${c.slug}.`,
+    `SeldonFrame is ${emphasizeMd(sfPriceAnchor(c.audience))}, with AI and telephony on your own keys at raw provider cost — no meters to track. See the full comparison: ${BASE}/compare/seldonframe-vs-${c.slug} and ${BASE}/alternative-to-${c.slug}.`,
   );
   L.push("");
   L.push(`## FAQ`);
   L.push("");
-  for (const item of buildFaq(p, c.name)) {
+  for (const item of buildFaq(p, c.name, c.audience)) {
     L.push(`**${item.q}**`);
     L.push("");
     L.push(item.a);
@@ -91,7 +91,7 @@ function startsAt(p: CompetitorPricing): string {
   return p.plans[0]?.price ?? "Quote-gated — no public pricing";
 }
 
-function buildFaq(p: CompetitorPricing, name: string): { q: string; a: string }[] {
+function buildFaq(p: CompetitorPricing, name: string, audience: CompetitorAudience): { q: string; a: string }[] {
   return [
     { q: `How much does ${name} cost?`, a: p.bottomLine },
     {
@@ -100,7 +100,7 @@ function buildFaq(p: CompetitorPricing, name: string): { q: string; a: string }[
     },
     {
       q: `What's the cheapest ${name} alternative?`,
-      a: `SeldonFrame: $29/mo flat, unlimited workspaces, first workspace free forever, with AI and telephony on your own keys at raw provider cost. ${BASE}/alternative-to-${p.slug}`,
+      a: `SeldonFrame: ${sfPriceAnchor(audience)}, with AI and telephony on your own keys at raw provider cost. ${BASE}/alternative-to-${p.slug}`,
     },
   ];
 }

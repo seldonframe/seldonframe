@@ -41,12 +41,23 @@ export type HonestyBox = {
   items: string[];
 };
 
+/** Which buyer this competitor is chiefly compared against — drives which
+ *  SeldonFrame price tier anchors the page (see `sfPriceAnchor` below).
+ *  "agency" = competitor's core deliverable is agency/whitelabel reselling;
+ *  "solo" = competitor is a single-operator/DIY tool with no agency layer;
+ *  "mixed" = genuinely serves both (or the split is ambiguous) — anchor
+ *  mentions both tiers without leading with either. Classified 2026-07-16,
+ *  see docs/superpowers/plans/2026-07-16-agency-price-anchor.md. */
+export type CompetitorAudience = "agency" | "solo" | "mixed";
+
 export type Competitor = {
   /** URL slug: /alternative-to-<slug> */
   slug: string;
   name: string;
   /** Short category kicker, e.g. "agency platform". */
   category: string;
+  /** Buyer audience this comparison targets — see `CompetitorAudience`. */
+  audience: CompetitorAudience;
   /** The competitor's canonical public pricing page — cited on every page that
    *  shows their price, so readers (and LLMs) can verify it themselves.
    *  Researched 2026-07-08; see docs/superpowers/specs/2026-07-08-competitor-pricing-facts.md. */
@@ -102,6 +113,32 @@ export const COMPARISON_LABELS: { key: keyof typeof SF_COLUMN; label: string }[]
   { key: "resale", label: "Sell / resell what you build" },
 ];
 
+/** The SeldonFrame price-anchor sentence fragment, banded by buyer audience
+ *  (Max, 2026-07-16): on agency-audience comparison surfaces the anchor is
+ *  the agency ladder — $29 is a demoted solo aside, never the lead. Solo
+ *  surfaces keep "$29/mo flat" as the anchor. Mixed surfaces carry both,
+ *  neither leading. See CompetitorAudience for how a competitor is banded. */
+/** Band resolution for two-competitor pages: an agency-audience competitor
+ *  anywhere in the pair makes the page an agency surface (Max 2026-07-16 —
+ *  never lead an agency-intercept page with the $29 solo anchor); mixed
+ *  beats solo for the same reason. */
+export function pairAudience(a: CompetitorAudience, b: CompetitorAudience): CompetitorAudience {
+  if (a === "agency" || b === "agency") return "agency";
+  if (a === "mixed" || b === "mixed") return "mixed";
+  return "solo";
+}
+
+export function sfPriceAnchor(audience: CompetitorAudience): string {
+  switch (audience) {
+    case "agency":
+      return "white-label agency plans from $99/mo ($99–$299, client sub-accounts included, 0% GMV) — solo builders from $29/mo flat";
+    case "solo":
+      return "$29/mo flat, unlimited workspaces, first workspace free forever";
+    case "mixed":
+      return "from $29/mo flat solo, or $99–$299/mo agency plans with white-label + client sub-accounts (0% GMV)";
+  }
+}
+
 /** FAQ items every page shares (appended after the competitor-specific ones). */
 export const SHARED_FAQ: AltFaqItem[] = [
   {
@@ -123,6 +160,7 @@ export const COMPETITORS: Competitor[] = [
     slug: "gohighlevel",
     name: "GoHighLevel",
     category: "agency platform",
+    audience: "agency",
     pricingSourceUrl: "https://www.gohighlevel.com/pricing",
     oneLiner:
       "GoHighLevel is an all-in-one white-label CRM and marketing-automation platform. Agencies use it to run funnels, email/SMS, and pipelines for local-business clients.",
@@ -226,6 +264,7 @@ export const COMPETITORS: Competitor[] = [
     slug: "vapi",
     name: "Vapi",
     category: "voice AI API",
+    audience: "solo",
     pricingSourceUrl: "https://vapi.ai/pricing",
     oneLiner:
       "Vapi is a developer-first API platform for building custom voice AI agents. You assemble and host your own voice stack.",
@@ -279,6 +318,7 @@ export const COMPETITORS: Competitor[] = [
     slug: "retell-ai",
     name: "Retell AI",
     category: "voice AI API",
+    audience: "solo",
     pricingSourceUrl: "https://www.retellai.com/pricing",
     oneLiner:
       "Retell AI is developer infrastructure for building voice and chat AI agents. It's priced per minute, built from separate pieces you assemble yourself.",
@@ -332,6 +372,7 @@ export const COMPETITORS: Competitor[] = [
     slug: "synthflow",
     name: "Synthflow AI",
     category: "no-code voice AI",
+    audience: "mixed",
     pricingSourceUrl: "https://synthflow.ai/pricing",
     oneLiner:
       "Synthflow AI is a no-code voice-agent builder for phone receptionists and appointment booking.",
@@ -385,6 +426,7 @@ export const COMPETITORS: Competitor[] = [
     slug: "chatbase",
     name: "Chatbase",
     category: "AI chatbot builder",
+    audience: "solo",
     pricingSourceUrl: "https://www.chatbase.co/pricing",
     oneLiner:
       "Chatbase is a no-code platform for building AI chatbots trained on your own data and putting them on a website.",
@@ -438,6 +480,7 @@ export const COMPETITORS: Competitor[] = [
     slug: "botpress",
     name: "Botpress",
     category: "agent platform",
+    audience: "solo",
     pricingSourceUrl: "https://botpress.com/pricing",
     oneLiner:
       "Botpress is an open-source-rooted, developer-focused platform for building and running AI chatbots and agents.",
@@ -491,6 +534,7 @@ export const COMPETITORS: Competitor[] = [
     slug: "stammer-ai",
     name: "Stammer.ai",
     category: "whitelabel agent platform",
+    audience: "agency",
     pricingSourceUrl: "https://www.stammer.ai/pricing",
     oneLiner:
       "Stammer.ai is a white-label AI chat and voice agent platform. Agencies use it to resell agents under their own brand.",
@@ -544,6 +588,9 @@ export const COMPETITORS: Competitor[] = [
     slug: "podium",
     name: "Podium",
     category: "SMB messaging & reviews",
+    // Reband 2026-07-16 review: Podium sells TO local businesses (solo reader),
+    // not to agencies — the band follows the READER, not the price point.
+    audience: "solo",
     pricingSourceUrl: "https://www.podium.com/pricing",
     oneLiner:
       "Podium is a messaging, reviews, and AI-employee platform for local businesses, sold through a sales-quote process.",
@@ -597,6 +644,7 @@ export const COMPETITORS: Competitor[] = [
     slug: "vendasta",
     name: "Vendasta",
     category: "agency platform",
+    audience: "agency",
     pricingSourceUrl: "https://www.vendasta.com/pricing/",
     oneLiner:
       "Vendasta is a white-label platform and product marketplace. Agencies use it to resell digital services to local-business clients.",
@@ -650,6 +698,7 @@ export const COMPETITORS: Competitor[] = [
     slug: "goodcall",
     name: "Goodcall",
     category: "AI phone agent",
+    audience: "solo",
     pricingSourceUrl: "https://www.goodcall.com/pricing",
     oneLiner:
       "Goodcall is a no-code AI phone agent for small businesses. It answers FAQs and takes appointments, billed per unique monthly caller.",
@@ -703,6 +752,7 @@ export const COMPETITORS: Competitor[] = [
     slug: "voiceflow",
     name: "Voiceflow",
     category: "conversation-design platform",
+    audience: "solo",
     pricingSourceUrl: "https://www.voiceflow.com/pricing",
     oneLiner:
       "Voiceflow is a visual conversation-design platform. Technical teams use it to build and run voice and chat AI agents.",
@@ -756,6 +806,7 @@ export const COMPETITORS: Competitor[] = [
     slug: "lindy",
     name: "Lindy",
     category: "AI employee builder",
+    audience: "solo",
     pricingSourceUrl: "https://www.lindy.ai/pricing",
     oneLiner:
       "Lindy is a general-purpose AI agent builder for automating internal work like email triage, research, and scheduling.",
@@ -809,6 +860,7 @@ export const COMPETITORS: Competitor[] = [
     slug: "durable",
     name: "Durable",
     category: "AI website builder",
+    audience: "solo",
     pricingSourceUrl: "https://durable.com/pricing",
     oneLiner:
       "Durable is an AI website builder with a light CRM and invoicing, aimed at solo operators who want a fast, cheap site.",
@@ -862,6 +914,7 @@ export const COMPETITORS: Competitor[] = [
     slug: "my-ai-front-desk",
     name: "My AI Front Desk",
     category: "AI receptionist",
+    audience: "mixed",
     pricingSourceUrl: "https://www.myaifrontdesk.com/pricing",
     oneLiner:
       "My AI Front Desk (rebranding to Frontdesk) is an AI receptionist for phone, SMS, and chat, aimed at small local businesses.",
@@ -915,6 +968,9 @@ export const COMPETITORS: Competitor[] = [
     slug: "smith-ai",
     name: "Smith.ai",
     category: "receptionist service",
+    // Reband 2026-07-16 review: Smith.ai is a per-call service bought by the
+    // firm/SMB itself — solo reader, same rule as podium.
+    audience: "solo",
     pricingSourceUrl: "https://smith.ai/pricing/ai-receptionist",
     oneLiner:
       "Smith.ai is a North-America-based receptionist service that combines AI with human receptionists, billed per call.",
@@ -968,6 +1024,7 @@ export const COMPETITORS: Competitor[] = [
     slug: "activecampaign",
     name: "ActiveCampaign",
     category: "email automation & CRM",
+    audience: "mixed",
     pricingSourceUrl: "https://www.activecampaign.com/pricing",
     oneLiner:
       "ActiveCampaign is an automation-first email marketing platform with a light CRM layer, priced per contact.",
@@ -1021,6 +1078,7 @@ export const COMPETITORS: Competitor[] = [
     slug: "hubspot",
     name: "HubSpot",
     category: "enterprise CRM",
+    audience: "mixed",
     pricingSourceUrl: "https://www.hubspot.com/pricing/marketing",
     oneLiner:
       "HubSpot is a premium all-in-one CRM and marketing platform that scales from a free tier to enterprise contracts.",
@@ -1074,6 +1132,7 @@ export const COMPETITORS: Competitor[] = [
     slug: "clickfunnels",
     name: "ClickFunnels",
     category: "funnel builder",
+    audience: "solo",
     pricingSourceUrl: "https://www.clickfunnels.com/pricing",
     oneLiner:
       "ClickFunnels is a funnel-building platform for offer-sellers, built around ready-made sales pages and checkout flows.",
@@ -1127,6 +1186,7 @@ export const COMPETITORS: Competitor[] = [
     slug: "keap",
     name: "Keap",
     category: "SMB CRM & automation",
+    audience: "solo",
     pricingSourceUrl: "https://keap.com/pricing",
     oneLiner:
       "Keap (owned by Thryv since October 2024) is a veteran small-business CRM and automation platform with invoicing and payments.",
@@ -1180,6 +1240,7 @@ export const COMPETITORS: Competitor[] = [
     slug: "linktree",
     name: "Linktree",
     category: "link-in-bio",
+    audience: "solo",
     pricingSourceUrl: "https://linktr.ee/s/pricing/",
     oneLiner:
       "Linktree is a link-in-bio tool that turns one profile link into a page of links — not a business platform.",
@@ -1233,6 +1294,7 @@ export const COMPETITORS: Competitor[] = [
     slug: "kartra",
     name: "Kartra",
     category: "creator all-in-one",
+    audience: "solo",
     pricingSourceUrl: "https://kartra.com/pricing/",
     oneLiner:
       "Kartra is an all-in-one platform for creators and coaches selling courses, memberships, and video content, with contact-capped tiers.",
@@ -1286,6 +1348,7 @@ export const COMPETITORS: Competitor[] = [
     slug: "sharpspring",
     name: "SharpSpring (Constant Contact)",
     category: "agency marketing automation",
+    audience: "agency",
     pricingSourceUrl: "https://www.constantcontact.com/pricing/lead-gen-crm",
     oneLiner:
       "SharpSpring is an agency-focused marketing automation platform, now operating under Constant Contact and reported to be in maintenance mode after the acquisition.",
@@ -1339,6 +1402,7 @@ export const COMPETITORS: Competitor[] = [
     slug: "klaviyo",
     name: "Klaviyo",
     category: "ecommerce email & SMS",
+    audience: "solo",
     pricingSourceUrl: "https://www.klaviyo.com/pricing",
     oneLiner:
       "Klaviyo is an ecommerce-focused email and SMS marketing platform with a B2C CRM layer, priced per profile.",
@@ -1392,6 +1456,7 @@ export const COMPETITORS: Competitor[] = [
     slug: "zoho",
     name: "Zoho",
     category: "value CRM suite",
+    audience: "mixed",
     pricingSourceUrl: "https://www.zoho.com/crm/zohocrm-pricing.html",
     oneLiner:
       "Zoho is a value-priced CRM and 45-app business suite, sold per user across gated editions.",
@@ -1445,6 +1510,7 @@ export const COMPETITORS: Competitor[] = [
     slug: "salesforce",
     name: "Salesforce",
     category: "enterprise CRM",
+    audience: "mixed",
     pricingSourceUrl: "https://www.salesforce.com/small-business/pricing/",
     oneLiner:
       "Salesforce is the enterprise CRM standard, now also selling to small businesses through Starter and Pro Suite editions.",
@@ -1498,6 +1564,7 @@ export const COMPETITORS: Competitor[] = [
     slug: "claude-projects",
     name: "Claude Projects",
     category: "DIY workflow",
+    audience: "mixed",
     pricingSourceUrl: "https://www.anthropic.com/pricing",
     oneLiner:
       "Claude Projects is Anthropic's persistent-workspace feature — standing instructions plus a knowledge base that load into every conversation, which many agencies hand-build once per client.",

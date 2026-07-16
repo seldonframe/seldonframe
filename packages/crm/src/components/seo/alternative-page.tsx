@@ -28,6 +28,7 @@ import {
   SF_COLUMN,
   SHARED_FAQ,
   LAST_UPDATED,
+  sfPriceAnchor,
   type Competitor,
 } from "@/lib/seo/alternative-pages";
 import {
@@ -82,7 +83,7 @@ export function AlternativePage({ competitor }: { competitor: Competitor }): Rea
     "@type": "SoftwareApplication",
     name: "SeldonFrame",
     applicationCategory: "BusinessApplication",
-    description: `SeldonFrame — ${c.name} alternative for agencies & builders: AI receptionist, website, CRM and booking in one flat $29/mo platform.`,
+    description: `SeldonFrame — ${c.name} alternative for agencies & builders: AI receptionist, website, CRM and booking, at ${sfPriceAnchor(c.audience)}.`,
     offers: { "@type": "Offer", price: "29", priceCurrency: "USD" },
     provider: { "@type": "Organization", name: "SeldonFrame", url: "https://seldonframe.com" },
   };
@@ -151,7 +152,7 @@ export function AlternativePage({ competitor }: { competitor: Competitor }): Rea
           <TldrBox
             items={[
               { icon: "💰", label: `${c.name} pricing`, text: c.them.pricingModel },
-              { icon: "💰", label: "SeldonFrame pricing", text: "$29/mo flat, unlimited workspaces, first workspace free forever" },
+              { icon: "💰", label: "SeldonFrame pricing", text: sfPriceAnchor(c.audience) },
               { icon: "👍", label: `Pick ${c.name} if`, text: x.chooseThem[0] },
               { icon: "🏆", label: "Pick SeldonFrame if", text: x.chooseSf[0] },
             ]}
@@ -306,7 +307,12 @@ export function AlternativePage({ competitor }: { competitor: Competitor }): Rea
           </h2>
           <p style={{ margin: "10px auto 0", fontSize: 15.5, lineHeight: 1.6, color: "rgba(246,242,234,0.75)", maxWidth: 560 }}>
             Paste a business&apos;s website and SeldonFrame builds the site, CRM, booking calendar and AI receptionist in about 3 minutes —
-            free, before you sign up. Then it&apos;s $29/mo flat for unlimited workspaces.
+            free, before you sign up. Then it&apos;s{" "}
+            {c.audience === "agency"
+              ? "$99/mo flat for white-label agency plans (or $29/mo solo)."
+              : c.audience === "mixed"
+                ? "$29/mo flat solo, or $99+/mo for agency whitelabel."
+                : "$29/mo flat for unlimited workspaces."}
           </p>
           <div style={{ display: "flex", flexWrap: "wrap", gap: 12, justifyContent: "center", marginTop: 22 }}>
             <a href={START_HREF} style={{ background: MKT.green, color: "#fff", padding: "13px 26px", borderRadius: 12, fontWeight: 700, fontSize: 15.5, textDecoration: "none" }}>

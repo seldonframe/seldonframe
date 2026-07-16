@@ -29,7 +29,13 @@ import {
   type BestContender,
 } from "@/lib/seo/best-pages";
 import { START_HREF, DEMO_HREF } from "@/lib/seo/alternative-pages-extras";
-import { getCompetitor } from "@/lib/seo/alternative-pages";
+import { getCompetitor, sfPriceAnchor } from "@/lib/seo/alternative-pages";
+
+/** Best-pages are category-based, not tied to one competitor's audience band
+ *  (contenders here aren't joined to the alternative-pages registry by slug).
+ *  Absent a per-category audience signal, anchor these listicles as "mixed"
+ *  — never assume the narrower solo-only framing (Max, 2026-07-16). */
+const BEST_PAGE_AUDIENCE = "mixed" as const;
 
 /** Maps a /best category slug to a related /alternative-to-<slug> page, when
  *  one exists in the competitor registry (honest, no dangling link). */
@@ -209,7 +215,7 @@ export function BestPage({ slug }: { slug: string }): ReactElement {
           {page.videoId && <LiteYoutube videoId={page.videoId} title={h1} />}
           <TldrBox
             items={[
-              { icon: "🏆", label: "Our pick", text: "SeldonFrame — the whole front office at $29/mo flat (we build it, and we say below when the others win)" },
+              { icon: "🏆", label: "Our pick", text: `SeldonFrame — the whole front office, ${sfPriceAnchor(BEST_PAGE_AUDIENCE)} (we build it, and we say below when the others win)` },
               { icon: "💰", label: "Cheapest real option", text: composeCheapestOption(category) },
               { icon: "🔍", label: "How to choose", text: category.intentLine },
             ]}
@@ -290,7 +296,7 @@ export function BestPage({ slug }: { slug: string }): ReactElement {
                 color: MKT.green,
               }}
             >
-              <span>$29/mo flat</span>
+              <span>$29/mo flat solo · $99+/mo agency</span>
               <span style={{ color: "rgba(34,29,23,0.3)" }}>·</span>
               <span>First workspace free forever</span>
               <span style={{ color: "rgba(34,29,23,0.3)" }}>·</span>
@@ -334,7 +340,7 @@ export function BestPage({ slug }: { slug: string }): ReactElement {
                 <tr>
                   <td style={{ ...TD, background: MKT.green10, fontWeight: 800, color: MKT.green }}>SeldonFrame</td>
                   <td style={{ ...TD, background: MKT.green10, color: "rgba(34,29,23,0.85)", fontWeight: 500 }}>{category.intentLine}</td>
-                  <td style={{ ...TD, background: MKT.green10, color: "rgba(34,29,23,0.85)", fontWeight: 500 }}>$29/mo flat, unlimited workspaces</td>
+                  <td style={{ ...TD, background: MKT.green10, color: "rgba(34,29,23,0.85)", fontWeight: 500 }}>$29/mo flat solo, or $99–$299/mo agency (0% GMV)</td>
                   <td style={{ ...TD, background: MKT.green10, color: "rgba(34,29,23,0.85)", fontWeight: 500 }}>Newer platform; not a dedicated funnel-builder</td>
                 </tr>
                 {category.contenders.map((c) => (
@@ -442,7 +448,7 @@ export function BestPage({ slug }: { slug: string }): ReactElement {
           </h2>
           <p style={{ margin: "10px auto 0", fontSize: 15.5, lineHeight: 1.6, color: "rgba(246,242,234,0.75)", maxWidth: 560 }}>
             Paste your website (or describe your business) and SeldonFrame builds the site, CRM, booking calendar and AI receptionist in
-            about 3 minutes — free, before you sign up. Then it&apos;s $29/mo flat for unlimited workspaces.
+            about 3 minutes — free, before you sign up. Then it&apos;s $29/mo flat solo, or $99–$299/mo for agency white-label.
           </p>
           <div style={{ display: "flex", flexWrap: "wrap", gap: 12, justifyContent: "center", marginTop: 22 }}>
             <a href={START_HREF} style={{ background: MKT.green, color: "#fff", padding: "13px 26px", borderRadius: 12, fontWeight: 700, fontSize: 15.5, textDecoration: "none" }}>

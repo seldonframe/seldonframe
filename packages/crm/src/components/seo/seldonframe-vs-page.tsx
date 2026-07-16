@@ -30,6 +30,7 @@ import {
   SF_COLUMN,
   SHARED_FAQ,
   LAST_UPDATED,
+  sfPriceAnchor,
   type Competitor,
   type AltFaqItem,
 } from "@/lib/seo/alternative-pages";
@@ -48,7 +49,7 @@ import {
  *  hygiene). Pure + exported for the Markdown twin and unit tests. */
 export function composeSeldonframeVsIntro(c: Competitor): [string, string] {
   return [
-    `${c.name} and SeldonFrame usually end up on the same shortlist for different reasons. ${c.oneLiner} SeldonFrame comes at the same problem from the other direction: one flat $29/mo workspace where the AI receptionist, website, CRM, booking calendar and intake forms arrive pre-wired — generated from a single conversation in about 3 minutes.`,
+    `${c.name} and SeldonFrame usually end up on the same shortlist for different reasons. ${c.oneLiner} SeldonFrame comes at the same problem from the other direction: the AI receptionist, website, CRM, booking calendar and intake forms arrive pre-wired — ${sfPriceAnchor(c.audience)} — generated from a single conversation in about 3 minutes.`,
     `${c.whenTheyWin} SeldonFrame's case is the opposite one: when the outcome you're buying is answered calls, qualified leads and jobs booked into a CRM you own, that whole front office ships on day one and the economics stay flat as you grow. The rest of this page walks the differences row by row — pricing model, the AI receptionist, the business system behind it, whitelabel, and what switching actually takes.`,
   ];
 }
@@ -60,11 +61,11 @@ export function composeSeldonframeVsFaq(c: Competitor): AltFaqItem[] {
   return [
     {
       q: `Is SeldonFrame a good ${c.name} alternative?`,
-      a: `For most agencies and builders, yes — SeldonFrame replaces the AI-front-office job (answering, qualifying, booking, tracking in a CRM) at $29/mo flat instead of ${c.name}'s stacked pricing. See the full switching guide: /alternative-to-${c.slug}.`,
+      a: `For most agencies and builders, yes — SeldonFrame replaces the AI-front-office job (answering, qualifying, booking, tracking in a CRM) at ${sfPriceAnchor(c.audience)}, instead of ${c.name}'s stacked pricing. See the full switching guide: /alternative-to-${c.slug}.`,
     },
     {
       q: `How much does ${c.name} cost compared to SeldonFrame?`,
-      a: `${c.name}: ${c.them.pricingModel}. SeldonFrame: $29/mo flat, unlimited workspaces, first workspace free forever, with AI and telephony on your own keys at raw provider cost — no per-minute or per-credit meter.`,
+      a: `${c.name}: ${c.them.pricingModel}. SeldonFrame: ${sfPriceAnchor(c.audience)}, with AI and telephony on your own keys at raw provider cost — no per-minute or per-credit meter.`,
     },
   ];
 }
@@ -95,7 +96,7 @@ export function SeldonFrameVsPage({ competitor }: { competitor: Competitor }): R
     "@type": "SoftwareApplication",
     name: "SeldonFrame",
     applicationCategory: "BusinessApplication",
-    description: `SeldonFrame vs ${c.name}: AI receptionist, website, CRM and booking in one flat $29/mo platform, compared head to head.`,
+    description: `SeldonFrame builds the whole AI front office — website, CRM, booking, and an AI receptionist — ${sfPriceAnchor(c.audience)}.`,
     offers: { "@type": "Offer", price: "29", priceCurrency: "USD" },
     provider: { "@type": "Organization", name: "SeldonFrame", url: "https://seldonframe.com" },
   };
@@ -157,7 +158,7 @@ export function SeldonFrameVsPage({ competitor }: { competitor: Competitor }): R
           <TldrBox
             items={[
               { icon: "💰", label: `${c.name} pricing`, text: c.them.pricingModel },
-              { icon: "💰", label: "SeldonFrame pricing", text: "$29/mo flat, unlimited workspaces, first workspace free forever" },
+              { icon: "💰", label: "SeldonFrame pricing", text: sfPriceAnchor(c.audience) },
               { icon: "👍", label: `Pick ${c.name} if`, text: x.chooseThem[0] },
               { icon: "🏆", label: "Pick SeldonFrame if", text: x.chooseSf[0] },
             ]}
@@ -243,7 +244,7 @@ export function SeldonFrameVsPage({ competitor }: { competitor: Competitor }): R
             <span style={{ fontSize: 10.5, fontWeight: 800, letterSpacing: "0.1em", textTransform: "uppercase", color: MKT.green }}>★ SeldonFrame</span>
             <h2 style={{ margin: "6px 0 0", fontSize: 20, fontWeight: 800 }}>SeldonFrame</h2>
             <p style={{ margin: "8px 0 12px", fontSize: 14.5, lineHeight: 1.6, color: "rgba(34,29,23,0.75)" }}>
-              $29/mo flat · unlimited workspaces · first workspace free forever
+              {sfPriceAnchor(c.audience)}
             </p>
             <div style={{ margin: "12px 0 4px", fontSize: 11.5, fontWeight: 800, letterSpacing: "0.1em", color: MKT.green }}>TOP REASONS TO CHOOSE IT</div>
             <ul style={{ margin: 0, padding: 0, listStyle: "none" }}>
@@ -421,7 +422,12 @@ export function SeldonFrameVsPage({ competitor }: { competitor: Competitor }): R
           </h2>
           <p style={{ margin: "10px auto 0", fontSize: 15.5, lineHeight: 1.6, color: "rgba(246,242,234,0.75)", maxWidth: 560 }}>
             Paste a business's website and SeldonFrame builds the site, CRM, booking calendar and AI receptionist in about 3 minutes —
-            free, before you sign up. Then it&apos;s $29/mo flat for unlimited workspaces.
+            free, before you sign up. Then it&apos;s{" "}
+            {c.audience === "agency"
+              ? "$99/mo flat for white-label agency plans (or $29/mo solo)."
+              : c.audience === "mixed"
+                ? "$29/mo flat solo, or $99+/mo for agency whitelabel."
+                : "$29/mo flat for unlimited workspaces."}
           </p>
           <div style={{ display: "flex", flexWrap: "wrap", gap: 12, justifyContent: "center", marginTop: 22 }}>
             <a href={START_HREF} style={{ background: MKT.green, color: "#fff", padding: "13px 26px", borderRadius: 12, fontWeight: 700, fontSize: 15.5, textDecoration: "none" }}>

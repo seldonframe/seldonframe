@@ -15,8 +15,12 @@ import { PricingSourceLine } from "@/components/seo/alternative-page";
 import { AuthorByline, articleLd } from "@/components/seo/author-byline";
 import { monthYearToIso } from "@/lib/seo/month-iso";
 import { emphasize } from "@/lib/seo/emphasize";
-import { COMPARISON_LABELS, SF_COLUMN, LAST_UPDATED, type Competitor, type AltFaqItem } from "@/lib/seo/alternative-pages";
+import { COMPARISON_LABELS, SF_COLUMN, LAST_UPDATED, sfPriceAnchor, type Competitor, type CompetitorAudience, type AltFaqItem, pairAudience } from "@/lib/seo/alternative-pages";
 import { getExtras, START_HREF, DEMO_HREF, type VsPair, vsSlug } from "@/lib/seo/alternative-pages-extras";
+
+/** A vs-page compares two competitors that may carry different audience
+ *  bands — anchor on the shared band when both agree, otherwise treat the
+ *  page as mixed (never assume the narrower band when the two disagree). */
 
 /** Compose the 4 shared FAQ items for a third-party X-vs-Y page, honestly
  *  built from registry data only (never-lies: no new facts). Pure + exported
@@ -33,7 +37,7 @@ export function composeVsFaq(a: Competitor, b: Competitor): AltFaqItem[] {
     },
     {
       q: "Is there an alternative to both?",
-      a: `Yes — SeldonFrame ships the AI receptionist plus the website, CRM and booking calendar it books into, for $29/mo flat with unlimited workspaces. See how it compares: /alternatives.`,
+      a: `Yes — SeldonFrame ships the AI receptionist plus the website, CRM and booking calendar it books into, at ${sfPriceAnchor(pairAudience(a, b))}. See how it compares: /alternatives.`,
     },
     {
       q: `Can I switch from ${a.name} or ${b.name}?`,
@@ -46,6 +50,7 @@ export function VsPage({ pair, a, b }: { pair: VsPair; a: Competitor; b: Competi
   const xa = getExtras(a.slug);
   const xb = getExtras(b.slug);
   const vsFaq = composeVsFaq(a, b);
+  const audience = pairAudience(a, b);
 
   const faqLd = {
     "@context": "https://schema.org",
@@ -104,7 +109,7 @@ export function VsPage({ pair, a, b }: { pair: VsPair; a: Competitor; b: Competi
               { icon: "💰", label: `${a.name} pricing`, text: a.them.pricingModel },
               { icon: "💰", label: `${b.name} pricing`, text: b.them.pricingModel },
               { icon: "🤝", label: "The real trade-off", text: pair.angle },
-              { icon: "🚪", label: "The third option", text: "SeldonFrame ships the whole front office at $29/mo flat — see below" },
+              { icon: "🚪", label: "The third option", text: `SeldonFrame ships the whole front office — ${sfPriceAnchor(audience)} — see below` },
             ]}
           />
         </header>
@@ -211,7 +216,7 @@ export function VsPage({ pair, a, b }: { pair: VsPair; a: Competitor; b: Competi
           <p style={{ margin: "10px 0 0", fontSize: 15.5, lineHeight: 1.65, color: "rgba(246,242,234,0.78)", maxWidth: 720 }}>
             Most people running this comparison actually need the outcome underneath both tools: calls and chats answered, leads
             qualified, jobs booked into a real calendar and CRM, on a site the client owns. SeldonFrame ships that whole front
-            office from one conversation — $29/mo flat, unlimited workspaces, your own AI keys at raw cost, whitelabel included.
+            office from one conversation — {sfPriceAnchor(audience)}, your own AI keys at raw cost.
           </p>
           <div style={{ display: "flex", flexWrap: "wrap", gap: 12, marginTop: 20 }}>
             <a href={START_HREF} style={{ background: MKT.green, color: "#fff", padding: "13px 26px", borderRadius: 12, fontWeight: 700, fontSize: 15.5, textDecoration: "none" }}>
