@@ -90,6 +90,13 @@ export type DispatchComposioEventDeps = {
     ok: boolean;
     toolCalls?: Array<{ tool: string; ok: boolean; note?: string }>;
     replyText?: string;
+    /** Agent truth slice (Task 1) — WHY the turn didn't succeed (e.g. "no LLM
+     *  key configured", or the turn's own `message` like "[runtime error]
+     *  anthropic 401: invalid x-api-key"). Only meaningful when `ok` is
+     *  false; optional so every existing fake returning just `{ok}` stays
+     *  valid. Never assumed secret-safe by the orchestrator — the writer
+     *  (lib/agent-receipts/write.ts) scrubs it before it becomes a summary. */
+    errorMessage?: string;
   }>;
   /** Verify-gate FIX 1 + FIX 2 — ONE atomic statement that both dedupes
    *  (deploymentId, messageId) AND gates/increments the per-deployment daily
@@ -123,6 +130,10 @@ export type DispatchComposioEventDeps = {
     sourceRef: string | null;
     toolCalls: Array<{ tool: string; ok: boolean; note?: string }>;
     replyText?: string;
+    /** Agent truth slice (Task 1) — the failure reason (turn's own message,
+     *  or the caught throw's message), present ONLY on an errored run.
+     *  Unscrubbed at this layer — the writer scrubs before persisting. */
+    errorMessage?: string;
   }) => Promise<void>;
 };
 
@@ -219,6 +230,10 @@ export async function dispatchComposioEventToDeployments(
       let ok = false;
       let toolCalls: Array<{ tool: string; ok: boolean; note?: string }> = [];
       let replyText: string | undefined;
+      // Agent truth slice (Task 1) — WHY the run didn't succeed, threaded
+      // from either the turn's own errorMessage (ok:false) or the caught
+      // throw's message, so the receipt can say more than "error".
+      let errorMessage: string | undefined;
       try {
         const turnResult = await deps.runAgenticTurn({
           orgId: m.orgId,
@@ -230,12 +245,14 @@ export async function dispatchComposioEventToDeployments(
         ok = turnResult?.ok === true;
         toolCalls = turnResult?.toolCalls ?? [];
         replyText = turnResult?.replyText;
+        if (!ok) errorMessage = turnResult?.errorMessage;
       } catch (err) {
         console.warn(
           `[composio-event-dispatch] runAgenticTurn failed for deployment ${m.deploymentId}:`,
           err instanceof Error ? err.message : String(err),
         );
         ok = false;
+        errorMessage = err instanceof Error ? err.message : String(err);
       }
 
       // Agent receipts slice (Task 2a) — record this STARTED run's outcome
@@ -251,6 +268,7 @@ export async function dispatchComposioEventToDeployments(
             sourceRef: messageId,
             toolCalls,
             replyText,
+            ...(errorMessage ? { errorMessage } : {}),
           });
         } catch (err) {
           console.warn(

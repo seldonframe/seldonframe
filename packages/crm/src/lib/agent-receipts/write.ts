@@ -38,6 +38,12 @@ export type WriteRunReceiptInput = {
   /** Only consulted when `summary` is absent — the turn's final reply text,
    *  used as the derivation fallback. */
   replyText?: string;
+  /** Agent truth slice (Task 1) — only consulted when `summary` is absent.
+   *  The failure reason (present only on an errored run) — takes priority
+   *  over `toolCalls`/`replyText` in derivation and becomes "error: <first
+   *  line, scrubbed, truncated>". Never assumed secret-safe by the caller;
+   *  `deriveReceiptSummary` scrubs it before it's ever persisted. */
+  errorMessage?: string;
 };
 
 /** Injectable insert fn — defaults to a lazy `@/db` insert (kept out of the
@@ -124,7 +130,11 @@ export async function writeRunReceipt(
     const summary =
       input.summary && input.summary.trim().length > 0
         ? input.summary
-        : deriveReceiptSummary({ toolCalls, replyText: input.replyText });
+        : deriveReceiptSummary({
+            toolCalls,
+            replyText: input.replyText,
+            errorMessage: input.errorMessage,
+          });
 
     await insert({
       orgId: input.orgId,

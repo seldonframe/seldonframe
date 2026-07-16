@@ -234,4 +234,40 @@ describe("writeRunReceipt — summary derivation wiring", () => {
     const row = inserted as Record<string, unknown>;
     assert.equal(row.summary, "matched 1, sent 1");
   });
+
+  test("agent truth: an errorMessage (no explicit summary) is derived + scrubbed into the written row", async () => {
+    let inserted: unknown = null;
+    await writeRunReceipt(
+      baseInput({
+        status: "error",
+        summary: undefined,
+        errorMessage: "anthropic 401: invalid x-api-key",
+      }),
+      {
+        insert: async (row) => {
+          inserted = row;
+        },
+      },
+    );
+    const row = inserted as Record<string, unknown>;
+    assert.equal(row.summary, "error: anthropic 401: invalid x-api-key");
+  });
+
+  test("agent truth: an explicit summary still overrides an errorMessage", async () => {
+    let inserted: unknown = null;
+    await writeRunReceipt(
+      baseInput({
+        status: "error",
+        summary: "custom override",
+        errorMessage: "anthropic 401: invalid x-api-key",
+      }),
+      {
+        insert: async (row) => {
+          inserted = row;
+        },
+      },
+    );
+    const row = inserted as Record<string, unknown>;
+    assert.equal(row.summary, "custom override");
+  });
 });

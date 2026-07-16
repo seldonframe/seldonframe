@@ -315,6 +315,70 @@ test("a failed run (ok:false) calls writeReceipt with status error", async () =>
   assert.equal(receipts[0].status, "error");
 });
 
+// Agent truth slice (Task 1) — thread the failure REASON into the receipt,
+// not just "error". A generic "ran with no actions" tells the operator
+// nothing about WHY their agent didn't act.
+test("agent truth: a failed run (ok:false) with an errorMessage carries it through to writeReceipt", async () => {
+  const receipts: Array<Record<string, unknown>> = [];
+  const deps = fakeDeps({
+    runAgenticTurn: async () => ({ ok: false, errorMessage: "anthropic 401: invalid x-api-key" }),
+    writeReceipt: async (args) => {
+      receipts.push(args as unknown as Record<string, unknown>);
+    },
+  });
+
+  await dispatchComposioEventToDeployments(deps, {
+    orgId: ORG,
+    eventType: EVENT,
+    payload: { messageId: "msg_1" },
+  });
+
+  assert.equal(receipts.length, 1);
+  assert.equal(receipts[0].status, "error");
+  assert.equal(receipts[0].errorMessage, "anthropic 401: invalid x-api-key");
+});
+
+test("agent truth: a THROWING run's caught error message is carried through to writeReceipt as errorMessage", async () => {
+  const receipts: Array<Record<string, unknown>> = [];
+  const deps = fakeDeps({
+    runAgenticTurn: async () => {
+      throw new Error("timeout after 30s");
+    },
+    writeReceipt: async (args) => {
+      receipts.push(args as unknown as Record<string, unknown>);
+    },
+  });
+
+  await dispatchComposioEventToDeployments(deps, {
+    orgId: ORG,
+    eventType: EVENT,
+    payload: { messageId: "msg_1" },
+  });
+
+  assert.equal(receipts.length, 1);
+  assert.equal(receipts[0].status, "error");
+  assert.equal(receipts[0].errorMessage, "timeout after 30s");
+});
+
+test("agent truth: a SUCCESSFUL run never carries an errorMessage", async () => {
+  const receipts: Array<Record<string, unknown>> = [];
+  const deps = fakeDeps({
+    runAgenticTurn: async () => ({ ok: true }),
+    writeReceipt: async (args) => {
+      receipts.push(args as unknown as Record<string, unknown>);
+    },
+  });
+
+  await dispatchComposioEventToDeployments(deps, {
+    orgId: ORG,
+    eventType: EVENT,
+    payload: { messageId: "msg_1" },
+  });
+
+  assert.equal(receipts.length, 1);
+  assert.equal(receipts[0].errorMessage, undefined);
+});
+
 test("a THROWING run also calls writeReceipt with status error (never blocks the release-claim path)", async () => {
   const receipts: Array<Record<string, unknown>> = [];
   let releaseArgs: unknown = null;

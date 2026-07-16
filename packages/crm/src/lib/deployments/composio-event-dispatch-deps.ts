@@ -33,8 +33,11 @@ export function buildDispatchComposioEventDeps(): DispatchComposioEventDeps {
     releaseClaim: releaseComposioPushRunClaim,
     // Agent receipts slice (Task 2a) — record every STARTED push run
     // (ok/error) so a webhook-triggered agent's runs are queryable.
-    // writeRunReceipt is itself fail-soft (never throws).
-    writeReceipt: ({ orgId, deploymentId, status, sourceRef, toolCalls, replyText }) =>
+    // writeRunReceipt is itself fail-soft (never throws). Agent truth slice
+    // (Task 1) — errorMessage (present only on an errored run) flows through
+    // to writeRunReceipt's derivation, which scrubs + prefixes it; never
+    // computed here, so this file stays a thin pass-through.
+    writeReceipt: ({ orgId, deploymentId, status, sourceRef, toolCalls, replyText, errorMessage }) =>
       writeRunReceipt({
         orgId,
         deploymentId,
@@ -43,6 +46,7 @@ export function buildDispatchComposioEventDeps(): DispatchComposioEventDeps {
         status,
         toolCalls,
         replyText,
+        errorMessage,
       }),
 
     runAgenticTurn: async ({ orgId, channel, blueprint }) => {
@@ -54,10 +58,11 @@ export function buildDispatchComposioEventDeps(): DispatchComposioEventDeps {
 
       const resolution = await getAIClient({ orgId });
       if (!resolution.client) {
-        // No usable LLM key → can't drive the agent. Not an error the caller
-        // needs to see beyond "did not run" — mirrors runActionOnlyTurn's
-        // no_llm_key fail-soft.
-        return { ok: false };
+        // No usable LLM key → can't drive the agent. Agent truth slice
+        // (Task 1) — this is now an observable receipt reason ("no LLM key
+        // configured") instead of a silent generic error; mirrors
+        // runActionOnlyTurn's no_llm_key fail-soft, just no longer mute.
+        return { ok: false, errorMessage: "no LLM key configured" };
       }
 
       const [org] = await db
@@ -70,7 +75,7 @@ export function buildDispatchComposioEventDeps(): DispatchComposioEventDeps {
         .from(organizations)
         .where(eq(organizations.id, orgId))
         .limit(1);
-      if (!org) return { ok: false };
+      if (!org) return { ok: false, errorMessage: "organization not found" };
 
       // Email-agent slice (Part A2) — splice the operator's voice profile for
       // an email-channel deployment. Read error / missing note → null (no-op).
@@ -129,6 +134,11 @@ export function buildDispatchComposioEventDeps(): DispatchComposioEventDeps {
         ok: turn.ok === true,
         toolCalls,
         replyText: turn.ok === true ? turn.reply : undefined,
+        // Agent truth slice (Task 1) — the turn's own diagnostic (e.g.
+        // "[runtime error] anthropic 401: invalid x-api-key") when it
+        // failed. Unscrubbed here — writeRunReceipt's deriveReceiptSummary
+        // scrubs before it's ever persisted.
+        errorMessage: turn.ok === false ? turn.message : undefined,
       };
     },
   };
