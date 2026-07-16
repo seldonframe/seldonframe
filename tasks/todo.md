@@ -14,22 +14,46 @@ look via design picker) drove B2B booking questions onto an HVAC company whose s
 `vertical=hvac` + `emergency_service=true`. Design picker = SURFACE, not build. Generalizes the
 existing step-0 health override in resolveIntakeFieldsFromSoul.
 
-- [ ] 1. Move `classifyArchetypeFromSoul` from apply-archetype-theme.ts (db-bound) to
+- [x] 1. Move `classifyArchetypeFromSoul` from apply-archetype-theme.ts (db-bound) to
       aesthetic-archetypes.ts (pure); re-export from the old location for existing importers.
-- [ ] 2. Slice A — extract `resolveIntakeFieldsFromSoul` out of lib/bookings/actions.ts
+- [x] 2. Slice A — extract `resolveIntakeFieldsFromSoul` out of lib/bookings/actions.ts
       ("use server", untestable) into new pure module lib/bookings/resolve-intake-fields.ts:
       NEW soul-vertical step between the health override and the theme-archetype lookup
       (soul.personality_vertical ?? settings.crmPersonality.vertical → classifyArchetypeFromSoul);
       feed the vertical into the blended hints so the step-0 health override sees it too.
-- [ ] 3. Wire actions.ts to the new module; pass org.settings.
-- [ ] 4. Slice B — pure DI seeder lib/workspace/seed-booking-intake-fields.ts (classify →
+- [x] 3. Wire actions.ts to the new module; pass org.settings.
+- [x] 4. Slice B — pure DI seeder lib/workspace/seed-booking-intake-fields.ts (classify →
       getBookingIntakeFieldsForArchetype → write intakeFields on template rows lacking them).
-- [ ] 5. Call the seeder from createFullWorkspace (create-full.ts, after step 12.6) — covers the
+- [x] 5. Call the seeder from createFullWorkspace (create-full.ts, after step 12.6) — covers the
       /try URL flow AND the paste flow (both funnel through createFullWorkspace).
-- [ ] 6. Unit tests: HVAC soul + technical-restrained theme → bold-urgency · empty soul +
-      explicit archetype → archetype fields (back-compat) · health override still wins ·
-      seeder seeds/skips correctly.
-- [ ] 7. scripts/run-unit-tests.js (delta vs DB-bound baseline) + tsc + verify-build gate.
+- [x] 6. Unit tests (11 new, all green): HVAC soul + technical-restrained theme → bold-urgency ·
+      agency soul on bold-urgency look → B2B (cuts both ways) · empty soul + explicit archetype →
+      archetype fields (back-compat) · health override still wins incl. vertical-only-in-settings ·
+      seeder seeds/skips/preserves-metadata. Related suites 202/202. Committed ea7442b21.
+- [x] 7a. tsc: 1 error, pre-existing (copilot/turn route TS2353) — delta 0. Full runner hits the
+      known Windows ENAMETOOLONG; targeted batches used instead.
+- [x] 7b. verify-build gate #1: PASS on ea7442b21 (tests · tsc-delta-0 · use-server · journal ·
+      regression-grep; smoke deferred post-merge).
+- [x] 8. Reviewer (maker≠checker): SHIP-WITH-FIXES — both findings fixed in e096d4462:
+      (1) BLOCKER seeder skipped the health override → physio ("general" vertical) would get
+      contractor fields PERMANENTLY seeded; (2) "general" default vertical short-circuited
+      theme + name/title hints (Roofs-by-Shiloh regression). Fix = ONE shared
+      classifyIntakeArchetypeFromBusinessSignals used by resolver AND seeder (+
+      extractArchetypeSignalsFromSoul split). 4 new regression tests; suites 206/206; tsc delta 0.
+      Accepted nit: type-only import of BookingIntakeField from actions.ts (harmless, erased).
+- [x] 9. verify-build gate #2 on e096d4462: PASS (15 tests · tsc delta 0 · use-server ·
+      no migrations · regression grep clean · smoke N/A pre-merge).
+
+**Review:** Two commits (ea7442b21 fix + e096d4462 reviewer fixes). The maker≠checker loop earned
+its keep: the reviewer caught that the first-cut seeder skipped the health override — physio
+(vertical "general") would have had contractor fields PERMANENTLY seeded (stored fields win, so
+the render-time override could never repair it) — and that the truthy-but-meaningless "general"
+vertical defeated the Roofs-by-Shiloh name-hints fix. Both fixed by ONE shared
+classifyIntakeArchetypeFromBusinessSignals used by resolver + seeder. 15 new tests; related
+suites 206/206; learnings note docs/learnings/2026-07-16-intake-semantics-from-soul-not-look.md.
+⏳ post-merge: create a FRESH /try workspace (not Flow-Tech — hand-patched) with an HVAC prompt,
+pick the "Technical" look, confirm /book still shows dispatch questions + intakeFields present on
+the template row. Max's merge gate: PR opened from claude/youthful-panini-ffb749.
 
 ### Task — Agency repositioning of homepage (2026-07-15, branch feat/agency-homepage-positioning)
 
