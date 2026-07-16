@@ -240,6 +240,28 @@ export function PricingShellMarketing({ isAuthed, tiers }: PricingShellMarketing
             </div>
           </div>
 
+          {/* The workspace-vs-sub-account distinction, per audience — the one
+              sentence that answers "why pay $99+ when $29 already has
+              unlimited workspaces?": the hand-off. Both lines SSR'd with the
+              inactive one hidden, same pattern as the tier rows below. */}
+          <p
+            className={`mx-auto mt-4 max-w-[62ch] text-center text-[14px] leading-[1.55] text-[#6E665A] ${audience === "personal" ? "" : "hidden"}`}
+            aria-hidden={audience !== "personal"}
+          >
+            Businesses <strong className="font-[600] text-[#221D17]">you</strong> run —
+            unlimited workspaces, all under your own login. Your clients never need an
+            account here.
+          </p>
+          <p
+            className={`mx-auto mt-4 max-w-[62ch] text-center text-[14px] leading-[1.55] text-[#6E665A] ${audience === "agency" ? "" : "hidden"}`}
+            aria-hidden={audience !== "agency"}
+          >
+            What the agency tiers add is the <strong className="font-[600] text-[#221D17]">hand-off</strong>:
+            a <strong className="font-[600] text-[#221D17]">sub-account</strong> is your
+            client&apos;s own login — their workspace and portal, wearing your brand — while
+            you keep the master view of every client.
+          </p>
+
           {/* Both audience rows are server-rendered (inactive one CSS-hidden)
               so crawlers/LLMs see all five tiers — only visibility is client
               state (preserves the 2026-07-08 SSR hotfix). */}

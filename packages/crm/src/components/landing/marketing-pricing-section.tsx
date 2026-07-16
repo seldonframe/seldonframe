@@ -147,6 +147,12 @@ function AgencyTierGrid() {
             <strong className="font-[600] text-[var(--lp-ink)]">0% GMV</strong> — we don&apos;t
             tax your client work. Build it free, cancel anytime.
           </p>
+          <p className="mx-auto mt-3 max-w-[62ch] text-[14px] leading-[1.55] text-[var(--lp-muted)]">
+            What these tiers buy is the <strong className="font-[600] text-[var(--lp-ink)]">hand-off</strong>:
+            a <strong className="font-[600] text-[var(--lp-ink)]">sub-account</strong> is your
+            client&apos;s own login — their workspace, their portal, wearing your brand — while
+            you keep the master view.
+          </p>
         </div>
 
         {/* Three tier cards */}
@@ -229,8 +235,9 @@ function AgencyTierGrid() {
             Build your first client workspace free →
           </Link>
           <p className="text-[13px] leading-[1.55] text-[var(--lp-muted)]">
-            Running your own business instead of clients? Builder is $29/mo (unlimited
-            workspaces, your own AI key) and Managed is $49/mo on ours.{" "}
+            Running your own business instead of clients? Builder is $29/mo — the same
+            unlimited workspaces, but everything lives under your own login: no client
+            logins, no white-label. Managed is $49/mo on our keys.{" "}
             <Link
               href="/pricing"
               className="font-[600] text-[var(--lp-accent)] underline underline-offset-2"

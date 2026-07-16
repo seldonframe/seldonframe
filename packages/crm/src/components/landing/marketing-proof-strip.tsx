@@ -8,10 +8,12 @@
 import { AvatarCircles } from "@/components/ui/magic/avatar-circles";
 import { EditByChatDemo } from "@/components/landing/edit-by-chat-demo";
 
+// 2026-07-16 (Max): "$29/mo flat" chip removed — the homepage sells the
+// agency tiers now, so a $29 anchor here undercut the $99+ grid below.
+// Price talk lives in the pricing section + FAQ.
 const CHIPS = [
   "Build it free",
   "Live in 3 minutes",
-  "$29/mo flat",
   "No code",
   "Cancel anytime",
 ] as const;
