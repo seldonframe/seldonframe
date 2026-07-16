@@ -118,6 +118,16 @@ export const COMPARISON_LABELS: { key: keyof typeof SF_COLUMN; label: string }[]
  *  the agency ladder — $29 is a demoted solo aside, never the lead. Solo
  *  surfaces keep "$29/mo flat" as the anchor. Mixed surfaces carry both,
  *  neither leading. See CompetitorAudience for how a competitor is banded. */
+/** Band resolution for two-competitor pages: an agency-audience competitor
+ *  anywhere in the pair makes the page an agency surface (Max 2026-07-16 —
+ *  never lead an agency-intercept page with the $29 solo anchor); mixed
+ *  beats solo for the same reason. */
+export function pairAudience(a: CompetitorAudience, b: CompetitorAudience): CompetitorAudience {
+  if (a === "agency" || b === "agency") return "agency";
+  if (a === "mixed" || b === "mixed") return "mixed";
+  return "solo";
+}
+
 export function sfPriceAnchor(audience: CompetitorAudience): string {
   switch (audience) {
     case "agency":
@@ -578,7 +588,9 @@ export const COMPETITORS: Competitor[] = [
     slug: "podium",
     name: "Podium",
     category: "SMB messaging & reviews",
-    audience: "agency",
+    // Reband 2026-07-16 review: Podium sells TO local businesses (solo reader),
+    // not to agencies — the band follows the READER, not the price point.
+    audience: "solo",
     pricingSourceUrl: "https://www.podium.com/pricing",
     oneLiner:
       "Podium is a messaging, reviews, and AI-employee platform for local businesses, sold through a sales-quote process.",
@@ -956,7 +968,9 @@ export const COMPETITORS: Competitor[] = [
     slug: "smith-ai",
     name: "Smith.ai",
     category: "receptionist service",
-    audience: "agency",
+    // Reband 2026-07-16 review: Smith.ai is a per-call service bought by the
+    // firm/SMB itself — solo reader, same rule as podium.
+    audience: "solo",
     pricingSourceUrl: "https://smith.ai/pricing/ai-receptionist",
     oneLiner:
       "Smith.ai is a North-America-based receptionist service that combines AI with human receptionists, billed per call.",

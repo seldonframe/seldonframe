@@ -15,15 +15,12 @@ import { PricingSourceLine } from "@/components/seo/alternative-page";
 import { AuthorByline, articleLd } from "@/components/seo/author-byline";
 import { monthYearToIso } from "@/lib/seo/month-iso";
 import { emphasize } from "@/lib/seo/emphasize";
-import { COMPARISON_LABELS, SF_COLUMN, LAST_UPDATED, sfPriceAnchor, type Competitor, type CompetitorAudience, type AltFaqItem } from "@/lib/seo/alternative-pages";
+import { COMPARISON_LABELS, SF_COLUMN, LAST_UPDATED, sfPriceAnchor, type Competitor, type CompetitorAudience, type AltFaqItem, pairAudience } from "@/lib/seo/alternative-pages";
 import { getExtras, START_HREF, DEMO_HREF, type VsPair, vsSlug } from "@/lib/seo/alternative-pages-extras";
 
 /** A vs-page compares two competitors that may carry different audience
  *  bands — anchor on the shared band when both agree, otherwise treat the
  *  page as mixed (never assume the narrower band when the two disagree). */
-export function pairAudience(a: Competitor, b: Competitor): CompetitorAudience {
-  return a.audience === b.audience ? a.audience : "mixed";
-}
 
 /** Compose the 4 shared FAQ items for a third-party X-vs-Y page, honestly
  *  built from registry data only (never-lies: no new facts). Pure + exported

@@ -12,9 +12,9 @@ import {
   sfPriceAnchor,
   type Competitor,
   type CompetitorAudience,
+  pairAudience,
 } from "@/lib/seo/alternative-pages";
 import { getExtras, SF_PROS, SF_CONS, SWITCH_STEPS, DEMO_HREF, type VsPair } from "@/lib/seo/alternative-pages-extras";
-import { pairAudience } from "@/components/seo/vs-page";
 import { emphasizeMd } from "@/lib/seo/emphasize";
 
 const BASE = "https://www.seldonframe.com";

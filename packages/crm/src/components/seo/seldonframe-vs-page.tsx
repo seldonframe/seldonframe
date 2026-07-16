@@ -96,7 +96,7 @@ export function SeldonFrameVsPage({ competitor }: { competitor: Competitor }): R
     "@type": "SoftwareApplication",
     name: "SeldonFrame",
     applicationCategory: "BusinessApplication",
-    description: `SeldonFrame vs ${c.name}: AI receptionist, website, CRM and booking in one flat $29/mo platform, compared head to head.`,
+    description: `SeldonFrame builds the whole AI front office — website, CRM, booking, and an AI receptionist — ${sfPriceAnchor(c.audience)}.`,
     offers: { "@type": "Offer", price: "29", priceCurrency: "USD" },
     provider: { "@type": "Organization", name: "SeldonFrame", url: "https://seldonframe.com" },
   };
