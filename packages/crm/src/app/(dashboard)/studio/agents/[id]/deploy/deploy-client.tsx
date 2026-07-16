@@ -359,7 +359,15 @@ export function DeployFlowClient({
           declaredTemplateVariables.length > 0 ? templateVarValues : undefined,
       });
       if (!result.ok) {
-        setError(result.error);
+        // Duplicate guard (2026-07-16) — friendly copy for the one error a
+        // well-meaning operator will actually hit: deploying the same agent
+        // to the same client twice (each copy runs — and bills — separately
+        // on every trigger fire).
+        setError(
+          result.error === "duplicate_deployment"
+            ? `${effectiveClientName} already has this agent deployed. A second copy would run (and bill) separately on every trigger — open Clients to manage the existing one instead.`
+            : result.error,
+        );
         return;
       }
       setDeployedId(result.id);

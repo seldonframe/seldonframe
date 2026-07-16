@@ -32,6 +32,31 @@ string into anthropic-error-map.ts (prevents the exact drift class that caused #
 Learnings appended to docs/learnings/2026-07-16-credits-exhausted-400-mapping.md
 (corollary: sweep ALL consumer surfaces of an error payload). ⏳ Max: merge #112 → #113.
 
+### Task — Token-smart agent runtime (2026-07-16, worktree hungry-jang)
+
+Context: Max's $20 Anthropic top-up burned in 34 min by 3 duplicate Gmail push agents
+(untruncated GMAIL_FETCH_EMAILS JSON re-sent every loop iteration, uncached, always-premium
+Sonnet). Prod deployments canceled directly (ed050e3a, a37115e4, 2e14ba00 → status=canceled).
+This slice = make the runtime cheap by construction. Max's explicit ask: caching + tool-result
+cap + duplicate-deployment guard.
+
+- [x] 1. Shared helpers in `lib/agents/turn-token-economy.ts` + 15-test spec (cap 20k chars
+      w/ explicit truncation marker; error cap 2k; cache helpers; moving breakpoint).
+- [x] 2. Cap applied in BOTH tool loops + runtime.ts HISTORY REBUILD (historical tool
+      outputs re-tax every later turn — capped at read time; full output still persisted).
+- [x] 3. Prompt caching in both loops: system + last-tool + moving message breakpoint
+      (3 markers ≤ API's 4). Regen call deliberately UNCACHED (no-tools prefix ≠ loop
+      prefix → marker would be pure write premium).
+- [x] 4. Duplicate guard: createDeployment rejects same builder+template+surface+client
+      (non-canceled) w/ duplicate_deployment + duplicateOfDeploymentId; allowDuplicate
+      escape hatch; deploy-to-self → already_deployed; wizard shows honest copy.
+      Both real incidents (Zen Flow ×3, J. Marin ×2) share template id → key catches them.
+- [x] 5. Unit: 60/60 deployments + 56/56 loop specs + 15/15 helpers; tsc delta = 0 new
+      (baseline = 1 pre-existing copilot 'persist' error, present on clean tree too).
+      verify-runner gate DISPATCHED (commit 89ca653d8).
+- [ ] 6. Push + PR after gate PASS (Max merges).
+
+
 ### Task — Agency repositioning of homepage (2026-07-15, branch feat/agency-homepage-positioning)
 
 Max's direction: keep marketing-page structure, reword for AGENCIES; everything true per §1b

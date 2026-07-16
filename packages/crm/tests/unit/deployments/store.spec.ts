@@ -93,6 +93,7 @@ describe("createDeployment", () => {
   test("inserts a DRAFT row (no provisioning/billing) for an owned template", async () => {
     let inserted: Record<string, unknown> | null = null;
     const deps: CreateDeploymentDeps = {
+      findDuplicate: async () => null,
       findTemplateById: async () => fakeTemplate(),
       insert: async (values) => {
         inserted = values as Record<string, unknown>;
@@ -133,6 +134,7 @@ describe("createDeployment", () => {
   test("defaults surface to 'phone' and price to 0", async () => {
     let inserted: Record<string, unknown> | null = null;
     const deps: CreateDeploymentDeps = {
+      findDuplicate: async () => null,
       findTemplateById: async () => fakeTemplate(),
       insert: async (values) => {
         inserted = values as Record<string, unknown>;
@@ -154,6 +156,7 @@ describe("createDeployment", () => {
   test("ownership guard: rejects a template owned by a DIFFERENT builder", async () => {
     let insertCalled = false;
     const deps: CreateDeploymentDeps = {
+      findDuplicate: async () => null,
       findTemplateById: async () => fakeTemplate({ builderOrgId: "someone-else" }),
       insert: async () => {
         insertCalled = true;
@@ -173,6 +176,7 @@ describe("createDeployment", () => {
 
   test("rejects a missing template", async () => {
     const deps: CreateDeploymentDeps = {
+      findDuplicate: async () => null,
       findTemplateById: async () => null,
       insert: async () => fakeDeployment(),
     };
@@ -188,6 +192,7 @@ describe("createDeployment", () => {
 
   test("requires a builderOrgId and a 2+ char client name", async () => {
     const deps: CreateDeploymentDeps = {
+      findDuplicate: async () => null,
       findTemplateById: async () => fakeTemplate(),
       insert: async () => fakeDeployment(),
     };
@@ -213,6 +218,7 @@ describe("createDeployment", () => {
   test("clamps a negative price to 0", async () => {
     let inserted: Record<string, unknown> | null = null;
     const deps: CreateDeploymentDeps = {
+      findDuplicate: async () => null,
       findTemplateById: async () => fakeTemplate(),
       insert: async (values) => {
         inserted = values as Record<string, unknown>;
