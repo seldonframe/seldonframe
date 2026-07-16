@@ -34,8 +34,15 @@ import { Play } from "lucide-react";
 
 // Hosted on Vercel Blob, not in public/ — an 8 MB binary in git would ship in
 // every clone and every deploy (see the 77 MB of orphaned walkthrough video that
-// arrived that way in 8aec9fd1d). Swapping a re-cut = replace this one URL.
-const EXPLAINER_VIDEO_URL = "/marketing/seldonframe-explainer.mp4";
+// arrived that way in 8aec9fd1d). Uploaded with `access: "public"` from the
+// linked crm project's BLOB_READ_WRITE_TOKEN.
+//
+// The key is VERSIONED (-v1) rather than overwritten in place: Blob serves
+// max-age=31536000, so re-cutting the video under the same pathname would leave
+// caches holding the old bytes. A new cut = upload -v2 + change this one line,
+// which no cache can get wrong.
+const EXPLAINER_VIDEO_URL =
+  "https://ptkw6zuztr7pnyvl.public.blob.vercel-storage.com/marketing/seldonframe-explainer-v1.mp4";
 const POSTER_SRC = "/marketing/explainer-poster.jpg";
 // m:ss, the video-thumbnail convention (68s reads as "1:08").
 const EXPLAINER_DURATION_LABEL = "1:08";
