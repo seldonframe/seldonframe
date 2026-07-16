@@ -27,7 +27,7 @@ export const metadata: Metadata = {
 
 export default function AgenciesPage() {
   return (
-    <div className="min-h-screen bg-[#F6F2EA] text-[#221D17] selection:bg-[#059669]/20 selection:text-[#059669]">
+    <div className="min-h-screen bg-[#F6F2EA] text-[#221D17] selection:bg-[#1F2B24]/20 selection:text-[#1F2B24]">
       <MarketingNav />
       <main id="main-content" className="pt-[100px]">
         <MarketingAgencyMath />
