@@ -16,7 +16,6 @@ import { MarketingBuildSteps } from "@/components/landing/marketing-build-steps"
 import { MarketingIdeStrip } from "@/components/landing/marketing-ide-strip";
 import { MarketingAgentOrbit } from "@/components/landing/marketing-agent-orbit";
 import { MarketingModules, MarketingAgents } from "@/components/landing/marketing-modules";
-import { MarketingSmbCta } from "@/components/landing/marketing-smb-cta";
 import { LandingMarketingPricingSection } from "@/components/landing/marketing-pricing-section";
 import { LandingMarketingFaqSection } from "@/components/landing/marketing-faq-section";
 import { MarketingFinalCta } from "@/components/landing/marketing-final-cta";
@@ -76,7 +75,9 @@ export function UnifiedLanding({
           <MarketingBuildSteps />
           <MarketingModules />
           <MarketingAgents />
-          <MarketingSmbCta />
+          {/* "Get paid" (2% GMV) section REMOVED 2026-07-16 (Max's call) —
+              agency plans pay 0% GMV, so the 2% story is /pricing + FAQ
+              material, not a homepage section. */}
           <LandingMarketingPricingSection tierLadderOn={tierLadderOn} />
           <MarketingProofStrip />
           <LandingMarketingFaqSection />

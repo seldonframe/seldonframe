@@ -4,65 +4,71 @@
 // FAQ section. Paper background, stacked <details> cards with
 // SeldonFrame green plus/minus icon. FAQPage JSON-LD preserved.
 //
-// Copy reflects the flat $29/mo (cancel anytime, no trial) + GMV model and
+// Copy reflects the flat pricing (cancel anytime, no trial) + GMV model and
 // the BYOK-as-qualifier framing (positioning v2, 2026-06-22; trial removed
 // 2026-07-05 — the free ungated build→claim→use experience already IS the
 // trial, so checkout charges immediately).
 //
-// 2026-07-08 pricing ladder (Task 6, flip-time commit): "$29/mo flat"
-// stays the anchor truth for the homepage (one-number rule) — the
-// white-label + workspace-count answers now mention that agencies
-// running CLIENT sub-accounts have a ladder starting at $99/mo,
-// without displacing the $29 anchor. Ships as part of the flip-time
-// commit alongside the SF_COLUMN comparison-registry edit.
+// 2026-07-16 agency persona rewrite (Max's call, with the homepage
+// repositioning + 3-tier pricing section): every answer now speaks to the
+// agency operator selling client front offices. Pricing truth per
+// CLAUDE.md §1b: Agency $99·$199·$299 (0% GMV) / Builder $29 / Managed
+// $49 (solo tiers, flat 2% only when SF is the sales channel). The
+// client-pricing anchor ($300–800/mo retail) matches the standing range
+// used across the SEO comparison pages.
 
 import Link from "next/link";
 
 type FaqItem = { question: string; answer: string };
 
-// Updated 2026-06-22 to the flat $29/mo + GMV model. The FAQPage JSON-LD
-// schema reads from this same const, so the visible answers and the
-// structured data can never drift — edit here and the schema regenerates.
+// Agency-persona FAQ (2026-07-16). The FAQPage JSON-LD schema reads from
+// this same const, so the visible answers and the structured data can
+// never drift — edit here and the schema regenerates.
 const FAQS: readonly FaqItem[] = [
   {
-    question: "Can an AI agent really run my front office — without dropping the ball?",
+    question: "Can an AI agent really run a client's front office — without dropping the ball?",
     answer:
-      "Yes, because it's grounded in your real business, not making things up. It answers from your actual services, prices, and hours, reads back what it heard before it books or quotes anything, and stays inside the guardrails you set — so it never invents a price or a promise you can't keep. You can review every call and message it handles. Most owners find it more consistent than a tired human at 9pm, because it never forgets to follow up.",
+      "Yes, because it's grounded in the client's real business, not making things up. It answers from their actual services, prices, and hours, reads back what it heard before it books or quotes anything, and stays inside the guardrails you set — so it never invents a price or a promise your client can't keep. You can review every call and message it handles, per client, before anyone else sees it. Your name is on this — that's exactly why it's built to never wing it.",
   },
   {
-    question: "I'm not technical. Can I actually run this myself?",
+    question: "Do I need to be a developer to deliver this?",
     answer:
-      "If you can text, you can run it. Change your hours, add a service, or tune what your receptionist says just by typing it in plain English — like you'd text ChatGPT. There's no code, no builder to learn, and nothing to wire together. Your website, booking page, CRM, and agent are already connected on day one.",
+      "No. If you can write an email, you can operate it. Change a client's hours, add a service, or tune what their receptionist says by typing it in plain English — like you'd text ChatGPT. There's no code, no builder to learn, and nothing to wire together: each client's website, booking page, CRM, and agent are already connected the moment the workspace builds.",
   },
   {
     question: "Which plan is right for me?",
     answer:
-      "Three simple paths. If you run your OWN business (or a few) and you already use ChatGPT, Claude, or Gemini, choose Builder — $29/mo, unlimited workspaces on your own AI key. If you'd rather we handle the keys and just run it for you, choose Managed — $49/mo for one workspace on SeldonFrame's keys, nothing to set up. If you build sites and agents for CLIENTS under your own brand, choose an Agency plan — $99/mo for 10 client sub-accounts, $199 for 30, or $299 for unlimited, whitelabel included. Not sure? Start free on Builder — you can move up in a click once you outgrow it.",
+      "If you run client front offices under your own brand, pick an Agency plan: Starter is $99/mo with 10 client sub-accounts, Growth is $199/mo with 30 plus one-click deploy to all clients, and Scale is $299/mo with unlimited sub-accounts plus API and MCP access. All three include full white-label and branded client portals. Running your OWN business instead? Builder is $29/mo (unlimited workspaces on your own AI key) and Managed is $49/mo (one workspace on ours). Not sure? Build your first workspace free and decide after you've seen it work.",
   },
   {
-    question: "Do I need my own AI key?",
+    question: "What should I charge my clients?",
     answer:
-      "On Builder, yes — and if you use ChatGPT, Claude, or Gemini you already have one. Your agents run on your own key (and Twilio for calls/texts), billed by the provider at cost — that's exactly why the price stays flat with no usage markup. Don't want to touch keys at all? The Managed plan ($49/mo) runs everything on our keys. Either way, your website, booking, and CRM build with no key at all.",
+      "That's your call — you set per-client pricing and keep every dollar of the spread, because agency plans pay 0% GMV. For reference, agencies typically retail a managed AI front office at $300–800/mo per client. At that range, one client more than covers Agency Starter ($99/mo for 10 sub-accounts), and everything after is margin. The marketplace is the same story: sell or rent your agents there and the only fee is the standing 5% on marketplace transactions.",
   },
   {
     question: "It's really a flat price? What's the catch?",
     answer:
-      "No catch. Flat monthly, no metered AI bills, no per-seat tax, no surprise invoices. The only variable is a flat 2% on what you actually SELL through SeldonFrame (payments and proposals) on the solo plans — collect any other way and we take nothing, and agency plans pay 0%. We only make money when you do.",
+      "No catch. Flat monthly, no metered AI bills, no per-seat tax, no per-client surprise invoices — and on agency plans, 0% GMV on everything you bill your clients. We don't tax your client work. (The solo plans carry the only variable fee that exists: a flat 2% when SeldonFrame itself is the sales channel — collect any other way and we take nothing.)",
+  },
+  {
+    question: "Do I need my own AI key?",
+    answer:
+      "If you already use ChatGPT, Claude, or Gemini, you have one — and your agents run on it, billed by the provider at cost. That's exactly why the price stays flat and your margin isn't metered: we never mark up usage. Don't want to touch keys at all? The Managed plan ($49/mo) runs everything on our keys. Either way, websites, booking, and CRMs build with no key at all.",
   },
   {
     question: "Is it free to start?",
     answer:
-      "Yes. We build your first workspace and let you watch it answer a call and book a job before you pay a cent — no card to look. You're only charged when you switch it on for real through Stripe, and you can cancel anytime. One booked job pays for the whole year.",
+      "Yes. Build your first client workspace free — from their URL, in about 3 minutes — and watch it answer a call and book a job before you pay a cent, no card to look. You're only charged when you switch a plan on through Stripe, and you can cancel anytime. Most agencies build the demo first and use it to close the client before spending a dollar.",
   },
   {
-    question: "Why not just hire someone, or use GoHighLevel?",
+    question: "Why not just use GoHighLevel?",
     answer:
-      "A part-time receptionist costs more in a week than SeldonFrame does in a month, and still sleeps. GoHighLevel Agency Pro is $497/mo and takes 2–4 weeks of setup plus Zapier glue. SeldonFrame builds the whole front office — website, CRM, booking, intake, and an agent across voice, chat, SMS, and email — in 3 minutes from your URL, for $29/mo, and you own it (open source, AGPL-3.0: self-host or use the cloud).",
+      "GoHighLevel's white-label tier (Agency Pro) is $497/mo, and a typical build-out takes 2–4 weeks of snapshot setup and Zapier glue per client. SeldonFrame builds a client's whole front office — website, CRM, booking, intake, and an agent across voice, chat, SMS, and email — in about 3 minutes from their URL, with white-label from $99/mo for your entire agency. And you own it: open source, AGPL-3.0, self-host or use the cloud.",
   },
   {
-    question: "Do I still need Zapier, Calendly, or Typeform?",
+    question: "Do my clients still need Zapier, Calendly, or Typeform?",
     answer:
-      "No. CRM, scheduling, intake forms, and the AI agents are all native and wired together from the start. No Zapier task fees, no broken integrations, no tab-switching between five tools that don't talk to each other.",
+      "No. CRM, scheduling, intake forms, and the AI agents are native and wired together from the first build — for every client, identically. That's five fewer subscriptions per client to buy, glue, and debug, and no Zapier task fees eating the retainer.",
   },
   {
     question: "Can I white-label it for my clients?",
@@ -72,12 +78,12 @@ const FAQS: readonly FaqItem[] = [
   {
     question: "Should I wait until the AI gets better?",
     answer:
-      "It already does — automatically. SeldonFrame is a thin harness over the frontier models, so every time Claude, GPT, or Gemini gets better, your agent does too, with nothing to migrate. Waiting doesn't get you a better product; it just sends more of this week's missed calls to voicemail. The best time to have an agent answering was last month. The next best time is today — and building it is free.",
+      "It already does — automatically. SeldonFrame is a thin harness over the frontier models, so every time Claude, GPT, or Gemini gets better, every agent you've deployed gets better too, with nothing to migrate across your whole client book. Waiting doesn't get you a better product; it just sends more of your clients' missed calls to voicemail. The best time to have agents answering client phones was last month. The next best time is today — and building the first one is free.",
   },
   {
-    question: "Can I cancel, and do I own my work?",
+    question: "Can I cancel, and who owns the client work?",
     answer:
-      "Cancel anytime, no lock-in and no penalty. And because SeldonFrame is open source (AGPL-3.0), you can export everything or self-host it whenever you want. Your customers, your content, and your agents are yours — we never hold them hostage.",
+      "Cancel anytime, no lock-in and no penalty. And because SeldonFrame is open source (AGPL-3.0), you can export everything or self-host it whenever you want. Your clients, their data, your content, and your agents are yours — we never hold a client book hostage.",
   },
 ];
 
