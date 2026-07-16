@@ -2392,3 +2392,6 @@ Prevention: to diff/typecheck a "before my change" baseline in a worktree,
 use `git worktree add` against a specific commit, or `git show <sha>:<path>`,
 or just re-run the same check on the parent repo path — never stash.
 - 2026-07-16 — Quote disputes (reviewer vs implementer) are settled by re-fetching the SOURCE, never the plan doc both relied on: the 'misquote' block was a false positive — both quotes were verbatim substrings of different sentences. (docs/learnings/2026-07-16-adjudicate-at-the-source.md)
+- 2026-07-16 — verify-runner EDITED code to fix type errors it found (checker must never write): its uncommitted worktree edits were half-lost at commit time and the broken half shipped. Rule: gate agents report, orchestrator fixes; run `git status` before AND after any gate dispatch and treat unexpected dirt as a gate violation.
+- 2026-07-16 — 'First price the reader meets' includes META DESCRIPTION and JSON-LD, not just body copy — the smoke caught $29 at byte 2761 (the <meta>) after all body anchors were fixed. Band/truth sweeps must include heroSub/metadata fields and word-form prices ('29 dollars'), which dodge $-greps.
+- 2026-07-16 — Worktree creation is a 3-step ritual: add + BOTH node_modules junctions. Skipping junctions makes every spec fail with ERR_MODULE_NOT_FOUND 'tsx' — 18 phantom failures before the real one.

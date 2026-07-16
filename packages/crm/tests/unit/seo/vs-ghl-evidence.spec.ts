@@ -14,7 +14,7 @@ import assert from "node:assert/strict";
 import { renderToStaticMarkup } from "react-dom/server";
 import { createElement } from "react";
 
-import { COMPETITORS, getCompetitor } from "../../../src/lib/seo/alternative-pages";
+import { COMPETITORS, getCompetitor, pairAudience, sfPriceAnchor } from "../../../src/lib/seo/alternative-pages";
 import { SeldonFrameVsPage } from "../../../src/components/seo/seldonframe-vs-page";
 
 function renderVsPage(slug: string): string {
@@ -95,4 +95,35 @@ test("a non-gohighlevel competitor (vendasta) declares no evidenceSections/hones
 test("only gohighlevel among all competitors declares evidenceSections/honestyBox (scope guard)", () => {
   const withEvidence = COMPETITORS.filter((c) => c.evidenceSections || c.honestyBox).map((c) => c.slug);
   assert.deepEqual(withEvidence, ["gohighlevel"]);
+});
+
+// ── 2026-07-16 hotfix guards (post-#110 smoke failures) ─────────────────────
+// (1) pair pages resolved the band at RUNTIME via pairAudience(objects) and
+// silently fell through to solo; (2) agency-band competitors' heroSub doubles
+// as the meta description — the first price a crawler/SERP reader meets.
+
+test("pairAudience is agency-wins over audience STRINGS (the runtime contract)", () => {
+  assert.equal(pairAudience("agency", "mixed"), "agency");
+  assert.equal(pairAudience("solo", "agency"), "agency");
+  assert.equal(pairAudience("mixed", "solo"), "mixed");
+  assert.equal(pairAudience("solo", "solo"), "solo");
+});
+
+test("every agency-band competitor's heroSub leads with the $99 ladder, never $29-first", () => {
+  for (const c of COMPETITORS.filter((c) => c.audience === "agency")) {
+    const i99 = c.heroSub.indexOf("$99");
+    const i29 = c.heroSub.indexOf("$29");
+    assert.notEqual(i99, -1, `${c.slug}: agency heroSub must state the $99 ladder`);
+    if (i29 !== -1) assert.ok(i99 < i29, `${c.slug}: heroSub mentions $29 before $99`);
+  }
+});
+
+test("a gohighlevel pair resolves to the agency anchor end-to-end", () => {
+  const anchor = sfPriceAnchor(pairAudience("agency", "mixed"));
+  assert.ok(anchor.indexOf("$99") !== -1 && (anchor.indexOf("$29") === -1 || anchor.indexOf("$99") < anchor.indexOf("$29")));
+});
+
+test("no words-not-digits price collocation dodge in the gohighlevel entry", () => {
+  const text = JSON.stringify(COMPETITORS.find((c) => c.slug === "gohighlevel"));
+  assert.doesNotMatch(text, /29 dollars[^.]{0,80}(white-?label|client sub-accounts)/i);
 });
