@@ -56,3 +56,19 @@ semantically-distinct failures under the same status (Anthropic's
 out-of-credits is a 400), so keep ONE shared mapper per provider, test the
 message-based cases, and make every non-retryable reason carry honest
 user-facing copy with the retry affordance suppressed.
+
+## Follow-up (same day, PR #113) — the consumer-surface sweep
+The "separate UI task" deferred above (judgment call 3) was real debt: the
+dashboard's `/clients/new` kept showing "We couldn't read that site. Try a
+different URL" for the same out-of-credits 422, on BOTH its URL and paste
+listeners — a worse lie than /try's, because the operator may be on their
+own BYOK key and the actual fix is funding it. PR #113 made both listeners
+reason-aware (server `message` wins, dedicated fallback copy mentions adding
+Anthropic credits), threaded `message` through `run-create-from-paste.ts`'s
+422, and hoisted the copy into `CREDITS_EXHAUSTED_UI_MESSAGE` in
+`anthropic-error-map.ts` so the two orchestrators share one string.
+
+**Corollary rule:** an error-payload honesty fix isn't done at the payload —
+enumerate every consumer surface of that payload (grep the event/field name
+across `app/`) and sweep them all in the same wave, or file the gap
+explicitly with the exact file:line so the follow-up is mechanical.

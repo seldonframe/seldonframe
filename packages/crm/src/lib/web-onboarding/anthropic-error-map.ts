@@ -17,6 +17,13 @@ import { WebFetchError } from "./web-fetch-extractor";
 // substring test is the reliable detector.
 const CREDIT_BALANCE_TOO_LOW = /credit balance is too low/i;
 
+// The UI-facing line both SSE orchestrators (run-create-from-url and
+// run-create-from-paste) attach to a credits_exhausted 422. One constant so
+// the two paths can never drift apart — the same copy-drift that let the
+// paste path emit a bare {reason} while the URL path carried a message.
+export const CREDITS_EXHAUSTED_UI_MESSAGE =
+  "The AI account powering this build is out of credits, so retrying won't help right now. If you brought your own Anthropic key, add credits to it — otherwise check back a little later.";
+
 export function mapAnthropicSdkError(err: unknown): WebFetchError {
   const status = (err as { status?: number } | null)?.status;
   const message = err instanceof Error ? err.message : String(err);

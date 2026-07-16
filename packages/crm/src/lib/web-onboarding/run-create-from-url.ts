@@ -35,6 +35,7 @@
 
 import { createSseStream, SSE_RESPONSE_HEADERS } from "./sse";
 import { validateCreateFromUrlInput } from "./url-validator";
+import { CREDITS_EXHAUSTED_UI_MESSAGE } from "./anthropic-error-map";
 import type { CreateFullWorkspaceInput, CreateFullWorkspaceResult } from "@/lib/workspace/create-full";
 import type { LimitDecision } from "@/lib/billing/limits";
 import type { ExtractedBusinessFacts } from "./extraction-prompt";
@@ -278,11 +279,7 @@ export async function runCreateFromUrl(input: RunInput): Promise<RunResult> {
                   "We read that site but couldn't find the basics we need — a business name, location, and phone number. Try a different URL, or describe your business instead.",
               }
             : reason === "credits_exhausted"
-              ? {
-                  reason,
-                  message:
-                    "The AI account powering this build is out of credits, so retrying won't help right now. If you brought your own Anthropic key, add credits to it — otherwise check back a little later.",
-                }
+              ? { reason, message: CREDITS_EXHAUSTED_UI_MESSAGE }
               : { reason },
         );
         sse.close();
