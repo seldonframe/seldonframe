@@ -2311,3 +2311,4 @@ C4 close-out with empirical SLICE 11 data.
   controller verifies ONE load-bearing claim it already knows the answer to
   — a report that fails its canary is discarded wholesale, not partially
   trusted.
+- 2026-07-15: NEVER run implementer agents in the main checkout — another live session may own it (branch switched mid-task, stashes interleaved). Worktree-first for every build; a stash found in a shared checkout is presumed someone else's work (verify diff shape against the task's known scope before applying).
