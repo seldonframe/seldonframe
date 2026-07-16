@@ -13,7 +13,7 @@ import { and, desc, eq } from "drizzle-orm";
 import { ArrowLeft } from "lucide-react";
 import { db } from "@/db";
 import { organizations } from "@/db/schema";
-import { getOrgId } from "@/lib/auth/helpers";
+import { getCurrentUser, getOrgId } from "@/lib/auth/helpers";
 import {
   getAgentTemplate,
   updateAgentTemplate,
@@ -25,6 +25,7 @@ import {
 import { fillAllBindingTools } from "@/lib/agents/mcp/discover-vetted-tools";
 import { resolveAgentTrigger } from "@/lib/agents/triggers/agent-trigger";
 import { getSellerListingContextAction } from "@/lib/marketplace/seller-actions";
+import { shouldWarnPersonalDetails } from "@/lib/agent-templates/generalize";
 import { VETTED_CONNECTORS, getVettedConnector } from "@/lib/agents/mcp/connectors";
 import { findSessionByTemplateId } from "@/lib/recordings/session-store";
 import type { FlowModel } from "@/lib/recordings/trace-schema";
@@ -32,6 +33,7 @@ import type { EvalScenario } from "@/lib/agents/evals/eval-types";
 import type { AgentBlueprint } from "@/db/schema";
 import { AgentTemplateEditor } from "./editor-client";
 import { ListOnMarketplace } from "./list-on-marketplace";
+import { GeneralizeTemplateCard } from "@/components/marketplace/generalize-template-panel";
 import { RunEvalsCard } from "./run-evals";
 import { EditorSection, EditorSectionDivider } from "./editor-section";
 import { TemplateStatusBadge, formatTemplateType, marketplaceListingCopy } from "../status-badge";
@@ -163,6 +165,18 @@ export default async function AgentTemplatePage({
   const sellerListing = listingCtx.ok ? listingCtx.listing : null;
   const sellerConnect = listingCtx.ok ? listingCtx.connect : { ready: false, pending: false };
   const builderName = orgRow[0]?.name ?? "A SeldonFrame builder";
+
+  // "Make it fit anybody" nudge (Sell stage, design item 5) — a cheap,
+  // NEVER-blocking heuristic: does this template's persona script still
+  // contain the operator's OWN account email, and has it never been
+  // generalized? Best-effort (getCurrentUser() failing just means no
+  // warning — never blocks the editor).
+  const currentUser = await getCurrentUser();
+  const showPersonalDetailsWarning = shouldWarnPersonalDetails({
+    customSkillMd: blueprint.customSkillMd,
+    templateVariables: blueprint.templateVariables,
+    operatorContactLiterals: [currentUser?.email],
+  });
 
   // "Born from your recording" provenance panel — only the templates
   // compiled via /record set recordingSessions.agentTemplateId, so this is
@@ -380,6 +394,10 @@ export default async function AgentTemplatePage({
           {marketplaceListingCopy(template.status) ? (
             <p className="text-xs text-muted-foreground">{marketplaceListingCopy(template.status)}</p>
           ) : null}
+          <GeneralizeTemplateCard
+            templateId={template.id}
+            showPersonalDetailsWarning={showPersonalDetailsWarning}
+          />
           <ListOnMarketplace
             templateId={template.id}
             templateName={template.name}
@@ -604,6 +622,7 @@ export default async function AgentTemplatePage({
         supervisedRunExempt={gate.supervisedRunExempt}
         actionCount={runActionCount}
         verdict={runVerdict}
+        showPersonalDetailsWarning={showPersonalDetailsWarning}
       />
     ) : (
       <RunStage
@@ -624,6 +643,7 @@ export default async function AgentTemplatePage({
         evalPass={gate.evalPass}
         supervisedRunSucceeded={gate.supervisedRun}
         supervisedRunExempt={gate.supervisedRunExempt}
+        showPersonalDetailsWarning={showPersonalDetailsWarning}
       />
     ),
   };

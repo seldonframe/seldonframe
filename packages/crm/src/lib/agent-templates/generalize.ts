@@ -218,3 +218,31 @@ function replaceAllLiteral(haystack: string, literal: string, replacement: strin
   if (!literal) return haystack;
   return haystack.split(literal).join(replacement);
 }
+
+/**
+ * The non-blocking "this looks personal" nudge (design item 5): should the
+ * Sell-card show the warning row? A cheap heuristic — NEVER a hard block
+ * (the operator may intend to keep their own details in): true when
+ * `customSkillMd` is non-empty, the template has NEVER been generalized
+ * (`templateVariables` is empty/absent), AND `customSkillMd` still contains
+ * at least one of the operator's own contact literals (their account email,
+ * the workspace's outbound phone number, etc — whatever the caller passes as
+ * `operatorContactLiterals`; blank/whitespace-only literals are ignored so an
+ * unconfigured field never false-positives).
+ *
+ * Pure; never throws.
+ */
+export function shouldWarnPersonalDetails(args: {
+  customSkillMd: string | null | undefined;
+  templateVariables: unknown[] | null | undefined;
+  operatorContactLiterals: Array<string | null | undefined>;
+}): boolean {
+  const text = (args.customSkillMd ?? "").trim();
+  if (!text) return false;
+  if (Array.isArray(args.templateVariables) && args.templateVariables.length > 0) return false;
+
+  return args.operatorContactLiterals.some((literal) => {
+    const trimmed = (literal ?? "").trim();
+    return trimmed.length > 0 && text.includes(trimmed);
+  });
+}

@@ -13,6 +13,7 @@ import Link from "next/link";
 import { Check, Rocket, Store, Users, X } from "lucide-react";
 import { deployToSelfAction } from "@/lib/agent-templates/deploy-to-self-actions";
 import { ListOnMarketplace } from "../list-on-marketplace";
+import { GeneralizeTemplateCard } from "@/components/marketplace/generalize-template-panel";
 import type { SellerListingView, SellerConnectStatus } from "@/lib/marketplace/seller-actions";
 
 export function SellStage({
@@ -25,6 +26,7 @@ export function SellStage({
   evalPass,
   supervisedRunSucceeded,
   supervisedRunExempt,
+  showPersonalDetailsWarning,
 }: {
   templateId: string;
   templateName: string;
@@ -38,6 +40,11 @@ export function SellStage({
    *  requirement is exempt, so it counts as satisfied for the checklist too
    *  (matches the server-side publish gate exactly). */
   supervisedRunExempt: boolean;
+  /** 2026-07-16 (marketplace generalize, Task 3) — cheap server-computed
+   *  heuristic: does this template's persona script still contain the
+   *  operator's own contact literal, with no declared templateVariables yet?
+   *  Never a hard block — just a nudge on the "Make it fit anybody" card. */
+  showPersonalDetailsWarning: boolean;
 }) {
   const [pending, startPending] = useTransition();
   const [selfResult, setSelfResult] = useState<
@@ -88,6 +95,12 @@ export function SellStage({
           <p className="mt-2 text-xs text-rose-600 dark:text-rose-400">Couldn&apos;t deploy. Try again.</p>
         ) : null}
       </div>
+
+      {/* ── Make it fit anybody (marketplace generalize, Task 3) ── */}
+      <GeneralizeTemplateCard
+        templateId={templateId}
+        showPersonalDetailsWarning={showPersonalDetailsWarning}
+      />
 
       {/* ── Marketplace ── */}
       <div className="rounded-lg border border-[var(--lc-line)] bg-[var(--lc-surface)]/30 p-3.5">

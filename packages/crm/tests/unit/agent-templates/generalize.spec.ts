@@ -3,6 +3,7 @@ import assert from "node:assert/strict";
 import {
   proposeTemplateGeneralization,
   applyTemplateGeneralization,
+  shouldWarnPersonalDetails,
   type ProposedSubstitution,
 } from "../../../src/lib/agent-templates/generalize";
 
@@ -205,5 +206,63 @@ describe("applyTemplateGeneralization", () => {
     if (result.ok) {
       assert.deepEqual(result.backfillValues, { business_name: "Max ABC Plumbing" });
     }
+  });
+});
+
+// ─── shouldWarnPersonalDetails (Sell-card nudge heuristic, design item 5) ────
+
+describe("shouldWarnPersonalDetails", () => {
+  test("true when customSkillMd contains an operator contact literal and templateVariables is empty", () => {
+    const out = shouldWarnPersonalDetails({
+      customSkillMd: "Forward interested replies to max@acme.test.",
+      templateVariables: [],
+      operatorContactLiterals: ["max@acme.test"],
+    });
+    assert.equal(out, true);
+  });
+
+  test("false when the literal isn't present in customSkillMd", () => {
+    const out = shouldWarnPersonalDetails({
+      customSkillMd: "Be concise and friendly.",
+      templateVariables: [],
+      operatorContactLiterals: ["max@acme.test"],
+    });
+    assert.equal(out, false);
+  });
+
+  test("false when templateVariables is already non-empty (already generalized once)", () => {
+    const out = shouldWarnPersonalDetails({
+      customSkillMd: "Forward replies to {contact_email}. Ignore max@acme.test elsewhere.",
+      templateVariables: [{ name: "contact_email", description: "d", example: "e" }],
+      operatorContactLiterals: ["max@acme.test"],
+    });
+    assert.equal(out, false);
+  });
+
+  test("false when customSkillMd is blank", () => {
+    const out = shouldWarnPersonalDetails({
+      customSkillMd: "   ",
+      templateVariables: [],
+      operatorContactLiterals: ["max@acme.test"],
+    });
+    assert.equal(out, false);
+  });
+
+  test("blank/absent operator contact literals never false-positive", () => {
+    const out = shouldWarnPersonalDetails({
+      customSkillMd: "Some persona script with real content.",
+      templateVariables: [],
+      operatorContactLiterals: ["", "   ", undefined, null],
+    });
+    assert.equal(out, false);
+  });
+
+  test("true when ANY (not necessarily the first) contact literal matches", () => {
+    const out = shouldWarnPersonalDetails({
+      customSkillMd: "Call 555-1234 for support.",
+      templateVariables: [],
+      operatorContactLiterals: ["max@acme.test", "555-1234"],
+    });
+    assert.equal(out, true);
   });
 });

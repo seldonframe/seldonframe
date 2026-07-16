@@ -25,6 +25,7 @@ export function CelebrationScreen({
   supervisedRunExempt,
   actionCount,
   verdict,
+  showPersonalDetailsWarning,
 }: {
   templateId: string;
   templateName: string;
@@ -37,6 +38,7 @@ export function CelebrationScreen({
   supervisedRunExempt: boolean;
   actionCount: number;
   verdict: string;
+  showPersonalDetailsWarning: boolean;
 }) {
   return (
     <div className="space-y-6 text-center">
@@ -59,6 +61,7 @@ export function CelebrationScreen({
           evalPass={evalPass}
           supervisedRunSucceeded={supervisedRunSucceeded}
           supervisedRunExempt={supervisedRunExempt}
+          showPersonalDetailsWarning={showPersonalDetailsWarning}
         />
       </div>
 
