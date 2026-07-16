@@ -54,13 +54,15 @@ const TRIGGER_LABEL: Record<AgentRunReceiptTriggerKind, string> = {
   event: "event",
 };
 
+/** Review fix B-1 — `/studio/agents/[id]` 404s for any org that isn't the
+ *  deployment's builder, so a client-workspace row (isBuilder: false) must
+ *  render the IDENTICAL content unlinked: no `<a>`, no href, no
+ *  cursor-pointer/hover-lift affordance that implies clickability. Still
+ *  shown (a client seeing an agent deployed to them is navigation truth) —
+ *  just not a dead link. */
 function YourAgentsRow({ row }: { row: DeployedAgentStripRow }) {
-  return (
-    <Link
-      href={`/studio/agents/${row.templateId}`}
-      data-your-agents-row
-      className="flex items-center gap-3 border-b border-border/70 px-4 py-2.5 text-sm last:border-b-0 hover:bg-muted/40"
-    >
+  const content = (
+    <>
       {row.active ? (
         <span
           data-your-agents-live-dot
@@ -79,6 +81,27 @@ function YourAgentsRow({ row }: { row: DeployedAgentStripRow }) {
           {TRIGGER_LABEL[row.triggerKind]}
         </span>
       ) : null}
-    </Link>
+    </>
+  );
+
+  if (row.isBuilder) {
+    return (
+      <Link
+        href={`/studio/agents/${row.templateId}`}
+        data-your-agents-row
+        className="flex items-center gap-3 border-b border-border/70 px-4 py-2.5 text-sm last:border-b-0 hover:bg-muted/40"
+      >
+        {content}
+      </Link>
+    );
+  }
+
+  return (
+    <div
+      data-your-agents-row
+      className="flex items-center gap-3 border-b border-border/70 px-4 py-2.5 text-sm last:border-b-0"
+    >
+      {content}
+    </div>
   );
 }

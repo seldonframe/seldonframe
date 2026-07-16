@@ -15,6 +15,7 @@ const ROWS: DeployedAgentStripRow[] = [
     agentName: "Zen Front Desk",
     triggerKind: "push",
     active: true,
+    isBuilder: true,
   },
   {
     deploymentId: "dep-2",
@@ -22,6 +23,7 @@ const ROWS: DeployedAgentStripRow[] = [
     agentName: "Weekly Digest",
     triggerKind: "schedule",
     active: false,
+    isBuilder: true,
   },
 ];
 
@@ -55,6 +57,45 @@ describe("<YourAgentsStrip> — populated", () => {
   test("no empty-state copy renders when there are rows", () => {
     const html = renderToString(<YourAgentsStrip rows={ROWS} />);
     assert.ok(!html.includes("data-your-agents-empty"));
+  });
+});
+
+describe("<YourAgentsStrip> — B-1 builder vs client context", () => {
+  const builderRow: DeployedAgentStripRow = {
+    deploymentId: "dep-3",
+    templateId: "tmpl-3",
+    agentName: "Builder's Own Agent",
+    triggerKind: "push",
+    active: true,
+    isBuilder: true,
+  };
+  const clientRow: DeployedAgentStripRow = {
+    deploymentId: "dep-4",
+    templateId: "tmpl-4",
+    agentName: "Agent Deployed To Us",
+    triggerKind: "event",
+    active: false,
+    isBuilder: false,
+  };
+
+  test("a builder-context row renders as an anchor with the studio href", () => {
+    const html = renderToString(<YourAgentsStrip rows={[builderRow]} />);
+    const m = html.match(/<a[^>]*data-your-agents-row[^>]*href="([^"]+)"/);
+    assert.equal(m?.[1], "/studio/agents/tmpl-3");
+  });
+
+  test("a client-context row renders NO anchor — /studio/agents/[id] would 404 for a non-builder org", () => {
+    const html = renderToString(<YourAgentsStrip rows={[clientRow]} />);
+    assert.ok(!/<a[^>]*data-your-agents-row/.test(html));
+    assert.match(html, /data-your-agents-row/);
+    assert.ok(!html.includes("/studio/agents/tmpl-4"));
+  });
+
+  test("client-context row still renders the same name/chip/dot content as a builder row would", () => {
+    const html = renderToString(<YourAgentsStrip rows={[clientRow]} />);
+    assert.match(html, /Agent Deployed To Us/);
+    assert.match(html, /data-trigger-chip[^>]*>\s*event/);
+    assert.ok(!html.includes("data-your-agents-live-dot"), "clientRow.active is false, no live dot");
   });
 });
 

@@ -80,6 +80,18 @@ describe("buildGeneralizeFailureLog", () => {
     assert.match(payload.upstream ?? "", /\[redacted\]/);
   });
 
+  test("caps the scrubbed upstream string at 200 chars (review fix NB-1, same rationale as deriveReceiptSummary's cap)", () => {
+    const longMessage = "x".repeat(500);
+    const { payload } = buildGeneralizeFailureLog({
+      templateId: "tmpl-7",
+      orgId: "org-7",
+      result: { ok: false, error: "llm_failed" },
+      model: "claude-haiku-4-5",
+      upstreamMessage: longMessage,
+    });
+    assert.equal(payload.upstream?.length, 200);
+  });
+
   test("never echoes skill-md content — the function takes no such parameter", () => {
     // Structural guarantee: buildGeneralizeFailureLog's input type has no
     // customSkillMd field, so it is impossible for a caller to (even

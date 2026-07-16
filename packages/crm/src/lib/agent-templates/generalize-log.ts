@@ -21,6 +21,14 @@ import type { ProposeGeneralizationResult } from "./generalize";
 
 export const GENERALIZE_PROPOSE_FAILURE_LOG_PREFIX = "[generalize] propose failed";
 
+/** Review fix NB-1 — same defense-in-depth rationale as the receipts
+ *  `deriveReceiptSummary`'s 140-char cap: even after `scrubSecretShapes`,
+ *  an upstream SDK error could echo back an oversized fragment (e.g. a
+ *  persona/prompt excerpt in a 400's error detail). Capped at 200 (vs.
+ *  receipts' 140) since this is a server log line, not operator-facing UI —
+ *  a little more room to stay diagnosable, still bounded. */
+const UPSTREAM_MAX_LENGTH = 200;
+
 export type GeneralizeFailureLogPayload = {
   templateId: string;
   orgId: string;
@@ -54,7 +62,7 @@ export function buildGeneralizeFailureLog(args: {
   };
 
   const upstream = args.upstreamMessage?.trim();
-  if (upstream) payload.upstream = scrubSecretShapes(upstream);
+  if (upstream) payload.upstream = scrubSecretShapes(upstream).slice(0, UPSTREAM_MAX_LENGTH);
 
   return { message: GENERALIZE_PROPOSE_FAILURE_LOG_PREFIX, payload };
 }
