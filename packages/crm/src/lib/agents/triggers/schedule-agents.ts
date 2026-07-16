@@ -214,10 +214,14 @@ export async function runDueScheduledAgents(
       const runResult = await deps.runEventAgent(event);
       ran = true;
       result.fired += 1;
+      // Never-lies: a green "ok" badge must never sit next to a summary that
+      // says "...failed N" — an aggregate with ANY failures (even mixed with
+      // some successes) reports status "error"; the mixed counts stay
+      // visible in the summary text (no "partial" status exists).
       await emitReceipt(deps, {
         orgId: d.orgId,
         deploymentId: d.deploymentId,
-        status: "ok",
+        status: runResult.failed > 0 ? "error" : "ok",
         sourceRef: firedAt.toISOString(),
         summary: summarizeScheduleFireResult(runResult),
       });

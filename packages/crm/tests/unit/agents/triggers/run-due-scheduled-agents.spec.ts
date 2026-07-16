@@ -239,6 +239,59 @@ describe("runDueScheduledAgents — writeReceipt DI hook (agent receipts)", () =
     assert.match(receipts[0].summary as string, /matched 1/);
   });
 
+  // Never-lies fix: a green "ok" badge must never sit next to a summary
+  // that says "...failed N" — status derives from the aggregate result's
+  // `failed` count, not from "the call didn't throw".
+  test("never-lies: an aggregate with failures > 0 calls writeReceipt with status error (even though runEventAgent didn't throw)", async () => {
+    const receipts: Array<Record<string, unknown>> = [];
+    const deps: RunDueScheduledAgentsDeps = {
+      list: async () => [dep({ deploymentId: "mixed-1" })],
+      runEventAgent: async (): Promise<RunEventAgentResult> => ({
+        matched: 3,
+        sent: 1,
+        skipped: 0,
+        throttled: 0,
+        scheduled: 0,
+        blocked: 0,
+        actionOnly: 0,
+        failed: 2,
+      }),
+      markFired: async () => {},
+      writeReceipt: async (args) => {
+        receipts.push(args as unknown as Record<string, unknown>);
+      },
+    };
+    await runDueScheduledAgents(NOW_MS, deps);
+    assert.equal(receipts.length, 1);
+    assert.equal(receipts[0].status, "error");
+    assert.match(receipts[0].summary as string, /failed 2/);
+    assert.match(receipts[0].summary as string, /sent 1/);
+  });
+
+  test("never-lies: a clean aggregate (failed: 0) calls writeReceipt with status ok", async () => {
+    const receipts: Array<Record<string, unknown>> = [];
+    const deps: RunDueScheduledAgentsDeps = {
+      list: async () => [dep({ deploymentId: "clean-1" })],
+      runEventAgent: async (): Promise<RunEventAgentResult> => ({
+        matched: 2,
+        sent: 2,
+        skipped: 0,
+        throttled: 0,
+        scheduled: 0,
+        blocked: 0,
+        actionOnly: 0,
+        failed: 0,
+      }),
+      markFired: async () => {},
+      writeReceipt: async (args) => {
+        receipts.push(args as unknown as Record<string, unknown>);
+      },
+    };
+    await runDueScheduledAgents(NOW_MS, deps);
+    assert.equal(receipts.length, 1);
+    assert.equal(receipts[0].status, "ok");
+  });
+
   test("a throwing runEventAgent calls writeReceipt with status error", async () => {
     const receipts: Array<Record<string, unknown>> = [];
     const { deps } = makeDeps([dep({ deploymentId: "bad-1" })], {
