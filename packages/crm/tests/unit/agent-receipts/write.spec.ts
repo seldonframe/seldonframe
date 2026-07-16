@@ -131,6 +131,17 @@ describe("deriveReceiptSummary", () => {
     const summary = deriveReceiptSummary({ replyText: "   " });
     assert.equal(summary, "ran with no actions");
   });
+
+  // Review fix — scrub at the single exit point: the spec's "never leak
+  // secrets into summaries" rule has no branch qualifier. An ok-path tool
+  // note can echo a credential shape just as easily as a thrown error.
+  test("review fix: an ok-path tool note containing a secret shape is scrubbed too", () => {
+    const summary = deriveReceiptSummary({
+      toolCalls: [{ tool: "SOME_TOOL", ok: true, note: "sent via Bearer abc123" }],
+    });
+    assert.equal(summary.includes("abc123"), false);
+    assert.match(summary, /Bearer \[redacted\]/);
+  });
 });
 
 describe("deriveReceiptSummary — agent truth: error notes (Task 1)", () => {

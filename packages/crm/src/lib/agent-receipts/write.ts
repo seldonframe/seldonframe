@@ -92,22 +92,30 @@ export function deriveReceiptSummary(input: {
   replyText?: string;
   errorMessage?: string;
 }): string {
-  const rawError = input.errorMessage?.trim();
-  if (rawError) {
-    const firstLine = rawError.split(/\r?\n/)[0];
-    const prefix = "error: ";
-    const scrubbed = scrubSecretShapes(firstLine);
-    return (prefix + scrubbed).slice(0, SUMMARY_MAX_LENGTH);
-  }
+  const chosen = ((): string => {
+    const rawError = input.errorMessage?.trim();
+    if (rawError) {
+      const firstLine = rawError.split(/\r?\n/)[0];
+      return `error: ${firstLine}`;
+    }
 
-  const firstNote = input.toolCalls?.find((c) => typeof c.note === "string" && c.note.trim().length > 0)
-    ?.note;
-  if (firstNote) return firstNote;
+    const firstNote = input.toolCalls?.find(
+      (c) => typeof c.note === "string" && c.note.trim().length > 0,
+    )?.note;
+    if (firstNote) return firstNote;
 
-  const reply = input.replyText?.trim();
-  if (reply) return reply.slice(0, SUMMARY_MAX_LENGTH);
+    const reply = input.replyText?.trim();
+    if (reply) return reply;
 
-  return "ran with no actions";
+    return "ran with no actions";
+  })();
+
+  // Single exit point (review fix): scrub EVERY branch by construction —
+  // the spec's "never leak secrets into summaries" rule has no branch
+  // qualifier, and a tool note / replyText / caller summary can echo a
+  // credential shape just as easily as a thrown error can. Scrub BEFORE the
+  // length cap so a redaction never gets truncated mid-shape.
+  return scrubSecretShapes(chosen).slice(0, SUMMARY_MAX_LENGTH);
 }
 
 /**
