@@ -1820,6 +1820,44 @@ export async function stampDeploymentTriggerUpgraded(
     .where(eq(deployments.id, deploymentId));
 }
 
+/** Agent receipts slice (Task 4) — the reserved customization jsonb key the
+ *  connected-account pin persists the CHOSEN Composio connected-account id
+ *  under (upgrade-inbox-trigger.ts's resolveConnectedAccountId). Read by
+ *  lib/agent-receipts/store.ts::getDeploymentLiveStatus to surface "reading
+ *  <account>" on the LIVE banner. */
+export const COMPOSIO_CONNECTED_ACCOUNT_ID_KEY = "_composioConnectedAccountId";
+
+/** Stamp `customization._composioConnectedAccountId` on a deployment — the
+ *  connected-account pin's audit record (agent receipts slice, Task 4).
+ *  Same read-modify-write jsonb idiom as stampDeploymentTriggerUpgraded (no
+ *  migration). Lazy DB import. */
+export async function persistDeploymentConnectedAccountId(
+  deploymentId: string,
+  connectedAccountId: string,
+): Promise<void> {
+  if (!deploymentId || !connectedAccountId) return;
+  const { db } = await import("@/db");
+  const { deployments } = await import("@/db/schema/deployments");
+  const { eq } = await import("drizzle-orm");
+
+  const [row] = await db
+    .select({ customization: deployments.customization })
+    .from(deployments)
+    .where(eq(deployments.id, deploymentId))
+    .limit(1);
+
+  const current = (row?.customization ?? {}) as Record<string, unknown>;
+  const next = { ...current, [COMPOSIO_CONNECTED_ACCOUNT_ID_KEY]: connectedAccountId };
+
+  await db
+    .update(deployments)
+    .set({
+      customization: next as Partial<DeploymentCustomization>,
+      updatedAt: new Date(),
+    })
+    .where(eq(deployments.id, deploymentId));
+}
+
 // ─── listSfManagedDeploymentsForRent (Task 7 — the monthly rent cron) ───────
 
 /** One row the rent cron plans against — see planMonthlyRent

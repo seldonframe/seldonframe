@@ -4,10 +4,11 @@
 // a live createTrigger call flips the template's trigger to event/push. Any
 // missing condition or failure leaves the hourly schedule intact (the floor).
 
-import { test } from "node:test";
+import { test, describe } from "node:test";
 import assert from "node:assert/strict";
 import {
   maybeUpgradeInboxTriggerToPush,
+  resolveConnectedAccountId,
   type UpgradeInboxTriggerDeps,
 } from "../../../src/lib/deployments/upgrade-inbox-trigger";
 import type { AgentBlueprint } from "../../../src/db/schema/agents";
@@ -171,4 +172,118 @@ test("FIX 4 — template has exactly 1 deployment -> upgrade proceeds normally",
   const deps = fakeDeps({ countDeploymentsForTemplate: async () => 1 });
   const r = await maybeUpgradeInboxTriggerToPush(deps, { orgId: ORG, deploymentId: DEPLOYMENT });
   assert.deepEqual(r, { upgraded: true });
+});
+
+// Agent receipts slice (Task 4) — resolveConnectedAccountId (pure).
+describe("resolveConnectedAccountId", () => {
+  test("0 accounts -> null", () => {
+    assert.equal(resolveConnectedAccountId([]), null);
+  });
+  test("1 account -> that id", () => {
+    assert.equal(resolveConnectedAccountId(["acc_1"]), "acc_1");
+  });
+  test(">1 accounts -> the first", () => {
+    assert.equal(resolveConnectedAccountId(["acc_1", "acc_2", "acc_3"]), "acc_1");
+  });
+});
+
+// Agent receipts slice (Task 4) — the connected-account pin wiring.
+describe("maybeUpgradeInboxTriggerToPush — connected-account pin", () => {
+  test("no listConnectedAccounts dep -> createTrigger called with no connectedAccountId (unchanged behavior)", async () => {
+    let createTriggerArgs: unknown[] = [];
+    const deps = fakeDeps({
+      createTrigger: async (...args: unknown[]) => {
+        createTriggerArgs = args;
+        return { triggerId: "trig_1" };
+      },
+    });
+    const r = await maybeUpgradeInboxTriggerToPush(deps, { orgId: ORG, deploymentId: DEPLOYMENT });
+    assert.equal(r.upgraded, true);
+    assert.deepEqual(createTriggerArgs, [ORG, null]);
+  });
+
+  test("1 connected account -> pinned + persisted + passed to createTrigger", async () => {
+    let persistedArgs: unknown = null;
+    let createTriggerArgs: unknown[] = [];
+    const deps = fakeDeps({
+      listConnectedAccounts: async () => ["acc_only"],
+      persistConnectedAccountId: async (deploymentId, connectedAccountId) => {
+        persistedArgs = { deploymentId, connectedAccountId };
+      },
+      createTrigger: async (...args: unknown[]) => {
+        createTriggerArgs = args;
+        return { triggerId: "trig_1" };
+      },
+    });
+    const r = await maybeUpgradeInboxTriggerToPush(deps, { orgId: ORG, deploymentId: DEPLOYMENT });
+    assert.equal(r.upgraded, true);
+    assert.deepEqual(persistedArgs, { deploymentId: DEPLOYMENT, connectedAccountId: "acc_only" });
+    assert.deepEqual(createTriggerArgs, [ORG, "acc_only"]);
+  });
+
+  test(">1 connected accounts -> the FIRST is pinned + persisted + passed to createTrigger", async () => {
+    let createTriggerArgs: unknown[] = [];
+    const deps = fakeDeps({
+      listConnectedAccounts: async () => ["acc_a", "acc_b"],
+      createTrigger: async (...args: unknown[]) => {
+        createTriggerArgs = args;
+        return { triggerId: "trig_1" };
+      },
+    });
+    const r = await maybeUpgradeInboxTriggerToPush(deps, { orgId: ORG, deploymentId: DEPLOYMENT });
+    assert.equal(r.upgraded, true);
+    assert.deepEqual(createTriggerArgs, [ORG, "acc_a"]);
+  });
+
+  test("0 connected accounts -> createTrigger called with null, no persist attempted", async () => {
+    let persistCalled = false;
+    let createTriggerArgs: unknown[] = [];
+    const deps = fakeDeps({
+      listConnectedAccounts: async () => [],
+      persistConnectedAccountId: async () => {
+        persistCalled = true;
+      },
+      createTrigger: async (...args: unknown[]) => {
+        createTriggerArgs = args;
+        return { triggerId: "trig_1" };
+      },
+    });
+    const r = await maybeUpgradeInboxTriggerToPush(deps, { orgId: ORG, deploymentId: DEPLOYMENT });
+    assert.equal(r.upgraded, true);
+    assert.equal(persistCalled, false);
+    assert.deepEqual(createTriggerArgs, [ORG, null]);
+  });
+
+  test("a throwing listConnectedAccounts is swallowed — upgrade still proceeds with no pin", async () => {
+    let createTriggerArgs: unknown[] = [];
+    const deps = fakeDeps({
+      listConnectedAccounts: async () => {
+        throw new Error("composio down");
+      },
+      createTrigger: async (...args: unknown[]) => {
+        createTriggerArgs = args;
+        return { triggerId: "trig_1" };
+      },
+    });
+    const r = await maybeUpgradeInboxTriggerToPush(deps, { orgId: ORG, deploymentId: DEPLOYMENT });
+    assert.equal(r.upgraded, true);
+    assert.deepEqual(createTriggerArgs, [ORG, null]);
+  });
+
+  test("a throwing persistConnectedAccountId is swallowed — upgrade still proceeds, trigger still pinned", async () => {
+    let createTriggerArgs: unknown[] = [];
+    const deps = fakeDeps({
+      listConnectedAccounts: async () => ["acc_only"],
+      persistConnectedAccountId: async () => {
+        throw new Error("db down");
+      },
+      createTrigger: async (...args: unknown[]) => {
+        createTriggerArgs = args;
+        return { triggerId: "trig_1" };
+      },
+    });
+    const r = await maybeUpgradeInboxTriggerToPush(deps, { orgId: ORG, deploymentId: DEPLOYMENT });
+    assert.equal(r.upgraded, true);
+    assert.deepEqual(createTriggerArgs, [ORG, "acc_only"]);
+  });
 });

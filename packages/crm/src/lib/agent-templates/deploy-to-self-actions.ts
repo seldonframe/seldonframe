@@ -18,13 +18,14 @@ import {
   getDeploymentOrgAndTemplate,
   stampDeploymentTriggerUpgraded,
   countDeploymentsForTemplate,
+  persistDeploymentConnectedAccountId,
 } from "@/lib/deployments/store";
 import { deployToSelfCore, type DeployToSelfDeps } from "@/lib/agents/lifecycle/deploy-to-self";
 import { ingestSentMailVoiceProfile } from "@/lib/agents/voice-profile/ingest-sent-mail";
 import { buildVoiceIngestDeps } from "@/lib/agents/voice-profile/build-deps";
 import { maybeUpgradeInboxTriggerToPush } from "@/lib/deployments/upgrade-inbox-trigger";
 import { getAgentTemplate, updateAgentTemplate } from "@/lib/agent-templates/store";
-import { createTrigger, listConnections } from "@/lib/integrations/composio/client";
+import { createTrigger, listConnections, listConnectedAccountIds } from "@/lib/integrations/composio/client";
 
 export type DeployToSelfActionResult =
   | { ok: true; deploymentId: string; active: boolean; triggerSentence: string }
@@ -93,8 +94,10 @@ export async function deployToSelfAction(templateId: string): Promise<DeployToSe
             const connections = await listConnections(checkOrgId);
             return connections.some((c) => c.slug === "gmail" && c.connected);
           },
-          createTrigger: (triggerOrgId) =>
-            createTrigger(triggerOrgId, "GMAIL_NEW_GMAIL_MESSAGE"),
+          createTrigger: (triggerOrgId, connectedAccountId) =>
+            createTrigger(triggerOrgId, "GMAIL_NEW_GMAIL_MESSAGE", undefined, {
+              connectedAccountId,
+            }),
           updateTemplateTrigger: async (agentTemplateId, trigger) => {
             const updated = await updateAgentTemplate({
               id: agentTemplateId,
@@ -103,6 +106,9 @@ export async function deployToSelfAction(templateId: string): Promise<DeployToSe
             if (!updated.ok) throw new Error(updated.error);
           },
           stampUpgraded: stampDeploymentTriggerUpgraded,
+          // Agent receipts slice (Task 4) — the connected-account pin.
+          listConnectedAccounts: (accountsOrgId) => listConnectedAccountIds(accountsOrgId, "gmail"),
+          persistConnectedAccountId: persistDeploymentConnectedAccountId,
         },
         { orgId: upgradeOrgId, deploymentId },
       ),

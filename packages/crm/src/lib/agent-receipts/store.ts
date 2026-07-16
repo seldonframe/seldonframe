@@ -11,6 +11,7 @@ import { and, desc, eq, gte, or } from "drizzle-orm";
 import { db } from "@/db";
 import { agentRunReceipts, type AgentRunReceiptToolCall, type AgentRunReceiptTriggerKind, type AgentRunReceiptStatus } from "@/db/schema/agent-run-receipts";
 import { deployments } from "@/db/schema/deployments";
+import { COMPOSIO_CONNECTED_ACCOUNT_ID_KEY } from "@/lib/deployments/store";
 import { summarizeDeploymentLiveStatus, type DeploymentLiveStatus } from "./live-status";
 
 export type AgentRunReceiptViewRow = {
@@ -73,11 +74,6 @@ export async function loadAgentRunReceipts(
   }));
 }
 
-/** The customization jsonb key Task 4 persists the chosen connected-account
- *  id under (see upgrade-inbox-trigger.ts). Read-only reference here — the
- *  writer lives in that Task 4 module. */
-const CONNECTED_ACCOUNT_ID_KEY = "_composioConnectedAccountId";
-
 /**
  * Compose the per-deployment LIVE banner view model: is it active, what
  * trigger kind is it running on (read off the most recent receipt — cheaper
@@ -121,7 +117,7 @@ export async function getDeploymentLiveStatus(
     .limit(200);
 
   const customization = dep.customization as Record<string, unknown> | null;
-  const connectedAccountLabel = customization?.[CONNECTED_ACCOUNT_ID_KEY] ?? null;
+  const connectedAccountLabel = customization?.[COMPOSIO_CONNECTED_ACCOUNT_ID_KEY] ?? null;
 
   return summarizeDeploymentLiveStatus({
     deploymentStatus: dep.status,
