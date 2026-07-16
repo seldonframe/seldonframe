@@ -2354,3 +2354,4 @@ C4 close-out with empirical SLICE 11 data.
   "test visibility not presence" lesson, generalized to buttons). (4) Buttons
   styled with transparent backgrounds require `appearance-none` — Preflight
   does not guarantee it.
+- 2026-07-16 — When rewriting a component, grep the test dir for the COMPONENT/MODULE NAME (marketing-faq) and run every spec that imports it — grepping for copy strings missed a stale spec that asserted concept regexes, not literals. The reviewer caught it; the grep should have.
