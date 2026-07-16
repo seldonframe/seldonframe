@@ -4,13 +4,13 @@ export const guide: Guide = {
   slug: "white-label-ai-front-office-without-agency-pro",
   title: "How to White-Label a Client AI Front Office Without the $497/mo Agency Pro Plan",
   description:
-    "White-labeling in GoHighLevel means the $497 SaaS plan. Here is how to give clients a fully branded AI front office, portal, domain and all, on a flat $29 platform.",
+    "White-labeling in GoHighLevel means the $497 SaaS plan. Here is how to give clients a fully branded AI front office, portal, domain and all, from a flat $99/mo agency plan.",
   targetKeyword: "white label gohighlevel cheaper",
   intent: "transactional",
   cluster: "gohighlevel",
   relatedTool: "/tools/agency-margin-calculator",
   relatedBest: "/alternative-to-gohighlevel",
-  dek: "A branded portal, a custom domain, and your logo are what clients actually see, and in GoHighLevel all of it sits behind the $497 plan. There is a flat path to the same client-facing result.",
+  dek: "A branded portal, a custom domain, and your logo are what clients actually see, and in GoHighLevel all of it sits behind the $497 plan. There is a flat path to the same client-facing result, starting at $99/mo.",
   sections: [
     {
       h2: "What white-label really requires",
@@ -44,7 +44,7 @@ export const guide: Guide = {
     {
       h2: "The flat alternative",
       body:
-        "The flat model unbundles the branding from the price. On SeldonFrame, the branded client portal and custom domains are included at **twenty-nine dollars a month**. They aren't a top-tier feature.\n\nThe client logs into a portal with your brand, at a domain that's yours, with your logo, and the platform underneath stays invisible — all on the flat price. There's no four hundred ninety-seven dollar plan standing between you and looking like a software company to your first client.\n\nUnderneath the branding, the front office is the whole point. The AI receptionist is the product, included, answering across voice, chat, and SMS. The website, CRM, booking, and reviews are included at the same flat price.\n\nWorkspaces are **unlimited** and the first one is **free forever**, so you can build and demo a real branded client environment before you've spent anything.\n\nThere's no per-location AI seat to buy, because the AI runs on your own AI keys and your own Twilio at raw provider cost — this is *BYOK*. That means the smart parts of the front office don't carry a per-client platform fee that climbs as you grow, which is exactly the line that hurts on the per-location model.\n\nThe honest way to say it: the flat model moves the money. Instead of paying a high plan plus per-location AI fees to unlock branding, you pay a small flat fee for the orchestration and run the AI and telephony on accounts you own.\n\nThe branding your client sees is the same or better. The cost you subtract from your resale price is far smaller and doesn't grow with your roster. And because the keys and numbers are yours, the work stays portable rather than locked to one vendor's billing. **You keep the margin, and you keep your options.**\n\nFor the mechanics of turning that margin into a repeatable client offer, see [white-label AI agents](/guides/white-label-ai-agents).",
+        "The flat model unbundles the branding from the top-tier price, but it doesn't pretend the branding is free. On SeldonFrame, the branded client portal, custom domains, and client sub-accounts live on the **Agency Starter plan, ninety-nine dollars a month** — still a fraction of GoHighLevel's four hundred ninety-seven, and the plan itself scales with more sub-accounts (Growth at $199, Scale at $299) rather than gating the branding a second time.\n\nThe client logs into a portal with your brand, at a domain that's yours, with your logo, and the platform underneath stays invisible. There's no four hundred ninety-seven dollar plan standing between you and looking like a software company to your first client — the gap closes at ninety-nine, not twenty-nine.\n\nUnderneath the branding, the front office is the whole point. The AI receptionist is the product, included, answering across voice, chat, and SMS. The website, CRM, booking, and reviews are included at the same flat price.\n\n(If you're only running workspaces for businesses you operate yourself — no client sub-accounts, no white-label portal — the Builder plan at **twenty-nine dollars a month** covers that, with unlimited workspaces and the first one free forever.)\n\nThere's no per-location AI seat to buy, because the AI runs on your own AI keys and your own Twilio at raw provider cost — this is *BYOK*. That means the smart parts of the front office don't carry a per-client platform fee that climbs as you grow, which is exactly the line that hurts on the per-location model.\n\nThe honest way to say it: the flat model moves the money. Instead of paying a high plan plus per-location AI fees to unlock branding, you pay a flat agency fee for the orchestration and run the AI and telephony on accounts you own.\n\nThe branding your client sees is the same or better. The cost you subtract from your resale price is far smaller than GoHighLevel's gate and doesn't grow per client. And because the keys and numbers are yours, the work stays portable rather than locked to one vendor's billing. **You keep the margin, and you keep your options.**\n\nFor the mechanics of turning that margin into a repeatable client offer, see [white-label AI agents](/guides/white-label-ai-agents).",
       callout: {
         kind: "analogy",
         text: "BYOK (bring your own key) is like using your own gas card instead of the rental car's prepaid fuel option — you pay the pump price directly instead of a marked-up flat fee baked into the rental.",
@@ -64,10 +64,10 @@ export const guide: Guide = {
         right: {
           heading: "SeldonFrame",
           items: [
-            "Branded portal: included at $29/mo",
+            "Branded portal: included from $99/mo",
             "Custom domain: included",
             "AI: your own keys, raw cost",
-            "Unlimited workspaces, first free",
+            "10 client sub-accounts on Agency Starter",
           ],
         },
       },
@@ -75,7 +75,7 @@ export const guide: Guide = {
     {
       h2: "Setup, and where GoHighLevel is still stronger",
       body:
-        "Setup on the flat model is deliberately fast. A full client workspace — branded portal, custom domain, AI receptionist configured, website up, CRM and booking wired in — comes out of **a single conversation in about three minutes**.\n\nYou describe the client and the workspace gets built. You're not assembling snapshots, configuring a metering system, or wiring a reselling flow before you can show a client anything. For a small agency signing clients one at a time, that speed is the difference between demoing today and demoing next week.\n\nThat said, GoHighLevel is genuinely more mature in two areas that matter, and it would be unfair not to say so.\n\nIts SaaS configurator is deeper. If you want granular control over building multiple pricing tiers, gating specific features into specific plans, and running a fully productized signup and billing flow, GoHighLevel has years of iteration behind that machine and it shows.\n\nAnd its snapshot and template marketplace is a real asset. You can drop in a mature, niche-specific configuration built and refined by other agencies and be running fast, with a library no newcomer can match on breadth.\n\nSo the recommendation is specific. If your agency's edge is a finely tuned, multi-tier SaaS product built on the snapshot ecosystem, and the per-location AI math works for your client mix, the four hundred ninety-seven dollar plan buys you a mature machine and you should stay.\n\nIf you're a small, new, or growth-stage agency and your goal is to give each client a genuinely branded AI front office — portal, domain, and all — without paying a top-tier gate and a growing per-location fee to do it, the flat path gets you the client-facing result for twenty-nine dollars flat, and keeps your margin intact as you scale. **Choose based on which problem is actually yours.**",
+        "Setup on the flat model is deliberately fast. A full client workspace — branded portal, custom domain, AI receptionist configured, website up, CRM and booking wired in — comes out of **a single conversation in about three minutes**.\n\nYou describe the client and the workspace gets built. You're not assembling snapshots, configuring a metering system, or wiring a reselling flow before you can show a client anything. For a small agency signing clients one at a time, that speed is the difference between demoing today and demoing next week.\n\nThat said, GoHighLevel is genuinely more mature in two areas that matter, and it would be unfair not to say so.\n\nIts SaaS configurator is deeper. If you want granular control over building multiple pricing tiers, gating specific features into specific plans, and running a fully productized signup and billing flow, GoHighLevel has years of iteration behind that machine and it shows.\n\nAnd its snapshot and template marketplace is a real asset. You can drop in a mature, niche-specific configuration built and refined by other agencies and be running fast, with a library no newcomer can match on breadth.\n\nSo the recommendation is specific. If your agency's edge is a finely tuned, multi-tier SaaS product built on the snapshot ecosystem, and the per-location AI math works for your client mix, the four hundred ninety-seven dollar plan buys you a mature machine and you should stay.\n\nIf you're a small, new, or growth-stage agency and your goal is to give each client a genuinely branded AI front office — portal, domain, and all — without paying a top-tier gate and a growing per-location fee to do it, the flat path gets you the client-facing result from ninety-nine dollars flat, and keeps your margin intact as you scale. **Choose based on which problem is actually yours.**",
     },
   ],
   faq: [
@@ -85,11 +85,11 @@ export const guide: Guide = {
     },
     {
       q: "Can I white-label a CRM for clients cheaply?",
-      a: "Yes, on a flat-priced platform. SeldonFrame includes a branded client portal and custom domains at twenty-nine dollars a month, with unlimited workspaces and the first one free forever. The AI receptionist, website, CRM, booking, and reviews are included, and the AI runs on your own keys at raw provider cost, so there is no per-location fee climbing as you add clients.",
+      a: "Yes, on a flat-priced platform. SeldonFrame's Agency Starter plan includes a branded client portal, custom domains, and ten client sub-accounts from ninety-nine dollars a month. The AI receptionist, website, CRM, booking, and reviews are included, and the AI runs on your own keys at raw provider cost, so there is no per-location fee climbing as you add clients.",
     },
     {
       q: "What's included in SeldonFrame's white-label?",
-      a: "At twenty-nine dollars a month flat you get a branded client portal, custom domains, your logo carried through, and the full front office: an AI receptionist across voice, chat, and SMS, a website, CRM, booking, and reviews. Workspaces are unlimited, the first is free forever, and each full client workspace is built from one conversation in about three minutes.",
+      a: "From ninety-nine dollars a month you get a branded client portal, custom domains, ten client sub-accounts, your logo carried through, and the full front office: an AI receptionist across voice, chat, and SMS, a website, CRM, booking, and reviews. Each full client workspace is built from one conversation in about three minutes.",
     },
   ],
   sources: [

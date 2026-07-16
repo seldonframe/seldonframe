@@ -10,4 +10,4 @@
 /** The one-line product positioning used in the homepage metadata/description
  *  and quoted verbatim at the top of /home.md. */
 export const POSITIONING_ONE_LINER =
-  "SeldonFrame — the all-in-one platform to run and sell your service business: website, booking, CRM, payments, and AI agents that do the work, built from your URL in 3 minutes. Build it free, then $29/mo, cancel anytime.";
+  "SeldonFrame — the platform agencies use to sell AI front offices: website, booking, CRM, payments, and AI agents that do the work, built from a client's URL in 3 minutes. Build it free, then $29/mo, cancel anytime.";

@@ -30,7 +30,7 @@ export const SF_PROS: string[] = [
   "An AI receptionist that answers calls, SMS, and web chat — and books real jobs into a real calendar and CRM",
   "The whole front office included: multi-page website, CRM, booking, intake forms, review automation",
   "$29/mo flat with unlimited workspaces — bring your own key and AI and phone service run at raw provider cost",
-  "Whitelabel built in: branded client portal, per-client workspaces, custom domains, one-click multi-client deploy",
+  "Whitelabel built in (agency plan, from $99/mo): branded client portal, per-client workspaces, custom domains, one-click multi-client deploy",
   "Build it free before you sign up — paste a URL, get a working workspace in about 3 minutes",
   "Open core and portable — your agents are plain, editable skill files, and your data lives in your workspace",
 ];
@@ -166,7 +166,7 @@ export const EXTRAS: Record<string, CompetitorExtras> = {
       "You can absorb the whitelabel add-on price at your scale",
     ],
     chooseSf: [
-      "You want the whitelabel agency layer at $29, not $2,000",
+      "You want the whitelabel agency layer from $99, not $2,000",
       "You want the receptionist to book into a system the client actually owns",
       "You want raw-cost AI and telephony (bring your own key) instead of stacked per-minute pricing",
       "You want the site, CRM, and booking built alongside the agent, not assembled around it",
@@ -250,7 +250,7 @@ export const EXTRAS: Record<string, CompetitorExtras> = {
       "You'd rather sell the whole front office ($300–800/mo retail) than a chatbot subscription",
       "You want the agent writing to a CRM and calendar the client actually owns",
       "You want your own margins instead of platform usage rates",
-      "$29 flat vs $197 plus usage changes your per-client math",
+      "$99 flat vs $197 plus usage changes your per-client math",
     ],
     switchNote:
       "Recreate each client agent from its prompt and FAQ (SeldonFrame builds most of it from the client's website), and re-point any embedded chat widgets to the new embed snippet.",
@@ -304,7 +304,7 @@ export const EXTRAS: Record<string, CompetitorExtras> = {
       "You want the AI receptionist as the core product, not a top-tier perk",
       "You want month-to-month flat pricing with no minimum spend",
       "You want clients live in minutes, not a 4–8 week onboarding",
-      "You want unlimited client workspaces included at $29",
+      "You want unlimited client workspaces included from $99",
     ],
     switchNote:
       "Your client list imports as contacts. Each client workspace rebuilds from their website in about 3 minutes — no marketplace product mapping needed.",

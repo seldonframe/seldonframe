@@ -78,7 +78,7 @@ export const guide: Guide = {
     },
     {
       q: "Does SeldonFrame set agent pricing for me?",
-      a: "No — SeldonFrame is the platform builders use to build and deploy the agent itself; what you charge your client is your call. **Disclosure:** SeldonFrame is $29/mo flat with unlimited workspaces and the first workspace free, and *BYOK* keeps our own model costs at-cost, which is part of why the cost floor described above stays low. We only take a share (5% stepping down to 2%) when SeldonFrame is the sales channel bringing the client in.",
+      a: "No — SeldonFrame is the platform builders use to build and deploy the agent itself; what you charge your client is your call. **Disclosure:** SeldonFrame is $29/mo flat with unlimited workspaces and the first workspace free, and *BYOK* keeps our own model costs at-cost, which is part of why the cost floor described above stays low. We only take a share — a flat 2% of GMV, and only on solo tiers like this one (0% on agency plans) — when SeldonFrame is the sales channel bringing the client in.",
     },
   ],
   sources: [

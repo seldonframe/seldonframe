@@ -67,7 +67,7 @@ export const guide: Guide = {
     },
     {
       h2: "Where SeldonFrame fits",
-      body: "Disclosure: SeldonFrame is the platform we build, so weigh this section as a disclosed pitch, not neutral advice.\n\nWhat's true regardless of who's telling you: SeldonFrame is a **flat $29/mo with unlimited workspaces** and the first workspace free forever. That means the per-client platform cost described in the margin section above approaches zero as your roster grows, rather than climbing with it — there's no per-sub-account fee to multiply by client count.\n\nIt runs on your own AI provider keys and your own Twilio account (*BYOK*), so usage cost is the raw provider rate, not a rebilled markup.\n\nThe only fee tied to your growth is a **GMV share — 5% stepping down to 2%** — and only on deals where SeldonFrame is the sales channel that brought the client in. A client you sourced and closed yourself carries no GMV fee at all.",
+      body: "Disclosure: SeldonFrame is the platform we build, so weigh this section as a disclosed pitch, not neutral advice.\n\nWhat's true regardless of who's telling you: SeldonFrame is a **flat $29/mo with unlimited workspaces** and the first workspace free forever. That means the per-client platform cost described in the margin section above approaches zero as your roster grows, rather than climbing with it — there's no per-sub-account fee to multiply by client count.\n\nIt runs on your own AI provider keys and your own Twilio account (*BYOK*), so usage cost is the raw provider rate, not a rebilled markup.\n\nThe only fee tied to your growth is a **flat 2% GMV share** — and only on deals where SeldonFrame is the sales channel that brought the client in. A client you sourced and closed yourself carries no GMV fee at all.",
     },
   ],
   faq: [
@@ -89,7 +89,7 @@ export const guide: Guide = {
     },
     {
       q: "Does SeldonFrame set what I charge my clients?",
-      a: "No. SeldonFrame is the platform an agency builds and deploys agents on; the pricing model and the number you charge your own clients are entirely your call. Disclosure: we're $29/mo flat with unlimited workspaces, BYOK for AI and telephony, and a GMV fee (5% stepping to 2%) that applies only on deals where SeldonFrame is the sales channel — never on clients you brought in yourself.",
+      a: "No. SeldonFrame is the platform an agency builds and deploys agents on; the pricing model and the number you charge your own clients are entirely your call. Disclosure: we're $29/mo flat with unlimited workspaces, BYOK for AI and telephony, and a flat 2% GMV fee that applies only on deals where SeldonFrame is the sales channel and only on solo tiers like this one (0% on agency plans) — never on clients you brought in yourself.",
     },
   ],
   sources: [

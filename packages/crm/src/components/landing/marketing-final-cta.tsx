@@ -47,7 +47,7 @@ export function MarketingFinalCta({
           </h2>
         ) : (
           <h2 className="mx-auto mt-4 max-w-[18ch] text-[clamp(30px,5.2vw,54px)] font-[500] leading-[1.05] tracking-[-0.03em] text-[var(--lp-cta-slab-ink)]">
-            Your front office is{" "}
+            Your next client is{" "}
             <em className="font-[Newsreader,Georgia,serif] font-normal not-italic text-[color-mix(in_oklab,var(--lp-cta-slab-ink)_75%,transparent)]">
               3 minutes away.
             </em>
@@ -55,9 +55,9 @@ export function MarketingFinalCta({
         )}
 
         <p className="mx-auto mt-5 max-w-[50ch] text-[16.5px] leading-[1.55] text-[color-mix(in_oklab,var(--lp-cta-slab-ink)_74%,transparent)]">
-          Paste a URL or describe your business. We build the website, booking,
+          Paste a client&rsquo;s URL or describe the business. We build the website, booking,
           AI receptionist, intake, and CRM — all wired together and live in 3 minutes.
-          For your business, or your clients&rsquo;.
+          For your clients&rsquo; businesses, or your own.
         </p>
 
         <div className="mt-9 flex flex-wrap items-center justify-center gap-4">
@@ -70,7 +70,7 @@ export function MarketingFinalCta({
             </a>
           ) : (
             <Link
-              href="/signup"
+              href="/#hero-form"
               className="inline-flex items-center gap-2.5 rounded-[11px] bg-[var(--lp-cta-slab-ink)] px-7 py-4 text-[15px] font-[500] text-[var(--lp-cta-slab)] shadow-[0_1px_2px_rgba(0,0,0,.2),0_12px_30px_rgba(0,0,0,.25),inset_0_1.5px_0_rgba(255,255,255,.6)] transition-all hover:-translate-y-[1.5px] active:translate-y-px focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[var(--lp-accent)]"
             >
               Build it free →

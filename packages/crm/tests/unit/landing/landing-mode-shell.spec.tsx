@@ -149,8 +149,8 @@ describe("<UnifiedLanding> composition (Task 9)", () => {
     // assert hiddenness structurally via a real DOM parse rather than
     // assuming the string is absent.
     const parsed = new JSDOM(html);
-    const buildHeroNode = findElementContainingText(parsed.window.document.body, "Run your business");
-    assert.ok(buildHeroNode, "expected to find the build hero's 'Run your business' copy in the SSR HTML");
+    const buildHeroNode = findElementContainingText(parsed.window.document.body, "Sell AI front offices");
+    assert.ok(buildHeroNode, "expected to find the build hero's 'Sell AI front offices' copy in the SSR HTML");
     assert.ok(
       hasHiddenAncestor(buildHeroNode),
       "build hero copy must sit under an ancestor carrying the `hidden` attribute in record mode",
@@ -176,6 +176,6 @@ describe("<UnifiedLanding> composition (Task 9)", () => {
     const faqPageMatches = html.match(/FAQPage/g) ?? [];
     assert.equal(faqPageMatches.length, 1, "expected exactly one FAQPage schema on /record");
 
-    assert.doesNotMatch(html, /Run your business/);
+    assert.doesNotMatch(html, /Sell AI front offices/);
   });
 });

@@ -99,12 +99,12 @@ export function renderHomeMarkdown(baseUrl: string = HOME_BASE_URL): string {
   const base = homeUrl(baseUrl);
   const lines: string[] = [];
 
-  lines.push("# SeldonFrame — your entire service business, live in 60 seconds");
+  lines.push("# SeldonFrame — a whole client front office, live in 60 seconds");
   lines.push("");
   lines.push(`> ${POSITIONING_ONE_LINER}`);
   lines.push("");
   lines.push(
-    "SeldonFrame is the all-in-one platform to run and sell a service business. Paste your website URL (or describe the business) and it builds a multi-page website, booking page, intake form, and CRM — wired together and ready for customers — then adds no-code AI agents that answer every call, request reviews, and handle DMs and email.",
+    "SeldonFrame is the platform agencies use to sell AI front offices (and operators use to run their own). Paste a client's website URL (or describe the business) and it builds a multi-page website, booking page, intake form, and CRM — wired together and ready for customers — then adds no-code AI agents that answer every call, request reviews, and handle DMs and email.",
   );
   lines.push("");
 

@@ -6,8 +6,15 @@
 // /agencies). The build-proof video panel (HeroBuildProof) is removed
 // entirely and the two-column split collapses to a single centered
 // column so the chatbox/form is the clear focal point.
-//   Primary: "Build it free →" → /signup (SMB self-serve; free ungated build,
-//   no trial countdown — the $29/mo charge only happens at the domain moment)
+//   Primary: "Build it free →" → #hero-form (scroll + focus the chatbox;
+//   route-by-promise 2026-07-15 — the label promises a build, and the free
+//   ungated build IS the trial; no trial countdown, the $29/mo charge only
+//   happens at the domain moment)
+//
+// Agency repositioning (2026-07-15, Max's call): the homepage now speaks to
+// the AGENCY/builder persona (the SMB self-serve pitch lives on the SEO
+// pages). H1/subhead/eyebrow/placeholders are agency-voiced; the
+// "your-clients-*" URL examples below are deliberate, not drift.
 //
 // Design tokens used:
 //   --paper:    #F6F2EA  (warm off-white background)
@@ -200,6 +207,20 @@ export function MarketingHero({
     return () => clearTimeout(t);
   }, []);
 
+  // "Build it free" pills across the page link to /#hero-form (route-by-
+  // promise, 2026-07-15). The browser handles the scroll; this focuses the
+  // active tab's input so the click ends in a ready-to-type chatbox instead
+  // of reading as a dead scroll-jump.
+  useEffect(() => {
+    const focusForm = () => {
+      if (window.location.hash !== "#hero-form") return;
+      (tab === "url" ? urlRef : bizRef).current?.focus({ preventScroll: true });
+    };
+    focusForm();
+    window.addEventListener("hashchange", focusForm);
+    return () => window.removeEventListener("hashchange", focusForm);
+  }, [tab]);
+
   return (
     <section
       id="top"
@@ -229,43 +250,53 @@ export function MarketingHero({
       <p className="inline-flex items-center gap-2.5 font-sans text-[12.5px] tracking-[0.04em] text-[#6E665A]">
         <span className="inline-block h-px w-4 bg-[#9A9183]" aria-hidden />
         <span className="sf-blink-dot inline-block size-1.5 rounded-full bg-[#1F2B24]" aria-hidden />
-        Built in 3 minutes — No coding
+        Each client built in 3 minutes — No coding
       </p>
 
       {/* Headline — outcome + mechanism (the Postiz formula) */}
       <h1 className="mt-3 max-w-[22ch] text-balance font-sans text-[clamp(34px,4.8vw,56px)] font-[500] leading-[1.04] tracking-[-0.025em] text-[#221D17]">
-        Run your business{" "}
+        Sell AI front offices that run{" "}
         <em className="font-[Newsreader,Georgia,serif] font-normal not-italic tracking-[-0.01em]">
           on autopilot
-        </em>{" "}
-        with agents
+        </em>
       </h1>
 
       {/* Subhead — what runs on autopilot, concretely, then the openness line */}
       <p className="mx-auto mt-4 max-w-[68ch] text-pretty text-[clamp(15.5px,1.6vw,17.5px)] leading-[1.55] text-[#6E665A]">
         <Highlighter repeat color="rgba(31, 43, 36,0.18)">
-          Answer every call, text back every lead, book the job, and ask for the
-          review — automatically
-        </Highlighter>
-        , across{" "}
+          Every client gets an agent that answers every call, texts back every lead,
+          books the job, and asks for the review
+        </Highlighter>{" "}
+        — across{" "}
         <strong className="font-[500] text-[#221D17]">
           voice, SMS, email, and web chat
         </strong>{" "}
-        — then see it all in one dashboard: website, bookings, CRM.
+        — plus the website, bookings, and CRM in one dashboard. You charge the retainer.
       </p>
-      {/* Primary CTA */}
+      {/* Primary CTA — routes to the chatbox, not /signup: the label promises
+          a build, and the ungated build IS the trial (route-by-promise,
+          2026-07-15). Smooth-scrolls to the form and focuses the active tab's
+          input; href="#hero-form" is the no-JS fallback. */}
       <div className="mt-7 flex flex-wrap items-center justify-center gap-3">
         <a
-          href="/signup"
+          href="#hero-form"
+          onClick={(e) => {
+            e.preventDefault();
+            formRef.current?.scrollIntoView({
+              behavior: reducedMotion ? "auto" : "smooth",
+              block: "center",
+            });
+            (tab === "url" ? urlRef : bizRef).current?.focus({ preventScroll: true });
+          }}
           className="inline-flex items-center gap-2.5 rounded-[11px] bg-[#1F2B24] px-6 py-3.5 text-[15px] font-[500] text-[#F6F2EA] shadow-[0_1px_2px_rgba(34,29,23,.10),0_6px_16px_rgba(34,29,23,.10),0_18px_40px_rgba(34,29,23,.06),inset_0_1.5px_0_rgba(255,255,255,.12)] transition-all hover:-translate-y-[1.5px] hover:shadow-[0_2px_4px_rgba(34,29,23,.12),0_12px_26px_rgba(34,29,23,.14),inset_0_1.5px_0_rgba(255,255,255,.14)] active:translate-y-px"
         >
           Build it free →
         </a>
       </div>
 
-      {/* BYOK line — elevated out of microcopy (the Postiz "use any agent"
-          move, applied to model keys): real logos, real claim. Wording
-          matches the site's standing BYOK claim (Claude/ChatGPT/Gemini). */}
+      {/* Margin line — leads with the value (flat cost, zero markup, the
+          agency's margin), per §1b "BYOK is plumbing, never the front-door
+          ask". Model logos stay: they carry the never-goes-stale signal. */}
       <p className="mt-4 inline-flex flex-wrap items-center justify-center gap-x-2 gap-y-1.5 text-[14px] leading-[1.5] text-[#221D17]">
         <span className="inline-flex items-center gap-1" aria-hidden>
           {[
@@ -282,8 +313,8 @@ export function MarketingHero({
             </span>
           ))}
         </span>
-        Works with your Claude, ChatGPT, or Gemini key —{" "}
-        <strong className="font-[600]">we never mark up tokens.</strong>
+        Runs on Claude, ChatGPT, or Gemini —{" "}
+        <strong className="font-[600]">we never mark up tokens. Your margin stays yours.</strong>
       </p>
 
       {/* Input form */}
@@ -292,7 +323,7 @@ export function MarketingHero({
         id="hero-form"
         aria-label="Start a workspace"
         onSubmit={(e) => { e.preventDefault(); submit(); }}
-        className="sf-prompt relative mt-10 w-full max-w-[720px] overflow-hidden rounded-[18px] border border-[rgba(34,29,23,.14)] bg-[#FFFDFA] shadow-[0_1px_2px_rgba(34,29,23,.06),0_10px_30px_rgba(34,29,23,.08)] transition-[border-color,box-shadow] duration-200 focus-within:border-[#1F2B24]/50 focus-within:shadow-[0_1px_2px_rgba(34,29,23,.06),0_10px_30px_rgba(34,29,23,.08),0_0_0_3px_rgba(31, 43, 36,.12)]"
+        className="sf-prompt relative mt-10 w-full max-w-[720px] scroll-mt-[110px] overflow-hidden rounded-[18px] border border-[rgba(34,29,23,.14)] bg-[#FFFDFA] shadow-[0_1px_2px_rgba(34,29,23,.06),0_10px_30px_rgba(34,29,23,.08)] transition-[border-color,box-shadow] duration-200 focus-within:border-[#1F2B24]/50 focus-within:shadow-[0_1px_2px_rgba(34,29,23,.06),0_10px_30px_rgba(34,29,23,.08),0_0_0_3px_rgba(31, 43, 36,.12)]"
       >
         {/* Task 13: Live-state accent BorderBeam. Only render when reduced-motion is off. */}
         {!reducedMotion && (
@@ -355,8 +386,8 @@ export function MarketingHero({
             }}
             autoComplete="off"
             spellCheck={false}
-            placeholder="https://your-hvac-company.com"
-            aria-label="Paste your website URL"
+            placeholder="https://your-clients-hvac-company.com"
+            aria-label="Paste your client's website URL"
             className="h-14 w-full border-0 bg-transparent font-mono text-[15px] text-[#221D17] caret-[#1F2B24] outline-none placeholder:text-[#9A9183]"
           />
         </div>
@@ -371,7 +402,7 @@ export function MarketingHero({
             rows={4}
             spellCheck={false}
             placeholder="Family-owned HVAC in Stockton, CA. 24/7 emergency service. Licensed C-20, bonded, insured. 4.8 stars on Google with 412 reviews."
-            aria-label="Describe your business"
+            aria-label="Describe the business"
             className="block max-h-60 min-h-[110px] w-full resize-none border-0 bg-transparent font-sans text-[15px] leading-[1.55] tracking-[-0.005em] text-[#221D17] caret-[#1F2B24] outline-none placeholder:text-[#9A9183]"
           />
         </div>
@@ -416,7 +447,7 @@ export function MarketingHero({
 
       {/* Proof checklist */}
       <ul className="mt-6 flex flex-wrap items-center justify-center gap-x-5 gap-y-2">
-        {["Start free", "Live in 3 minutes", "Cancel anytime"].map((item) => (
+        {["Start free", "Each client live in 3 minutes", "Cancel anytime"].map((item) => (
           <li key={item} className="flex items-center gap-2 text-[13.5px] text-[#6E665A]">
             <span className="flex size-[17px] items-center justify-center rounded-full bg-[rgba(31, 43, 36,.12)] text-[10px] font-[700] text-[#1F2B24]" aria-hidden>✓</span>
             {item}

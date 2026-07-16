@@ -43,11 +43,11 @@ const PATHS: readonly Path[] = [
     arrow: "we generate it",
     title: (
       <>
-        You know what you want.{" "}
+        You know what the client needs.{" "}
         <em className="font-[Newsreader,Georgia,serif] font-normal not-italic">Describe it.</em>
       </>
     ),
-    steps: ["Paste a URL or describe the business", "Watch it build — site, booking, CRM, agent", "Go live on your domain"],
+    steps: ["Paste your client's URL or describe their business", "Watch it build — site, booking, CRM, agent", "Go live on your client's domain"],
     mock: <ScanMock />,
     figure: <IntegrationBeam />,
   },
@@ -56,11 +56,11 @@ const PATHS: readonly Path[] = [
     arrow: "we compile it",
     title: (
       <>
-        You already do the work.{" "}
+        You already do it for clients.{" "}
         <em className="font-[Newsreader,Georgia,serif] font-normal not-italic">Record it.</em>
       </>
     ),
-    steps: ["Screen-record the workflow — on desktop or mobile", "Answer what the recording didn't show", "Get a tested agent you can switch on"],
+    steps: ["Screen-record the workflow — on desktop or mobile", "Answer what the recording didn't show", "Get a tested agent you can switch on — for any client"],
     mock: <RecordMock />,
     figure: <RecordFigure />,
   },
