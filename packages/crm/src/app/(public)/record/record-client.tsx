@@ -42,7 +42,6 @@ import { RestoredBanner } from "./record-ui/restored-banner";
 import { CaptureCard } from "./record-ui/capture-card";
 import { TracedList } from "./record-ui/traced-list";
 import { RecapPanel } from "./record-ui/recap-panel";
-import { clampQuestionIndex, nextQuestionIndex } from "./record-ui/question-card";
 
 const STORAGE_KEY = "sf-record-session";
 
@@ -110,19 +109,20 @@ export function RecordClient({
   const [interviewPending, setInterviewPending] = useState(false);
   const [interviewError, setInterviewError] = useState<string | null>(null);
   const lastInterviewMessage = useRef<string | null>(null);
-  // interview-one-question — which openQuestions[] entry the recap panel's
-  // one-question card is currently showing. Presentation-only state (like
-  // interviewInput above), not reducer state: the reducer's openQuestions
-  // array is the source of truth for WHAT the questions are; this is only
-  // ever a read position into it. Re-clamped into [0, openQuestions.length]
-  // below whenever the server refreshes the list (it may add/remove
-  // questions after a merge) — clamping to the length itself (not length-1)
-  // is deliberate: that's the "all questions answered" sentinel QuestionCard
-  // renders its compact done-state on.
-  const [questionIndex, setQuestionIndex] = useState(0);
-  useEffect(() => {
-    setQuestionIndex((i) => clampQuestionIndex(i, state.openQuestions.length));
-  }, [state.openQuestions]);
+  // interview-one-question — question texts the operator has locally
+  // skipped. Presentation-only state (like interviewInput above), not
+  // reducer state: the reducer's openQuestions array is the sole source of
+  // truth for WHICH questions exist. This is deliberately NOT an index —
+  // review fix (2026-07-16): an applied interview turn returns openQuestions
+  // with the answered question PRUNED server-side (interview.ts), so a
+  // synchronous "+1" advance would skip whatever took the pruned question's
+  // slot; on applied:false the list is UNCHANGED, so "+1" would skip an
+  // uncaptured question instead of leaving it visible. The only honest
+  // "what's next" rule is the queue selector in question-card.tsx
+  // (selectVisibleQuestion): the first entry of the CURRENT openQuestions
+  // that isn't in this set. No clamping needed — there's no index to go
+  // stale.
+  const [skippedQuestions, setSkippedQuestions] = useState<Set<string>>(() => new Set());
   const [fallbackText, setFallbackText] = useState<Record<number, string>>({});
   const [compiling, setCompiling] = useState(false);
   // 2026-07-15 — claim-flow origin fix (Task 3 audit): a compile failure gets
@@ -584,22 +584,30 @@ export function RecordClient({
   // Ask Seldon chat below (no new endpoint, no schema change) — the
   // `Q: <question>\nA: <answer>` framing is purely a merge-reliability aid
   // for interviewTurn's decompose path (interview.ts), not a new contract.
-  // The index advances immediately (optimistic — the LLM merge is a slower
-  // round-trip the operator shouldn't have to wait through to move on to the
-  // next question); the openQuestions-watching effect above re-clamps once
-  // the reply actually lands.
+  // No local advance: on an applied turn, sendInterviewMessage's
+  // INTERVIEW_REPLY/MODEL_UPDATED dispatch refreshes state.openQuestions
+  // with the answered question already pruned server-side, which is what
+  // reveals the next question via question-card.tsx's queue selector. On
+  // applied:false, openQuestions is unchanged and the SAME question stays
+  // visible — honest, since it wasn't actually captured.
   function handleQuestionAnswer(question: string, answer: string) {
     if (!state.token || interviewPending) return;
     const framed = `Q: ${question}\nA: ${answer}`;
     dispatch({ type: "INTERVIEW_USER_SENT", user: framed });
-    setQuestionIndex((i) => nextQuestionIndex(i));
     void sendInterviewMessage(framed);
   }
 
-  // Advances without sending anything — no merge is attempted for a skipped
-  // question, so nothing about the FlowModel changes.
-  function handleQuestionSkip() {
-    setQuestionIndex((i) => nextQuestionIndex(i));
+  // Adds `question` to the local skip set — no merge attempted, nothing sent
+  // to the server, so nothing about the FlowModel changes. Guarded by
+  // interviewPending the same as handleQuestionAnswer (not just the UI's
+  // disabled attribute) so a skip can't race a turn that's still resolving.
+  function handleQuestionSkip(question: string) {
+    if (interviewPending) return;
+    setSkippedQuestions((prev) => {
+      const next = new Set(prev);
+      next.add(question);
+      return next;
+    });
   }
 
   async function handleCompileAgent() {
@@ -772,7 +780,7 @@ export function RecordClient({
               compileError={compileError}
               compiledTemplateId={compiledTemplateId}
               claimHref={claimHref}
-              questionIndex={questionIndex}
+              skippedQuestions={skippedQuestions}
               onInterviewInputChange={setInterviewInput}
               onInterviewSend={() => void handleInterviewSend()}
               onInterviewRetry={() => void handleInterviewRetry()}

@@ -144,7 +144,7 @@ describe("<RecapPanel> edgeCasePrompt row", () => {
     compiling: false,
     compiledTemplateId: null,
     claimHref: "/signup",
-    questionIndex: 0,
+    skippedQuestions: new Set<string>(),
     onInterviewInputChange: noop,
     onInterviewSend: noop,
     onInterviewRetry: noop,
@@ -209,7 +209,7 @@ describe("<RecapPanel> question card (interview-one-question)", () => {
     compiling: false,
     compiledTemplateId: null,
     claimHref: "/signup",
-    questionIndex: 0,
+    skippedQuestions: new Set<string>(),
     onInterviewInputChange: noop,
     onInterviewSend: noop,
     onInterviewRetry: noop,
@@ -238,16 +238,44 @@ describe("<RecapPanel> question card (interview-one-question)", () => {
     assert.doesNotMatch(html, />Q6\?</);
   });
 
-  test("questionIndex advances which single question shows", () => {
+  test("skippedQuestions excludes locally-skipped questions from view — the next unskipped one shows", () => {
     const html = renderToString(
       React.createElement(RecapPanel, {
         ...baseProps,
         openQuestions: ["Q1?", "Q2?", "Q3?"],
-        questionIndex: 2,
+        skippedQuestions: new Set(["Q1?", "Q2?"]),
       }),
     );
-    assert.match(html, /Question <!-- -->3<!-- --> of <!-- -->3/);
+    // Filtered queue is just ["Q3?"] — "Question 1 of 1", not "3 of 3".
+    assert.match(html, /Question <!-- -->1<!-- --> of <!-- -->1/);
     assert.match(html, />Q3\?</);
+  });
+
+  test("an applied server refresh (answered question pruned from openQuestions) reveals the next question with no local index math", () => {
+    // Simulates record-client.tsx's state.openQuestions after
+    // sendInterviewMessage's INTERVIEW_REPLY/MODEL_UPDATED dispatch on an
+    // applied turn — the answered question is simply no longer in the array.
+    const html = renderToString(
+      React.createElement(RecapPanel, {
+        ...baseProps,
+        openQuestions: ["Q2?", "Q3?"], // Q1? already pruned server-side
+        skippedQuestions: new Set<string>(),
+      }),
+    );
+    assert.match(html, /Question <!-- -->1<!-- --> of <!-- -->2/);
+    assert.match(html, />Q2\?</);
+  });
+
+  test("an applied:false refresh (openQuestions unchanged) keeps the SAME question visible", () => {
+    const html = renderToString(
+      React.createElement(RecapPanel, {
+        ...baseProps,
+        openQuestions: ["Q1?", "Q2?", "Q3?"], // unchanged — turn didn't apply
+        skippedQuestions: new Set<string>(),
+      }),
+    );
+    assert.match(html, /Question <!-- -->1<!-- --> of <!-- -->3/);
+    assert.match(html, />Q1\?</);
   });
 
   test("the question card carries no #EAB308 amber (token hierarchy only)", () => {

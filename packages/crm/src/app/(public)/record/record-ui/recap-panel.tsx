@@ -18,7 +18,7 @@ import type { CoverageEntry, CoverageTier, FlowModel } from "@/lib/recordings/tr
 import type { InterviewTurn, RecorderState } from "../recorder-machine";
 import { summarizeCoverage } from "../recorder-machine";
 import { TIER_COLOR, TIER_LABEL, TIER_LABEL_DRAFTS } from "./tiers";
-import { QuestionCard } from "./question-card";
+import { QuestionCard, selectVisibleQuestion } from "./question-card";
 
 export function RecapPanel({
   phase,
@@ -34,7 +34,7 @@ export function RecapPanel({
   compileError = null,
   compiledTemplateId,
   claimHref,
-  questionIndex,
+  skippedQuestions,
   onInterviewInputChange,
   onInterviewSend,
   onInterviewRetry,
@@ -63,10 +63,11 @@ export function RecapPanel({
   compileError?: string | null;
   compiledTemplateId: string | null;
   claimHref: string;
-  /** interview-one-question — which openQuestions[] entry the one-question
-   *  card is currently showing. Owned by record-client.tsx (clamped to
-   *  openQuestions.length whenever the server refreshes the list). */
-  questionIndex: number;
+  /** interview-one-question — question texts the operator has locally
+   *  skipped, excluded from the one-question card's queue selector. Owned by
+   *  record-client.tsx; never cleared automatically (see question-card.tsx's
+   *  selectVisibleQuestion for why this is a queue, not an index). */
+  skippedQuestions: ReadonlySet<string>;
   onInterviewInputChange: (value: string) => void;
   onInterviewSend: () => void;
   onInterviewRetry: () => void;
@@ -75,8 +76,9 @@ export function RecapPanel({
   onApprove: () => void;
   /** A chip ("Yes"/"No") or the question card's free-text Send. */
   onQuestionAnswer: (question: string, answer: string) => void;
-  /** The question card's Skip link — advances without sending. */
-  onQuestionSkip: () => void;
+  /** The question card's Skip link — adds the given question text to the
+   *  local skip set. No merge attempted, nothing sent to the server. */
+  onQuestionSkip: (question: string) => void;
   /** Record v3 (S1) — "Make it trustworthy" row. Absent (undefined) hides
    *  the row entirely: no slot traced yet, a slot is mid-capture, or all
    *  MAX_RECORDINGS_PER_SESSION slots are used. record-client.tsx computes
@@ -181,11 +183,13 @@ export function RecapPanel({
 
       {/* interview-one-question — replaces the old amber (#EAB308) 6-question
           <ul> wall with exactly ONE question at a time (record-client.tsx
-          owns questionIndex/onQuestionAnswer/onQuestionSkip). */}
+          owns skippedQuestions/onQuestionAnswer/onQuestionSkip). Keyed by
+          the currently-visible question text (queue selector, not an
+          index) so the free-text input resets between questions. */}
       <QuestionCard
-        key={questionIndex}
+        key={selectVisibleQuestion(openQuestions, skippedQuestions)?.question ?? "none"}
         questions={openQuestions}
-        index={questionIndex}
+        skippedQuestions={skippedQuestions}
         pending={interviewPending}
         onAnswer={onQuestionAnswer}
         onSkip={onQuestionSkip}

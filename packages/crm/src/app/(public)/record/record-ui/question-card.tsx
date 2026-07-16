@@ -8,57 +8,79 @@
 // fallback (interview.ts's applied:false path). The product already told
 // the user to go one at a time; this UI just enforces it structurally.
 //
-// Presentational only — no I/O. record-client.tsx owns the questionIndex
-// state and wires onAnswer/onSkip to the existing interview send/advance
-// flow (reusing /api/v1/recordings/interview via sendInterviewMessage — no
-// new endpoint, no schema change). Chips are just prefilled answers; the
+// Presentational only — no I/O. record-client.tsx owns the skippedQuestions
+// set and wires onAnswer/onSkip to the existing interview send flow
+// (reusing /api/v1/recordings/interview via sendInterviewMessage — no new
+// endpoint, no schema change). Chips are just prefilled answers; the
 // free-text field is the honest fallback for anything a Yes/No can't cover.
+//
+// review fix (2026-07-16) — this is a QUEUE, not a pointer. An earlier
+// version tracked a numeric `questionIndex` and advanced it +1 optimistically
+// on every answer/skip. That's wrong against interviewTurn's actual
+// contract (interview.ts): an APPLIED turn returns openQuestions with the
+// answered question PRUNED — advancing +1 on top of a shorter list skips
+// the next question. And on applied:false (the merge didn't land),
+// openQuestions is UNCHANGED — advancing +1 there silently drops an
+// uncaptured question. There is no reliable index to advance TO; the only
+// honest source of truth is "whichever open question is still in the list
+// and hasn't been locally skipped" — a queue selector, not a counter.
 "use client";
 
 import { useState } from "react";
 
-/** Pure index-advance helper — exported for direct unit testing, since
- *  record-client.tsx's hooks aren't reachable via renderToString (useEffect
- *  never runs during SSR, and there's no jsdom harness for this surface). */
-export function nextQuestionIndex(index: number): number {
-  return index + 1;
-}
-
-/** Pure clamp helper — keeps the index in [0, total] whenever the server
- *  refreshes openQuestions after a merge (it may add or remove questions,
- *  per the design's "always re-derive N and clamp i"). `total` itself is a
- *  valid clamp target — it's the sentinel this card's compact "all
- *  questions answered" state renders on (index >= questions.length). */
-export function clampQuestionIndex(index: number, total: number): number {
-  return Math.min(Math.max(index, 0), total);
+/** Pure selector — exported for direct unit testing, since record-client.tsx's
+ *  hooks aren't reachable via renderToString (useEffect never runs during
+ *  SSR, and there's no jsdom harness for this surface). The visible question
+ *  is always the FIRST entry of `questions` that isn't in `skipped` — no
+ *  index, no clamping. When a turn applies, the server's refreshed
+ *  `openQuestions` simply no longer contains the answered question, so the
+ *  next call naturally reveals the next one. When a turn doesn't apply,
+ *  `questions` is unchanged, so the SAME question stays visible — honest,
+ *  since it wasn't actually captured. `position`/`total` are derived from
+ *  the filtered (skip-excluded) list, so "Question 1 of N" always describes
+ *  the remaining queue, not the original list. */
+export function selectVisibleQuestion(
+  questions: string[],
+  skipped: ReadonlySet<string>,
+): { question: string; position: number; total: number } | null {
+  const remaining = questions.filter((q) => !skipped.has(q));
+  if (remaining.length === 0) return null;
+  return { question: remaining[0], position: 1, total: remaining.length };
 }
 
 export function QuestionCard({
   questions,
-  index,
+  skippedQuestions,
   pending,
   onAnswer,
   onSkip,
 }: {
   questions: string[];
-  index: number;
+  /** Question texts the operator has locally skipped — excluded from the
+   *  queue selector. Never cleared: once skipped, a question only comes
+   *  back into view if the server itself re-adds the same text (rare, and
+   *  harmless if it does — it's just a fresh entry to skip again). */
+  skippedQuestions: ReadonlySet<string>;
   /** interviewPending — true while the previous answer's interview turn is
    *  still in flight. Disables every affordance so a second click can't fire
    *  a concurrent /interview request while one is still resolving. */
   pending: boolean;
   /** Fired by a chip ("Yes"/"No") or the free-text Send — record-client.tsx
    *  frames it as `Q: <question>\nA: <answer>` and sends the ONE existing
-   *  interview message, then advances the index. */
+   *  interview message. No local advance: the server's refreshed
+   *  openQuestions (on an applied turn) is what reveals the next question. */
   onAnswer: (question: string, answer: string) => void;
-  /** Advances without sending anything (no merge attempted for a skipped
-   *  question). */
-  onSkip: () => void;
+  /** Adds `question` to the local skip set — no merge attempted, nothing
+   *  sent to the server. */
+  onSkip: (question: string) => void;
 }) {
   const [text, setText] = useState("");
 
   if (questions.length === 0) return null;
 
-  if (index >= questions.length) {
+  const visible = selectVisibleQuestion(questions, skippedQuestions);
+
+  if (!visible) {
     return (
       <p className="text-[13.5px]" style={{ color: "var(--lp-body)" }}>
         All questions answered.
@@ -66,7 +88,7 @@ export function QuestionCard({
     );
   }
 
-  const question = questions[index];
+  const { question, position, total } = visible;
 
   function send() {
     const trimmed = text.trim();
@@ -84,9 +106,17 @@ export function QuestionCard({
         className="text-[11px] font-[600] uppercase tracking-[0.05em]"
         style={{ color: "var(--lp-muted)" }}
       >
-        Question {index + 1} of {questions.length}
+        Question {position} of {total}
       </p>
-      <p className="text-[15px] font-[600]" style={{ color: "var(--lp-ink)" }}>
+      {/* aria-live: the question text changes in place (applied turns prune
+          the answered question; the next one takes this same slot) — announce
+          it rather than relying on a DOM-structure change screen readers may
+          not catch. */}
+      <p
+        className="text-[15px] font-[600]"
+        style={{ color: "var(--lp-ink)" }}
+        aria-live="polite"
+      >
         {question}
       </p>
       <div className="flex flex-wrap items-center gap-2">
@@ -111,7 +141,7 @@ export function QuestionCard({
         <button
           type="button"
           disabled={pending}
-          onClick={onSkip}
+          onClick={() => onSkip(question)}
           className="text-[13.5px] underline underline-offset-2 disabled:cursor-not-allowed disabled:opacity-50"
           style={{ color: "var(--lp-muted)" }}
         >
@@ -123,6 +153,7 @@ export function QuestionCard({
           type="text"
           value={text}
           disabled={pending}
+          aria-label="Answer this question"
           onChange={(e) => setText(e.target.value)}
           onKeyDown={(e) => {
             if (e.key === "Enter") {
