@@ -26,10 +26,15 @@ import { buildVoiceIngestDeps } from "@/lib/agents/voice-profile/build-deps";
 import { maybeUpgradeInboxTriggerToPush } from "@/lib/deployments/upgrade-inbox-trigger";
 import { getAgentTemplate, updateAgentTemplate } from "@/lib/agent-templates/store";
 import { createTrigger, listConnections, listConnectedAccountIds } from "@/lib/integrations/composio/client";
+import {
+  hasDeclaredTemplateVariables,
+  TEMPLATE_VARIABLES_DEPLOY_GUARD_MESSAGE,
+} from "@/lib/agent-templates/generalize";
 
 export type DeployToSelfActionResult =
   | { ok: true; deploymentId: string; active: boolean; triggerSentence: string }
-  | { ok: false; error: "unauthorized" | "template_not_found" | "create_failed" };
+  | { ok: false; error: "unauthorized" | "template_not_found" | "create_failed" }
+  | { ok: false; error: "template_variables_unfilled"; message: string };
 
 /** "For myself" — one-click self-deploy into the OPERATOR'S OWN workspace. */
 export async function deployToSelfAction(templateId: string): Promise<DeployToSelfActionResult> {
@@ -44,6 +49,20 @@ export async function deployToSelfAction(templateId: string): Promise<DeployToSe
     .where(and(eq(agentTemplates.id, templateId), eq(agentTemplates.builderOrgId, orgId)))
     .limit(1);
   if (!template) return { ok: false, error: "template_not_found" };
+
+  // Review fix (2026-07-16) — "Deploy for myself" writes a `deployments` row
+  // with NO templateVarValues; resolveDeploymentPersona would then silently
+  // DROP every declared token, vanishing the AUTHOR's own details from their
+  // OWN live agent (the never-lies invariant inverted). This surface has no
+  // fill form (that lives on the studio/agents/[id]/deploy wizard) — reject
+  // rather than build a second one here.
+  if (hasDeclaredTemplateVariables(template.blueprint as AgentBlueprint | null)) {
+    return {
+      ok: false,
+      error: "template_variables_unfilled",
+      message: TEMPLATE_VARIABLES_DEPLOY_GUARD_MESSAGE,
+    };
+  }
 
   const [org] = await db
     .select({ name: organizations.name })

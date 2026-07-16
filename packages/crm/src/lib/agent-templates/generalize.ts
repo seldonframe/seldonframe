@@ -188,10 +188,22 @@ export function applyTemplateGeneralization(
   }
   if (missing.length > 0) return { ok: false, error: "literal_not_found", tokens: missing };
 
-  // Every row verified — now perform the rewrite (exact-literal, global).
+  // Perform the rewrite (exact-literal, global), RE-VERIFYING each row's
+  // occurrence count against the text AS IT STANDS AT ITS OWN TURN — not just
+  // against the original `source`. This catches overlapping/substring
+  // literals (e.g. "max@x.com" and "max@x.com.": the first row's rewrite
+  // consumes the shared substring, so the second row's naive split/join would
+  // silently no-op even though it passed the up-front check against
+  // `source`). A row that hits 0 occurrences at ITS turn fails the WHOLE
+  // apply — never a declared variable left with no placeholder in the
+  // rewritten text (a required deploy-form field that fills nothing).
   let next = source;
   const backfillValues: Record<string, string> = {};
   for (const r of rows) {
+    const countAtTurn = countOccurrences(next, r.currentValue);
+    if (countAtTurn === 0) {
+      return { ok: false, error: "literal_not_found", tokens: [r.token] };
+    }
     next = replaceAllLiteral(next, r.currentValue, `{${r.token}}`);
     backfillValues[r.token] = r.currentValue;
   }
@@ -243,6 +255,33 @@ export function validateTemplateVarValues(args: {
     .filter((name) => !(typeof values[name] === "string" && values[name].trim() !== ""));
 
   return missing.length === 0 ? { ok: true } : { ok: false, missing };
+}
+
+/** Shared, user-facing copy for `TEMPLATE_VARIABLES_DEPLOY_GUARD_MESSAGE` below —
+ *  every formless deploy surface (deploy-for-myself, bulk deploy-to-clients,
+ *  the marketplace buyer auto-deploy shortcut) points at the ONE surface that
+ *  actually has the fill form. */
+export const TEMPLATE_VARIABLES_DEPLOY_GUARD_MESSAGE =
+  "This agent uses template variables — deploy it from the client deploy wizard where you can fill them.";
+
+/**
+ * Review-fix (2026-07-16) — the REJECT gate for every deploy surface that has
+ * NO fill form (deploy-for-myself, bulk deploy-to-clients, the marketplace
+ * buyer auto-deploy shortcut). A template with declared `templateVariables`
+ * must NEVER proceed through one of these: none of them call
+ * `resolveDeploymentPersona` with a `templateVarValues` a human ever filled,
+ * so every declared token would either be dropped silently
+ * (`fillPlaceholders`' drop-unknown-token behavior) or, on the `agents`-table
+ * paths, never resolved at all — a dishonest output on a happy path,
+ * including the AUTHOR'S OWN agent losing its own details post-generalization
+ * (the never-lies invariant inverted). Minimum fix per CLAUDE.md 3.1
+ * (Optimistic Path) + Minimal Impact: reject, don't build a second form.
+ * Pure; never throws.
+ */
+export function hasDeclaredTemplateVariables(
+  blueprint: { templateVariables?: unknown[] | null } | null | undefined,
+): boolean {
+  return Array.isArray(blueprint?.templateVariables) && blueprint!.templateVariables!.length > 0;
 }
 
 /**

@@ -5,6 +5,8 @@ import {
   applyTemplateGeneralization,
   shouldWarnPersonalDetails,
   validateTemplateVarValues,
+  hasDeclaredTemplateVariables,
+  TEMPLATE_VARIABLES_DEPLOY_GUARD_MESSAGE,
   type ProposedSubstitution,
 } from "../../../src/lib/agent-templates/generalize";
 
@@ -208,6 +210,41 @@ describe("applyTemplateGeneralization", () => {
       assert.deepEqual(result.backfillValues, { business_name: "Max ABC Plumbing" });
     }
   });
+
+  // Review non-blocking fix — overlapping/substring literals must never
+  // silently emit a declared variable with no placeholder in the text.
+  test("overlapping literals (one is a substring of another) REJECT rather than emit a token with no placeholder", () => {
+    // "max@x.com" is a substring of "max@x.com." — if row 1 rewrites first,
+    // it consumes the shared text, so row 2's naive replace against the
+    // now-mutated text would find 0 occurrences. Must reject the WHOLE apply,
+    // never silently declare contact_email_dot with nothing to fill it.
+    const result = applyTemplateGeneralization(
+      "Reach max@x.com or, for billing only, max@x.com. for invoices.",
+      [
+        { token: "contact_email", currentValue: "max@x.com", description: "d", example: "e" },
+        { token: "contact_email_dot", currentValue: "max@x.com.", description: "d", example: "e" },
+      ],
+    );
+    assert.equal(result.ok, false);
+    if (!result.ok) {
+      assert.equal(result.error, "literal_not_found");
+    }
+  });
+
+  test("processing the LONGER/more-specific literal first still succeeds (order that doesn't collide)", () => {
+    // Same overlapping pair, but ordered so the longer literal is consumed
+    // FIRST — the shorter one still has occurrences left afterward, so this
+    // should succeed (proves the fix doesn't reject every overlap, only the
+    // ones that actually collide at rewrite time).
+    const result = applyTemplateGeneralization(
+      "Reach max@x.com or, for billing only, max@x.com. for invoices.",
+      [
+        { token: "contact_email_dot", currentValue: "max@x.com.", description: "d", example: "e" },
+        { token: "contact_email", currentValue: "max@x.com", description: "d", example: "e" },
+      ],
+    );
+    assert.equal(result.ok, true);
+  });
 });
 
 // ─── validateTemplateVarValues (deploy-time REQUIRED-field enforcement) ─────
@@ -266,6 +303,39 @@ describe("validateTemplateVarValues", () => {
       values: { contact_email: "hi@acme.test", unrelated_field: "whatever" },
     });
     assert.deepEqual(result, { ok: true });
+  });
+});
+
+// ─── hasDeclaredTemplateVariables (review fix — formless-deploy REJECT gate) ─
+
+describe("hasDeclaredTemplateVariables", () => {
+  test("true when templateVariables has at least one entry", () => {
+    assert.equal(
+      hasDeclaredTemplateVariables({ templateVariables: [{ name: "contact_email" }] }),
+      true,
+    );
+  });
+
+  test("false when templateVariables is an empty array", () => {
+    assert.equal(hasDeclaredTemplateVariables({ templateVariables: [] }), false);
+  });
+
+  test("false when templateVariables is absent/undefined", () => {
+    assert.equal(hasDeclaredTemplateVariables({}), false);
+    assert.equal(hasDeclaredTemplateVariables(undefined), false);
+  });
+
+  test("false when templateVariables is null", () => {
+    assert.equal(hasDeclaredTemplateVariables({ templateVariables: null }), false);
+  });
+
+  test("false when blueprint itself is null/undefined", () => {
+    assert.equal(hasDeclaredTemplateVariables(null), false);
+    assert.equal(hasDeclaredTemplateVariables(undefined), false);
+  });
+
+  test("the guard message points at the wizard that has the fill form", () => {
+    assert.match(TEMPLATE_VARIABLES_DEPLOY_GUARD_MESSAGE, /deploy wizard/);
   });
 });
 
