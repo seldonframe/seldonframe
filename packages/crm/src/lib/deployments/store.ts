@@ -70,6 +70,20 @@ export type CreateDeploymentDeps = {
   findTemplateById: (id: string) => Promise<AgentTemplate | null>;
   /** Insert a deployments row and return it. */
   insert: (values: NewDeployment) => Promise<Deployment>;
+  /** Duplicate guard (2026-07-16): find an existing NON-CANCELED deployment of
+   *  the same template, for the same builder + surface + client target. Born
+   *  from a live incident: the same push-triggered Gmail template deployed 3×
+   *  to the same mailbox ran 3 LLM turns per incoming email until the
+   *  operator's Anthropic credits were gone. Client target matches on
+   *  clientOrgId when the new deployment attaches to an existing client, OR on
+   *  case-insensitive clientName (drafts have no clientOrgId yet). */
+  findDuplicate: (args: {
+    builderOrgId: string;
+    agentTemplateId: string;
+    surface: DeploymentSurface;
+    clientName: string;
+    clientOrgId: string | null;
+  }) => Promise<{ id: string } | null>;
 };
 
 export type ListDeploymentsDeps = {
@@ -110,6 +124,34 @@ function buildDefaultCreateDeps(): CreateDeploymentDeps {
       const [created] = await db.insert(deployments).values(values).returning();
       if (!created) throw new Error("deployments insert returned no row");
       return created;
+    },
+    findDuplicate: async (args) => {
+      const { db } = await import("@/db");
+      const { deployments } = await import("@/db/schema/deployments");
+      const { and, eq, ne, or, sql } = await import("drizzle-orm");
+      // Same-client match: the attach path carries a clientOrgId; a draft
+      // created for a new client only has a name. An existing row may have
+      // EITHER (name at draft, orgId after activation) — match both ways.
+      const sameClient = args.clientOrgId
+        ? or(
+            eq(deployments.clientOrgId, args.clientOrgId),
+            sql`lower(${deployments.clientName}) = lower(${args.clientName})`,
+          )
+        : sql`lower(${deployments.clientName}) = lower(${args.clientName})`;
+      const rows = await db
+        .select({ id: deployments.id })
+        .from(deployments)
+        .where(
+          and(
+            eq(deployments.builderOrgId, args.builderOrgId),
+            eq(deployments.agentTemplateId, args.agentTemplateId),
+            eq(deployments.surface, args.surface),
+            ne(deployments.status, "canceled"),
+            sameClient,
+          ),
+        )
+        .limit(1);
+      return rows[0] ?? null;
     },
   };
 }
@@ -289,12 +331,29 @@ export type CreateDeploymentInput = {
    *  store trusts a pre-validated id here. Absent → today's "new client" behavior
    *  (clientOrgId null, provisioned on activation). */
   existingClientOrgId?: string | null;
+  /** Duplicate guard escape hatch (2026-07-16): a caller that has ALREADY
+   *  confirmed with the operator that a second identical deployment is
+   *  intentional may pass true. Default false → an exact duplicate (same
+   *  builder + template + surface + client target, non-canceled) is rejected
+   *  with `duplicate_deployment` instead of silently multiplying every
+   *  trigger fire's LLM spend. */
+  allowDuplicate?: boolean;
   deps?: Partial<CreateDeploymentDeps>;
 };
 
 export type CreateDeploymentResult =
   | { ok: true; deployment: Deployment }
-  | { ok: false; error: "unauthorized" | "template_not_found" | "invalid_input" };
+  | {
+      ok: false;
+      error:
+        | "unauthorized"
+        | "template_not_found"
+        | "invalid_input"
+        | "duplicate_deployment";
+      /** Set ONLY for `duplicate_deployment` — the existing deployment the new
+       *  one would duplicate, so callers can link/reuse it. */
+      duplicateOfDeploymentId?: string;
+    };
 
 /**
  * Create a new deployment (a lite-tenant SMB client) for a builder, in `draft`
@@ -322,11 +381,36 @@ export async function createDeployment(
   const defaults = buildDefaultCreateDeps();
   const findTemplateById = input.deps?.findTemplateById ?? defaults.findTemplateById;
   const insert = input.deps?.insert ?? defaults.insert;
+  const findDuplicate = input.deps?.findDuplicate ?? defaults.findDuplicate;
 
   // Ownership guard: the template must exist AND belong to this builder.
   const template = await findTemplateById(input.agentTemplateId);
   if (!template || template.builderOrgId !== builderOrgId) {
     return { ok: false, error: "template_not_found" };
+  }
+
+  // Duplicate guard (2026-07-16): the same template deployed twice to the same
+  // client target multiplies every trigger fire's LLM spend (live incident:
+  // 3 duplicate Gmail push agents = 3 paid agentic runs per incoming email).
+  // Blocked by default; `allowDuplicate: true` is the explicit escape hatch.
+  if (!input.allowDuplicate) {
+    const existingClientOrgIdForDupe = normalizeExistingClientOrgId(
+      input.existingClientOrgId,
+    );
+    const duplicate = await findDuplicate({
+      builderOrgId,
+      agentTemplateId: input.agentTemplateId,
+      surface,
+      clientName,
+      clientOrgId: existingClientOrgIdForDupe ?? null,
+    });
+    if (duplicate) {
+      return {
+        ok: false,
+        error: "duplicate_deployment",
+        duplicateOfDeploymentId: duplicate.id,
+      };
+    }
   }
 
   // Drop empty contact fields so we never persist {} or whitespace-only values.

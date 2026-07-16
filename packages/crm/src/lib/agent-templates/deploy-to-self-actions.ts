@@ -33,7 +33,17 @@ import {
 
 export type DeployToSelfActionResult =
   | { ok: true; deploymentId: string; active: boolean; triggerSentence: string }
-  | { ok: false; error: "unauthorized" | "template_not_found" | "create_failed" }
+  | {
+      ok: false;
+      error:
+        | "unauthorized"
+        | "template_not_found"
+        | "create_failed"
+        // Duplicate guard (2026-07-16): this template is already live in the
+        // caller's workspace — a second copy would multiply LLM spend on
+        // every trigger fire. UI copy: "already deployed — it's live".
+        | "already_deployed";
+    }
   | { ok: false; error: "template_variables_unfilled"; message: string };
 
 /** "For myself" — one-click self-deploy into the OPERATOR'S OWN workspace. */

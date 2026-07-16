@@ -113,7 +113,13 @@ export function blueprintHasGmailBinding(
 
 export type DeployToSelfResult =
   | { ok: true; deploymentId: string; active: boolean; triggerSentence: string }
-  | { ok: false; error: "create_failed" };
+  | { ok: false; error: "create_failed" }
+  /** Duplicate guard (2026-07-16): this template is ALREADY deployed to the
+   *  caller's own workspace (non-canceled). Surfaced as its own variant so
+   *  the UI/MCP tool can say "it's already live" instead of a generic
+   *  failure — a second copy would multiply every trigger fire's LLM spend
+   *  (live incident: 3 duplicate Gmail push agents, 3 paid runs per email). */
+  | { ok: false; error: "already_deployed" };
 
 /**
  * Deploy this template into the OPERATOR'S OWN workspace ("For myself").
@@ -144,7 +150,11 @@ export async function deployToSelfCore(
     // own org — never any other org id.
     existingClientOrgId: input.orgId,
   });
-  if (!created.ok) return { ok: false, error: "create_failed" };
+  if (!created.ok) {
+    return created.error === "duplicate_deployment"
+      ? { ok: false, error: "already_deployed" }
+      : { ok: false, error: "create_failed" };
+  }
 
   // Email-agent slice (Part A3) — best-effort voice-profile ingestion. Fired
   // ONLY for an email-channel deploy with a gmail binding; guarded so a

@@ -8,12 +8,25 @@ import assert from "node:assert/strict";
 import { runStatelessAgentTurn } from "../../../src/lib/agents/stateless-turn";
 import type { AgentBlueprint } from "../../../src/db/schema/agents";
 
+/** Token economy (2026-07-16): the loop now sends `system` as a cache-marked
+ *  block array. Extract the text either way so these assertions stay about the
+ *  PROMPT CONTENT, not the wire shape. */
+function systemText(system: unknown): string {
+  if (typeof system === "string") return system;
+  if (Array.isArray(system)) {
+    return system
+      .map((b) => (b && typeof b === "object" ? String((b as { text?: string }).text ?? "") : ""))
+      .join("\n");
+  }
+  return "";
+}
+
 function makeFakeClient() {
   const prompts: string[] = [];
   const client = {
     messages: {
-      create: async (params: { system?: string }) => {
-        prompts.push(params.system ?? "");
+      create: async (params: { system?: unknown }) => {
+        prompts.push(systemText(params.system));
         return {
           stop_reason: "end_turn",
           content: [{ type: "text", text: "hi" }],

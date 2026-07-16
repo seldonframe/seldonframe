@@ -47,6 +47,14 @@ import {
 } from "./tools";
 import { resolveTurnModel } from "./runtime/turn-model";
 import { createTtlPromiseCache } from "./runtime/capped-reply-cache";
+import {
+  cachedSystemBlocks,
+  cachedToolParams,
+  withMovingCacheBreakpoint,
+  serializeToolResultCapped,
+  capErrorText,
+  type LooseMessage,
+} from "./turn-token-economy";
 import type { CalendarBinding } from "@/lib/agents/booking/calendar-backend";
 import type { BookingPolicy } from "@/lib/agents/booking/booking-policy";
 import { bindingToCtxBooking } from "@/lib/agents/booking/binding-ctx";
@@ -220,7 +228,11 @@ export async function executeTurn(input: {
         }
       }
       messages.push({ role: "assistant", content: blocks });
-      // Tool results from previous turns ride as a user message.
+      // Tool results from previous turns ride as a user message. Capped at
+      // rebuild time (token economy, 2026-07-16): the FULL output is persisted
+      // on the turn row, but every later turn of the conversation re-sends
+      // this history — an unbounded historical payload would tax every turn
+      // that follows it, forever.
       if (turn.toolResults && turn.toolResults.length > 0) {
         messages.push({
           role: "user",
@@ -228,8 +240,8 @@ export async function executeTurn(input: {
             type: "tool_result" as const,
             tool_use_id: tr.toolCallId,
             content: tr.ok
-              ? JSON.stringify(tr.output ?? null)
-              : `Error: ${tr.error ?? "unknown"}`,
+              ? serializeToolResultCapped(tr.output)
+              : `Error: ${capErrorText(tr.error ?? "unknown")}`,
             is_error: !tr.ok,
           })),
         });
@@ -412,16 +424,25 @@ export async function executeTurn(input: {
     let response: Anthropic.Messages.Message;
     const llmCallStartedAt = Date.now();
     try {
+      // Token economy (2026-07-16): system + tools are static across the loop
+      // AND across every turn of this conversation → one cache breakpoint
+      // each; the moving breakpoint on the last message block makes both the
+      // next loop iteration and the NEXT TURN's history rebuild a cache READ
+      // instead of full-price input. Three markers total (≤ the API's 4).
       response = await anthropic.messages.create({
         model: turnModel,
         max_tokens: 1024,
-        system: systemPrompt,
-        tools: tools.map((t) => ({
-          name: t.name,
-          description: t.description,
-          input_schema: t.jsonSchema as Anthropic.Messages.Tool.InputSchema,
-        })),
-        messages: messages as Anthropic.Messages.MessageParam[],
+        system: cachedSystemBlocks(systemPrompt) as Anthropic.Messages.MessageCreateParams["system"],
+        tools: cachedToolParams(
+          tools.map((t) => ({
+            name: t.name,
+            description: t.description,
+            input_schema: t.jsonSchema as Anthropic.Messages.Tool.InputSchema,
+          })),
+        ) as Anthropic.Messages.ToolUnion[],
+        messages: withMovingCacheBreakpoint(
+          messages as LooseMessage[],
+        ) as Anthropic.Messages.MessageParam[],
       });
     } catch (err) {
       const detail = err instanceof Error ? err.message : String(err);
@@ -558,7 +579,11 @@ export async function executeTurn(input: {
         toolResultsForThisIter.push({
           type: "tool_result",
           tool_use_id: tu.id,
-          content: JSON.stringify(output ?? null),
+          // Hard-capped (token economy, 2026-07-16): an unbounded connector
+          // payload must never ride the loop at full size — it gets re-sent
+          // every remaining iteration AND every later turn's history rebuild.
+          // The FULL output still persists on the turn row (allToolResults).
+          content: serializeToolResultCapped(output),
         });
       } catch (err) {
         const result: AgentToolResult = {
@@ -570,7 +595,8 @@ export async function executeTurn(input: {
         toolResultsForThisIter.push({
           type: "tool_result",
           tool_use_id: tu.id,
-          content: `Error: ${err instanceof Error ? err.message : String(err)}`,
+          // Capped: connector errors can embed whole upstream response bodies.
+          content: `Error: ${capErrorText(err instanceof Error ? err.message : String(err))}`,
           is_error: true,
         });
       }
@@ -689,6 +715,10 @@ export async function executeTurn(input: {
       const regenResponse = await anthropic.messages.create({
         model: regenModel,
         max_tokens: 512,
+        // Deliberately UNCACHED (token economy): this call has no tools, so
+        // its prefix can never match the loop's cached [tools, system, …]
+        // prefix — a marker here would pay the cache-write premium with no
+        // possible reader (regen fires at most once per turn).
         system: systemPrompt,
         // No tools on regeneration — we want a clean text response, not
         // another tool-loop iteration. The original turn already

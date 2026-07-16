@@ -32,6 +32,26 @@ string into anthropic-error-map.ts (prevents the exact drift class that caused #
 Learnings appended to docs/learnings/2026-07-16-credits-exhausted-400-mapping.md
 (corollary: sweep ALL consumer surfaces of an error payload). ⏳ Max: merge #112 → #113.
 
+### Task — Token-smart agent runtime (2026-07-16, worktree hungry-jang)
+
+Context: Max's $20 Anthropic top-up burned in 34 min by 3 duplicate Gmail push agents
+(untruncated GMAIL_FETCH_EMAILS JSON re-sent every loop iteration, uncached, always-premium
+Sonnet). Prod deployments canceled directly (ed050e3a, a37115e4, 2e14ba00 → status=canceled).
+This slice = make the runtime cheap by construction. Max's explicit ask: caching + tool-result
+cap + duplicate-deployment guard.
+
+- [ ] 1. Shared tool-result cap helper (`lib/agents/tool-result-cap.ts`) + unit test —
+      JSON.stringify(output) capped with explicit truncation marker.
+- [ ] 2. Apply cap in BOTH tool loops: stateless-turn.ts (push/email/test path) and
+      runtime.ts executeTurn (live conversation path).
+- [ ] 3. Prompt caching in both loops: system + tools get cache_control ephemeral;
+      moving breakpoint on the last message block each iteration.
+- [ ] 4. Duplicate-deployment guard at the create seam: block a second non-canceled
+      deployment with same builderOrg + template + surface + client target; clear error. Test.
+- [ ] 5. Verify: unit tests + tsc delta + verify gate (maker≠checker).
+- [ ] 6. Commit, push branch, open PR (Max merges).
+
+
 ### Task — Agency repositioning of homepage (2026-07-15, branch feat/agency-homepage-positioning)
 
 Max's direction: keep marketing-page structure, reword for AGENCIES; everything true per §1b
