@@ -25,6 +25,7 @@ import {
   type AestheticArchetypeId,
 } from "./aesthetic-archetypes";
 import { getBookingIntakeFieldsForArchetype } from "./booking-intake-fields";
+import { classifyIntakeArchetypeFromBusinessSignals } from "@/lib/bookings/resolve-intake-fields";
 
 export interface SeedIntakeFieldsResult {
   archetype: AestheticArchetypeId;
@@ -40,16 +41,37 @@ export interface SeedIntakeFieldsResult {
  * fields onto every booking-template row that doesn't already have any.
  * Rows with existing fields are never clobbered (operator-edited custom
  * fields, soul-package templates).
+ *
+ * Classification goes through classifyIntakeArchetypeFromBusinessSignals —
+ * the SAME function the render-time lazy resolver uses — so creation-time
+ * seeding and lazy resolution can never drift. In particular the health
+ * override rides along: a physio/chiro/massage workspace (whose personality
+ * vertical is the meaningless "general" — health niches aren't in the CRM
+ * personality registry) seeds the clinical intake, not the editorial-warm
+ * contractor catch-all. When the business gives no confident signal, fall
+ * back to name+description hints (same shape as the resolver's blended
+ * step) so "Roadrunner HVAC" still seeds dispatch questions.
  */
 export async function seedIntakeFieldsOnBookingTemplates(opts: {
   classifier: ArchetypeClassifierInput;
+  businessName?: string | null;
   templates: Array<{ id: string; metadata: unknown }>;
   writeTemplateMetadata: (
     templateId: string,
     metadata: Record<string, unknown>,
   ) => Promise<void>;
 }): Promise<SeedIntakeFieldsResult> {
-  const archetype = classifyArchetype(opts.classifier);
+  const archetype =
+    classifyIntakeArchetypeFromBusinessSignals({
+      ...opts.classifier,
+      businessName: opts.businessName ?? null,
+    }) ??
+    classifyArchetype({
+      vertical: [opts.businessName ?? "", opts.classifier.businessDescription ?? ""]
+        .filter(Boolean)
+        .join(" "),
+      businessDescription: opts.classifier.businessDescription ?? null,
+    });
   const intakeFields = getBookingIntakeFieldsForArchetype(archetype);
 
   let seeded = 0;

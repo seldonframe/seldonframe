@@ -546,6 +546,7 @@ export async function createFullWorkspace(
   // signals); workspace stays valid.
   try {
     const seedResult = await seedIntakeFieldsOnBookingTemplates({
+      businessName: input.business_name,
       classifier: {
         vertical: personality.vertical,
         emergencyService: input.emergency_service ?? null,

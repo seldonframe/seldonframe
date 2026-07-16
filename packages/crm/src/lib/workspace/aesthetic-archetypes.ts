@@ -657,14 +657,41 @@ export function classifyArchetype(input: ArchetypeClassifierInput): AestheticArc
 }
 
 /**
+ * Extract the archetype-classifier signals from an org's raw `soul` +
+ * `settings` JSONB. organizations.soul stores snake_case keys
+ * (personality_vertical, emergency_service, …) even though the OrgSoul TS
+ * interface is camelCase, so we read the runtime shape via
+ * Record<string, unknown>. Exported separately from classifyArchetypeFromSoul
+ * so callers that classify with EXTRA signals (the booking intake-field
+ * resolver adds workspace name + appointment title + a health override) share
+ * one extraction instead of drifting.
+ */
+export function extractArchetypeSignalsFromSoul(
+  soul: unknown,
+  settings: unknown,
+): ArchetypeClassifierInput {
+  const soulRecord = (soul as Record<string, unknown> | null) ?? null;
+  const settingsRecord = (settings as Record<string, unknown> | null) ?? null;
+  const crmPersonality = settingsRecord?.crmPersonality as
+    | { vertical?: string }
+    | undefined;
+  return {
+    vertical:
+      (soulRecord?.personality_vertical as string | undefined) ??
+      crmPersonality?.vertical ??
+      "",
+    emergencyService: (soulRecord?.emergency_service as boolean | null | undefined) ?? null,
+    sameDay: (soulRecord?.same_day as boolean | null | undefined) ?? null,
+    reviewRating: (soulRecord?.review_rating as number | null | undefined) ?? null,
+    reviewCount: (soulRecord?.review_count as number | null | undefined) ?? null,
+    businessDescription: (soulRecord?.business_description as string | null | undefined) ?? null,
+  };
+}
+
+/**
  * Classify an aesthetic archetype from an org's raw `soul` + `settings` JSONB.
- *
- * organizations.soul stores snake_case keys (personality_vertical,
- * emergency_service, …) even though the OrgSoul TS interface is camelCase, so
- * we read the runtime shape via Record<string, unknown>. Extracted so the
- * creation-time seed (applyArchetypeThemeToOrg), the ready-page "Auto" design
- * choice (setLandingTemplateForOrg), and the booking intake-field resolver
- * (resolveIntakeFieldsFromSoul) all classify identically.
+ * Used by the creation-time theme seed (applyArchetypeThemeToOrg) and the
+ * ready-page "Auto" design choice (setLandingTemplateForOrg).
  *
  * 2026-07-16 — moved here from workspace/apply-archetype-theme.ts (which
  * re-exports it for back-compat) so pure, db-free modules can import it.
@@ -673,23 +700,7 @@ export function classifyArchetypeFromSoul(
   soul: unknown,
   settings: unknown,
 ): AestheticArchetypeId {
-  const soulRecord = (soul as Record<string, unknown> | null) ?? null;
-  const settingsRecord = (settings as Record<string, unknown> | null) ?? null;
-  const crmPersonality = settingsRecord?.crmPersonality as
-    | { vertical?: string }
-    | undefined;
-  const vertical =
-    (soulRecord?.personality_vertical as string | undefined) ??
-    crmPersonality?.vertical ??
-    "";
-  return classifyArchetype({
-    vertical,
-    emergencyService: (soulRecord?.emergency_service as boolean | null | undefined) ?? null,
-    sameDay: (soulRecord?.same_day as boolean | null | undefined) ?? null,
-    reviewRating: (soulRecord?.review_rating as number | null | undefined) ?? null,
-    reviewCount: (soulRecord?.review_count as number | null | undefined) ?? null,
-    businessDescription: (soulRecord?.business_description as string | null | undefined) ?? null,
-  });
+  return classifyArchetype(extractArchetypeSignalsFromSoul(soul, settings));
 }
 
 /** Convenience accessor. */

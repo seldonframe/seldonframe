@@ -67,6 +67,35 @@ describe("resolveIntakeFieldsFromSoul — soul signals beat the visual archetype
   });
 });
 
+describe("resolveIntakeFieldsFromSoul — the 'general' default vertical is not a business signal", () => {
+  test("general vertical + roofing name hints → bold-urgency via blended hints (Roofs by Shiloh)", () => {
+    // "general" is the registry default for unmatched businesses — it must
+    // not short-circuit into the classifier catch-all and defeat the
+    // name/title hint classification (the 2026-05-18 Roofs-by-Shiloh fix).
+    const fields = resolveIntakeFieldsFromSoul(
+      null,
+      null,
+      { crmPersonality: { vertical: "general" } },
+      "Roofs by Shiloh",
+      "Free Roof Inspection",
+    );
+    const ids = fieldIds(fields);
+    assert.ok(ids.includes("issue_type"), `expected bold-urgency via name hints, got: ${ids.join(", ")}`);
+  });
+
+  test("general vertical + explicit archetype → theme still reachable", () => {
+    const fields = resolveIntakeFieldsFromSoul(
+      { aestheticArchetype: "technical-restrained" },
+      null,
+      { crmPersonality: { vertical: "general" } },
+      "Acme",
+      null,
+    );
+    const ids = fieldIds(fields);
+    assert.ok(ids.includes("company"), `expected technical-restrained via theme, got: ${ids.join(", ")}`);
+  });
+});
+
 describe("resolveIntakeFieldsFromSoul — back-compat when soul gives no vertical", () => {
   test("empty soul + explicit archetype → archetype fields", () => {
     const fields = resolveIntakeFieldsFromSoul(

@@ -105,4 +105,42 @@ describe("seedIntakeFieldsOnBookingTemplates", () => {
     assert.ok(ids.length > 0, "always seeds a non-empty field set");
     assert.ok(ids.includes("notes"));
   });
+
+  test("physio on the 'general' vertical → clinical intake seeded, never contractor fields", async () => {
+    // Health niches (physio/chiro/massage/yoga…) aren't in the CRM
+    // personality registry, so they resolve to vertical="general". The
+    // seeder must run the same health override as the render-time
+    // resolver — otherwise contractor fields get PERMANENTLY seeded
+    // (stored fields win over the lazy resolver, so the render-time
+    // override could never correct them).
+    const { writes, writeTemplateMetadata } = collectWrites();
+    const result = await seedIntakeFieldsOnBookingTemplates({
+      businessName: "Round Rock Physiotherapy",
+      classifier: {
+        vertical: "general",
+        businessDescription: "Physiotherapy and sports rehab clinic in Round Rock",
+      },
+      templates: [{ id: "tpl-1", metadata: { kind: "appointment_type" } }],
+      writeTemplateMetadata,
+    });
+
+    assert.equal(result.archetype, "clinical-trust");
+    const ids = (writes.get("tpl-1")!.intakeFields as Array<{ id: string }>).map((f) => f.id);
+    assert.ok(ids.includes("concern"), `expected clinical fields, got: ${ids.join(", ")}`);
+    assert.ok(!ids.includes("budget_range"), "contractor budget question must not be seeded for a physio");
+  });
+
+  test("general vertical + HVAC business name → dispatch fields via name hints", async () => {
+    const { writes, writeTemplateMetadata } = collectWrites();
+    const result = await seedIntakeFieldsOnBookingTemplates({
+      businessName: "Roadrunner HVAC & Air",
+      classifier: { vertical: "general", businessDescription: "Heating and cooling service" },
+      templates: [{ id: "tpl-1", metadata: {} }],
+      writeTemplateMetadata,
+    });
+
+    assert.equal(result.archetype, "bold-urgency");
+    const ids = (writes.get("tpl-1")!.intakeFields as Array<{ id: string }>).map((f) => f.id);
+    assert.ok(ids.includes("issue_type"), `expected dispatch fields via name hints, got: ${ids.join(", ")}`);
+  });
 });
