@@ -11,6 +11,7 @@ import type { LandingMode } from "./landing-mode";
 import { LandingModeShell } from "@/components/landing/landing-mode";
 import { MarketingNav } from "@/components/landing/marketing-nav";
 import { MarketingHero } from "@/components/landing/marketing-hero";
+import { MarketingExplainer } from "@/components/landing/marketing-explainer";
 import { MarketingProofStrip } from "@/components/landing/marketing-proof-strip";
 import { MarketingBuildSteps } from "@/components/landing/marketing-build-steps";
 import { MarketingIdeStrip } from "@/components/landing/marketing-ide-strip";
@@ -65,6 +66,12 @@ export function UnifiedLanding({
       buildStack={
         <>
           <MarketingHero ungatedBuildEnabled={ungatedBuildEnabled} />
+          {/* The launch explainer, directly under the hero: the pitch, then the
+              minute that shows it. Sits on the hero's base parchment (no bg of its
+              own) so the two read as one opening beat; the IDE strip's #EFE9DD band
+              below supplies the next contrast. Build mode only — /record has its own
+              narrative and shouldn't detour into the platform explainer. */}
+          <MarketingExplainer />
           {/* IDE strip sits right above the orbit — "build it with one command"
               then "one agent, your whole stack". */}
           <MarketingIdeStrip />

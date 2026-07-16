@@ -1,0 +1,11 @@
+{
+  "version": "0.0.1",
+  "configurations": [
+    {
+      "name": "crm",
+      "runtimeExecutable": "pnpm",
+      "runtimeArgs": ["dev:crm"],
+      "port": 3000
+    }
+  ]
+}

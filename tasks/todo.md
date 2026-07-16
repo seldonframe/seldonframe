@@ -7,6 +7,66 @@ with a checkable plan, gets ticked off as it ships, and ends with a review block
 
 ## In flight
 
+### Task — Ship the 68s explainer video on seldonframe.com + the GitHub README (2026-07-16)
+
+**Source:** `C:\Users\maxim\Downloads\0716(1)\0716(1).mp4` — Max's CapCut assembly of the
+Remotion parchment `MasterV2` story + his filmed A-roll bookends.
+
+**What the audit found:**
+
+| Fact | Evidence |
+|---|---|
+| 68.24s · 1920x1080 · 30fps · **HEVC/H.265** (hvc1) · 25.0 MB · AAC 44.1k | ffprobe via Remotion's bundled ffmpeg |
+| HEVC does not play reliably in Chrome/Firefox `<video>` | codec fact — **must** transcode |
+| H.264 transcode: **25.0 MB → 8.3 MB**, same 1080p/68.24s | `-c:v libx264 -crf 21 -preset slow -movflags +faststart` |
+| **Screen-recorder widget burned into pixels** (orange stop + timer + pause) at **0.0–9.5s and 64.0–68.0s = 14.5s = 21% of runtime** | 1×1 pixel sampling of the button region every 0.5s across 0–68.5s |
+| Those ranges == the two A-roll slots (`aroll: 13`, `close: 12` in `launch-video/src/theme.ts:57-65`) | timer reads `0:04` @ t=3s but `0:03` @ t=66s → two separate takes |
+| No video exists anywhere on seldonframe.com today | `videoId:` set by zero pages in `src/lib/seo/` |
+| `packages/crm/public/` already holds **77 MB of orphaned video in git** (`spin-up-60-seconds.mp4`+`.gif`), no LFS, referenced only by orphaned components | `git ls-files --error-unmatch`, landed `8aec9fd1d` |
+| GitHub's sanitizer **keeps** `<video src>` for arbitrary https URLs (does not camo it, unlike `<img>`) | verified via `gh api --method POST markdown` |
+| Vercel Blob already a dep (`@vercel/blob ^0.27.0`); large-file pattern at `record-client.tsx:391` | — |
+
+**Max's decisions (2026-07-16):**
+
+1. **Widget** → Max re-exports clean from CapCut (crops the A-roll clips so the widget is out
+   of frame). Build everything now; his export is a one-file swap.
+2. **Hosting** → **Vercel Blob** for the site (keeps the binary out of git). GitHub Release
+   asset for the README (free GH bandwidth, durable, survives Blob rotation).
+
+**Blocked on Max (async — nothing else waits on these):**
+
+- [ ] **B1** — clean CapCut re-export, widget out of frame. Any codec; we transcode.
+- [ ] **B2** — `BLOB_READ_WRITE_TOKEN` in `packages/crm/.env.local` (Vercel → Storage → Blob
+      store → Tokens). The value never needs to be seen; the `@vercel/blob` SDK reads the env.
+
+**Plan:**
+
+- [ ] **T1 — Explainer section component.** New `packages/crm/src/components/landing/marketing-explainer.tsx`.
+      Base parchment (no bg override) so it flows from the hero; `MarketingIdeStrip`'s `#EFE9DD`
+      band supplies the next beat's contrast. 16:9 (`aspect-video`, matches the asset), ratio
+      reserved → zero CLS. Click-to-play facade borrowing `hero-build-proof.tsx`'s visual
+      language (`#FFFDFA` card, `rgba(34,29,23,.14)` border, `#221D17`/`#6E665A` ink) — 8.3 MB
+      must not autoload on every homepage visit. a11y: `aria-labelledby`, real `<button>`.
+      Video URL = one constant → swapping the Blob URL is a one-line change.
+- [ ] **T2 — Wire into the homepage.** `unified-landing.tsx` `buildStack`, between
+      `<MarketingHero>` (:67) and `<MarketingIdeStrip />` (:70). **buildStack only** — not `recordStack`.
+- [ ] **T3 — Poster frame.** Clean frame at t≈12s (title card, after the widget clears at 9.5s)
+      → `packages/crm/public/marketing/explainer-poster.jpg`. Re-extract from B1's export.
+- [ ] **T4 — Blob upload** (needs B1+B2). `put()` the H.264 file → wire the URL into T1's constant.
+- [ ] **T5 — README** (needs B1). `gh release create` + attach the mp4 → inline
+      `<video src=... controls poster=...>` after the header block.
+      **Publishing the release is a public action → explicit go-ahead from Max first.**
+- [ ] **T6 — Verify** (`/verify-build` + live). Poster renders, click plays, no CLS, 375px +
+      1280px, reduced-motion honored, README rendered via `gh api markdown`.
+
+**Out of scope (flag, don't fix — §3.1 Kitchen Sink):** the 77 MB of orphaned video in
+`packages/crm/public/marketing/walkthrough/` + its two orphaned components; the stale
+section-order comment at `packages/crm/src/app/(public)/page.tsx:10-17`.
+
+**Review:** _(to be filled in after implementation)_
+
+---
+
 ### Task — Agency repositioning of homepage (2026-07-15, branch feat/agency-homepage-positioning)
 
 Max's direction: keep marketing-page structure, reword for AGENCIES; everything true per §1b
