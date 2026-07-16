@@ -97,7 +97,7 @@ export function renderAlternativeMarkdown(c: Competitor): string {
   }
   L.push(`## Get started`);
   L.push("");
-  L.push(`- Start free (build the workspace in ~3 minutes, before signing up): ${BASE}/signup`);
+  L.push(`- Start free (build the workspace in ~3 minutes, before signing up): ${BASE}/#hero-form`);
   L.push(`- Book a 15-minute demo: ${DEMO_HREF}`);
   L.push(`- All comparisons: ${BASE}/alternatives`);
   L.push("");
@@ -105,7 +105,7 @@ export function renderAlternativeMarkdown(c: Competitor): string {
 }
 
 export function renderVsMarkdown(pair: VsPair, a: Competitor, b: Competitor): string {
-  const audience: CompetitorAudience = pairAudience(a, b);
+  const audience: CompetitorAudience = pairAudience(a.audience, b.audience);
   const L: string[] = [];
   L.push(`# ${a.name} vs ${b.name}: What You Need to Know (${LAST_UPDATED})`);
   L.push("");
@@ -151,7 +151,7 @@ export function renderVsMarkdown(pair: VsPair, a: Competitor, b: Competitor): st
   );
   L.push("");
   L.push(`- Honest deep-dives: ${BASE}/alternative-to-${a.slug} and ${BASE}/alternative-to-${b.slug}`);
-  L.push(`- Start free: ${BASE}/signup · Book a demo: ${DEMO_HREF}`);
+  L.push(`- Start free: ${BASE}/#hero-form · Book a demo: ${DEMO_HREF}`);
   L.push("");
   return L.join("\n");
 }
