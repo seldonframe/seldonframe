@@ -11,6 +11,7 @@ import { and, desc, eq, gte, or } from "drizzle-orm";
 import { db } from "@/db";
 import { agentRunReceipts, type AgentRunReceiptToolCall, type AgentRunReceiptTriggerKind, type AgentRunReceiptStatus } from "@/db/schema/agent-run-receipts";
 import { deployments } from "@/db/schema/deployments";
+import { agentTemplates } from "@/db/schema/agent-templates";
 import { COMPOSIO_CONNECTED_ACCOUNT_ID_KEY } from "@/lib/deployments/store";
 import { summarizeDeploymentLiveStatus, type DeploymentLiveStatus } from "./live-status";
 
@@ -126,4 +127,55 @@ export async function getDeploymentLiveStatus(
     nowMs: Date.now(),
     connectedAccountLabel: typeof connectedAccountLabel === "string" ? connectedAccountLabel : null,
   });
+}
+
+/** One row for the /automations "Your agents" strip (Task 3, P4-lite). */
+export type DeployedAgentStripRow = {
+  deploymentId: string;
+  templateId: string;
+  agentName: string;
+  triggerKind: AgentRunReceiptTriggerKind | null;
+  active: boolean;
+};
+
+/**
+ * Agent truth slice (2026-07-16, Task 3) — every deployment THIS org can see
+ * (as builder OR client — mirrors `getDeploymentLiveStatus`'s own org-scope
+ * OR, so a client workspace sees agents deployed TO it and a builder
+ * workspace sees agents it deployed), joined to its template's name.
+ *
+ * The live dot + trigger-kind chip are REUSED from `getDeploymentLiveStatus`
+ * (never a second status-deriving implementation) — one extra query per
+ * deployment, acceptable for a compact strip (this org's own deployment
+ * count, not a global list). Org-scoped: the join's `WHERE` only ever
+ * matches deployments where this org is builder or client; `orgId` is passed
+ * straight through to `getDeploymentLiveStatus` too, so a row can never leak
+ * another org's deployment status.
+ */
+export async function loadDeployedAgentsForStrip(orgId: string): Promise<DeployedAgentStripRow[]> {
+  if (!orgId) return [];
+
+  const rows = await db
+    .select({
+      deploymentId: deployments.id,
+      templateId: deployments.agentTemplateId,
+      agentName: agentTemplates.name,
+    })
+    .from(deployments)
+    .innerJoin(agentTemplates, eq(deployments.agentTemplateId, agentTemplates.id))
+    .where(or(eq(deployments.builderOrgId, orgId), eq(deployments.clientOrgId, orgId)))
+    .orderBy(desc(deployments.updatedAt));
+
+  return Promise.all(
+    rows.map(async (row): Promise<DeployedAgentStripRow> => {
+      const status = await getDeploymentLiveStatus(row.deploymentId, orgId);
+      return {
+        deploymentId: row.deploymentId,
+        templateId: row.templateId,
+        agentName: row.agentName,
+        triggerKind: status?.triggerKind ?? null,
+        active: status?.active ?? false,
+      };
+    }),
+  );
 }

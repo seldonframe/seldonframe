@@ -8,7 +8,6 @@ import {
   MessageCircle,
   Phone,
   RefreshCw,
-  Sparkles,
   Star,
   Sun,
   Zap,
@@ -20,6 +19,9 @@ import { getArchetype, listArchetypes } from "@/lib/agents/archetypes";
 import { resolveVoiceCardStatus, type VoiceCardStatus } from "@/lib/agents/voice/card-status";
 import type { AgentConfig } from "@/lib/agents/configure-actions";
 import { SoulAutomationsOverview } from "@/components/automations/soul-automations-overview";
+import { TwoDoorsCard } from "@/components/automations/two-doors-card";
+import { YourAgentsStrip } from "@/components/automations/your-agents-strip";
+import { loadDeployedAgentsForStrip } from "@/lib/agent-receipts/store";
 import { getSoul } from "@/lib/soul/server";
 import { organizations, stripeConnections } from "@/db/schema";
 import coachingFramework from "@/lib/frameworks/coaching.json";
@@ -85,6 +87,11 @@ const FALLBACK_VISUAL = {
 
 export default async function AutomationsPage() {
   const [soul, orgId] = await Promise.all([getSoul(), getOrgId()]);
+
+  // Agent truth slice (Task 3) — org-scoped deployed-agent strip. Reuses the
+  // agent-receipts store's getDeploymentLiveStatus shape (never a second
+  // status-deriving implementation) for the live dot + trigger-kind chip.
+  const deployedAgentRows = orgId ? await loadDeployedAgentsForStrip(orgId) : [];
 
   // Soul-suggestion data + agent configs (the latter drives card status).
   const [org, stripe] = orgId
@@ -350,37 +357,20 @@ export default async function AutomationsPage() {
             );
           })}
 
-          {/* v1.40.6 — was "Custom Agent." Renamed to "Custom Workflow"
-              to disambiguate from the persistent AI-assistant primitive
-              that lives on /agents (chatbot, voice receptionist, SMS auto-
-              reply). Automations and Agents are different concepts:
-              automations fire on triggers + run-and-exit; agents are
-              always-on and hold conversational state. The "Custom Agent"
-              naming made operators search /agents looking for their
-              workflow templates and vice versa. */}
-          <div className="flex flex-col gap-3 rounded-xl border border-dashed border-border bg-muted/10 p-5 opacity-70">
-            <div className="flex items-start justify-between gap-3">
-              <span className="inline-flex size-9 items-center justify-center rounded-lg bg-primary/10 text-primary">
-                <Sparkles className="size-4" />
-              </span>
-              <span className="rounded-full bg-muted px-2 py-0.5 text-[10px] font-medium uppercase tracking-wide text-muted-foreground">
-                Coming soon
-              </span>
-            </div>
-            <div className="space-y-1">
-              <h3 className="text-sm font-semibold tracking-tight text-foreground">
-                Custom Workflow
-              </h3>
-              <p className="line-clamp-3 text-xs text-muted-foreground">
-                Build a custom workflow with your own triggers, conditions, and actions.
-                Available in the next release — for now use the typed templates above. For
-                conversational AI assistants (website chatbot, voice receptionist), see
-                Agents in the sidebar.
-              </p>
-            </div>
-          </div>
+          {/* Agent truth slice (2026-07-16, Task 2) — the "Custom Workflow —
+              COMING SOON" card was navigation dishonesty: the custom path
+              already exists (describe-by-default in Studio, or record
+              yourself once). Replaced with a real, enabled two-doors card. */}
+          <TwoDoorsCard />
         </div>
       </div>
+
+      {/* Agent truth slice (Task 3, P4-lite) — "where are my agents"
+          (Max's live-run finding: "i don't see the agents for zen in
+          /automations"). A compact, org-scoped strip of every DEPLOYED agent
+          — NOT the full /automations↔agents fold-in (that stays the named
+          roadmap item). */}
+      <YourAgentsStrip rows={deployedAgentRows} />
 
       {/* Soul-derived suggestions — secondary, collapsed disclosure */}
       {(activeAutomations.length > 0 ||
