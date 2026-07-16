@@ -1,10 +1,11 @@
 // packages/crm/src/components/landing/marketing-smb-cta.tsx
 //
 // Positioning v2 (2026-06-22) — the "Sell" rung of the homepage ladder.
-// Repurposed from the old SMB-first CTA band (which rotated an industry word)
-// to the single Sell idea: take payments, send proposals, sell packages right
-// through SeldonFrame. GMV framing lives here (2% only on SF sales),
-// pulled out of the hero so each rung holds one idea.
+// Agency repositioning (2026-07-15): the GMV framing now leads with the
+// agency truth — 0% GMV on agency tiers ($99+), with the solo-tier 2%
+// (only when SF is the sales channel) as the parenthetical. Numbers per
+// CLAUDE.md §1b (GMV restructured 2026-07-10). CTA routes to the hero
+// chatbox (route-by-promise), not /signup.
 //
 // Design tokens: card #FFFDFA, paper #F6F2EA, ink #221D17, muted #6E665A,
 // accent green #1F2B24, border rgba(34,29,23,.10). Newsreader italic accent.
@@ -33,15 +34,16 @@ export function MarketingSmbCta() {
         </h2>
 
         <p className="mx-auto mt-4 max-w-[54ch] text-[clamp(15px,1.7vw,17px)] leading-[1.55] text-[#6E665A]">
-          Take payments, send proposals, and sell packages from the same place you run
-          everything — no extra tools. We only charge{" "}
-          <strong className="font-[500] text-[#221D17]">2% on what you sell through SeldonFrame</strong>.
-          Sell anywhere else? We take nothing.
+          Take payments, send proposals, and sell packages inside every client&apos;s front
+          office — no extra tools. On agency plans{" "}
+          <strong className="font-[500] text-[#221D17]">we take 0% of what your clients sell</strong>.
+          We don&apos;t tax your work. (Solo plans: a flat 2% only on sales made through
+          SeldonFrame — sell anywhere else and we take nothing.)
         </p>
 
         <div className="mt-8 flex justify-center">
           <Link
-            href="/signup"
+            href="/#hero-form"
             className="inline-flex items-center gap-2.5 rounded-[11px] bg-[#1F2B24] px-7 py-4 text-[15px] font-[500] text-[#F6F2EA] shadow-[0_1px_2px_rgba(34,29,23,.10),0_6px_16px_rgba(34,29,23,.10),0_18px_40px_rgba(34,29,23,.06),inset_0_1.5px_0_rgba(255,255,255,.12)] transition-all hover:-translate-y-[1.5px] hover:shadow-[0_2px_4px_rgba(34,29,23,.12),0_12px_26px_rgba(34,29,23,.14),inset_0_1.5px_0_rgba(255,255,255,.14)] active:translate-y-px focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[#1F2B24]"
           >
             Build it free →

@@ -23,13 +23,17 @@ import Link from "next/link";
 import { Check } from "lucide-react";
 
 // Everything that's included in the flat $29/mo (the whole platform).
+// Agency-voiced 2026-07-15 (Max's repositioning call) — claims stay
+// tier-true: $29 = Builder (unlimited workspaces YOU operate); client
+// sub-accounts / white-label / portal are the $99+ agency tiers, named
+// in the ladder line below the card, never implied here.
 const INCLUDED: readonly string[] = [
-  "A website on your own domain, customized to your business — live and taking customers in minutes.",
-  "A CRM and pipeline, so every lead lands in one place and you always know who to call next.",
-  "A booking page tied to your real calendar, so customers book themselves while you're on the job.",
-  "A lead form wired straight to your CRM, so no inquiry ever slips through the cracks.",
-  "A website chatbot built in, so your site answers questions and books work for you 24/7.",
-  "Add any AI agent to take the busywork off your plate — just tell it what you want, no code.",
+  "A website on your client's domain, customized to their business — live and taking customers in minutes.",
+  "A CRM and pipeline, so every lead lands in one place and your client always knows who to call next.",
+  "A booking page tied to their real calendar, so customers book themselves while your client is on the job.",
+  "A lead form wired straight to the CRM, so no inquiry ever slips through the cracks.",
+  "A website chatbot built in, so the site answers questions and books work 24/7.",
+  "Add any AI agent to take the busywork off their plate — just tell it what you want, no code.",
 ];
 
 export type LandingMarketingPricingSectionProps = {
@@ -68,8 +72,8 @@ export function LandingMarketingPricingSection({
             </em>
           </h2>
           <p className="mx-auto mt-4 max-w-[56ch] text-[16px] leading-[1.55] text-[var(--lp-muted)]">
-            No metered bills, no per-seat tax, no surprise invoices. Build it free, cancel
-            anytime.
+            No metered bills, no per-seat tax, no per-client surprise invoices. Build it
+            free, cancel anytime.
           </p>
         </div>
 
@@ -90,8 +94,8 @@ export function LandingMarketingPricingSection({
               SeldonFrame
             </h3>
             <p className="mt-1.5 text-[13.5px] leading-[1.5] text-[var(--lp-muted)]">
-              Everything you need to get customers and get paid — in one place, on one flat
-              bill.
+              Everything you need to build and run client front offices — in one place, on
+              one flat bill.
             </p>
 
             <div className="mt-5 flex items-baseline gap-1.5">
@@ -104,11 +108,11 @@ export function LandingMarketingPricingSection({
               Unlimited workspaces · cancel anytime
             </p>
             <p className="mt-1 text-[13px] font-[500] text-[var(--lp-ink)]">
-              One booked job pays for the year.
+              One client covers it. The rest is margin.
             </p>
 
             <Link
-              href="/signup"
+              href="/#hero-form"
               data-plan-cta="flat"
               className="mt-6 inline-flex items-center justify-center gap-2.5 rounded-[11px] bg-[var(--lp-cta-bg)] px-6 py-3.5 text-[14px] font-[500] text-[var(--lp-cta-ink)] shadow-[0_1px_2px_color-mix(in_oklab,var(--lp-ink)_10%,transparent),0_6px_16px_color-mix(in_oklab,var(--lp-ink)_10%,transparent),inset_0_1.5px_0_rgba(255,255,255,.12)] transition-all hover:-translate-y-px focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[var(--lp-accent)]"
             >
@@ -129,9 +133,10 @@ export function LandingMarketingPricingSection({
                 ))}
               </ul>
               <p className="mt-5 rounded-[12px] border border-[color-mix(in_oklab,var(--lp-accent)_25%,transparent)] bg-[var(--lp-accent-soft)] px-4 py-3 text-[13.5px] leading-[1.5] text-[var(--lp-ink)]">
-                Want a voice agent that answers every call? A review agent that turns happy
-                customers into 5-star Google reviews? A speed-to-lead agent that texts back
-                missed calls before they hire someone else? Add them in a click.
+                Want a voice agent that answers a client&apos;s every call? A review agent
+                that turns their happy customers into 5-star Google reviews? A
+                speed-to-lead agent that texts back missed calls before the caller hires
+                someone else? Add them in a click.
               </p>
               <p className="mt-4 text-[12.5px] leading-[1.5] text-[var(--lp-muted)]">
                 Your agents run on your own AI key (and Twilio for calls/texts), billed by
@@ -139,7 +144,9 @@ export function LandingMarketingPricingSection({
               </p>
               {tierLadderOn ? (
                 <p className="mt-4 text-[12.5px] leading-[1.5] text-[var(--lp-muted)]">
-                  Running client sub-accounts? Agency plans from $99/mo →{" "}
+                  Handing clients their own login? Agency plans add white-label, a branded
+                  client portal, and sub-accounts: $99/mo (10 clients) · $199/mo (30) ·
+                  $299/mo (unlimited) — all at 0% GMV.{" "}
                   <Link href="/pricing" className="font-[500] text-[var(--lp-accent)] underline underline-offset-2">
                     See agency pricing
                   </Link>
@@ -150,11 +157,13 @@ export function LandingMarketingPricingSection({
 
         </div>
 
-        {/* The GMV fee, demoted from a full panel to a quiet line + link. */}
+        {/* The GMV fee, demoted from a full panel to a quiet line + link.
+            Agency-first order (2026-07-15): lead with the 0% agency truth. */}
         <p className="mx-auto mt-5 max-w-[640px] text-center text-[13px] leading-[1.55] text-[var(--lp-muted)]">
-          + a flat <strong className="font-[600] text-[var(--lp-ink)]">2%</strong> only when Seldon is your
-          sales channel — you keep 98% of what we help you collect, 100% of everything else, and 0% on
-          agency tiers.{" "}
+          Agency plans pay <strong className="font-[600] text-[var(--lp-ink)]">0% GMV</strong> — we
+          don&apos;t tax your client work. Solo plans: a flat{" "}
+          <strong className="font-[600] text-[var(--lp-ink)]">2%</strong> only when Seldon is your
+          sales channel — keep 98% of what we help you collect, 100% of everything else.{" "}
           <Link href="/pricing" className="font-[600] text-[var(--lp-accent)] underline underline-offset-2">
             How the 2% works →
           </Link>

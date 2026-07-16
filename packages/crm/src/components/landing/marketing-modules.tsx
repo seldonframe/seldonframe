@@ -60,13 +60,13 @@ const FEATURES = [
   {
     icon: MessageSquare,
     title: "A receptionist that books",
-    body: "Not just a chatbot — it answers, qualifies, and books the job straight into your calendar, in your own voice. Never miss a lead.",
+    body: "Not just a chatbot — it answers, qualifies, and books the job straight into your client's calendar, in their own voice. They never miss a lead.",
     mock: <ChatMock />,
   },
   {
     icon: Phone,
     title: "Missed-call text-back",
-    body: "Can't pick up? It texts them back in seconds — before they dial the next company.",
+    body: "Your client can't pick up? It texts the caller back in seconds — before they dial the next company.",
     mock: <SmsMock />,
   },
   {
@@ -94,7 +94,7 @@ export function MarketingModules() {
             <span className="h-px w-4 bg-[#1F2B24] opacity-50" aria-hidden />
           </div>
           <h2 className="mx-auto mt-3.5 max-w-[20ch] text-[clamp(27px,4.2vw,42px)] font-[500] leading-[1.08] tracking-[-0.025em] text-[#221D17]">
-            You get the whole{" "}
+            Every client gets the whole{" "}
             <em className="font-[Newsreader,Georgia,serif] font-normal not-italic">
               front office.
             </em>
@@ -104,8 +104,8 @@ export function MarketingModules() {
               A multi-page website, booking page, intake form, CRM, payments, and a 24/7
               receptionist that books the job
             </AnimatedShinyText>{" "}
-            — one connected system, so you never miss a lead. Change a phone number once
-            and everything updates, instantly.
+            — one connected system per client, delivered in minutes, not weeks. Change a
+            phone number once and everything updates, instantly.
           </p>
         </div>
 
