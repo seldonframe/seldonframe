@@ -2374,3 +2374,20 @@ C4 close-out with empirical SLICE 11 data.
   query`) — reparse point ⇒ unlink-only. This is the destructive twin of the
   worktree-junction setup memory: junctions are cheap to make and catastrophic
   to delete wrong.
+
+## L-38 — never `git stash`/`git stash pop` in a worktree (shared .git stash stack)
+
+Worktrees share ONE stash stack with the main repo and every other worktree.
+`git stash` with no local tracked changes says "No local changes to save" and
+does nothing useful (untracked new files are never stashed by default) — but
+a subsequent `git stash pop` still pops whatever ELSE is sitting at
+`stash@{0}`, which may be a stale WIP from a totally unrelated branch/session
+(seen: a `feature/crm-engine` stash from 2026-07-08 landed a `packages/core`
++ `packages/payments` deletion and a CLAUDE.md edit into an unrelated
+`marketplace-generalize` worktree, with merge conflicts). Recovery: `git
+reset --hard HEAD` restores tracked files (leaves untracked files alone,
+including whatever you were mid-edit on) and the stray stash entry is simply
+left in the stack — never touch/drop a stash you didn't push yourself.
+Prevention: to diff/typecheck a "before my change" baseline in a worktree,
+use `git worktree add` against a specific commit, or `git show <sha>:<path>`,
+or just re-run the same check on the parent repo path — never stash.
