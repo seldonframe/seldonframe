@@ -9,6 +9,7 @@ import {
   GeneralizationWarningRow,
   GeneralizationReviewList,
   GeneralizeTemplateCard,
+  mapProposeGeneralizationError,
   type ReviewRow,
 } from "../../../src/components/marketplace/generalize-template-panel";
 
@@ -81,6 +82,45 @@ describe("<GeneralizationReviewList>", () => {
     const html = renderToString(<GeneralizationReviewList rows={ROWS} />);
     assert.match(html, /value="The operator&#x27;s email"|value="The operator's email"/);
     assert.match(html, /value="hi@acme.test"/);
+  });
+});
+
+// ─── mapProposeGeneralizationError — Task 1: each typed error → distinct copy
+
+describe("mapProposeGeneralizationError", () => {
+  test("empty_skill_md → 'no instructions to check'", () => {
+    assert.match(mapProposeGeneralizationError("empty_skill_md"), /no instructions to check/);
+  });
+
+  test("llm_failed → the model/key-issue message (was the undiagnosable generic message)", () => {
+    assert.match(
+      mapProposeGeneralizationError("llm_failed"),
+      /couldn't run \(model or key issue on our side\)/,
+    );
+  });
+
+  test("malformed_llm_output → the 'unusable' message", () => {
+    assert.match(mapProposeGeneralizationError("malformed_llm_output"), /returned something unusable/);
+  });
+
+  test("unauthorized → the access message", () => {
+    assert.match(mapProposeGeneralizationError("unauthorized"), /don't have access/);
+  });
+
+  test("template_not_found → the not-found message", () => {
+    assert.match(mapProposeGeneralizationError("template_not_found"), /couldn't be found/);
+  });
+
+  test("all five typed errors map to DISTINCT messages (never the old one-size-fits-all copy)", () => {
+    const errors = [
+      "empty_skill_md",
+      "llm_failed",
+      "malformed_llm_output",
+      "unauthorized",
+      "template_not_found",
+    ] as const;
+    const messages = errors.map((e) => mapProposeGeneralizationError(e));
+    assert.equal(new Set(messages).size, messages.length);
   });
 });
 

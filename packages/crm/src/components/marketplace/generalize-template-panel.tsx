@@ -25,6 +25,44 @@ import type { ProposedSubstitution } from "@/lib/agent-templates/generalize";
 
 export type ReviewRow = ProposedSubstitution & { accepted: boolean };
 
+/** Every typed error `proposeTemplateGeneralizationAction` can return
+ *  (generalize-actions.ts's `ProposeTemplateGeneralizationResult["error"]`,
+ *  duplicated here rather than imported so this stays a pure, dependency-free
+ *  mapping — importing the "use server" action module's types is fine, but
+ *  the VALUE mapping below must not accidentally pull in server-only code). */
+export type ProposeTemplateGeneralizationError =
+  | "unauthorized"
+  | "template_not_found"
+  | "empty_skill_md"
+  | "llm_failed"
+  | "malformed_llm_output";
+
+/**
+ * Agent truth slice (Task 1) — map each typed propose error to a distinct,
+ * honest message. Before this fix ALL FIVE errors rendered the same generic
+ * "Couldn't check for personal details. Try again." (Max's real failure was
+ * an LLM/model issue that looked identical to "no key configured" or "bad
+ * auth" — undiagnosable from the UI alone). Pure; never throws.
+ */
+export function mapProposeGeneralizationError(
+  error: ProposeTemplateGeneralizationError,
+): string {
+  switch (error) {
+    case "empty_skill_md":
+      return "This agent has no instructions to check.";
+    case "unauthorized":
+      return "You don't have access to this template.";
+    case "template_not_found":
+      return "This agent's template couldn't be found.";
+    case "llm_failed":
+      return "The AI check couldn't run (model or key issue on our side) — try again in a minute.";
+    case "malformed_llm_output":
+      return "The AI returned something unusable — try again.";
+    default:
+      return "Couldn't check for personal details. Try again.";
+  }
+}
+
 /** The non-blocking "this looks personal" nudge (design item 5). Renders
  *  nothing when `show` is false — visibility is a prop, never CSS
  *  display:none, so an L-36 test can assert the element's ABSENCE, not just
@@ -152,13 +190,7 @@ export function GeneralizeTemplateCard(props: GeneralizeTemplateCardProps) {
     startProposing(async () => {
       const result = await proposeTemplateGeneralizationAction({ templateId: props.templateId });
       if (!result.ok) {
-        setError(
-          result.error === "empty_skill_md"
-            ? "This agent has no persona script to generalize yet."
-            : result.error === "unauthorized"
-              ? "You don't have access to this template."
-              : "Couldn't check for personal details. Try again.",
-        );
+        setError(mapProposeGeneralizationError(result.error));
         return;
       }
       setRows(result.proposals.map((p) => ({ ...p, accepted: true })));
@@ -231,7 +263,11 @@ export function GeneralizeTemplateCard(props: GeneralizeTemplateCardProps) {
 
       {open ? (
         <div className="mt-3 space-y-3 border-t border-[var(--lc-line)] pt-3">
-          {error ? <p className="text-xs text-rose-600 dark:text-rose-400">{error}</p> : null}
+          {error ? (
+            <p data-generalize-error className="text-xs text-rose-600 dark:text-rose-400">
+              {error}
+            </p>
+          ) : null}
           {applied ? (
             <p
               data-generalize-applied

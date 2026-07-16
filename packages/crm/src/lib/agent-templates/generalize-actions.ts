@@ -18,8 +18,10 @@ import {
   proposeTemplateGeneralization,
   type ProposedSubstitution,
   type AcceptedGeneralizationRow,
+  type GeneralizationLlm,
 } from "./generalize";
-import { makeGeneralizationLlm } from "./generalize-llm";
+import { makeGeneralizationLlm, DEFAULT_GENERALIZATION_MODEL } from "./generalize-llm";
+import { buildGeneralizeFailureLog } from "./generalize-log";
 import {
   applyTemplateGeneralizationTx,
   type ApplyGeneralizationTxResult,
@@ -58,8 +60,37 @@ export async function proposeTemplateGeneralizationAction(input: {
   if (!template) return { ok: false, error: "template_not_found" };
 
   const customSkillMd = (template.blueprint as AgentBlueprint | null)?.customSkillMd ?? "";
-  const result = await proposeTemplateGeneralization(customSkillMd, makeGeneralizationLlm());
-  if (!result.ok) return result;
+
+  // Wrap the real LLM call to capture the UPSTREAM error (the Anthropic SDK
+  // error's own message — model-not-found, 401, overloaded) before
+  // `proposeTemplateGeneralization`'s try/catch swallows it into the typed
+  // `llm_failed` error. This was Max's real production failure: the typed
+  // error reached the UI, but nothing server-side recorded WHY the LLM call
+  // failed, leaving zero trace in Vercel logs.
+  let upstreamMessage: string | null = null;
+  const baseLlm = makeGeneralizationLlm();
+  const llm: GeneralizationLlm = async (llmArgs) => {
+    try {
+      return await baseLlm(llmArgs);
+    } catch (err) {
+      upstreamMessage = err instanceof Error ? err.message : String(err);
+      throw err;
+    }
+  };
+
+  const result = await proposeTemplateGeneralization(customSkillMd, llm);
+  if (!result.ok) {
+    const model = process.env.ANTHROPIC_EVAL_MODEL?.trim() || DEFAULT_GENERALIZATION_MODEL;
+    const { message, payload } = buildGeneralizeFailureLog({
+      templateId,
+      orgId: auth.orgId,
+      result,
+      model,
+      upstreamMessage,
+    });
+    console.error(message, payload);
+    return result;
+  }
   return { ok: true, proposals: result.proposals };
 }
 
