@@ -15,15 +15,22 @@ read that site…") in both SSE error listeners. Since #112 the server emits
 (run-create-from-paste.ts:119) still emits bare `{reason}`. Merged #112's branch
 (`claude/intelligent-nightingale-771275`, fast-forward to 59bfa0dee) as the base.
 
-- [ ] RED: extend clients-new-form.spec.tsx — (a) 422 credits_exhausted + message shows
+- [x] RED: extend clients-new-form.spec.tsx — (a) 422 credits_exhausted + message shows
       server message; (b) no message → dedicated fallback copy mentioning adding credits
-      to their Anthropic key; (c) paste path shows server message too
-- [ ] RED: new run-create-from-paste.spec.ts — credits_exhausted 422 carries honest
-      `message`; other reasons stay bare
-- [ ] GREEN: CREDITS_EXHAUSTED_UI_MESSAGE exported from anthropic-error-map.ts (single
+      to their Anthropic key; (c) paste path shows server message too (all 3 watched fail)
+- [x] RED: new run-create-from-paste.spec.ts — credits_exhausted 422 carries honest
+      `message` (watched fail); other reasons stay bare (guard, green by design)
+- [x] GREEN: CREDITS_EXHAUSTED_UI_MESSAGE exported from anthropic-error-map.ts (single
       source, both run-* files use it) + COPY.errors.credits_exhausted + both listeners
-- [ ] verify-build gate (verify-runner, maker ≠ checker)
-- [ ] Commit + PR (stacked on #112)
+      — 46/46 across the 7 affected suites
+- [x] verify-build gate: PASS via verify-runner (web-onboarding 95/95, tsc delta 0,
+      use-server clean, no migrations, regression grep empty; smoke = post-deploy)
+- [x] Commit fe18a8a68 + PR #113 (stacked on #112 — merge #112 first)
+
+Review: shipped as spec'd; only deviation from minimal-diff was hoisting the message
+string into anthropic-error-map.ts (prevents the exact drift class that caused #112).
+Learnings appended to docs/learnings/2026-07-16-credits-exhausted-400-mapping.md
+(corollary: sweep ALL consumer surfaces of an error payload). ⏳ Max: merge #112 → #113.
 
 ### Task — Agency repositioning of homepage (2026-07-15, branch feat/agency-homepage-positioning)
 
