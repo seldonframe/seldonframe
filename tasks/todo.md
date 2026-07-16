@@ -7,6 +7,30 @@ with a checkable plan, gets ticked off as it ships, and ends with a review block
 
 ## In flight
 
+### Task — Booking intake fields: soul-first classification (2026-07-16, worktree youthful-panini-ffb749)
+
+Live-confirmed bug (flow-tech-air-conditioning): an explicit AESTHETIC pick ("technical-restrained"
+look via design picker) drove B2B booking questions onto an HVAC company whose soul/settings said
+`vertical=hvac` + `emergency_service=true`. Design picker = SURFACE, not build. Generalizes the
+existing step-0 health override in resolveIntakeFieldsFromSoul.
+
+- [ ] 1. Move `classifyArchetypeFromSoul` from apply-archetype-theme.ts (db-bound) to
+      aesthetic-archetypes.ts (pure); re-export from the old location for existing importers.
+- [ ] 2. Slice A — extract `resolveIntakeFieldsFromSoul` out of lib/bookings/actions.ts
+      ("use server", untestable) into new pure module lib/bookings/resolve-intake-fields.ts:
+      NEW soul-vertical step between the health override and the theme-archetype lookup
+      (soul.personality_vertical ?? settings.crmPersonality.vertical → classifyArchetypeFromSoul);
+      feed the vertical into the blended hints so the step-0 health override sees it too.
+- [ ] 3. Wire actions.ts to the new module; pass org.settings.
+- [ ] 4. Slice B — pure DI seeder lib/workspace/seed-booking-intake-fields.ts (classify →
+      getBookingIntakeFieldsForArchetype → write intakeFields on template rows lacking them).
+- [ ] 5. Call the seeder from createFullWorkspace (create-full.ts, after step 12.6) — covers the
+      /try URL flow AND the paste flow (both funnel through createFullWorkspace).
+- [ ] 6. Unit tests: HVAC soul + technical-restrained theme → bold-urgency · empty soul +
+      explicit archetype → archetype fields (back-compat) · health override still wins ·
+      seeder seeds/skips correctly.
+- [ ] 7. scripts/run-unit-tests.js (delta vs DB-bound baseline) + tsc + verify-build gate.
+
 ### Task — Agency repositioning of homepage (2026-07-15, branch feat/agency-homepage-positioning)
 
 Max's direction: keep marketing-page structure, reword for AGENCIES; everything true per §1b

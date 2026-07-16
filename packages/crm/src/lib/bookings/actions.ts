@@ -20,20 +20,18 @@ import {
   syncBookingWithGoogleCalendar,
 } from "./google-calendar-sync";
 import { buildMeetingUrl, resolveBookingProvider } from "./providers";
-// 2026-05-18 — lazy-resolve intake fields from theme.aestheticArchetype
-// for workspaces created before enhance-blocks ran the booking-intake
-// field seeding (or whose creation flow skipped it entirely, like the
-// lean URL flow create_workspace_v2 → complete_workspace_v2). Without
-// this, /book renders the legacy name+email+notes flow for every
-// pre-v1.40 workspace — operator-reported as "booking pages aren't
-// SOUL-aware". The function is pure (in-memory lookup), so it's safe
-// to call on every booking page render.
-import {
-  classifyArchetype,
-  type AestheticArchetypeId,
-} from "@/lib/workspace/aesthetic-archetypes";
-import { getBookingIntakeFieldsForArchetype } from "@/lib/workspace/booking-intake-fields";
-import { classifyHealthTemplate } from "@/lib/landing/template-selection";
+// 2026-05-18 — lazy-resolve intake fields for workspaces created before
+// enhance-blocks ran the booking-intake field seeding (or whose creation
+// flow skipped it entirely, like the lean URL flow create_workspace_v2 →
+// complete_workspace_v2). Without this, /book renders the legacy
+// name+email+notes flow for every pre-v1.40 workspace — operator-reported
+// as "booking pages aren't SOUL-aware". The function is pure (in-memory
+// lookup), so it's safe to call on every booking page render.
+// 2026-07-16 — extracted to its own module (testable outside "use server")
+// and taught to classify from SOUL signals before trusting the visual
+// archetype: the look must never drive intake SEMANTICS when soul/settings
+// say what the business does.
+import { resolveIntakeFieldsFromSoul } from "./resolve-intake-fields";
 import { PUBLIC_BOOKING_WINDOW_DAYS } from "./booking-window";
 // Workspace-level booking availability + rules. Types + pure helpers live
 // in a NON-"use server" module so they can be imported anywhere. The public
@@ -337,8 +335,8 @@ async function resolvePublicBookingContext(orgSlug: string, bookingSlug: string)
   const maxBookingsPerDay = effectiveRules.maxBookingsPerDay;
   const minNoticeMinutes = effectiveRules.minNoticeMinutes;
 
-  // 2026-05-18 — lazy-resolve intake fields from theme.aestheticArchetype
-  // (or classify from soul.industry as a last resort) when the booking
+  // 2026-05-18 — lazy-resolve intake fields (soul/settings vertical first,
+  // then theme.aestheticArchetype, then soul.industry hints) when the booking
   // template doesn't have them pre-seeded. Solves the "booking pages
   // aren't SOUL-aware" complaint for workspaces created before v1.40.1
   // OR via the lean URL flow (create_workspace_v2) which doesn't run
@@ -360,6 +358,7 @@ async function resolvePublicBookingContext(orgSlug: string, bookingSlug: string)
       : resolveIntakeFieldsFromSoul(
           org.theme,
           org.soul,
+          org.settings,
           org.name,
           template?.title ?? null,
         );
@@ -387,96 +386,6 @@ async function resolvePublicBookingContext(orgSlug: string, bookingSlug: string)
     // v1.40.2 — workspace IANA TZ. Falls back to UTC if unset.
     workspaceTimezone: org.timezone || "UTC",
   };
-}
-
-// 2026-05-18 — lazy-resolve helper. Tries (in order):
-//   1. theme.aestheticArchetype (set during create_full_workspace +
-//      detected during the lean URL flow's enhance step)
-//   2. classify from soul.industry + soul.businessDescription PLUS
-//      workspace name + appointment title as extra signal
-//   3. fall back to "editorial-warm" via the classifier's catch-all
-// ALWAYS returns a non-empty field set — even with zero soul data we
-// get the editorial-warm baseline (address + phone + scope + timeline
-// + budget) which is universally useful for a service business.
-function resolveIntakeFieldsFromSoul(
-  rawTheme: unknown,
-  rawSoul: unknown,
-  workspaceName: string | null,
-  appointmentTitle: string | null,
-): BookingIntakeField[] {
-  // Blend soul + workspace-name + appointment-title into ONE string the
-  // classifiers can pattern-match against. Keywords like "physio", "dental",
-  // "roof", "hvac" often live in the workspace name ("Roofs by Shiloh", "Dr.
-  // Smith Dental") or the appointment title ("Free Roof Inspection") even when
-  // soul.industry was never set by the operator.
-  const soul = (rawSoul && typeof rawSoul === "object" ? (rawSoul as Record<string, unknown>) : null) ?? null;
-  const business = (soul?.business && typeof soul.business === "object" ? (soul.business as Record<string, unknown>) : null) ?? null;
-  const soulVertical = typeof soul?.industry === "string"
-    ? soul.industry
-    : typeof business?.industry === "string"
-      ? business.industry
-      : typeof business?.vertical === "string"
-        ? business.vertical
-        : "";
-  const soulDescription = typeof business?.description === "string"
-    ? business.description
-    : typeof soul?.summary === "string"
-      ? soul.summary
-      : "";
-  const blendedHints = [
-    soulVertical,
-    workspaceName ?? "",
-    appointmentTitle ?? "",
-    soulDescription,
-  ]
-    .filter(Boolean)
-    .join(" ")
-    .trim();
-
-  // 0. Health/wellness businesses ALWAYS get the clinical intake — regardless
-  //    of the *visual* archetype. The aesthetic look (editorial-warm,
-  //    cinematic-aspirational, soft-residential…) is a design choice; it must
-  //    never stamp contractor-style "project address / materials / budget"
-  //    questions onto a physio/clinic/spa. This deliberately precedes the
-  //    theme.aestheticArchetype lookup, which was the source of the mismatch
-  //    (a physio on the editorial-warm *look* got the high-end-contractor set).
-  if (
-    classifyHealthTemplate({
-      businessName: workspaceName ?? "",
-      businessDescription: blendedHints,
-      services: [],
-    })
-  ) {
-    return getBookingIntakeFieldsForArchetype("clinical-trust");
-  }
-
-  // 1. Try the explicit archetype on the theme.
-  const theme = (rawTheme && typeof rawTheme === "object" ? (rawTheme as Record<string, unknown>) : null);
-  const explicitArchetype = typeof theme?.aestheticArchetype === "string" ? theme.aestheticArchetype as AestheticArchetypeId : null;
-
-  if (explicitArchetype) {
-    try {
-      return getBookingIntakeFieldsForArchetype(explicitArchetype);
-    } catch {
-      // Unknown archetype id — fall through to classify-from-soul.
-    }
-  }
-
-  // 2. Classify from the blended hints. We pass them as both `vertical` (for
-  //    the .test(v + " " + desc) checks) and `businessDescription` (for the
-  //    desc-only checks) so a hit on either branch fires.
-  try {
-    const archetypeId = classifyArchetype({
-      vertical: blendedHints,
-      businessDescription: soulDescription || blendedHints,
-    });
-    return getBookingIntakeFieldsForArchetype(archetypeId);
-  } catch {
-    // Last-resort fallback — pick editorial-warm directly. The classifier
-    // itself uses this as its catch-all, so we get the same shape but bypass
-    // any unforeseen throw inside it.
-    return getBookingIntakeFieldsForArchetype("editorial-warm");
-  }
 }
 
 export async function getPublicBookingContext(orgSlug: string, bookingSlug: string) {
