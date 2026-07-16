@@ -24,6 +24,31 @@
 // uncaptured question. There is no reliable index to advance TO; the only
 // honest source of truth is "whichever open question is still in the list
 // and hasn't been locally skipped" — a queue selector, not a counter.
+//
+// visibility fix (2026-07-16) — Max saw the Yes/No chips render as BLANK
+// cream pills on a live browser. Root-caused via getComputedStyle against
+// the REAL Next.js CSS pipeline (a temp diagnostic route, not this file's
+// own renderToString tests): the chips never set an explicit background,
+// relying on Tailwind Preflight's `background-color: transparent` default
+// for `<button>`. That default DOES hold under Chromium (verified: the
+// bug does not reproduce there) — the actual gap is Preflight pairing
+// `background-color: transparent` with `appearance: button` (not `none`)
+// on raw buttons, a known cross-browser inconsistency: some browser/OS
+// theme combinations paint a native (often light) button face UNDER an
+// author's transparent background when appearance isn't explicitly `none`.
+// The dashboard-shadcn-token hypothesis (--card/--foreground/--primary
+// failing to resolve on /record, since only .lp-root[data-mode="record"]
+// tokens exist there) does NOT hold — this component never referenced
+// those tokens, and the --lp-* tokens it DID use resolved correctly. Either
+// way, the fix is the same: every interactive element here now sets an
+// EXPLICIT background AND an EXPLICIT, differing text color (literal hex,
+// not a var — /record's CSS scope is a smaller, easier surface to keep
+// bulletproof than trying to prove every var resolves in every browser),
+// plus `appearance-none` so no browser is ever free to paint its own face
+// underneath. Same dark-mode branding as the seldonframe.com dashboard:
+// forest ink (#1F2B24) on paper (#F6F2EA) for filled chips — matching
+// landing-theme.css's own `--lp-cta-bg`/`--lp-cta-ink` pairing for
+// record-mode, just hardcoded here for defense in depth.
 "use client";
 
 import { useState } from "react";
@@ -82,7 +107,7 @@ export function QuestionCard({
 
   if (!visible) {
     return (
-      <p className="text-[13.5px]" style={{ color: "var(--lp-body)" }}>
+      <p className="text-[13.5px]" style={{ color: "#C9C2B6" }}>
         All questions answered.
       </p>
     );
@@ -97,14 +122,23 @@ export function QuestionCard({
     setText("");
   }
 
+  // Dashboard-dark font stack: same var the root layout loads Hanken
+  // Grotesk into app-wide, with an explicit fallback chain so this still
+  // reads correctly if the var is ever unset for any reason.
+  const fontStack = "var(--font-hanken, ui-sans-serif), ui-sans-serif, system-ui, sans-serif";
+
   return (
     <div
-      className="flex flex-col gap-2.5 rounded-[10px] border p-3"
-      style={{ borderColor: "var(--lp-border-soft)" }}
+      className="flex flex-col gap-2.5 rounded-[10px] p-3"
+      style={{
+        background: "#1A1713",
+        border: "1px solid rgba(246,242,234,0.08)",
+        fontFamily: fontStack,
+      }}
     >
       <p
         className="text-[11px] font-[600] uppercase tracking-[0.05em]"
-        style={{ color: "var(--lp-muted)" }}
+        style={{ color: "#A39B8D" }}
       >
         Question {position} of {total}
       </p>
@@ -114,18 +148,25 @@ export function QuestionCard({
           not catch. */}
       <p
         className="text-[15px] font-[600]"
-        style={{ color: "var(--lp-ink)" }}
+        style={{ color: "#F6F2EA" }}
         aria-live="polite"
       >
         {question}
       </p>
       <div className="flex flex-wrap items-center gap-2">
+        {/* Yes/No chips — forest ink on paper, the same filled-button
+            pairing as the dashboard (landing-theme.css's --lp-cta-ink/
+            --lp-cta-bg for record-mode), hardcoded here so no browser/OS
+            appearance quirk can ever paint over it (see the file header's
+            visibility-fix note). Squared corners per brand; appearance-none
+            strips any native widget chrome that could otherwise render
+            underneath the explicit background. */}
         <button
           type="button"
           disabled={pending}
           onClick={() => onAnswer(question, "Yes")}
-          className="inline-flex h-8 items-center rounded-[9px] border px-3 text-[13.5px] font-[600] disabled:cursor-not-allowed disabled:opacity-50"
-          style={{ borderColor: "var(--lp-border)", color: "var(--lp-ink)" }}
+          className="appearance-none inline-flex h-8 items-center rounded-none px-3 text-[13.5px] font-[500] hover:bg-[#E8E2D6] disabled:cursor-not-allowed disabled:opacity-50"
+          style={{ background: "#F6F2EA", color: "#1F2B24" }}
         >
           Yes
         </button>
@@ -133,8 +174,8 @@ export function QuestionCard({
           type="button"
           disabled={pending}
           onClick={() => onAnswer(question, "No")}
-          className="inline-flex h-8 items-center rounded-[9px] border px-3 text-[13.5px] font-[600] disabled:cursor-not-allowed disabled:opacity-50"
-          style={{ borderColor: "var(--lp-border)", color: "var(--lp-ink)" }}
+          className="appearance-none inline-flex h-8 items-center rounded-none px-3 text-[13.5px] font-[500] hover:bg-[#E8E2D6] disabled:cursor-not-allowed disabled:opacity-50"
+          style={{ background: "#F6F2EA", color: "#1F2B24" }}
         >
           No
         </button>
@@ -142,8 +183,8 @@ export function QuestionCard({
           type="button"
           disabled={pending}
           onClick={() => onSkip(question)}
-          className="text-[13.5px] underline underline-offset-2 disabled:cursor-not-allowed disabled:opacity-50"
-          style={{ color: "var(--lp-muted)" }}
+          className="appearance-none underline underline-offset-2 text-[13.5px] disabled:cursor-not-allowed disabled:opacity-50"
+          style={{ background: "transparent", color: "#A39B8D" }}
         >
           Skip
         </button>
@@ -162,15 +203,18 @@ export function QuestionCard({
             }
           }}
           placeholder="Or type a short answer..."
-          className="flex-1 rounded-[10px] border bg-transparent px-3 py-2 text-[13.5px] outline-none placeholder:text-[color:var(--lp-muted)] disabled:opacity-50"
-          style={{ borderColor: "var(--lp-border-soft)", color: "var(--lp-ink)" }}
+          className="flex-1 rounded-[10px] border bg-transparent px-3 py-2 text-[13.5px] outline-none placeholder:text-[#A39B8D] disabled:opacity-50"
+          style={{ borderColor: "rgba(246,242,234,0.14)", color: "#F6F2EA" }}
         />
+        {/* Send — same explicit paper/ink pairing as the Yes/No chips
+            (never the bare --lp-accent/--lp-on-accent tokens this used to
+            reference), plus appearance-none for the same reason. */}
         <button
           type="button"
           disabled={pending || !text.trim()}
           onClick={send}
-          className="rounded-[10px] px-3 py-2 text-[13.5px] font-[600] disabled:cursor-not-allowed disabled:opacity-50"
-          style={{ background: "var(--lp-accent)", color: "var(--lp-on-accent)" }}
+          className="appearance-none rounded-[10px] px-3 py-2 text-[13.5px] font-[600] hover:bg-[#E8E2D6] disabled:cursor-not-allowed disabled:opacity-50"
+          style={{ background: "#F6F2EA", color: "#1F2B24" }}
         >
           Send
         </button>

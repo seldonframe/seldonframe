@@ -78,6 +78,118 @@ describe("selectVisibleQuestion", () => {
   });
 });
 
+describe("<QuestionCard> visibility invariant (chip text must never match its background)", () => {
+  // Live-browser bug (2026-07-16): Max saw the Yes/No chips render as BLANK
+  // cream pills — label invisible. Root-caused via getComputedStyle against
+  // the real Next.js CSS pipeline (not this test harness): the chips never
+  // set an explicit background, relying on Tailwind Preflight's
+  // `background-color: transparent` default on `<button>`. That default
+  // holds under Chromium/Playwright (verified: transparent bg, cream text,
+  // renders correctly) — the actual gap is Preflight's `appearance: button`
+  // (not `none`), a well-documented cross-browser inconsistency where some
+  // browsers/OS theme combinations paint a native (often light/cream) button
+  // face UNDER an author's `background-color: transparent` when appearance
+  // isn't explicitly `none`. The dashboard-token hypothesis (--card/
+  // --foreground/--primary failing to resolve on /record) does NOT hold:
+  // this component never references those tokens, and the --lp-* tokens it
+  // does use resolve correctly (confirmed via computed style). The fix is
+  // still the same either way: stop relying on any implicit/inherited
+  // background — every chip gets an EXPLICIT background AND an EXPLICIT,
+  // differing text color, so there's no browser/OS path left where they can
+  // coincide. Test visibility, not presence (the OG-card lesson) — assert
+  // the actual hex values, not just that *a* style attribute exists.
+  test("the Yes chip carries an explicit paper background (#F6F2EA) AND explicit forest-ink text (#1F2B24)", () => {
+    const html = renderToString(
+      React.createElement(QuestionCard, {
+        questions: ["Q1?"],
+        skippedQuestions: new Set<string>(),
+        pending: false,
+        onAnswer: noop,
+        onSkip: noopSkip,
+      }),
+    );
+    const match = html.match(/<button[^>]*>Yes<\/button>/);
+    assert.ok(match, "Yes chip did not render");
+    const tag = match[0];
+    assert.match(tag, /#F6F2EA/i, "Yes chip is missing its explicit paper background (#F6F2EA)");
+    assert.match(tag, /#1F2B24/i, "Yes chip is missing its explicit forest-ink text color (#1F2B24)");
+  });
+
+  test("the No chip carries an explicit paper background (#F6F2EA) AND explicit forest-ink text (#1F2B24)", () => {
+    const html = renderToString(
+      React.createElement(QuestionCard, {
+        questions: ["Q1?"],
+        skippedQuestions: new Set<string>(),
+        pending: false,
+        onAnswer: noop,
+        onSkip: noopSkip,
+      }),
+    );
+    const match = html.match(/<button[^>]*>No<\/button>/);
+    assert.ok(match, "No chip did not render");
+    const tag = match[0];
+    assert.match(tag, /#F6F2EA/i, "No chip is missing its explicit paper background (#F6F2EA)");
+    assert.match(tag, /#1F2B24/i, "No chip is missing its explicit forest-ink text color (#1F2B24)");
+  });
+
+  test("the chip background and text colors are never the same hex (the actual visibility invariant)", () => {
+    const html = renderToString(
+      React.createElement(QuestionCard, {
+        questions: ["Q1?"],
+        skippedQuestions: new Set<string>(),
+        pending: false,
+        onAnswer: noop,
+        onSkip: noopSkip,
+      }),
+    );
+    for (const label of ["Yes", "No"]) {
+      const match = html.match(new RegExp(`<button[^>]*>${label}</button>`));
+      assert.ok(match, `${label} chip did not render`);
+      const tag = match[0];
+      // Direct, unambiguous check on the two literal values the directive
+      // specifies — bg #F6F2EA, text #1F2B24 — rather than a generic
+      // "any two hexes differ" check, since that would pass even if both
+      // ended up cream (matching the ORIGINAL bug) as long as some OTHER
+      // unrelated hex appeared anywhere in the tag.
+      assert.match(tag, /#F6F2EA/i, `${label} chip missing explicit #F6F2EA background`);
+      assert.match(tag, /#1F2B24/i, `${label} chip missing explicit #1F2B24 text`);
+    }
+  });
+
+  test("the question text itself sets its color explicitly to #F6F2EA (not a bare CSS var)", () => {
+    const html = renderToString(
+      React.createElement(QuestionCard, {
+        questions: ["What if there's no email?"],
+        skippedQuestions: new Set<string>(),
+        pending: false,
+        onAnswer: noop,
+        onSkip: noopSkip,
+      }),
+    );
+    assert.match(html, /aria-live="polite"[^>]*>What if there&#x27;s no email\?</);
+    const idx = html.indexOf("What if there&#x27;s no email?");
+    assert.ok(idx >= 0);
+    const before = html.slice(Math.max(0, idx - 400), idx);
+    assert.match(before, /#F6F2EA/i, "question text is missing an explicit #F6F2EA color");
+  });
+
+  test("disabled chips still carry their explicit colors (contrast holds even mid-flight)", () => {
+    const html = renderToString(
+      React.createElement(QuestionCard, {
+        questions: ["Q1?"],
+        skippedQuestions: new Set<string>(),
+        pending: true,
+        onAnswer: noop,
+        onSkip: noopSkip,
+      }),
+    );
+    const match = html.match(/<button[^>]*>Yes<\/button>/);
+    assert.ok(match);
+    assert.match(match[0], /#F6F2EA/i);
+    assert.match(match[0], /#1F2B24/i);
+  });
+});
+
 describe("<QuestionCard>", () => {
   test("renders nothing when there are no open questions", () => {
     const html = renderToString(
