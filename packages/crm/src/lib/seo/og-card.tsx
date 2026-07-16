@@ -434,8 +434,11 @@ export function AgentShareCard({ name, steps }: { name: string; steps: string })
                     alignItems: "center",
                     padding: "12px 22px",
                     borderRadius: 12,
-                    backgroundColor: "#1c2230",
-                    border: "2px solid #3a4256",
+                    // Elevated dark surface (forest rebrand) — was the
+                    // pre-rebrand navy #1c2230/#3a4256, retired alongside
+                    // the emerald #2fd18d highlight.
+                    backgroundColor: "#1A1713",
+                    border: "2px solid #4A4032",
                     fontSize: 26,
                     fontWeight: 700,
                     fontFamily: "Inter-Bold",

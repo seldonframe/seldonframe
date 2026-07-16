@@ -54,17 +54,17 @@ export default async function PublicShareCardPage({
     <main className="light flex min-h-screen flex-col items-center justify-center gap-8 bg-[#0b0e14] px-6 py-16 text-center">
       <ShareVisitBeacon slug={slug} />
       <div className="space-y-2">
-        <p className="text-xs font-medium uppercase tracking-wide text-[#2fd18d]">Built with SeldonFrame</p>
+        <p className="text-xs font-medium uppercase tracking-wide text-[#A39B8D]">Built with SeldonFrame</p>
         <h1 className="text-2xl font-semibold text-white sm:text-3xl">{card.agentName}</h1>
       </div>
 
-      <div className="w-full max-w-3xl overflow-x-auto rounded-2xl border border-[#3a4256] bg-[#12151d] p-6">
+      <div className="w-full max-w-3xl overflow-x-auto rounded-2xl border border-[#4A4032] bg-[#12151d] p-6">
         <SharePipelineSvg steps={card.steps} />
       </div>
 
       <a
         href={`/record?ref=share-${encodeURIComponent(slug)}`}
-        className="inline-flex items-center gap-2 rounded-[11px] bg-[#2fd18d] px-6 py-3 text-sm font-semibold text-[#0b0e14] transition-opacity hover:opacity-90"
+        className="inline-flex items-center gap-2 rounded-[11px] bg-[#F6F2EA] px-6 py-3 text-sm font-semibold text-[#1F2B24] transition-opacity hover:opacity-90"
       >
         Build yours from a screen recording →
       </a>
