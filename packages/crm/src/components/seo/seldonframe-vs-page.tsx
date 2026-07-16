@@ -194,7 +194,7 @@ export function SeldonFrameVsPage({ competitor }: { competitor: Competitor }): R
                   >
                     {`"${sec.quote.text}"`}
                     <div style={{ marginTop: 6, fontSize: 12.5, fontStyle: "normal", fontWeight: 600 }}>
-                      <a href={sec.quote.href} className="sf-link" style={{ color: MKT.green, textDecoration: "underline" }}>
+                      <a href={sec.quote.href} rel="nofollow noopener" className="sf-link" style={{ color: MKT.green, textDecoration: "underline" }}>
                         {sec.quote.source}
                       </a>
                       {" — accessed July 2026"}

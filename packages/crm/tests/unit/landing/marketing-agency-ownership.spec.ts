@@ -43,6 +43,11 @@ const GHL_EXPORT_HELP_URL =
 
 // The verbatim quote embedded in the component — must stay <=15 words and
 // must be a substring of the article text confirmed in the plan doc.
+// Source-verified 2026-07-16 against the live article (last updated 2026-02-10):
+// full sentence = "HighLevel does not support exporting websites in a way that allows
+// them to be managed or edited outside the HighLevel platform." The vs-GHL page
+// quotes a DIFFERENT verbatim sentence from the same article (the external-hosting
+// one) — both are true; re-verify against the source if either string changes.
 const VERBATIM_QUOTE =
   "does not support exporting websites in a way that allows them to be managed";
 

@@ -37,8 +37,8 @@ export function MarketingAgencyOwnership() {
         {/* Ownership block */}
         <div className="grid grid-cols-1 items-start gap-10 min-[900px]:grid-cols-[1.1fr_.9fr] min-[900px]:gap-14">
           <div>
-            <div className="inline-flex items-center gap-2.5 text-[12px] font-[600] uppercase tracking-[0.09em] text-[#059669]">
-              <span className="h-px w-4 bg-[#059669]" aria-hidden />
+            <div className="inline-flex items-center gap-2.5 text-[12px] font-[600] uppercase tracking-[0.09em] text-[#1F2B24]">
+              <span className="h-px w-4 bg-[#1F2B24]" aria-hidden />
               No lock-in
             </div>
             <h2 className="mt-3.5 text-[clamp(27px,4.2vw,40px)] font-[500] leading-[1.08] tracking-[-0.025em] text-[#221D17]">
@@ -77,8 +77,8 @@ export function MarketingAgencyOwnership() {
 
         {/* $99-vs-$497 comparison table */}
         <div className="mt-16 md:mt-20">
-          <div className="inline-flex items-center gap-2.5 text-[12px] font-[600] uppercase tracking-[0.09em] text-[#059669]">
-            <span className="h-px w-4 bg-[#059669]" aria-hidden />
+          <div className="inline-flex items-center gap-2.5 text-[12px] font-[600] uppercase tracking-[0.09em] text-[#1F2B24]">
+            <span className="h-px w-4 bg-[#1F2B24]" aria-hidden />
             The math, side by side
           </div>
           <h3 className="mt-3.5 max-w-[36ch] text-[clamp(22px,3vw,30px)] font-[500] leading-[1.15] tracking-[-0.02em] text-[#221D17]">
@@ -108,7 +108,7 @@ export function MarketingAgencyOwnership() {
                   <th scope="row" className="px-5 py-4 font-[500] text-[rgba(34,29,23,.7)]">
                     Resell under your brand
                   </th>
-                  <td className="px-5 py-4 font-[600] text-[#059669]">$99/mo (included)</td>
+                  <td className="px-5 py-4 font-[600] text-[#1F2B24]">$99/mo (included)</td>
                   <td className="px-5 py-4 text-[rgba(34,29,23,.72)]">
                     requires $497/mo Agency Pro (SaaS Mode)
                   </td>
@@ -135,7 +135,7 @@ export function MarketingAgencyOwnership() {
                   <th scope="row" className="px-5 py-4 font-[500] text-[rgba(34,29,23,.7)]">
                     Cut of what you resell
                   </th>
-                  <td className="px-5 py-4 font-[600] text-[#059669]">0% GMV on agency plans</td>
+                  <td className="px-5 py-4 font-[600] text-[#1F2B24]">0% GMV on agency plans</td>
                   <td className="px-5 py-4 text-[rgba(34,29,23,.72)]">&mdash;</td>
                 </tr>
               </tbody>
