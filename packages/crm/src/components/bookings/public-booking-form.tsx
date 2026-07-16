@@ -147,7 +147,7 @@ export function PublicBookingForm({
   workspaceTimezone: string;
   /** 2026-05-18 — operator-supplied workspace logo (theme.logoUrl).
    *  When set, renders in the header next to businessName. Null →
-   *  text-only header. The /settings/theme page already persists this
+   *  text-only header. The theme write path (saveThemeForOrg) already persists this
    *  field; this prop just plumbs it through to the public surface.
    *  Replaces the "uploaded a logo, why doesn't it show?" gap. */
   logoUrl?: string | null;
