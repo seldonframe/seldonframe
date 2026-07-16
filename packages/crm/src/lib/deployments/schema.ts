@@ -102,6 +102,13 @@ export const CreateDeploymentSchema = z
     // .url() — operators paste GBP share links of varying shapes (the runtime only
     // trims). Absent/blank → no customization is written (→ the template default).
     reviewUrl: z.string().max(2000).optional(),
+    // 2026-07-16 (marketplace generalize) — fill values for the template's
+    // DECLARED `templateVariables` (AgentBlueprint.templateVariables), keyed
+    // by the variable's snake_case token. Persisted onto the new deployment's
+    // `customization.templateVarValues`. The action (not this loose schema)
+    // enforces that every DECLARED variable has a non-blank value — this
+    // shape just bounds the map so a caller can't smuggle an oversized blob.
+    templateVarValues: z.record(z.string(), z.string().max(2000)).optional(),
   })
   .strict()
   // external_link is only useful with a real URL to hand off; demand one. Other

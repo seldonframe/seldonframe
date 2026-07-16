@@ -220,6 +220,32 @@ function replaceAllLiteral(haystack: string, literal: string, replacement: strin
 }
 
 /**
+ * Deploy-time REQUIRED-field enforcement (Task 4, design item 4): a template
+ * with declared `templateVariables` must have every one of them filled before
+ * a deploy action fires — an unfilled variable would silently VANISH via
+ * `fillPlaceholders`' drop-unknown-token behavior (a dishonest output: the
+ * agent would just quietly not mention it), so this is a hard reject, never a
+ * silent pass (CLAUDE.md 3.1 Optimistic Path). Blank/whitespace-only counts
+ * as missing. Absent/empty `templateVariables` → always valid (nothing to
+ * require) — a template that was never generalized behaves exactly as
+ * before. Pure; never throws.
+ */
+export function validateTemplateVarValues(args: {
+  templateVariables: Array<{ name: string }> | null | undefined;
+  values: Record<string, string> | null | undefined;
+}): { ok: true } | { ok: false; missing: string[] } {
+  const declared = Array.isArray(args.templateVariables) ? args.templateVariables : [];
+  if (declared.length === 0) return { ok: true };
+
+  const values = args.values ?? {};
+  const missing = declared
+    .map((v) => v.name)
+    .filter((name) => !(typeof values[name] === "string" && values[name].trim() !== ""));
+
+  return missing.length === 0 ? { ok: true } : { ok: false, missing };
+}
+
+/**
  * The non-blocking "this looks personal" nudge (design item 5): should the
  * Sell-card show the warning row? A cheap heuristic — NEVER a hard block
  * (the operator may intend to keep their own details in): true when

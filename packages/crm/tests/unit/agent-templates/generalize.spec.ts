@@ -4,6 +4,7 @@ import {
   proposeTemplateGeneralization,
   applyTemplateGeneralization,
   shouldWarnPersonalDetails,
+  validateTemplateVarValues,
   type ProposedSubstitution,
 } from "../../../src/lib/agent-templates/generalize";
 
@@ -206,6 +207,65 @@ describe("applyTemplateGeneralization", () => {
     if (result.ok) {
       assert.deepEqual(result.backfillValues, { business_name: "Max ABC Plumbing" });
     }
+  });
+});
+
+// ─── validateTemplateVarValues (deploy-time REQUIRED-field enforcement) ─────
+
+describe("validateTemplateVarValues", () => {
+  test("no declared templateVariables → always valid, regardless of values", () => {
+    assert.deepEqual(
+      validateTemplateVarValues({ templateVariables: [], values: {} }),
+      { ok: true },
+    );
+    assert.deepEqual(
+      validateTemplateVarValues({ templateVariables: null, values: null }),
+      { ok: true },
+    );
+    assert.deepEqual(
+      validateTemplateVarValues({ templateVariables: undefined, values: undefined }),
+      { ok: true },
+    );
+  });
+
+  test("all declared variables filled → ok", () => {
+    const result = validateTemplateVarValues({
+      templateVariables: [{ name: "contact_email" }, { name: "contact_phone" }],
+      values: { contact_email: "hi@acme.test", contact_phone: "555-1234" },
+    });
+    assert.deepEqual(result, { ok: true });
+  });
+
+  test("a missing declared variable → rejected with its name", () => {
+    const result = validateTemplateVarValues({
+      templateVariables: [{ name: "contact_email" }, { name: "contact_phone" }],
+      values: { contact_email: "hi@acme.test" },
+    });
+    assert.deepEqual(result, { ok: false, missing: ["contact_phone"] });
+  });
+
+  test("a blank/whitespace-only value counts as missing (never a silent drop at runtime)", () => {
+    const result = validateTemplateVarValues({
+      templateVariables: [{ name: "contact_email" }],
+      values: { contact_email: "   " },
+    });
+    assert.deepEqual(result, { ok: false, missing: ["contact_email"] });
+  });
+
+  test("absent values object with declared variables → all reported missing", () => {
+    const result = validateTemplateVarValues({
+      templateVariables: [{ name: "contact_email" }, { name: "contact_phone" }],
+      values: undefined,
+    });
+    assert.deepEqual(result, { ok: false, missing: ["contact_email", "contact_phone"] });
+  });
+
+  test("extra values not declared by the template are simply ignored", () => {
+    const result = validateTemplateVarValues({
+      templateVariables: [{ name: "contact_email" }],
+      values: { contact_email: "hi@acme.test", unrelated_field: "whatever" },
+    });
+    assert.deepEqual(result, { ok: true });
   });
 });
 

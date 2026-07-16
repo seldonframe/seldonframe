@@ -54,6 +54,8 @@ import {
   deploymentNeedsNumber,
 } from "./margin";
 import { getAgentTemplate } from "@/lib/agent-templates/store";
+import { validateTemplateVarValues } from "@/lib/agent-templates/generalize";
+import type { AgentBlueprint } from "@/db/schema/agents";
 import { mapSoulToClientContext } from "./client-context";
 import { compileSoulService } from "@/lib/soul-compiler/service";
 import { resolveBuilderClaudeKey } from "./client-context-server";
@@ -68,7 +70,7 @@ import { ensureBuilderSubaccount, buildSfManagedDeps } from "@/lib/telephony/sf-
 
 export type CreateDeploymentActionResult =
   | { ok: true; id: string }
-  | { ok: false; error: string };
+  | { ok: false; error: string; missingTemplateVariables?: string[] };
 
 /** DI seam for createDeploymentAction's attach-to-existing-client resolution
  *  (F3). Defaults resolve the builder's agency + its client workspaces from the
@@ -120,6 +122,13 @@ export async function createDeploymentAction(
     /** R2 — the CLIENT's Google review link (review-requester agents), persisted
      *  onto the new deployment's `customization.reviewUrl`. Absent/blank → none. */
     reviewUrl?: string;
+    /** 2026-07-16 (marketplace generalize) — fill values for the template's
+     *  DECLARED `templateVariables`, keyed by token. REQUIRED when the
+     *  template has any declared variables — see validateTemplateVarValues
+     *  below (an unfilled declared variable would silently vanish via
+     *  fillPlaceholders' drop behavior, so this is enforced server-side,
+     *  never a silent pass). */
+    templateVarValues?: Record<string, string>;
   },
   _deps?: Partial<CreateDeploymentActionDeps>,
 ): Promise<CreateDeploymentActionResult> {
@@ -153,12 +162,44 @@ export async function createDeploymentAction(
     return { ok: false, error: "client_not_found" };
   }
 
+  // 2026-07-16 (marketplace generalize) — REQUIRED-field enforcement: if the
+  // template declares templateVariables, every one must have a non-blank
+  // fill value before the deployment is created. An unfilled declared
+  // variable would silently vanish via fillPlaceholders' drop-unknown-token
+  // behavior at runtime (the agent would just quietly not mention it) — this
+  // is a hard reject, never a silent pass (CLAUDE.md 3.1 Optimistic Path).
+  // Loaded here (not just in the store) so the operator gets an explicit,
+  // actionable error BEFORE any row is written.
+  const template = await getAgentTemplate(parsed.data.agentTemplateId);
+  if (!template || template.builderOrgId !== orgId) {
+    return { ok: false, error: "template_not_found" };
+  }
+  const templateVariables = (template.blueprint as AgentBlueprint | null)?.templateVariables;
+  const varsCheck = validateTemplateVarValues({
+    templateVariables,
+    values: parsed.data.templateVarValues,
+  });
+  if (!varsCheck.ok) {
+    return {
+      ok: false,
+      error: "missing_template_variables",
+      missingTemplateVariables: varsCheck.missing,
+    };
+  }
+
   // R2 — capture the client's Google review link onto the new deployment's
   // customization (review-requester agents). A blank/absent value collapses to no
   // customization in the store (→ the template default). Only this persona field
   // is set at deploy time; the rest are edited later on the client card.
   const reviewUrl = parsed.data.reviewUrl?.trim();
-  const customization = reviewUrl ? { reviewUrl } : undefined;
+  const templateVarValues =
+    parsed.data.templateVarValues && Object.keys(parsed.data.templateVarValues).length > 0
+      ? parsed.data.templateVarValues
+      : undefined;
+  const customization =
+    reviewUrl || templateVarValues
+      ? { ...(reviewUrl ? { reviewUrl } : {}), ...(templateVarValues ? { templateVarValues } : {}) }
+      : undefined;
 
   const result = await createDeployment({
     builderOrgId: orgId,
