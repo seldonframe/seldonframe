@@ -271,7 +271,8 @@ export function MarketingHero({
         <strong className="font-[500] text-[#221D17]">
           voice, SMS, email, and web chat
         </strong>{" "}
-        — plus the website, bookings, and CRM in one dashboard. You charge the retainer.
+        — plus the website, bookings, and CRM in one dashboard. You charge the retainer,
+        on a platform you own.
       </p>
       {/* Primary CTA — routes to the chatbox, not /signup: the label promises
           a build, and the ungated build IS the trial (route-by-promise,
@@ -314,7 +315,7 @@ export function MarketingHero({
           ))}
         </span>
         Runs on Claude, ChatGPT, or Gemini —{" "}
-        <strong className="font-[600]">we never mark up tokens. Your margin stays yours.</strong>
+        <strong className="font-[600]">no token markups, no usage meters. Your margin stays yours.</strong>
       </p>
 
       {/* Input form */}
@@ -447,7 +448,7 @@ export function MarketingHero({
 
       {/* Proof checklist */}
       <ul className="mt-6 flex flex-wrap items-center justify-center gap-x-5 gap-y-2">
-        {["Start free", "Each client live in 3 minutes", "Cancel anytime"].map((item) => (
+        {["Start free", "Each client live in 3 minutes", "Yours to keep — open source"].map((item) => (
           <li key={item} className="flex items-center gap-2 text-[13.5px] text-[#6E665A]">
             <span className="flex size-[17px] items-center justify-center rounded-full bg-[rgba(31, 43, 36,.12)] text-[10px] font-[700] text-[#1F2B24]" aria-hidden>✓</span>
             {item}
