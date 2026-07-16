@@ -67,8 +67,36 @@ function formatEventDescriptor(event: string): string {
 }
 
 /** Status pill for an agent template. draft / tested / published, mirroring the
- *  agent dashboards' pill chrome. */
-export function TemplateStatusBadge({ status }: { status: AgentTemplateStatus | string }) {
+ *  agent dashboards' pill chrome.
+ *
+ *  Agent truth slice (Task 2) — `deploymentCount` is an OPTIONAL, additive
+ *  prop (every existing call site that doesn't pass it renders byte-for-byte
+ *  the pre-existing tri-state). When ≥1, this is deployment TRUTH — the
+ *  template is actually running for a client — and the badge renders
+ *  "● Live · N deployment(s)" INSTEAD of the marketplace draft/tested/
+ *  published tri-state, regardless of `status`: a template can sit at
+ *  `draft` in the marketplace lifecycle while very much live for the
+ *  operator who deployed it, and a "draft" title chip on a running agent is
+ *  a lie-shaped label (see the design doc's ground truth). L-36: every
+ *  branch below carries an EXPLICIT foreground + background class (never an
+ *  inherited/absent color that could collide with its own background). */
+export function TemplateStatusBadge({
+  status,
+  deploymentCount,
+}: {
+  status: AgentTemplateStatus | string;
+  deploymentCount?: number;
+}) {
+  if (typeof deploymentCount === "number" && deploymentCount > 0) {
+    const label = `Live · ${deploymentCount} deployment${deploymentCount === 1 ? "" : "s"}`;
+    return (
+      <span className="inline-flex items-center gap-1.5 rounded-full bg-emerald-500/15 px-2.5 py-0.5 text-[11px] font-medium text-emerald-700 dark:text-emerald-400">
+        <span className="inline-flex size-1.5 rounded-full bg-emerald-500" aria-hidden />
+        {label}
+      </span>
+    );
+  }
+
   const tone =
     status === "published"
       ? "bg-emerald-500/15 text-emerald-700 dark:text-emerald-400"
@@ -80,4 +108,15 @@ export function TemplateStatusBadge({ status }: { status: AgentTemplateStatus | 
       {status}
     </span>
   );
+}
+
+/** Sell-card copy for the marketplace tri-state (Task 2) — moved out of the
+ *  title badge (which now shows deployment truth, above) and into the Sell/
+ *  Publish section's own copy. `tested` keeps its existing meaning wherever
+ *  it appears; only `draft`/`published` get an explicit sentence here. Pure
+ *  string helper — the caller renders it as plain muted text. */
+export function marketplaceListingCopy(status: AgentTemplateStatus | string): string | null {
+  if (status === "draft") return "Not listed on marketplace";
+  if (status === "published") return "Listed";
+  return null;
 }

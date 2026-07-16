@@ -34,7 +34,7 @@ import { AgentTemplateEditor } from "./editor-client";
 import { ListOnMarketplace } from "./list-on-marketplace";
 import { RunEvalsCard } from "./run-evals";
 import { EditorSection, EditorSectionDivider } from "./editor-section";
-import { TemplateStatusBadge, formatTemplateType } from "../status-badge";
+import { TemplateStatusBadge, formatTemplateType, marketplaceListingCopy } from "../status-badge";
 import { DeployButton } from "../deploy-button";
 import { DeployToClientsButton } from "../deploy-to-clients-button";
 import { TestButton } from "../test-button";
@@ -200,6 +200,9 @@ export default async function AgentTemplatePage({
 
   if (!lifecycleEnabled) {
   const templateDeployments = await listDeployments(orgId);
+  const templateDeploymentCount = templateDeployments.filter(
+    (d) => d.agentTemplateId === template.id,
+  ).length;
   const primaryDeployment =
     templateDeployments.find((d) => d.agentTemplateId === template.id && d.status === "active") ??
     templateDeployments.find((d) => d.agentTemplateId === template.id) ??
@@ -239,7 +242,12 @@ export default async function AgentTemplatePage({
             <h1 className="truncate text-base font-semibold tracking-tight text-foreground sm:text-[17px]">
               {template.name}
             </h1>
-            <TemplateStatusBadge status={template.status} />
+            {/* Agent truth slice (Task 2) — deployment TRUTH overrides the
+                marketplace tri-state here: a template with ≥1 deployment
+                shows "● Live · N deployment(s)" instead of a stale "draft"
+                chip (the tri-state's meaning moves to the Sell section
+                below). */}
+            <TemplateStatusBadge status={template.status} deploymentCount={templateDeploymentCount} />
           </div>
           <div className="ml-auto flex shrink-0 items-center gap-2">
             <DeployToClientsButton templateId={template.id} variant="secondary" />
@@ -365,6 +373,13 @@ export default async function AgentTemplatePage({
           anchor="publish"
           description="Sell this template on the marketplace so other businesses can deploy it."
         >
+          {/* Agent truth slice (Task 2) — the marketplace tri-state's
+              meaning, moved here from the title badge (which now shows
+              deployment truth instead). `tested` keeps its existing
+              meaning wherever it appears — no override copy for it. */}
+          {marketplaceListingCopy(template.status) ? (
+            <p className="text-xs text-muted-foreground">{marketplaceListingCopy(template.status)}</p>
+          ) : null}
           <ListOnMarketplace
             templateId={template.id}
             templateName={template.name}
