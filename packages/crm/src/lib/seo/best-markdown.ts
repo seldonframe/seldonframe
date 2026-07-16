@@ -6,7 +6,13 @@
 import { getBestPage, LAST_UPDATED, midSentence, type BestContender } from "./best-pages";
 import { START_HREF, DEMO_HREF } from "./alternative-pages-extras";
 import { emphasizeMd } from "./emphasize";
+import { sfPriceAnchor } from "./alternative-pages";
 import { composeCheapestOption, composeQuickPicks } from "@/components/seo/best-page";
+
+// Best-pages are category-based, not tied to one competitor's audience band —
+// see BEST_PAGE_AUDIENCE in components/seo/best-page.tsx for why this stays
+// "mixed" rather than assuming solo-only.
+const BEST_PAGE_AUDIENCE = "mixed" as const;
 
 const BASE = "https://www.seldonframe.com";
 
@@ -49,7 +55,7 @@ export function renderBestMarkdown(slug: string): string {
   L.push(`## The short version`);
   L.push("");
   L.push(
-    `- **Our pick:** ${emphasizeMd("SeldonFrame — the whole front office at $29/mo flat (we build it, and we say below when the others win)")}`,
+    `- **Our pick:** ${emphasizeMd(`SeldonFrame — the whole front office, ${sfPriceAnchor(BEST_PAGE_AUDIENCE)} (we build it, and we say below when the others win)`)}`,
   );
   L.push(`- **Cheapest real option:** ${emphasizeMd(composeCheapestOption(category))}`);
   L.push(`- **How to choose:** ${emphasizeMd(category.intentLine)}`);
@@ -67,7 +73,7 @@ export function renderBestMarkdown(slug: string): string {
     L.push(`For ${midSentence(audience.label)}, that means ${audience.exampleService} gets captured and booked automatically, whether the customer calls, texts or fills out a form.`);
   }
   L.push("");
-  L.push(`- Price: $29/mo flat, unlimited workspaces — first workspace free forever`);
+  L.push(`- Price: $29/mo flat solo, or $99–$299/mo agency (0% GMV) — first workspace free forever`);
   L.push(`- Build it free in about 3 minutes before you sign up: ${BASE}${START_HREF}`);
   L.push(`- Book a demo: ${DEMO_HREF}`);
   L.push(`- Honest caveat: SeldonFrame is newer than several names on this list and isn't a dedicated funnel-builder — if that's specifically what you need, see the alternatives below.`);
@@ -90,7 +96,7 @@ export function renderBestMarkdown(slug: string): string {
   L.push("");
   L.push(`| ${category.noun} | Best for | From price | The catch |`);
   L.push("|---|---|---|---|");
-  L.push(`| **SeldonFrame** | ${emphasizeMd(category.intentLine)} | ${emphasizeMd("$29/mo flat, unlimited workspaces")} | Newer platform; not a dedicated funnel-builder |`);
+  L.push(`| **SeldonFrame** | ${emphasizeMd(category.intentLine)} | ${emphasizeMd("$29/mo flat solo, or $99–$299/mo agency (0% GMV)")} | Newer platform; not a dedicated funnel-builder |`);
   for (const c of category.contenders) {
     L.push(`| ${c.name} | ${emphasizeMd(c.bestFor)} | ${emphasizeMd(c.from)} | ${emphasizeMd(c.watchOut)} |`);
   }

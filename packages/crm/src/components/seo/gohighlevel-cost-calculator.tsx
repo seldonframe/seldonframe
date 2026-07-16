@@ -369,8 +369,8 @@ export function GohighlevelCostCalculator(): ReactElement {
       </div>
 
       <p style={{ margin: "18px 0 0", fontSize: 14.5, fontWeight: 700, color: GREEN }}>
-        SeldonFrame: $29/mo flat on the builder tier (agency tiers up to $299), unlimited workspaces — AI + telephony on your own keys at raw
-        provider cost.
+        SeldonFrame for agencies: $99&ndash;$299/mo flat (white-label + client sub-accounts, 0% GMV) &mdash; solo builder tier $29/mo. Unlimited
+        workspaces either way — AI + telephony on your own keys at raw provider cost.
       </p>
 
       <div style={{ marginTop: 22, fontSize: 12.5, color: "rgba(34,29,23,0.6)", lineHeight: 1.6 }}>

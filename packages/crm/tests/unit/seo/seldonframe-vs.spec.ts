@@ -73,6 +73,42 @@ test("composeVsFaq returns 4 well-formed items for a sample pair", () => {
   assert.ok(items[3].a.includes("/alternative-to-vendasta"));
 });
 
+// ─── agency price-anchor banding (Max, 2026-07-16) ─────────────────────────
+// On agency-audience comparison surfaces, $99-$299 is the lead anchor and
+// $29 is demoted to a solo aside; solo surfaces keep $29/mo flat as the
+// anchor; mixed surfaces carry both without leading with either.
+
+test("gohighlevel (agency band): pricing anchor leads with $99, FAQ never pairs 'agencies' with '$29/mo flat' as the lead", () => {
+  const c = getCompetitor("gohighlevel");
+  assert.equal(c.audience, "agency");
+  const md = renderSeldonframeVsMarkdown(c);
+  assert.match(md, /\$99/, "gohighlevel vs-page markdown missing the $99 agency anchor");
+  const faqItems = composeSeldonframeVsFaq(c);
+  assert.doesNotMatch(
+    faqItems[0].a,
+    /agencies and builders, yes.*\$29\/mo flat instead of/i,
+    "gohighlevel FAQ still leads agencies with the bare $29/mo flat anchor",
+  );
+  assert.match(faqItems[0].a, /\$99/, "gohighlevel FAQ answer should carry the agency anchor");
+});
+
+test("durable and linktree (solo band): still anchor '$29/mo flat'", () => {
+  for (const slug of ["durable", "linktree"]) {
+    const c = getCompetitor(slug);
+    assert.equal(c.audience, "solo");
+    const faqItems = composeSeldonframeVsFaq(c);
+    assert.match(faqItems[0].a, /\$29\/mo flat/, `${slug} FAQ answer should still anchor $29/mo flat`);
+  }
+});
+
+test("hubspot (mixed band): carries both the solo and agency anchors", () => {
+  const c = getCompetitor("hubspot");
+  assert.equal(c.audience, "mixed");
+  const faqItems = composeSeldonframeVsFaq(c);
+  assert.match(faqItems[0].a, /\$29\/mo flat/, "mixed anchor should still mention $29/mo flat solo");
+  assert.match(faqItems[0].a, /\$99/, "mixed anchor should still mention the $99+ agency tier");
+});
+
 function escapeRegExp(s: string): string {
   return s.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
 }

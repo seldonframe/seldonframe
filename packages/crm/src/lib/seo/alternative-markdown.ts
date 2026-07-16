@@ -9,9 +9,12 @@ import {
   SF_COLUMN,
   SHARED_FAQ,
   LAST_UPDATED,
+  sfPriceAnchor,
   type Competitor,
+  type CompetitorAudience,
 } from "@/lib/seo/alternative-pages";
 import { getExtras, SF_PROS, SF_CONS, SWITCH_STEPS, DEMO_HREF, type VsPair } from "@/lib/seo/alternative-pages-extras";
+import { pairAudience } from "@/components/seo/vs-page";
 import { emphasizeMd } from "@/lib/seo/emphasize";
 
 const BASE = "https://www.seldonframe.com";
@@ -32,7 +35,7 @@ export function renderAlternativeMarkdown(c: Competitor): string {
   L.push(`## The short version`);
   L.push("");
   L.push(`- **${c.name} pricing:** ${emphasizeMd(c.them.pricingModel)}`);
-  L.push(`- **SeldonFrame pricing:** ${emphasizeMd("$29/mo flat, unlimited workspaces, first workspace free forever")}`);
+  L.push(`- **SeldonFrame pricing:** ${emphasizeMd(sfPriceAnchor(c.audience))}`);
   L.push(`- **Pick ${c.name} if:** ${emphasizeMd(x.chooseThem[0])}`);
   L.push(`- **Pick SeldonFrame if:** ${emphasizeMd(x.chooseSf[0])}`);
   L.push("");
@@ -102,6 +105,7 @@ export function renderAlternativeMarkdown(c: Competitor): string {
 }
 
 export function renderVsMarkdown(pair: VsPair, a: Competitor, b: Competitor): string {
+  const audience: CompetitorAudience = pairAudience(a, b);
   const L: string[] = [];
   L.push(`# ${a.name} vs ${b.name}: What You Need to Know (${LAST_UPDATED})`);
   L.push("");
@@ -116,7 +120,7 @@ export function renderVsMarkdown(pair: VsPair, a: Competitor, b: Competitor): st
   L.push(`- **${a.name} pricing:** ${emphasizeMd(a.them.pricingModel)}`);
   L.push(`- **${b.name} pricing:** ${emphasizeMd(b.them.pricingModel)}`);
   L.push(`- **The real trade-off:** ${emphasizeMd(pair.angle)}`);
-  L.push(`- **The third option:** ${emphasizeMd("SeldonFrame ships the whole front office at $29/mo flat — see below")}`);
+  L.push(`- **The third option:** ${emphasizeMd(`SeldonFrame ships the whole front office — ${sfPriceAnchor(audience)} — see below`)}`);
   L.push("");
   for (const c of [a, b]) {
     L.push(`## ${c.name}`);
@@ -143,7 +147,7 @@ export function renderVsMarkdown(pair: VsPair, a: Competitor, b: Competitor): st
   L.push(`## If you need what BOTH do`);
   L.push("");
   L.push(
-    `Most people comparing ${a.name} and ${b.name} actually need the outcome underneath both: calls and chats answered, leads qualified, jobs booked into a real calendar and CRM, on a site the client owns. SeldonFrame ships that whole front office from one conversation at $29/mo flat (unlimited workspaces, bring-your-own AI keys), with agency white-label from $99/mo.`,
+    `Most people comparing ${a.name} and ${b.name} actually need the outcome underneath both: calls and chats answered, leads qualified, jobs booked into a real calendar and CRM, on a site the client owns. SeldonFrame ships that whole front office from one conversation — ${sfPriceAnchor(audience)}, bring-your-own AI keys.`,
   );
   L.push("");
   L.push(`- Honest deep-dives: ${BASE}/alternative-to-${a.slug} and ${BASE}/alternative-to-${b.slug}`);

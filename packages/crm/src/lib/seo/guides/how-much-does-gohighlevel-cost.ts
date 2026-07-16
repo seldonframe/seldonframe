@@ -67,7 +67,7 @@ export const guide: Guide = {
   faq: [
     {
       q: "Is the AI receptionist included in GoHighLevel's price?",
-      a: "No. GoHighLevel's *AI Employee* is an add-on billed on top of your base plan, reported at around $50 per month per location on the Growth option or around $97 per month per location on the Unlimited option, with a usage-based route reported near $0.02 to $0.05 per minute. Because it is charged **per location**, the cost repeats for every client account. By contrast, SeldonFrame includes the AI receptionist in its flat $29 per month price."
+      a: "No. GoHighLevel's *AI Employee* is an add-on billed on top of your base plan, reported at around $50 per month per location on the Growth option or around $97 per month per location on the Unlimited option, with a usage-based route reported near $0.02 to $0.05 per minute. Because it is charged **per location**, the cost repeats for every client account. By contrast, SeldonFrame includes the AI receptionist for every client sub-account at no extra per-location fee — Agency plans from $99 to $299 per month cover white-label, client sub-accounts, and the branded portal; solo operators running their own workspaces only can use the $29/mo Builder tier instead."
     },
     {
       q: "What does a 10-client agency really pay?",

@@ -20,7 +20,7 @@ import { AuthorByline, articleLd } from "@/components/seo/author-byline";
 import { monthYearToIso } from "@/lib/seo/month-iso";
 import { emphasize } from "@/lib/seo/emphasize";
 import { getCompetitorPricing, PRICING, type CompetitorPricing } from "@/lib/seo/competitor-pricing";
-import { getCompetitor } from "@/lib/seo/alternative-pages";
+import { getCompetitor, sfPriceAnchor, type CompetitorAudience } from "@/lib/seo/alternative-pages";
 import { START_HREF, DEMO_HREF } from "@/lib/seo/alternative-pages-extras";
 
 /** "Starts at" TL;DR fact — quote-gated competitors say so plainly rather
@@ -34,7 +34,7 @@ export function startsAtLabel(p: CompetitorPricing): string {
 
 /** Compose the 3-item FAQ every pricing page shares. Pure + exported so the
  *  Markdown twin and unit tests can reuse it without duplicating copy. */
-export function composePricingFaq(p: CompetitorPricing, name: string): { q: string; a: string }[] {
+export function composePricingFaq(p: CompetitorPricing, name: string, audience: CompetitorAudience): { q: string; a: string }[] {
   return [
     { q: `How much does ${name} cost?`, a: p.bottomLine },
     {
@@ -43,7 +43,7 @@ export function composePricingFaq(p: CompetitorPricing, name: string): { q: stri
     },
     {
       q: `What's the cheapest ${name} alternative?`,
-      a: `SeldonFrame: $29/mo flat, unlimited workspaces, first workspace free forever, with AI and telephony on your own keys at raw provider cost — no meters. /alternative-to-${p.slug}`,
+      a: `SeldonFrame: ${sfPriceAnchor(audience)}, with AI and telephony on your own keys at raw provider cost — no meters. /alternative-to-${p.slug}`,
     },
   ];
 }
@@ -51,7 +51,7 @@ export function composePricingFaq(p: CompetitorPricing, name: string): { q: stri
 export function CompetitorPricingPage({ slug }: { slug: string }): ReactElement {
   const p = getCompetitorPricing(slug);
   const c = getCompetitor(slug);
-  const faq = composePricingFaq(p, c.name);
+  const faq = composePricingFaq(p, c.name, c.audience);
   const startsAt = startsAtLabel(p);
 
   const others = PRICING.filter((o) => o.slug !== p.slug);
@@ -119,7 +119,7 @@ export function CompetitorPricingPage({ slug }: { slug: string }): ReactElement 
             items={[
               { icon: "💰", label: "Starts at", text: startsAt },
               { icon: "📈", label: "What stacks on top", text: p.stacks[0]?.detail ?? "No published add-ons" },
-              { icon: "🪙", label: "SeldonFrame comparison", text: "$29/mo flat, unlimited workspaces — no meters" },
+              { icon: "🪙", label: "SeldonFrame comparison", text: `${sfPriceAnchor(c.audience)} — no meters` },
             ]}
           />
         </section>
@@ -192,7 +192,7 @@ export function CompetitorPricingPage({ slug }: { slug: string }): ReactElement 
           <h2 style={H2}>How this compares to SeldonFrame</h2>
           <p style={{ margin: "14px 0 0", fontSize: 15.5, lineHeight: 1.65, color: "rgba(34,29,23,0.78)", maxWidth: 760 }}>
             {emphasize(
-              `SeldonFrame is $29/mo flat, unlimited workspaces, with AI and telephony on your own keys at raw provider cost — the AI receptionist, website, CRM, and booking calendar all ship in one price, no meters to watch.`,
+              `SeldonFrame is ${sfPriceAnchor(c.audience)}, with AI and telephony on your own keys at raw provider cost — the AI receptionist, website, CRM, and booking calendar all ship in, no meters to watch.`,
             )}
           </p>
           <div style={{ display: "flex", flexWrap: "wrap", gap: 8, marginTop: 16 }}>
@@ -247,7 +247,12 @@ export function CompetitorPricingPage({ slug }: { slug: string }): ReactElement 
           <h2 style={{ margin: 0, fontSize: 26, fontWeight: 800, letterSpacing: "-0.02em" }}>See what you&apos;d pay on SeldonFrame instead</h2>
           <p style={{ margin: "10px auto 0", fontSize: 15.5, lineHeight: 1.6, color: "rgba(246,242,234,0.75)", maxWidth: 560 }}>
             Paste a business&apos;s website and SeldonFrame builds the site, CRM, booking calendar and AI receptionist in about 3 minutes —
-            free, before you sign up. Then it&apos;s $29/mo flat for unlimited workspaces.
+            free, before you sign up. Then it&apos;s{" "}
+            {c.audience === "agency"
+              ? "$99/mo flat for white-label agency plans (or $29/mo solo)."
+              : c.audience === "mixed"
+                ? "$29/mo flat solo, or $99+/mo for agency whitelabel."
+                : "$29/mo flat for unlimited workspaces."}
           </p>
           <div style={{ display: "flex", flexWrap: "wrap", gap: 12, justifyContent: "center", marginTop: 22 }}>
             <a href={START_HREF} style={{ background: MKT.green, color: "#fff", padding: "13px 26px", borderRadius: 12, fontWeight: 700, fontSize: 15.5, textDecoration: "none" }}>

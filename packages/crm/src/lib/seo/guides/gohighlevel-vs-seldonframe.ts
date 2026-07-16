@@ -48,9 +48,9 @@ export const guide: Guide = {
           { label: "GoHighLevel Starter", value: 97, display: "$97/mo", domain: "gohighlevel.com" },
           { label: "GoHighLevel Unlimited", value: 297, display: "$297/mo", domain: "gohighlevel.com" },
           { label: "GoHighLevel Agency Pro / SaaS Mode", value: 497, display: "$497/mo", domain: "gohighlevel.com" },
-          { label: "SeldonFrame, unlimited workspaces", value: 29, display: "$29/mo" },
+          { label: "SeldonFrame Agency (white-label, client sub-accounts)", value: 99, display: "$99+/mo agency ($29 solo)" },
         ],
-        note: "Base plan pricing only. GoHighLevel adds the AI Employee and usage on top; SeldonFrame includes the AI receptionist in the flat price.",
+        note: "Base plan pricing only. GoHighLevel adds the AI Employee and usage on top; SeldonFrame includes the AI receptionist in the flat price. SeldonFrame's agency plans ($99-$299) bundle white-label and client sub-accounts; the $29 Builder tier is for an operator's own workspaces only.",
       },
     },
     {

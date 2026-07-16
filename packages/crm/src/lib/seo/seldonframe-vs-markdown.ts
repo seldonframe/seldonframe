@@ -9,6 +9,7 @@ import {
   SF_COLUMN,
   SHARED_FAQ,
   LAST_UPDATED,
+  sfPriceAnchor,
   type Competitor,
 } from "@/lib/seo/alternative-pages";
 import { getExtras, SF_PROS, SF_CONS, SWITCH_STEPS, DEMO_HREF } from "@/lib/seo/alternative-pages-extras";
@@ -33,7 +34,7 @@ export function renderSeldonframeVsMarkdown(c: Competitor): string {
   L.push(`## The short version`);
   L.push("");
   L.push(`- **${c.name} pricing:** ${emphasizeMd(c.them.pricingModel)}`);
-  L.push(`- **SeldonFrame pricing:** ${emphasizeMd("$29/mo flat, unlimited workspaces, first workspace free forever")}`);
+  L.push(`- **SeldonFrame pricing:** ${emphasizeMd(sfPriceAnchor(c.audience))}`);
   L.push(`- **Pick ${c.name} if:** ${emphasizeMd(x.chooseThem[0])}`);
   L.push(`- **Pick SeldonFrame if:** ${emphasizeMd(x.chooseSf[0])}`);
   L.push("");
