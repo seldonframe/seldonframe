@@ -2311,3 +2311,6 @@ C4 close-out with empirical SLICE 11 data.
   controller verifies ONE load-bearing claim it already knows the answer to
   — a report that fails its canary is discarded wholesale, not partially
   trusted.
+- 2026-07-15 — Pricing changes drift: when the pricing catalog (plans.ts) changes, grep the WHOLE content surface (lib/seo/**, marketing components, docs) for the OLD numbers and price+capability collocations — per-page review missed 41 stale claims. (docs/learnings/2026-07-15-pricing-claims-drift-audit.md)
+- 2026-07-15 — Route CTAs by their label's promise: 'Build it free' → the build surface, 'Start for free' → signup. A label that promises less friction than it delivers is a small lie. (docs/learnings/2026-07-15-route-by-promise-ctas.md)
+- 2026-07-15 — Never share one working tree between two active sessions: a concurrent session clobbered in-flight edits mid-stream. Branch work goes in a git worktree; commit early to pin.

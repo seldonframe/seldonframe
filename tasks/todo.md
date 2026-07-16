@@ -22,8 +22,21 @@ edits re-applied and committed promptly to pin them.
 - [x] BYOK hero line demoted to value framing (§1b)
 - [x] Targeted specs green (landing-mode-shell · marketing-pricing · render-home-markdown = 19/19)
 - [x] /agencies metadata pricing-truth fix (commit d8e8cc7f0)
-- [ ] Audit agency-facing content for stale pricing claims (Explore agent running) → fix FALSE ones
-- [ ] verify-build (verify-runner, maker≠checker) + reviewer diff pass → PR for Max's merge gate
+- [x] Audit: 41 false/misleading claims found (Explore agent) → fixed by 3 parallel implementers
+      (alternative-pages ×29 · guides ×12 files incl. 2 whole-guide recasts · agency-math/sell/
+      docs-pricing/tier-upsell) — commit 79418533c; seo 1474/1474 + guides 861/861 green
+- [x] Reviewer (maker≠checker): SHIP-WITH-FIXES, 0 blockers — all 5 fixes applied (metadata
+      adjacency · card framing · GMV line gated behind tierLadderOn · pronoun · /home.md re-voice)
+- [x] verify-build gate: PASS (touched suites 14/14 · tsc 0 new · use-server clean · no migrations ·
+      regression grep empty) → pushed, PR #100 open (Max's merge gate)
+
+**Review:** Shipped in one pass: 3 commits (homepage repositioning · /agencies metadata · 41-claim
+sweep). The audit was the sleeper — the retired pricing era ($29 white-label, 5→3→2 GMV ladder,
+$297 docs tier) survived in ~20 files/41 claims of ranked SEO content long after plans.ts moved on.
+Route-by-promise resolved the CTA question cleanly: labels promising a BUILD → chatbox; labels
+promising SIGNUP → /signup. ⏳ post-merge: live smoke /, /agencies, /sell, /docs/billing/pricing +
+Max eyeballs the CTA scroll-focus. Lesson candidates: pricing-claims drift needs a grep gate tied
+to plans.ts changes; two sessions must not share one working tree.
 
 ### Task — /reflect decision loop (2026-07-15, branch feat/reflect-decision-loop)
 
