@@ -533,8 +533,7 @@ const undoLastChange: AgentTool<z.infer<typeof undoLastChangeInput>> = {
 // theme-shaped requests and trips r1-customize's invalid_payload path. This
 // tool gives the copilot a structured, always-succeeds-or-tells-you-why path
 // straight to the same write core the settings page uses
-// (saveThemeForOrg, lib/theme/save-theme.ts — extracted from
-// saveThemeSettingsAction, lib/theme/actions.ts:100).
+// (saveThemeForOrg, lib/theme/save-theme.ts).
 //
 // Only offers the exact enum values normalizeTheme() actually accepts
 // (lib/theme/normalize-theme.ts) — anything else is silently coerced back to
