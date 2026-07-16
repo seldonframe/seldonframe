@@ -16,6 +16,31 @@ export const LAST_UPDATED = "July 2026";
 export type AltFaqItem = { q: string; a: string };
 export type SwitchReason = { title: string; body: string };
 
+/** A single evidence-ordered section on the /compare/seldonframe-vs-<slug>
+ *  page — OPTIONAL, competitor-specific, and rendered by
+ *  components/seo/seldonframe-vs-page.tsx only when a competitor supplies
+ *  `evidenceSections`. Every claim must trace to a primary/attributed source
+ *  (see docs/strategy/ghl-pain-messaging-plan-2026-07-16.md for the pattern);
+ *  no competitor other than the one populating this field is affected. */
+export type EvidenceSection = {
+  /** Section heading, e.g. "The lock-in: no supported export". */
+  title: string;
+  /** Body paragraphs, rendered in order. */
+  paragraphs: string[];
+  /** Optional short, attributed verbatim quote from the competitor's own
+   *  material (kept under 15 words per copyright/never-lies discipline). */
+  quote?: { text: string; source: string; href: string };
+  /** The honest SF contrast sentence closing out the section. */
+  contrast?: string;
+};
+
+/** The visually distinct "what they get right / what's true for everyone"
+ *  callout — the never-lies proof. OPTIONAL; renders only when present. */
+export type HonestyBox = {
+  title: string;
+  items: string[];
+};
+
 export type Competitor = {
   /** URL slug: /alternative-to-<slug> */
   slug: string;
@@ -47,6 +72,13 @@ export type Competitor = {
   /** Honest "choose them if…" sentence. */
   whenTheyWin: string;
   faq: AltFaqItem[];
+  /** OPTIONAL — evidence-ordered deep-dive sections for the vs-page (used
+   *  only by gohighlevel as of 2026-07-16; every other competitor omits this
+   *  and renders byte-identically to before). Order in the array is render
+   *  order — strongest evidence first. */
+  evidenceSections?: EvidenceSection[];
+  /** OPTIONAL — the honesty-box callout (used only by gohighlevel). */
+  honestyBox?: HonestyBox;
 };
 
 /** SeldonFrame's side of the comparison table — identical on every page. */
@@ -139,6 +171,56 @@ export const COMPETITORS: Competitor[] = [
         a: "Yes. Client workspaces, a branded client portal, and custom domains are included starting at $99/mo — not locked behind a $497/mo tier.",
       },
     ],
+    evidenceSections: [
+      {
+        title: "The lock-in: no supported export",
+        paragraphs: [
+          "GoHighLevel's own help center is explicit about what happens if you ever want to leave: your funnel and website pages don't come with you. The article's own words:",
+          "Sub-account transfers off an agency's master account are agency-initiated only, and white-label sub-accounts can't transfer at all — integrations, phone numbers, and email senders sever the moment a sub-account moves.",
+        ],
+        quote: {
+          text: "does not provide tools, guidance, or support for copying, hosting, or maintaining",
+          source: "GoHighLevel help center, article 155000007342",
+          href: "https://help.gohighlevel.com/support/solutions/articles/155000007342",
+        },
+        contrast:
+          "SeldonFrame is AGPL-3.0 open source and self-hostable — every workspace exports as JSON, and nothing about leaving requires the vendor's help.",
+      },
+      {
+        title: "The complexity: a real learning curve",
+        paragraphs: [
+          "GoHighLevel's own G2 review base tells a consistent story: Learning Curve (141 mentions), Steep Learning Curve (90), and Not Intuitive (56) — 287 grouped mentions in G2's AI-tallied cons summary as of July 2026 (directional, since categories can overlap). Capterra's aggregate ease-of-use sub-score sits at 3.7/5, the lowest of its rated categories. Reviewers report implementations commonly taking 2–4 weeks to get running.",
+        ],
+        contrast:
+          "A SeldonFrame workspace — site, CRM, booking calendar, intake, and the AI agent — is generated from one conversation in about 3 minutes.",
+      },
+      {
+        title: "The pricing stack",
+        paragraphs: [
+          "GoHighLevel's published pricing page (per GoHighLevel's pricing page, July 2026) lists a $97/$297/$497 monthly ladder. SaaS Mode — reselling the platform under your own brand — requires the $497/mo tier, and white-label mobile branding is a separate $497/mo add-on on any tier. On top of the subscription, usage is metered by default: $0.675 per 1,000 LC emails, per-segment SMS, and per-minute voice, drawn from an auto-refilling wallet on the agency's card. Add-ons stack further: $97/mo per sub-account for the AI Employee, $297/mo for HIPAA (which can't be disabled once purchased), and $500/mo for premium support.",
+          "These numbers are published in GoHighLevel's own support docs — they're just absent from the top-level marketing pages. To GoHighLevel's credit, there are real mitigations: agencies can bring their own SMTP to cut email costs, and usage rebilling with markup becomes available on the $497 tier.",
+        ],
+        contrast:
+          "SeldonFrame's agency tiers are flat — $99/$199/$299/mo, whitelabel and client portal included, 0% GMV fee on agency tiers, and AI/telephony run on your own keys at provider cost. The marketplace's 5% fee only ever applies to marketplace transactions, never to the subscription tier.",
+      },
+      {
+        title: "Reliability, as reviewers report it",
+        paragraphs: [
+          "Individual reviewers report real incidents: a 30–45-day phone outage described in a G2 review dated 2026-06-29; misfired workflow emails sent to the wrong recipients; and a status-page feature request that's stayed open on GoHighLevel's own community board since April 2023. These are reviewer reports, not a claim that GoHighLevel is broadly unreliable — see the honesty box below for the aggregate rating.",
+        ],
+        contrast:
+          "Rather than generalize from anyone's outages, SeldonFrame sells its own never-lies machinery directly: grounded responses, an enforced read-back before anything is booked, guardrails, and automatic evals on every agent.",
+      },
+    ],
+    honestyBox: {
+      title: "What GoHighLevel gets right — and what's true for everyone",
+      items: [
+        "GoHighLevel rates 4.2/5 on Capterra and 4.6/5 on G2 in aggregate — the complaints above are real but are the minority voice, not the average experience.",
+        "Its fees are published in its own support documentation; nothing here is a hidden or secret charge.",
+        "A2P 10DLC carrier registration delays apply to every SMS platform, SeldonFrame included — this isn't a GoHighLevel-specific problem.",
+        "For a large team that wants one all-in-one platform with a huge template ecosystem and is willing to invest the ramp-up time, GoHighLevel is a legitimate, well-reviewed choice.",
+      ],
+    },
   },
   {
     slug: "vapi",
