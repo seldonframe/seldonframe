@@ -164,6 +164,79 @@ export function SeldonFrameVsPage({ competitor }: { competitor: Competitor }): R
           />
         </section>
 
+        {/* ── EVIDENCE-ORDERED DEEP-DIVE SECTIONS (OPTIONAL — only present when
+            the competitor supplies evidenceSections; every other competitor
+            page is unaffected) ── */}
+        {c.evidenceSections && c.evidenceSections.length > 0 ? (
+          <section style={{ padding: "34px 0 8px" }}>
+            <h2 style={H2}>{`${c.name}, evidence first`}</h2>
+            {c.evidenceSections.map((sec) => (
+              <div key={sec.title} style={{ marginTop: 22, maxWidth: 760 }}>
+                <h3 style={{ margin: 0, fontSize: 18.5, fontWeight: 800 }}>{sec.title}</h3>
+                {sec.paragraphs.map((p, i) => (
+                  <p key={i} style={{ margin: "10px 0 0", fontSize: 15, lineHeight: 1.65, color: "rgba(34,29,23,0.78)" }}>
+                    {emphasize(p)}
+                  </p>
+                ))}
+                {sec.quote ? (
+                  <blockquote
+                    style={{
+                      margin: "12px 0 0",
+                      padding: "12px 18px",
+                      borderLeft: `3px solid ${MKT.green}`,
+                      background: MKT.green10,
+                      borderRadius: "0 10px 10px 0",
+                      fontSize: 14.5,
+                      lineHeight: 1.6,
+                      fontStyle: "italic",
+                      color: "rgba(34,29,23,0.82)",
+                    }}
+                  >
+                    {`"${sec.quote.text}"`}
+                    <div style={{ marginTop: 6, fontSize: 12.5, fontStyle: "normal", fontWeight: 600 }}>
+                      <a href={sec.quote.href} rel="nofollow noopener" className="sf-link" style={{ color: MKT.green, textDecoration: "underline" }}>
+                        {sec.quote.source}
+                      </a>
+                      {" — accessed July 2026"}
+                    </div>
+                  </blockquote>
+                ) : null}
+                {sec.contrast ? (
+                  <p style={{ margin: "10px 0 0", fontSize: 14.5, lineHeight: 1.6, color: "rgba(34,29,23,0.7)" }}>
+                    <strong style={{ color: MKT.green }}>SeldonFrame: </strong>
+                    {emphasize(sec.contrast)}
+                  </p>
+                ) : null}
+              </div>
+            ))}
+          </section>
+        ) : null}
+
+        {/* ── HONESTY BOX (OPTIONAL — the never-lies proof) ── */}
+        {c.honestyBox ? (
+          <section style={{ padding: "20px 0 8px" }}>
+            <div
+              style={{
+                border: `1.5px solid ${MKT.ink10}`,
+                borderRadius: 16,
+                padding: "20px 24px",
+                background: "rgba(255,255,255,0.6)",
+                maxWidth: 760,
+              }}
+            >
+              <h3 style={{ margin: 0, fontSize: 16.5, fontWeight: 800 }}>{c.honestyBox.title}</h3>
+              <ul style={{ margin: "12px 0 0", padding: 0, listStyle: "none" }}>
+                {c.honestyBox.items.map((item) => (
+                  <li key={item} style={{ fontSize: 14, lineHeight: 1.6, color: "rgba(34,29,23,0.75)", marginBottom: 8 }}>
+                    <span style={{ color: MKT.green, fontWeight: 800, marginRight: 8 }}>✓</span>
+                    {emphasize(item)}
+                  </li>
+                ))}
+              </ul>
+            </div>
+          </section>
+        ) : null}
+
         {/* ── THE TWO CONTENDERS ── */}
         <section className="sf-sfvs-cards" style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 16, padding: "10px 0 8px" }}>
           <div style={{ border: "1.5px solid rgba(31, 43, 36,0.4)", borderRadius: 16, padding: "22px 24px", background: "rgba(31, 43, 36,0.05)" }}>

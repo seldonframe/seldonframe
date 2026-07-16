@@ -2391,3 +2391,4 @@ left in the stack — never touch/drop a stash you didn't push yourself.
 Prevention: to diff/typecheck a "before my change" baseline in a worktree,
 use `git worktree add` against a specific commit, or `git show <sha>:<path>`,
 or just re-run the same check on the parent repo path — never stash.
+- 2026-07-16 — Quote disputes (reviewer vs implementer) are settled by re-fetching the SOURCE, never the plan doc both relied on: the 'misquote' block was a false positive — both quotes were verbatim substrings of different sentences. (docs/learnings/2026-07-16-adjudicate-at-the-source.md)

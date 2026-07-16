@@ -12,6 +12,7 @@ import type { Metadata } from "next";
 import Link from "next/link";
 import { MarketingNav } from "@/components/landing/marketing-nav";
 import { MarketingAgencyMath } from "@/components/landing/marketing-agency-math";
+import { MarketingAgencyOwnership } from "@/components/landing/marketing-agency-ownership";
 import { MarketingFooter } from "@/components/landing/marketing-footer";
 
 export const metadata: Metadata = {
@@ -30,6 +31,7 @@ export default function AgenciesPage() {
       <MarketingNav />
       <main id="main-content" className="pt-[100px]">
         <MarketingAgencyMath />
+        <MarketingAgencyOwnership />
 
         {/* Guides for agency builders — cross-links into the supply-side content library. */}
         <section aria-label="Guides for agency builders" className="border-t border-[rgba(34,29,23,.08)] px-5 py-16 md:px-8 lg:px-12">
