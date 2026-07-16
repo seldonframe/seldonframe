@@ -56,14 +56,44 @@ async function defaultInsert(row: NewAgentRunReceiptRow): Promise<void> {
 const SUMMARY_MAX_LENGTH = 140;
 
 /**
- * Derive a one-line, human-readable summary per the design's rule: the first
- * tool call's note when present, else the turn's reply text truncated to 140
- * chars, else "ran with no actions". Pure; never throws.
+ * Agent truth slice (Task 1) — credential-shape scrubber, reusing L-10's
+ * shape list (tasks/lessons.md): `postgres://`/`postgresql://`, `sk-`, `sk_`,
+ * `wst_`, `ghp_`, `Bearer <token>`. A receipt summary is operator-facing and
+ * MUST NEVER carry a live key/token even when the underlying error message
+ * (a thrown Error, an SDK error) happens to echo one back. Redacts the
+ * matched shape + its contiguous token-ish tail (or, for `Bearer `, the
+ * credential that follows it). Pure; never throws.
+ */
+export function scrubSecretShapes(text: string): string {
+  return text
+    .replace(/postgres(?:ql)?:\/\/[^\s]*/gi, "[redacted]")
+    .replace(/\b(?:sk|sk_|wst|ghp)[-_][A-Za-z0-9._-]+/g, "[redacted]")
+    .replace(/Bearer\s+[A-Za-z0-9._-]+/g, "Bearer [redacted]");
+}
+
+/**
+ * Derive a one-line, human-readable summary. Agent truth slice (Task 1): an
+ * `errorMessage` (when non-blank) takes priority over everything else — the
+ * caller only passes it on a genuine failure, never on an ok-but-actionless
+ * turn — and becomes `"error: " + <first line, secret-scrubbed, truncated to
+ * the 140-char summary limit>`. Absent an errorMessage, the pre-existing rule
+ * applies unchanged: the first tool call's note when present, else the
+ * turn's reply text truncated to 140 chars, else "ran with no actions" (the
+ * ok-but-actionless fallback — NEVER used for an error). Pure; never throws.
  */
 export function deriveReceiptSummary(input: {
   toolCalls?: AgentRunReceiptToolCall[];
   replyText?: string;
+  errorMessage?: string;
 }): string {
+  const rawError = input.errorMessage?.trim();
+  if (rawError) {
+    const firstLine = rawError.split(/\r?\n/)[0];
+    const prefix = "error: ";
+    const scrubbed = scrubSecretShapes(firstLine);
+    return (prefix + scrubbed).slice(0, SUMMARY_MAX_LENGTH);
+  }
+
   const firstNote = input.toolCalls?.find((c) => typeof c.note === "string" && c.note.trim().length > 0)
     ?.note;
   if (firstNote) return firstNote;
