@@ -35,6 +35,7 @@
 
 import { isCronDueWithin } from "./cron-due";
 import type { FiredEvent, RunEventAgentResult } from "./run-event-agent";
+import { scrubSecretShapes } from "@/lib/agent-receipts/write";
 
 /** The synthetic event type a scheduled fire replays through runEventAgent. The
  *  orchestrator's findEventAgents resolves the matching scheduled agent for the
@@ -231,12 +232,18 @@ export async function runDueScheduledAgents(
         `[schedule-agents] runEventAgent failed for deployment ${d.deploymentId}:`,
         err instanceof Error ? err.message : String(err),
       );
+      // Agent truth slice (Task 1) — scrub L-10 credential shapes out of the
+      // thrown error's message BEFORE it becomes a receipt summary (a
+      // thrown Error can echo back a connection string / key from a lower
+      // layer; the receipt is operator-facing and must never carry one).
       await emitReceipt(deps, {
         orgId: d.orgId,
         deploymentId: d.deploymentId,
         status: "error",
         sourceRef: firedAt.toISOString(),
-        summary: `failed: ${err instanceof Error ? err.message.slice(0, 120) : "unknown error"}`,
+        summary: `failed: ${
+          err instanceof Error ? scrubSecretShapes(err.message).slice(0, 120) : "unknown error"
+        }`,
       });
       // Do NOT markFired on a hard failure — a transient error should be retried
       // next tick (the agent never ran). Continue to the next deployment.

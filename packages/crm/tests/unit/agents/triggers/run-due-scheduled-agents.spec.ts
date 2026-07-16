@@ -306,6 +306,28 @@ describe("runDueScheduledAgents — writeReceipt DI hook (agent receipts)", () =
     assert.match(receipts[0].summary as string, /failed:/);
   });
 
+  // Agent truth slice (Task 1) — a thrown error's message becomes the
+  // receipt summary (verbatim today); this pins that any credential-shaped
+  // substring inside it is scrubbed (L-10 shapes) before ever being written.
+  test("agent truth: a throwing runEventAgent's secret-shaped error message is scrubbed in the receipt summary", async () => {
+    const receipts: Array<Record<string, unknown>> = [];
+    const deps: RunDueScheduledAgentsDeps = {
+      list: async () => [dep({ deploymentId: "leaky-1" })],
+      runEventAgent: async () => {
+        throw new Error("connect failed: postgres://user:sk-abcDEF12345@host/db");
+      },
+      markFired: async () => {},
+      writeReceipt: async (args) => {
+        receipts.push(args as unknown as Record<string, unknown>);
+      },
+    };
+    await withSilencedWarn(() => runDueScheduledAgents(NOW_MS, deps));
+    assert.equal(receipts.length, 1);
+    const summary = receipts[0].summary as string;
+    assert.equal(summary.includes("sk-abcDEF12345"), false);
+    assert.equal(summary.includes("postgres://user:"), false);
+  });
+
   test("a skipped deployment (not due) never calls writeReceipt", async () => {
     const receipts: Array<Record<string, unknown>> = [];
     const { deps } = makeDeps([dep({ deploymentId: "skip-1", cron: "0 0 1 1 *" })]);
