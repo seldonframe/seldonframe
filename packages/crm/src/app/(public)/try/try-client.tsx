@@ -93,6 +93,12 @@ export function TryClient({ initialUrl }: { initialUrl: string }) {
   // burn the visitor's rate limit. See run-create-from-url.ts's step-5 catch
   // for the server-side `message` this reads.
   const [extractionFailed, setExtractionFailed] = useState(false);
+  // 2026-07-16 — credits_exhausted honesty fix. Out-of-credits on the
+  // Anthropic account funding the build is equally non-retryable from the
+  // visitor's side (Anthropic reports it as HTTP 400, mapped server-side in
+  // anthropic-error-map.ts) — a "Try again" button would be a lie. The
+  // server's `message` explains it; we just suppress the retry affordance.
+  const [creditsExhausted, setCreditsExhausted] = useState(false);
   const esRef = useRef<EventSource | null>(null);
   const autoSubmittedRef = useRef(false);
 
@@ -152,6 +158,7 @@ export function TryClient({ initialUrl }: { initialUrl: string }) {
       const isExtractionFailed = data.reason === "extraction_failed";
       setRateLimited(data.code === "rate_limited");
       setExtractionFailed(isExtractionFailed);
+      setCreditsExhausted(data.reason === "credits_exhausted");
       setError(
         data.message ??
           (isExtractionFailed
@@ -182,6 +189,7 @@ export function TryClient({ initialUrl }: { initialUrl: string }) {
     setError(null);
     setRateLimited(false);
     setExtractionFailed(false);
+    setCreditsExhausted(false);
     setBuildInput(null);
   }
 
@@ -357,6 +365,18 @@ export function TryClient({ initialUrl }: { initialUrl: string }) {
                       Describe your business instead
                     </a>
                   </div>
+                ) : creditsExhausted ? (
+                  // credits_exhausted is non-retryable until credits are
+                  // added upstream — no "Try again" (it would fail
+                  // identically). The server message explains; the only
+                  // honest affordance is starting over with the input.
+                  <button
+                    type="button"
+                    onClick={reset}
+                    className="mt-3 rounded-[11px] border border-[rgba(34,29,23,.16)] bg-[#FFFDFA] px-4 py-2 text-[13.5px] font-[500] text-[#221D17]"
+                  >
+                    Back
+                  </button>
                 ) : (
                   <button
                     type="button"
