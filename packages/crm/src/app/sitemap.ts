@@ -13,9 +13,9 @@
 
 import type { MetadataRoute } from "next";
 import { isRecordToAgentOn } from "@/lib/recordings/policy";
-import { AGENT_JOBS, allJobVerticalPairs } from "@/lib/seo/agent-pages";
+import { AGENT_JOBS, KEPT_PAIRS } from "@/lib/seo/agent-pages";
 import { COMPETITORS } from "@/lib/seo/alternative-pages";
-import { VS_PAIRS, vsSlug } from "@/lib/seo/alternative-pages-extras";
+import { VS_PAIRS, vsSlug, isKeptVsPair } from "@/lib/seo/alternative-pages-extras";
 import { allBestSlugs } from "@/lib/seo/best-pages";
 import { allGuideSlugs } from "@/lib/seo/guides";
 import { allBlogSlugs } from "@/lib/seo/blog";
@@ -64,8 +64,9 @@ export default async function sitemap(): Promise<MetadataRoute.Sitemap> {
     });
   }
 
-  // Tier-2: job × vertical (the long tail).
-  for (const { job, vertical } of allJobVerticalPairs()) {
+  // Tier-2: job × vertical (the long tail) — only the kept pairs (indexation
+  // consolidation, 2026-07-17); folded pairs 301 and must not be sitemapped.
+  for (const { job, vertical } of KEPT_PAIRS) {
     entries.push({
       url: `${base}/ai-agents/${job}/for/${vertical}`,
       lastModified: now,
@@ -150,10 +151,14 @@ export default async function sitemap(): Promise<MetadataRoute.Sitemap> {
     });
   }
 
-  // Head-to-head comparison pages (/compare/<a>-vs-<b>).
+  // Head-to-head comparison pages (/compare/<a>-vs-<b>) — only the kept
+  // third-party pairs (indexation consolidation, 2026-07-17); folded pairs
+  // 301 to /alternatives and must not be sitemapped.
   for (const pair of VS_PAIRS) {
+    const slug = vsSlug(pair);
+    if (!isKeptVsPair(slug)) continue;
     entries.push({
-      url: `${base}/compare/${vsSlug(pair)}`,
+      url: `${base}/compare/${slug}`,
       lastModified: now,
       changeFrequency: "monthly",
       priority: 0.7,

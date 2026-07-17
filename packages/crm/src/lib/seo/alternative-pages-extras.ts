@@ -828,3 +828,25 @@ export function getVsPair(slug: string): { pair: VsPair; a: Competitor; b: Compe
   if (!pair) throw new Error(`Unknown vs pair: ${slug}`);
   return { pair, a: getCompetitor(pair.a), b: getCompetitor(pair.b) };
 }
+
+// ─── indexation consolidation (2026-07-17) ────────────────────────────────────
+// See docs/strategy/seo/2026-07-17-indexation-consolidation-plan.md — of the 30
+// third-party VS_PAIRS, 3 months of GSC data show clicks on only these 7; the
+// other ~23 have 0 clicks and Google treats a mismatched-topic 301 as a
+// soft-404, which is the intended outcome for them. The 26 seldonframe-vs-*
+// pages (COMPETITORS, alternative-pages.ts) are bottom-funnel and untouched —
+// this allowlist governs ONLY the third-party VS_PAIRS family.
+export const KEPT_VS_SLUGS: string[] = [
+  "chatbase-vs-voiceflow",
+  "chatbase-vs-botpress",
+  "gohighlevel-vs-linktree",
+  "gohighlevel-vs-klaviyo",
+  "keap-vs-activecampaign",
+  "klaviyo-vs-hubspot",
+  "vapi-vs-retell-ai",
+];
+
+/** Whether a third-party `/compare/<a>-vs-<b>` pair keeps its standalone page. */
+export function isKeptVsPair(slug: string): boolean {
+  return KEPT_VS_SLUGS.includes(slug);
+}
