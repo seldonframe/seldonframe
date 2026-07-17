@@ -844,6 +844,12 @@ export function isKeptPair(job: string, vertical: string): boolean {
   return KEPT_PAIRS.some((p) => p.job === job && p.vertical === vertical);
 }
 
+/** The kept verticals for one job, in registry order — the sibling set a kept
+ *  Tier-2 page cross-links to (PR 2, Part 1c "review-agent cluster"). Pure. */
+export function keptVerticalsForJob(jobSlug: string): Vertical[] {
+  return KEPT_PAIRS.filter((p) => p.job === jobSlug).map((p) => getVertical(p.vertical));
+}
+
 // ─── copy composition (the GEO answer-page engine) ─────────────────────────────
 
 export type ComposedPageCopy = {

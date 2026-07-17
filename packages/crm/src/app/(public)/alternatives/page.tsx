@@ -7,7 +7,7 @@ import { MarketplaceNav, MarketplaceFooter } from "@/components/marketplace/mark
 import { MarketplaceStyles } from "@/components/marketplace/marketplace-styles";
 import { MKT } from "@/components/marketplace/marketplace-data";
 import { COMPETITORS, LAST_UPDATED, getCompetitor } from "@/lib/seo/alternative-pages";
-import { VS_PAIRS, vsSlug } from "@/lib/seo/alternative-pages-extras";
+import { VS_PAIRS, vsSlug, isKeptVsPair } from "@/lib/seo/alternative-pages-extras";
 
 export const metadata: Metadata = {
   title: "SeldonFrame vs the alternatives — honest comparisons for agencies & builders",
@@ -15,6 +15,11 @@ export const metadata: Metadata = {
     "How SeldonFrame compares to GoHighLevel, HubSpot, ActiveCampaign, ClickFunnels, Vapi, Podium and more — plus HighLevel head-to-heads: AI receptionist, website, CRM and booking at $29/mo flat.",
   alternates: { canonical: "/alternatives" },
 };
+
+// Folded third-party pairs 301 to this very page (indexation consolidation,
+// 2026-07-17) — listing them here would just be a dead click, so only the
+// kept pairs are linked.
+const KEPT_VS_PAIRS = VS_PAIRS.filter((p) => isKeptVsPair(vsSlug(p)));
 
 export default function AlternativesHubPage(): ReactElement {
   return (
@@ -99,7 +104,7 @@ export default function AlternativesHubPage(): ReactElement {
           Comparing two tools against each other? These break down the real trade-off — and what to do when you need what both do.
         </p>
         <div style={{ display: "flex", flexWrap: "wrap", gap: 8, marginTop: 18 }}>
-          {VS_PAIRS.map((p) => (
+          {KEPT_VS_PAIRS.map((p) => (
             <Link
               key={vsSlug(p)}
               href={`/compare/${vsSlug(p)}`}

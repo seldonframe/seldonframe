@@ -7,9 +7,9 @@
 //
 // Served as text/markdown at /llms.txt.
 
-import { AGENT_JOBS, VERTICALS } from "@/lib/seo/agent-pages";
+import { AGENT_JOBS, VERTICALS, KEPT_PAIRS, getJob, getVertical } from "@/lib/seo/agent-pages";
 import { COMPETITORS, getCompetitor } from "@/lib/seo/alternative-pages";
-import { VS_PAIRS, vsSlug } from "@/lib/seo/alternative-pages-extras";
+import { VS_PAIRS, vsSlug, isKeptVsPair } from "@/lib/seo/alternative-pages-extras";
 import { BEST_PAGES, bestSlug, getBestPage, midSentence } from "@/lib/seo/best-pages";
 import { allGuideSlugs, getGuide } from "@/lib/seo/guides";
 import { allBlogSlugs, getBlogArticle } from "@/lib/seo/blog";
@@ -64,18 +64,18 @@ export async function GET(req: Request): Promise<Response> {
   }
   lines.push("");
 
-  // Tier-2: a representative sample of job × vertical pages (the long tail is
-  // enumerated in sitemap.xml; here we list a focused, useful subset per job so
-  // the file stays scannable while still revealing the vertical pattern).
-  lines.push("## AI agents by industry (examples)");
+  // Tier-2: only the KEPT job × vertical pages (indexation consolidation,
+  // 2026-07-17) — every other pair now 301s to its job hub, so listing them
+  // here would just send the crawler through a redirect. The full long tail
+  // (kept pairs only) is enumerated in sitemap.xml.
+  lines.push("## AI agents by industry");
   lines.push("");
-  const sampleVerticals = VERTICALS.slice(0, 6);
-  for (const job of AGENT_JOBS) {
-    for (const v of sampleVerticals) {
-      lines.push(
-        `- [${job.name} for ${v.plural}](${base}/ai-agents/${job.slug}/for/${v.slug}): ${job.name} tailored for ${v.plural}.`,
-      );
-    }
+  for (const { job: jobSlug, vertical: verticalSlug } of KEPT_PAIRS) {
+    const job = getJob(jobSlug);
+    const v = getVertical(verticalSlug);
+    lines.push(
+      `- [${job.name} for ${v.plural}](${base}/ai-agents/${jobSlug}/for/${verticalSlug}): ${job.name} tailored for ${v.plural}.`,
+    );
   }
   lines.push("");
 
@@ -93,7 +93,9 @@ export async function GET(req: Request): Promise<Response> {
   for (const c of COMPETITORS) {
     lines.push(`- [${c.name} pricing breakdown](${base}/${c.slug}-pricing): plans, the costs that stack on top, and what you'll actually pay.`);
   }
-  for (const p of VS_PAIRS) {
+  // Only the kept third-party pairs (indexation consolidation, 2026-07-17) —
+  // the other ~23 now 301 to /alternatives.
+  for (const p of VS_PAIRS.filter((pair) => isKeptVsPair(vsSlug(pair)))) {
     lines.push(
       `- [${getCompetitor(p.a).name} vs ${getCompetitor(p.b).name}](${base}/compare/${vsSlug(p)}): ${p.angle}`,
     );
@@ -210,7 +212,7 @@ export async function GET(req: Request): Promise<Response> {
   lines.push(`- [AI agent library](${base}/ai-agents): every stat-backed agent answer page.`);
   lines.push(`- [Pricing](${base}/pricing): plans and what a workspace costs.`);
   lines.push(
-    `- Full URL list: ${base}/sitemap.xml lists every agent page (all ${AGENT_JOBS.length} jobs × ${VERTICALS.length} industries).`,
+    `- Full URL list: ${base}/sitemap.xml lists every agent page (${AGENT_JOBS.length} job hubs, each covering all ${VERTICALS.length} industries, plus the ${KEPT_PAIRS.length} by-industry pages with real search traffic).`,
   );
   lines.push("");
 
