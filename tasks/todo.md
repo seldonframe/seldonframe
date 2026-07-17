@@ -7,6 +7,33 @@ with a checkable plan, gets ticked off as it ships, and ends with a review block
 
 ## In flight
 
+### Task — cursor.directory security-scan fixes: @seldonframe/mcp (2026-07-17, worktree vibrant-hamilton-3697cd)
+
+Scan flagged 4 findings; plugin hidden pending review. Ground truth established before coding:
+published npm 1.60.0 src is byte-identical to this worktree — findings 1 (env-key consent gate),
+3 (SSRF guard), 4 (SKILL.md masked-flow claim) were ALREADY fixed in `5efcc90f1` (v1.59.2) and are
+live on npm; the cursor.directory submission predates that commit, so resubmission clears them.
+Finding 2 is REAL: `upload_workspace_image.local_file_path` accepts any absolute path (only
+image-sniffing guards it — real images anywhere on disk remain exfiltratable). Version drift:
+package.json=1.60.0 but server.json/manifest.json/welcome.js VERSION=1.59.2.
+
+- [ ] 1. Finding 2: `assertLocalPathAllowed` helper in src/security.js — realpath containment
+      under process.cwd() or `SELDONFRAME_UPLOAD_ROOTS` (path-delimited opt-in env var);
+      win32 case-insensitive; symlink-escape safe; explicit remediation error.
+- [ ] 2. Wire into upload_workspace_image local_file_path branch (before readFileSync) +
+      update tool description.
+- [ ] 3. Unit tests in tests/security.test.mjs (inside-cwd OK · outside rejected · extra root
+      opt-in · symlink escape · relative resolved against cwd).
+- [ ] 4. Version bump 1.61.0 everywhere: package.json, server.json (×2), manifest.json,
+      welcome.js VERSION (also settles the pending "server.json sync").
+- [ ] 5. Gates: node --test mcp tests · scripts/run-unit-tests.js (delta-judged) · verify-build.
+- [ ] 6. Commit + PR.
+- [ ] 7. npm publish 1.61.0 (explicitly instructed; may stop at OTP → Max).
+- [ ] 8. Max: cursor.directory Edit-plugin → resubmit re-scan; then ClawHub + Smithery.
+
+Constitution check: progressive key disclosure preserved — consent gate fires only when an env
+key exists AND would be transmitted; no-key platform-fallback first-run untouched.
+
 ### Task — Booking intake fields: soul-first classification (2026-07-16, worktree youthful-panini-ffb749)
 
 Live-confirmed bug (flow-tech-air-conditioning): an explicit AESTHETIC pick ("technical-restrained"
