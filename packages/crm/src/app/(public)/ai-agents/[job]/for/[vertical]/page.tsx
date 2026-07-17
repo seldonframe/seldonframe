@@ -9,9 +9,10 @@
 // ADDITIVE: no migration, no DB — pure registry → static HTML.
 
 import type { Metadata } from "next";
-import { notFound } from "next/navigation";
+import { notFound, permanentRedirect } from "next/navigation";
 import {
-  allJobVerticalPairs,
+  KEPT_PAIRS,
+  isKeptPair,
   getJob,
   getVertical,
   composePageCopy,
@@ -20,9 +21,11 @@ import { AgentPage } from "@/components/seo/agent-page";
 
 type RouteParams = { params: Promise<{ job: string; vertical: string }> };
 
-/** Statically pre-render one page per (job, vertical) pair. */
+/** Statically pre-render only the kept (job, vertical) pairs — see
+ *  KEPT_PAIRS (indexation consolidation, 2026-07-17). Every other valid
+ *  pair still resolves at request time and 301s to its job hub. */
 export function generateStaticParams(): { job: string; vertical: string }[] {
-  return allJobVerticalPairs();
+  return KEPT_PAIRS;
 }
 
 export async function generateMetadata({ params }: RouteParams): Promise<Metadata> {
@@ -35,6 +38,7 @@ export async function generateMetadata({ params }: RouteParams): Promise<Metadat
   } catch {
     return { title: "Agent not found — SeldonFrame" };
   }
+  if (!isKeptPair(job.slug, vertical.slug)) permanentRedirect(`/ai-agents/${job.slug}`);
   const copy = composePageCopy(job, vertical);
   const canonical = `/ai-agents/${job.slug}/for/${vertical.slug}`;
   return {
@@ -66,5 +70,6 @@ export default async function AgentJobVerticalPage({ params }: RouteParams) {
   } catch {
     notFound();
   }
+  if (!isKeptPair(job.slug, vertical.slug)) permanentRedirect(`/ai-agents/${job.slug}`);
   return <AgentPage job={job} vertical={vertical} />;
 }

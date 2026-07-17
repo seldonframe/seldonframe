@@ -7,10 +7,10 @@
 //     VS_PAIRS registry, ending in the SeldonFrame both-worlds answer (VsPage).
 // Additive: no DB.
 import type { Metadata } from "next";
-import { notFound } from "next/navigation";
+import { notFound, permanentRedirect } from "next/navigation";
 import { VsPage } from "@/components/seo/vs-page";
 import { SeldonFrameVsPage } from "@/components/seo/seldonframe-vs-page";
-import { VS_PAIRS, getVsPair, vsSlug } from "@/lib/seo/alternative-pages-extras";
+import { VS_PAIRS, getVsPair, vsSlug, isKeptVsPair } from "@/lib/seo/alternative-pages-extras";
 import { COMPETITORS, getCompetitor, LAST_UPDATED, type Competitor } from "@/lib/seo/alternative-pages";
 import { buildOgUrl, shortPrice } from "@/lib/seo/og-card";
 
@@ -31,7 +31,7 @@ function resolveSfVs(pairSlug: string): Competitor | null {
 export function generateStaticParams(): { pair: string }[] {
   return [
     ...COMPETITORS.map((c) => ({ pair: `${SF_VS_PREFIX}${c.slug}` })),
-    ...VS_PAIRS.map((p) => ({ pair: vsSlug(p) })),
+    ...VS_PAIRS.map((p) => vsSlug(p)).filter(isKeptVsPair).map((pair) => ({ pair })),
   ];
 }
 
@@ -59,6 +59,9 @@ export async function generateMetadata({ params }: RouteParams): Promise<Metadat
   } catch {
     return { title: "Comparison not found — SeldonFrame" };
   }
+  // Folded third-party pair (indexation consolidation, 2026-07-17) — 301 to
+  // the /alternatives hub; seldonframe-vs-* pairs never reach this branch.
+  if (!isKeptVsPair(pairSlug)) permanentRedirect("/alternatives");
   const { a, b } = resolved;
   const title = `${a.name} vs ${b.name}: What You Need to Know (${LAST_UPDATED}) — SeldonFrame`;
   const description = `${a.name} vs ${b.name}, honestly compared: pricing, AI receptionist, whitelabel and the business system behind the agent — plus the both-worlds option.`;
@@ -84,5 +87,6 @@ export default async function ComparePairPage({ params }: RouteParams) {
   } catch {
     notFound();
   }
+  if (!isKeptVsPair(pairSlug)) permanentRedirect("/alternatives");
   return <VsPage pair={resolved.pair} a={resolved.a} b={resolved.b} />;
 }
