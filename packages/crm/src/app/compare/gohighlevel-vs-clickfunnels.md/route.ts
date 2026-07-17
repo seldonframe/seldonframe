@@ -1,19 +1,8 @@
-// /compare/gohighlevel-vs-clickfunnels.md — Markdown twin of the head-to-head page.
-import { getVsPair } from "@/lib/seo/alternative-pages-extras";
-import { renderVsMarkdown } from "@/lib/seo/alternative-markdown";
-import { logMarkdownFetch } from "@/lib/marketplace/md-analytics";
-
+// /compare/gohighlevel-vs-clickfunnels.md — folded pair (indexation consolidation, 2026-07-17): 308
+// to the /alternatives hub, mirroring the HTML page's permanentRedirect. See
+// docs/strategy/seo/2026-07-17-indexation-consolidation-plan.md.
 export const dynamic = "force-dynamic";
 
 export function GET(req: Request): Response {
-  logMarkdownFetch(req, { surface: "compare_page", mode: "explicit_md", path: "/compare/gohighlevel-vs-clickfunnels.md" });
-  const { pair, a, b } = getVsPair("gohighlevel-vs-clickfunnels");
-  const md = renderVsMarkdown(pair, a, b);
-  return new Response(md, {
-    headers: {
-      "Content-Type": "text/markdown; charset=utf-8",
-      Link: '<https://www.seldonframe.com/compare/gohighlevel-vs-clickfunnels>; rel="alternate"; type="text/html"',
-      "Cache-Control": "public, max-age=300, s-maxage=3600",
-    },
-  });
+  return Response.redirect(new URL("/alternatives", req.url), 308);
 }
