@@ -10,6 +10,7 @@ import { MarketplaceStyles } from "@/components/marketplace/marketplace-styles";
 import { MKT } from "@/components/marketplace/marketplace-data";
 import { GoogleReviewLinkGenerator } from "@/components/seo/google-review-link-generator";
 import { buildOgUrl } from "@/lib/seo/og-card";
+import { keptVerticalsForJob } from "@/lib/seo/agent-pages";
 
 /** FAQ answers use a few <strong> tags for readability; JSON-LD wants plain
  *  text, so strip tags before embedding in the schema. */
@@ -60,6 +61,8 @@ const FAQ = [
   },
 ];
 
+const REVIEW_AGENT_VERTICALS = keptVerticalsForJob("google-review-agent");
+
 export default function GoogleReviewLinkGeneratorPage(): ReactElement {
   const faqLd = {
     "@context": "https://schema.org",
@@ -105,6 +108,27 @@ export default function GoogleReviewLinkGeneratorPage(): ReactElement {
             biggest lever isn't asking more — it's <strong>removing friction</strong> from the ask. A direct link or a QR
             code on a receipt turns a 2-minute chore into a <strong>10-second tap</strong>.
           </p>
+        </section>
+
+        <section style={{ padding: "40px 0 0" }}>
+          <h2 style={{ margin: "0 0 14px", fontSize: 24, fontWeight: 800, letterSpacing: "-0.02em" }}>Put this on autopilot</h2>
+          <p style={{ margin: "0 0 16px", fontSize: 15, lineHeight: 1.65, color: "rgba(34,29,23,0.72)", maxWidth: 660 }}>
+            This tool builds the link. The <strong>Google Review Agent</strong> sends it automatically — at the perfect
+            moment after every finished job, with a follow-up if there's no response, and it catches unhappy customers
+            privately first. Built for:
+          </p>
+          <div style={{ display: "flex", flexWrap: "wrap", gap: 8 }}>
+            {REVIEW_AGENT_VERTICALS.map((v) => (
+              <Link
+                key={v.slug}
+                href={`/ai-agents/google-review-agent/for/${v.slug}`}
+                className="sf-link"
+                style={{ fontSize: 13.5, fontWeight: 600, color: "rgba(34,29,23,0.7)", border: `1px solid ${MKT.ink10}`, borderRadius: 999, padding: "7px 14px", textDecoration: "none", background: "rgba(255,255,255,0.5)" }}
+              >
+                {`Review agent for ${v.plural}`}
+              </Link>
+            ))}
+          </div>
         </section>
 
         <section style={{ padding: "40px 0 0" }}>

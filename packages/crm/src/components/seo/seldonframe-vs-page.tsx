@@ -19,6 +19,7 @@ import { MarkdownPointer } from "@/components/seo/markdown-pointer";
 import { TldrBox } from "@/components/seo/tldr-box";
 import { FrontOfficeFlow } from "@/components/seo/front-office-flow";
 import { PricingSourceLine } from "@/components/seo/alternative-page";
+import { hasCompetitorPricing } from "@/components/seo/competitor-crosslinks";
 import { BuildWidget } from "@/components/seo/build-widget";
 import { AuthorByline, articleLd } from "@/components/seo/author-byline";
 import { monthYearToIso } from "@/lib/seo/month-iso";
@@ -450,6 +451,15 @@ export function SeldonFrameVsPage({ competitor }: { competitor: Competitor }): R
             >
               {`Prefer the switching guide? Full ${c.name} alternative breakdown →`}
             </Link>
+            {hasCompetitorPricing(c.slug) ? (
+              <Link
+                href={`/${c.slug}-pricing`}
+                className="sf-link"
+                style={{ fontSize: 13.5, fontWeight: 600, color: MKT.green, border: `1px solid rgba(31, 43, 36,0.35)`, borderRadius: 999, padding: "7px 14px", textDecoration: "none", background: "rgba(31, 43, 36,0.06)" }}
+              >
+                {`${c.name} pricing breakdown →`}
+              </Link>
+            ) : null}
             {crossLinks.map((o) => (
               <Link
                 key={o.slug}

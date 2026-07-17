@@ -1,9 +1,15 @@
 // packages/crm/src/components/landing/marketing-footer.tsx
 //
 // Redesign 2026-06-18 — warm light aesthetic.
-// Six-column footer on md+ (brand + 5 link columns incl. the Compare/Free-tools
-// SEO mesh, PostPlanify-style). Paper-soft background, warm ink typography.
-// Dual CTA strip above the columns — SMB + agency paths.
+// Seven-column footer on md+ (brand + 6 link columns incl. the Compare/Free-tools/
+// Pricing-guides SEO mesh, PostPlanify-style). Paper-soft background, warm ink
+// typography. Dual CTA strip above the columns — SMB + agency paths.
+//
+// 2026-07-17: added the "Pricing guides" column (indexation-consolidation
+// Part 1c — the homepage/footer previously linked zero pricing pages despite
+// */-pricing being the best-performing SEO family). No pricing hub/index page
+// exists to headline the column (only the SF-owned /pricing page, which is a
+// different page), so there is no "All pricing breakdowns →" link here.
 
 import Link from "next/link";
 
@@ -74,6 +80,17 @@ const COLUMNS: readonly Column[] = [
     ],
   },
   {
+    heading: "Pricing guides",
+    links: [
+      { label: "Podium Pricing", href: "/podium-pricing" },
+      { label: "Linktree Pricing", href: "/linktree-pricing" },
+      { label: "Kartra Pricing", href: "/kartra-pricing" },
+      { label: "Voiceflow Pricing", href: "/voiceflow-pricing" },
+      { label: "Durable Pricing", href: "/durable-pricing" },
+      { label: "Synthflow Pricing", href: "/synthflow-pricing" },
+    ],
+  },
+  {
     heading: "Company",
     links: [
       { label: "Contact", href: "mailto:hello@seldonframe.com" },
@@ -95,7 +112,7 @@ export function MarketingFooter() {
 
       <div className="mx-auto max-w-[1120px]">
         {/* Brand block */}
-        <div className="grid grid-cols-1 gap-10 md:grid-cols-[1.4fr_repeat(5,1fr)] md:gap-8">
+        <div className="grid grid-cols-1 gap-10 md:grid-cols-[1.4fr_repeat(6,1fr)] md:gap-8">
           <div className="flex max-w-[340px] flex-col gap-5">
             <Link href="/" aria-label="SeldonFrame — home" className="inline-flex items-center">
               <BrandMark size={22} />

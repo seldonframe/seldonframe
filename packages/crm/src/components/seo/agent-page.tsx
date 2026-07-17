@@ -34,6 +34,9 @@ import {
   composePageCopy,
   deployHrefFor,
   relatedJobsForVertical,
+  keptVerticalsForJob,
+  isKeptPair,
+  VERTICALS,
   type AgentJob,
   type Vertical,
 } from "@/lib/seo/agent-pages";
@@ -55,6 +58,20 @@ export function AgentPage({ job, vertical }: AgentPageProps): ReactElement {
   const steps = job.howItWorks;
   const related = relatedJobsForVertical(job.slug, 5);
   const verticalLabel = vertical ? vertical.plural : "your business";
+  // Review-agent cluster (PR 2, Part 1c): on a kept google-review-agent Tier-2
+  // page, cross-link the tool that builds the review link this agent sends,
+  // plus the other kept verticals for the SAME job (siblings) — every folded
+  // pair already redirects before this component renders, so `vertical` here
+  // is always a kept one when it's present.
+  const reviewAgentSiblings =
+    vertical && job.slug === "google-review-agent"
+      ? keptVerticalsForJob(job.slug).filter((v) => v.slug !== vertical.slug)
+      : [];
+  // Job-hub "by industry" section (PR 2, Part 1c — the consolidation payoff):
+  // Tier-1 only. Kept verticals link to their standalone page; folded verticals
+  // render their composed copy inline so the content lives on the hub instead
+  // of vanishing with the page.
+  const byIndustry = !vertical ? VERTICALS : [];
   // The public `.md` twin of THIS page (Tier-1 or Tier-2) — pointed at by the
   // visually-hidden Markdown pointer for the human-pastes-URL-into-an-LLM flow.
   const markdownHref = vertical
@@ -348,6 +365,97 @@ export function AgentPage({ job, vertical }: AgentPageProps): ReactElement {
           </div>
         </section>
 
+        {/* ── REVIEW-AGENT CLUSTER: tool + sibling-vertical cross-links (Tier-2, google-review-agent only) ── */}
+        {reviewAgentSiblings.length > 0 ? (
+          <section style={SECTION}>
+            <h2 style={{ ...H2, marginBottom: 4 }}>Built the link? Put the ask on autopilot</h2>
+            <p style={{ margin: "0 0 18px", fontSize: 14.5, color: "rgba(34,29,23,0.55)" }}>
+              This agent sends the ask automatically — no manual texting required.
+            </p>
+            <div style={{ display: "flex", flexWrap: "wrap", gap: 8 }}>
+              <Link
+                href="/tools/google-review-link-generator"
+                className="sf-link"
+                style={{ fontSize: 13.5, fontWeight: 600, color: MKT.green, border: "1px solid rgba(31, 43, 36,0.35)", borderRadius: 999, padding: "7px 14px", textDecoration: "none", background: "rgba(31, 43, 36,0.06)" }}
+              >
+                Build the review link (free tool) →
+              </Link>
+              {reviewAgentSiblings.map((v) => (
+                <Link
+                  key={v.slug}
+                  href={`/ai-agents/google-review-agent/for/${v.slug}`}
+                  className="sf-link"
+                  style={{ fontSize: 13.5, fontWeight: 600, color: "rgba(34,29,23,0.7)", border: "1px solid rgba(34,29,23,0.10)", borderRadius: 999, padding: "7px 14px", textDecoration: "none", background: "rgba(255,255,255,0.5)" }}
+                >
+                  {`For ${v.plural}`}
+                </Link>
+              ))}
+            </div>
+          </section>
+        ) : null}
+
+        {/* ── BY INDUSTRY (Tier-1 hub only — the consolidation payoff): kept
+             verticals link out, folded verticals render their composed copy
+             inline so the content lives on the hub instead of vanishing. ── */}
+        {byIndustry.length > 0 ? (
+          <section style={SECTION}>
+            <h2 style={H2}>{`${job.name} by industry`}</h2>
+            <p style={{ margin: "-6px 0 20px", fontSize: 15, color: "rgba(34,29,23,0.6)", maxWidth: 640 }}>
+              How this agent shows up for the trades that ask about it most.
+            </p>
+            <div className="sf-ap-industry">
+              {byIndustry.map((v) => {
+                const kept = isKeptPair(job.slug, v.slug);
+                if (kept) {
+                  return (
+                    <Link
+                      key={v.slug}
+                      href={`/ai-agents/${job.slug}/for/${v.slug}`}
+                      className="sf-cardhover"
+                      style={{
+                        textDecoration: "none",
+                        color: MKT.ink,
+                        background: "#fff",
+                        border: "1px solid rgba(34,29,23,0.10)",
+                        borderRadius: 14,
+                        padding: 16,
+                        display: "flex",
+                        alignItems: "center",
+                        justifyContent: "space-between",
+                        gap: 12,
+                        boxShadow: "0 1px 2px rgba(34,29,23,0.04)",
+                      }}
+                    >
+                      <div style={{ fontWeight: 700, fontSize: 15.5 }}>{v.plural}</div>
+                      <span style={{ color: MKT.green, flex: "none", display: "flex" }}>
+                        <MarketplaceIcon name="arrowRight" size={16} />
+                      </span>
+                    </Link>
+                  );
+                }
+                const vCopy = composePageCopy(job, v);
+                return (
+                  <div
+                    key={v.slug}
+                    style={{
+                      background: "#fff",
+                      border: "1px solid rgba(34,29,23,0.10)",
+                      borderRadius: 14,
+                      padding: 16,
+                      boxShadow: "0 1px 2px rgba(34,29,23,0.04)",
+                    }}
+                  >
+                    <div style={{ fontWeight: 700, fontSize: 15.5, marginBottom: 6 }}>{v.plural}</div>
+                    <p style={{ margin: 0, fontSize: 13.5, lineHeight: 1.55, color: "rgba(34,29,23,0.68)" }}>
+                      {firstSentences(vCopy.intro, 2)}
+                    </p>
+                  </div>
+                );
+              })}
+            </div>
+          </section>
+        ) : null}
+
         {/* ── FLYWHEEL: "more agents for [vertical]" cross-links ── */}
         {related.length > 0 ? (
           <section style={SECTION}>
@@ -445,6 +553,7 @@ const AGENT_PAGE_CSS = `
   .sf-agentpage,.sf-agentpage *{min-width:0}
   .sf-ap-main{max-width:920px}
   .sf-ap-related{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:12px}
+  .sf-ap-industry{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:12px}
   .sf-ap-howit{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:14px}
   .sf-ap-works{display:flex;flex-wrap:wrap;gap:10px}
   .sf-ap-stepcard{transition:transform .2s cubic-bezier(0.22,1,0.36,1),box-shadow .2s,border-color .2s}
@@ -460,6 +569,7 @@ const AGENT_PAGE_CSS = `
     .sf-ap-h1{font-size:32px !important;line-height:1.08 !important}
     .sf-ap-stat{font-size:18px !important}
     .sf-ap-related{grid-template-columns:1fr}
+    .sf-ap-industry{grid-template-columns:1fr}
     .sf-ap-howit{grid-template-columns:1fr}
   }
   @media (prefers-reduced-motion:reduce){
@@ -495,4 +605,13 @@ function aOrAnLower(name: string): string {
 /** Pick a representative surface icon for a related-agent card. */
 function surfaceIconFor(job: AgentJob) {
   return SURFACE_META[job.surfaces[0]].icon;
+}
+
+/** The first `n` sentences of already-composed copy (splitting on ". ") — no
+ *  new writing, just trims composePageCopy's intro down to a hub-card-sized
+ *  blurb for the "by industry" section (PR 2, Part 1c). */
+function firstSentences(text: string, n: number): string {
+  const parts = text.split(". ");
+  if (parts.length <= n) return text;
+  return `${parts.slice(0, n).join(". ")}.`;
 }

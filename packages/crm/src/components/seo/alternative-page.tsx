@@ -15,6 +15,7 @@ import { MarketplaceNav, MarketplaceFooter, SeldonFrameMark } from "@/components
 import { MarketplaceStyles } from "@/components/marketplace/marketplace-styles";
 import { MKT } from "@/components/marketplace/marketplace-data";
 import { MarkdownPointer } from "@/components/seo/markdown-pointer";
+import { CompetitorCrossLinks } from "@/components/seo/competitor-crosslinks";
 import { TldrBox } from "@/components/seo/tldr-box";
 import { FrontOfficeFlow } from "@/components/seo/front-office-flow";
 import { BuildWidget } from "@/components/seo/build-widget";
@@ -277,6 +278,12 @@ export function AlternativePage({ competitor }: { competitor: Competitor }): Rea
               <p style={{ margin: "10px 0 2px", fontSize: 14.5, lineHeight: 1.6, color: "rgba(34,29,23,0.72)" }}>{item.a}</p>
             </details>
           ))}
+        </section>
+
+        {/* ── THIS COMPETITOR, EVERYWHERE (the pricing/compare triangle) ── */}
+        <section style={{ padding: "30px 0 8px" }}>
+          <h2 style={{ margin: "0 0 14px", fontSize: 20, fontWeight: 800, letterSpacing: "-0.01em" }}>{`More on ${c.name}`}</h2>
+          <CompetitorCrossLinks slug={c.slug} current="alternative" />
         </section>
 
         {/* ── MORE COMPARISONS (flywheel) ── */}

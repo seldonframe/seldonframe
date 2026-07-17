@@ -19,6 +19,12 @@ import type { SaveLlmKeyResult } from "../../../src/lib/integrations/llm/actions
 
 afterEach(() => cleanup());
 
+// testing-library's default asyncUtilTimeout is 1s, which is too tight for
+// base-ui's Dialog mount/unmount cycle when CI runs the whole suite in
+// parallel (`node --test` fans specs across every core). The assertions below
+// still prove the same contract — they just tolerate a loaded machine.
+const WAIT = { timeout: 5000 } as const;
+
 describe("<LlmKeyDialog>", () => {
   test("renders the Anthropic key field when open", () => {
     render(<LlmKeyDialog open={true} onOpenChange={() => {}} action={async () => ({ ok: true, provider: "anthropic" })} />);
@@ -49,7 +55,7 @@ describe("<LlmKeyDialog>", () => {
 
     await waitFor(() => {
       assert.equal(openState, false, "dialog should close on success");
-    });
+    }, WAIT);
     assert.equal(savedCalled, true, "onSaved should fire on success");
   });
 
@@ -79,7 +85,7 @@ describe("<LlmKeyDialog>", () => {
         screen.getAllByText(/anthropic keys start with sk-ant-/i).length > 0,
         "error message not shown",
       );
-    });
+    }, WAIT);
     assert.equal(openState, true, "dialog must stay open on error — no silent close");
   });
 
@@ -109,7 +115,7 @@ describe("<LlmKeyDialog>", () => {
 
     await waitFor(() => {
       assert.ok(screen.getAllByText(/anthropic keys start with sk-ant-/i).length > 0);
-    });
+    }, WAIT);
 
     // Close without saving via the dialog's own close control — the same
     // onOpenChange(false) path Escape/overlay-click drive internally.
@@ -117,7 +123,7 @@ describe("<LlmKeyDialog>", () => {
 
     await waitFor(() => {
       assert.equal(screen.queryAllByLabelText(/anthropic api key/i).length, 0, "dialog should be closed");
-    });
+    }, WAIT);
 
     fireEvent.click(screen.getByRole("button", { name: /reopen/i }));
 
