@@ -1,6 +1,6 @@
 // v1.59.2 — security hardening helpers shared by tools.js.
 //
-// Two independent concerns live here:
+// Three independent concerns live here:
 //   1. sniffImageKind — magic-byte detection so upload_workspace_image only
 //      ever forwards bytes that are actually image files (not arbitrary
 //      local files an agent was pointed at).
@@ -8,10 +8,18 @@
 //      operator-supplied URLs (fetch_source_for_soul today). Rejects
 //      loopback / private / link-local targets so the MCP process can't be
 //      used to probe the operator's own LAN or cloud metadata endpoints.
+//   3. assertLocalPathAllowed (v1.61.0) — path containment for the
+//      local-file-read branch of upload_workspace_image. Only files under
+//      the MCP server's working directory (or roots the operator opts into
+//      via SELDONFRAME_UPLOAD_ROOTS) may be read, so an agent can't be
+//      steered into uploading files from elsewhere on the machine.
 //
-// Both are pure-ish (assertPublicHttpUrl takes an injectable `lookup` for
-// tests) and have zero dependency on the rest of tools.js so they can be
-// unit-tested in isolation (see tests/security.test.mjs).
+// All are pure-ish (injectable `lookup` / `realpath` for tests) and have
+// zero dependency on the rest of tools.js so they can be unit-tested in
+// isolation (see tests/security.test.mjs).
+
+import path from "node:path";
+import { realpathSync } from "node:fs";
 
 const MAX_SVG_BYTES = 1 * 1024 * 1024; // 1MB
 
@@ -238,4 +246,87 @@ export async function assertPublicHttpUrl(urlString, opts = {}) {
       );
     }
   }
+}
+
+// ── local-path containment (v1.61.0) ────────────────────────────────────
+
+/**
+ * The directories upload_workspace_image may read local files from:
+ * the MCP server's working directory, plus any roots the operator has
+ * explicitly opted into via SELDONFRAME_UPLOAD_ROOTS (a path.delimiter-
+ * separated list, same convention as PATH).
+ *
+ * @param {NodeJS.ProcessEnv} [env]
+ * @param {string} [cwd]
+ * @returns {string[]}
+ */
+export function getAllowedUploadRoots(env = process.env, cwd = process.cwd()) {
+  const roots = [cwd];
+  const extra = env.SELDONFRAME_UPLOAD_ROOTS;
+  if (typeof extra === "string" && extra.length > 0) {
+    for (const entry of extra.split(path.delimiter)) {
+      const trimmed = entry.trim();
+      if (trimmed) roots.push(trimmed);
+    }
+  }
+  return roots;
+}
+
+/**
+ * Assert that a local file path is inside one of the allowed roots, and
+ * return its fully-resolved real path. Symlinks are resolved BEFORE the
+ * containment check, so a link inside the project pointing outside it
+ * doesn't slip through. Relative paths resolve against cwd.
+ *
+ * Throws with a remediation message (copy the file into the project, or
+ * opt a directory in via SELDONFRAME_UPLOAD_ROOTS) when the path lands
+ * outside every allowed root.
+ *
+ * @param {string} filePath
+ * @param {{
+ *   cwd?: string,
+ *   env?: NodeJS.ProcessEnv,
+ *   roots?: string[],
+ *   realpath?: (p: string) => string,
+ *   caseInsensitive?: boolean,
+ * }} [opts]
+ * @returns {string} the resolved real path, safe to read
+ */
+export function assertLocalPathAllowed(filePath, opts = {}) {
+  const cwd = opts.cwd ?? process.cwd();
+  const roots = opts.roots ?? getAllowedUploadRoots(opts.env ?? process.env, cwd);
+  const realpath = opts.realpath ?? realpathSync;
+  const caseInsensitive = opts.caseInsensitive ?? process.platform === "win32";
+  const fold = (p) => (caseInsensitive ? p.toLowerCase() : p);
+
+  const resolved = path.resolve(cwd, filePath);
+  let real;
+  try {
+    real = realpath(resolved);
+  } catch (err) {
+    throw new Error(
+      `assertLocalPathAllowed: cannot resolve "${filePath}" — ${err?.message ?? err}`,
+    );
+  }
+
+  for (const root of roots) {
+    let realRoot;
+    try {
+      realRoot = realpath(path.resolve(cwd, root));
+    } catch {
+      continue; // configured root doesn't exist — skip it, don't crash
+    }
+    const rel = path.relative(fold(realRoot), fold(real));
+    if (rel === "" || (!rel.startsWith("..") && !path.isAbsolute(rel))) {
+      return real;
+    }
+  }
+
+  throw new Error(
+    `assertLocalPathAllowed: "${filePath}" is outside the allowed upload directories ` +
+      `(${roots.join(", ")}). Local-file uploads are restricted to the MCP server's ` +
+      `working directory so an agent can't be steered into reading arbitrary files. ` +
+      `Either copy the file into the project directory, or launch the MCP server with ` +
+      `SELDONFRAME_UPLOAD_ROOTS="<dir>" (${path.delimiter}-separated) to allow more directories.`,
+  );
 }
