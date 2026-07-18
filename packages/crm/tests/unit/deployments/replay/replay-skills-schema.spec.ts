@@ -34,6 +34,7 @@ describe("replay_skills — table shape", () => {
     assert.ok("healCount" in replaySkills);
     assert.ok("lastReplayAt" in replaySkills);
     assert.ok("triggerFilter" in replaySkills);
+    assert.ok("idempotency" in replaySkills);
     assert.ok("createdAt" in replaySkills);
     assert.ok("updatedAt" in replaySkills);
   });
@@ -55,6 +56,7 @@ describe("replay_skills — table shape", () => {
       healCount: 0,
       lastReplayAt: null,
       triggerFilter: null,
+      idempotency: null,
       createdAt: new Date(),
       updatedAt: new Date(),
     };
@@ -80,10 +82,30 @@ describe("replay_skills — table shape", () => {
       healCount: 0,
       lastReplayAt: null,
       triggerFilter: { senderEndsWith: "@seldonframe.com" },
+      idempotency: null,
       createdAt: new Date(),
       updatedAt: new Date(),
     };
     assert.deepEqual(row.triggerFilter, { senderEndsWith: "@seldonframe.com" });
+  });
+
+  test("idempotency round-trips a real config object (migration 0077)", () => {
+    const row: ReplaySkillRow = {
+      id: "00000000-0000-4000-8000-000000000001",
+      orgId: "00000000-0000-4000-8000-000000000002",
+      deploymentId: "00000000-0000-4000-8000-000000000003",
+      name: "email:dep_1",
+      skillMd: "---\nname: x\n---\n",
+      status: "enabled",
+      sourceTraceId: null,
+      healCount: 0,
+      lastReplayAt: null,
+      triggerFilter: null,
+      idempotency: { stepN: 3, keyVar: "message_id" },
+      createdAt: new Date(),
+      updatedAt: new Date(),
+    };
+    assert.deepEqual(row.idempotency, { stepN: 3, keyVar: "message_id" });
   });
 
   test("barrel re-export wires replay_skills into the db schema bundle", async () => {
@@ -163,5 +185,49 @@ describe("migration 0076 — trigger_filter column matches the Drizzle schema", 
     assert.ok(idx75 >= 0, "0075 must be registered");
     assert.ok(idx76 >= 0, "0076 must be registered");
     assert.equal(idx76, idx75 + 1, "0076 must immediately follow 0075");
+  });
+});
+
+describe("migration 0077 — replay gate v2 (idempotency column + send-claims table)", () => {
+  const migrationSql = readFileSync(
+    path.join(__dirname, "../../../../drizzle/0077_replay_gate_v2.sql"),
+    "utf8",
+  );
+
+  test("adds replay_skills.idempotency as a nullable jsonb column", () => {
+    assert.match(migrationSql, /ALTER TABLE "replay_skills"/);
+    assert.match(migrationSql, /ADD COLUMN IF NOT EXISTS "idempotency" jsonb;/);
+    assert.doesNotMatch(migrationSql, /"idempotency" jsonb NOT NULL/);
+  });
+
+  test("creates replay_send_claims with skill_id NOT NULL + ON DELETE CASCADE", () => {
+    assert.match(migrationSql, /CREATE TABLE IF NOT EXISTS "replay_send_claims"/);
+    assert.match(
+      migrationSql,
+      /"skill_id" uuid NOT NULL REFERENCES "replay_skills"\("id"\) ON DELETE CASCADE/,
+    );
+  });
+
+  test("creates the UNIQUE index on (skill_id, step_n, idempotency_key) — the double-send lock", () => {
+    assert.match(
+      migrationSql,
+      /CREATE UNIQUE INDEX IF NOT EXISTS "replay_send_claims_skill_step_key_idx"\s*\n\s*ON "replay_send_claims" \("skill_id", "step_n", "idempotency_key"\)/,
+    );
+  });
+
+  test("outcome defaults to 'unknown' at the SQL level", () => {
+    assert.match(migrationSql, /"outcome" text NOT NULL DEFAULT 'unknown'/);
+  });
+
+  test("journal registers 0077 after 0076", () => {
+    const journal = JSON.parse(
+      readFileSync(path.join(__dirname, "../../../../drizzle/meta/_journal.json"), "utf8"),
+    ) as { entries: Array<{ idx: number; tag: string }> };
+    const tags = journal.entries.map((e) => e.tag);
+    const idx76 = tags.indexOf("0076_replay_skills_trigger_filter");
+    const idx77 = tags.indexOf("0077_replay_gate_v2");
+    assert.ok(idx76 >= 0, "0076 must be registered");
+    assert.ok(idx77 >= 0, "0077 must be registered");
+    assert.equal(idx77, idx76 + 1, "0077 must immediately follow 0076");
   });
 });

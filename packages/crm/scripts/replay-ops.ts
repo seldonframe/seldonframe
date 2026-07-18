@@ -268,6 +268,7 @@ async function cmdListSkills(flags: Record<string, string>) {
       healCount: replaySkills.healCount,
       lastReplayAt: replaySkills.lastReplayAt,
       triggerFilter: replaySkills.triggerFilter,
+      idempotency: replaySkills.idempotency,
     })
     .from(replaySkills)
     .orderBy(desc(replaySkills.createdAt));
@@ -284,9 +285,97 @@ async function cmdListSkills(flags: Record<string, string>) {
   console.log(`${rows.length} skill(s):\n`);
   for (const row of rows) {
     console.log(
-      `${row.id}  deployment=${row.deploymentId}  name=${row.name ?? "-"}  status=${row.status}  heals=${row.healCount}  lastReplay=${row.lastReplayAt ? row.lastReplayAt.toISOString() : "-"}  filter=${row.triggerFilter ? truncate(row.triggerFilter, 200) : "-"}`,
+      `${row.id}  deployment=${row.deploymentId}  name=${row.name ?? "-"}  status=${row.status}  heals=${row.healCount}  lastReplay=${row.lastReplayAt ? row.lastReplayAt.toISOString() : "-"}  filter=${row.triggerFilter ? truncate(row.triggerFilter, 200) : "-"}  idempotency=${row.idempotency ? truncate(row.idempotency, 200) : "-"}`,
     );
   }
+}
+
+/**
+ * Set (or clear) a skill's Replay gate v2 idempotency config
+ * (replay_skills.idempotency, migration 0077). Validated with the SAME
+ * passesGateV2 function replay-before-llm.ts uses at replay time, checked
+ * BEFORE any DB write, so a config that's accepted here is guaranteed to
+ * pass there too — mirrors set-filter/enable's parseFilterFlag pattern
+ * exactly. Requires the skill's OWN destructive step number (--step) and
+ * the key var (--key-var, only "message_id" is ever accepted — sender/
+ * subject are attacker-influenceable and forbidden as key material).
+ */
+async function cmdSetIdempotency(skillId: string | undefined, flags: Record<string, string>) {
+  const usage =
+    "usage: set-idempotency <skillId> --step <N> --key-var message_id  |  set-idempotency <skillId> --clear";
+  if (!skillId) {
+    console.error(usage);
+    process.exitCode = 1;
+    return;
+  }
+
+  const { db } = await import("@/db");
+  const { replaySkills } = await import("@/db/schema/replay-skills");
+  const { eq } = await import("drizzle-orm");
+
+  const [skill] = await db
+    .select({ id: replaySkills.id, deploymentId: replaySkills.deploymentId, skillMd: replaySkills.skillMd })
+    .from(replaySkills)
+    .where(eq(replaySkills.id, skillId))
+    .limit(1);
+  if (!skill) {
+    console.error(`skill not found: ${skillId}`);
+    process.exitCode = 1;
+    return;
+  }
+
+  if (flags.clear) {
+    await db
+      .update(replaySkills)
+      .set({ idempotency: null, updatedAt: new Date() })
+      .where(eq(replaySkills.id, skillId));
+    console.log(`${skillId}: idempotency config cleared  (deployment ${skill.deploymentId})`);
+    return;
+  }
+
+  if (!flags.step || !flags["key-var"]) {
+    console.error(usage);
+    process.exitCode = 1;
+    return;
+  }
+
+  const stepN = Number.parseInt(flags.step, 10);
+  if (!Number.isFinite(stepN) || stepN < 1) {
+    console.error(`--step must be a positive integer, got: ${flags.step}`);
+    process.exitCode = 1;
+    return;
+  }
+
+  const { parseSkill } = await import("@seldonframe/reelier/skill");
+  let parsed: import("@seldonframe/reelier/skill").ReelierSkill;
+  try {
+    parsed = parseSkill(skill.skillMd);
+  } catch (err) {
+    console.error(`skill_md failed to parse: ${err instanceof Error ? err.message : String(err)}`);
+    process.exitCode = 1;
+    return;
+  }
+
+  const { passesGateV2 } = await import("@/lib/deployments/replay/gate-v2");
+  const config = { stepN, keyVar: flags["key-var"] };
+  const gate = passesGateV2(parsed, config);
+  if (!gate.ok) {
+    console.error(`set-idempotency rejected: ${gate.reason}`);
+    process.exitCode = 1;
+    return;
+  }
+
+  await db
+    .update(replaySkills)
+    .set({ idempotency: config, updatedAt: new Date() })
+    .where(eq(replaySkills.id, skillId));
+  console.log(
+    `${skillId}: idempotency -> step ${stepN} key ${config.keyVar}  (deployment ${skill.deploymentId})\n\n` +
+      `WARNING: once SF_REPLAY_GATE_V2=1 is set, gate v2 replay will EXECUTE this skill's destructive ` +
+      `step FOR REAL during L0 replay (claim-guarded against a double-send, but a real send nonetheless). ` +
+      `Review the compiled skill_md above before enabling this in production, and run the staging drill ` +
+      `(spec §Rollout item 3: 10 consecutive live events, assert exactly one send per key) before flipping the flag.`,
+  );
 }
 
 /** Parse + strictly validate a `--filter` CLI flag value with the SAME
@@ -454,16 +543,21 @@ async function main() {
     case "set-filter":
       await cmdSetFilter(positional[0], flags);
       break;
+    case "set-idempotency":
+      await cmdSetIdempotency(positional[0], flags);
+      break;
     default:
       console.error(
-        "usage: replay-ops.ts <list-traces|show-trace|compile|list-skills|enable|disable|set-filter> [args]\n\n" +
+        "usage: replay-ops.ts <list-traces|show-trace|compile|list-skills|enable|disable|set-filter|set-idempotency> [args]\n\n" +
           "  list-traces [--org <id>] [--deployment <id>] [--limit N]\n" +
           "  show-trace <traceId>\n" +
           "  compile <traceId>\n" +
           "  list-skills [--deployment <id>]\n" +
           "  enable <skillId> [--filter '<json>']\n" +
           "  disable <skillId>\n" +
-          "  set-filter <skillId> --filter '<json>'",
+          "  set-filter <skillId> --filter '<json>'\n" +
+          "  set-idempotency <skillId> --step <N> --key-var message_id  |  set-idempotency <skillId> --clear\n" +
+          "    (Replay gate v2 — also requires SF_REPLAY_GATE_V2=1 to activate at replay time)",
       );
       process.exitCode = command ? 1 : 0;
   }

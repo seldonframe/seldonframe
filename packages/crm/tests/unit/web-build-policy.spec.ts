@@ -4,6 +4,7 @@ import {
   isWebUngatedBuildOn,
   isAutopayConsoleOn,
   isDeterministicReplayOn,
+  isReplayGateV2On,
   shouldIndexWorkspace,
   WEB_BUILD_RATE_LIMIT,
   WEB_BUILD_RATE_WINDOW_MS,
@@ -36,6 +37,14 @@ test("flag: SF_DETERMINISTIC_REPLAY — on only for exact '1' (trimmed); everyth
   assert.equal(isDeterministicReplayOn({ SF_DETERMINISTIC_REPLAY: "true" }), false);
   assert.equal(isDeterministicReplayOn({ SF_DETERMINISTIC_REPLAY: "0" }), false);
   assert.equal(isDeterministicReplayOn({}), false);
+});
+
+test("flag: SF_REPLAY_GATE_V2 — on only for exact '1' (trimmed); everything else keeps v2 dark (default off)", () => {
+  assert.equal(isReplayGateV2On({ SF_REPLAY_GATE_V2: "1" }), true);
+  assert.equal(isReplayGateV2On({ SF_REPLAY_GATE_V2: " 1 " }), true);
+  assert.equal(isReplayGateV2On({ SF_REPLAY_GATE_V2: "true" }), false);
+  assert.equal(isReplayGateV2On({ SF_REPLAY_GATE_V2: "0" }), false);
+  assert.equal(isReplayGateV2On({}), false);
 });
 
 test("shouldIndexWorkspace: noindex ONLY for unclaimed anonymous web builds (Task 8)", () => {

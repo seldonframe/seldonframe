@@ -287,7 +287,11 @@ export function buildDispatchComposioEventDeps(): DispatchComposioEventDeps {
               ok: replay.kind === "passed",
               callCount: replay.record.steps.length,
               records: replay.record,
-              kind: "replay-run",
+              // Replay gate v2 — a distinct marker for "diverged AT/AFTER
+              // the destructive step, no agent fallback attempted" so ops
+              // (replay-ops.ts list-traces/show-trace) can tell it apart
+              // from a normal (pre-send) diverged replay at a glance.
+              kind: replay.kind === "failed-post-send" ? "replay-run-failed-post-send" : "replay-run",
               inputTokens: 0,
               outputTokens: 0,
             });

@@ -87,3 +87,16 @@ export function isDeterministicReplayOn(env: {
 }): boolean {
   return env.SF_DETERMINISTIC_REPLAY?.trim() === "1";
 }
+
+/** Replay gate v2 — idempotent-send (2026-07-18,
+ *  docs/superpowers/plans/2026-07-18-replay-gate-v2-spec.md). Separate flag
+ *  from SF_DETERMINISTIC_REPLAY by design (spec §1): turning this on alone
+ *  does nothing — a skill must ALSO carry a valid idempotency config
+ *  (replay_skills.idempotency, set via `replay-ops.ts set-idempotency`)
+ *  before lib/deployments/replay/replay-before-llm.ts's v2 branch ever
+ *  activates for it. Same strict-"1" contract as every other flag here:
+ *  dark by default. When off (or a skill has no idempotency config), replay
+ *  behavior is BYTE-IDENTICAL to v1 — see gate-v2.ts's module header. */
+export function isReplayGateV2On(env: { SF_REPLAY_GATE_V2?: string | undefined }): boolean {
+  return env.SF_REPLAY_GATE_V2?.trim() === "1";
+}
