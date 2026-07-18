@@ -840,3 +840,33 @@ Plan: docs/superpowers/plans/2026-07-13-circle-mcp-connector.md
 - No DB migrations. No new npm dependencies.
 - Divergences from the plan (all documented in per-task commit messages and the implementer report): the bind-time bearer swap landed in `template-mcp-server.ts` (not `mcp-actions.ts`, which only holds the deps type); `page.tsx`'s undiscovered-composio guard was widened (not just swapped) to also catch an undiscovered vetted-OAuth binding; `fillBlueprintConnectorsForPersist`'s internal swap uses a dynamic import to avoid a circular static import.
 - Full report: `reports/2026-07-13-circle-implementer-report.md`.
+
+---
+
+## 2026-07-18 — Dependabot #123 split: workflow bundler "use server" incompatibility (worktree zen-sutherland)
+
+Evidence (Phase 1 complete):
+- Vercel build of PR #123 fails: Turbopack, 3× "Server Actions must be async functions" in the
+  generated `.well-known/workflow/v1/step/route.js` — the workflow bundler wraps `"use server"`
+  modules (payments/bookings/emails actions.ts) into sync `__esm({...})` closures, leaving the
+  directive inside a non-async function.
+- Our own `check-use-server` gate PASSES on the same build — source files are clean; the
+  generated bundle is what's invalid. Known upstream pattern: vercel/workflow#817.
+- Dependabot branch is STALE (based before #132 — its diff vs main deletes replay files/specs).
+
+Plan:
+- [x] Root-cause investigation (Vercel log, changelogs, upstream issue #817)
+- [x] Exp A: PR #133 `test/workflow-46-isolation` — ONLY workflow ^4.6.0 + @workflow/next ^4.1.0, next stays 16.2.1 → expect Vercel FAIL
+- [x] Exp B: PR #134 `chore/deps-minor-patch-split` — the other 35 bumps, workflow held at 4.2.4/4.0.5 → expect Vercel GREEN (deliverable)
+- [x] Vercel verdicts: #133 FAIL (identical 3 errors, next pinned 16.2.1 → workflow pair alone reproduces) · #134 GREEN
+- [x] @anthropic-ai/sdk 0.80→0.112.3 compat review → comment on #134 (low risk; deep import verified in 0.112.3; wire-level surfaces unaffected by SDK bump)
+- [x] unit-tests delta vs main: identical 70 failing names (DB-bound baseline) → zero regressions
+- [x] Issue #135 filed (root cause + isolation table + unblock options); #133 closed+branch deleted; #123 commented + closed (superseded)
+- [x] dependabot.yml `ignore:` for workflow/@workflow/next added to #134 (comment-command ignores don't work on grouped PRs)
+- [x] Review section + L-39 + learnings note (docs/learnings/2026-07-18-dependabot-batch-isolation-by-preview-build.md) + memory
+
+**Review (2026-07-18):**
+- Deliverable = split PRs + issue, as specified: **PR #134 OPEN, Vercel preview GREEN, awaiting Max's merge** (human merge gate per CLAUDE.md). Contains: 35 bumps (next 16.2.10, @anthropic-ai/sdk 0.112.3, react 19.2.7, zod 4.4.3, grapesjs 0.23, turbo 2.10, …), workflow held at 4.2.4/4.0.5, dependabot ignores, learnings note.
+- Rebuilt on current main (dependabot branch was stale, based before #132) — lockfile regenerated via `pnpm install --lockfile-only`, no local install churn.
+- Verification: Vercel preview build (the exact failing gate) green on #134; red-CI judged by failing-test-name delta (70 = 70, zero new); #133 negative control failed exactly as predicted.
+- Known-accepted: grapesjs-* plugins peer-warn against grapesjs 0.23 (same combination dependabot shipped; warning only).
