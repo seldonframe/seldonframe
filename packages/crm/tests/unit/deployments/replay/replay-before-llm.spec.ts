@@ -59,7 +59,16 @@ function passingRecord(skillName: string, stepCount: number): ReelierRunRecord {
     finishedAt: "2026-07-17T00:00:01.000Z",
     passed: true,
     steps,
-    totals: { steps: stepCount, passed: stepCount, failed: 0, ms: 5 * stepCount, llmInputTokens: 0, llmOutputTokens: 0 },
+    totals: {
+      steps: stepCount,
+      passed: stepCount,
+      unchecked: 0,
+      skipped: 0,
+      failed: 0,
+      ms: 5 * stepCount,
+      llmInputTokens: 0,
+      llmOutputTokens: 0,
+    },
   };
 }
 
@@ -72,7 +81,7 @@ function divergedRecord(skillName: string): ReelierRunRecord {
     steps: [
       { n: 1, title: "step 1", level: 0, outcome: "failed", ms: 5, failures: ["status == 200 failed: got 500"] },
     ],
-    totals: { steps: 1, passed: 0, failed: 1, ms: 5, llmInputTokens: 0, llmOutputTokens: 0 },
+    totals: { steps: 1, passed: 0, unchecked: 0, skipped: 0, failed: 1, ms: 5, llmInputTokens: 0, llmOutputTokens: 0 },
   };
 }
 

@@ -240,7 +240,16 @@ function emptyFailedRecord(skillName: string, reason: string): ReelierRunRecord 
     finishedAt: now,
     passed: false,
     steps: [],
-    totals: { steps: 0, passed: 0, failed: 0, ms: 0, llmInputTokens: 0, llmOutputTokens: 0 },
+    totals: {
+      steps: 0,
+      passed: 0,
+      unchecked: 0,
+      skipped: 0,
+      failed: 0,
+      ms: 0,
+      llmInputTokens: 0,
+      llmOutputTokens: 0,
+    },
   };
 }
 

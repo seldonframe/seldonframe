@@ -1,13 +1,23 @@
-// Ambient type declarations for @seldonframe/reelier@0.1.0 — the published
-// npm package ships compiled JS only (dist/*.js), no .d.ts files (verified
-// against the published tarball: `npm pack @seldonframe/reelier@0.1.0`).
-// These declarations cover ONLY the surface this repo actually calls
-// (compile.ts, skill.ts, runner exports) — they are OUR contract with the
-// package, hand-derived from reading its dist/*.js source (see
-// lib/deployments/replay/compile.ts and lib/deployments/replay/
+// Ambient type declarations for @seldonframe/reelier@0.2.0 — the published
+// npm package still ships compiled JS only (dist/*.js), no .d.ts files
+// (re-verified against the published tarball: `npm pack
+// @seldonframe/reelier@0.2.0` — "files" is ["dist", "README.md", "LICENSE"],
+// no SPEC.md and no *.d.ts). These declarations cover ONLY the surface this
+// repo actually calls (compile.ts, skill.ts, runner exports) — they are OUR
+// contract with the package, hand-derived from reading its dist/*.js source
+// (see lib/deployments/replay/compile.ts and lib/deployments/replay/
 // replay-before-llm.ts for the call sites), not an official types package.
 // A future reelier version may ship real .d.ts files, at which point this
 // file should be deleted rather than kept alongside them.
+//
+// 0.2.0 diff (re-derived from dist/runner.js): RunRecord.totals gained
+// `unchecked` and `skipped` (steps whose outcome is "unchecked"/"skipped" —
+// previously folded into the totals-vs-steps gap; the split is additive,
+// `passed`+`failed` keep their exact 0.1.x meaning) and StepRecord gained
+// an optional `escalationAttempted` (1 or 2, present only once an L1/L2
+// escalation was tried for that step — see attemptEscalation in
+// dist/runner.js). trace.js's record shapes (meta/note/call/result) are
+// byte-identical to 0.1.x.
 
 declare module "@seldonframe/reelier/skill" {
   export type ReelierEffect = "read" | "idempotent-write" | "destructive";
@@ -116,6 +126,10 @@ declare module "@seldonframe/reelier" {
     ms: number;
     failures: string[];
     llm?: { inputTokens: number; outputTokens: number };
+    /** 0.2.0 — 1 or 2, present only when this step's "failed" deterministic
+     *  outcome triggered an L1/L2 escalation attempt (see attemptEscalation
+     *  in dist/runner.js). Absent on any step that never escalated. */
+    escalationAttempted?: 1 | 2;
   };
 
   export type ReelierRunRecord = {
@@ -127,6 +141,13 @@ declare module "@seldonframe/reelier" {
     totals: {
       steps: number;
       passed: number;
+      /** 0.2.0 — count of steps whose outcome is "unchecked" (a step with
+       *  zero asserts that ran without error — reelier's "honest success"
+       *  rule: zero assertions never counts as "passed"). */
+      unchecked: number;
+      /** 0.2.0 — count of steps whose outcome is "skipped" (steps after the
+       *  first divergence in a run, never executed). */
+      skipped: number;
       failed: number;
       ms: number;
       llmInputTokens: number;
