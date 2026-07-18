@@ -52,6 +52,8 @@ export * from "./message-triggers";
 export * from "./workflow-approvals";
 export * from "./agent-action-drafts";
 export * from "./agent-run-receipts";
+// Deterministic replay — Reelier phase 2c slice 1 (observe mode only).
+export * from "./agent-workflow-traces";
 // May 1, 2026 — Measurement Layers 2 + 3.
 export * from "./seldonframe-events";
 export * from "./brain-outcomes";
