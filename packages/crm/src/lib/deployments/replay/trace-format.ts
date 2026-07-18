@@ -1,10 +1,27 @@
 // Deterministic replay — Reelier phase 2c, slice 1 (OBSERVE MODE ONLY).
 //
 // WHAT THIS IS: a small, pure module implementing the Reelier trace-record
-// FORMAT (github.com/seldonframe/reelier) — NOT a dependency on Reelier's
-// code. Slice 1 only ever WRITES records in this shape (a recorder — see
-// ./recorder.ts); nothing here replays a trace. Slice 2 (a future, separate
-// change) is what will read `agent_workflow_traces.records` and compile them.
+// FORMAT (github.com/seldonframe/reelier) — NOT a runtime dependency on
+// Reelier's code (this module imports only TYPES from
+// "@seldonframe/reelier/trace", never any of its functions; ./recorder.ts
+// stays a pure, DB-free, reelier-runtime-free writer). Slice 1 only ever
+// WRITES records in this shape; slice 2 (compile.ts) is what reads
+// `agent_workflow_traces.records` and compiles them via reelier's own
+// compile().
+//
+// TYPES DERIVE FROM THE PACKAGE: TraceRecord (and its per-`t` members below)
+// are aliases of ReelierTraceRecord from "@seldonframe/reelier/trace" — see
+// src/types/reelier.d.ts (the package ships no .d.ts of its own; that file
+// is hand-derived from its dist/trace.js and is this repo's one contract
+// with the format). Deriving here rather than re-declaring the shape means a
+// future reelier trace-format change becomes a TYPE ERROR at this file's
+// import, not silent drift between two independently hand-maintained shapes.
+//
+// SF PROFILE (this repo's own constraints on TOP of the record format, not
+// part of it): the 20k body cap (TRACE_BODY_MAX_CHARS), the 200-record cap
+// (TRACE_MAX_RECORDS), and redaction (redact()/redactString()) below are all
+// SF-only concerns — reelier's own trace format has no opinion on any of
+// them. Kept local and clearly separated from the imported record shapes.
 //
 // Record shapes (seq is monotonic from 0, starting with the one `meta`
 // record; `i` is the call index, monotonic from 0, independent of `seq`):
@@ -16,52 +33,18 @@
 // Everything here is PURE and never throws — an observation-only recorder
 // must never affect (or even risk) the agent turn it is watching alongside.
 
-/** meta must be first (seq 0); every trace opens with exactly one. */
-export type TraceMetaRecord = {
-  t: "meta";
-  seq: number;
-  /** e.g. "email:<deploymentId>" — the running workflow's stable name. */
-  name: string;
-  /** ISO-8601 turn start time. */
-  startedAt: string;
-  /** Tool source names bound into this turn (native + connector), for
-   *  compile-time context — never large, never secret. */
-  wrapped: string[];
-};
+import type { ReelierTraceRecord } from "@seldonframe/reelier/trace";
 
-export type TraceNoteRecord = {
-  t: "note";
-  seq: number;
-  ts: string;
-  text: string;
-};
+/** This repo's trace-record union IS reelier's own trace-record type —
+ *  derived, not re-declared (see header comment). */
+export type TraceRecord = ReelierTraceRecord;
 
-export type TraceCallRecord = {
-  t: "call";
-  seq: number;
-  /** Call index — 0 for the first tool call, 1 for the second, … */
-  i: number;
-  ts: string;
-  tool: string;
-  args: unknown;
-};
-
-export type TraceResultRecord = {
-  t: "result";
-  seq: number;
-  /** Same call index as the matching TraceCallRecord. */
-  i: number;
-  ok: boolean;
-  /** Wall-clock duration of the call, in milliseconds. */
-  ms: number;
-  body: unknown;
-};
-
-export type TraceRecord =
-  | TraceMetaRecord
-  | TraceNoteRecord
-  | TraceCallRecord
-  | TraceResultRecord;
+/** meta must be first (seq 0); every trace opens with exactly one. Narrowed
+ *  from TraceRecord by discriminant — not a separate declaration. */
+export type TraceMetaRecord = Extract<TraceRecord, { t: "meta" }>;
+export type TraceNoteRecord = Extract<TraceRecord, { t: "note" }>;
+export type TraceCallRecord = Extract<TraceRecord, { t: "call" }>;
+export type TraceResultRecord = Extract<TraceRecord, { t: "result" }>;
 
 /** Max chars a single `result.body` (post-redaction, post-serialization) may
  *  occupy in a stored record — matches the token-smart-runtime precedent

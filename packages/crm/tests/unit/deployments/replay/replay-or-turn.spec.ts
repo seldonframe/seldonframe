@@ -26,7 +26,7 @@ function passRecord(): ReelierRunRecord {
     finishedAt: "2026-07-17T00:00:01.000Z",
     passed: true,
     steps: [{ n: 1, title: "step", level: 0, outcome: "passed", ms: 1, failures: [] }],
-    totals: { steps: 1, passed: 1, failed: 0, ms: 1, llmInputTokens: 0, llmOutputTokens: 0 },
+    totals: { steps: 1, passed: 1, unchecked: 0, skipped: 0, failed: 0, ms: 1, llmInputTokens: 0, llmOutputTokens: 0 },
   };
 }
 
@@ -37,7 +37,7 @@ function divergeRecord(): ReelierRunRecord {
     finishedAt: "2026-07-17T00:00:01.000Z",
     passed: false,
     steps: [{ n: 1, title: "step", level: 0, outcome: "failed", ms: 1, failures: ["boom"] }],
-    totals: { steps: 1, passed: 0, failed: 1, ms: 1, llmInputTokens: 0, llmOutputTokens: 0 },
+    totals: { steps: 1, passed: 0, unchecked: 0, skipped: 0, failed: 1, ms: 1, llmInputTokens: 0, llmOutputTokens: 0 },
   };
 }
 
