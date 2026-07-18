@@ -49,12 +49,45 @@ export function buildDispatchComposioEventDeps(): DispatchComposioEventDeps {
         errorMessage,
       }),
 
-    runAgenticTurn: async ({ orgId, channel, blueprint }) => {
+    runAgenticTurn: async ({ orgId, deploymentId, channel, blueprint, payload }) => {
       const { db } = await import("@/db");
       const { organizations } = await import("@/db/schema/organizations");
       const { eq } = await import("drizzle-orm");
       const { getAIClient } = await import("@/lib/ai/client");
       const { runStatelessAgentTurn } = await import("@/lib/agents/stateless-turn");
+
+      // Deterministic replay — Reelier phase 2c slice 1 (OBSERVE MODE ONLY).
+      // Dark unless SF_DETERMINISTIC_REPLAY=1: when off, `recorder` stays
+      // undefined, `wrapToolCall` is never passed to runStatelessAgentTurn,
+      // and no new code path executes beyond this boolean check.
+      const { isDeterministicReplayOn } = await import("@/lib/web-build/policy");
+      const replayOn = isDeterministicReplayOn({
+        SF_DETERMINISTIC_REPLAY: process.env.SF_DETERMINISTIC_REPLAY,
+      });
+      let recorder: import("@/lib/deployments/replay/recorder").TraceRecorder | undefined;
+      const turnStartedAt = new Date();
+      if (replayOn) {
+        try {
+          const { TraceRecorder } = await import("@/lib/deployments/replay/recorder");
+          recorder = new TraceRecorder({
+            name: `email:${deploymentId}`,
+            startedAt: turnStartedAt.toISOString(),
+            // Native tool names aren't known until getToolsForCapabilities
+            // resolves inside runStatelessAgentTurn — this slice records the
+            // capability allowlist instead (a stable, cheap proxy for
+            // "what was bound"), never the resolved tool-name list.
+            wrapped: blueprint.capabilities ?? [],
+          });
+        } catch (err) {
+          // Recorder construction must never affect the turn — fall through
+          // with recorder left undefined (no tracing this run).
+          console.warn(
+            "[composio-event-dispatch-deps] TraceRecorder construction failed:",
+            err instanceof Error ? err.message : String(err),
+          );
+          recorder = undefined;
+        }
+      }
 
       const resolution = await getAIClient({ orgId });
       if (!resolution.client) {
@@ -128,7 +161,45 @@ export function buildDispatchComposioEventDeps(): DispatchComposioEventDeps {
           if (event.phase !== "result") return;
           toolCalls.push({ tool: event.tool, ok: event.ok === true, note: event.line });
         },
+        // Deterministic replay — only passed when recording is on; every
+        // other caller/run leaves this undefined (identical unwrapped path).
+        wrapToolCall: recorder
+          ? (tool, args, run) => recorder!.wrapCall(tool, args, run)
+          : undefined,
       });
+
+      // Deterministic replay — persist ONE row for this run, success or
+      // failure, best-effort (writeWorkflowTrace never throws). Runs after
+      // the turn resolves so recording never delays or blocks the turn
+      // itself; a persistence failure is swallowed inside the writer.
+      if (recorder) {
+        try {
+          const { writeWorkflowTrace } = await import("@/lib/deployments/replay/persist");
+          const { extractMessageId } = await import(
+            "@/lib/deployments/composio-event-dispatch"
+          );
+          await writeWorkflowTrace({
+            orgId,
+            deploymentId,
+            triggerKind: "email",
+            triggerKey: extractMessageId(payload ?? {}),
+            startedAt: turnStartedAt,
+            finishedAt: new Date(),
+            ok: turn.ok === true,
+            callCount: recorder.callCount,
+            records: recorder.finish(),
+            // No token metering path exists on this turn result yet — store
+            // 0 rather than inventing a new one (slice 1 scope).
+            inputTokens: 0,
+            outputTokens: 0,
+          });
+        } catch (err) {
+          console.warn(
+            "[composio-event-dispatch-deps] deterministic-replay persist failed (fail-soft, run continues):",
+            err instanceof Error ? err.message : String(err),
+          );
+        }
+      }
 
       return {
         ok: turn.ok === true,

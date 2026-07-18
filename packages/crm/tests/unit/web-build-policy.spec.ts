@@ -3,6 +3,7 @@ import assert from "node:assert/strict";
 import {
   isWebUngatedBuildOn,
   isAutopayConsoleOn,
+  isDeterministicReplayOn,
   shouldIndexWorkspace,
   WEB_BUILD_RATE_LIMIT,
   WEB_BUILD_RATE_WINDOW_MS,
@@ -27,6 +28,14 @@ test("flag: SF_AUTOPAY_CONSOLE — on only for exact '1' (trimmed); everything e
   assert.equal(isAutopayConsoleOn({ SF_AUTOPAY_CONSOLE: "true" }), false);
   assert.equal(isAutopayConsoleOn({ SF_AUTOPAY_CONSOLE: "0" }), false);
   assert.equal(isAutopayConsoleOn({}), false);
+});
+
+test("flag: SF_DETERMINISTIC_REPLAY — on only for exact '1' (trimmed); everything else keeps recording dark (default off)", () => {
+  assert.equal(isDeterministicReplayOn({ SF_DETERMINISTIC_REPLAY: "1" }), true);
+  assert.equal(isDeterministicReplayOn({ SF_DETERMINISTIC_REPLAY: " 1 " }), true);
+  assert.equal(isDeterministicReplayOn({ SF_DETERMINISTIC_REPLAY: "true" }), false);
+  assert.equal(isDeterministicReplayOn({ SF_DETERMINISTIC_REPLAY: "0" }), false);
+  assert.equal(isDeterministicReplayOn({}), false);
 });
 
 test("shouldIndexWorkspace: noindex ONLY for unclaimed anonymous web builds (Task 8)", () => {

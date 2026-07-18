@@ -152,7 +152,7 @@ export type DispatchComposioEventResult = {
  *  payload. Tolerates a few plausible field names/shapes; returns null when
  *  absent (the caller then runs WITHOUT dedupe — a missing id must never
  *  silently drop a real trigger). Never throws. */
-function extractMessageId(payload: Record<string, unknown>): string | null {
+export function extractMessageId(payload: Record<string, unknown>): string | null {
   const direct = payload.messageId ?? payload.message_id;
   if (typeof direct === "string" && direct.trim().length > 0) return direct.trim();
   const nested = (payload.data as Record<string, unknown> | undefined)?.messageId;

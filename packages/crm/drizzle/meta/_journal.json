@@ -358,6 +358,13 @@
       "when": 1783900000000,
       "tag": "0073_agent_run_receipts",
       "breakpoints": true
+    },
+    {
+      "idx": 51,
+      "version": "7",
+      "when": 1784000000000,
+      "tag": "0074_agent_workflow_traces",
+      "breakpoints": true
     }
   ]
 }

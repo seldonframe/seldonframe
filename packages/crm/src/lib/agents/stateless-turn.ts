@@ -118,6 +118,17 @@ export type RunStatelessAgentTurnInput = {
    *  unaffected. Never throws into the loop — a callback error is caught
    *  and swallowed so a logging bug can never break a live agent turn. */
   onToolEvent?: (event: StatelessToolEvent) => void;
+  /** Deterministic replay — Reelier phase 2c slice 1 (OBSERVE MODE ONLY,
+   *  2026-07-17). Optional DI hook that wraps ONE tool execute() call for
+   *  observation only (timing a real trace-record recorder builds from it —
+   *  see lib/deployments/replay/recorder.ts). MUST return whatever `run()`
+   *  resolves to, and MUST let whatever `run()` throws propagate unchanged —
+   *  this is a pure observation seam, never a place to alter turn behavior.
+   *  Default undefined: every existing caller (chat/voice/SMS/eval/template
+   *  test surfaces) takes the identical unwrapped path — this hook is only
+   *  ever passed by the email-dispatch seam, and only when
+   *  SF_DETERMINISTIC_REPLAY=1. */
+  wrapToolCall?: <T>(tool: string, args: unknown, run: () => Promise<T>) => Promise<T>;
   /** H1 hotfix (2026-07-11) — forwarded to getToolsForCapabilities: when
    *  true, every wrapped connector (MCP/vetted/byo AND composio) tool
    *  executes as a synthetic no-op instead of calling the real
@@ -429,10 +440,11 @@ export async function runStatelessAgentTurn(
         timezone: input.timezone || undefined,
       };
       try {
-        const output = await (tool as AgentTool<unknown, unknown>).execute(
-          parsed.data,
-          ctx,
-        );
+        const runExecute = () =>
+          (tool as AgentTool<unknown, unknown>).execute(parsed.data, ctx);
+        const output = input.wrapToolCall
+          ? await input.wrapToolCall(tu.name, parsed.data, runExecute)
+          : await runExecute();
         toolResultsForThisIter.push({
           type: "tool_result",
           tool_use_id: tu.id,
