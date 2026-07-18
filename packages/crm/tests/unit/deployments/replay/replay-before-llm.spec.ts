@@ -361,6 +361,31 @@ describe("attemptL0Replay — DIVERGE / throw", () => {
     assert.equal(result.kind, "skipped");
   });
 
+  test("flag off unchanged: no trigger on the input still runs a clean replay with empty-string vars", async () => {
+    // Guards the byte-for-byte-unchanged claim for every caller that
+    // doesn't (yet) thread a real event — the old `vars: {}` behavior.
+    const skill: ReelierSkill = {
+      name: "s",
+      description: "d",
+      steps: [makeStep({ effect: "read" })],
+      preamble: "",
+      trailing: "",
+    };
+    let seenVars: unknown;
+    const deps: AttemptL0ReplayDeps = {
+      loadEnabledSkill: async () => ({ id: "skill_1", skillMd: "x" }),
+      parseSkill: async () => skill,
+      buildTools: async () => ({}),
+      runSkill: async (_skill, options) => {
+        seenVars = (options as { vars?: unknown }).vars;
+        return passingRecord("s", 1);
+      },
+    };
+    const result = await attemptL0Replay(baseInput(), deps);
+    assert.equal(result.kind, "passed");
+    assert.deepEqual(seenVars, { message_id: "", sender: "", subject: "" });
+  });
+
   test("an unparseable skill_md is skipped, not thrown", async () => {
     const deps: AttemptL0ReplayDeps = {
       loadEnabledSkill: async () => ({ id: "skill_1", skillMd: "not a skill" }),
@@ -370,5 +395,257 @@ describe("attemptL0Replay — DIVERGE / throw", () => {
     };
     const result = await attemptL0Replay(baseInput(), deps);
     assert.equal(result.kind, "skipped");
+  });
+});
+
+describe("attemptL0Replay — trigger vars threading ({{message_id}}/sender/subject)", () => {
+  const allReadSkill: ReelierSkill = {
+    name: "s",
+    description: "d",
+    steps: [makeStep({ effect: "read" })],
+    preamble: "",
+    trailing: "",
+  };
+
+  test("message_id fills from the event's already-extracted trigger_key", async () => {
+    let seenVars: unknown;
+    const deps: AttemptL0ReplayDeps = {
+      loadEnabledSkill: async () => ({ id: "skill_1", skillMd: "x" }),
+      parseSkill: async () => allReadSkill,
+      buildTools: async () => ({}),
+      runSkill: async (_skill, options) => {
+        seenVars = (options as { vars?: unknown }).vars;
+        return passingRecord("s", 1);
+      },
+    };
+    const input: AttemptL0ReplayInput = {
+      ...baseInput(),
+      trigger: { messageId: "msg_abc123", sender: "", subject: "" },
+    };
+    const result = await attemptL0Replay(input, deps);
+    assert.equal(result.kind, "passed");
+    assert.deepEqual(seenVars, { message_id: "msg_abc123", sender: "", subject: "" });
+  });
+
+  test("sender/subject fill from the event when the payload carried them", async () => {
+    let seenVars: unknown;
+    const deps: AttemptL0ReplayDeps = {
+      loadEnabledSkill: async () => ({ id: "skill_1", skillMd: "x" }),
+      parseSkill: async () => allReadSkill,
+      buildTools: async () => ({}),
+      runSkill: async (_skill, options) => {
+        seenVars = (options as { vars?: unknown }).vars;
+        return passingRecord("s", 1);
+      },
+    };
+    const input: AttemptL0ReplayInput = {
+      ...baseInput(),
+      trigger: { messageId: "msg_1", sender: "ops@seldonframe.com", subject: "Weekly digest" },
+    };
+    await attemptL0Replay(input, deps);
+    assert.deepEqual(seenVars, {
+      message_id: "msg_1",
+      sender: "ops@seldonframe.com",
+      subject: "Weekly digest",
+    });
+  });
+
+  test("a null messageId fills as empty string, never the literal 'null'", async () => {
+    let seenVars: unknown;
+    const deps: AttemptL0ReplayDeps = {
+      loadEnabledSkill: async () => ({ id: "skill_1", skillMd: "x" }),
+      parseSkill: async () => allReadSkill,
+      buildTools: async () => ({}),
+      runSkill: async (_skill, options) => {
+        seenVars = (options as { vars?: unknown }).vars;
+        return passingRecord("s", 1);
+      },
+    };
+    const input: AttemptL0ReplayInput = {
+      ...baseInput(),
+      trigger: { messageId: null, sender: "", subject: "" },
+    };
+    await attemptL0Replay(input, deps);
+    assert.deepEqual(seenVars, { message_id: "", sender: "", subject: "" });
+  });
+
+  test("an unresolved {{var}} beyond the fixed set still diverges — reelier's own fillTemplate throw is unchanged", async () => {
+    // The runner (reelier's runSkill) is the thing that actually throws on
+    // an unresolved template var — this test proves attemptL0Replay's own
+    // fail-open/diverge contract still catches that throw exactly like any
+    // other runSkill failure, now that vars are no longer always {}.
+    const deps: AttemptL0ReplayDeps = {
+      loadEnabledSkill: async () => ({ id: "skill_1", skillMd: "x" }),
+      parseSkill: async () => allReadSkill,
+      buildTools: async () => ({}),
+      runSkill: async () => {
+        throw new Error("unresolved template var {{unmapped_var}}");
+      },
+    };
+    const input: AttemptL0ReplayInput = {
+      ...baseInput(),
+      trigger: { messageId: "msg_1", sender: "", subject: "" },
+    };
+    const result = await attemptL0Replay(input, deps);
+    assert.equal(result.kind, "diverged");
+  });
+});
+
+describe("attemptL0Replay — trigger_filter gate wired into the attempt", () => {
+  const allReadSkill: ReelierSkill = {
+    name: "s",
+    description: "d",
+    steps: [makeStep({ effect: "read" })],
+    preamble: "",
+    trailing: "",
+  };
+
+  test("a matching senderEndsWith filter attempts replay as normal", async () => {
+    const deps: AttemptL0ReplayDeps = {
+      loadEnabledSkill: async () => ({
+        id: "skill_1",
+        skillMd: "x",
+        triggerFilter: { senderEndsWith: "@seldonframe.com" },
+      }),
+      parseSkill: async () => allReadSkill,
+      buildTools: async () => ({}),
+      runSkill: async () => passingRecord("s", 1),
+    };
+    const input: AttemptL0ReplayInput = {
+      ...baseInput(),
+      trigger: { messageId: "msg_1", sender: "ops@seldonframe.com", subject: "" },
+    };
+    const result = await attemptL0Replay(input, deps);
+    assert.equal(result.kind, "passed");
+  });
+
+  test("a case-mismatched-but-equivalent senderEndsWith still matches (case-insensitive)", async () => {
+    const deps: AttemptL0ReplayDeps = {
+      loadEnabledSkill: async () => ({
+        id: "skill_1",
+        skillMd: "x",
+        triggerFilter: { senderEndsWith: "@SeldonFrame.COM" },
+      }),
+      parseSkill: async () => allReadSkill,
+      buildTools: async () => ({}),
+      runSkill: async () => passingRecord("s", 1),
+    };
+    const input: AttemptL0ReplayInput = {
+      ...baseInput(),
+      trigger: { messageId: "msg_1", sender: "ops@seldonframe.com", subject: "" },
+    };
+    const result = await attemptL0Replay(input, deps);
+    assert.equal(result.kind, "passed");
+  });
+
+  test("a mismatched senderEndsWith SKIPS replay without calling parseSkill, buildTools, or runSkill", async () => {
+    let parseSkillCalled = false;
+    let buildToolsCalled = false;
+    let runSkillCalled = false;
+    const deps: AttemptL0ReplayDeps = {
+      loadEnabledSkill: async () => ({
+        id: "skill_1",
+        skillMd: "x",
+        triggerFilter: { senderEndsWith: "@seldonframe.com" },
+      }),
+      parseSkill: async () => {
+        parseSkillCalled = true;
+        return allReadSkill;
+      },
+      buildTools: async () => {
+        buildToolsCalled = true;
+        return {};
+      },
+      runSkill: async () => {
+        runSkillCalled = true;
+        return passingRecord("s", 1);
+      },
+    };
+    const input: AttemptL0ReplayInput = {
+      ...baseInput(),
+      trigger: { messageId: "msg_1", sender: "someone@gmail.com", subject: "" },
+    };
+    const result = await attemptL0Replay(input, deps);
+    assert.equal(result.kind, "skipped");
+    assert.equal(parseSkillCalled, false, "filter mismatch must skip BEFORE parseSkill");
+    assert.equal(buildToolsCalled, false, "filter mismatch must skip BEFORE the tool bridge");
+    assert.equal(runSkillCalled, false, "filter mismatch must never reach runSkill");
+  });
+
+  test("subjectContains gate: matches", async () => {
+    const deps: AttemptL0ReplayDeps = {
+      loadEnabledSkill: async () => ({
+        id: "skill_1",
+        skillMd: "x",
+        triggerFilter: { subjectContains: "labeler" },
+      }),
+      parseSkill: async () => allReadSkill,
+      buildTools: async () => ({}),
+      runSkill: async () => passingRecord("s", 1),
+    };
+    const input: AttemptL0ReplayInput = {
+      ...baseInput(),
+      trigger: { messageId: "msg_1", sender: "", subject: "labeler run 42" },
+    };
+    const result = await attemptL0Replay(input, deps);
+    assert.equal(result.kind, "passed");
+  });
+
+  test("multiple conditions are AND-matched — one mismatch skips", async () => {
+    const deps: AttemptL0ReplayDeps = {
+      loadEnabledSkill: async () => ({
+        id: "skill_1",
+        skillMd: "x",
+        triggerFilter: { senderEndsWith: "@seldonframe.com", subjectContains: "labeler" },
+      }),
+      parseSkill: async () => allReadSkill,
+      buildTools: async () => ({}),
+      runSkill: async () => passingRecord("s", 1),
+    };
+    const input: AttemptL0ReplayInput = {
+      ...baseInput(),
+      trigger: { messageId: "msg_1", sender: "ops@seldonframe.com", subject: "unrelated" },
+    };
+    const result = await attemptL0Replay(input, deps);
+    assert.equal(result.kind, "skipped");
+  });
+
+  test("a null trigger_filter (undefined on the row) attempts replay — no filter means every event", async () => {
+    const deps: AttemptL0ReplayDeps = {
+      loadEnabledSkill: async () => ({ id: "skill_1", skillMd: "x" }),
+      parseSkill: async () => allReadSkill,
+      buildTools: async () => ({}),
+      runSkill: async () => passingRecord("s", 1),
+    };
+    const input: AttemptL0ReplayInput = {
+      ...baseInput(),
+      trigger: { messageId: "msg_1", sender: "whoever@anywhere.com", subject: "" },
+    };
+    const result = await attemptL0Replay(input, deps);
+    assert.equal(result.kind, "passed");
+  });
+
+  test("a malformed trigger_filter (unknown key) SKIPS replay without calling parseSkill/buildTools/runSkill — fail-safe", async () => {
+    let parseSkillCalled = false;
+    const deps: AttemptL0ReplayDeps = {
+      loadEnabledSkill: async () => ({
+        id: "skill_1",
+        skillMd: "x",
+        triggerFilter: { bogusKey: "y" },
+      }),
+      parseSkill: async () => {
+        parseSkillCalled = true;
+        return allReadSkill;
+      },
+      buildTools: async () => ({}),
+      runSkill: async () => passingRecord("s", 1),
+    };
+    const input: AttemptL0ReplayInput = {
+      ...baseInput(),
+      trigger: { messageId: "msg_1", sender: "ops@seldonframe.com", subject: "" },
+    };
+    const result = await attemptL0Replay(input, deps);
+    assert.equal(result.kind, "skipped");
+    assert.equal(parseSkillCalled, false);
   });
 });
