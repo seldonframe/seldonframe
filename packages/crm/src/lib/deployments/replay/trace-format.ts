@@ -89,6 +89,44 @@ const BASIC_AUTH_RE = /Basic\s+[A-Za-z0-9+/=]{8,}/gi;
 const GOOGLE_OAUTH_RE = /\bya29\.[A-Za-z0-9._-]{10,}/g;
 /** Matches a JWT-shaped string (three dot-separated base64url segments). */
 const JWT_RE = /\beyJ[A-Za-z0-9_-]{8,}\.[A-Za-z0-9_-]{8,}\.[A-Za-z0-9_-]{4,}/g;
+/** Query-param / form-field NAME pattern whose VALUE is masked when found as
+ *  a `name=value` occurrence inside any plain string — e.g. a URL stored
+ *  whole in a single string field (`?api_key=abc123&x=1`) or an
+ *  obviously form-encoded body (`token=abc123&foo=bar`). Independent of
+ *  SECRET_KEY_NAME_RE below, which only fires on actual JSON object keys —
+ *  this one fires on TEXT embedded inside a string value.
+ *
+ *  NOT the same matching policy as SECRET_KEY_NAME_RE (that one is a bare
+ *  substring test — `/token|secret|.../i.test(k)` — appropriate for a JSON
+ *  key name, which is rarely an English word). A query-param name embedded
+ *  in arbitrary URL/body text is far more likely to collide with an
+ *  ordinary word, so this pattern is ANCHORED: each short token
+ *  (key/auth/authorization/signature/sig/code) must match the param name as
+ *  a whole word or a `_`/`-`-delimited compound at the END of the name
+ *  (`(?:^|[_-])TOKEN$`), never as a bare substring anywhere. That's what
+ *  keeps `api_key`/`access_token`/`public_key`/`auth_code` masked while
+ *  `monkey`/`donkey`/`design`/`author`/`barcode` (which merely CONTAIN one
+ *  of those tokens mid-word) pass through untouched. */
+const QUERY_PARAM_NAME_RE =
+  /(?:^|[_-])(?:api[_-]?key|access[_-]?token|key|token|secret|password|auth|authorization|signature|sig|code)$/i;
+/** Matches one `name=value` pair, anchored so it only fires on an ACTUAL
+ *  `name=value` occurrence — preceded by start-of-string, `?`, `&`,
+ *  whitespace, or a quote (never mid-word, so a bare sentence containing
+ *  "key" never matches — there's no `=`). The value runs until the next
+ *  `&`, whitespace, quote, or angle bracket, so only THAT param's value is
+ *  replaced and the rest of the URL/body (other params, the path, etc.)
+ *  passes through untouched. */
+const QUERY_PARAM_PAIR_RE = /(^|[?&\s"'])([A-Za-z0-9_.\-]+)=([^&\s"'<>]*)/g;
+
+/** Mask query-param / form-field VALUES by NAME inside a plain string. Pure;
+ *  never throws (a plain regex replace over a string can't throw). */
+function redactQueryParams(value: string): string {
+  return value.replace(QUERY_PARAM_PAIR_RE, (match, prefix: string, name: string, val: string) => {
+    if (!val || !QUERY_PARAM_NAME_RE.test(name)) return match;
+    return `${prefix}${name}=«redacted»`;
+  });
+}
+
 /** Object keys whose STRING value is masked outright (never pattern-matched
  *  — a token/secret/password field can hold any shape, not just the shapes
  *  above), when the value is long enough to plausibly be a real credential
@@ -103,18 +141,23 @@ const SECRET_KEY_NAME_MIN_LENGTH = 8;
  *
  *  NOTE — this is defense-in-depth, not a guarantee: it catches the KNOWN
  *  shapes above (Anthropic/OpenAI-style keys, Bearer/Basic auth headers,
- *  Google OAuth tokens, JWTs) plus a key-name heuristic (see
- *  SECRET_KEY_NAME_RE in redact() below) — an arbitrary connector's own
- *  bespoke credential shape, embedded in a plain string under an
- *  innocuous-looking field name, can still slip through. Treat this as one
- *  layer, not the only layer, of the "never store a live secret" contract. */
+ *  Google OAuth tokens, JWTs), a URL-query-param / form-field NAME
+ *  heuristic (QUERY_PARAM_NAME_RE — masks `?api_key=...`-shaped values by
+ *  param name, e.g. a callback/webhook URL stored whole in a string field),
+ *  plus a JSON-object key-name heuristic (see SECRET_KEY_NAME_RE in
+ *  redact() below) — an arbitrary connector's own bespoke credential shape,
+ *  embedded in a plain string under an innocuous-looking field name, can
+ *  still slip through. Treat this as one layer, not the only layer, of the
+ *  "never store a live secret" contract. */
 function redactString(value: string): string {
-  return value
-    .replace(SECRET_KEY_RE, "[redacted]")
-    .replace(BEARER_RE, "Bearer [redacted]")
-    .replace(BASIC_AUTH_RE, "Basic [redacted]")
-    .replace(GOOGLE_OAUTH_RE, "[redacted]")
-    .replace(JWT_RE, "[redacted]");
+  return redactQueryParams(
+    value
+      .replace(SECRET_KEY_RE, "[redacted]")
+      .replace(BEARER_RE, "Bearer [redacted]")
+      .replace(BASIC_AUTH_RE, "Basic [redacted]")
+      .replace(GOOGLE_OAUTH_RE, "[redacted]")
+      .replace(JWT_RE, "[redacted]"),
+  );
 }
 
 /**

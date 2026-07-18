@@ -134,6 +134,77 @@ describe("redact — secret-shaped strings never reach storage", () => {
   });
 });
 
+describe("redact — query-param / form-field VALUES masked by param NAME", () => {
+  test("masks an api_key query-param value, leaves other params alone", () => {
+    const out = redact("https://example.com/cb?api_key=abc123&x=1") as string;
+    assert.ok(!out.includes("abc123"));
+    assert.ok(out.includes("api_key=«redacted»"));
+    assert.ok(out.includes("x=1"));
+  });
+
+  test("utm_source (and other non-secret-shaped param names) are left untouched", () => {
+    const url = "https://example.com/?utm_source=google&utm_medium=cpc";
+    assert.equal(redact(url), url);
+  });
+
+  test("multiple secret-shaped params in the same string are all masked", () => {
+    const out = redact("?token=abc&secret=def&public=1") as string;
+    assert.ok(!out.includes("=abc"));
+    assert.ok(!out.includes("=def"));
+    assert.ok(out.includes("token=«redacted»"));
+    assert.ok(out.includes("secret=«redacted»"));
+    assert.ok(out.includes("public=1"));
+  });
+
+  test("a value containing URL-safe special characters is masked in full, rest of the URL preserved", () => {
+    const out = redact("https://x.test/cb?api_key=abc-123_ABC.xyz%3D&ok=1") as string;
+    assert.ok(!out.includes("abc-123_ABC.xyz%3D"));
+    assert.ok(out.includes("api_key=«redacted»"));
+    assert.ok(out.startsWith("https://x.test/cb?"));
+    assert.ok(out.includes("ok=1"));
+  });
+
+  test("a plain sentence containing the word 'key' with no '=' is left untouched", () => {
+    const sentence = "the key to success is hard work, not luck";
+    assert.equal(redact(sentence), sentence);
+  });
+
+  test("a form-encoded body's first pair (no leading ? or &) is still masked by name", () => {
+    const out = redact("token=abc123&foo=bar") as string;
+    assert.ok(!out.includes("abc123"));
+    assert.ok(out.includes("token=«redacted»"));
+    assert.ok(out.includes("foo=bar"));
+  });
+
+  test("recurses into nested objects — a URL string field inside an object is redacted the same way", () => {
+    const out = redact({ webhookUrl: "https://hooks.example.com/x?signature=deadbeef1234&id=9" }) as {
+      webhookUrl: string;
+    };
+    assert.ok(!out.webhookUrl.includes("deadbeef1234"));
+    assert.ok(out.webhookUrl.includes("signature=«redacted»"));
+    assert.ok(out.webhookUrl.includes("id=9"));
+  });
+
+  test("param names that merely CONTAIN a secret-shaped token mid-word are left untouched (anchored, not substring)", () => {
+    // monkey/donkey contain "key" but don't END in it at a word/compound
+    // boundary; design/assignment contain "sig" mid-word; barcode contains
+    // "code" but not as a `_`/`-`-delimited (or whole-name) suffix; author
+    // contains "auth" as a prefix, not the whole name.
+    const url =
+      "https://example.com/?monkey=1&donkey=2&design=blue&barcode=abc123&author=jane&assignment=42&x=1";
+    assert.equal(redact(url), url);
+  });
+
+  test("public_key and auth_code (compound, `_`-delimited) are still masked — the anchoring keeps compounds, not just bare names", () => {
+    const out = redact("?public_key=abc123&auth_code=xyz789&id=1") as string;
+    assert.ok(!out.includes("abc123"));
+    assert.ok(!out.includes("xyz789"));
+    assert.ok(out.includes("public_key=«redacted»"));
+    assert.ok(out.includes("auth_code=«redacted»"));
+    assert.ok(out.includes("id=1"));
+  });
+});
+
 describe("capTraceBody — per-record truncation with an explicit marker", () => {
   test("small body passes through unchanged", () => {
     const body = { ok: true, id: "x" };

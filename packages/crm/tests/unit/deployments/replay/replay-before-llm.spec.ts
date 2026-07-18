@@ -78,13 +78,21 @@ function divergedRecord(skillName: string): ReelierRunRecord {
 
 describe("passesAllReadGate — v1 policy", () => {
   test("all-read skill passes", () => {
-    const skill = { steps: [makeStep({ effect: "read" }), makeStep({ n: 2, effect: "read" })] } as ReelierSkill;
+    const skill = {
+      steps: [
+        makeStep({ effect: "read", actionTool: "look_up_availability" }),
+        makeStep({ n: 2, effect: "read", actionTool: "look_up_availability" }),
+      ],
+    } as ReelierSkill;
     assert.equal(passesAllReadGate(skill), true);
   });
 
   test("read steps followed by ONE final non-read step passes", () => {
     const skill = {
-      steps: [makeStep({ effect: "read" }), makeStep({ n: 2, effect: "idempotent-write" })],
+      steps: [
+        makeStep({ effect: "read", actionTool: "look_up_availability" }),
+        makeStep({ n: 2, effect: "idempotent-write" }),
+      ],
     } as ReelierSkill;
     assert.equal(passesAllReadGate(skill), true);
   });
@@ -116,6 +124,57 @@ describe("passesAllReadGate — v1 policy", () => {
 
   test("an empty skill (no steps) never passes", () => {
     assert.equal(passesAllReadGate({ steps: [] } as unknown as ReelierSkill), false);
+  });
+});
+
+describe("passesAllReadGate — tool-effects allowlist wired in (the search_and_purge attack)", () => {
+  test("an ALLOWLISTED destructive tool declared 'read' in skill_md is NOT trusted — gate fails when it isn't the last step", () => {
+    // book_appointment is allowlisted 'destructive' (tool-effects.ts). A
+    // compiler bug or a hand-edited skill_md could still claim effect:'read'
+    // for it — the allowlist must win over that text.
+    const skill = {
+      steps: [
+        makeStep({ effect: "read", actionTool: "book_appointment" }),
+        makeStep({ n: 2, effect: "read", actionTool: "look_up_availability" }),
+      ],
+    } as ReelierSkill;
+    assert.equal(passesAllReadGate(skill), false);
+  });
+
+  test("an UNKNOWN tool declared 'read' in skill_md is NEVER trusted — gate fails even though skill_md says read (the literal attack)", () => {
+    // A hypothetical tool like `search_and_purge` isn't in the allowlist at
+    // all. Under the OLD gate (trusting skill_md's effect line directly),
+    // this would have passed as 'read' anywhere in the sequence — exactly
+    // reelier's verb-prefix heuristic misclassifying a destructive tool
+    // because its name starts with "search". The allowlist forces any
+    // UNKNOWN tool to 'destructive', so it can only ever be the bounded
+    // final step, never a mid-sequence "read".
+    const skill = {
+      steps: [
+        makeStep({ effect: "read", actionTool: "search_and_purge" }),
+        makeStep({ n: 2, effect: "read", actionTool: "look_up_availability" }),
+      ],
+    } as ReelierSkill;
+    assert.equal(passesAllReadGate(skill), false);
+  });
+
+  test("an UNKNOWN tool as the sole/final step still passes (bounded exactly like a known-destructive final step)", () => {
+    const skill = {
+      steps: [makeStep({ effect: "read", actionTool: "search_and_purge" })],
+    } as ReelierSkill;
+    assert.equal(passesAllReadGate(skill), true);
+  });
+
+  test("an allowlisted read tool passes even when skill_md's own effect line disagrees", () => {
+    // look_up_availability is allowlisted 'read' — trusted regardless of
+    // what skill_md's (untrusted) effect line claims.
+    const skill = {
+      steps: [
+        makeStep({ effect: "destructive", actionTool: "look_up_availability" }),
+        makeStep({ n: 2, effect: "read", actionTool: "look_up_availability" }),
+      ],
+    } as ReelierSkill;
+    assert.equal(passesAllReadGate(skill), true);
   });
 });
 
