@@ -175,7 +175,13 @@ function resolveApiKey(
  * itself stays observable from Vercel function logs.
  */
 async function dispatch(params: {
-  event: "new_signup" | "paid_conversion" | "new_lead" | "usage_cap_breach" | "retainer_payment_failed";
+  event:
+    | "new_signup"
+    | "paid_conversion"
+    | "new_lead"
+    | "usage_cap_breach"
+    | "retainer_payment_failed"
+    | "replay_heartbeat_silent";
   to: string;
   from: string;
   subject: string;
@@ -635,6 +641,120 @@ Stripe is automatically retrying the charge on the card on file. The client has 
   await dispatch({
     event: "retainer_payment_failed",
     to: params.toEmail,
+    from,
+    subject,
+    text,
+    html,
+    apiKey,
+    fetcher,
+  });
+}
+
+export type HeartbeatSilentDeploymentRow = {
+  deploymentId: string;
+  clientName: string;
+  orgName: string | null;
+  orgId: string;
+  /** Hours since the deployment's last agent_workflow_traces row. Always a
+   *  number here (a 'silent' row always has a prior lastActivityAt — see
+   *  heartbeat.ts's computeHeartbeat; 'never' rows are never passed to this
+   *  function). */
+  hoursSinceActivity: number;
+};
+
+export type ReplayHeartbeatAlertParams = {
+  /** Only 'silent' deployments — the caller (the cron route) filters before
+   *  calling; this function sends unconditionally when invoked. */
+  silentDeployments: HeartbeatSilentDeploymentRow[];
+};
+
+/**
+ * Send the "replay heartbeat" alert — the inbound-chain dead-man's switch
+ * (roadmap #7). Fires from the replay-heartbeat cron ONLY when at least one
+ * ACTIVE email-surface deployment has gone silent (no agent_workflow_traces
+ * row) for more than 24h — the exact shape of the 2026-07-16 incident where
+ * the email-agent chain died silently for two days before anyone noticed.
+ *
+ * Platform-level send (one global recipient, no per-workspace Resend
+ * lookup) — mirrors sendNewSignupAlert/sendNewLeadAlert. Never throws — the
+ * cron route must always return 200 for the cron log even if Resend is down.
+ */
+export async function sendReplayHeartbeatAlert(
+  params: ReplayHeartbeatAlertParams,
+  deps: OpsNotificationDeps = {},
+): Promise<void> {
+  const env = deps.env ?? process.env;
+  const fetcher = deps.fetcher ?? globalThis.fetch;
+  const apiKey = resolveApiKey(deps.apiKey, env);
+  const to = resolveOpsNotificationRecipient(env);
+  const from = resolveFromAddress(env);
+
+  const n = params.silentDeployments.length;
+  const subject = `Replay heartbeat: ${n} deployment(s) silent >24h`;
+
+  const textRows = params.silentDeployments
+    .map(
+      (d) =>
+        `- ${d.clientName} (deployment ${d.deploymentId}) — org ${d.orgName ?? d.orgId} — last activity ${d.hoursSinceActivity.toFixed(1)}h ago`,
+    )
+    .join("\n");
+
+  const text = `${n} active email deployment(s) have had no activity in over 24 hours.
+
+${textRows}
+
+This is the daily inbound-chain heartbeat check — it catches a deployment going silent (e.g. a canceled upstream connection) before it goes unnoticed for days.`;
+
+  const htmlRows = params.silentDeployments
+    .map((d) => {
+      const safeName = escapeHtml(d.clientName);
+      const safeOrg = escapeHtml(d.orgName ?? d.orgId);
+      const safeDeploymentId = escapeHtml(d.deploymentId);
+      const hours = d.hoursSinceActivity.toFixed(1);
+      return `<tr>
+        <td style="padding:6px 8px;border-bottom:1px solid #e5e7eb;">${safeName}</td>
+        <td style="padding:6px 8px;border-bottom:1px solid #e5e7eb;font-family:monospace;font-size:12px;">${safeDeploymentId}</td>
+        <td style="padding:6px 8px;border-bottom:1px solid #e5e7eb;">${safeOrg}</td>
+        <td style="padding:6px 8px;border-bottom:1px solid #e5e7eb;">${hours}h ago</td>
+      </tr>`;
+    })
+    .join("\n");
+
+  const html = `<!doctype html>
+<html lang="en">
+<body style="margin:0;padding:0;background:#f5f5f7;font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,Helvetica,Arial,sans-serif;color:#111;">
+  <table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="background:#f5f5f7;padding:24px 12px;">
+    <tr><td align="center">
+      <table role="presentation" width="640" cellpadding="0" cellspacing="0" style="max-width:640px;width:100%;background:#ffffff;border-radius:12px;overflow:hidden;border:1px solid #e5e7eb;">
+        <tr><td style="background:#b91c1c;padding:20px 24px;color:#ffffff;">
+          <div style="font-size:12px;letter-spacing:0.08em;text-transform:uppercase;color:#fecaca;margin-bottom:6px;">Replay heartbeat</div>
+          <div style="font-size:20px;font-weight:600;line-height:1.25;">${n} deployment(s) silent &gt;24h</div>
+        </td></tr>
+        <tr><td style="padding:20px 24px;font-size:14px;line-height:1.6;color:#1a1a1f;">
+          <table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="border-collapse:collapse;">
+            <thead>
+              <tr>
+                <th align="left" style="padding:6px 8px;border-bottom:2px solid #e5e7eb;color:#6b7280;font-size:12px;text-transform:uppercase;">Deployment</th>
+                <th align="left" style="padding:6px 8px;border-bottom:2px solid #e5e7eb;color:#6b7280;font-size:12px;text-transform:uppercase;">ID</th>
+                <th align="left" style="padding:6px 8px;border-bottom:2px solid #e5e7eb;color:#6b7280;font-size:12px;text-transform:uppercase;">Org</th>
+                <th align="left" style="padding:6px 8px;border-bottom:2px solid #e5e7eb;color:#6b7280;font-size:12px;text-transform:uppercase;">Last activity</th>
+              </tr>
+            </thead>
+            <tbody>
+              ${htmlRows}
+            </tbody>
+          </table>
+          <p style="margin:16px 0 0 0;font-size:13px;color:#6b7280;">Daily inbound-chain heartbeat check — catches a canceled/broken email deployment before it goes unnoticed for days.</p>
+        </td></tr>
+      </table>
+    </td></tr>
+  </table>
+</body>
+</html>`;
+
+  await dispatch({
+    event: "replay_heartbeat_silent",
+    to,
     from,
     subject,
     text,
