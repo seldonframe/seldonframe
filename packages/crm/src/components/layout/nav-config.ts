@@ -306,6 +306,11 @@ export function buildNavGroups(input: BuildNavInput): NavGroup[] {
         { href: "/dashboard", label: "Home", icon: "Home" },
         { href: "/studio/agents", label: "Agents", icon: "Bot" },
         { href: "/automations", label: "Automations", icon: "Zap", indent: true },
+        // Replay Ledger (2026-07-18) — the org-scoped receipts dashboard for
+        // deterministic replay (agent_workflow_traces + replay_skills).
+        // Indented under Agents like Automations: a reliability surface for
+        // the same agents, not a new top-level noun.
+        { href: "/replay", label: "Replay", icon: "BookOpen", indent: true },
       ]),
     },
     {
