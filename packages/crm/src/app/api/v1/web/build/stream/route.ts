@@ -55,6 +55,7 @@ import { withUrlExtractionCache } from "@/lib/web-build/cached-extraction";
 import {
   isWebUngatedBuildOn,
   resolveWebBuildRateLimit,
+  WEB_BUILD_RATE_LIMITED_MESSAGE,
   WEB_BUILD_RATE_WINDOW_MS,
   WEB_UNGATED_ORIGIN,
 } from "@/lib/web-build/policy";
@@ -211,7 +212,7 @@ export async function GET(request: Request): Promise<Response> {
     const sse = createSseStream();
     sse.emit("error", {
       code: "rate_limited",
-      message: "You've built a few workspaces today — sign up to keep building.",
+      message: WEB_BUILD_RATE_LIMITED_MESSAGE,
     });
     sse.close();
     return new Response(sse.stream, { headers: SSE_RESPONSE_HEADERS });
