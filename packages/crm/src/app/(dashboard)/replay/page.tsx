@@ -21,7 +21,7 @@
 // rounded-2xl cards, emerald/amber/red outcome chips.
 
 import { redirect } from "next/navigation";
-import { BookOpen, CheckCircle2, ListChecks, Zap } from "lucide-react";
+import { BookOpen, Bot, CheckCircle2, ListChecks, Zap } from "lucide-react";
 
 import { getOrgId } from "@/lib/auth/helpers";
 import {
@@ -93,11 +93,11 @@ function EmptyState() {
 
 function SummaryCards({ summary }: { summary: LedgerSummary }) {
   return (
-    <div className="grid grid-cols-2 gap-3 sm:grid-cols-4">
+    <div className="grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-5">
       <KpiTile
         label="Replays"
         value={summary.replayRunsTotal}
-        sublabel={`${summary.replayRunsOk} ok · ${summary.replayRunsFailed} failed`}
+        sublabel={`${summary.replayRunsOk} ok · ${summary.replayRunsFailed} failed · ${formatMs(summary.totalReplayMs)} total replay time`}
         icon={<Zap className="size-[18px]" />}
         tone="info"
       />
@@ -108,10 +108,23 @@ function SummaryCards({ summary }: { summary: LedgerSummary }) {
         icon={<CheckCircle2 className="size-[18px]" />}
         tone="positive"
       />
+      {/* Agent turns (LLM) — the replay-vs-agent side-by-side is the ledger's
+          whole point: this is the count of agent_run_receipts rows (every
+          push/schedule/event RUN attempt) for the org, the denominator
+          llmTurnsAvoided is measured against. Fetched by getLedgerSummary
+          already; this card is what surfaces it (previously computed but
+          never rendered). */}
+      <KpiTile
+        label="Agent turns (LLM)"
+        value={summary.agentTurnCount}
+        sublabel="agent_run_receipts, all triggers"
+        icon={<Bot className="size-[18px]" />}
+        tone="info"
+      />
       <KpiTile
         label="Steps verified"
         value={summary.stepsPassed}
-        sublabel={`${summary.stepsUnchecked} unchecked · ${summary.stepsFailed} failed`}
+        sublabel={`${summary.stepsUnchecked} unchecked · ${summary.stepsSkipped} skipped · ${summary.stepsFailed} failed`}
         icon={<ListChecks className="size-[18px]" />}
         tone="neutral"
       />
@@ -197,6 +210,7 @@ function SkillsTable({ rows }: { rows: LedgerSkillRow[] }) {
               <th className="px-5 py-3 font-medium">Trigger filter</th>
               <th className="px-5 py-3 font-medium">Heals</th>
               <th className="px-5 py-3 font-medium">Last replayed</th>
+              <th className="px-5 py-3 font-medium">Source</th>
             </tr>
           </thead>
           <tbody>
@@ -217,6 +231,9 @@ function SkillsTable({ rows }: { rows: LedgerSkillRow[] }) {
                 <td className="px-5 py-3 text-muted-foreground">{row.healCount}</td>
                 <td className="px-5 py-3 text-muted-foreground">
                   {row.lastReplayAt ? formatWhen(row.lastReplayAt) : "never"}
+                </td>
+                <td className="px-5 py-3 font-mono text-xs text-muted-foreground">
+                  {formatSource(row.sourceTraceId)}
                 </td>
               </tr>
             ))}
@@ -332,6 +349,14 @@ function OutcomeChip({
   );
 }
 
+/** The compiled skill's source trace — provenance only (sourceTraceId is
+ *  ON DELETE SET NULL, so a deleted trace shows "trace deleted" rather than
+ *  a dead link). Shows a truncated id, never a full uuid (visual noise). */
+function formatSource(sourceTraceId: string | null): string {
+  if (!sourceTraceId) return "manual / trace deleted";
+  return `trace:${sourceTraceId.slice(0, 8)}`;
+}
+
 function formatTriggerFilter(filter: LedgerSkillRow["triggerFilter"]): string {
   if (!filter) return "every event";
   const parts: string[] = [];
@@ -339,6 +364,12 @@ function formatTriggerFilter(filter: LedgerSkillRow["triggerFilter"]): string {
   if (filter.senderContains) parts.push(`sender contains "${filter.senderContains}"`);
   if (filter.subjectContains) parts.push(`subject contains "${filter.subjectContains}"`);
   return parts.length > 0 ? parts.join(", ") : "every event";
+}
+
+/** Human-readable duration from a summed ms figure — e.g. "1.2s", "340ms". */
+function formatMs(ms: number): string {
+  if (ms < 1000) return `${ms}ms`;
+  return `${(ms / 1000).toFixed(1)}s`;
 }
 
 /** A compact, locale-stable "when" — e.g. "Jun 26, 14:32". */

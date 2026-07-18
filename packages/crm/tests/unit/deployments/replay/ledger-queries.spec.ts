@@ -181,6 +181,47 @@ describe("computeLedgerSummary — pure math over fixture rows", () => {
     assert.equal(summary.replayRunsOk, 1);
     assert.equal(summary.stepsPassed, 0);
   });
+
+  test("a legacy RunRecord with `totals` but missing unchecked/skipped fields folds those as 0 via ?? 0 (never undefined/NaN)", () => {
+    // Simulates an older reelier RunRecord shape (pre-unchecked/skipped totals
+    // fields) landing in a stored row — the ?? 0 fallback in computeLedgerSummary
+    // must degrade honestly rather than propagate `undefined` into a sum.
+    const legacyRecord = {
+      skill: "email:dep_1",
+      startedAt: "2026-07-17T00:00:00.000Z",
+      finishedAt: "2026-07-17T00:00:01.000Z",
+      passed: true,
+      steps: [],
+      totals: {
+        steps: 2,
+        passed: 2,
+        // unchecked / skipped intentionally OMITTED — legacy shape.
+        failed: 0,
+        ms: 50,
+        llmInputTokens: 0,
+        llmOutputTokens: 0,
+      },
+    } as unknown as ReelierRunRecord;
+    const rows: LedgerTraceRow[] = [
+      {
+        id: "r1",
+        kind: "replay-run",
+        ok: true,
+        callCount: 0,
+        records: legacyRecord,
+        createdAt: new Date("2026-07-17T00:00:00.000Z"),
+      },
+    ];
+    const summary = computeLedgerSummary(rows, 0);
+    assert.equal(summary.stepsPassed, 2);
+    assert.equal(summary.stepsUnchecked, 0);
+    assert.equal(summary.stepsSkipped, 0);
+    assert.equal(summary.stepsFailed, 0);
+    assert.equal(summary.totalReplayMs, 50);
+    // No NaN/undefined ever leaks into the summary.
+    assert.equal(Number.isFinite(summary.stepsUnchecked), true);
+    assert.equal(Number.isFinite(summary.stepsSkipped), true);
+  });
 });
 
 describe("toLedgerRecentRun — pure shaping", () => {
