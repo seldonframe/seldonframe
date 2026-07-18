@@ -67,17 +67,17 @@ type EnabledSkillRow = { id: string; skillMd: string };
 /**
  * A step's TRUSTED effect for gate purposes. Consults tool-effects.ts's
  * explicit allowlist FIRST — SF's own hand-classified truth about the tool's
- * real side effect, keyed by name. Only when the allowlist has never heard
- * of the tool (an unknown/third-party/typo'd name) does the compiled skill's
- * own `effect:` line get a say — and even then it is trusted ONLY when it
- * says 'destructive' (the safe direction); an unknown tool claiming 'read'
- * or 'idempotent-write' in skill_md text is never believed, because that
+ * real side effect, keyed by name. When the allowlist has never heard of the
+ * tool (an unknown/third-party/typo'd name), the result is UNCONDITIONALLY
+ * 'destructive' — the compiled skill's own `effect:` line is never consulted
+ * for an unknown tool, not even to check whether it says 'destructive'. That
  * text came from reelier's verb-prefix heuristic over the tool NAME, not
- * from anything SF actually verified (this is the `search_and_purge`
- * attack: a destructive tool whose name happens to parse as a read verb).
- * Net effect: an unknown tool is ALWAYS treated as destructive here — it can
- * only ever occupy the gate's single bounded final-step slot, exactly like a
- * genuinely destructive allowlisted tool.
+ * from anything SF actually verified (this is the `search_and_purge` attack:
+ * a destructive tool whose name happens to parse as a read verb), so it gets
+ * zero influence on the gate either way. Net effect: an unknown tool is
+ * ALWAYS treated as destructive here — it can only ever occupy the gate's
+ * single bounded final-step slot, exactly like a genuinely destructive
+ * allowlisted tool.
  */
 function trustedEffect(step: ReelierSkillStep): ReelierSkill["steps"][number]["effect"] {
   const known = effectForTool(step.actionTool);

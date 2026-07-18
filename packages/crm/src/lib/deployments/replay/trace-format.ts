@@ -94,10 +94,21 @@ const JWT_RE = /\beyJ[A-Za-z0-9_-]{8,}\.[A-Za-z0-9_-]{8,}\.[A-Za-z0-9_-]{4,}/g;
  *  whole in a single string field (`?api_key=abc123&x=1`) or an
  *  obviously form-encoded body (`token=abc123&foo=bar`). Independent of
  *  SECRET_KEY_NAME_RE below, which only fires on actual JSON object keys —
- *  this one fires on TEXT embedded inside a string value. Deliberately the
- *  same shape-agnostic policy as SECRET_KEY_NAME_RE: match on the NAME,
- *  never on the value's shape (a token/key/code can look like anything). */
-const QUERY_PARAM_NAME_RE = /token|secret|key|password|auth|signature|sig|code/i;
+ *  this one fires on TEXT embedded inside a string value.
+ *
+ *  NOT the same matching policy as SECRET_KEY_NAME_RE (that one is a bare
+ *  substring test — `/token|secret|.../i.test(k)` — appropriate for a JSON
+ *  key name, which is rarely an English word). A query-param name embedded
+ *  in arbitrary URL/body text is far more likely to collide with an
+ *  ordinary word, so this pattern is ANCHORED: each short token
+ *  (key/auth/authorization/signature/sig/code) must match the param name as
+ *  a whole word or a `_`/`-`-delimited compound at the END of the name
+ *  (`(?:^|[_-])TOKEN$`), never as a bare substring anywhere. That's what
+ *  keeps `api_key`/`access_token`/`public_key`/`auth_code` masked while
+ *  `monkey`/`donkey`/`design`/`author`/`barcode` (which merely CONTAIN one
+ *  of those tokens mid-word) pass through untouched. */
+const QUERY_PARAM_NAME_RE =
+  /(?:^|[_-])(?:api[_-]?key|access[_-]?token|key|token|secret|password|auth|authorization|signature|sig|code)$/i;
 /** Matches one `name=value` pair, anchored so it only fires on an ACTUAL
  *  `name=value` occurrence — preceded by start-of-string, `?`, `&`,
  *  whitespace, or a quote (never mid-word, so a bare sentence containing

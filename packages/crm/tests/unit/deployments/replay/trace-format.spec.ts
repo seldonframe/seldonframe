@@ -184,6 +184,25 @@ describe("redact — query-param / form-field VALUES masked by param NAME", () =
     assert.ok(out.webhookUrl.includes("signature=«redacted»"));
     assert.ok(out.webhookUrl.includes("id=9"));
   });
+
+  test("param names that merely CONTAIN a secret-shaped token mid-word are left untouched (anchored, not substring)", () => {
+    // monkey/donkey contain "key" but don't END in it at a word/compound
+    // boundary; design/assignment contain "sig" mid-word; barcode contains
+    // "code" but not as a `_`/`-`-delimited (or whole-name) suffix; author
+    // contains "auth" as a prefix, not the whole name.
+    const url =
+      "https://example.com/?monkey=1&donkey=2&design=blue&barcode=abc123&author=jane&assignment=42&x=1";
+    assert.equal(redact(url), url);
+  });
+
+  test("public_key and auth_code (compound, `_`-delimited) are still masked — the anchoring keeps compounds, not just bare names", () => {
+    const out = redact("?public_key=abc123&auth_code=xyz789&id=1") as string;
+    assert.ok(!out.includes("abc123"));
+    assert.ok(!out.includes("xyz789"));
+    assert.ok(out.includes("public_key=«redacted»"));
+    assert.ok(out.includes("auth_code=«redacted»"));
+    assert.ok(out.includes("id=1"));
+  });
 });
 
 describe("capTraceBody — per-record truncation with an explicit marker", () => {

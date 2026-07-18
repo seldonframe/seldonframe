@@ -1,11 +1,18 @@
 // Deterministic replay — ops CLI for the trace -> skill -> enable loop
 // (Reelier phase 2c). This is OPS TOOLING run by the platform owner with
-// direct DB env — NOT an in-app admin surface. `list-traces` / `list-skills`
-// deliberately allow cross-org listing (no logged-in org to scope to; a
-// human with direct DB access already has that reach) — every other
-// command that TOUCHES a specific row (`show-trace`, `compile`, `enable`,
-// `disable`) still scopes/derives its org from that row's own org_id, never
-// from an argument a caller could spoof.
+// direct DB env — NOT an in-app admin surface. There is no logged-in org to
+// scope anything to here; direct DB access IS the authorization boundary,
+// same as running SQL by hand. Per command:
+//   - `list-traces` / `list-skills`: intentionally cross-org (no filter
+//     unless `--org`/`--deployment` is passed).
+//   - `compile`: looks up the trace row by id, then derives orgId +
+//     deploymentId FROM that row and passes them into compileSkillFromTrace
+//     (which enforces its own org-scoped WHERE) — so a compile always
+//     targets the trace's OWN org, never an argument a caller could spoof.
+//   - `enable` / `disable`: act by skillId ALONE (no org check at all) —
+//     the operator running this script with direct DB env is already
+//     trusted with every row in the database, so there is no org boundary
+//     left to enforce.
 //
 // Usage (from packages/crm):
 //   pnpm tsx scripts/replay-ops.ts list-traces [--org <id>] [--deployment <id>] [--limit N]
