@@ -91,8 +91,8 @@ importers:
         specifier: workspace:*
         version: link:../payments
       '@seldonframe/reelier':
-        specifier: 0.1.0
-        version: 0.1.0(zod@4.4.3)
+        specifier: 0.1.1
+        version: 0.1.1(zod@4.4.3)
       '@stripe/react-stripe-js':
         specifier: ^6.8.0
         version: 6.8.0(@stripe/stripe-js@9.10.0)(react-dom@19.2.7(react@19.2.7))(react@19.2.7)
@@ -2189,8 +2189,8 @@ packages:
   '@sec-ant/readable-stream@0.4.1':
     resolution: {integrity: sha512-831qok9r2t8AlxLko40y2ebgSDhenenCatLVeW/uBtnHPyhHOvG0C7TvfgecV+wHzIm5KUICgzmVpWS+IMEAeg==}
 
-  '@seldonframe/reelier@0.1.0':
-    resolution: {integrity: sha512-aF7QzNBooL4PMf08PmxFLnZuSLUeyZeY7rdZgwW4kNHM6Pl94VYcr7o8EozZhtepf8tT02/0v0fpx+XxPs0uMg==}
+  '@seldonframe/reelier@0.1.1':
+    resolution: {integrity: sha512-15ljFAN4FvweApBVuAG8WlBB4wUUTClZIVp2cs9Q+JB7+QUlyvSWtqojUOfG6nyUVwjymevaP48LXdTiPGc9dg==}
     engines: {node: '>=20'}
     hasBin: true
 
@@ -8770,7 +8770,7 @@ snapshots:
 
   '@sec-ant/readable-stream@0.4.1': {}
 
-  '@seldonframe/reelier@0.1.0(zod@4.4.3)':
+  '@seldonframe/reelier@0.1.1(zod@4.4.3)':
     dependencies:
       '@modelcontextprotocol/sdk': 1.29.0(zod@4.4.3)
     transitivePeerDependencies:
