@@ -120,14 +120,42 @@ const TOOL_EFFECTS: Record<string, Effect> = {
 };
 
 /**
- * Look up a tool's REAL effect from this explicit allowlist. Returns
- * `undefined` for any name not in the map — an unknown tool, NEVER a
- * guess. Callers must treat `undefined` as untrusted (never 'read', never
- * 'idempotent-write') — see replay-before-llm.ts's passesAllReadGate, the
- * only caller with a safety contract riding on this.
+ * Strip any number of leading `<namespace>__` groups off a recorded tool
+ * name. Recorded/traced tool names carry the SAME namespace prefix the
+ * runtime wraps them with before handing them to the model — this
+ * allowlist is keyed by the bare action name, so a lookup on the raw
+ * recorded name always misses:
+ *  - Composio connector tools: `composio__<TOOLKIT_ACTION>` — the fixed
+ *    `composio` namespace (COMPOSIO_TOOL_NAMESPACE in
+ *    lib/integrations/composio/connector.ts), e.g.
+ *    `composio__GMAIL_FETCH_EMAILS`.
+ *  - Generic MCP connector tools: `<serviceName>__<toolName>` — an
+ *    arbitrary per-connector serviceName (lib/agents/mcp/wrap-tool.ts),
+ *    so the namespace itself isn't a fixed string.
+ * Native SF tools (book_appointment, look_up_availability, ...) are never
+ * namespaced and pass through unchanged. Only a `__`-delimited prefix is
+ * stripped — never a fuzzy match — so an unrelated name is returned as-is
+ * and still misses the allowlist (stays UNKNOWN, still destructive by
+ * default).
+ */
+export function normalizeToolName(name: string): string {
+  return name.replace(/^(?:[A-Za-z0-9-]+__)+/, "");
+}
+
+/**
+ * Look up a tool's REAL effect from this explicit allowlist. Tries the
+ * exact recorded name first, then the name with any leading
+ * `<namespace>__` prefix(es) stripped (normalizeToolName) — so a recorded
+ * `composio__GMAIL_FETCH_EMAILS` matches this table's `GMAIL_FETCH_EMAILS`
+ * entry. Returns `undefined` for any name not in the map either way — an
+ * unknown tool, NEVER a guess. Callers must treat `undefined` as untrusted
+ * (never 'read', never 'idempotent-write') — see replay-before-llm.ts's
+ * passesAllReadGate, the only caller with a safety contract riding on this.
  */
 export function effectForTool(name: string): Effect | undefined {
-  return TOOL_EFFECTS[name];
+  const exact = TOOL_EFFECTS[name];
+  if (exact !== undefined) return exact;
+  return TOOL_EFFECTS[normalizeToolName(name)];
 }
 
 /** Total tool names this allowlist explicitly classifies. Exposed for the
