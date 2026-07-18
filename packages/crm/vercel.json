@@ -60,6 +60,10 @@
       "schedule": "0 7 * * *"
     },
     {
+      "path": "/api/cron/replay-heartbeat",
+      "schedule": "30 7 * * *"
+    },
+    {
       "path": "/api/cron/payment-dunning",
       "schedule": "0 8 * * *"
     },
