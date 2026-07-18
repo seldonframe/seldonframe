@@ -9,7 +9,12 @@
 import { describe, test } from "node:test";
 import assert from "node:assert/strict";
 
-import { effectForTool, allowlistSize, listToolEffects } from "@/lib/deployments/replay/tool-effects";
+import {
+  effectForTool,
+  allowlistSize,
+  listToolEffects,
+  normalizeToolName,
+} from "@/lib/deployments/replay/tool-effects";
 
 describe("effectForTool — native SF tools", () => {
   test("look_up_availability is read", () => {
@@ -96,6 +101,51 @@ describe("effectForTool — unknown tools", () => {
     assert.equal(effectForTool("search_and_purge"), undefined);
     assert.equal(effectForTool("SOME_RANDOM_TOOLKIT_ACTION"), undefined);
     assert.equal(effectForTool(""), undefined);
+  });
+});
+
+describe("normalizeToolName — MCP-server prefix stripping", () => {
+  test("strips the fixed composio__ namespace", () => {
+    assert.equal(normalizeToolName("composio__GMAIL_FETCH_EMAILS"), "GMAIL_FETCH_EMAILS");
+  });
+
+  test("strips an arbitrary generic-MCP serviceName__ namespace", () => {
+    assert.equal(normalizeToolName("stripe__CREATE_INVOICE"), "CREATE_INVOICE");
+  });
+
+  test("strips repeated/double prefixes", () => {
+    assert.equal(normalizeToolName("composio__gmail__GMAIL_FETCH_EMAILS"), "GMAIL_FETCH_EMAILS");
+  });
+
+  test("unprefixed native tool names pass through unchanged", () => {
+    assert.equal(normalizeToolName("book_appointment"), "book_appointment");
+  });
+
+  test("empty string passes through unchanged", () => {
+    assert.equal(normalizeToolName(""), "");
+  });
+});
+
+describe("effectForTool — recorded names carrying an MCP-server prefix", () => {
+  test("a composio__-prefixed read tool classifies as read", () => {
+    assert.equal(effectForTool("composio__GMAIL_FETCH_EMAILS"), "read");
+  });
+
+  test("a composio__-prefixed destructive tool classifies as destructive", () => {
+    assert.equal(effectForTool("composio__GMAIL_SEND_EMAIL"), "destructive");
+  });
+
+  test("an unknown tool name under a prefix still returns undefined, never a guess", () => {
+    assert.equal(effectForTool("composio__SOME_RANDOM_TOOLKIT_ACTION"), undefined);
+  });
+
+  test("a double-prefixed name is still resolved via normalization", () => {
+    assert.equal(effectForTool("composio__gmail__GMAIL_SEND_EMAIL"), "destructive");
+  });
+
+  test("unprefixed names classify exactly as before", () => {
+    assert.equal(effectForTool("book_appointment"), "destructive");
+    assert.equal(effectForTool("look_up_availability"), "read");
   });
 });
 

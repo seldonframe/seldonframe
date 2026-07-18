@@ -178,6 +178,35 @@ describe("passesAllReadGate — tool-effects allowlist wired in (the search_and_
   });
 });
 
+describe("passesAllReadGate — recorded actionTool names carry an MCP-server prefix", () => {
+  test("an all-read skill whose action tools are composio__-prefixed passes the gate", () => {
+    const skill = {
+      steps: [
+        makeStep({ effect: "read", actionTool: "composio__GMAIL_FETCH_EMAILS" }),
+        makeStep({ n: 2, effect: "read", actionTool: "composio__GMAIL_LIST_LABELS" }),
+      ],
+    } as ReelierSkill;
+    assert.equal(passesAllReadGate(skill), true);
+  });
+
+  test("a composio__-prefixed destructive send mid-sequence still fails the gate", () => {
+    const skill = {
+      steps: [
+        makeStep({ effect: "read", actionTool: "composio__GMAIL_SEND_EMAIL" }),
+        makeStep({ n: 2, effect: "read", actionTool: "composio__GMAIL_FETCH_EMAILS" }),
+      ],
+    } as ReelierSkill;
+    assert.equal(passesAllReadGate(skill), false);
+  });
+
+  test("a composio__-prefixed destructive send as the sole/final step still passes (bounded)", () => {
+    const skill = {
+      steps: [makeStep({ effect: "read", actionTool: "composio__GMAIL_SEND_EMAIL" })],
+    } as ReelierSkill;
+    assert.equal(passesAllReadGate(skill), true);
+  });
+});
+
 describe("attemptL0Replay — org-scoped enabled-skill lookup", () => {
   test("skips when no enabled skill exists for this org+deployment", async () => {
     const deps: AttemptL0ReplayDeps = {
