@@ -1,15 +1,19 @@
-// agent_workflow_traces — deterministic replay, Reelier phase 2c slice 1
-// (OBSERVE MODE ONLY). One row per email-triggered deployed-agent turn,
-// recorded ONLY when SF_DETERMINISTIC_REPLAY=1 (lib/web-build/policy.ts's
+// agent_workflow_traces — deterministic replay, Reelier phase 2c. One row per
+// email-triggered deployed-agent turn (kind='trace', slice 1) OR one row per
+// L0 replay attempt (kind='replay-run', slice 2) — recorded ONLY when
+// SF_DETERMINISTIC_REPLAY=1 (lib/web-build/policy.ts's
 // isDeterministicReplayOn). Dark by default; zero rows written when off.
 //
-// WHAT THIS IS: the raw material slice 2 (a future, separate change) will
-// compile into Reelier replays. This slice only ever WRITES — nothing reads
-// or replays `records` yet.
+// Slice 1 wrote 'trace' rows only (raw material for the compiler). Slice 2
+// adds the compiler (lib/deployments/replay/compile.ts, reading a 'trace'
+// row into a replay_skills.skill_md) and the L0 replayer
+// (lib/deployments/replay/replay-before-llm.ts, writing a 'replay-run' row
+// per attempt) — see AgentWorkflowTraceKind below for the two shapes.
 //
-// `records` is a jsonb array shaped by lib/deployments/replay/trace-format.ts
-// (the Reelier trace-record FORMAT — this repo has no npm dependency on
-// Reelier's code, only matches its record contract).
+// `records` is a jsonb value shaped per `kind` — see AgentWorkflowTraceRecords
+// below (this repo has no npm dependency on Reelier's trace FORMAT itself,
+// only matches its record contract; it DOES depend on @seldonframe/reelier
+// for the runner/compiler, which is where ReelierRunRecord comes from).
 //
 // FAIL-SOFT BY CONTRACT: the writer (lib/deployments/replay/persist.ts)
 // NEVER throws into the agent turn it observed — mirrors agent-run-receipts.ts's
@@ -33,8 +37,19 @@ import {
 import { organizations } from "./organizations";
 import { deployments } from "./deployments";
 import type { TraceRecord } from "@/lib/deployments/replay/trace-format";
+import type { ReelierRunRecord } from "@seldonframe/reelier";
 
 export type AgentWorkflowTraceTriggerKind = "email";
+
+/** Reelier phase 2c slice 2 — a row is either an OBSERVE-MODE trace (`kind:
+ *  'trace'`, `records` a TraceRecord[] in seq order, unchanged from slice 1)
+ *  or an L0 REPLAY run (`kind: 'replay-run'`, `records` the reelier
+ *  RunRecord the replay attempt produced — see
+ *  lib/deployments/replay/replay-before-llm.ts). Default 'trace' so every
+ *  slice-1 row (and every insert that doesn't pass `kind`) keeps its
+ *  existing meaning unchanged. */
+export type AgentWorkflowTraceKind = "trace" | "replay-run";
+export type AgentWorkflowTraceRecords = TraceRecord[] | ReelierRunRecord;
 
 export const agentWorkflowTraces = pgTable(
   "agent_workflow_traces",
@@ -54,6 +69,10 @@ export const agentWorkflowTraces = pgTable(
      *  enum) so a later slice (sms/schedule) needs no migration to add a
      *  new kind, mirroring agent_run_receipts.trigger_kind's convention. */
     triggerKind: text("trigger_kind").$type<AgentWorkflowTraceTriggerKind>().notNull(),
+    /** Reelier phase 2c slice 2 (migration 0075) — 'trace' (default, slice 1
+     *  behavior unchanged) or 'replay-run' (an L0 replay attempt's
+     *  RunRecord). See AgentWorkflowTraceKind above. */
+    kind: text("kind").$type<AgentWorkflowTraceKind>().notNull().default("trace"),
     /** The Gmail messageId / dedup key that identified this run. Nullable —
      *  not every trigger carries one (mirrors composio-event-dispatch.ts's
      *  fail-open-on-missing-id contract). */
@@ -66,7 +85,7 @@ export const agentWorkflowTraces = pgTable(
      *  meta first (seq 0), then note/call/result records in seq order.
      *  Already redacted + per-record capped by the recorder before this row
      *  is ever written (see trace-format.ts's redact()/capTraceBody()). */
-    records: jsonb("records").$type<TraceRecord[]>().notNull().default([]),
+    records: jsonb("records").$type<AgentWorkflowTraceRecords>().notNull().default([]),
     inputTokens: integer("input_tokens").notNull().default(0),
     outputTokens: integer("output_tokens").notNull().default(0),
     createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),

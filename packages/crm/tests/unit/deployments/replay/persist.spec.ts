@@ -59,6 +59,28 @@ describe("writeWorkflowTrace — happy path", () => {
     assert.deepEqual(row.records, records);
   });
 
+  test("kind defaults to 'trace' when not specified (slice 2)", async () => {
+    let inserted: unknown = null;
+    await writeWorkflowTrace(baseInput(), {
+      insert: async (row) => {
+        inserted = row;
+      },
+    });
+    const row = inserted as Record<string, unknown>;
+    assert.equal(row.kind, "trace");
+  });
+
+  test("kind:'replay-run' passes through when specified", async () => {
+    let inserted: unknown = null;
+    await writeWorkflowTrace(baseInput({ kind: "replay-run" }), {
+      insert: async (row) => {
+        inserted = row;
+      },
+    });
+    const row = inserted as Record<string, unknown>;
+    assert.equal(row.kind, "replay-run");
+  });
+
   test("null deploymentId / triggerKey pass through as null (not undefined)", async () => {
     let inserted: unknown = null;
     await writeWorkflowTrace(baseInput({ deploymentId: null, triggerKey: null }), {

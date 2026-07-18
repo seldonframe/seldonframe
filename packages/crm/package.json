@@ -40,6 +40,7 @@
     "@radix-ui/react-icons": "^1.3.2",
     "@seldonframe/core": "workspace:*",
     "@seldonframe/payments": "workspace:*",
+    "@seldonframe/reelier": "0.1.0",
     "@stripe/react-stripe-js": "^6.3.0",
     "@stripe/stripe-js": "^9.5.0",
     "@tanstack/react-table": "^8.21.3",

@@ -81,6 +81,57 @@ describe("redact — secret-shaped strings never reach storage", () => {
   test("a short-looking token that doesn't match either shape is left alone", () => {
     assert.equal(redact("hello world"), "hello world");
   });
+
+  test("masks a Basic auth header inside a plain string", () => {
+    const out = redact("Authorization: Basic dXNlcjpwYXNzd29yZA==") as string;
+    assert.ok(!out.includes("dXNlcjpwYXNzd29yZA=="));
+    assert.ok(out.includes("Basic [redacted]"));
+  });
+
+  test("masks a Google OAuth (ya29.) access token", () => {
+    const out = redact("token: ya29.a0ARrdaM_veryLongOpaqueTokenValue123456") as string;
+    assert.ok(!out.includes("ya29.a0ARrdaM_veryLongOpaqueTokenValue123456"));
+    assert.ok(out.includes("[redacted]"));
+  });
+
+  test("masks a JWT-shaped string", () => {
+    const jwt =
+      "eyJhbGciOiJIUzI1NiJ9.eyJzdWIiOiIxMjM0NTY3ODkwIn0.dozjgNryP4J3jVmNHl0w5N_XgL0n3I9PlFUP0THsR8U";
+    const out = redact(`bearer token is ${jwt}`) as string;
+    assert.ok(!out.includes(jwt));
+    assert.ok(out.includes("[redacted]"));
+  });
+
+  test("masks a string value under a secret-shaped KEY NAME, regardless of shape", () => {
+    const out = redact({
+      apiKey: "totally-plain-looking-value-not-a-known-shape",
+      api_key: "another-plain-value-1234",
+      password: "hunter22222",
+      Authorization: "custom-scheme xyz123abc456",
+      unrelatedField: "totally-plain-looking-value-not-a-known-shape",
+    }) as Record<string, string>;
+    assert.equal(out.apiKey, "[redacted]");
+    assert.equal(out.api_key, "[redacted]");
+    assert.equal(out.password, "[redacted]");
+    assert.equal(out.Authorization, "[redacted]");
+    // The SAME value under a non-secret-shaped key name is left untouched —
+    // the key-name mask only fires on the key, never on the value's shape.
+    assert.equal(out.unrelatedField, "totally-plain-looking-value-not-a-known-shape");
+  });
+
+  test("a short value under a secret-shaped key name is left alone (too short to plausibly be a real credential)", () => {
+    const out = redact({ tokenType: "bearer" }) as Record<string, string>;
+    assert.equal(out.tokenType, "bearer");
+  });
+
+  test("a non-secret key with an ordinary value is never touched", () => {
+    const out = redact({ contactName: "Jordan Rivera", note: "call back tomorrow" }) as Record<
+      string,
+      string
+    >;
+    assert.equal(out.contactName, "Jordan Rivera");
+    assert.equal(out.note, "call back tomorrow");
+  });
 });
 
 describe("capTraceBody — per-record truncation with an explicit marker", () => {
@@ -101,6 +152,22 @@ describe("capTraceBody — per-record truncation with an explicit marker", () =>
     const circular: Record<string, unknown> = {};
     circular.self = circular;
     assert.equal(capTraceBody(circular), "[trace body was not serializable]");
+  });
+});
+
+describe("makeCallRecord — args are cap'd like a result body", () => {
+  test("oversized args are truncated with the same __truncated marker as a result body", () => {
+    const bigArgs = { payload: "x".repeat(TRACE_BODY_MAX_CHARS * 2) };
+    const call = makeCallRecord({ seq: 1, i: 0, ts: "t1", tool: "BULK_UPSERT", args: bigArgs });
+    const out = call.args as { __truncated: boolean; preview: string; originalLength: number };
+    assert.equal(out.__truncated, true);
+    assert.ok(out.preview.length <= TRACE_BODY_MAX_CHARS);
+    assert.ok(out.originalLength > TRACE_BODY_MAX_CHARS);
+  });
+
+  test("small args pass through unchanged (still redacted)", () => {
+    const call = makeCallRecord({ seq: 1, i: 0, ts: "t1", tool: "GMAIL_SEND_EMAIL", args: { to: "a@b.com" } });
+    assert.deepEqual(call.args, { to: "a@b.com" });
   });
 });
 
