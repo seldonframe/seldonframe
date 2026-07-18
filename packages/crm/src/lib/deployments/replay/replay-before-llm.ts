@@ -32,7 +32,8 @@ import type {
   ReelierRunRecord,
   ReelierTool,
 } from "@seldonframe/reelier";
-import type { ReelierSkill } from "@seldonframe/reelier/skill";
+import type { ReelierSkill, ReelierSkillStep } from "@seldonframe/reelier/skill";
+import { effectForTool } from "./tool-effects";
 
 export type AttemptL0ReplayInput = {
   orgId: string;
@@ -64,14 +65,37 @@ export type AttemptL0ReplayResult =
 type EnabledSkillRow = { id: string; skillMd: string };
 
 /**
+ * A step's TRUSTED effect for gate purposes. Consults tool-effects.ts's
+ * explicit allowlist FIRST — SF's own hand-classified truth about the tool's
+ * real side effect, keyed by name. Only when the allowlist has never heard
+ * of the tool (an unknown/third-party/typo'd name) does the compiled skill's
+ * own `effect:` line get a say — and even then it is trusted ONLY when it
+ * says 'destructive' (the safe direction); an unknown tool claiming 'read'
+ * or 'idempotent-write' in skill_md text is never believed, because that
+ * text came from reelier's verb-prefix heuristic over the tool NAME, not
+ * from anything SF actually verified (this is the `search_and_purge`
+ * attack: a destructive tool whose name happens to parse as a read verb).
+ * Net effect: an unknown tool is ALWAYS treated as destructive here — it can
+ * only ever occupy the gate's single bounded final-step slot, exactly like a
+ * genuinely destructive allowlisted tool.
+ */
+function trustedEffect(step: ReelierSkillStep): ReelierSkill["steps"][number]["effect"] {
+  const known = effectForTool(step.actionTool);
+  if (known !== undefined) return known;
+  return "destructive";
+}
+
+/**
  * v1 replay gate: at most one non-read step, and it must be the LAST step.
  * Zero non-read steps (a pure-read skill) also passes trivially. An empty
- * skill (no steps) never passes — nothing to replay.
+ * skill (no steps) never passes — nothing to replay. "Non-read" here is the
+ * ALLOWLIST-trusted effect (trustedEffect above), never skill_md's raw
+ * `effect:` line directly.
  */
 export function passesAllReadGate(skill: ReelierSkill): boolean {
   if (skill.steps.length === 0) return false;
   const lastIdx = skill.steps.length - 1;
-  return skill.steps.every((step, idx) => step.effect === "read" || idx === lastIdx);
+  return skill.steps.every((step, idx) => trustedEffect(step) === "read" || idx === lastIdx);
 }
 
 /** Injectable I/O — defaults to real DB reads / reelier calls (kept out of
