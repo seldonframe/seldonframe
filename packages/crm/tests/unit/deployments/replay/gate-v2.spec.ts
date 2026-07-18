@@ -147,4 +147,42 @@ describe("passesGateV2 — eligibility", () => {
     const result = passesGateV2(skill, { stepN: 1, keyVar: "message_id" });
     assert.deepEqual(result, { ok: true, destructiveStepN: 1 });
   });
+
+  // Reviewer P2 (security-critical, pre-merge): rawEffectsOk is the guard
+  // that stops allowDestructive:true (set for the whole v2 run) from giving
+  // a free pass to a step SF's allowlist trusts as 'read' but whose raw
+  // COMPILED skill_md line still says 'destructive' — reelier's own runner
+  // gates purely on that raw line, not on tool-effects.ts. Without this
+  // guard such a step would execute for real without ever going through
+  // the claim wrapper (only the declared destructive step's tool is
+  // wrapped). See gate-v2.ts's "EXECUTION-LAYER guard" comment.
+  test("a non-declared step with an allowlist-READ tool but raw effect:'destructive' is refused (the anti-bypass guard)", () => {
+    const skill = {
+      steps: [
+        makeStep({ n: 1, effect: "destructive", actionTool: "take_message" }),
+        // GMAIL_FETCH_EMAILS is allowlisted 'read' (tool-effects.ts), so
+        // trustedEffect() would happily count this as read/idempotent-write
+        // and NOT as the skill's second destructive step — but its raw
+        // compiled effect line disagrees, which is exactly what
+        // rawEffectsOk exists to catch.
+        makeStep({ n: 2, effect: "destructive", actionTool: "composio__GMAIL_FETCH_EMAILS" }),
+      ],
+    } as ReelierSkill;
+    const result = passesGateV2(skill, { stepN: 1, keyVar: "message_id" });
+    assert.equal(result.ok, false);
+    if (!result.ok) {
+      assert.match(result.reason, /raw compiled effect/);
+    }
+  });
+
+  test("INVERSE CONTROL: the same skill with that step's raw effect 'read' (matching its allowlist trust) is eligible", () => {
+    const skill = {
+      steps: [
+        makeStep({ n: 1, effect: "destructive", actionTool: "take_message" }),
+        makeStep({ n: 2, effect: "read", actionTool: "composio__GMAIL_FETCH_EMAILS" }),
+      ],
+    } as ReelierSkill;
+    const result = passesGateV2(skill, { stepN: 1, keyVar: "message_id" });
+    assert.deepEqual(result, { ok: true, destructiveStepN: 1 });
+  });
 });
