@@ -13,7 +13,7 @@
   },
   "dependencies": {
     "drizzle-orm": "^0.45.2",
-    "stripe": "^18.4.0",
+    "stripe": "^22.3.2",
     "zod": "^4.4.3"
   },
   "devDependencies": {
