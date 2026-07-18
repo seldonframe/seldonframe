@@ -9,10 +9,20 @@
 //     contract: `--max-level 0` never constructs an `llm` client).
 //   - allowDestructive false — a `destructive`-effect step always refuses
 //     inside the runner regardless of our own gate below (belt + suspenders).
-//   - vars: {} — no input-variable mapping from the event payload in v1; an
-//     unresolved `{{var}}` in a skill throws inside reelier's fillTemplate,
-//     which the runner already turns into a normal step failure → diverge.
-//     Nothing special to implement here for that case.
+//   - TRIGGER VARS (gap 1, closed): `vars` is built from the fired event —
+//     `message_id` (the Gmail id, already extracted upstream as
+//     trigger_key), plus `sender`/`subject` when the composio payload
+//     carries them ("" when absent — never assumed present). These are the
+//     ONLY vars filled; an unresolved `{{var}}` beyond these still throws
+//     inside reelier's fillTemplate, which the runner already turns into a
+//     normal step failure → diverge (unchanged fail-safe).
+//   - TRIGGER FILTER (gap 2, closed): a linear skill can't branch, but a
+//     push deployment receives EVERY fired event. `trigger_filter`
+//     (replay_skills.trigger_filter, migration 0076) is evaluated via
+//     ./trigger-filter.ts immediately after the enabled skill loads —
+//     BEFORE parseSkill or the tool bridge ever run — so a mismatch skips
+//     replay entirely (no tool construction) and falls through to the
+//     normal agentic turn, which still handles the conditional itself.
 //
 // HARD SAFETY — never send email/SMS twice: if replay executes some steps
 // then diverges, the caller (replay-or-turn.ts) falls back to a FRESH
@@ -34,6 +44,18 @@ import type {
 } from "@seldonframe/reelier";
 import type { ReelierSkill, ReelierSkillStep } from "@seldonframe/reelier/skill";
 import { effectForTool } from "./tool-effects";
+import { evaluateTriggerFilter } from "./trigger-filter";
+
+/** The fired event's trigger fields, threaded through to (a) fill a skill's
+ *  `{{message_id}}`/`{{sender}}`/`{{subject}}` template vars and (b)
+ *  evaluate the enabled skill's trigger_filter. Optional on the input —
+ *  callers that don't (yet) thread a real event get the empty-string/null
+ *  defaults below, byte-for-byte the old `vars: {}` behavior. */
+export type AttemptL0ReplayTrigger = {
+  messageId: string | null;
+  sender: string;
+  subject: string;
+};
 
 export type AttemptL0ReplayInput = {
   orgId: string;
@@ -41,6 +63,7 @@ export type AttemptL0ReplayInput = {
   orgSlug: string;
   timezone: string;
   blueprint: AgentBlueprint;
+  trigger?: AttemptL0ReplayTrigger;
 };
 
 export type AttemptL0ReplaySkippedResult = { kind: "skipped"; reason: string };
@@ -62,7 +85,12 @@ export type AttemptL0ReplayResult =
   | AttemptL0ReplayDivergedResult
   | AttemptL0ReplayPassedResult;
 
-type EnabledSkillRow = { id: string; skillMd: string };
+// triggerFilter is optional on the row shape (rather than required) so
+// every existing fake constructing `{ id, skillMd }` (predating the
+// trigger-filter gate) keeps compiling unchanged — `undefined` is treated
+// identically to a stored `null` by evaluateTriggerFilter (no filter,
+// attempt every event).
+type EnabledSkillRow = { id: string; skillMd: string; triggerFilter?: unknown };
 
 /**
  * A step's TRUSTED effect for gate purposes. Consults tool-effects.ts's
@@ -118,7 +146,11 @@ async function defaultLoadEnabledSkill(
   const { replaySkills } = await import("@/db/schema/replay-skills");
   const { and, eq } = await import("drizzle-orm");
   const [row] = await db
-    .select({ id: replaySkills.id, skillMd: replaySkills.skillMd })
+    .select({
+      id: replaySkills.id,
+      skillMd: replaySkills.skillMd,
+      triggerFilter: replaySkills.triggerFilter,
+    })
     .from(replaySkills)
     .where(
       and(
@@ -232,6 +264,27 @@ export async function attemptL0Replay(
     const skillRow = await loadEnabledSkill(input.orgId, input.deploymentId);
     if (!skillRow) return { kind: "skipped", reason: "no enabled skill for this deployment" };
 
+    const trigger: AttemptL0ReplayTrigger = input.trigger ?? {
+      messageId: null,
+      sender: "",
+      subject: "",
+    };
+
+    // Trigger filter gate (gap 2) — evaluated BEFORE parseSkill/buildTools,
+    // so a mismatch never constructs a single reelier tool. A null filter
+    // always matches (attempt every event); a malformed filter is treated
+    // as not-matched (fail-safe — see trigger-filter.ts).
+    const filterResult = evaluateTriggerFilter(skillRow.triggerFilter, {
+      sender: trigger.sender,
+      subject: trigger.subject,
+    });
+    if (!filterResult.matched) {
+      return {
+        kind: "skipped",
+        reason: `trigger_filter not matched: ${filterResult.reason}`,
+      };
+    }
+
     let skill: ReelierSkill;
     try {
       skill = await parseSkillFn(skillRow.skillMd);
@@ -260,6 +313,19 @@ export async function attemptL0Replay(
       };
     }
 
+    // Trigger vars (gap 1) — the ONLY vars a skill's {{...}} templates get
+    // filled from. message_id mirrors the same value already used
+    // upstream as the dedupe/claim trigger_key; "" (never undefined) when
+    // a field is absent so reelier's fillTemplate always finds the key
+    // (an EMPTY resolved value, not a missing one) — an unresolved
+    // {{var}} outside this fixed set still throws inside fillTemplate,
+    // which the runner turns into a step failure → diverge (unchanged).
+    const vars: Record<string, string> = {
+      message_id: trigger.messageId ?? "",
+      sender: trigger.sender,
+      subject: trigger.subject,
+    };
+
     let record: ReelierRunRecord;
     try {
       record = await runSkillFn(skill, {
@@ -271,7 +337,7 @@ export async function attemptL0Replay(
         // serverless deploy has no durable local filesystem to write to
         // anyway.
         dryRun: true,
-        vars: {},
+        vars,
       });
     } catch (err) {
       // A thrown runSkill (rather than a clean per-step divergence) is

@@ -33,6 +33,7 @@ describe("replay_skills — table shape", () => {
     assert.ok("sourceTraceId" in replaySkills);
     assert.ok("healCount" in replaySkills);
     assert.ok("lastReplayAt" in replaySkills);
+    assert.ok("triggerFilter" in replaySkills);
     assert.ok("createdAt" in replaySkills);
     assert.ok("updatedAt" in replaySkills);
   });
@@ -53,6 +54,7 @@ describe("replay_skills — table shape", () => {
       sourceTraceId: null,
       healCount: 0,
       lastReplayAt: null,
+      triggerFilter: null,
       createdAt: new Date(),
       updatedAt: new Date(),
     };
@@ -64,6 +66,24 @@ describe("replay_skills — table shape", () => {
       skillMd: row.skillMd,
     };
     assert.equal(insert.deploymentId, row.deploymentId);
+  });
+
+  test("triggerFilter round-trips a real filter object (migration 0076)", () => {
+    const row: ReplaySkillRow = {
+      id: "00000000-0000-4000-8000-000000000001",
+      orgId: "00000000-0000-4000-8000-000000000002",
+      deploymentId: "00000000-0000-4000-8000-000000000003",
+      name: "email:dep_1",
+      skillMd: "---\nname: x\n---\n",
+      status: "enabled",
+      sourceTraceId: null,
+      healCount: 0,
+      lastReplayAt: null,
+      triggerFilter: { senderEndsWith: "@seldonframe.com" },
+      createdAt: new Date(),
+      updatedAt: new Date(),
+    };
+    assert.deepEqual(row.triggerFilter, { senderEndsWith: "@seldonframe.com" });
   });
 
   test("barrel re-export wires replay_skills into the db schema bundle", async () => {
@@ -116,5 +136,32 @@ describe("migration 0075 — SQL matches the Drizzle schema's constraints", () =
       migrationSql,
       /"source_trace_id" uuid REFERENCES "agent_workflow_traces"\("id"\) ON DELETE SET NULL/,
     );
+  });
+});
+
+describe("migration 0076 — trigger_filter column matches the Drizzle schema", () => {
+  const migrationSql = readFileSync(
+    path.join(__dirname, "../../../../drizzle/0076_replay_skills_trigger_filter.sql"),
+    "utf8",
+  );
+
+  test("adds replay_skills.trigger_filter as a nullable jsonb column", () => {
+    assert.match(migrationSql, /ALTER TABLE "replay_skills"/);
+    assert.match(migrationSql, /ADD COLUMN IF NOT EXISTS "trigger_filter" jsonb;/);
+    // Nullable — no NOT NULL on this column (null = no filter is a real,
+    // supported state, not a placeholder).
+    assert.doesNotMatch(migrationSql, /"trigger_filter" jsonb NOT NULL/);
+  });
+
+  test("journal registers 0076 after 0075", () => {
+    const journal = JSON.parse(
+      readFileSync(path.join(__dirname, "../../../../drizzle/meta/_journal.json"), "utf8"),
+    ) as { entries: Array<{ idx: number; tag: string }> };
+    const tags = journal.entries.map((e) => e.tag);
+    const idx75 = tags.indexOf("0075_replay_skills");
+    const idx76 = tags.indexOf("0076_replay_skills_trigger_filter");
+    assert.ok(idx75 >= 0, "0075 must be registered");
+    assert.ok(idx76 >= 0, "0076 must be registered");
+    assert.equal(idx76, idx75 + 1, "0076 must immediately follow 0075");
   });
 });

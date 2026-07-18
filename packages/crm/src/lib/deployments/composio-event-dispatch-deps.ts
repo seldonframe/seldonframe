@@ -254,7 +254,19 @@ export function buildDispatchComposioEventDeps(): DispatchComposioEventDeps {
         "@/lib/deployments/replay/replay-before-llm"
       );
       const { writeWorkflowTrace } = await import("@/lib/deployments/replay/persist");
-      const { extractMessageId } = await import("@/lib/deployments/composio-event-dispatch");
+      const { extractMessageId, extractSender, extractSubject } = await import(
+        "@/lib/deployments/composio-event-dispatch"
+      );
+
+      // Trigger vars/filter threading — built ONCE from the fired event and
+      // passed into attemptL0Replay below, which both fills the skill's
+      // {{message_id}}/{{sender}}/{{subject}} vars AND evaluates the
+      // enabled skill's trigger_filter against sender/subject.
+      const trigger = {
+        messageId: extractMessageId(payload ?? {}),
+        sender: extractSender(payload ?? {}),
+        subject: extractSubject(payload ?? {}),
+      };
 
       return replayOrTurn(
         {
@@ -288,6 +300,7 @@ export function buildDispatchComposioEventDeps(): DispatchComposioEventDeps {
           orgSlug: org.slug,
           timezone: org.timezone ?? "UTC",
           blueprint,
+          trigger,
         },
       );
     },

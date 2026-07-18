@@ -19,6 +19,7 @@ import { sql } from "drizzle-orm";
 import {
   index,
   integer,
+  jsonb,
   pgTable,
   text,
   timestamp,
@@ -29,6 +30,7 @@ import {
 import { organizations } from "./organizations";
 import { deployments } from "./deployments";
 import { agentWorkflowTraces } from "./agent-workflow-traces";
+import type { TriggerFilter } from "@/lib/deployments/replay/trigger-filter";
 
 export type ReplaySkillStatus = "draft" | "enabled" | "disabled";
 
@@ -64,6 +66,16 @@ export const replaySkills = pgTable(
     /** Set only after a PASSED L0 replay run (replay-before-llm.ts) — never
      *  touched by a skipped or diverged attempt. */
     lastReplayAt: timestamp("last_replay_at", { withTimezone: true }),
+    /** Trigger filter gate (migration 0076) — a minimal AND-matched
+     *  condition set (see trigger-filter.ts) evaluated BEFORE any L0
+     *  replay attempt, so a linear skill only ever replays for the branch
+     *  of events it was actually recorded from. NULL = no filter, replay
+     *  is attempted for every fired event (operator's own responsibility
+     *  to scope a narrowly-recorded skill correctly). Never trusted
+     *  as-is on read — trigger-filter.ts's validateTriggerFilter/
+     *  evaluateTriggerFilter re-validate every time, since this column has
+     *  no CHECK constraint (a hand-edited row could be malformed). */
+    triggerFilter: jsonb("trigger_filter").$type<TriggerFilter | null>(),
     createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
     updatedAt: timestamp("updated_at", { withTimezone: true }).notNull().defaultNow(),
   },
