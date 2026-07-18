@@ -34,6 +34,21 @@ import type { TriggerFilter } from "@/lib/deployments/replay/trigger-filter";
 
 export type ReplaySkillStatus = "draft" | "enabled" | "disabled";
 
+/** Replay gate v2 (migration 0077) — out-of-band idempotency-key config for
+ *  a skill's ONE destructive step. Lives here, NOT inside skill_md, because
+ *  reelier's parseSkill (external npm dep) rejects any step bullet it
+ *  doesn't recognize (`- idempotency-key: ...` would throw) — see
+ *  lib/deployments/replay/gate-v2.ts's module header for the full
+ *  rationale. `stepN` is the skill's own step number (1-based, matches
+ *  ReelierSkillStep.n); `keyVar` MUST be `"message_id"` — see
+ *  gate-v2.ts's ALLOWED_KEY_VARS (sender/subject are attacker-influenceable
+ *  and forbidden as key material by the spec). Set via
+ *  `pnpm tsx scripts/replay-ops.ts set-idempotency`, validated there with
+ *  the SAME passesGateV2 function replay-before-llm.ts uses at replay
+ *  time. NULL = not v2-eligible (gate v2 never activates for this skill,
+ *  regardless of SF_REPLAY_GATE_V2). */
+export type ReplaySkillIdempotency = { stepN: number; keyVar: string };
+
 export const replaySkills = pgTable(
   "replay_skills",
   {
@@ -76,6 +91,11 @@ export const replaySkills = pgTable(
      *  evaluateTriggerFilter re-validate every time, since this column has
      *  no CHECK constraint (a hand-edited row could be malformed). */
     triggerFilter: jsonb("trigger_filter").$type<TriggerFilter | null>(),
+    /** Replay gate v2 (migration 0077) — see ReplaySkillIdempotency above.
+     *  NULL = not v2-eligible. Never trusted as-is on read — gate-v2.ts's
+     *  validateIdempotencyConfig re-validates every time (this column has
+     *  no CHECK constraint; a hand-edited row could be malformed). */
+    idempotency: jsonb("idempotency").$type<ReplaySkillIdempotency | null>(),
     createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
     updatedAt: timestamp("updated_at", { withTimezone: true }).notNull().defaultNow(),
   },

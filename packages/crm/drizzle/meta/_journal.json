@@ -379,6 +379,13 @@
       "when": 1784200000000,
       "tag": "0076_replay_skills_trigger_filter",
       "breakpoints": true
+    },
+    {
+      "idx": 54,
+      "version": "7",
+      "when": 1784300000000,
+      "tag": "0077_replay_gate_v2",
+      "breakpoints": true
     }
   ]
 }

@@ -144,3 +144,38 @@ describe("replayOrTurn — skipped falls back WITHOUT persisting a run record", 
     assert.equal(result.replyText, "turn ran");
   });
 });
+
+describe("replayOrTurn — replay gate v2's asymmetric fallback (failed-post-send)", () => {
+  test("runTurn is NEVER called on a post-send divergence — the whole point of the asymmetric policy", async () => {
+    const { deps, runTurnCalled } = baseDeps({
+      attemptL0Replay: async () => ({
+        kind: "failed-post-send",
+        skillId: "skill_1",
+        record: divergeRecord(),
+        failures: ["destructive step tool returned status 500"],
+        destructiveStepN: 2,
+      }),
+    });
+    const result = await replayOrTurn(deps, INPUT);
+    assert.equal(runTurnCalled.count, 0, "a fresh agentic turn would risk a real double-send");
+    assert.equal(result.ok, false);
+    assert.ok(result.errorMessage?.includes("skill_1"));
+    assert.ok(result.errorMessage?.includes("step 2"));
+  });
+
+  test("a post-send divergence still persists the run record (for ops visibility) but never marks the skill replayed", async () => {
+    const { deps, persisted, markedSkillIds } = baseDeps({
+      attemptL0Replay: async () => ({
+        kind: "failed-post-send",
+        skillId: "skill_1",
+        record: divergeRecord(),
+        failures: ["boom"],
+        destructiveStepN: 2,
+      }),
+    });
+    await replayOrTurn(deps, INPUT);
+    assert.equal(persisted.length, 1);
+    assert.equal(persisted[0].kind, "failed-post-send");
+    assert.equal(markedSkillIds.length, 0);
+  });
+});

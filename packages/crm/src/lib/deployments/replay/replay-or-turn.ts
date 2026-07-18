@@ -50,7 +50,8 @@ export async function replayOrTurn(
     return deps.runTurn();
   }
 
-  // pass OR diverge — both are a real, recorded replay attempt.
+  // pass OR diverge OR failed-post-send — all three are a real, recorded
+  // replay attempt.
   try {
     await deps.persistReplayRun(replay);
   } catch (err) {
@@ -72,9 +73,26 @@ export async function replayOrTurn(
     return { ok: true, toolCalls: replay.toolCalls, replyText: replay.replyText };
   }
 
-  // diverged — fall back to the normal agentic turn. The fallback's own
-  // result (ok/toolCalls/replyText/errorMessage) is the user-visible
-  // result; the failed replay attempt is invisible to the end user beyond
-  // its own persisted 'replay-run' row.
+  // Replay gate v2 ONLY (spec §3, the asymmetric fallback) — a divergence
+  // AT or AFTER the destructive step. deps.runTurn() is NEVER called here:
+  // the destructive step may have already sent for real, so a fresh
+  // agentic turn risks a genuine double-send. The run ends here,
+  // unsuccessfully, with a loud errorMessage — the SAME plumbing every
+  // other run-failure already uses to surface an error receipt
+  // (composio-event-dispatch.ts's writeReceipt reads this errorMessage),
+  // so no new receipt code is needed for the "loud receipt note" the spec
+  // calls for.
+  if (replay.kind === "failed-post-send") {
+    return {
+      ok: false,
+      errorMessage: `replay diverged AFTER its destructive step (skill ${replay.skillId}, step ${replay.destructiveStepN}) — no agent fallback attempted (would risk a real double-send); failures: ${replay.failures.join("; ") || "unknown"}`,
+    };
+  }
+
+  // diverged (v1, or v2 strictly BEFORE the destructive step) — fall back
+  // to the normal agentic turn. The fallback's own result
+  // (ok/toolCalls/replyText/errorMessage) is the user-visible result; the
+  // failed replay attempt is invisible to the end user beyond its own
+  // persisted 'replay-run' row.
   return deps.runTurn();
 }

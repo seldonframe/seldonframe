@@ -47,8 +47,16 @@ export type AgentWorkflowTraceTriggerKind = "email";
  *  RunRecord the replay attempt produced — see
  *  lib/deployments/replay/replay-before-llm.ts). Default 'trace' so every
  *  slice-1 row (and every insert that doesn't pass `kind`) keeps its
- *  existing meaning unchanged. */
-export type AgentWorkflowTraceKind = "trace" | "replay-run";
+ *  existing meaning unchanged.
+ *
+ *  Replay gate v2 (2026-07-18) adds `'replay-run-failed-post-send'` — the
+ *  DISTINCT marker the spec calls for on a divergence AT/AFTER a v2 skill's
+ *  destructive step (no agent fallback attempted; see replay-or-turn.ts).
+ *  Deliberately reuses this existing `kind` column rather than adding a new
+ *  one (no CHECK constraint ties it to a fixed enum — see migration 0075's
+ *  plain `text` column) — this IS already the field that distinguishes
+ *  trace shapes, and a new value here needs no migration. */
+export type AgentWorkflowTraceKind = "trace" | "replay-run" | "replay-run-failed-post-send";
 export type AgentWorkflowTraceRecords = TraceRecord[] | ReelierRunRecord;
 
 export const agentWorkflowTraces = pgTable(
