@@ -13,10 +13,11 @@
 // with a throwing insert.
 
 import type {
+  AgentWorkflowTraceKind,
+  AgentWorkflowTraceRecords,
   AgentWorkflowTraceTriggerKind,
   NewAgentWorkflowTraceRow,
 } from "@/db/schema/agent-workflow-traces";
-import type { TraceRecord } from "./trace-format";
 
 export type WriteWorkflowTraceInput = {
   orgId: string;
@@ -30,7 +31,13 @@ export type WriteWorkflowTraceInput = {
   finishedAt: Date;
   ok: boolean;
   callCount: number;
-  records: TraceRecord[];
+  /** A TraceRecord[] (kind:'trace', default) or a reelier RunRecord
+   *  (kind:'replay-run') — see AgentWorkflowTraceKind. */
+  records: AgentWorkflowTraceRecords;
+  /** Slice 2 — 'trace' (default, slice 1 behavior unchanged) or
+   *  'replay-run' (an L0 replay attempt's RunRecord; see
+   *  replay-before-llm.ts). */
+  kind?: AgentWorkflowTraceKind;
   /** Slice 1 rule: populate from whatever the turn already exposes; store 0
    *  when unavailable rather than inventing a new metering path. */
   inputTokens?: number;
@@ -68,6 +75,7 @@ export async function writeWorkflowTrace(
       orgId: input.orgId,
       deploymentId: input.deploymentId ?? null,
       triggerKind: input.triggerKind,
+      kind: input.kind ?? "trace",
       triggerKey: input.triggerKey ?? null,
       startedAt: input.startedAt,
       finishedAt: input.finishedAt,

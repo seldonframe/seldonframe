@@ -83,19 +83,52 @@ export const TRACE_MAX_RECORDS = 200;
 const SECRET_KEY_RE = /\bsk-[A-Za-z0-9_-]{10,}/g;
 /** Matches an Authorization-header-shaped bearer token. */
 const BEARER_RE = /Bearer\s+\S{8,}/gi;
+/** Matches an Authorization-header-shaped Basic credential (base64-ish). */
+const BASIC_AUTH_RE = /Basic\s+[A-Za-z0-9+/=]{8,}/gi;
+/** Matches a Google OAuth access token (`ya29.…`). */
+const GOOGLE_OAUTH_RE = /\bya29\.[A-Za-z0-9._-]{10,}/g;
+/** Matches a JWT-shaped string (three dot-separated base64url segments). */
+const JWT_RE = /\beyJ[A-Za-z0-9_-]{8,}\.[A-Za-z0-9_-]{8,}\.[A-Za-z0-9_-]{4,}/g;
+/** Object keys whose STRING value is masked outright (never pattern-matched
+ *  — a token/secret/password field can hold any shape, not just the shapes
+ *  above), when the value is long enough to plausibly be a real credential
+ *  rather than e.g. a boolean-ish "yes"/short label. */
+const SECRET_KEY_NAME_RE = /token|secret|password|api[_-]?key|authorization/i;
+/** Minimum length for a key-name-matched value to be masked — short strings
+ *  under a secret-shaped key name (e.g. `{tokenType: "bearer"}`) are almost
+ *  certainly not the secret itself. */
+const SECRET_KEY_NAME_MIN_LENGTH = 8;
 
-/** Redact secret-shaped substrings from a plain string. Pure; never throws. */
+/** Redact secret-shaped substrings from a plain string. Pure; never throws.
+ *
+ *  NOTE — this is defense-in-depth, not a guarantee: it catches the KNOWN
+ *  shapes above (Anthropic/OpenAI-style keys, Bearer/Basic auth headers,
+ *  Google OAuth tokens, JWTs) plus a key-name heuristic (see
+ *  SECRET_KEY_NAME_RE in redact() below) — an arbitrary connector's own
+ *  bespoke credential shape, embedded in a plain string under an
+ *  innocuous-looking field name, can still slip through. Treat this as one
+ *  layer, not the only layer, of the "never store a live secret" contract. */
 function redactString(value: string): string {
-  return value.replace(SECRET_KEY_RE, "[redacted]").replace(BEARER_RE, "Bearer [redacted]");
+  return value
+    .replace(SECRET_KEY_RE, "[redacted]")
+    .replace(BEARER_RE, "Bearer [redacted]")
+    .replace(BASIC_AUTH_RE, "Basic [redacted]")
+    .replace(GOOGLE_OAUTH_RE, "[redacted]")
+    .replace(JWT_RE, "[redacted]");
 }
 
 /**
  * Deep-redact secret-shaped strings out of an arbitrary JSON-ish value
  * (tool args or a tool result body) before it is ever stored. Walks
- * objects/arrays; non-string primitives pass through unchanged. Guards
- * against cycles/excessive depth with a max-depth cutoff (returns a fixed
- * marker past the cutoff rather than recursing forever or throwing).
- * Pure; never throws — any unexpected shape degrades to a safe marker.
+ * objects/arrays; non-string primitives pass through unchanged. At each
+ * object key, a string value under a secret-shaped KEY NAME (token / secret /
+ * password / api[_-]?key / authorization, case-insensitive) is masked
+ * outright — independent of whether its shape matches one of the known
+ * patterns above — since a "secret" or "password" field can hold literally
+ * any string. Guards against cycles/excessive depth with a max-depth cutoff
+ * (returns a fixed marker past the cutoff rather than recursing forever or
+ * throwing). Pure; never throws — any unexpected shape degrades to a safe
+ * marker.
  */
 export function redact(value: unknown, depth = 0): unknown {
   if (depth > 12) return "[redact: max depth exceeded]";
@@ -105,6 +138,14 @@ export function redact(value: unknown, depth = 0): unknown {
     if (Array.isArray(value)) return value.map((v) => redact(v, depth + 1));
     const out: Record<string, unknown> = {};
     for (const [k, v] of Object.entries(value as Record<string, unknown>)) {
+      if (
+        typeof v === "string" &&
+        v.length >= SECRET_KEY_NAME_MIN_LENGTH &&
+        SECRET_KEY_NAME_RE.test(k)
+      ) {
+        out[k] = "[redacted]";
+        continue;
+      }
       out[k] = redact(v, depth + 1);
     }
     return out;
@@ -150,7 +191,10 @@ export function makeNoteRecord(input: { seq: number; ts: string; text: string })
   return { t: "note", seq: input.seq, ts: input.ts, text: input.text };
 }
 
-/** Build a `call` record — args are redacted before storage. */
+/** Build a `call` record — args are redacted THEN cap'd before storage,
+ *  mirroring makeResultRecord's contract exactly (a runaway call args
+ *  payload — e.g. a bulk connector operation — must not bloat a trace row
+ *  any more than a runaway result body can). */
 export function makeCallRecord(input: {
   seq: number;
   i: number;
@@ -164,7 +208,7 @@ export function makeCallRecord(input: {
     i: input.i,
     ts: input.ts,
     tool: input.tool,
-    args: redact(input.args),
+    args: capTraceBody(redact(input.args)),
   };
 }
 
