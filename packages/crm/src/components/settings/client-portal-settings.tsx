@@ -308,14 +308,14 @@ export function ClientPortalSettings({
         </div>
 
         <p className="mt-3 text-xs text-muted-foreground">
-          Adjust your brand color in{" "}
+          Adjust your logo and brand name in{" "}
           <Link
-            href="/settings/theme"
+            href="/settings/branding"
             className="text-primary underline-offset-4 hover:underline"
           >
-            Brand &amp; Theme
+            Branding
           </Link>
-          .
+          {" "}— or ask the copilot to change your brand color.
         </p>
       </article>
 

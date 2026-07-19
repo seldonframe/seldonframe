@@ -44,7 +44,7 @@ const CLASSIFY_SYSTEM = [
   'Return ONLY a JSON object of the shape: {"skill": string, "trigger": {"kind": string, "event": string, "channel": string}, "name"?: string, "description"?: string}.',
   'skill MUST be one of: "review-requester" (ask a customer for a review after a job), "speed-to-lead" (instantly reply to a new lead/inquiry), "receptionist" (answer inbound calls/chats).',
   'trigger.kind is "event" for review-requester (event "booking.completed") and speed-to-lead (event "lead.created"), and "inbound" for receptionist (omit event, channel "voice" or "chat").',
-  'trigger.channel is "sms" or "email" for event skills (default "sms"); for receptionist it is "voice" or "chat".',
+  'trigger.channel is "sms" or "email" for event skills (default "email" — it delivers without the business connecting a phone number; only pick "sms" when the request explicitly asks for texting); for receptionist it is "voice" or "chat".',
   "name/description are optional short operator-facing labels — include them only if the request clearly implies a specific name.",
   "Do not include any prose, explanation, or markdown fences. Output JSON only.",
 ].join("\n");

@@ -26,7 +26,7 @@ export function UpgradeGate({ feature, requiredPlan, hasAccess, message, childre
           <a
             href={`/settings/billing?feature=${encodeURIComponent(feature)}`}
             className="inline-flex items-center gap-2 rounded-lg px-4 py-2 text-sm font-medium text-white"
-            style={{ backgroundColor: "#14b8a6" }}
+            style={{ backgroundColor: "#059669" }}
           >
             Upgrade to {requiredPlan === "pro" ? "Pro" : "Cloud"}
           </a>

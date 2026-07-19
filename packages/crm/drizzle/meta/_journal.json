@@ -302,6 +302,90 @@
       "when": 1783130000000,
       "tag": "0065_url_extraction_cache",
       "breakpoints": true
+    },
+    {
+      "idx": 43,
+      "version": "7",
+      "when": 1783200000000,
+      "tag": "0066_agent_reflection_events",
+      "breakpoints": true
+    },
+    {
+      "idx": 44,
+      "version": "7",
+      "when": 1783300000000,
+      "tag": "0067_record_to_agent",
+      "breakpoints": true
+    },
+    {
+      "idx": 45,
+      "version": "7",
+      "when": 1783400000000,
+      "tag": "0068_agent_lifecycle",
+      "breakpoints": true
+    },
+    {
+      "idx": 46,
+      "version": "7",
+      "when": 1783500000000,
+      "tag": "0069_supervised_runs_one_running",
+      "breakpoints": true
+    },
+    {
+      "idx": 47,
+      "version": "7",
+      "when": 1783600000000,
+      "tag": "0070_share_cards",
+      "breakpoints": true
+    },
+    {
+      "idx": 48,
+      "version": "7",
+      "when": 1783700000000,
+      "tag": "0071_eval_run_jobs",
+      "breakpoints": true
+    },
+    {
+      "idx": 49,
+      "version": "7",
+      "when": 1783800000000,
+      "tag": "0072_agent_action_drafts",
+      "breakpoints": true
+    },
+    {
+      "idx": 50,
+      "version": "7",
+      "when": 1783900000000,
+      "tag": "0073_agent_run_receipts",
+      "breakpoints": true
+    },
+    {
+      "idx": 51,
+      "version": "7",
+      "when": 1784000000000,
+      "tag": "0074_agent_workflow_traces",
+      "breakpoints": true
+    },
+    {
+      "idx": 52,
+      "version": "7",
+      "when": 1784100000000,
+      "tag": "0075_replay_skills",
+      "breakpoints": true
+    },
+    {
+      "idx": 53,
+      "version": "7",
+      "when": 1784200000000,
+      "tag": "0076_replay_skills_trigger_filter",
+      "breakpoints": true
+    },
+    {
+      "idx": 54,
+      "version": "7",
+      "when": 1784300000000,
+      "tag": "0077_replay_gate_v2",
+      "breakpoints": true
     }
   ]
 }

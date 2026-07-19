@@ -70,6 +70,15 @@ export type DeploymentCustomization = {
    *  voice/chat runtime is byte-for-byte unaffected. Absent on agency-created
    *  deployments. See lib/marketplace/onboarding/progress.ts. */
   onboardingProgress?: import("@/lib/marketplace/onboarding/progress").OnboardingProgress;
+  /** 2026-07-16 (marketplace generalize) — this deployment's fill values for
+   *  the template's DECLARED `templateVariables` (AgentBlueprint.templateVariables).
+   *  Keyed by the variable's snake_case token name. `resolveDeploymentPersona`
+   *  merges these OVER the businessInfo-derived vars before `fillPlaceholders`
+   *  — an explicit template var wins on token-name collision, because it was
+   *  authored specifically for this template (vs. the generic business-info
+   *  fallback). Absent → the vars object is exactly what businessInfo produces
+   *  today (byte-identical current behavior). */
+  templateVarValues?: Record<string, string>;
 };
 
 /**
@@ -221,6 +230,18 @@ export function resolveDeploymentPersona(args: {
   add("address", info?.address);
   add("phone", info?.phone);
   add("email", info?.email);
+
+  // Template-declared variable fill values (marketplace generalize) win OVER
+  // the businessInfo-derived vars on token-name collision — they were filled
+  // explicitly for THIS template's declared placeholders. Absent/empty →
+  // `vars` is untouched, so this is a no-op for every deployment that predates
+  // the feature (byte-identical current behavior).
+  const templateVarValues = customization?.templateVarValues;
+  if (templateVarValues) {
+    for (const [key, value] of Object.entries(templateVarValues)) {
+      add(key, value);
+    }
+  }
 
   const greetingOverride = firstNonEmpty(customization?.greeting);
   const greeting =

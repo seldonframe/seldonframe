@@ -1,10 +1,15 @@
 import Anthropic from "@anthropic-ai/sdk";
 import { and, eq, gte, sql } from "drizzle-orm";
 import { db } from "@/db";
-import { organizations, seldonUsage, users } from "@/db/schema";
+import { agentConversations, organizations, partnerAgencies, seldonUsage, users } from "@/db/schema";
 import { decryptValue } from "@/lib/encryption";
 
-export type AIClientMode = "byok" | "included" | "metered";
+// 2026-07-08 per-sub-account usage meter — "capped" is a runtime-only mode
+// resolveRuntimeAiClient can return (never getAIClient itself): an
+// inherited-key sub-account whose agency set a "pause" cap that's breached
+// this period, behind flag SF_USAGE_CAP_PAUSE. executeTurn branches on it to
+// send a holding reply instead of calling the LLM (see runtime.ts).
+export type AIClientMode = "byok" | "included" | "metered" | "capped";
 
 export type OrganizationAiIntegrations = {
   anthropic?: { apiKey?: string };
@@ -234,6 +239,201 @@ export async function getAIClient(params: { orgId: string; userId?: string | nul
     includedLimit,
     planId,
   };
+}
+
+// ─── 2026-07-08 pricing ladder — agency key inheritance (flag SF_AGENCY_KEY_INHERIT) ───
+//
+// Resolution order (spec D3):
+//   1. org's own BYOK key (getAIClient's existing behavior — unchanged, always wins).
+//   2. NEW: if the flag is on AND the org has a parentAgencyId -> the
+//      agency owner org's BYOK key.
+//   3. platform env fallback (unchanged — the safety net stays; this is
+//      what step 2 falls through to when the agency owner has no key
+//      either, and what the whole wrapper falls through to on ANY error).
+//
+// Fail-soft is load-bearing: a broken lookup in the inheritance path
+// must never break agent runtime. Every injected dependency call is
+// wrapped so a throw anywhere in steps 1b/2 degrades to the org's own
+// (step 1's) resolution, never propagates.
+
+/** Narrow DB reads needed to find the agency owner org, injectable so
+ *  resolveAgencyKeyOrgId is unit-testable without a DB (mirrors the
+ *  hasFeature / enforceWorkspaceLimit DI pattern). */
+export type AgencyKeyOrgDeps = {
+  getPartnerAgencyOwner: (
+    agencyId: string,
+  ) => Promise<{ ownerWorkspaceId: string | null; ownerUserId: string | null } | null>;
+  getUserOrgId: (userId: string) => Promise<string | null>;
+};
+
+const defaultAgencyKeyOrgDeps: AgencyKeyOrgDeps = {
+  getPartnerAgencyOwner: async (agencyId) => {
+    const [row] = await db
+      .select({
+        ownerWorkspaceId: partnerAgencies.ownerWorkspaceId,
+        ownerUserId: partnerAgencies.ownerUserId,
+      })
+      .from(partnerAgencies)
+      .where(eq(partnerAgencies.id, agencyId))
+      .limit(1);
+    return row ?? null;
+  },
+  getUserOrgId: async (userId) => {
+    const [row] = await db.select({ orgId: users.orgId }).from(users).where(eq(users.id, userId)).limit(1);
+    return row?.orgId ?? null;
+  },
+};
+
+/** Resolve the agency OWNER org id for a partner_agencies row —
+ *  `ownerWorkspaceId ?? (ownerUserId -> users.orgId)` (spec D3). Returns
+ *  null for any unresolvable case (agency not found, no owner identity,
+ *  owner user has no primary org) OR any thrown error — fail-soft by
+ *  construction so a broken lookup never surfaces past this function. */
+export async function resolveAgencyKeyOrgId(
+  agencyId: string,
+  deps: AgencyKeyOrgDeps = defaultAgencyKeyOrgDeps,
+): Promise<string | null> {
+  try {
+    const agency = await deps.getPartnerAgencyOwner(agencyId);
+    if (!agency) return null;
+    if (agency.ownerWorkspaceId) return agency.ownerWorkspaceId;
+    if (agency.ownerUserId) {
+      const orgId = await deps.getUserOrgId(agency.ownerUserId);
+      return orgId ?? null;
+    }
+    return null;
+  } catch {
+    return null;
+  }
+}
+
+/** The evaluated cap state for a single org — the minimal shape
+ *  resolveRuntimeAiClient's pause branch needs. null = no cap set (or the
+ *  lookup couldn't resolve one) → never capped. */
+export type UsageCapEvaluationForRuntime = { breached: boolean; mode: "notify" | "pause" } | null;
+
+/** Injectable deps for resolveRuntimeAiClient. Production default reads
+ *  the SF_AGENCY_KEY_INHERIT env flag (strict "1", same contract as the
+ *  other dark-by-default flags) and wires the real getAIClient +
+ *  organizations.parentAgencyId lookup + resolveAgencyKeyOrgId.
+ *
+ *  2026-07-08 per-sub-account usage meter (Task 4) — pauseFlagOn +
+ *  isOwnByokKey + loadUsageCapEvaluation add the opt-in "capped" branch
+ *  behind SF_USAGE_CAP_PAUSE, evaluated AFTER agency-key inheritance so it
+ *  sees the FINAL resolved mode (an inherited BYOK key is never paused —
+ *  it's a real key either way, not the platform fallback). */
+export type RuntimeAiClientDeps = {
+  flagOn: boolean;
+  getAIClient: (params: { orgId: string; userId?: string | null }) => Promise<AIClientResolution>;
+  getParentAgencyId: (orgId: string) => Promise<string | null>;
+  resolveAgencyOrgId: (agencyId: string) => Promise<string | null>;
+  /** SF_USAGE_CAP_PAUSE flag — dark by default, same strict "1" contract.
+   *  OPTIONAL — omitted (e.g. by the pre-Task-4 test suite / any caller that
+   *  predates the pause feature) defaults to false, so the branch is
+   *  entirely inert unless a caller opts in. */
+  pauseFlagOn?: boolean;
+  /** Is the FINAL resolved client's key the org's own (or an inherited
+   *  agency) BYOK key? True → never evaluate/apply a pause cap (their key,
+   *  their bill — or a real inherited key, not the platform fallback).
+   *  OPTIONAL — defaults to `resolution.mode === "byok"`. */
+  isOwnByokKey?: (resolution: AIClientResolution) => boolean;
+  /** Evaluate the sub-account's usage cap for the CURRENT period. Returns
+   *  null when no cap is set. Any thrown error is caught by the caller
+   *  (fail-soft) — this function is free to throw. OPTIONAL — defaults to
+   *  "no cap" (never capped) when omitted. */
+  loadUsageCapEvaluation?: (orgId: string) => Promise<UsageCapEvaluationForRuntime>;
+};
+
+function defaultRuntimeAiClientDeps(): RuntimeAiClientDeps {
+  return {
+    flagOn: process.env.SF_AGENCY_KEY_INHERIT?.trim() === "1",
+    getAIClient,
+    getParentAgencyId: async (orgId) => {
+      const [row] = await db
+        .select({ parentAgencyId: organizations.parentAgencyId })
+        .from(organizations)
+        .where(eq(organizations.id, orgId))
+        .limit(1);
+      return row?.parentAgencyId ?? null;
+    },
+    resolveAgencyOrgId: (agencyId) => resolveAgencyKeyOrgId(agencyId),
+    pauseFlagOn: process.env.SF_USAGE_CAP_PAUSE?.trim() === "1",
+    isOwnByokKey: (resolution) => resolution.mode === "byok",
+    loadUsageCapEvaluation: async (orgId) => {
+      // Lazy import — lib/billing/usage-cap.ts pulls in more schema tables
+      // than this module otherwise needs, and this path is only exercised
+      // when the pause flag is on.
+      const { loadUsageCapForOrg, evaluateUsageCap, periodKeyUtc } = await import(
+        "@/lib/billing/usage-cap"
+      );
+      const cap = await loadUsageCapForOrg(orgId);
+      if (!cap) return null;
+      const now = new Date();
+      const periodStart = new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), 1));
+      const [row] = await db
+        .select({ total: sql<number>`coalesce(sum(${agentConversations.llmCostCents}), 0)::int` })
+        .from(agentConversations)
+        .where(and(eq(agentConversations.orgId, orgId), gte(agentConversations.startedAt, periodStart)));
+      const estCostCents = Number(row?.total ?? 0);
+      const evaluation = evaluateUsageCap({ cap, estCostCents, periodKey: periodKeyUtc(now) });
+      return { breached: evaluation.breached, mode: cap.mode };
+    },
+  };
+}
+
+/** Wraps getAIClient with the agency-key-inheritance seam, then (Task 4) the
+ *  opt-in usage-cap pause branch. NEVER throws — any error anywhere in
+ *  either path falls through to the underlying resolution (agency
+ *  inheritance's own step 1, or the pre-pause resolution), which is today's
+ *  exact behavior when the corresponding flag is off or a lookup fails.
+ *  Voice runtime (OPENAI env) is untouched — this only wraps the
+ *  Anthropic-facing chat/agent runtime client. */
+export async function resolveRuntimeAiClient(
+  params: { orgId: string; userId?: string | null },
+  deps: RuntimeAiClientDeps = defaultRuntimeAiClientDeps(),
+): Promise<AIClientResolution> {
+  const own = await deps.getAIClient(params);
+
+  let resolved = own;
+  if (deps.flagOn && own.mode !== "byok") {
+    try {
+      const parentAgencyId = await deps.getParentAgencyId(params.orgId);
+      if (parentAgencyId) {
+        const agencyOrgId = await deps.resolveAgencyOrgId(parentAgencyId);
+        if (agencyOrgId) {
+          const agencyResolution = await deps.getAIClient({ orgId: agencyOrgId });
+          if (agencyResolution.mode === "byok") {
+            resolved = agencyResolution;
+          }
+        }
+      }
+    } catch {
+      // fail-soft — resolved stays `own`.
+    }
+  }
+
+  // Task 4 — opt-in pause (SF_USAGE_CAP_PAUSE). A real key (own OR inherited
+  // BYOK) is never paused: it's their key, their bill. Only evaluated for
+  // sub-accounts riding the platform fallback. All three deps are optional
+  // (defaulted here) so callers that predate this feature — including the
+  // pre-Task-4 test suite — compile and behave exactly as before (never
+  // capped) without having to know about it.
+  const pauseFlagOn = deps.pauseFlagOn ?? false;
+  const isOwnByokKey = deps.isOwnByokKey ?? ((r: AIClientResolution) => r.mode === "byok");
+  const loadUsageCapEvaluation = deps.loadUsageCapEvaluation ?? (async () => null);
+
+  if (pauseFlagOn && !isOwnByokKey(resolved)) {
+    try {
+      const evaluation = await loadUsageCapEvaluation(params.orgId);
+      if (evaluation && evaluation.mode === "pause" && evaluation.breached) {
+        return { ...resolved, mode: "capped" };
+      }
+    } catch {
+      // fail-soft — resolved stays uncapped.
+    }
+  }
+
+  return resolved;
 }
 
 export type SeldonUsageStats = {

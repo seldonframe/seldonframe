@@ -27,6 +27,8 @@ import {
   type EventAgentActivityOutcome,
   type EventAgentActivityRow,
 } from "@/lib/agents/triggers/activity";
+import { loadAgentRunReceipts } from "@/lib/agent-receipts/store";
+import { AgentRunReceiptsSection } from "@/components/agent-receipts/receipts-section";
 import { StudioTabs } from "../../studio-tabs";
 
 export const dynamic = "force-dynamic";
@@ -59,7 +61,10 @@ export default async function EventAgentActivityPage({
     );
   }
 
-  const rows = await loadEventAgentActivity(orgId, 50, windowDays);
+  const [rows, receiptRows] = await Promise.all([
+    loadEventAgentActivity(orgId, 50, windowDays),
+    loadAgentRunReceipts(orgId, 50, windowDays),
+  ]);
 
   // KPI tiles — a pure fold over the rows already loaded (no extra query). "Posted"
   // mirrors the mockup's social outcome; the event-agent path tags those as sends
@@ -108,6 +113,12 @@ export default async function EventAgentActivityPage({
           tone="neutral"
         />
       </div>
+
+      {/* Agent runs — every push/schedule/event RUN attempt, whether or not
+          it took any outbound action (the never-lies receipt: see the
+          2026-07-15 incident in the design doc's "Why"). Sits above the
+          outbound-only table below, same window/org scope. */}
+      <AgentRunReceiptsSection rows={receiptRows} />
 
       {rows.length === 0 ? (
         <div className="rounded-2xl border border-border bg-card p-8 text-center shadow-(--shadow-xs)">

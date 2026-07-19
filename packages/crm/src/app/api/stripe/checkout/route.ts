@@ -8,6 +8,10 @@ import { getOrgId } from "@/lib/auth/helpers";
 import {
   WORKSPACE_ADDON_MONTHLY_PRICE_ID,
   BUILDER_PRICE_ID,
+  MANAGED_PRICE_ID,
+  AGENCY_STARTER_PRICE_ID,
+  AGENCY_GROWTH_PRICE_ID,
+  AGENCY_SCALE_PRICE_ID,
   WORKSPACE_PRICE_ID,
   AGENCY_BASE_PRICE_ID,
   GROWTH_BASE_PRICE_ID,
@@ -19,6 +23,7 @@ import {
 import {
   buildCheckoutSessionParams,
   tierFromBasePriceId,
+  resolveCheckoutTierGate,
 } from "@/lib/billing/checkout-items";
 import type { TierId } from "@/lib/billing/plans";
 
@@ -129,16 +134,25 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ error: "Unsupported priceId." }, { status: 400 });
   }
 
-  // Resolve the target tier (builder / workspace / agency). Paths in
-  // order of precedence:
-  //   1. Explicit `tier` body field (the new pricing buttons send this).
-  //      Legacy "growth"/"scale" are accepted and remapped.
-  //   2. Marketing lookup_key (e.g. "workspace_monthly", legacy
+  // Resolve the target tier. Paths in order of precedence:
+  //   1. Explicit `tier` body field (the pricing buttons send this).
+  //      Legacy "growth"/"scale" are accepted and remapped to their
+  //      grandfathered tier (existing links only — new checkout never
+  //      offers them; see the sellable gate below).
+  //   2. Marketing lookup_key (e.g. "managed_monthly", legacy
   //      "growth_monthly").
   //   3. priceId — new base ids directly, or legacy Growth/Scale/Cloud
   //      base ids grandfathered to workspace/agency.
   let targetTier: TierId | null = null;
-  if (rawTier === "builder" || rawTier === "workspace" || rawTier === "agency") {
+  if (
+    rawTier === "builder" ||
+    rawTier === "managed" ||
+    rawTier === "agency_starter" ||
+    rawTier === "agency_growth" ||
+    rawTier === "agency_scale" ||
+    rawTier === "workspace" ||
+    rawTier === "agency"
+  ) {
     targetTier = rawTier;
   } else if (rawTier === "growth") {
     targetTier = "workspace";
@@ -146,6 +160,14 @@ export async function POST(req: NextRequest) {
     targetTier = "agency";
   } else if (lookupKey === "builder_monthly" || lookupKey === "builder_yearly") {
     targetTier = "builder";
+  } else if (lookupKey === "managed_monthly" || lookupKey === "managed_yearly") {
+    targetTier = "managed";
+  } else if (lookupKey === "agency_starter_monthly" || lookupKey === "agency_starter_yearly") {
+    targetTier = "agency_starter";
+  } else if (lookupKey === "agency_growth_monthly" || lookupKey === "agency_growth_yearly") {
+    targetTier = "agency_growth";
+  } else if (lookupKey === "agency_scale_monthly" || lookupKey === "agency_scale_yearly") {
+    targetTier = "agency_scale";
   } else if (
     lookupKey === "workspace_monthly" ||
     lookupKey === "workspace_yearly" ||
@@ -162,6 +184,14 @@ export async function POST(req: NextRequest) {
     targetTier = "agency";
   } else if (requestedPriceId === BUILDER_PRICE_ID) {
     targetTier = "builder";
+  } else if (requestedPriceId === MANAGED_PRICE_ID) {
+    targetTier = "managed";
+  } else if (requestedPriceId === AGENCY_STARTER_PRICE_ID) {
+    targetTier = "agency_starter";
+  } else if (requestedPriceId === AGENCY_GROWTH_PRICE_ID) {
+    targetTier = "agency_growth";
+  } else if (requestedPriceId === AGENCY_SCALE_PRICE_ID) {
+    targetTier = "agency_scale";
   } else if (requestedPriceId === WORKSPACE_PRICE_ID || requestedPriceId === GROWTH_BASE_PRICE_ID) {
     targetTier = "workspace";
   } else if (requestedPriceId === AGENCY_BASE_PRICE_ID || requestedPriceId === SCALE_BASE_PRICE_ID) {
@@ -169,6 +199,28 @@ export async function POST(req: NextRequest) {
   } else if (requestedPriceId) {
     // Legacy Cloud Starter / Pro / Agency ids → closest new tier.
     targetTier = tierFromBasePriceId(requestedPriceId);
+  }
+
+  // 2026-07-08 pricing ladder — money-safe sellable gate. A NEW checkout
+  // (this is the only path — the legacy fallback below never resolves a
+  // targetTier) may only target a tier the catalog marks `sellable`.
+  // Grandfathered tiers ("workspace", "agency") remain resolvable for
+  // legacy replay/back-compat elsewhere (webhook, getPlanByStripePriceId)
+  // but are rejected here so nobody can newly subscribe to a frozen tier.
+  //
+  // 2026-07-08 SECOND post-review fix wave — extracted to
+  // resolveCheckoutTierGate (checkout-items.ts) so the exact gate the
+  // route enforces is directly unit-testable (see
+  // tests/unit/billing/checkout-tier-gate.spec.ts) without a live
+  // server/DB. This is the "end-state" test class the review flagged:
+  // asserting a mocked fetch call was SENT is not the same as asserting
+  // the route would ACCEPT it.
+  const gate = resolveCheckoutTierGate(targetTier);
+  if (!gate.ok) {
+    return NextResponse.json(
+      { error: `Tier '${targetTier}' is not available for new checkout.`, reason: gate.reason },
+      { status: 409 }
+    );
   }
 
   const [dbUser] = await db
@@ -226,14 +278,17 @@ export async function POST(req: NextRequest) {
     // Hotfix H4b — fail soft when the resolved base price is still the
     // unconfigured placeholder (Stripe would otherwise reject it with a raw
     // "No such price" 500). Never call Stripe with a placeholder id.
+    // 2026-07-08: same money-safe contract as the sellable gate above —
+    // reason: "tier_unavailable" so callers (pricing page CTA) can render
+    // "Talk to us" instead of a checkout error.
     const unconfiguredPrice = params.line_items.find((item) => isPlaceholderPriceId(item.price));
     if (unconfiguredPrice) {
       console.error(
-        "[stripe/checkout] STRIPE_WORKSPACE_PRICE_ID is not set — checkout blocked on placeholder price id."
+        `[stripe/checkout] price id for tier '${targetTier}' is not set — checkout blocked on placeholder price id.`
       );
       return NextResponse.json(
-        { error: "Checkout isn't configured yet. Please try again soon." },
-        { status: 503 }
+        { error: "Checkout isn't configured yet. Please try again soon.", reason: "tier_unavailable" },
+        { status: 409 }
       );
     }
 

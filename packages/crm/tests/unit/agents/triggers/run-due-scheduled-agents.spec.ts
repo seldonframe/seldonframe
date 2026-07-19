@@ -223,6 +223,136 @@ describe("runDueScheduledAgents — fail-soft isolation", () => {
   });
 });
 
+// Agent receipts slice (Task 2b) — the optional writeReceipt DI hook.
+describe("runDueScheduledAgents — writeReceipt DI hook (agent receipts)", () => {
+  test("a successful fire calls writeReceipt with status ok + a summary of the run result", async () => {
+    const receipts: Array<Record<string, unknown>> = [];
+    const { deps } = makeDeps([dep({ deploymentId: "ok-1", orgId: "org-9" })]);
+    deps.writeReceipt = async (args) => {
+      receipts.push(args as unknown as Record<string, unknown>);
+    };
+    await runDueScheduledAgents(NOW_MS, deps);
+    assert.equal(receipts.length, 1);
+    assert.equal(receipts[0].orgId, "org-9");
+    assert.equal(receipts[0].deploymentId, "ok-1");
+    assert.equal(receipts[0].status, "ok");
+    assert.match(receipts[0].summary as string, /matched 1/);
+  });
+
+  // Never-lies fix: a green "ok" badge must never sit next to a summary
+  // that says "...failed N" — status derives from the aggregate result's
+  // `failed` count, not from "the call didn't throw".
+  test("never-lies: an aggregate with failures > 0 calls writeReceipt with status error (even though runEventAgent didn't throw)", async () => {
+    const receipts: Array<Record<string, unknown>> = [];
+    const deps: RunDueScheduledAgentsDeps = {
+      list: async () => [dep({ deploymentId: "mixed-1" })],
+      runEventAgent: async (): Promise<RunEventAgentResult> => ({
+        matched: 3,
+        sent: 1,
+        skipped: 0,
+        throttled: 0,
+        scheduled: 0,
+        blocked: 0,
+        actionOnly: 0,
+        failed: 2,
+      }),
+      markFired: async () => {},
+      writeReceipt: async (args) => {
+        receipts.push(args as unknown as Record<string, unknown>);
+      },
+    };
+    await runDueScheduledAgents(NOW_MS, deps);
+    assert.equal(receipts.length, 1);
+    assert.equal(receipts[0].status, "error");
+    assert.match(receipts[0].summary as string, /failed 2/);
+    assert.match(receipts[0].summary as string, /sent 1/);
+  });
+
+  test("never-lies: a clean aggregate (failed: 0) calls writeReceipt with status ok", async () => {
+    const receipts: Array<Record<string, unknown>> = [];
+    const deps: RunDueScheduledAgentsDeps = {
+      list: async () => [dep({ deploymentId: "clean-1" })],
+      runEventAgent: async (): Promise<RunEventAgentResult> => ({
+        matched: 2,
+        sent: 2,
+        skipped: 0,
+        throttled: 0,
+        scheduled: 0,
+        blocked: 0,
+        actionOnly: 0,
+        failed: 0,
+      }),
+      markFired: async () => {},
+      writeReceipt: async (args) => {
+        receipts.push(args as unknown as Record<string, unknown>);
+      },
+    };
+    await runDueScheduledAgents(NOW_MS, deps);
+    assert.equal(receipts.length, 1);
+    assert.equal(receipts[0].status, "ok");
+  });
+
+  test("a throwing runEventAgent calls writeReceipt with status error", async () => {
+    const receipts: Array<Record<string, unknown>> = [];
+    const { deps } = makeDeps([dep({ deploymentId: "bad-1" })], {
+      throwRunFor: new Set(["bad-1"]),
+    });
+    deps.writeReceipt = async (args) => {
+      receipts.push(args as unknown as Record<string, unknown>);
+    };
+    await withSilencedWarn(() => runDueScheduledAgents(NOW_MS, deps));
+    assert.equal(receipts.length, 1);
+    assert.equal(receipts[0].status, "error");
+    assert.match(receipts[0].summary as string, /failed:/);
+  });
+
+  // Agent truth slice (Task 1) — a thrown error's message becomes the
+  // receipt summary (verbatim today); this pins that any credential-shaped
+  // substring inside it is scrubbed (L-10 shapes) before ever being written.
+  test("agent truth: a throwing runEventAgent's secret-shaped error message is scrubbed in the receipt summary", async () => {
+    const receipts: Array<Record<string, unknown>> = [];
+    const deps: RunDueScheduledAgentsDeps = {
+      list: async () => [dep({ deploymentId: "leaky-1" })],
+      runEventAgent: async () => {
+        throw new Error("connect failed: postgres://user:sk-abcDEF12345@host/db");
+      },
+      markFired: async () => {},
+      writeReceipt: async (args) => {
+        receipts.push(args as unknown as Record<string, unknown>);
+      },
+    };
+    await withSilencedWarn(() => runDueScheduledAgents(NOW_MS, deps));
+    assert.equal(receipts.length, 1);
+    const summary = receipts[0].summary as string;
+    assert.equal(summary.includes("sk-abcDEF12345"), false);
+    assert.equal(summary.includes("postgres://user:"), false);
+  });
+
+  test("a skipped deployment (not due) never calls writeReceipt", async () => {
+    const receipts: Array<Record<string, unknown>> = [];
+    const { deps } = makeDeps([dep({ deploymentId: "skip-1", cron: "0 0 1 1 *" })]);
+    deps.writeReceipt = async (args) => {
+      receipts.push(args as unknown as Record<string, unknown>);
+    };
+    await runDueScheduledAgents(NOW_MS, deps);
+    assert.equal(receipts.length, 0);
+  });
+
+  test("no writeReceipt dep provided → run still completes (default no-op)", async () => {
+    const { deps } = makeDeps([dep({ deploymentId: "no-hook" })]);
+    await assert.doesNotReject(() => runDueScheduledAgents(NOW_MS, deps));
+  });
+
+  test("a throwing writeReceipt is swallowed — never affects the run's result/errors count", async () => {
+    const { deps } = makeDeps([dep({ deploymentId: "hook-throws" })]);
+    deps.writeReceipt = async () => {
+      throw new Error("receipt db down");
+    };
+    const result = await withSilencedWarn(() => runDueScheduledAgents(NOW_MS, deps));
+    assert.deepEqual(result, { scanned: 1, fired: 1, skipped: 0, errors: 0 });
+  });
+});
+
 describe("firedWithinWindow — the idempotency predicate (pure)", () => {
   test("a stamp inside the window → true (skip the re-fire)", () => {
     assert.equal(firedWithinWindow(new Date(NOW_MS - 5 * 60_000).toISOString(), NOW_MS, 15), true);

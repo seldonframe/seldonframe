@@ -138,10 +138,13 @@ export const GENERATOR_CASES: GeneratorCase[] = [
     expect: {
       triggerKind: "event",
       triggerEvent: "missed_call",
-      channelOneOf: ["sms"],
+      // P2 day-one default: no explicit text/sms keyword here, so the channel
+      // now defaults to email (resolveDayOneChannel) — it delivers without
+      // BYO Twilio. SMS remains available once the operator says "text".
+      channelOneOf: ["email"],
       skillNot: [SKILL_SIGNATURE.socialPoster, SKILL_SIGNATURE.reviewRequester],
     },
-    note: "Missed-call text-back: MISSED_CALL_RE fires before LEAD_RE, so 'missed call' → trigger event 'missed_call' (needs a dedicated number per INBOUND_ISH_EVENTS), keeping the speed-to-lead text-back skill.",
+    note: "Missed-call text-back: MISSED_CALL_RE fires before LEAD_RE, so 'missed call' → trigger event 'missed_call' (needs a dedicated number per INBOUND_ISH_EVENTS), keeping the speed-to-lead text-back skill. Channel defaults to email day-one (P2).",
   },
 
   // 4 — speed-to-lead, the canonical inbound-lead follow-up. event lead.created.
@@ -150,7 +153,9 @@ export const GENERATOR_CASES: GeneratorCase[] = [
     expect: {
       triggerKind: "event",
       triggerEvent: "lead.created",
-      channelOneOf: ["sms"],
+      // P2 day-one default: no explicit text/sms keyword → email (delivers
+      // without BYO Twilio; see resolveDayOneChannel in parse-intent.ts).
+      channelOneOf: ["email"],
       toolIdsExclude: ["postiz"],
       skillNot: [SKILL_SIGNATURE.socialPoster, SKILL_SIGNATURE.reviewRequester],
     },

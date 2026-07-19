@@ -2,7 +2,7 @@
 //
 // Redesign 2026-06-18 — warm light aesthetic + ANIMATED build log.
 // "How it works" — 3-step flow. Paper/card surface, Newsreader italic
-// accent numbers, SeldonFrame green (#00897B) for active/done dots.
+// accent numbers, SeldonFrame green (#1F2B24) for active/done dots.
 //
 // Each step card's terminal-style "mock" rows now animate, mirroring the
 // motion idiom shipped in marketing-modules.tsx:
@@ -21,51 +21,48 @@
 import { useEffect, useRef, useState, type ReactNode } from "react";
 import { motion, useInView, useReducedMotion } from "framer-motion";
 
+import { IntegrationBeam } from "@/components/landing/integration-beam";
+
 // Shared spring-ish ease used everywhere (the brief's cubic-bezier).
 const EASE = [0.22, 1, 0.36, 1] as const;
 
-type Step = {
-  num: string;
-  title: string;
-  body: string;
+// Two on-ramps. Path A: describe the agent you're MISSING → Seldon generates it.
+// Path B: record the workflow you already DO → Seldon compiles it.
+type Path = {
+  kicker: string;
+  arrow: string;
+  title: ReactNode;
+  steps: readonly string[];
   mock: ReactNode;
+  figure?: ReactNode;
 };
 
-const STEPS: readonly Step[] = [
+const PATHS: readonly Path[] = [
   {
-    num: "1",
-    title: "Paste a URL — or describe the business.",
-    body: "Your client's website, or a quick Google Maps description. We'll build from either.",
+    kicker: "Describe it",
+    arrow: "we generate it",
+    title: (
+      <>
+        You know what the client needs.{" "}
+        <em className="font-[Newsreader,Georgia,serif] font-normal not-italic">Describe it.</em>
+      </>
+    ),
+    steps: ["Paste your client's URL or describe their business", "Watch it build — site, booking, CRM, agent", "Go live on your client's domain"],
     mock: <ScanMock />,
+    figure: <IntegrationBeam />,
   },
   {
-    num: "2",
-    title: "Watch it spin up in 60 seconds.",
-    body: "The build runs live — website, booking, intake, CRM, and a 24/7 AI agent that answers across voice, SMS, chat, and email. Everything wired together.",
-    mock: (
-      <ArriveMock
-        rows={[
-          "Website live",
-          "Booking page live",
-          "AI receptionist trained",
-          "CRM ready",
-        ]}
-      />
+    kicker: "Record it",
+    arrow: "we compile it",
+    title: (
+      <>
+        You already do it for clients.{" "}
+        <em className="font-[Newsreader,Georgia,serif] font-normal not-italic">Record it.</em>
+      </>
     ),
-  },
-  {
-    num: "3",
-    title: "Hand it over — or keep it for yourself.",
-    body: "Agencies resell it under their own brand. SMBs run it directly. Either way, you own it.",
-    mock: (
-      <ArriveMock
-        rows={[
-          { label: "Custom domain connected", emphasis: true },
-          "Your branding applied",
-          "Hands-free",
-        ]}
-      />
-    ),
+    steps: ["Screen-record the workflow — on desktop or mobile", "Answer what the recording didn't show", "Get a tested agent you can switch on — for any client"],
+    mock: <RecordMock />,
+    figure: <RecordFigure />,
   },
 ];
 
@@ -74,68 +71,66 @@ export function MarketingBuildSteps() {
     <section
       id="build"
       aria-label="How it works"
-      className="border-t border-[rgba(34,29,23,.08)] bg-[#F6F2EA] px-5 py-20 md:px-8 md:py-28 lg:px-12"
+      className="border-t border-[rgba(34,29,23,.08)] px-5 py-20 md:px-8 md:py-28 lg:px-12"
     >
       <div className="mx-auto max-w-[1120px]">
         {/* Section head */}
-        <div className="max-w-[600px]">
-          <div className="inline-flex items-center gap-2.5 text-[12px] font-[600] uppercase tracking-[0.09em] text-[#00897B]">
-            <span className="h-px w-4 bg-[#00897B] opacity-50" aria-hidden />
+        <div className="mx-auto max-w-[680px] text-center">
+          <div className="inline-flex items-center gap-2.5 text-[12px] font-[600] uppercase tracking-[0.09em] text-[#1F2B24]">
+            <span className="h-px w-4 bg-[#1F2B24] opacity-50" aria-hidden />
             How it works
           </div>
           <h2 className="mt-3.5 text-[clamp(27px,4.2vw,42px)] font-[500] leading-[1.08] tracking-[-0.025em] text-[#221D17]">
-            Paste a URL.{" "}
+            Two ways in.{" "}
             <em className="font-[Newsreader,Georgia,serif] font-normal not-italic">
-              Done in 60 seconds.
+              Both live in minutes.
             </em>
           </h2>
-          <p className="mt-4 max-w-[54ch] text-[clamp(15.5px,1.9vw,18px)] leading-[1.55] text-[#6E665A]">
-            Whether you&rsquo;re setting up your own front office or onboarding a client,
-            the flow is identical — and it takes under a minute.
-          </p>
-
-          {/* "What you need" beat — BYOK as a qualifier, not a barrier. */}
-          <p className="mt-5 inline-flex max-w-[60ch] items-start gap-2 rounded-[12px] border border-[rgba(34,29,23,.10)] bg-[#FFFDFA] px-4 py-3 text-[13.5px] leading-[1.5] text-[#6E665A] shadow-[0_1px_2px_rgba(34,29,23,.05)]">
-            <span className="mt-0.5 inline-block size-1.5 shrink-0 rounded-full bg-[#00897B]" aria-hidden />
-            <span>
-              <strong className="font-[600] text-[#221D17]">All you need:</strong> a URL, and an AI key you probably
-              already have (ChatGPT, Claude, or Gemini). We show you how to connect it in 30 seconds.
-            </span>
-          </p>
         </div>
 
-        {/* Step cards */}
-        <div className="mt-12 grid grid-cols-1 gap-4 min-[900px]:grid-cols-3 min-[900px]:gap-5">
-          {STEPS.map((step) => (
+        {/* Two path cards */}
+        <div className="mt-12 grid grid-cols-1 gap-5 min-[900px]:grid-cols-2">
+          {PATHS.map((path) => (
             <div
-              key={step.num}
-              className="relative flex flex-col gap-4 overflow-hidden rounded-[18px] border border-[rgba(34,29,23,.08)] bg-[#FFFDFA] p-6 shadow-[0_1px_2px_rgba(34,29,23,.05),0_10px_30px_rgba(34,29,23,.07)]"
+              key={path.kicker}
+              className="relative flex flex-col gap-4 overflow-hidden rounded-[20px] border border-[rgba(34,29,23,.08)] bg-[#FFFDFA] p-7 shadow-[0_1px_2px_rgba(34,29,23,.05),0_10px_30px_rgba(34,29,23,.07)]"
             >
-              {/* Newsreader italic step number */}
-              <span className="font-[Newsreader,Georgia,serif] text-2xl italic text-[#00897B]">
-                {step.num}
-              </span>
-              <h3 className="m-0 text-[16px] font-[600] leading-tight tracking-[-0.01em] text-[#221D17]">
-                {step.title}
-              </h3>
-              <p className="m-0 text-[13.5px] leading-[1.5] text-[#6E665A]">{step.body}</p>
+              {/* Path badge */}
+              <div className="flex items-center gap-2">
+                <span className="rounded-full bg-[rgba(31, 43, 36,.1)] px-2.5 py-1 text-[11px] font-[700] uppercase tracking-[0.06em] text-[#1F2B24]">
+                  {path.kicker}
+                </span>
+                <span className="text-[12px] font-[500] text-[#9A9183]">→ {path.arrow}</span>
+              </div>
 
-              {/* Animated build log */}
-              <div className="mt-auto">{step.mock}</div>
+              <h3 className="m-0 text-[clamp(19px,2.4vw,23px)] font-[500] leading-[1.12] tracking-[-0.02em] text-[#221D17]">
+                {path.title}
+              </h3>
+
+              {/* Three mini-steps */}
+              <ol className="m-0 flex flex-col gap-2 p-0">
+                {path.steps.map((s, i) => (
+                  <li key={s} className="flex items-center gap-2.5 text-[13px] text-[#221D17]">
+                    <span className="flex size-5 shrink-0 items-center justify-center rounded-full bg-[rgba(31, 43, 36,.1)] text-[11px] font-[700] text-[#1F2B24]">
+                      {i + 1}
+                    </span>
+                    {s}
+                  </li>
+                ))}
+              </ol>
+
+              {/* Animated mock */}
+              <div className="mt-2">{path.mock}</div>
+              {path.figure ? <div className="mt-2">{path.figure}</div> : null}
             </div>
           ))}
         </div>
 
-        {/* Summary note */}
-        <div className="mt-6 rounded-[16px] border border-[rgba(34,29,23,.08)] bg-[#EFE9DD] px-6 py-5 text-[15px] leading-[1.5] text-[#221D17]">
-          Miss a call mid-job?{" "}
-          <strong className="font-[600] text-[#00897B]">The AI receptionist texts them back before they dial a competitor</strong> — so every lead stays yours. And once the job&rsquo;s done, the review follow-up quietly asks for a 5-star Google review.
-        </div>
       </div>
 
       <style jsx>{`
         .sf-blink-dot {
-          box-shadow: 0 0 0 3px color-mix(in oklab, #00897b 22%, transparent);
+          box-shadow: 0 0 0 3px color-mix(in oklab, #1F2B24 22%, transparent);
           animation: sf-blink 1.4s ease-in-out infinite;
         }
         @keyframes sf-blink {
@@ -224,9 +219,9 @@ function StatusDot({ tone }: { tone: "idle" | "active" | "done" }) {
     <span
       className={`size-1.5 shrink-0 rounded-sm ${
         tone === "done"
-          ? "bg-[#00897B] shadow-[0_0_6px_rgba(0,137,123,.5)]"
+          ? "bg-[#1F2B24] shadow-[0_0_6px_rgba(31, 43, 36,.5)]"
           : tone === "active"
-          ? "sf-blink-dot bg-[#00897B]"
+          ? "sf-blink-dot bg-[#1F2B24]"
           : "bg-[#9A9183]/40"
       }`}
       aria-hidden
@@ -271,7 +266,7 @@ function ScanMock() {
           {!reduce && step === 1 ? (
             <motion.span
               aria-hidden
-              className="ml-0.5 inline-block h-3 w-px translate-y-[2px] bg-[#00897B] align-middle"
+              className="ml-0.5 inline-block h-3 w-px translate-y-[2px] bg-[#1F2B24] align-middle"
               animate={{ opacity: [1, 0, 1] }}
               transition={{ duration: 0.7, repeat: Infinity, ease: "linear" }}
             />
@@ -295,63 +290,104 @@ function ScanMock() {
 }
 
 /* ════════════════════════════════════════════════════════════════════════
-   STEPS 2 & 3 — Arrive: done-rows slide in from the left, staggered, each with
-   a green-dot pulse on arrival, then settle. Reusable for both cards.
+   RECORD — the Path-B mock: REC (red, pulsing) → reads frames + narration →
+   compiles → agent ready. Same LogFrame + step-clock idiom as ScanMock.
    ════════════════════════════════════════════════════════════════════════ */
 
-type ArriveRow = string | { label: string; emphasis?: boolean };
-
-function normalizeRow(row: ArriveRow): { label: string; emphasis: boolean } {
-  return typeof row === "string" ? { label: row, emphasis: false } : { label: row.label, emphasis: !!row.emphasis };
-}
-
-function ArriveMock({ rows }: { rows: readonly ArriveRow[] }) {
+// 0 idle → 1 recording → 2 compiling (dot blinks) → 3 compiled (done) → 4 hold
+function RecordMock() {
   const reduce = useReducedMotion() ?? false;
   const [ref, inView] = useInViewRef<HTMLDivElement>();
-  // One tick per row arrival (~700ms apart → close to the ~200ms-stagger feel
-  // once you account for each row's own slide), then a hold before resetting.
-  const HOLD = 2;
-  const steps = rows.length + HOLD;
-  const step = useStepClock(steps, 700, inView, reduce);
+  const step = useStepClock(5, 1100, inView, reduce);
+
+  const recording = reduce || step >= 1;
+  const compiling = !reduce && step === 2;
+  const compiled = reduce || step >= 3;
 
   return (
     <LogFrame innerRef={ref}>
-      {rows.map((raw, i) => {
-        const { label, emphasis } = normalizeRow(raw);
-        const visible = reduce || step >= i;
-        // The row "just arrived" on the exact tick it appears → pulse the dot.
-        const justArrived = !reduce && step === i;
-        return (
-          <motion.div
-            key={label}
-            initial={false}
-            animate={{ opacity: visible ? 1 : 0, x: visible ? 0 : -10 }}
-            transition={{ duration: 0.34, ease: EASE }}
-            className="flex items-center gap-2"
-          >
-            <motion.span
-              className="flex size-1.5 shrink-0 items-center justify-center"
-              animate={justArrived ? { scale: [1, 1.5, 1] } : { scale: 1 }}
-              transition={{ duration: 0.45, ease: EASE }}
-            >
-              <StatusDot tone={visible ? "done" : "idle"} />
-            </motion.span>
-            <span className={`flex-1 ${visible ? "text-[#221D17]" : ""}`}>{label}</span>
-            {emphasis ? (
-              <motion.span
-                aria-hidden
-                className="shrink-0 text-[#00897B]"
-                initial={false}
-                animate={{ opacity: visible ? 1 : 0, scale: visible ? 1 : 0.6 }}
-                transition={{ duration: 0.32, ease: EASE, delay: justArrived ? 0.12 : 0 }}
-              >
-                <LinkCheck className="size-3.5" />
-              </motion.span>
-            ) : null}
-          </motion.div>
-        );
-      })}
+      {/* recording row — red dot pulses while capturing */}
+      <div className="flex items-center gap-2">
+        <motion.span
+          className="size-1.5 shrink-0 rounded-sm bg-[#E5484D]"
+          animate={recording && !reduce ? { opacity: [1, 0.35, 1] } : { opacity: recording ? 1 : 0.4 }}
+          transition={{ duration: 1.2, repeat: recording && !reduce ? Infinity : 0, ease: "easeInOut" }}
+          aria-hidden
+        />
+        <span className={`flex-1 ${recording ? "text-[#221D17]" : ""}`}>
+          {recording ? "REC — capturing your workflow" : "Ready to record"}
+        </span>
+      </div>
+
+      {/* reading → compiled */}
+      <motion.div
+        className="flex items-center gap-2"
+        animate={{ opacity: recording ? 1 : 0.35 }}
+        transition={{ duration: 0.3, ease: EASE }}
+      >
+        <StatusDot tone={compiled ? "done" : compiling ? "active" : "idle"} />
+        <span className={`flex-1 ${compiled ? "text-[#221D17]" : ""}`}>
+          {compiled ? "Steps + tools compiled" : "Reading frames + narration…"}
+        </span>
+      </motion.div>
+
+      {/* agent ready */}
+      <motion.div
+        className="flex items-center gap-2"
+        animate={{ opacity: compiled ? 1 : 0.35 }}
+        transition={{ duration: 0.3, ease: EASE }}
+      >
+        <StatusDot tone={compiled ? "done" : "idle"} />
+        <span className={`flex-1 ${compiled ? "text-[#221D17]" : ""}`}>
+          {compiled ? "Agent ready to test" : "Agent"}
+        </span>
+      </motion.div>
     </LogFrame>
+  );
+}
+
+/* ════════════════════════════════════════════════════════════════════════
+   RECORD figure — the Path-B counterpart to the IntegrationBeam box: a small
+   "screen recording → compiled agent" still, so both path cards carry equal
+   visual weight.
+   ════════════════════════════════════════════════════════════════════════ */
+
+function RecordFigure() {
+  const CAPTURED = [
+    "Opened Gmail, read the thread",
+    "Labeled + archived 4 messages",
+    "Logged the lead to the sheet",
+  ];
+  return (
+    <div className="flex min-h-[220px] w-full flex-col justify-between overflow-hidden rounded-[10px] border border-[rgba(34,29,23,.08)] bg-[#F6F2EA] p-5">
+      {/* window chrome + REC badge */}
+      <div className="flex items-center justify-between">
+        <span className="flex gap-1.5" aria-hidden>
+          <span className="size-2 rounded-full bg-[#E5484D]/70" />
+          <span className="size-2 rounded-full bg-[#FEBC2E]/70" />
+          <span className="size-2 rounded-full bg-[#28C840]/70" />
+        </span>
+        <span className="inline-flex items-center gap-1.5 rounded-full bg-[rgba(229,72,77,.1)] px-2 py-0.5 text-[10.5px] font-[700] uppercase tracking-[0.06em] text-[#E5484D]">
+          <span className="size-1.5 rounded-full bg-[#E5484D]" /> REC 0:14
+        </span>
+      </div>
+
+      {/* captured steps */}
+      <div className="flex flex-col gap-1.5 font-mono text-[11.5px] text-[#6E665A]">
+        {CAPTURED.map((c) => (
+          <div key={c} className="flex items-center gap-2">
+            <span className="size-1.5 shrink-0 rounded-sm bg-[#1F2B24]" aria-hidden />
+            <span className="truncate">{c}</span>
+          </div>
+        ))}
+      </div>
+
+      {/* compiled result */}
+      <div className="flex items-center gap-2 rounded-[9px] border border-[rgba(31, 43, 36,.28)] bg-[rgba(31, 43, 36,.06)] px-3 py-2">
+        <span className="flex size-5 shrink-0 items-center justify-center rounded-full bg-[#1F2B24] text-[11px] font-[800] text-[#FFFDFA]" aria-hidden>✓</span>
+        <span className="text-[12.5px] font-[600] text-[#221D17]">Inbox-triage agent — compiled, ready to test</span>
+      </div>
+    </div>
   );
 }
 
@@ -372,20 +408,5 @@ function TypedText({ text, animate }: { text: string; animate: boolean }) {
     >
       {text}
     </motion.span>
-  );
-}
-
-/** Tiny link + check cue for the custom-domain emphasis row. */
-function LinkCheck({ className = "" }: { className?: string }) {
-  return (
-    <svg viewBox="0 0 24 24" fill="none" className={className} aria-hidden>
-      <path
-        d="M9 17H7A5 5 0 0 1 7 7h2m6 0h2a5 5 0 0 1 1.5 9.75M9 12h6"
-        stroke="#00897B"
-        strokeWidth={2}
-        strokeLinecap="round"
-        strokeLinejoin="round"
-      />
-    </svg>
   );
 }

@@ -45,7 +45,7 @@ export default function NewSoulStudioPage() {
   const [feedInput, setFeedInput] = useState("");
   const [feedItems, setFeedItems] = useState<Array<{ type: string; value: string }>>([]);
 
-  const [primaryColor, setPrimaryColor] = useState("#14b8a6");
+  const [primaryColor, setPrimaryColor] = useState("#059669");
   const [accentColor, setAccentColor] = useState("#6366f1");
   const [fontFamily, setFontFamily] = useState(FONTS[0]);
   const [borderRadius, setBorderRadius] = useState(8);

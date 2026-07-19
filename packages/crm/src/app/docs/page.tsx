@@ -94,13 +94,13 @@ export default function DocsHome() {
           <Step
             num={2}
             title="Build your workspace"
-            body="Tell Claude Code about your business — name, industry, services, hours. SF generates a public website, booking page, intake form, CRM pipeline, and AI agents tuned to your industry."
+            body="Tell Claude Code about your business — name, industry, services, hours. Seldon generates a public website, booking page, intake form, CRM pipeline, and AI agents tuned to your industry."
             code='"Build me a workspace for Cypress Pine HVAC in Phoenix — services: AC repair, install, maintenance. Mon-Sat 7a-7p."'
           />
           <Step
             num={3}
             title="Add a chatbot"
-            body="One MCP call wires a chatbot into your website. Pass FAQ + pricing + greeting; SF runs the safety evals, generates the embed snippet, gives you a sandbox URL."
+            body="One MCP call wires a chatbot into your website. Pass FAQ + pricing + greeting; Seldon runs the safety evals, generates the embed snippet, gives you a sandbox URL."
             code="build_website_chatbot({ workspace_id, name, faq, pricing_facts, greeting })"
           />
           <Step
@@ -175,7 +175,7 @@ export default function DocsHome() {
             { title: "Public pages", description: "Hero, services, FAQ, CTA — composed from your Soul", href: "/docs#pages" },
             { title: "Forms", description: "Lead capture; submissions become customers automatically", href: "/docs#forms" },
             { title: "Booking pages", description: "Slot picker tied to your availability + appointment types", href: "/docs#booking-pages" },
-            { title: "Custom domains", description: "Use yourdomain.com instead of the SF subdomain", href: "/docs#domains" },
+            { title: "Custom domains", description: "Use yourdomain.com instead of the Seldon subdomain", href: "/docs#domains" },
           ]}
         />
 
@@ -230,7 +230,7 @@ export default function DocsHome() {
           <SmallCard
             icon={<GraduationCap className="size-4" />}
             title="Video tutorials"
-            description="Watch how SF clients build workspaces, deploy chatbots, and configure their CRM from scratch."
+            description="Watch how Seldon clients build workspaces, deploy chatbots, and configure their CRM from scratch."
             href="https://youtube.com/@seldonframe"
             external
           />
@@ -253,7 +253,7 @@ export default function DocsHome() {
           </p>
           <div className="flex flex-wrap justify-center gap-3 pt-2">
             <Link
-              href="/signup"
+              href="/#hero-form"
               className="inline-flex h-10 items-center px-5 rounded-md bg-primary text-primary-foreground text-sm font-medium hover:bg-primary/90 transition-colors"
             >
               Start building

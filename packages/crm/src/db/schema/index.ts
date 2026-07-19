@@ -50,6 +50,14 @@ export * from "./block-subscription-deliveries";
 export * from "./message-triggers";
 // SLICE 10 PR 1 C2 — request_approval persistence.
 export * from "./workflow-approvals";
+export * from "./agent-action-drafts";
+export * from "./agent-run-receipts";
+// Deterministic replay — Reelier phase 2c slice 1 (observe mode only).
+export * from "./agent-workflow-traces";
+// Deterministic replay — Reelier phase 2c slice 2 (compile + L0 replay).
+export * from "./replay-skills";
+// Replay gate v2 — idempotent-send claim ledger (migration 0077).
+export * from "./replay-send-claims";
 // May 1, 2026 — Measurement Layers 2 + 3.
 export * from "./seldonframe-events";
 export * from "./brain-outcomes";
@@ -190,3 +198,33 @@ export * from "./agent-taste-sessions";
 // Repeat pastes of the same URL skip scrape + LLM entirely (~$0). See
 // lib/web-build/extraction-cache-store.ts.
 export * from "./url-extraction-cache";
+
+// 2026-07-06 — `/dream` loop prerequisite: agent_reflection_events (migration
+// 0066). Additive table persisting every vision_check verdict (previously
+// console.log-only) so the daily dream routine has a queryable collect
+// source. See docs/superpowers/specs/2026-07-06-dream-loop-design.md +
+// lib/vision/persist-reflection.ts / collect-reflections.ts.
+export * from "./agent-reflection-events";
+
+// 2026-07-10 — Record-to-agent (migration 0067): recording_sessions +
+// workflow_recordings. Anonymous, bearer-token-authed rows that collect
+// screen recordings, compile a FlowModel, and (post-claim) an
+// agent_templates draft. Inert behind SF_RECORD_TO_AGENT. See
+// docs/superpowers/specs/2026-07-10-record-to-agent-design.md.
+export * from "./recordings";
+
+// 2026-07-11 — Agent lifecycle slice (migration 0068): supervised_runs (one
+// real-tool, supervised run of a template — Stage 04 "Run") +
+// recording_sessions.answered_questions (Stage 01 "Learned" Q&A record).
+// Additive. Inert behind SF_AGENT_LIFECYCLE. See
+// docs/superpowers/specs/2026-07-11-agent-lifecycle-design.md.
+export * from "./agent-lifecycle";
+
+// 2026-07-11 — Agent setup mode slice (migration 0070): share_cards (the
+// celebration screen's opt-in, PREVIEW-before-publish share card). Additive.
+// See docs/superpowers/specs/2026-07-11-agent-setup-mode-design.md.
+export * from "./share-cards";
+
+// 2026-07-11 — H2 hotfix (migration 0071): eval_run_jobs, an ephemeral poll
+// target for the out-of-request "Run evals" flow (after()). Additive.
+export * from "./eval-run-jobs";

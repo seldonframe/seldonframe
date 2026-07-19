@@ -19,9 +19,49 @@ import assert from "node:assert/strict";
 import {
   heuristicIntent,
   parseAgentIntent,
+  resolveDayOneChannel,
   type AgentIntent,
 } from "../../../../src/lib/agents/generate/parse-intent";
 import { agentNeedsNumber } from "../../../../src/lib/agents/triggers/agent-trigger";
+
+// ─── resolveDayOneChannel (P2 — day-one delivery predicate) ──────────────────
+//
+// Managed Resend delivers email day-one (no BYO Twilio needed); lib/sms/api.ts
+// is strictly BYO-Twilio (422 on a fresh workspace). So a freshly-generated
+// event-outbound agent must default to email UNLESS the sentence explicitly
+// asks for text/SMS.
+
+describe("resolveDayOneChannel", () => {
+  test("no channel keyword → email (the day-one default)", () => {
+    assert.equal(resolveDayOneChannel("ask customers for a review"), "email");
+    assert.equal(resolveDayOneChannel("reply to new leads instantly"), "email");
+  });
+
+  test("explicit 'text' → sms", () => {
+    assert.equal(resolveDayOneChannel("text customers for a review"), "sms");
+    assert.equal(resolveDayOneChannel("send a text message to new leads"), "sms");
+  });
+
+  test("explicit 'sms' → sms", () => {
+    assert.equal(resolveDayOneChannel("send an SMS to new leads"), "sms");
+  });
+
+  test("explicit 'email' wins outright, even alongside 'text'", () => {
+    assert.equal(resolveDayOneChannel("email new leads"), "email");
+    assert.equal(
+      resolveDayOneChannel("text and email new leads"),
+      "email",
+      "an explicit email mention always wins over a text mention",
+    );
+  });
+
+  test("never throws on odd input", () => {
+    assert.doesNotThrow(() => resolveDayOneChannel(""));
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    assert.doesNotThrow(() => resolveDayOneChannel(undefined as any));
+    assert.equal(resolveDayOneChannel(""), "email");
+  });
+});
 
 // ─── heuristicIntent — social-poster (priority #1) ───────────────────────────
 
@@ -77,14 +117,22 @@ describe("heuristicIntent — social-poster", () => {
 // ─── heuristicIntent — review-requester ──────────────────────────────────────
 
 describe("heuristicIntent — review-requester", () => {
-  test("'ask my customers for a google review after the job' → review-requester + booking.completed + sms", () => {
+  test("'ask my customers for a google review after the job' → review-requester + booking.completed + email (day-one default)", () => {
+    // P2 — day-one delivery: the default channel is email (managed Resend
+    // delivers without BYO Twilio); SMS only when explicitly requested.
     const i = heuristicIntent("ask my customers for a google review after the job");
     assert.equal(i.skill, "review-requester");
     assert.deepEqual(i.trigger, {
       kind: "event",
       event: "booking.completed",
-      channel: "sms",
+      channel: "email",
     });
+  });
+
+  test("'text my customers for a google review after the job' → explicit SMS ask wins", () => {
+    const i = heuristicIntent("text my customers for a google review after the job");
+    assert.equal(i.skill, "review-requester");
+    assert.equal((i.trigger as { channel: string }).channel, "sms");
   });
 
   test("'text customers to ask for a Google review after a booking' → review-requester", () => {
@@ -112,13 +160,23 @@ describe("heuristicIntent — review-requester", () => {
 // ─── heuristicIntent — speed-to-lead ─────────────────────────────────────────
 
 describe("heuristicIntent — speed-to-lead", () => {
-  test("'instantly text new leads that come in' → speed-to-lead + lead.created + sms", () => {
+  test("'instantly text new leads that come in' → speed-to-lead + lead.created + sms (explicit 'text')", () => {
     const i = heuristicIntent("instantly text new leads that come in");
     assert.equal(i.skill, "speed-to-lead");
     assert.deepEqual(i.trigger, {
       kind: "event",
       event: "lead.created",
       channel: "sms",
+    });
+  });
+
+  test("'reach out to new leads instantly' (no channel keyword) → email (day-one default)", () => {
+    const i = heuristicIntent("reach out to new leads instantly");
+    assert.equal(i.skill, "speed-to-lead");
+    assert.deepEqual(i.trigger, {
+      kind: "event",
+      event: "lead.created",
+      channel: "email",
     });
   });
 
@@ -215,6 +273,15 @@ describe("parseAgentIntent — without a classifier", () => {
       channel: "sms",
     });
   });
+
+  test("no explicit channel keyword → email (day-one default)", async () => {
+    const i = await parseAgentIntent("reach out to new leads instantly");
+    assert.deepEqual(i.trigger, {
+      kind: "event",
+      event: "lead.created",
+      channel: "email",
+    });
+  });
 });
 
 // ─── parseAgentIntent — injected classify wins (fields it returns) ───────────
@@ -288,7 +355,7 @@ describe("parseAgentIntent — classify failure is fail-soft", () => {
     assert.deepEqual(i.trigger, {
       kind: "event",
       event: "booking.completed",
-      channel: "sms",
+      channel: "email",
     });
   });
 });

@@ -56,6 +56,42 @@ import {
   setArchetypeForOrg as setArchetypeForOrgDefault,
   type SetExplicitArchetypeResult,
 } from "@/lib/workspace/apply-archetype-theme";
+import {
+  searchStockPhotos as searchStockPhotosDefault,
+  type StockPhoto,
+} from "@/lib/media/stock-search";
+import {
+  resolveExternalMedia as resolveExternalMediaDefault,
+  type MediaKind,
+  type ResolveMediaResult,
+} from "@/lib/media/resolve-url";
+import {
+  setR1Media as setR1MediaDefault,
+  clearR1Media as clearR1MediaDefault,
+  defaultLoad as loadR1PayloadDefault,
+  buildMediaSlotMap,
+  type SetR1MediaInput,
+  type SetR1MediaResult,
+} from "@/lib/landing/set-r1-media";
+import {
+  setR1Field as setR1FieldDefault,
+  type R1Section,
+  type SetR1FieldResult,
+} from "@/lib/landing/set-r1-field";
+
+/** The 8 top-level r1 payload sections (mirrors R1Section in set-r1-field.ts;
+ *  kept as a local const array so the zod enum/jsonSchema below don't need a
+ *  runtime import of a type-only union). */
+const R1_SECTIONS = [
+  "hero",
+  "services",
+  "testimonials",
+  "faq",
+  "footer",
+  "emergency",
+  "sticky",
+  "leadForm",
+] as const;
 
 export const COPILOT_CAPABILITY = "workspace_copilot";
 
@@ -76,10 +112,33 @@ async function safe<T>(fn: () => Promise<T>): Promise<T | { ok: false; error: st
 
 const getSiteStructureInput = z.object({});
 
+/** Read-only projection of the live r1 payload for get_site_structure: the
+ *  8 sections that exist on this payload, each with its current field
+ *  values, so the model edits against reality instead of guessing. */
+async function getR1Structure(orgId: string) {
+  const loaded = await loadR1PayloadDefault(orgId);
+  if (!loaded) return null;
+
+  const { payload } = loaded;
+  const sections = R1_SECTIONS.filter(
+    (section) => (payload as unknown as Record<string, unknown>)[section] !== undefined,
+  ).map((section) => ({
+    section,
+    fields: (payload as unknown as Record<string, unknown>)[section],
+  }));
+
+  return {
+    ok: true as const,
+    workspace_id: orgId,
+    slug: "r1",
+    sections,
+  };
+}
+
 const getSiteStructure: AgentTool<z.infer<typeof getSiteStructureInput>> = {
   name: "get_site_structure",
   description:
-    "Read the workspace's landing page section list (index, type, preview) plus its slug and public URL. Call this first before any section edit so you know the current layout and indices.",
+    "Read the workspace's live landing page: the sections that exist (hero, services, testimonials, faq, footer, emergency?, sticky?, leadForm?) and their current field values. Call this first before any field edit so you know the real field names and current values (e.g. the hero headline is the `tagline` field).",
   inputSchema: getSiteStructureInput,
   jsonSchema: {
     type: "object",
@@ -87,7 +146,12 @@ const getSiteStructure: AgentTool<z.infer<typeof getSiteStructureInput>> = {
     required: [],
   },
   execute: (_input, ctx: ToolExecuteContext) =>
-    safe(() => getLandingStructureForWorkspace(ctx.orgId)),
+    safe(async () => {
+      const r1 = await getR1Structure(ctx.orgId);
+      if (r1) return r1;
+      // Legacy fallback: no r1 page for this org.
+      return getLandingStructureForWorkspace(ctx.orgId);
+    }),
 };
 
 // ─── edit_site ───────────────────────────────────────────────────────────────
@@ -124,8 +188,17 @@ const editSite: AgentTool<z.infer<typeof editSiteInput>> = {
 
 // ─── update_section_field ───────────────────────────────────────────────────
 
+// Accepts both the r1 sections (hero, services, testimonials, faq, footer,
+// emergency, sticky, leadForm) AND the legacy VALID_SECTION_TYPES (e.g.
+// services-grid, trust-strip, mid-cta) — the tool tries the live r1 payload
+// first and only falls back to the legacy blueprint when the org has no r1
+// page, so both vocabularies must validate here.
+const UPDATE_SECTION_FIELD_SECTIONS = Array.from(
+  new Set([...R1_SECTIONS, ...VALID_SECTION_TYPES]),
+) as [string, ...string[]];
+
 const updateSectionFieldInput = z.object({
-  section: z.enum(VALID_SECTION_TYPES as [string, ...string[]]),
+  section: z.enum(UPDATE_SECTION_FIELD_SECTIONS),
   field: z.string().min(1, "field is required"),
   value: z.unknown(),
 });
@@ -207,19 +280,21 @@ async function updateSectionFieldForWorkspace(
 const updateSectionField: AgentTool<z.infer<typeof updateSectionFieldInput>> = {
   name: "update_section_field",
   description:
-    "Set a single field on a landing-page section by dot-path (e.g. section='hero', field='headline', value='Same-day HVAC repair'). The escape hatch for edits edit_site can't target precisely.",
+    "Set a single field on the live landing page section by dot-path. Sections: hero, services, testimonials, faq, footer, emergency, sticky, leadForm. Real field names — the hero headline is the `tagline` field (not 'headline'); also `subhead`, `primaryCTA.label`. Services/faq/testimonials use `heading` for their section title. Dot-paths address nested/array fields, e.g. `services.0.name`, `faq.items.1.answer`. The escape hatch for edits edit_site can't target precisely.",
   inputSchema: updateSectionFieldInput,
   jsonSchema: {
     type: "object",
     properties: {
       section: {
         type: "string",
-        enum: VALID_SECTION_TYPES,
-        description: "Section type to mutate.",
+        enum: UPDATE_SECTION_FIELD_SECTIONS,
+        description:
+          "Section to mutate: hero, services, testimonials, faq, footer, emergency, sticky, or leadForm (this workspace's live page). Legacy section-type names are accepted as a fallback for workspaces without a live page.",
       },
       field: {
         type: "string",
-        description: "Dot-segmented field path, e.g. 'headline' or 'items.0.title'.",
+        description:
+          "Dot-segmented field path, e.g. 'tagline' (hero headline), 'subhead', 'primaryCTA.label', 'services.0.name', 'faq.items.1.answer'.",
       },
       value: {
         description: "New value for the field (any JSON type; null clears an optional field).",
@@ -228,14 +303,28 @@ const updateSectionField: AgentTool<z.infer<typeof updateSectionFieldInput>> = {
     required: ["section", "field", "value"],
   },
   execute: (input, ctx: ToolExecuteContext) =>
-    safe(() =>
-      updateSectionFieldForWorkspace(
+    safe(async () => {
+      const r1Result: SetR1FieldResult = await setR1FieldDefault(
+        ctx.orgId,
+        input.section as R1Section,
+        input.field,
+        input.value,
+      );
+
+      if (r1Result.ok) return r1Result;
+
+      // Legacy fallback ONLY when this org has no r1 page at all — an
+      // r1 org with a bad field/section must see the real error so the
+      // model can retry with a correct field, never a silent no-op.
+      if (r1Result.error !== "no_r1_page") return r1Result;
+
+      return updateSectionFieldForWorkspace(
         ctx.orgId,
         input.section as LandingSection["type"],
         input.field,
         input.value,
-      ),
-    ),
+      );
+    }),
 };
 
 // ─── move_section ───────────────────────────────────────────────────────────
@@ -258,7 +347,22 @@ const moveSection: AgentTool<z.infer<typeof moveSectionInput>> = {
     required: ["fromIndex", "toIndex"],
   },
   execute: (input, ctx: ToolExecuteContext) =>
-    safe(() => moveSectionForWorkspace(ctx.orgId, input.fromIndex, input.toIndex)),
+    safe(async () => {
+      // r1 has no arbitrary sections[] array to index deterministically —
+      // when this org has a live r1 page, delegate to the working NL-edit
+      // pipeline (customizeLandingR1) instead of writing the dead legacy
+      // blueprint. Legacy path only when there's no r1 page at all.
+      const r1 = await loadR1PayloadDefault(ctx.orgId);
+      if (r1) {
+        return customizeLandingR1({
+          workspaceId: ctx.orgId,
+          instruction: `Move the section currently at position ${input.fromIndex} to position ${input.toIndex}.`,
+          userId: `copilot:${ctx.orgId}`,
+          byokKey: process.env.ANTHROPIC_API_KEY ?? "",
+        });
+      }
+      return moveSectionForWorkspace(ctx.orgId, input.fromIndex, input.toIndex);
+    }),
 };
 
 // ─── delete_section ──────────────────────────────────────────────────────────
@@ -286,7 +390,21 @@ const deleteSection: AgentTool<z.infer<typeof deleteSectionInput>> = {
     required: ["index", "confirm"],
   },
   execute: (input, ctx: ToolExecuteContext) =>
-    safe(() => deleteSectionForWorkspace(ctx.orgId, input.index)),
+    safe(async () => {
+      // Same rationale as move_section above: r1 has no arbitrary
+      // sections[] array to index, so delegate structural deletes to the
+      // working NL-edit pipeline when this org has a live r1 page.
+      const r1 = await loadR1PayloadDefault(ctx.orgId);
+      if (r1) {
+        return customizeLandingR1({
+          workspaceId: ctx.orgId,
+          instruction: `Remove the section currently at position ${input.index} from the page.`,
+          userId: `copilot:${ctx.orgId}`,
+          byokKey: process.env.ANTHROPIC_API_KEY ?? "",
+        });
+      }
+      return deleteSectionForWorkspace(ctx.orgId, input.index);
+    }),
 };
 
 // ─── add_intake_field ────────────────────────────────────────────────────────
@@ -415,8 +533,7 @@ const undoLastChange: AgentTool<z.infer<typeof undoLastChangeInput>> = {
 // theme-shaped requests and trips r1-customize's invalid_payload path. This
 // tool gives the copilot a structured, always-succeeds-or-tells-you-why path
 // straight to the same write core the settings page uses
-// (saveThemeForOrg, lib/theme/save-theme.ts — extracted from
-// saveThemeSettingsAction, lib/theme/actions.ts:100).
+// (saveThemeForOrg, lib/theme/save-theme.ts).
 //
 // Only offers the exact enum values normalizeTheme() actually accepts
 // (lib/theme/normalize-theme.ts) — anything else is silently coerced back to
@@ -1006,6 +1123,323 @@ const pinCard: AgentTool<z.infer<typeof pinCardInput>> & {
     }),
 };
 
+// ─── search_media / update_media / delete_media ─────────────────────────────
+//
+// Media-editing T3 (SeldonChat media tools). Wires the T1 write seam
+// (setR1Media/clearR1Media) and T2 media sources (searchStockPhotos,
+// resolveExternalMedia) into the copilot toolset — parallels the
+// list_designs/update_design chip-picker pattern above: search_media never
+// writes, its candidates are surfaced by the route as tappable thumbnails
+// (mediaOptions) instead of a verbalized list; tapping one sends a
+// deterministic apply payload that resolves to update_media.
+//
+// Slot vocabulary (shared across all three tools, matches R1MediaSlot in
+// set-r1-media.ts):
+//   - hero_background        — the main background image behind the hero.
+//     DEFAULT for "add/change the background".
+//   - hero_background_video  — background video (kind:"video" on update_media).
+//   - hero_image             — the foreground hero photo (a distinct panel
+//     image, not the background).
+//   - service_photo:<index>  — a specific service card photo (0-based).
+//
+// SECURITY: update_media/delete_media's zod schemas carry NO orgId-shaped
+// field at all — ctx.orgId (from the runtime, never the model) is the only
+// source of which org's payload gets written. Any external/user/stock URL
+// applied via update_media is routed through resolveExternalMedia FIRST,
+// which runs the SSRF guard (assertPublicHttpUrl) on the URL and every
+// redirect hop before anything is fetched — this protects even a
+// client-supplied URL that arrived via a tapped thumbnail, since the tap
+// still goes through this same tool.
+
+/** Injectable seam for search_media/update_media/delete_media's execute
+ *  (mirrors UpdateThemeDeps/ModuleToolsDeps/DesignToolsDeps above). Defaults
+ *  to the real T1/T2 seams so production callers are unaffected. */
+export type MediaToolsDeps = {
+  searchStockPhotos: (query: string) => Promise<StockPhoto[]>;
+  resolveExternalMedia: (url: string, kind: MediaKind) => Promise<ResolveMediaResult>;
+  setR1Media: (orgId: string, input: SetR1MediaInput) => Promise<SetR1MediaResult>;
+  clearR1Media: (orgId: string, slot: string) => Promise<SetR1MediaResult>;
+  loadR1Payload: typeof loadR1PayloadDefault;
+};
+
+const defaultMediaToolsDeps: MediaToolsDeps = {
+  searchStockPhotos: searchStockPhotosDefault,
+  resolveExternalMedia: resolveExternalMediaDefault,
+  setR1Media: setR1MediaDefault,
+  clearR1Media: clearR1MediaDefault,
+  loadR1Payload: loadR1PayloadDefault,
+};
+
+const MEDIA_SLOT_DESCRIPTION =
+  "Media slot id: 'hero_background' (the main background image behind the hero — the DEFAULT for \"add/change the background\"), 'hero_background_video' (background video), 'hero_image' (the foreground hero photo, a separate panel image), or 'service_photo:<index>' (a specific service card photo, 0-based, e.g. 'service_photo:0').";
+
+const searchMediaInput = z.object({
+  query: z.string().min(1, "query is required"),
+  target_slot: z.string().optional(),
+});
+
+const searchMedia: AgentTool<z.infer<typeof searchMediaInput>> & {
+  execute: (
+    input: z.infer<typeof searchMediaInput>,
+    ctx: ToolExecuteContext,
+    deps?: MediaToolsDeps,
+  ) => ReturnType<AgentTool<z.infer<typeof searchMediaInput>>["execute"]>;
+} = {
+  name: "search_media",
+  description:
+    "Search stock photos (Unsplash + Pexels) for an image matching a description, e.g. 'a friendly plumber at work' or 'cozy modern cafe interior'. Does NOT write anything — the results are shown to the operator as tappable thumbnails; they pick one to apply. Use target_slot to hint which slot a pick should apply to (defaults to hero_background — the main site background). Call this when the operator describes an image they want rather than giving you a URL.",
+  inputSchema: searchMediaInput,
+  jsonSchema: {
+    type: "object",
+    properties: {
+      query: { type: "string", description: "Plain-English description of the image to find." },
+      target_slot: {
+        type: "string",
+        description: `${MEDIA_SLOT_DESCRIPTION} Hint for where a picked photo should apply; defaults to 'hero_background'.`,
+      },
+    },
+    required: ["query"],
+  },
+  execute: (
+    input,
+    _ctx: ToolExecuteContext,
+    deps: MediaToolsDeps = defaultMediaToolsDeps,
+  ) =>
+    safe(async () => {
+      const photos = await deps.searchStockPhotos(input.query);
+      const targetSlot = input.target_slot ?? "hero_background";
+
+      logEvent(
+        "media_search",
+        { query: input.query, target_slot: targetSlot, result_count: photos.length },
+        {},
+      );
+
+      return {
+        ok: true as const,
+        target_slot: targetSlot,
+        photos,
+        message:
+          photos.length > 0
+            ? "Found some options — tap one below to use it."
+            : "No stock photos found for that search — try a different description, or give me a direct image URL.",
+      };
+    }),
+};
+
+// ─── list_media_slots ────────────────────────────────────────────────────────
+//
+// Media-targeting fix: gives the model a LABELED slot map instead of making
+// it guess service_photo:<index> indices from a natural-language location
+// like "the photo above Emergency Electrical Repair". READ-ONLY — reads
+// ctx.orgId's r1 payload the exact same way setR1Media does (loadR1Payload)
+// and returns buildMediaSlotMap's pure labeling, nothing is written. The
+// `list_` prefix intentionally does NOT match the turn route's preview-bust
+// regex (^(edit_|update_|move_|delete_|add_|undo_)/, see api/copilot/turn/
+// route.ts) — this tool must never be treated as a mutating call.
+
+const listMediaSlotsInput = z.object({});
+
+const listMediaSlots: AgentTool<z.infer<typeof listMediaSlotsInput>> & {
+  execute: (
+    input: z.infer<typeof listMediaSlotsInput>,
+    ctx: ToolExecuteContext,
+    deps?: MediaToolsDeps,
+  ) => ReturnType<AgentTool<z.infer<typeof listMediaSlotsInput>>["execute"]>;
+} = {
+  name: "list_media_slots",
+  description:
+    "List the site's image slots with human labels + whether each already has an image. ALWAYS call this before update_media to resolve a location like 'the photo above Emergency Electrical Repair' to the exact slot — never guess an index.",
+  inputSchema: listMediaSlotsInput,
+  jsonSchema: {
+    type: "object",
+    properties: {},
+    required: [],
+  },
+  // ctx.orgId is the ONLY source of the org to read — no orgId-shaped field
+  // in this tool's schema at all, same rule as update_media/delete_media.
+  execute: (
+    _input,
+    ctx: ToolExecuteContext,
+    deps: MediaToolsDeps = defaultMediaToolsDeps,
+  ) =>
+    safe(async () => {
+      const loaded = await deps.loadR1Payload(ctx.orgId);
+      if (!loaded) {
+        return {
+          ok: false as const,
+          error: "no_landing_exists",
+          message: "This workspace doesn't have a landing page yet.",
+        };
+      }
+
+      const slots = buildMediaSlotMap(loaded.payload);
+
+      return {
+        ok: true as const,
+        slots,
+        message:
+          "Here are the site's image slots — use the exact slot id with update_media, matched by label.",
+      };
+    }),
+};
+
+const updateMediaInput = z.object({
+  slot: z.string().min(1, "slot is required"),
+  url: z.string().min(1, "url is required"),
+  kind: z.enum(["image", "video"]).optional(),
+  alt: z.string().optional(),
+});
+
+const updateMedia: AgentTool<z.infer<typeof updateMediaInput>> & {
+  execute: (
+    input: z.infer<typeof updateMediaInput>,
+    ctx: ToolExecuteContext,
+    deps?: MediaToolsDeps,
+  ) => ReturnType<AgentTool<z.infer<typeof updateMediaInput>>["execute"]>;
+} = {
+  name: "update_media",
+  description:
+    "Set an image or background video on the site from a URL (a stock-photo URL from search_media's results, or any image/video URL the operator gives you). Validates the URL is safe and re-hosts images before applying. Pass kind:'video' (and slot:'hero_background_video') for a background video; otherwise defaults to image. Use the slot vocabulary: hero_background (main background image, the default for \"add/change the background\"), hero_background_video, hero_image (foreground hero photo), service_photo:<index>. Call list_media_slots first to get the valid slots + labels; never guess a service_photo index.",
+  inputSchema: updateMediaInput,
+  jsonSchema: {
+    type: "object",
+    properties: {
+      slot: { type: "string", description: MEDIA_SLOT_DESCRIPTION },
+      url: { type: "string", description: "The image or video URL to apply." },
+      kind: {
+        type: "string",
+        enum: ["image", "video"],
+        description: "Media kind — defaults to 'image'. Use 'video' for a background video URL.",
+      },
+      alt: { type: "string", description: "Alt text describing the image (skip for video)." },
+    },
+    required: ["slot", "url"],
+  },
+  // ctx.orgId is the ONLY source of the org to write — input is a zod-parsed
+  // model-args object with no orgId-shaped field in its schema at all, so
+  // even a malicious/hallucinated arg object can't redirect the write.
+  execute: (
+    input,
+    ctx: ToolExecuteContext,
+    deps: MediaToolsDeps = defaultMediaToolsDeps,
+  ) =>
+    safe(async () => {
+      const kind: MediaKind = input.kind ?? "image";
+
+      // Guard: kind and slot must agree BEFORE any resolve/write happens.
+      // setR1Media dispatches purely on `slot`, so a mismatched kind/slot
+      // pair (e.g. slot:"hero_background", kind:"video") would validate
+      // here and then write a wrong-shaped media value into the slot,
+      // breaking the hero render on a live customer site.
+      if (kind === "video" && input.slot !== "hero_background_video") {
+        return {
+          ok: false as const,
+          error: "kind_slot_mismatch",
+          message:
+            'A video can only go in the background-video slot (hero_background_video). For an image, drop kind or use kind:"image".',
+        };
+      }
+      if (kind !== "video" && input.slot === "hero_background_video") {
+        return {
+          ok: false as const,
+          error: "kind_slot_mismatch",
+          message:
+            'The background-video slot needs kind:"video". For an image, pick hero_background / hero_image / service_photo:<i>.',
+        };
+      }
+
+      const resolved = await deps.resolveExternalMedia(input.url, kind);
+      if (!resolved.ok) {
+        return {
+          ok: false as const,
+          error: resolved.error,
+          message: `Couldn't use that URL (${resolved.error}) — try a different image/video URL, or search_media for a stock photo instead.`,
+        };
+      }
+
+      const setResult = await deps.setR1Media(ctx.orgId, {
+        slot: input.slot,
+        src: resolved.url,
+        alt: input.alt,
+      });
+
+      logEvent(
+        "media_update",
+        { slot: input.slot, kind, ok: setResult.ok, via: "copilot" },
+        { orgId: ctx.orgId },
+      );
+
+      if (!setResult.ok) {
+        return {
+          ok: false as const,
+          error: setResult.error,
+          message: `Couldn't set ${input.slot}: ${setResult.error}. Call list_media_slots to see the valid slots.`,
+        };
+      }
+
+      return {
+        ok: true as const,
+        slot: setResult.slot,
+        message: `Updated ${setResult.slot} with the new ${kind}.`,
+      };
+    }),
+};
+
+const deleteMediaInput = z.object({
+  slot: z.string().min(1, "slot is required"),
+});
+
+const deleteMedia: AgentTool<z.infer<typeof deleteMediaInput>> & {
+  execute: (
+    input: z.infer<typeof deleteMediaInput>,
+    ctx: ToolExecuteContext,
+    deps?: MediaToolsDeps,
+  ) => ReturnType<AgentTool<z.infer<typeof deleteMediaInput>>["execute"]>;
+} = {
+  name: "delete_media",
+  description:
+    "Remove an image or background video from the site (clears the field — never deletes the section/service itself). Use the slot vocabulary: hero_background, hero_background_video, hero_image, service_photo:<index>.",
+  inputSchema: deleteMediaInput,
+  jsonSchema: {
+    type: "object",
+    properties: {
+      slot: { type: "string", description: MEDIA_SLOT_DESCRIPTION },
+    },
+    required: ["slot"],
+  },
+  // ctx.orgId is the ONLY source of the org to write — same rule as
+  // update_media above.
+  execute: (
+    input,
+    ctx: ToolExecuteContext,
+    deps: MediaToolsDeps = defaultMediaToolsDeps,
+  ) =>
+    safe(async () => {
+      const result = await deps.clearR1Media(ctx.orgId, input.slot);
+
+      logEvent(
+        "media_delete",
+        { slot: input.slot, ok: result.ok, via: "copilot" },
+        { orgId: ctx.orgId },
+      );
+
+      if (!result.ok) {
+        return {
+          ok: false as const,
+          error: result.error,
+          message: `Couldn't remove ${input.slot} (${result.error}).`,
+        };
+      }
+
+      return {
+        ok: true as const,
+        slot: result.slot,
+        message: `Removed the media from ${result.slot}.`,
+      };
+    }),
+};
+
 export function buildCopilotTools(): AgentTool[] {
   return [
     getSiteStructure as AgentTool,
@@ -1022,5 +1456,9 @@ export function buildCopilotTools(): AgentTool[] {
     enableModule as AgentTool,
     disableModule as AgentTool,
     pinCard as AgentTool,
+    searchMedia as AgentTool,
+    listMediaSlots as AgentTool,
+    updateMedia as AgentTool,
+    deleteMedia as AgentTool,
   ];
 }

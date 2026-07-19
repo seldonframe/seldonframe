@@ -34,6 +34,7 @@ import {
   type BuyerListing,
 } from "@/lib/marketplace/buyer/buyer-deployment";
 import { buyerSetupPath } from "@/lib/marketplace/buyer/buyer-routes";
+import { hasDeclaredTemplateVariables } from "@/lib/agent-templates/generalize";
 
 type GeneratedFile = { path: string; content: string };
 
@@ -400,6 +401,26 @@ async function provisionBuyerAgentFromListing(
   buyerOrgId: string,
 ): Promise<{ templateId: string; deploymentId: string | null }> {
   const templateId = await cloneAgentListingIntoOrg(listing, buyerOrgId);
+
+  // 2026-07-16 (marketplace generalize, review fix) — a template with
+  // DECLARED templateVariables (Task 1) must NEVER auto-deploy through this
+  // direct shortcut: resolveOrCreateBuyerDeployment writes a `deployments`
+  // row with no templateVarValues, and resolveDeploymentPersona would then
+  // silently DROP every declared token (fillPlaceholders' drop-unknown-token
+  // behavior) — a dishonest output on the buyer's very first run. There is no
+  // fill form on this buyer-onboarding path (only the operator-side
+  // studio/agents/[id]/deploy wizard has one). Rather than build a second
+  // form here, this mirrors the EXISTING soft-fail contract just below
+  // (deployment step failure -> deploymentId:null, buyer keeps the cloned
+  // template): the buyer still gets their installed template + the purchase
+  // still succeeds (money-safe — never break a completed purchase), but they
+  // land in Studio instead of the setup wizard, where the template's own
+  // "Deploy" wizard (which DOES gate + fill templateVariables) is the
+  // downstream path that catches it.
+  if (hasDeclaredTemplateVariables(listing.agentBlueprint as AgentBlueprint | null)) {
+    return { templateId, deploymentId: null };
+  }
+
   try {
     const buyerListing: BuyerListing = {
       id: listing.id,

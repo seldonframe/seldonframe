@@ -10,6 +10,8 @@ import { proposalEvents, proposals, stripeConnections } from "@/db/schema";
 import { loadProposalByToken } from "@/lib/proposals/load-by-token";
 import { buildCheckoutSessionParams } from "@/lib/proposals/checkout";
 import { getStripeClient } from "@/lib/proposals/stripe-connect";
+import { getOrgSubscription } from "@/lib/billing/subscription";
+import { normalizeTierId } from "@/lib/billing/features";
 
 export const runtime = "nodejs";
 
@@ -53,6 +55,12 @@ export async function POST(
   const baseUrl =
     process.env.NEXT_PUBLIC_APP_URL?.trim() || "https://app.seldonframe.com";
 
+  // 2026-07-10 — GMV fee is tier-scoped: 0% on agency tiers, 2% on solo.
+  // Resolve the SELLING (agency) org's subscription tier via the existing
+  // billing subscription helper (same one hasFeature/getOrgFeatures use).
+  const sellerSubscription = await getOrgSubscription(proposal.agencyOrgId);
+  const sellerTier = normalizeTierId(sellerSubscription.tier ?? null);
+
   const checkoutParams = buildCheckoutSessionParams({
     proposalId: proposal.id,
     previewWorkspaceId: proposal.previewWorkspaceId,
@@ -62,6 +70,7 @@ export async function POST(
     setupFeeCents: proposal.setupFeeCents,
     signedToken: proposal.signedToken,
     baseUrl,
+    sellerTier,
   });
 
   // Direct charge on the agency's connected account.

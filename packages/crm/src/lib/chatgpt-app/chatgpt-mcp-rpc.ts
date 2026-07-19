@@ -18,6 +18,7 @@
 
 import type { McpToolDescriptor } from "@/lib/agents/mcp/client";
 import type { MarketplaceAgentRow } from "@/lib/marketplace/agent-listings";
+import { BUILD_RESULT_WIDGET_URI, AGENT_CAROUSEL_WIDGET_URI } from "./widgets";
 
 // Re-export the transport envelope builders we share with the rental MCP, so
 // the handler can import the whole wire vocabulary from one ChatGPT module.
@@ -71,7 +72,33 @@ export type ChatGptToolDescriptor = McpToolDescriptor & {
     idempotentHint?: boolean;
   };
   outputSchema?: Record<string, unknown>;
+  /** Free-form tool metadata: invocation strings (openai/toolInvocation/*),
+   *  widget wiring (ui.resourceUri + the openai/outputTemplate alias), and
+   *  openai/widgetAccessible. See buildInvocationMeta / buildWidgetMeta. */
+  _meta?: Record<string, unknown>;
 };
+
+/** `_meta["openai/toolInvocation/invoking"|"invoked"]` — the two short status
+ *  strings ChatGPT shows while/after a tool call runs. Kept ≤64 chars per the
+ *  Apps SDK guidance. */
+function buildInvocationMeta(invoking: string, invoked: string): Record<string, unknown> {
+  return {
+    "openai/toolInvocation/invoking": invoking,
+    "openai/toolInvocation/invoked": invoked,
+  };
+}
+
+/** Wire a tool descriptor to its widget resource: the MCP Apps
+ *  `ui.resourceUri` field plus the ChatGPT-specific `openai/outputTemplate`
+ *  alias (same URI — one widget works under either spelling) and a one-
+ *  sentence `openai/widgetDescription` for the host's own UI. */
+function buildWidgetMeta(resourceUri: string, widgetDescription: string): Record<string, unknown> {
+  return {
+    ui: { resourceUri },
+    "openai/outputTemplate": resourceUri,
+    "openai/widgetDescription": widgetDescription,
+  };
+}
 
 /**
  * The `tools/list` result: the three ChatGPT tools with real MCP inputSchemas,
@@ -134,8 +161,19 @@ export function buildChatGptToolsList(): { tools: ChatGptToolDescriptor[] } {
               type: "string",
               description: "Link to manage the workspace (no signup, expires in about 7 days).",
             },
+            name: {
+              type: "string",
+              description: "The business name, as given — rendered on the build-result widget.",
+            },
           },
           required: ["url", "workspaceToken"],
+        },
+        _meta: {
+          ...buildInvocationMeta("Building your workspace…", "Workspace live."),
+          ...buildWidgetMeta(
+            BUILD_RESULT_WIDGET_URI,
+            "Shows the newly built workspace with links to the live site and free claim.",
+          ),
         },
       },
       {
@@ -181,6 +219,13 @@ export function buildChatGptToolsList(): { tools: ChatGptToolDescriptor[] } {
           },
           required: ["agents"],
         },
+        _meta: {
+          ...buildInvocationMeta("Browsing free agents…", "Agents found."),
+          ...buildWidgetMeta(
+            AGENT_CAROUSEL_WIDGET_URI,
+            "Shows the free agents found, each with a button to add it to the workspace.",
+          ),
+        },
       },
       {
         name: DEPLOY_AGENT_TOOL,
@@ -215,6 +260,12 @@ export function buildChatGptToolsList(): { tools: ChatGptToolDescriptor[] } {
             error: { type: "string" },
           },
           required: ["ok"],
+        },
+        // Stays text-only (no widget resourceUri) — but IS callable FROM the
+        // agent-carousel widget's CTA, so it needs widgetAccessible:true.
+        _meta: {
+          ...buildInvocationMeta("Installing agent…", "Agent installed."),
+          "openai/widgetAccessible": true,
         },
       },
     ],
@@ -303,6 +354,57 @@ export function parseDeployArgs(args: Record<string, unknown>): ParseResult<Depl
     return { ok: false, error: "`agent_slug` (a non-empty string) is required — pick one from browse_marketplace." };
   }
   return { ok: true, value: { workspace_token: rawToken.trim(), agent_slug: rawSlug.trim() } };
+}
+
+// ─── OpenAI call metadata (_meta) ────────────────────────────────────────────
+
+/** The OpenAI-provided per-call metadata on a tools/call request. `subject` is
+ *  the anonymized, stable per-USER id OpenAI sends exactly for rate limiting —
+ *  ChatGPT tool calls all originate from OpenAI's SHARED server egress IPs, so
+ *  an IP key alone collapses the whole channel to one user's allowance.
+ *  `session` identifies the conversation (logged for funnel correlation). */
+export type OpenAiCallMeta = {
+  subject?: string;
+  session?: string;
+};
+
+// Subject/session become rate-limit keys + log fields — cap runaway values.
+const MAX_META_ID = 128;
+
+/** Trim to a non-empty, length-capped string, or undefined. */
+function metaString(v: unknown): string | undefined {
+  if (typeof v !== "string") return undefined;
+  const trimmed = v.trim();
+  return trimmed.length > 0 ? trimmed.slice(0, MAX_META_ID) : undefined;
+}
+
+/** Extract `_meta["openai/subject"]` + `_meta["openai/session"]` from a
+ *  tools/call params object. Both are optional — a non-ChatGPT MCP caller
+ *  (or a probe) sends no `_meta` and gets an empty meta back. */
+export function extractOpenAiMeta(params: Record<string, unknown>): OpenAiCallMeta {
+  const meta =
+    typeof params._meta === "object" && params._meta !== null && !Array.isArray(params._meta)
+      ? (params._meta as Record<string, unknown>)
+      : {};
+  return {
+    subject: metaString(meta["openai/subject"]),
+    session: metaString(meta["openai/session"]),
+  };
+}
+
+// ─── attribution ─────────────────────────────────────────────────────────────
+
+/** Stamp `ref=chatgpt` onto a URL we hand back to ChatGPT (workspace, claim,
+ *  and deploy-admin URLs), so ChatGPT-attributed visits/claims are measurable
+ *  in analytics. Idempotent; an unparseable input is returned unchanged. */
+export function withChatGptRef(url: string): string {
+  try {
+    const u = new URL(url);
+    u.searchParams.set("ref", "chatgpt");
+    return u.toString();
+  } catch {
+    return url;
+  }
 }
 
 // ─── source assembly ─────────────────────────────────────────────────────────

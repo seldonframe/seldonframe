@@ -8,6 +8,7 @@ import {
   MARKETPLACE_FEE_PERCENT,
   computeInvoiceApplicationFeeCents,
   computeMarketplaceFeeCents,
+  gmvFeePercentForTier,
 } from "@/lib/billing/gmv";
 
 describe("GMV fee helper", () => {
@@ -38,6 +39,48 @@ describe("GMV fee helper", () => {
 
   test("Infinity input -> 0 (defensive, non-finite)", () => {
     assert.equal(computeInvoiceApplicationFeeCents(Number.POSITIVE_INFINITY), 0);
+  });
+});
+
+describe("gmvFeePercentForTier — 2026-07-10 tier-scoped GMV decision", () => {
+  test("agency_starter -> 0", () => {
+    assert.equal(gmvFeePercentForTier("agency_starter"), 0);
+  });
+
+  test("agency_growth -> 0", () => {
+    assert.equal(gmvFeePercentForTier("agency_growth"), 0);
+  });
+
+  test("agency_scale -> 0", () => {
+    assert.equal(gmvFeePercentForTier("agency_scale"), 0);
+  });
+
+  test("legacy grandfathered agency -> 0", () => {
+    assert.equal(gmvFeePercentForTier("agency"), 0);
+  });
+
+  test("builder -> 2 (GMV_FEE_PERCENT)", () => {
+    assert.equal(gmvFeePercentForTier("builder"), GMV_FEE_PERCENT);
+  });
+
+  test("managed -> 2 (GMV_FEE_PERCENT)", () => {
+    assert.equal(gmvFeePercentForTier("managed"), GMV_FEE_PERCENT);
+  });
+
+  test("legacy grandfathered workspace -> 2 (GMV_FEE_PERCENT)", () => {
+    assert.equal(gmvFeePercentForTier("workspace"), GMV_FEE_PERCENT);
+  });
+
+  test("inactive -> 2 (GMV_FEE_PERCENT, pre-solo but SF is still the channel)", () => {
+    assert.equal(gmvFeePercentForTier("inactive"), GMV_FEE_PERCENT);
+  });
+
+  test("null -> 2 (GMV_FEE_PERCENT, pre-solo default)", () => {
+    assert.equal(gmvFeePercentForTier(null), GMV_FEE_PERCENT);
+  });
+
+  test("undefined -> 2 (GMV_FEE_PERCENT, pre-solo default)", () => {
+    assert.equal(gmvFeePercentForTier(undefined), GMV_FEE_PERCENT);
   });
 });
 

@@ -240,6 +240,12 @@ const SAFE_REDIRECT_PREFIXES = [
   "/oauth/authorize",
   // 2026-07-03 — web-activation invisible claim return (docs/superpowers/specs/2026-07-03-web-activation-design.md)
   "/claim-build",
+  // 2026-07-15 — claim-flow origin fix: the /record claim round-trip
+  // (record → /signup?callbackUrl=/record?session=…&claimed=1 → back to the
+  // recap) was collapsing to /dashboard for EVERY claimer because /record was
+  // never allowlisted (log-proven 401+dashboard-dump incident, spec
+  // 2026-07-15-claim-flow-origin-fix-design.md).
+  "/record",
 ] as const;
 
 /**

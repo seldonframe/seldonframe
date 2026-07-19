@@ -48,6 +48,16 @@ export type R1HeroSection = {
   /** P2: when true (and payload.leadForm.enabled), the hero renders the intake
    *  form in its right column (desktop) / below the text (mobile). */
   leadFormInHero?: boolean;
+  /** Media-editing T1: optional full-bleed background image, rendered BEHIND
+   *  the existing foreground content (distinct from `heroImage`, which is the
+   *  foreground photo panel in HeroSplit/HeroLeftAsymmetric). Optional — grandfathered
+   *  payloads without it render byte-identical to today. Video takes precedence
+   *  over this when both are set. */
+  backgroundImage?: { src: string; alt: string };
+  /** Media-editing T1: optional full-bleed background video, rendered BEHIND
+   *  the existing foreground content. Takes precedence over `backgroundImage`
+   *  when both are set. Autoplays muted/looped — decorative, no audio. */
+  backgroundVideo?: { src: string; poster?: string };
 };
 
 export type R1Service = {
@@ -188,6 +198,10 @@ export type R1LandingPayload = {
   testimonials: R1TestimonialsSection;
   faq: R1FaqSection;
   footer: R1FooterSection;
+  /** The client's own logo, captured from their site during URL onboarding
+   *  (html-image-harvester). Optional — absent on paste/manual builds.
+   *  Rendered in the nav brand slot in place of the text wordmark. */
+  logo?: string;
   emergency?: R1EmergencySection;
   sticky?: R1StickySection;
   /** Speed-to-Lead bottom section (optional). */

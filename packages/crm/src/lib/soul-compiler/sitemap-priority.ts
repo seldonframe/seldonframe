@@ -3,13 +3,14 @@ import { fileURLToPath } from "node:url";
 import Anthropic from "@anthropic-ai/sdk";
 import { createByokAnthropicClient } from "./anthropic";
 import { readSkillPack } from "@/lib/skill-packs/reader";
+import { DEFAULT_SONNET_MODEL } from "@/lib/ai/models";
 
 const SKILL_PACK_PATH = path.join(
   path.dirname(fileURLToPath(import.meta.url)),
   "skills/sitemap-priority.md"
 );
 
-const MODEL = process.env.SOUL_COMPILER_MODEL?.trim() || "claude-sonnet-4-20250514";
+const MODEL = process.env.SOUL_COMPILER_MODEL?.trim() || DEFAULT_SONNET_MODEL;
 const MAX_TOKENS = 2000;
 const DEFAULT_LIMIT = 10;
 

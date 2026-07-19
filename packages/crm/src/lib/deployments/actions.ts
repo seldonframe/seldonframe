@@ -54,6 +54,8 @@ import {
   deploymentNeedsNumber,
 } from "./margin";
 import { getAgentTemplate } from "@/lib/agent-templates/store";
+import { validateTemplateVarValues } from "@/lib/agent-templates/generalize";
+import type { AgentBlueprint } from "@/db/schema/agents";
 import { mapSoulToClientContext } from "./client-context";
 import { compileSoulService } from "@/lib/soul-compiler/service";
 import { resolveBuilderClaudeKey } from "./client-context-server";
@@ -68,7 +70,7 @@ import { ensureBuilderSubaccount, buildSfManagedDeps } from "@/lib/telephony/sf-
 
 export type CreateDeploymentActionResult =
   | { ok: true; id: string }
-  | { ok: false; error: string };
+  | { ok: false; error: string; missingTemplateVariables?: string[] };
 
 /** DI seam for createDeploymentAction's attach-to-existing-client resolution
  *  (F3). Defaults resolve the builder's agency + its client workspaces from the
@@ -120,6 +122,13 @@ export async function createDeploymentAction(
     /** R2 — the CLIENT's Google review link (review-requester agents), persisted
      *  onto the new deployment's `customization.reviewUrl`. Absent/blank → none. */
     reviewUrl?: string;
+    /** 2026-07-16 (marketplace generalize) — fill values for the template's
+     *  DECLARED `templateVariables`, keyed by token. REQUIRED when the
+     *  template has any declared variables — see validateTemplateVarValues
+     *  below (an unfilled declared variable would silently vanish via
+     *  fillPlaceholders' drop behavior, so this is enforced server-side,
+     *  never a silent pass). */
+    templateVarValues?: Record<string, string>;
   },
   _deps?: Partial<CreateDeploymentActionDeps>,
 ): Promise<CreateDeploymentActionResult> {
@@ -153,12 +162,44 @@ export async function createDeploymentAction(
     return { ok: false, error: "client_not_found" };
   }
 
+  // 2026-07-16 (marketplace generalize) — REQUIRED-field enforcement: if the
+  // template declares templateVariables, every one must have a non-blank
+  // fill value before the deployment is created. An unfilled declared
+  // variable would silently vanish via fillPlaceholders' drop-unknown-token
+  // behavior at runtime (the agent would just quietly not mention it) — this
+  // is a hard reject, never a silent pass (CLAUDE.md 3.1 Optimistic Path).
+  // Loaded here (not just in the store) so the operator gets an explicit,
+  // actionable error BEFORE any row is written.
+  const template = await getAgentTemplate(parsed.data.agentTemplateId);
+  if (!template || template.builderOrgId !== orgId) {
+    return { ok: false, error: "template_not_found" };
+  }
+  const templateVariables = (template.blueprint as AgentBlueprint | null)?.templateVariables;
+  const varsCheck = validateTemplateVarValues({
+    templateVariables,
+    values: parsed.data.templateVarValues,
+  });
+  if (!varsCheck.ok) {
+    return {
+      ok: false,
+      error: "missing_template_variables",
+      missingTemplateVariables: varsCheck.missing,
+    };
+  }
+
   // R2 — capture the client's Google review link onto the new deployment's
   // customization (review-requester agents). A blank/absent value collapses to no
   // customization in the store (→ the template default). Only this persona field
   // is set at deploy time; the rest are edited later on the client card.
   const reviewUrl = parsed.data.reviewUrl?.trim();
-  const customization = reviewUrl ? { reviewUrl } : undefined;
+  const templateVarValues =
+    parsed.data.templateVarValues && Object.keys(parsed.data.templateVarValues).length > 0
+      ? parsed.data.templateVarValues
+      : undefined;
+  const customization =
+    reviewUrl || templateVarValues
+      ? { ...(reviewUrl ? { reviewUrl } : {}), ...(templateVarValues ? { templateVarValues } : {}) }
+      : undefined;
 
   const result = await createDeployment({
     builderOrgId: orgId,
@@ -613,9 +654,19 @@ export async function provisionDeploymentNumberAction(input: {
       fresh,
     );
     if (!provisioned.ok) {
+      // 2026-07-08 — subaccount_limit_reached is a real, structured
+      // gate rejection (not a transient error): the builder is over
+      // their tier's sub-account cap. Twilio activation still succeeds
+      // (this bridge's soft-fail contract is unchanged — the agent
+      // falls back to writing the builder org) but the log line
+      // surfaces the used/limit detail distinctly so it's
+      // distinguishable from a create_threw/create_failed transient.
       console.warn("[deployments][provision] client workspace not provisioned (continuing)", {
         deploymentId: existing.id,
         error: provisioned.error,
+        ...(provisioned.error === "subaccount_limit_reached"
+          ? { used: provisioned.used, limit: provisioned.limit }
+          : {}),
       });
     }
   } catch (err) {
@@ -640,6 +691,16 @@ function buildProvisionDeps() {
     setParentAgency: setOrgParentAgency,
     updateDeployment: async (id: string, patch: { clientOrgId: string }) => {
       await updateDeployment({ id, patch });
+    },
+    // 2026-07-08 post-review fix wave (spec invariant 5, BLOCKING) — the
+    // deploy-to-client path is a real sub-account handoff, gated the
+    // same way the manual attach API is (both now call the shared
+    // resolveSubAccountCapForBuilderOrg — see subaccount-count.ts;
+    // non-blocking item #5 removed the duplicated inline closure that
+    // used to live here).
+    enforceSubAccountCap: async (builderOrgId: string) => {
+      const { resolveSubAccountCapForBuilderOrg } = await import("@/lib/billing/subaccount-count");
+      return resolveSubAccountCapForBuilderOrg(builderOrgId);
     },
     // #3 — best-effort copy of the deploying template's MCP connectors onto the
     // client workspace's default TEXT agent. Soft-fail by construction
@@ -1046,4 +1107,137 @@ export async function inviteClientToPortalAction(input: {
   if (!result.ok) return result;
   revalidatePath("/studio/clients");
   return { ok: true, inviteUrl: result.inviteUrl };
+}
+
+// ─── setSubAccountUsageCapAction (per-sub-account usage meter, 2026-07-08) ──
+//
+// Sets (or clears) a client sub-account's monthly estimated-AI-cost cap.
+// Org-scoped to the AGENCY: the caller's own builder org must resolve (via
+// resolveBuilderAgency — the SAME lookup the deploy-to-client flow already
+// uses) to the SAME agency the target client org is attached to
+// (organizations.parentAgencyId). Persisted in organizations.settings.usageCap
+// (jsonb — no migration; see lib/billing/usage-cap.ts).
+
+export type SetSubAccountUsageCapActionResult =
+  | { ok: true }
+  | { ok: false; error: "unauthorized" | "not_found" | "invalid_input" | "update_failed" };
+
+export async function setSubAccountUsageCapAction(
+  input: {
+    clientOrgId: string;
+    /** null clears the cap (→ unset, no enforcement). */
+    monthlyEstCostCentsCap: number | null;
+    mode?: "notify" | "pause";
+    holdingReply?: string | null;
+  },
+  _deps?: {
+    getOrgId?: () => Promise<string | null>;
+    resolveBuilderAgency?: (builderOrgId: string) => Promise<string | null>;
+    getOrgParentAgencyId?: (orgId: string) => Promise<string | null>;
+    getOrgSettings?: (orgId: string) => Promise<Record<string, unknown> | null>;
+    updateOrgSettings?: (orgId: string, settings: Record<string, unknown>) => Promise<boolean>;
+    revalidate?: (path: string) => void;
+  },
+): Promise<SetSubAccountUsageCapActionResult> {
+  assertWritable();
+
+  const resolveOrgId = _deps?.getOrgId ?? getOrgId;
+  const callerOrgId = await resolveOrgId();
+  if (!callerOrgId) return { ok: false, error: "unauthorized" };
+
+  if (!input.clientOrgId || typeof input.clientOrgId !== "string") {
+    return { ok: false, error: "invalid_input" };
+  }
+  if (
+    input.monthlyEstCostCentsCap !== null &&
+    (typeof input.monthlyEstCostCentsCap !== "number" ||
+      !Number.isFinite(input.monthlyEstCostCentsCap) ||
+      input.monthlyEstCostCentsCap < 0)
+  ) {
+    return { ok: false, error: "invalid_input" };
+  }
+  if (input.mode && input.mode !== "notify" && input.mode !== "pause") {
+    return { ok: false, error: "invalid_input" };
+  }
+
+  const { authorizeUsageCapSetterForOrg } = await import("@/lib/billing/usage-cap");
+  const resolveBuilderAgencyFn = _deps?.resolveBuilderAgency ?? resolveBuilderAgency;
+  const getOrgParentAgencyIdFn =
+    _deps?.getOrgParentAgencyId ??
+    (async (orgId: string) => {
+      const { db } = await import("@/db");
+      const { organizations } = await import("@/db/schema/organizations");
+      const { eq } = await import("drizzle-orm");
+      const [row] = await db
+        .select({ parentAgencyId: organizations.parentAgencyId })
+        .from(organizations)
+        .where(eq(organizations.id, orgId))
+        .limit(1);
+      return row?.parentAgencyId ?? null;
+    });
+
+  const authorized = await authorizeUsageCapSetterForOrg({
+    callerOrgId,
+    targetOrgId: input.clientOrgId,
+    deps: { resolveBuilderAgency: resolveBuilderAgencyFn, getOrgParentAgencyId: getOrgParentAgencyIdFn },
+  });
+  if (!authorized) return { ok: false, error: "unauthorized" };
+
+  const getSettings =
+    _deps?.getOrgSettings ??
+    (async (orgId: string) => {
+      const { db } = await import("@/db");
+      const { organizations } = await import("@/db/schema/organizations");
+      const { eq } = await import("drizzle-orm");
+      const [row] = await db
+        .select({ settings: organizations.settings })
+        .from(organizations)
+        .where(eq(organizations.id, orgId))
+        .limit(1);
+      return row ? (row.settings ?? {}) : null;
+    });
+
+  const existingSettings = await getSettings(input.clientOrgId);
+  if (existingSettings === null) return { ok: false, error: "not_found" };
+
+  const nextSettings: Record<string, unknown> =
+    input.monthlyEstCostCentsCap === null
+      ? { ...existingSettings, usageCap: undefined }
+      : {
+          ...existingSettings,
+          usageCap: {
+            monthlyEstCostCentsCap: input.monthlyEstCostCentsCap,
+            mode: input.mode ?? "notify",
+            // Clearing the cap value resets notify idempotency; changing the
+            // cap amount/mode while it's still set preserves the existing
+            // lastNotifiedPeriod (no reason to re-spam an already-notified period).
+            lastNotifiedPeriod:
+              (existingSettings as { usageCap?: { lastNotifiedPeriod?: string } })?.usageCap
+                ?.lastNotifiedPeriod ?? null,
+            holdingReply: input.holdingReply ?? null,
+          },
+        };
+  // JSON.stringify drops `undefined` keys — the jsonb column never stores an
+  // explicit null placeholder for a cleared cap.
+  const cleanedSettings = JSON.parse(JSON.stringify(nextSettings));
+
+  const updateSettings =
+    _deps?.updateOrgSettings ??
+    (async (orgId: string, settings: Record<string, unknown>) => {
+      const { db } = await import("@/db");
+      const { organizations } = await import("@/db/schema/organizations");
+      const { eq } = await import("drizzle-orm");
+      const result = await db
+        .update(organizations)
+        .set({ settings, updatedAt: new Date() })
+        .where(eq(organizations.id, orgId))
+        .returning({ id: organizations.id });
+      return result.length > 0;
+    });
+
+  const updated = await updateSettings(input.clientOrgId, cleanedSettings);
+  if (!updated) return { ok: false, error: "update_failed" };
+
+  (_deps?.revalidate ?? revalidatePath)("/studio/clients");
+  return { ok: true };
 }

@@ -161,3 +161,62 @@ describe("TemplateBlueprintPatchSchema — existing fields regression", () => {
     assert.equal(result.success, true);
   });
 });
+
+// ---------------------------------------------------------------------
+// templateVariables (2026-07-16 — marketplace generalize, Task 1)
+// ---------------------------------------------------------------------
+
+describe("TemplateBlueprintPatchSchema — templateVariables", () => {
+  test("accepts a valid templateVariables array", () => {
+    const result = TemplateBlueprintPatchSchema.safeParse({
+      templateVariables: [
+        { name: "business_email", description: "The owner's contact email", example: "max@acme.test" },
+      ],
+    });
+    assert.equal(result.success, true, `Expected success but got: ${!result.success ? JSON.stringify((result as { error: unknown }).error) : ""}`);
+  });
+
+  test("accepts an empty templateVariables array", () => {
+    const result = TemplateBlueprintPatchSchema.safeParse({ templateVariables: [] });
+    assert.equal(result.success, true);
+  });
+
+  test("templateVariables is optional (undefined = omit)", () => {
+    const result = TemplateBlueprintPatchSchema.safeParse({ greeting: "Hello" });
+    assert.equal(result.success, true);
+  });
+
+  test("rejects a name that isn't snake_case (regex ^[a-z0-9_]{2,40}$)", () => {
+    const bad = [
+      { name: "Business Email", description: "d", example: "e" }, // spaces/caps
+      { name: "a", description: "d", example: "e" }, // too short (min 2)
+      { name: "x".repeat(41), description: "d", example: "e" }, // too long (max 40)
+      { name: "business-email", description: "d", example: "e" }, // hyphen
+    ];
+    for (const entry of bad) {
+      const result = TemplateBlueprintPatchSchema.safeParse({ templateVariables: [entry] });
+      assert.equal(result.success, false, `expected rejection for name=${JSON.stringify(entry.name)}`);
+    }
+  });
+
+  test("caps templateVariables at 12 entries", () => {
+    const thirteen = Array.from({ length: 13 }, (_, i) => ({
+      name: `var_${i}`,
+      description: "d",
+      example: "e",
+    }));
+    const result = TemplateBlueprintPatchSchema.safeParse({ templateVariables: thirteen });
+    assert.equal(result.success, false, "13 entries should exceed the max(12) cap");
+
+    const twelve = thirteen.slice(0, 12);
+    const okResult = TemplateBlueprintPatchSchema.safeParse({ templateVariables: twelve });
+    assert.equal(okResult.success, true, "exactly 12 entries should be accepted");
+  });
+
+  test("rejects an undeclared extra key on a templateVariables entry (still strict overall)", () => {
+    const result = TemplateBlueprintPatchSchema.safeParse({
+      templateVariables: [{ name: "ok_name", description: "d", example: "e", extra: "nope" }],
+    });
+    assert.equal(result.success, false);
+  });
+});

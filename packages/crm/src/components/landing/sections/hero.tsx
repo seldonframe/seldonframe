@@ -265,7 +265,7 @@ export function HeroSection(props: HeroSectionContent) {
                 hasImage ? (
                   <Link
                     href={props.secondaryCta.link}
-                    className="inline-flex h-12 items-center rounded-full border border-white/30 bg-white/10 px-7 text-base font-semibold text-white backdrop-blur-md hover:bg-white/15"
+                    className="inline-flex h-12 items-center rounded-[11px] border border-white/30 bg-white/10 px-7 text-base font-semibold text-white backdrop-blur-md hover:bg-white/15"
                   >
                     {props.secondaryCta.text}
                   </Link>

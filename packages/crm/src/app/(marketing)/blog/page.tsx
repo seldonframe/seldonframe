@@ -1,10 +1,16 @@
-// /blog — index of launch-week posts.
-// v1.31.3 — replaced "Coming soon" stub with a real 3-post index.
-// Posts that are written link to /blog/<slug>; the others use
-// "Coming soon" markers without breaking the visual rhythm.
+// /blog — index of build-notes + information-gain articles.
+// Light marketplace parchment theme (matches the article page + /guides), NOT
+// MarketingShell's dark chrome — so the index reads dark-ink-on-parchment and
+// clicking through to an article keeps the same look.
 
 import type { Metadata } from "next";
-import { MarketingShell } from "../marketing-shell";
+import Link from "next/link";
+import type { ReactElement } from "react";
+import { MarketplaceNav, MarketplaceFooter } from "@/components/marketplace/marketplace-chrome";
+import { MarketplaceStyles } from "@/components/marketplace/marketplace-styles";
+import { MKT } from "@/components/marketplace/marketplace-data";
+import { articlesNewestFirst } from "@/lib/seo/blog";
+import { AUTHOR } from "@/components/seo/author-byline";
 
 export const metadata: Metadata = {
   title: "Blog — SeldonFrame",
@@ -21,7 +27,7 @@ type Post = {
   status: "live" | "soon";
 };
 
-const POSTS: Post[] = [
+const HAND_CODED_POSTS: Post[] = [
   {
     slug: "why-mcp",
     title: "Why we built SeldonFrame on MCP",
@@ -51,92 +57,117 @@ const POSTS: Post[] = [
   },
 ];
 
-export default function BlogIndexPage() {
+/** Registry articles (the data-driven engine) rendered as the same Post shape,
+ *  newest-first. Deduped by slug against HAND_CODED_POSTS. */
+function registryPosts(): Post[] {
+  const handCodedSlugs = new Set(HAND_CODED_POSTS.map((p) => p.slug));
+  return articlesNewestFirst()
+    .filter((a) => !handCodedSlugs.has(a.slug))
+    .map((a) => ({
+      slug: a.slug,
+      title: a.title,
+      lede: a.dek,
+      date: new Date(`${a.date}T00:00:00Z`).toLocaleDateString("en-US", { year: "numeric", month: "long", day: "numeric", timeZone: "UTC" }),
+      author: a.author ?? AUTHOR.name,
+      status: "live" as const,
+    }));
+}
+
+// Live articles first (registry, newest-first, are the real content), then the
+// hand-coded live post, then the "coming soon" stubs — so the index leads with
+// what a reader can actually open.
+const REGISTRY = registryPosts();
+const HAND_LIVE = HAND_CODED_POSTS.filter((p) => p.status === "live");
+const SOON = HAND_CODED_POSTS.filter((p) => p.status === "soon");
+const POSTS: Post[] = [...REGISTRY, ...HAND_LIVE, ...SOON];
+
+const INDEX_CSS = `.sf-blog-card{transition:transform .15s ease,border-color .15s ease,box-shadow .15s ease}
+a.sf-blog-link:hover .sf-blog-card{transform:translateY(-2px);border-color:rgba(31, 43, 36,0.45);box-shadow:0 10px 30px -18px rgba(34,29,23,0.35)}
+a.sf-blog-link:hover .sf-blog-cta{gap:9px}`;
+
+function PostCard({ post }: { post: Post }): ReactElement {
+  const isLive = post.status === "live";
+  const muted = "rgba(34,29,23,0.55)";
   return (
-    <MarketingShell>
-      <article className="max-w-[920px] mx-auto px-5 md:px-12 py-16 md:py-24">
-        <header className="mb-14">
-          <p className="text-[12px] uppercase tracking-[0.12em] text-[#71717a] font-mono mb-3">Blog</p>
-          <h1 className="text-[clamp(32px,4.5vw,52px)] font-bold tracking-[-0.035em] text-[#fafafa] mb-4 leading-[1.1]">
+    <div
+      className={isLive ? "sf-blog-card" : undefined}
+      style={{
+        border: `1px solid ${MKT.ink10}`,
+        borderRadius: 14,
+        background: isLive ? "#fff" : "rgba(255,255,255,0.45)",
+        padding: "22px 24px",
+        opacity: isLive ? 1 : 0.82,
+      }}
+    >
+      <div style={{ display: "flex", alignItems: "center", gap: 10, marginBottom: 10 }}>
+        <span style={{ fontSize: 12.5, fontFamily: MKT.fontMono, color: muted }}>{post.date}</span>
+        <span style={{ color: "rgba(34,29,23,0.3)" }}>·</span>
+        <span style={{ fontSize: 12.5, color: muted }}>{post.author}</span>
+        {!isLive && (
+          <span style={{ marginLeft: "auto", fontSize: 10.5, textTransform: "uppercase", letterSpacing: "0.08em", fontFamily: MKT.fontMono, color: muted, padding: "3px 9px", borderRadius: 999, border: `1px solid ${MKT.ink10}` }}>
+            Coming soon
+          </span>
+        )}
+      </div>
+      <h2 style={{ margin: 0, fontFamily: MKT.fontSerif, fontSize: 22, fontWeight: 700, letterSpacing: "-0.02em", lineHeight: 1.22, color: MKT.ink, marginBottom: 10 }}>
+        {post.title}
+      </h2>
+      <p style={{ margin: 0, fontSize: 14.5, color: "rgba(34,29,23,0.72)", lineHeight: 1.62 }}>{post.lede}</p>
+      {isLive && (
+        <span className="sf-blog-cta" style={{ marginTop: 14, display: "inline-flex", alignItems: "center", gap: 6, fontSize: 13.5, color: MKT.green, fontWeight: 700, transition: "gap .15s ease" }}>
+          Read post <span aria-hidden>&rarr;</span>
+        </span>
+      )}
+    </div>
+  );
+}
+
+export default function BlogIndexPage(): ReactElement {
+  return (
+    <div className="sf-mkt" style={{ minHeight: "100vh", background: MKT.paper, color: MKT.ink, fontFamily: MKT.fontSans, overflowX: "hidden" }}>
+      <MarketplaceStyles />
+      <style dangerouslySetInnerHTML={{ __html: INDEX_CSS }} />
+      <MarketplaceNav />
+      <main style={{ maxWidth: 880, margin: "0 auto", padding: "40px 32px 72px", width: "100%" }}>
+        <header style={{ marginBottom: 40 }}>
+          <p style={{ margin: 0, fontSize: 12.5, textTransform: "uppercase", letterSpacing: "0.12em", color: "rgba(34,29,23,0.5)", fontFamily: MKT.fontMono, marginBottom: 12 }}>Blog</p>
+          <h1 style={{ margin: 0, fontFamily: MKT.fontSerif, fontSize: "clamp(32px,5vw,52px)", fontWeight: 700, letterSpacing: "-0.03em", lineHeight: 1.08, color: MKT.ink, marginBottom: 14 }}>
             Notes from the build
           </h1>
-          <p className="text-[16px] text-[#a1a1aa] leading-[1.7] max-w-[640px]">
-            How SeldonFrame is built, why we made the architecture choices we
-            did, and what we learn from dogfooding it on real customer
-            operations.
+          <p style={{ margin: 0, fontSize: 17, color: "rgba(34,29,23,0.7)", lineHeight: 1.6, maxWidth: 660 }}>
+            How SeldonFrame is built, why we made the architecture choices we did, and what we learn from real founders shipping agents — plus original stories mined from the people actually doing it.
           </p>
         </header>
 
-        <div className="space-y-6">
-          {POSTS.map((post) => {
-            const card = (
-              <div
-                className={`group relative rounded-[12px] border border-white/5 bg-[#111113] p-6 md:p-8 transition-all ${
-                  post.status === "live"
-                    ? "hover:border-[#1FAE85]/40 hover:-translate-y-[2px]"
-                    : "opacity-70"
-                }`}
-              >
-                <div className="flex items-center gap-3 mb-3">
-                  <span className="text-[12px] font-mono text-[#71717a]">{post.date}</span>
-                  <span className="text-[12px] text-[#3f3f46]">·</span>
-                  <span className="text-[12px] text-[#71717a]">{post.author}</span>
-                  {post.status === "soon" && (
-                    <span className="ml-auto text-[10px] uppercase tracking-[0.08em] font-mono text-[#71717a] px-2 py-0.5 rounded-full border border-white/10">
-                      Coming soon
-                    </span>
-                  )}
-                </div>
-                <h2
-                  className={`text-[20px] md:text-[22px] font-bold tracking-[-0.025em] leading-[1.2] mb-3 text-[#fafafa] ${
-                    post.status === "live" ? "group-hover:text-[#1FAE85] transition-colors" : ""
-                  }`}
-                >
-                  {post.title}
-                </h2>
-                <p className="text-[14px] text-[#a1a1aa] leading-[1.7]">{post.lede}</p>
-                {post.status === "live" && (
-                  <span className="mt-4 inline-flex items-center gap-1.5 text-[13px] text-[#1FAE85] font-semibold group-hover:gap-2 transition-all">
-                    Read post <span>&rarr;</span>
-                  </span>
-                )}
-              </div>
-            );
-
-            return post.status === "live" ? (
-              <a key={post.slug} href={`/blog/${post.slug}`} className="block">
-                {card}
-              </a>
+        <div style={{ display: "flex", flexDirection: "column", gap: 18 }}>
+          {POSTS.map((post) =>
+            post.status === "live" ? (
+              <Link key={post.slug} href={`/blog/${post.slug}`} className="sf-blog-link" style={{ textDecoration: "none", display: "block", color: "inherit" }}>
+                <PostCard post={post} />
+              </Link>
             ) : (
-              <div key={post.slug}>{card}</div>
-            );
-          })}
+              <div key={post.slug}>
+                <PostCard post={post} />
+              </div>
+            ),
+          )}
         </div>
 
-        <div className="mt-16 pt-10 border-t border-white/5 text-center">
-          <p className="text-[14px] text-[#a1a1aa] leading-[1.7]">
+        <div style={{ marginTop: 48, paddingTop: 32, borderTop: `1px solid ${MKT.ink10}`, textAlign: "center" }}>
+          <p style={{ margin: 0, fontSize: 14, color: "rgba(34,29,23,0.7)", lineHeight: 1.6 }}>
             Follow{" "}
-            <a
-              href="https://x.com/seldonframe"
-              target="_blank"
-              rel="noopener noreferrer"
-              className="text-[#1FAE85] hover:underline font-semibold"
-            >
+            <a href="https://x.com/seldonframe" target="_blank" rel="noopener noreferrer" style={{ color: MKT.green, fontWeight: 700, textDecoration: "none" }}>
               @seldonframe on 𝕏
             </a>{" "}
             for new posts, or join the{" "}
-            <a
-              href="https://discord.gg/sbVUu976NW"
-              target="_blank"
-              rel="noopener noreferrer"
-              className="text-[#1FAE85] hover:underline font-semibold"
-            >
+            <a href="https://discord.gg/sbVUu976NW" target="_blank" rel="noopener noreferrer" style={{ color: MKT.green, fontWeight: 700, textDecoration: "none" }}>
               Discord
             </a>{" "}
             to talk to the team.
           </p>
         </div>
-      </article>
-    </MarketingShell>
+      </main>
+      <MarketplaceFooter />
+    </div>
   );
 }

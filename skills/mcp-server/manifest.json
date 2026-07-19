@@ -2,7 +2,7 @@
   "manifest_version": "0.3",
   "name": "seldonframe",
   "display_name": "SeldonFrame",
-  "version": "1.59.2",
+  "version": "1.61.0",
   "description": "Build, deploy, and sell AI agents for local-service businesses — from your IDE. One command creates a live hosted workspace: website, booking page, intake form, CRM, and an AI receptionist, in about 3 minutes.",
   "long_description": "SeldonFrame is an open-source GoHighLevel alternative for agencies and builders. 146+ MCP tools let Claude spin up a real, hosted business workspace — website, Cal.diy booking, Formbricks intake, CRM, and pre-wired AI agent archetypes (speed-to-lead, missed-call-text-back, review-requester) — in minutes, on a live `<slug>.app.seldonframe.com` subdomain. No guest mode, no local files, no upfront API key: the first workspace is free forever. An API key is only needed later to unlock a second workspace, custom domains, full Brain v2, or publishing to the agent marketplace. This connector is MIT-licensed; the SeldonFrame platform is AGPL-3.0.",
   "author": {

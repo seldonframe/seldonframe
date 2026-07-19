@@ -294,11 +294,11 @@ export function ListingActionsClient({
       <div
         style={{
           background: "#fff",
-          border: showFinishCheckout ? "1px solid rgba(0,137,123,0.45)" : "1px solid rgba(34,29,23,0.10)",
+          border: showFinishCheckout ? "1px solid rgba(31, 43, 36,0.45)" : "1px solid rgba(34,29,23,0.10)",
           borderRadius: 20,
           padding: 22,
           boxShadow: showFinishCheckout
-            ? "0 1px 2px rgba(34,29,23,0.05),0 20px 44px rgba(0,137,123,0.18)"
+            ? "0 1px 2px rgba(34,29,23,0.05),0 20px 44px rgba(31, 43, 36,0.18)"
             : "0 1px 2px rgba(34,29,23,0.05),0 20px 44px rgba(34,29,23,0.10)",
         }}
       >
@@ -309,8 +309,8 @@ export function ListingActionsClient({
               display: "flex",
               alignItems: "flex-start",
               gap: 10,
-              background: "rgba(0,137,123,0.08)",
-              border: "1px solid rgba(0,137,123,0.22)",
+              background: "rgba(31, 43, 36,0.08)",
+              border: "1px solid rgba(31, 43, 36,0.22)",
               borderRadius: 12,
               padding: "11px 13px",
               marginBottom: 16,
@@ -353,7 +353,7 @@ export function ListingActionsClient({
             padding: 15,
             borderRadius: 13,
             cursor: "pointer",
-            boxShadow: "0 8px 20px rgba(0,137,123,0.28)",
+            boxShadow: "0 8px 20px rgba(31, 43, 36,0.28)",
             display: "flex",
             alignItems: "center",
             justifyContent: "center",
@@ -445,8 +445,8 @@ export function ListingActionsClient({
                 style={{
                   width: "100%",
                   marginBottom: 12,
-                  border: "1px solid rgba(0,137,123,0.35)",
-                  background: "rgba(0,137,123,0.08)",
+                  border: "1px solid rgba(31, 43, 36,0.35)",
+                  background: "rgba(31, 43, 36,0.08)",
                   color: MKT.green,
                   fontFamily: "inherit",
                   fontWeight: 650,
@@ -584,7 +584,7 @@ function PurchasedConfirmation({
     <div
       style={{
         background: "#fff",
-        border: "1px solid rgba(0,137,123,0.30)",
+        border: "1px solid rgba(31, 43, 36,0.30)",
         borderRadius: 20,
         padding: 24,
         boxShadow: "0 1px 2px rgba(34,29,23,0.05),0 20px 44px rgba(34,29,23,0.10)",
@@ -595,7 +595,7 @@ function PurchasedConfirmation({
           width: 52,
           height: 52,
           borderRadius: 15,
-          background: "rgba(0,137,123,0.10)",
+          background: "rgba(31, 43, 36,0.10)",
           color: MKT.green,
           display: "flex",
           alignItems: "center",
@@ -627,7 +627,7 @@ function PurchasedConfirmation({
           padding: 15,
           borderRadius: 13,
           cursor: "pointer",
-          boxShadow: "0 8px 20px rgba(0,137,123,0.28)",
+          boxShadow: "0 8px 20px rgba(31, 43, 36,0.28)",
           display: "flex",
           alignItems: "center",
           justifyContent: "center",
@@ -668,10 +668,10 @@ function InstallCeremony({
 }): ReactElement {
   return (
     <div style={{ position: "fixed", inset: 0, zIndex: 200, background: MKT.dark, display: "flex", alignItems: "center", justifyContent: "center", padding: 32 }}>
-      <div style={{ position: "absolute", inset: 0, background: "radial-gradient(circle at 50% 42%,rgba(0,137,123,0.22),transparent 58%)" }} />
+      <div style={{ position: "absolute", inset: 0, background: "radial-gradient(circle at 50% 42%,rgba(31, 43, 36,0.22),transparent 58%)" }} />
       <div style={{ position: "relative", textAlign: "center", maxWidth: 460, width: "100%" }}>
         <div style={{ position: "relative", width: 120, height: 120, margin: "0 auto 30px" }}>
-          <span style={{ position: "absolute", inset: 0, borderRadius: 30, background: "rgba(0,137,123,0.18)", animation: "sfRing 2s ease-out infinite" }} />
+          <span style={{ position: "absolute", inset: 0, borderRadius: 30, background: "rgba(31, 43, 36,0.18)", animation: "sfRing 2s ease-out infinite" }} />
           <span
             style={{
               position: "absolute",
@@ -765,7 +765,7 @@ function InstallCeremony({
                 padding: "15px 30px",
                 borderRadius: 13,
                 cursor: "pointer",
-                boxShadow: "0 10px 30px rgba(0,137,123,0.4)",
+                boxShadow: "0 10px 30px rgba(31, 43, 36,0.4)",
                 display: "inline-flex",
                 alignItems: "center",
                 gap: 9,

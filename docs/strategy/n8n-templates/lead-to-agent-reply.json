@@ -1,0 +1,70 @@
+{
+  "name": "SeldonFrame — Lead Question to Agent Reply",
+  "nodes": [
+    {
+      "parameters": {
+        "httpMethod": "POST",
+        "path": "sf-agent-reply",
+        "responseMode": "responseNode",
+        "options": {}
+      },
+      "id": "b1b2c3d4-0001-4000-8000-000000000001",
+      "name": "Inbound Question Webhook",
+      "type": "n8n-nodes-base.webhook",
+      "typeVersion": 2,
+      "position": [240, 300]
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "=https://app.seldonframe.com/api/v1/public/agent/{{ $env.SF_AGENT_SLUG }}/turn",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            { "name": "Content-Type", "value": "application/json" }
+          ]
+        },
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={\n  \"message\": \"{{ $json.body.message }}\",\n  \"session_id\": \"{{ $json.body.session_id || $json.body.contact_id || '' }}\"\n}"
+      },
+      "id": "b1b2c3d4-0002-4000-8000-000000000002",
+      "name": "SF Agent Turn",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [460, 300]
+    },
+    {
+      "parameters": {
+        "respondWith": "json",
+        "responseBody": "={\n  \"reply\": {{ JSON.stringify($json.reply || $json.message || $json) }}\n}",
+        "options": {}
+      },
+      "id": "b1b2c3d4-0003-4000-8000-000000000003",
+      "name": "Respond With Agent Reply",
+      "type": "n8n-nodes-base.respondToWebhook",
+      "typeVersion": 1,
+      "position": [680, 300]
+    }
+  ],
+  "connections": {
+    "Inbound Question Webhook": {
+      "main": [
+        [
+          { "node": "SF Agent Turn", "type": "main", "index": 0 }
+        ]
+      ]
+    },
+    "SF Agent Turn": {
+      "main": [
+        [
+          { "node": "Respond With Agent Reply", "type": "main", "index": 0 }
+        ]
+      ]
+    }
+  },
+  "active": false,
+  "settings": { "executionOrder": "v1" },
+  "pinData": {},
+  "meta": { "templateCredsSetupCompleted": false }
+}

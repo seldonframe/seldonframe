@@ -1,16 +1,23 @@
-// 2026-06-18 pricing migration — checkout line-item assembly.
+// 2026-07-08 pricing ladder — checkout line-item assembly.
 //
-// Flat per-tier base price at checkout (Builder $19 / Workspace $49 /
-// Agency $297). The new tiers have no metered overage lines at
-// checkout; the Agency $10 quantity-licensed "extra client workspace"
-// item is attached/synced POST-activation (Phase 4), not here.
+// Flat per-tier base price at checkout for the 5 SELLABLE tiers
+// (Builder $29 / Managed $49 / Agency Starter $99 / Agency Growth $199
+// / Agency Scale $299), plus the 2 GRANDFATHERED legacy tiers
+// (Workspace $49 / Agency $29-flat) so old checkout links + webhook
+// replays keep resolving a base price. No metered overage lines at
+// checkout on any tier.
 
 import {
   BUILDER_PRICE_ID,
+  MANAGED_PRICE_ID,
+  AGENCY_STARTER_PRICE_ID,
+  AGENCY_GROWTH_PRICE_ID,
+  AGENCY_SCALE_PRICE_ID,
   WORKSPACE_PRICE_ID,
   AGENCY_BASE_PRICE_ID,
+  isPlaceholderPriceId,
 } from "./price-ids";
-import type { TierId } from "./plans";
+import { getPlan, type TierId } from "./plans";
 import type { BillingTier } from "./features";
 
 export type CheckoutLineItem = {
@@ -21,6 +28,12 @@ export type CheckoutLineItem = {
 
 const TIER_BASE_PRICE: Record<TierId, string> = {
   builder: BUILDER_PRICE_ID,
+  managed: MANAGED_PRICE_ID,
+  agency_starter: AGENCY_STARTER_PRICE_ID,
+  agency_growth: AGENCY_GROWTH_PRICE_ID,
+  agency_scale: AGENCY_SCALE_PRICE_ID,
+  // Grandfathered legacy tiers — resolvable for replay / old links,
+  // never offered at new checkout (route.ts gates on Plan.sellable).
   workspace: WORKSPACE_PRICE_ID,
   agency: AGENCY_BASE_PRICE_ID,
 };
@@ -32,9 +45,42 @@ const TIER_BASE_PRICE: Record<TierId, string> = {
  */
 export function buildCheckoutLineItemsForTier(tier: BillingTier): CheckoutLineItem[] | null {
   if (tier === "inactive") return null;
-  const base = TIER_BASE_PRICE[tier];
+  const base = TIER_BASE_PRICE[tier as TierId];
   if (!base) return null;
   return [{ price: base, quantity: 1 }];
+}
+
+// 2026-07-08 second post-review fix wave (BLOCKING item #4) — extracted
+// the checkout route's money-safe gate into a PURE, directly-testable
+// function so tests can assert against the EXACT check the route runs
+// (route.ts calls this, not a re-implementation that could drift). The
+// previous approach (fetch-mocked modal tests asserting the POST body
+// shape) is the "Optimistic Path" failure mode CLAUDE.md §3.1 names —
+// it verified the request was SENT, never that the route would ACCEPT
+// it. This function is what closes that gap.
+
+export type CheckoutTierGateResult =
+  | { ok: true }
+  | { ok: false; reason: "tier_unavailable"; detail: "not_sellable" | "placeholder_price" };
+
+/**
+ * The route's money-safe gate for a resolved checkout tier: the tier
+ * must (a) exist and be Plan.sellable, and (b) resolve to a REAL
+ * (non-placeholder) Stripe price. Returns the exact rejection reason
+ * route.ts turns into a 409 `tier_unavailable` response. A null tier
+ * (the legacy add-on fallback path) always passes — that path never
+ * resolves a targetTier in the first place.
+ */
+export function resolveCheckoutTierGate(tier: TierId | null): CheckoutTierGateResult {
+  if (!tier) return { ok: true };
+  const plan = getPlan(tier);
+  if (!plan || !plan.sellable) {
+    return { ok: false, reason: "tier_unavailable", detail: "not_sellable" };
+  }
+  if (isPlaceholderPriceId(plan.stripePriceId)) {
+    return { ok: false, reason: "tier_unavailable", detail: "placeholder_price" };
+  }
+  return { ok: true };
 }
 
 /** Map a single base-tier priceId (the value clients pass) to a TierId.
@@ -42,6 +88,10 @@ export function buildCheckoutLineItemsForTier(tier: BillingTier): CheckoutLineIt
 export function tierFromBasePriceId(priceId: string | null | undefined): TierId | null {
   if (!priceId) return null;
   if (priceId === BUILDER_PRICE_ID) return "builder";
+  if (priceId === MANAGED_PRICE_ID) return "managed";
+  if (priceId === AGENCY_STARTER_PRICE_ID) return "agency_starter";
+  if (priceId === AGENCY_GROWTH_PRICE_ID) return "agency_growth";
+  if (priceId === AGENCY_SCALE_PRICE_ID) return "agency_scale";
   if (priceId === WORKSPACE_PRICE_ID) return "workspace";
   if (priceId === AGENCY_BASE_PRICE_ID) return "agency";
   return null;

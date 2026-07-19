@@ -125,7 +125,7 @@ function Card({ channel }: { channel: Channel }) {
   return (
     <article className="flex flex-col gap-[18px] rounded-2xl border border-zinc-800 bg-zinc-900 p-6">
       <div className="flex items-center gap-3">
-        <span className="inline-flex size-9 shrink-0 items-center justify-center rounded-[9px] border border-[color-mix(in_oklab,#14b8a6_28%,transparent)] bg-[color-mix(in_oklab,#14b8a6_18%,#27272a)] text-[#5eead4]">
+        <span className="inline-flex size-9 shrink-0 items-center justify-center rounded-[9px] border border-[color-mix(in_oklab,#1F2B24_28%,transparent)] bg-[color-mix(in_oklab,#1F2B24_18%,#27272a)] text-[#5eead4]">
           {channel.icon}
         </span>
         <div>

@@ -115,7 +115,7 @@ export async function DealsListPageView({
           </p>
           {readonly ? (
             <p className="text-xs text-muted-foreground italic">
-              Read-only view. Edits available via the SF dashboard
+              Read-only view. Edits available via the Seldon dashboard
               (operator-portal write mode lands in v1.24.1).
             </p>
           ) : null}

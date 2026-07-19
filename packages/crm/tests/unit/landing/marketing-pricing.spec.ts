@@ -1,11 +1,11 @@
 // Snapshot-shape test for LandingMarketingPricingSection.
 //
-// 2026-06-18 pricing migration (Phase 3): the homepage pricing section is
-// the flat 3-tier ladder — Builder $19 / Workspace $49 / Agency $297 —
-// with CTAs that route to /signup?plan=<tier>. (Was Free/Growth/Scale.)
-//
-// Same shape-walking pattern as hero-cta.spec.ts and how-it-works.spec.ts
-// so we don't need jsdom for what is otherwise a static surface.
+// 2026-07-16 agency repositioning (Max's call): flag ON now renders the
+// THREE AGENCY TIER cards ($99 Starter / $199 Growth / $299 Scale) with
+// 0% GMV framing and NO 2% talk (the solo GMV story lives on /pricing +
+// the FAQ). Flag OFF (SF_TIER_LADDER unset) still renders the single $29
+// flat card with no tier-ladder vocabulary — that contract is unchanged
+// from the 2026-07-08 one-number rule.
 
 import { describe, test } from "node:test";
 import assert from "node:assert/strict";
@@ -41,73 +41,73 @@ function safeText(node: unknown): string {
   });
 }
 
-describe("LandingMarketingPricingSection — 3-column matrix", () => {
-  test("renders 3 tier columns: Builder, Workspace, Agency", () => {
-    const result = LandingMarketingPricingSection();
+describe("LandingMarketingPricingSection — flag OFF (default) — single $29 card, byte-compatible", () => {
+  test("renders exactly one plan card ($29 flat)", () => {
+    const result = LandingMarketingPricingSection({});
     const cols = flatten(result).filter(
-      (el) =>
-        typeof (el.props as { "data-tier"?: string })?.["data-tier"] === "string",
+      (el) => typeof (el.props as { "data-plan"?: string })?.["data-plan"] === "string",
     );
-    const tiers = cols.map((c) => (c.props as { "data-tier": string })["data-tier"]);
-    assert.deepEqual(tiers, ["builder", "workspace", "agency"]);
+    assert.deepEqual(
+      cols.map((c) => (c.props as { "data-plan": string })["data-plan"]),
+      ["flat"],
+    );
   });
 
-  test("each tier card surfaces its price label", () => {
-    const result = LandingMarketingPricingSection();
+  test("the $29 price + unlimited-workspaces copy is present", () => {
+    const result = LandingMarketingPricingSection({});
     const text = safeText(result);
-    assert.match(text, /\$19/);
-    assert.match(text, /\$49/);
-    assert.match(text, /\$297/);
+    assert.match(text, /\$29/);
+    assert.match(text, /Unlimited workspaces/);
   });
 
-  test("Builder CTA links to /signup?plan=builder", () => {
-    const result = LandingMarketingPricingSection();
-    const ctas = flatten(result).filter(
-      (el) => (el.props as { "data-tier-cta"?: string })?.["data-tier-cta"] === "builder",
-    );
-    assert.equal(ctas.length, 1);
-    assert.equal(
-      (ctas[0].props as { href?: string }).href,
-      "/signup?plan=builder",
-    );
-  });
-
-  test("Workspace + Agency CTAs link to /signup with plan query param", () => {
-    const result = LandingMarketingPricingSection();
-    const workspaceCta = flatten(result).find(
-      (el) => (el.props as { "data-tier-cta"?: string })?.["data-tier-cta"] === "workspace",
-    );
-    const agencyCta = flatten(result).find(
-      (el) => (el.props as { "data-tier-cta"?: string })?.["data-tier-cta"] === "agency",
-    );
-    assert.equal(
-      (workspaceCta?.props as { href?: string } | undefined)?.href,
-      "/signup?plan=workspace",
-    );
-    assert.equal(
-      (agencyCta?.props as { href?: string } | undefined)?.href,
-      "/signup?plan=agency",
-    );
-  });
-
-  test("the key feature rows render", () => {
-    // Short substrings of the real (longer) marketing copy so a future
-    // copy polish doesn't break the test; the substrings must still
-    // uniquely identify each row in the comparison table.
-    const result = LandingMarketingPricingSection();
+  test("no tier-ladder vocabulary leaks when the flag is off", () => {
+    const result = LandingMarketingPricingSection({});
     const text = safeText(result);
-    for (const label of [
-      "Client workspaces",
-      "Landing pages",
-      "Own domain",
-      "CRM",
-      "Booking page",
-      "Intake form",
-      "AI chatbot",
-      "White-label",
-      "Priority support",
-    ]) {
-      assert.match(text, new RegExp(label, "i"), `missing feature row: ${label}`);
-    }
+    assert.doesNotMatch(text, /sub-account/i);
+    assert.doesNotMatch(text, /Agency Starter|Agency Growth|Agency Scale/);
+  });
+});
+
+describe("LandingMarketingPricingSection — flag ON (SF_TIER_LADDER) — three agency tiers", () => {
+  test("renders exactly the three agency tier cards, in ladder order", () => {
+    const result = LandingMarketingPricingSection({ tierLadderOn: true });
+    const cols = flatten(result).filter(
+      (el) => typeof (el.props as { "data-plan"?: string })?.["data-plan"] === "string",
+    );
+    assert.deepEqual(
+      cols.map((c) => (c.props as { "data-plan": string })["data-plan"]),
+      ["agency_starter", "agency_growth", "agency_scale"],
+    );
+  });
+
+  test("shows the catalog-true prices and sub-account counts", () => {
+    const result = LandingMarketingPricingSection({ tierLadderOn: true });
+    const text = safeText(result);
+    assert.match(text, /\$99/);
+    assert.match(text, /\$199/);
+    assert.match(text, /\$299/);
+    assert.match(text, /10 client sub-accounts/);
+    assert.match(text, /30 client sub-accounts/);
+    assert.match(text, /Unlimited client sub-accounts/);
+  });
+
+  test("leads with 0% GMV and never mentions the solo 2% fee", () => {
+    const result = LandingMarketingPricingSection({ tierLadderOn: true });
+    const text = safeText(result);
+    assert.match(text, /0% GMV/);
+    assert.doesNotMatch(text, /2%/);
+  });
+
+  test("links to /pricing (comparison) and /#hero-form (free build)", () => {
+    const result = LandingMarketingPricingSection({ tierLadderOn: true });
+    const links = flatten(result).map((el) => (el.props as { href?: string })?.href);
+    assert.ok(links.filter((h) => h === "/pricing").length >= 1, "expected a /pricing link");
+    assert.ok(links.filter((h) => h === "/#hero-form").length >= 1, "expected the free-build anchor");
+  });
+
+  test("never claims popularity we haven't measured", () => {
+    const result = LandingMarketingPricingSection({ tierLadderOn: true });
+    const text = safeText(result);
+    assert.doesNotMatch(text, /most popular|best value/i);
   });
 });

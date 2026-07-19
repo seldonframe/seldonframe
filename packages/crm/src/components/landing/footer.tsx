@@ -93,9 +93,9 @@ export function LandingFooter() {
             href="https://github.com/seldonframe/crm"
             target="_blank"
             rel="noopener noreferrer"
-            // a11y: zinc-950 on teal #14b8a6 = 7.2:1 (white-on-teal
+            // a11y: zinc-950 on teal #1F2B24 = 7.2:1 (white-on-teal
             // was 2.6:1 — fails WCAG AA). Matches the pricing CTA fix.
-            className="inline-flex items-center gap-2 rounded-lg bg-[#14b8a6] px-4 py-2 text-sm font-semibold text-zinc-950 transition-opacity hover:opacity-90 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[#14b8a6]"
+            className="inline-flex items-center gap-2 rounded-lg bg-[#1F2B24] px-4 py-2 text-sm font-semibold text-zinc-950 transition-opacity hover:opacity-90 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[#1F2B24]"
           >
             <GitFork size={16} aria-hidden="true" />
             View on GitHub

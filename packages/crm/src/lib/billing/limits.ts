@@ -19,6 +19,7 @@
 
 import { normalizeTierId, type BillingTier } from "./features";
 import { resolveTierForWorkspace } from "./tier-resolver";
+import { getPlan } from "./plans";
 
 export type LimitDecision =
   | { allowed: true; tier: BillingTier }
@@ -109,6 +110,48 @@ export async function enforceWorkspaceLimit(
     upgradeUrl: "/settings/billing",
     used: params.ownedWorkspaceCount,
     limit: cap,
+  };
+}
+
+// ─── 2026-07-08 pricing ladder — sub-account (client-workspace handoff) gate ───
+//
+// Counted unit: `organizations.parent_agency_id` attachment (archivedAt
+// IS NULL) — see lib/billing/orgs.ts::fetchAgencyAttachedWorkspaceIds.
+// Enforced at attachWorkspaceToAgency and any flow that auto-attaches.
+// -1 = unlimited. Pure core (this file) has no DB import, so it stays
+// unit-testable without a circular import back to orgs.ts (which
+// already imports enforceWorkspaceLimit from here).
+
+export type SubAccountLimitDecision =
+  | { ok: true }
+  | {
+      ok: false;
+      reason: "subaccount_limit_reached";
+      used: number;
+      limit: number;
+    };
+
+/** Sub-account allowance per tier, read straight from the catalog's
+ *  `limits.maxSubAccounts` (single source of truth — plans.ts). */
+export function maxSubAccountsForTier(tier: BillingTier): number {
+  const plan = getPlan(tier);
+  return plan?.limits.maxSubAccounts ?? 0;
+}
+
+/** Pure gate: does attaching one more client workspace exceed the
+ *  tier's sub-account cap? -1 = unlimited (always allows). */
+export function enforceSubAccountLimit(params: {
+  tier: BillingTier;
+  currentCount: number;
+}): SubAccountLimitDecision {
+  const limit = maxSubAccountsForTier(params.tier);
+  if (limit === -1) return { ok: true };
+  if (params.currentCount < limit) return { ok: true };
+  return {
+    ok: false,
+    reason: "subaccount_limit_reached",
+    used: params.currentCount,
+    limit,
   };
 }
 

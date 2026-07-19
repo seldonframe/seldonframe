@@ -14,8 +14,8 @@
 //   enhanceLandingForWorkspace … no longer called by default"). The
 //   default public surface became a chatbot-preview page seeded by
 //   `v2/complete`. As a side effect, `organizations.theme` was left at
-//   the legacy DB column DEFAULT — `{primaryColor:"#14b8a6",
-//   accentColor:"#0d9488", fontFamily:"Inter", mode:"dark", …}` from
+//   the legacy DB column DEFAULT — `{primaryColor:"#059669",
+//   accentColor:"#047857", fontFamily:"Inter", mode:"dark", …}` from
 //   drizzle/0010_organization_theme_jsonb.sql — for every new workspace.
 //
 //   Visible regression: the public chatbot embed (api/v1/public/agent/…
@@ -38,9 +38,9 @@
 //   3. Write a new theme that:
 //        - sets aestheticArchetype to the classified id
 //        - overwrites primaryColor / accentColor / fontFamily / mode WHEN
-//          they look like the legacy SeldonFrame default (#14b8a6 / Inter
+//          they look like the legacy SeldonFrame default (#059669 / Inter
 //          / dark). Operator-customized values (any hex other than
-//          #14b8a6/#0d9488, any font other than Inter, light mode) are
+//          #059669/#047857, any font other than Inter, light mode) are
 //          preserved.
 //        - preserves logoUrl + motionPreset + borderRadius untouched —
 //          those are independent of archetype and operators frequently
@@ -64,19 +64,24 @@ import { eq } from "drizzle-orm";
 import { db } from "@/db";
 import { organizations } from "@/db/schema";
 import {
-  classifyArchetype,
   ARCHETYPES,
+  classifyArchetypeFromSoul,
   type AestheticArchetypeId,
 } from "@/lib/workspace/aesthetic-archetypes";
 import { DEFAULT_ORG_THEME, type OrgTheme } from "@/lib/theme/types";
+
+// 2026-07-16 — classifyArchetypeFromSoul moved to aesthetic-archetypes.ts (a
+// pure, db-free module) so the booking intake-field resolver can share it.
+// Re-exported here so existing importers keep working unchanged.
+export { classifyArchetypeFromSoul };
 
 /** Legacy SeldonFrame default palette — written by the DB column default
  *  in drizzle/0010_organization_theme_jsonb.sql for every workspace
  *  created before the archetype theme was applied. Any theme whose
  *  primaryColor matches this exactly is presumed to be the untouched
  *  default and is eligible for archetype overwrite. */
-const LEGACY_DEFAULT_PRIMARY = "#14b8a6";
-const LEGACY_DEFAULT_ACCENT = "#0d9488";
+const LEGACY_DEFAULT_PRIMARY = "#059669";
+const LEGACY_DEFAULT_ACCENT = "#047857";
 const LEGACY_DEFAULT_FONT = "Inter";
 
 /** A theme is considered "legacy untouched default" if its primary AND
@@ -155,26 +160,9 @@ export async function applyArchetypeThemeToOrg(
     // camelCase. Cast through Record<string, unknown> to read the actual
     // runtime shape — same pattern used in resolveOrgArchetype
     // (lib/page-blocks/persist.ts) and seedChatbotPreviewLandingForOrg.
-    const soulRecord = (org.soul as unknown as Record<string, unknown> | null) ?? null;
     // Fall back to settings.crmPersonality.vertical when soul.personality_vertical
     // is missing — the v2 creation path writes vertical into settings, not soul.
-    const settingsRecord = (org.settings ?? null) as Record<string, unknown> | null;
-    const crmPersonality = settingsRecord?.crmPersonality as
-      | { vertical?: string }
-      | undefined;
-    const vertical =
-      (soulRecord?.personality_vertical as string | undefined) ??
-      crmPersonality?.vertical ??
-      "";
-
-    const archetypeId = classifyArchetype({
-      vertical,
-      emergencyService: (soulRecord?.emergency_service as boolean | null | undefined) ?? null,
-      sameDay: (soulRecord?.same_day as boolean | null | undefined) ?? null,
-      reviewRating: (soulRecord?.review_rating as number | null | undefined) ?? null,
-      reviewCount: (soulRecord?.review_count as number | null | undefined) ?? null,
-      businessDescription: (soulRecord?.business_description as string | null | undefined) ?? null,
-    });
+    const archetypeId = classifyArchetypeFromSoul(org.soul, org.settings);
     const archetype = ARCHETYPES[archetypeId];
 
     // Only overwrite palette/font fields when the current theme looks like
@@ -270,6 +258,11 @@ export interface SetExplicitArchetypeResult {
 export async function setArchetypeForOrg(
   orgId: string,
   archetypeId: AestheticArchetypeId,
+  /** The operator's *intent* to record on theme.aestheticArchetypeChoice.
+   *  Defaults to the archetype id (an explicit hand-pick). Pass "auto" when
+   *  this write is the result of re-classifying from soul, so the ready-page
+   *  picker shows "Auto-picked for X" rather than "Chosen by you". */
+  choice: string = archetypeId,
 ): Promise<SetExplicitArchetypeResult> {
   try {
     const archetype = ARCHETYPES[archetypeId];
@@ -295,6 +288,7 @@ export async function setArchetypeForOrg(
       fontFamily: archetype.fonts.headline as OrgTheme["fontFamily"],
       mode: archetype.defaultThemeMode,
       aestheticArchetype: archetypeId,
+      aestheticArchetypeChoice: choice,
       // Preserve any premium health template — an archetype switch is a
       // different axis and must not silently clear it (same rationale as
       // applyArchetypeThemeToOrg's legacy-overwrite branch above).

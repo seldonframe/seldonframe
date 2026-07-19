@@ -269,7 +269,7 @@ function ClientsStep({
                 key={label}
                 type="button"
                 onClick={() => onClientLabelSelect(label)}
-                className={`rounded-full border px-4 py-2 text-sm transition ${
+                className={`rounded-[11px] border px-4 py-2 text-sm transition ${
                   active ? "border-teal-300 bg-teal-500/15 text-foreground" : "border-white/20 text-slate-200 hover:border-white/40"
                 }`}
               >
@@ -368,7 +368,7 @@ function ProcessStep({
           </div>
         </div>
 
-        <button type="button" className="mt-4 rounded-full border border-white/20 px-4 py-2 text-sm text-foreground" onClick={onAddStage}>
+        <button type="button" className="mt-4 rounded-[11px] border border-white/20 px-4 py-2 text-sm text-foreground" onClick={onAddStage}>
           + Add stage
         </button>
 
@@ -773,7 +773,7 @@ export function SoulWizard({ completionRedirect = "/dashboard" }: { completionRe
         style={{
           background:
             stepIndex < 3
-              ? "radial-gradient(circle at 12% 12%, rgba(20, 184, 166, 0.22), transparent 42%), radial-gradient(circle at 82% 0%, rgba(245, 158, 11, 0.17), transparent 46%), linear-gradient(120deg, rgba(15,23,42,0.93), rgba(17,24,39,0.95))"
+              ? "radial-gradient(circle at 12% 12%, rgba(5, 150, 105, 0.22), transparent 42%), radial-gradient(circle at 82% 0%, rgba(245, 158, 11, 0.17), transparent 46%), linear-gradient(120deg, rgba(15,23,42,0.93), rgba(17,24,39,0.95))"
               : stepIndex < 6
                 ? "radial-gradient(circle at 8% 8%, rgba(16, 185, 129, 0.19), transparent 44%), radial-gradient(circle at 88% 24%, rgba(14, 165, 233, 0.14), transparent 45%), linear-gradient(120deg, rgba(15,23,42,0.93), rgba(22,28,45,0.95))"
                 : "radial-gradient(circle at 14% 18%, rgba(45, 212, 191, 0.24), transparent 42%), radial-gradient(circle at 86% 16%, rgba(56, 189, 248, 0.15), transparent 46%), linear-gradient(120deg, rgba(8,47,73,0.95), rgba(15,23,42,0.95))",

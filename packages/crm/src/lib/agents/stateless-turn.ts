@@ -38,6 +38,14 @@ import {
   type ToolExecuteContext,
 } from "./tools";
 import { resolveTurnModel } from "./runtime/turn-model";
+import {
+  cachedSystemBlocks,
+  cachedToolParams,
+  withMovingCacheBreakpoint,
+  serializeToolResultCapped,
+  capErrorText,
+  type LooseMessage,
+} from "./turn-token-economy";
 
 // Mirror runtime.ts exactly so a template test behaves like the live agent.
 const MODEL =
@@ -58,6 +66,20 @@ export type StatelessChatMessage = {
 export type StatelessToolCall = {
   name: string;
   input: Record<string, unknown>;
+};
+
+/** One tool-dispatch event, fired at call-start and again at its result
+ *  (agent lifecycle slice, T5 — the supervised run's live action log DI
+ *  seam). `line` is a short, ALREADY-SUMMARIZED human line (tool name plus a
+ *  plain-language gloss) — never the raw input/output payload, so a caller
+ *  persisting these (e.g. supervised_runs.action_log) can never leak a
+ *  secret or a raw tool result. */
+export type StatelessToolEvent = {
+  tool: string;
+  phase: "start" | "result";
+  /** Present only on phase:"result" — whether the call succeeded. */
+  ok?: boolean;
+  line: string;
 };
 
 export type RunStatelessAgentTurnInput = {
@@ -90,7 +112,124 @@ export type RunStatelessAgentTurnInput = {
   modelOverride?: string;
   /** Replaces the default 1024 output cap when set. */
   maxTokensOverride?: number;
+  /** Optional DI hook (agent lifecycle slice, T5) — invoked at each tool
+   *  call's start and again at its result, inside the existing dispatch
+   *  loop. Default no-op: every existing caller is byte-for-byte
+   *  unaffected. Never throws into the loop — a callback error is caught
+   *  and swallowed so a logging bug can never break a live agent turn. */
+  onToolEvent?: (event: StatelessToolEvent) => void;
+  /** Deterministic replay — Reelier phase 2c slice 1 (OBSERVE MODE ONLY,
+   *  2026-07-17). Optional DI hook that wraps ONE tool execute() call for
+   *  observation only (timing a real trace-record recorder builds from it —
+   *  see lib/deployments/replay/recorder.ts). MUST return whatever `run()`
+   *  resolves to, and MUST let whatever `run()` throws propagate unchanged —
+   *  this is a pure observation seam, never a place to alter turn behavior.
+   *  Default undefined: every existing caller (chat/voice/SMS/eval/template
+   *  test surfaces) takes the identical unwrapped path — this hook is only
+   *  ever passed by the email-dispatch seam, and only when
+   *  SF_DETERMINISTIC_REPLAY=1. */
+  wrapToolCall?: <T>(tool: string, args: unknown, run: () => Promise<T>) => Promise<T>;
+  /** H1 hotfix (2026-07-11) — forwarded to getToolsForCapabilities: when
+   *  true, every wrapped connector (MCP/vetted/byo AND composio) tool
+   *  executes as a synthetic no-op instead of calling the real
+   *  toolkit/API. Distinct from `testMode` (which only sandboxes SF's own
+   *  native write tools) — the eval harness sets this true; supervised-run
+   *  and every other caller leave it unset (real connector execution,
+   *  unchanged). Default false/undefined. */
+  sandboxConnectors?: boolean;
+  /** Email-agent slice (Part A2) — the operator's sent-mail voice profile
+   *  (Brain note `voice-profiles/email.md`), for an email-channel event/
+   *  schedule run. The caller (a DB-coupled deps builder) resolves it, since
+   *  this module stays DB-free; absent/null → no-op, byte-for-byte unchanged. */
+  voiceProfileNote?: string | null;
 };
+
+/**
+ * Fixed, secret-safe gloss for a failed tool call — used ONLY for the
+ * `onToolEvent` line (which a caller like the supervised-run action log
+ * (lib/agents/lifecycle/supervised-run.ts) PERSISTS durably). The raw
+ * `Error.message` from a thrown tool execution can carry a connector's raw
+ * response body, a stack fragment, or worse — a secret — so it must never
+ * reach a durable, operator-visible log (Wave 1 review, F3: "summarized,
+ * never secrets"). The detailed message still flows to the LLM via the
+ * `tool_result` content below (non-persisted, used only to help the model
+ * recover mid-turn).
+ */
+export function toolFailureGloss(toolName: string): string {
+  return `${toolName} failed`;
+}
+
+/** Common id-shaped field names, checked in order (F-F item 2 — the ACTION
+ *  lane's target/proof suffix). Best-effort, generic across tool shapes —
+ *  Composio result shapes vary by toolkit/action and aren't generically
+ *  introspectable beyond common conventions, so a toolkit whose result uses
+ *  an uncommon id field name simply gets no proof suffix (documented
+ *  limit, not a bug: the line still renders, just without the extra id). */
+const PROOF_FIELD_NAMES = [
+  "id",
+  "messageId",
+  "message_id",
+  "threadId",
+  "thread_id",
+  "eventId",
+  "event_id",
+  "recordId",
+  "record_id",
+  "bookingId",
+  "booking_id",
+  "uid",
+];
+
+/** A short id-like string can be at most this long to count as a "proof" —
+ *  guards against an id-named field actually smuggling a body/blob through
+ *  (the summarized/no-secrets rule — never a raw payload in the durable,
+ *  operator-visible action log). */
+const MAX_PROOF_LENGTH = 64;
+
+/**
+ * Extract a cheap, short target/proof id from a tool's raw result, for the
+ * supervised run's ACTION lane ("Sent — GMAIL_SEND_EMAIL_id: abc123").
+ * Shallow (top-level fields only), never recurses into nested objects, and
+ * only ever returns a short existing string — never a number coerced to
+ * string, never an object, never anything long enough to be a body rather
+ * than an id. Pure; never throws. Returns `undefined` when nothing
+ * id-shaped is found (the line still renders without a suffix).
+ */
+export function extractToolProof(output: unknown): string | undefined {
+  if (output == null || typeof output !== "object" || Array.isArray(output)) return undefined;
+  const record = output as Record<string, unknown>;
+  for (const field of PROOF_FIELD_NAMES) {
+    const value = record[field];
+    if (
+      typeof value === "string" &&
+      value.trim().length > 0 &&
+      value.length <= MAX_PROOF_LENGTH &&
+      // An id-named field carrying an email address or embedded whitespace
+      // is smuggling PII/free text through an "id" field, not a real short
+      // id — reject it rather than surface it in the operator-visible log.
+      !value.includes("@") &&
+      !/\s/.test(value)
+    ) {
+      return value.trim();
+    }
+  }
+  return undefined;
+}
+
+/** Fires `onToolEvent` if provided, swallowing any error the callback
+ *  throws — a logging/observability bug must never break a live agent
+ *  turn's tool dispatch loop. */
+function emitToolEvent(
+  onToolEvent: ((event: StatelessToolEvent) => void) | undefined,
+  event: StatelessToolEvent,
+): void {
+  if (!onToolEvent) return;
+  try {
+    onToolEvent(event);
+  } catch {
+    // Never let a callback failure affect the turn loop.
+  }
+}
 
 export type RunStatelessAgentTurnResult =
   | { ok: true; reply: string; toolCalls: StatelessToolCall[] }
@@ -137,6 +276,7 @@ export async function runStatelessAgentTurn(
     testMode: input.testMode,
     now: input.now ?? new Date(),
     timezone: input.timezone || "UTC",
+    voiceProfileNote: input.voiceProfileNote,
   });
 
   // Same seam as production: native (capability-filtered) tools plus any MCP
@@ -147,6 +287,7 @@ export async function runStatelessAgentTurn(
   const tools = await getToolsForCapabilities(input.blueprint.capabilities, {
     orgId: input.orgId,
     connectors: input.blueprint.connectors,
+    sandboxConnectors: input.sandboxConnectors,
   });
 
   // Seed the messages array from the plain-text chat history.
@@ -180,16 +321,24 @@ export async function runStatelessAgentTurn(
     });
     let response: Anthropic.Messages.Message;
     try {
+      // Token economy (2026-07-16): system + tools are static across the loop
+      // → one cache breakpoint each; the moving breakpoint on the last message
+      // block makes iteration N+1's growing prefix a cache READ instead of
+      // full-price input. Three markers total (≤ the API's limit of 4).
       response = await input.client.messages.create({
         model: turnModel,
         max_tokens: input.maxTokensOverride ?? MAX_TOKENS,
-        system: systemPrompt,
-        tools: tools.map((t) => ({
-          name: t.name,
-          description: t.description,
-          input_schema: t.jsonSchema as Anthropic.Messages.Tool.InputSchema,
-        })),
-        messages: messages as Anthropic.Messages.MessageParam[],
+        system: cachedSystemBlocks(systemPrompt) as Anthropic.Messages.MessageCreateParams["system"],
+        tools: cachedToolParams(
+          tools.map((t) => ({
+            name: t.name,
+            description: t.description,
+            input_schema: t.jsonSchema as Anthropic.Messages.Tool.InputSchema,
+          })),
+        ) as Anthropic.Messages.ToolUnion[],
+        messages: withMovingCacheBreakpoint(
+          messages as LooseMessage[],
+        ) as Anthropic.Messages.MessageParam[],
       });
     } catch (err) {
       const detail = err instanceof Error ? err.message : String(err);
@@ -244,6 +393,7 @@ export async function runStatelessAgentTurn(
         name: tu.name,
         input: (tu.input as Record<string, unknown>) ?? {},
       });
+      emitToolEvent(input.onToolEvent, { tool: tu.name, phase: "start", line: `Calling ${tu.name}…` });
       // Resolve across the built tool set (natives + any wrapped MCP tools),
       // matching production's dispatch. Native-only templates resolve exactly as
       // the prior findTool lookup did.
@@ -255,6 +405,12 @@ export async function runStatelessAgentTurn(
           content: `Error: unknown tool ${tu.name}`,
           is_error: true,
         });
+        emitToolEvent(input.onToolEvent, {
+          tool: tu.name,
+          phase: "result",
+          ok: false,
+          line: `${tu.name} failed: unknown tool`,
+        });
         continue;
       }
       const parsed = tool.inputSchema.safeParse(tu.input);
@@ -264,6 +420,12 @@ export async function runStatelessAgentTurn(
           tool_use_id: tu.id,
           content: `Error: ${parsed.error.message}`,
           is_error: true,
+        });
+        emitToolEvent(input.onToolEvent, {
+          tool: tu.name,
+          phase: "result",
+          ok: false,
+          line: `${tu.name} failed: invalid input`,
         });
         continue;
       }
@@ -278,21 +440,49 @@ export async function runStatelessAgentTurn(
         timezone: input.timezone || undefined,
       };
       try {
-        const output = await (tool as AgentTool<unknown, unknown>).execute(
-          parsed.data,
-          ctx,
-        );
+        const runExecute = () =>
+          (tool as AgentTool<unknown, unknown>).execute(parsed.data, ctx);
+        const output = input.wrapToolCall
+          ? await input.wrapToolCall(tu.name, parsed.data, runExecute)
+          : await runExecute();
         toolResultsForThisIter.push({
           type: "tool_result",
           tool_use_id: tu.id,
-          content: JSON.stringify(output ?? null),
+          // Hard-capped (token economy, 2026-07-16): an unbounded connector
+          // payload (e.g. GMAIL_FETCH_EMAILS) must never ride the loop at
+          // full size — it gets re-sent every remaining iteration.
+          content: serializeToolResultCapped(output),
+        });
+        // F-F item 2 — a short target/proof suffix when the result has a
+        // cheap id field (never the raw payload; extractToolProof caps
+        // length and only reads top-level string fields).
+        const proof = extractToolProof(output);
+        emitToolEvent(input.onToolEvent, {
+          tool: tu.name,
+          phase: "result",
+          ok: true,
+          line: proof ? `${tu.name} succeeded (${proof}).` : `${tu.name} succeeded.`,
         });
       } catch (err) {
+        const message = err instanceof Error ? err.message : String(err);
+        // The raw `message` stays ONLY in this non-persisted tool_result
+        // content — it's fed back to the LLM within THIS turn to help it
+        // recover, and is never itself written to a durable store. The
+        // onToolEvent `line` below, which a caller may persist (e.g. the
+        // supervised run's durable action_log), gets the fixed gloss
+        // instead (Wave 1 review, F3 — "summarized, never secrets").
         toolResultsForThisIter.push({
           type: "tool_result",
           tool_use_id: tu.id,
-          content: `Error: ${err instanceof Error ? err.message : String(err)}`,
+          // Capped: connector errors can embed whole upstream response bodies.
+          content: `Error: ${capErrorText(message)}`,
           is_error: true,
+        });
+        emitToolEvent(input.onToolEvent, {
+          tool: tu.name,
+          phase: "result",
+          ok: false,
+          line: toolFailureGloss(tu.name),
         });
       }
     }

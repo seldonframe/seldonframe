@@ -55,6 +55,11 @@ import {
   DEFAULT_LLM_CENTS,
 } from "@/lib/deployments/margin";
 import { formatTemplateType } from "../../status-badge";
+import {
+  TemplateVariablesForm,
+  templateVariablesComplete,
+  type TemplateVariableDecl,
+} from "@/components/marketplace/template-variables-form";
 
 type TemplateOption = {
   id: string;
@@ -65,6 +70,11 @@ type TemplateOption = {
    *  booking.completed) — the stepper then captures the client's Google review
    *  link in step 2 and persists it onto the deployment's customization.reviewUrl. */
   isReviewRequester?: boolean;
+  /** 2026-07-16 (marketplace generalize, Task 4) — the template's declared
+   *  fill-in variables. Empty/absent on every ungeneralized template — the
+   *  Review step's TemplateVariablesForm renders nothing and the deploy gate
+   *  is unaffected (today's behavior, byte-for-byte). */
+  templateVariables?: TemplateVariableDecl[];
 };
 
 type Surface = "phone" | "embed" | "link" | "sms" | "email";
@@ -220,11 +230,18 @@ export function DeployFlowClient({
   const [isDeploying, startDeploy] = useTransition();
   const [error, setError] = useState<string | null>(null);
   const [deployedId, setDeployedId] = useState<string | null>(null);
+  // 2026-07-16 (marketplace generalize, Task 4) — fill values for the
+  // selected template's declared templateVariables (Task 1). Absent/empty on
+  // any template that was never generalized.
+  const [templateVarValues, setTemplateVarValues] = useState<Record<string, string>>({});
 
   const selectedTemplate = useMemo(
     () => templates.find((t) => t.id === templateId) ?? null,
     [templates, templateId],
   );
+
+  const declaredTemplateVariables = selectedTemplate?.templateVariables ?? [];
+  const templateVarsComplete = templateVariablesComplete(declaredTemplateVariables, templateVarValues);
 
   // Show the Google-review-link field only when deploying a review-requester.
   const isReviewRequester = Boolean(selectedTemplate?.isReviewRequester);
@@ -265,7 +282,11 @@ export function DeployFlowClient({
     : clientName.trim().length >= 2;
 
   const canSubmit =
-    clientStepValid && effectiveClientName.length >= 2 && !!templateId && bookingValid;
+    clientStepValid &&
+    effectiveClientName.length >= 2 &&
+    !!templateId &&
+    bookingValid &&
+    templateVarsComplete;
 
   // Auto-fill the client's business from pasted website text / a description.
   // Compiles it server-side, then PRE-FILLS the editable rows (the builder can
@@ -330,9 +351,23 @@ export function DeployFlowClient({
         // R2 — the client's Google review link (review-requester only). Trimmed;
         // blank → omitted (no customization written → the template default).
         reviewUrl: isReviewRequester ? reviewUrl.trim() || undefined : undefined,
+        // 2026-07-16 (marketplace generalize, Task 4) — fill values for the
+        // template's declared variables. Omitted entirely when the template
+        // has none (today's behavior, byte-for-byte); the action also
+        // enforces this server-side (validateTemplateVarValues).
+        templateVarValues:
+          declaredTemplateVariables.length > 0 ? templateVarValues : undefined,
       });
       if (!result.ok) {
-        setError(result.error);
+        // Duplicate guard (2026-07-16) — friendly copy for the one error a
+        // well-meaning operator will actually hit: deploying the same agent
+        // to the same client twice (each copy runs — and bills — separately
+        // on every trigger fire).
+        setError(
+          result.error === "duplicate_deployment"
+            ? `${effectiveClientName} already has this agent deployed. A second copy would run (and bill) separately on every trigger — open Clients to manage the existing one instead.`
+            : result.error,
+        );
         return;
       }
       setDeployedId(result.id);
@@ -874,6 +909,15 @@ export function DeployFlowClient({
             <ReviewRow label="Your estimated net" value={formatCentsMonthly(margin.netCents)} />
             <ReviewRow label="Status on save" value="Draft (pending activation)" />
           </dl>
+
+          <TemplateVariablesForm
+            variables={declaredTemplateVariables}
+            values={templateVarValues}
+            onChange={(name, value) =>
+              setTemplateVarValues((prev) => ({ ...prev, [name]: value }))
+            }
+            disabled={isDeploying}
+          />
 
           {error && (
             <p className="rounded-md border border-rose-500/30 bg-rose-500/5 px-3 py-2 text-xs text-rose-600">

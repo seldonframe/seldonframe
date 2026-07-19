@@ -91,7 +91,7 @@ export function formatCrmValue(value: unknown) {
 export function resolveInitials(input?: string | null) {
   const normalized = (input ?? "").trim();
   if (!normalized) {
-    return "SF";
+    return "Se";
   }
 
   const parts = normalized.split(/\s+/).filter(Boolean);

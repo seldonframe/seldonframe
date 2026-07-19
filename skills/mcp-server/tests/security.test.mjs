@@ -158,3 +158,100 @@ test("assertPublicHttpUrl: rejects a hostname whose lookup returns an empty resu
     }),
   );
 });
+
+// ── assertLocalPathAllowed (v1.61.0) ────────────────────────────────────
+
+import path from "node:path";
+import { assertLocalPathAllowed, getAllowedUploadRoots } from "../src/security.js";
+
+// Identity realpath fake: resolves nothing, pretends every path exists.
+// Symlink-specific tests inject a mapping instead.
+const identityRealpath = (p) => p;
+
+const CWD = path.resolve(path.sep, "proj");
+const opts = (extra = {}) => ({
+  cwd: CWD,
+  env: {},
+  realpath: identityRealpath,
+  caseInsensitive: false,
+  ...extra,
+});
+
+test("assertLocalPathAllowed: accepts an absolute path under cwd", () => {
+  const file = path.join(CWD, "images", "logo.png");
+  assert.equal(assertLocalPathAllowed(file, opts()), file);
+});
+
+test("assertLocalPathAllowed: resolves a relative path against cwd and accepts it", () => {
+  const rel = path.join("images", "logo.png");
+  assert.equal(assertLocalPathAllowed(rel, opts()), path.join(CWD, rel));
+});
+
+test("assertLocalPathAllowed: rejects an absolute path outside cwd", () => {
+  const outside = path.resolve(path.sep, "secrets", "photo.png");
+  assert.throws(
+    () => assertLocalPathAllowed(outside, opts()),
+    /outside the allowed upload directories/,
+  );
+});
+
+test("assertLocalPathAllowed: rejects ../ traversal escaping cwd", () => {
+  assert.throws(
+    () => assertLocalPathAllowed(path.join("..", "escape.png"), opts()),
+    /outside the allowed upload directories/,
+  );
+});
+
+test("assertLocalPathAllowed: allows an extra root opted in via SELDONFRAME_UPLOAD_ROOTS", () => {
+  const extraRoot = path.resolve(path.sep, "assets");
+  const file = path.join(extraRoot, "hero.jpg");
+  assert.equal(
+    assertLocalPathAllowed(
+      file,
+      opts({ env: { SELDONFRAME_UPLOAD_ROOTS: extraRoot } }),
+    ),
+    file,
+  );
+});
+
+test("assertLocalPathAllowed: rejects a symlink inside cwd that resolves outside it", () => {
+  const link = path.join(CWD, "innocent-link.png");
+  const target = path.resolve(path.sep, "home", "user", ".ssh", "id_rsa");
+  const realpath = (p) => (p === link ? target : p);
+  assert.throws(
+    () => assertLocalPathAllowed(link, opts({ realpath })),
+    /outside the allowed upload directories/,
+  );
+});
+
+test("assertLocalPathAllowed: case-insensitive containment when enabled (win32 behavior)", () => {
+  const file = path.join(path.resolve(path.sep, "PROJ"), "logo.png");
+  assert.equal(
+    assertLocalPathAllowed(file, opts({ caseInsensitive: true })),
+    file,
+  );
+});
+
+test("assertLocalPathAllowed: surfaces a clear error when the file doesn't exist", () => {
+  const realpath = () => {
+    const err = new Error("ENOENT: no such file or directory");
+    throw err;
+  };
+  assert.throws(
+    () => assertLocalPathAllowed(path.join(CWD, "missing.png"), opts({ realpath })),
+    /cannot resolve/,
+  );
+});
+
+test("getAllowedUploadRoots: cwd only by default, plus delimiter-split env roots", () => {
+  assert.deepEqual(getAllowedUploadRoots({}, CWD), [CWD]);
+  const a = path.resolve(path.sep, "a");
+  const b = path.resolve(path.sep, "b");
+  assert.deepEqual(
+    getAllowedUploadRoots(
+      { SELDONFRAME_UPLOAD_ROOTS: `${a}${path.delimiter} ${b} ${path.delimiter}` },
+      CWD,
+    ),
+    [CWD, a, b],
+  );
+});

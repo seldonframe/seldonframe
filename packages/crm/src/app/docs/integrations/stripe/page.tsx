@@ -50,7 +50,7 @@ export default function Page() {
       <h2>What you don't have to do</h2>
       <ul>
         <li>You don't enter card numbers — customers do, on Stripe-hosted pages. SeldonFrame is never PCI scope.</li>
-        <li>You don't reconcile manually — Stripe payouts to your bank are independent of SF.</li>
+        <li>You don't reconcile manually — Stripe payouts to your bank are independent of Seldon.</li>
       </ul>
 
       <h2>Refunds</h2>

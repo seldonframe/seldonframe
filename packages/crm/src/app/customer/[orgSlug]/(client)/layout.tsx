@@ -25,6 +25,7 @@ import {
 } from "@/lib/portal/auth";
 import { getHarnessRules } from "@/lib/harness-rules";
 import { getPublicOrgThemeBySlug } from "@/lib/theme/actions";
+import { isAutopayConsoleOn } from "@/lib/web-build/policy";
 
 export default async function CustomerPortalLayout({
   children,
@@ -61,6 +62,7 @@ export default async function CustomerPortalLayout({
         branding={branding}
         customerEmail={customerEmail}
         signOutAction={clearPortalSessionAction.bind(null, orgSlug)}
+        showBilling={isAutopayConsoleOn({ SF_AUTOPAY_CONSOLE: process.env.SF_AUTOPAY_CONSOLE })}
       >
         {children}
       </CustomerPortalShell>

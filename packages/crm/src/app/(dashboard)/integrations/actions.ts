@@ -17,9 +17,22 @@
 
 "use server";
 
+import { cookies } from "next/headers";
 import { getOrgId, getCurrentUser } from "@/lib/auth/helpers";
 import { assertWritable } from "@/lib/demo/server";
-import { storeSecret } from "@/lib/secrets";
+import { storeSecret, rotateSecret } from "@/lib/secrets";
+import { getVettedConnector } from "@/lib/agents/mcp/connectors";
+import {
+  discoverAuthServer,
+  registerClient,
+  buildAuthorizeUrl,
+  generatePkcePair,
+  generateStateToken,
+} from "@/lib/agents/mcp/oauth";
+import {
+  MCP_OAUTH_COOKIE,
+  signMcpOauthState,
+} from "@/lib/agents/mcp/oauth-state-cookie";
 import {
   listConnections,
   createConnectLink,
@@ -28,6 +41,11 @@ import {
   type ToolkitConnection,
 } from "@/lib/integrations/composio/client";
 import { getComposioToolkit } from "@/lib/integrations/composio/catalog";
+import {
+  ingestSentMailVoiceProfile,
+  type VoiceIngestResult,
+} from "@/lib/agents/voice-profile/ingest-sent-mail";
+import { buildVoiceIngestDeps } from "@/lib/agents/voice-profile/build-deps";
 
 /** Where Composio sends the operator back after the hosted consent screen. */
 const INTEGRATIONS_BASE_URL = "https://app.seldonframe.com/integrations";
@@ -159,6 +177,145 @@ export async function setComposioKeyAction(
   }
 }
 
+// ─── MCP OAuth connectors (Circle et al.) ────────────────────────────────────
+//
+// Mirrors connectComposioToolkitAction's shape: resolve the authed org
+// server-side, look up the connector in the vetted registry (never trust a
+// client-supplied endpoint), then run discovery → DCR → mint a signed,
+// httpOnly, 10-minute state cookie and return the authorize URL for the
+// client to redirect to. The callback (app/api/integrations/mcp/callback)
+// completes the exchange.
+
+const MCP_OAUTH_COOKIE_MAX_AGE_SECONDS = 600; // 10 minutes
+
+function resolveAuthSecret(): string {
+  const secret = process.env.AUTH_SECRET?.trim() || process.env.NEXTAUTH_SECRET?.trim() || "";
+  if (!secret) {
+    // contract:throw-ok: deployment-config error (env var missing) — never
+    // mint an unverifiable state cookie.
+    throw new Error("Cannot start MCP OAuth connect: AUTH_SECRET (or NEXTAUTH_SECRET) is not set.");
+  }
+  return secret;
+}
+
+function resolveAppOrigin(): string {
+  return (process.env.NEXTAUTH_URL?.trim() || "https://app.seldonframe.com").replace(/\/+$/, "");
+}
+
+export type ConnectMcpConnectorResult = { ok: true; url: string } | { ok: false; error: string };
+
+/**
+ * Begin the OAuth connect flow for a vetted `authType:"oauth"` connector
+ * (Circle). Discovers the auth server, registers a per-workspace DCR client,
+ * mints PKCE + state, sets the signed state cookie, and returns the
+ * authorize URL — the client does `window.location.assign(url)`.
+ */
+export async function connectMcpConnectorAction(input: {
+  connectorId: string;
+  accessLevelIndex?: number;
+}): Promise<ConnectMcpConnectorResult> {
+  assertWritable();
+  const orgId = await getOrgId();
+  if (!orgId) return { ok: false, error: "unauthorized" };
+
+  const connector = getVettedConnector(input.connectorId);
+  if (!connector || connector.authType !== "oauth") {
+    return { ok: false, error: "unknown_oauth_connector" };
+  }
+
+  const accessLevels = connector.accessLevels ?? [];
+  const level =
+    accessLevels[input.accessLevelIndex ?? 0] ?? accessLevels[0];
+  if (!level) return { ok: false, error: "no_access_levels_configured" };
+
+  const redirectUri = `${resolveAppOrigin()}/api/integrations/mcp/callback`;
+
+  let secret: string;
+  try {
+    secret = resolveAuthSecret();
+  } catch (err) {
+    return { ok: false, error: err instanceof Error ? err.message : String(err) };
+  }
+
+  try {
+    const metadata = await discoverAuthServer(connector.endpoint);
+    const client = await registerClient({
+      metadata,
+      redirectUri,
+      clientName: "SeldonFrame",
+    });
+
+    const { verifier, challenge } = generatePkcePair();
+    const state = generateStateToken();
+
+    const cookieValue = signMcpOauthState(
+      {
+        v: 1,
+        state,
+        verifier,
+        connectorId: connector.id,
+        orgId,
+        clientId: client.client_id,
+        clientSecret: client.client_secret,
+        tokenEndpoint: metadata.token_endpoint,
+        scopes: level.scopes,
+        exp: Date.now() + MCP_OAUTH_COOKIE_MAX_AGE_SECONDS * 1000,
+      },
+      secret,
+    );
+
+    const cookieStore = await cookies();
+    cookieStore.set(MCP_OAUTH_COOKIE, cookieValue, {
+      httpOnly: true,
+      secure: true,
+      sameSite: "lax",
+      path: "/",
+      maxAge: MCP_OAUTH_COOKIE_MAX_AGE_SECONDS,
+    });
+
+    const url = buildAuthorizeUrl({
+      metadata,
+      clientId: client.client_id,
+      redirectUri,
+      scopes: level.scopes,
+      state,
+      codeChallenge: challenge,
+    });
+
+    return { ok: true, url };
+  } catch (err) {
+    return { ok: false, error: err instanceof Error ? err.message : String(err) };
+  }
+}
+
+export type DisconnectMcpConnectorResult = { ok: true } | { ok: false; error: string };
+
+/**
+ * Disconnect a vetted OAuth connector: delete its stored secret (the token
+ * envelope). Circle doesn't advertise a revocation endpoint — the operator
+ * can also revoke access from within Circle itself; documented in the
+ * /integrations card copy, not enforced here.
+ */
+export async function disconnectMcpConnectorAction(
+  connectorId: string,
+): Promise<DisconnectMcpConnectorResult> {
+  assertWritable();
+  const orgId = await getOrgId();
+  if (!orgId) return { ok: false, error: "unauthorized" };
+
+  const connector = getVettedConnector(connectorId);
+  if (!connector || connector.authType !== "oauth") {
+    return { ok: false, error: "unknown_oauth_connector" };
+  }
+
+  try {
+    await rotateSecret({ workspaceId: orgId, serviceName: connector.secretService });
+    return { ok: true };
+  } catch (err) {
+    return { ok: false, error: err instanceof Error ? err.message : String(err) };
+  }
+}
+
 export type EnableComposioTriggerResult =
   | { ok: true; triggerId: string | null }
   | { ok: false; error: string };
@@ -186,4 +343,22 @@ export async function enableComposioTriggerAction(
   } catch (err) {
     return { ok: false, error: err instanceof Error ? err.message : String(err) };
   }
+}
+
+/**
+ * Email-agent slice (Part A3) — manual refresh of the operator's sent-mail
+ * voice profile. Same org-guard pattern as enableComposioTriggerAction; wires
+ * the REAL Composio Gmail fetch + ONE Anthropic distill call + the Brain
+ * store upsert. Returns the ingestion result verbatim ({ok:true, notePath} |
+ * {ok:false, reason}) — never throws (ingestSentMailVoiceProfile is
+ * fail-soft end-to-end).
+ */
+export async function refreshVoiceProfileAction(): Promise<
+  VoiceIngestResult | { ok: false; reason: "unauthorized" }
+> {
+  assertWritable();
+  const orgId = await getOrgId();
+  if (!orgId) return { ok: false, reason: "unauthorized" };
+
+  return ingestSentMailVoiceProfile(buildVoiceIngestDeps(orgId), { orgId });
 }

@@ -178,12 +178,26 @@ export default async function ListingDetailPage({ params, searchParams }: Listin
     author: { "@type": "Organization", name: agent.builder },
   };
 
+  // schema.org BreadcrumbList — Home → Marketplace → this listing. Helps
+  // search engines render the breadcrumb trail in results and gives LLMs a
+  // clean site-hierarchy signal alongside the SoftwareApplication JSON-LD.
+  const breadcrumbJsonLd = {
+    "@context": "https://schema.org",
+    "@type": "BreadcrumbList",
+    itemListElement: [
+      { "@type": "ListItem", position: 1, name: "Home", item: "https://www.seldonframe.com" },
+      { "@type": "ListItem", position: 2, name: "Marketplace", item: "https://www.seldonframe.com/marketplace" },
+      { "@type": "ListItem", position: 3, name: agent.name, item: `https://www.seldonframe.com/marketplace/${agent.slug}` },
+    ],
+  };
+
   return (
     <div className="sf-mkt" style={{ minHeight: "100vh", background: MKT.paper, color: MKT.ink, fontFamily: MKT.fontSans }}>
       <MarketplaceStyles />
       <MarkdownPointer href={`/marketplace/${agent.slug}.md`} />
       {/* GEO: structured data so LLMs + search engines can cite the listing. */}
       <script type="application/ld+json" dangerouslySetInnerHTML={{ __html: JSON.stringify(jsonLd) }} />
+      <script type="application/ld+json" dangerouslySetInnerHTML={{ __html: JSON.stringify(breadcrumbJsonLd) }} />
       <MarketplaceNav active="browse" />
 
       <main className="sf-listing-main" style={{ maxWidth: 1100, margin: "0 auto", padding: "26px 32px 70px" }}>
@@ -202,7 +216,7 @@ export default async function ListingDetailPage({ params, searchParams }: Listin
           <div>
             {/* header — semantic h1 + the SEO/GEO credibility line */}
             <header className="sf-listing-head" style={{ display: "flex", alignItems: "flex-start", gap: 20, paddingBottom: 26, borderBottom: "1px solid rgba(34,29,23,0.10)" }}>
-              <span style={{ width: 74, height: 74, borderRadius: 19, background: "rgba(0,137,123,0.10)", color: MKT.green, display: "flex", alignItems: "center", justifyContent: "center", flex: "none" }}>
+              <span style={{ width: 74, height: 74, borderRadius: 19, background: "rgba(31, 43, 36,0.10)", color: MKT.green, display: "flex", alignItems: "center", justifyContent: "center", flex: "none" }}>
                 <MarketplaceIcon name={agent.icon} size={36} />
               </span>
               <div style={{ flex: 1, minWidth: 0 }}>
@@ -237,7 +251,7 @@ export default async function ListingDetailPage({ params, searchParams }: Listin
                         letterSpacing: "0.04em",
                         textTransform: "uppercase",
                         color: MKT.green,
-                        background: "rgba(0,137,123,0.10)",
+                        background: "rgba(31, 43, 36,0.10)",
                         padding: "4px 10px",
                         borderRadius: 999,
                         fontFamily: MKT.fontMono,
@@ -364,7 +378,7 @@ export default async function ListingDetailPage({ params, searchParams }: Listin
                             <div style={{ fontWeight: 650, fontSize: 15, display: "flex", alignItems: "center", gap: 7, whiteSpace: "nowrap" }}>
                               {r.author}
                               {r.verified ? (
-                                <span style={{ display: "inline-flex", alignItems: "center", gap: 3, fontSize: 11, fontWeight: 700, color: MKT.green, background: "rgba(0,137,123,0.10)", padding: "2px 8px", borderRadius: 999, whiteSpace: "nowrap" }}>
+                                <span style={{ display: "inline-flex", alignItems: "center", gap: 3, fontSize: 11, fontWeight: 700, color: MKT.green, background: "rgba(31, 43, 36,0.10)", padding: "2px 8px", borderRadius: 999, whiteSpace: "nowrap" }}>
                                   <MarketplaceIcon name="shield" size={13} />
                                   Verified install
                                 </span>
@@ -397,7 +411,7 @@ export default async function ListingDetailPage({ params, searchParams }: Listin
                       className="sf-cardhover"
                       style={{ textDecoration: "none", color: MKT.ink, background: "#fff", border: "1px solid rgba(34,29,23,0.10)", borderRadius: 15, padding: 16, display: "flex", alignItems: "center", gap: 13, boxShadow: "0 1px 2px rgba(34,29,23,0.04)" }}
                     >
-                      <span style={{ width: 44, height: 44, borderRadius: 12, background: "rgba(0,137,123,0.10)", color: MKT.green, display: "flex", alignItems: "center", justifyContent: "center", flex: "none" }}>
+                      <span style={{ width: 44, height: 44, borderRadius: 12, background: "rgba(31, 43, 36,0.10)", color: MKT.green, display: "flex", alignItems: "center", justifyContent: "center", flex: "none" }}>
                         <MarketplaceIcon name={o.icon} size={21} />
                       </span>
                       <div style={{ flex: 1, minWidth: 0 }}>
@@ -465,6 +479,89 @@ export default async function ListingDetailPage({ params, searchParams }: Listin
                       — a stat-backed answer page you can deploy from in 60 seconds.
                     </p>
                   ) : null}
+                </div>
+              </div>
+            </section>
+
+            {/* cross-link — sell-agents guide cluster */}
+            <section style={sectionBorder}>
+              <h2 style={{ ...sectionH2, marginBottom: 4 }}>Selling agents like this one</h2>
+              <p style={{ margin: "0 0 18px", fontSize: 14.5, color: "rgba(34,29,23,0.55)" }}>
+                Guides for builders who want to list on the marketplace
+              </p>
+              <div style={{ display: "flex", flexDirection: "column", gap: 10 }}>
+                {[
+                  { href: "/guides/how-to-make-money-selling-ai-agents", label: "How to make money selling AI agents" },
+                  { href: "/guides/how-much-to-charge-for-an-ai-agent", label: "How much to charge for an AI agent" },
+                  { href: "/guides/white-label-ai-agents", label: "White-label AI agents for agencies" },
+                ].map((g) => (
+                  <Link
+                    key={g.href}
+                    href={g.href}
+                    className="sf-link"
+                    style={{ display: "inline-flex", alignItems: "center", gap: 7, fontSize: 15, fontWeight: 600, color: MKT.green, textDecoration: "none" }}
+                  >
+                    <MarketplaceIcon name="backArrow" size={14} style={{ transform: "rotate(180deg)" }} />
+                    {g.label}
+                  </Link>
+                ))}
+              </div>
+            </section>
+
+            {/* "Sell yours" CTA row */}
+            <section style={{ padding: "26px 0 0" }}>
+              <div
+                style={{
+                  display: "flex",
+                  alignItems: "center",
+                  justifyContent: "space-between",
+                  gap: 16,
+                  flexWrap: "wrap",
+                  background: "rgba(31, 43, 36,0.06)",
+                  border: "1px solid rgba(31, 43, 36,0.18)",
+                  borderRadius: 16,
+                  padding: "18px 22px",
+                }}
+              >
+                <p style={{ margin: 0, fontSize: 15.5, fontWeight: 600, color: MKT.ink }}>
+                  Built an agent worth selling? List it on the marketplace.
+                </p>
+                <div style={{ display: "flex", gap: 10, flex: "none" }}>
+                  <Link
+                    href="/marketplace/build"
+                    className="sf-btn"
+                    style={{
+                      display: "inline-flex",
+                      alignItems: "center",
+                      fontSize: 14.5,
+                      fontWeight: 650,
+                      color: "#fff",
+                      background: MKT.green,
+                      textDecoration: "none",
+                      padding: "10px 18px",
+                      borderRadius: 11,
+                    }}
+                  >
+                    Build an agent
+                  </Link>
+                  <Link
+                    href="/sell"
+                    className="sf-link"
+                    style={{
+                      display: "inline-flex",
+                      alignItems: "center",
+                      fontSize: 14.5,
+                      fontWeight: 650,
+                      color: MKT.ink,
+                      background: "#fff",
+                      border: "1px solid rgba(34,29,23,0.16)",
+                      textDecoration: "none",
+                      padding: "10px 18px",
+                      borderRadius: 11,
+                    }}
+                  >
+                    Learn how selling works
+                  </Link>
                 </div>
               </div>
             </section>

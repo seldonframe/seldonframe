@@ -35,6 +35,7 @@
 
 import { isCronDueWithin } from "./cron-due";
 import type { FiredEvent, RunEventAgentResult } from "./run-event-agent";
+import { scrubSecretShapes } from "@/lib/agent-receipts/write";
 
 /** The synthetic event type a scheduled fire replays through runEventAgent. The
  *  orchestrator's findEventAgents resolves the matching scheduled agent for the
@@ -80,6 +81,20 @@ export type RunDueScheduledAgentsDeps = {
    *  cron cadence). A deployment whose lastFiredAt is newer than `now - window`
    *  is skipped even if the cron is due (it already fired this tick's window). */
   windowMinutes?: number;
+  /** Agent receipts slice (Task 2b) — optional DI hook, called once per fire
+   *  ATTEMPT (never for a skip), with the outcome of THIS deployment's
+   *  runEventAgent call. Default no-op: every existing caller/test is
+   *  byte-for-byte unaffected. In prod this is writeRunReceipt
+   *  (lib/agent-receipts/write.ts), itself fail-soft — but this hook is ALSO
+   *  guarded here (a throw is swallowed) so an injected writer can never
+   *  affect the cron loop. */
+  writeReceipt?: (args: {
+    orgId: string;
+    deploymentId: string;
+    status: "ok" | "error";
+    sourceRef: string;
+    summary: string;
+  }) => Promise<void>;
 };
 
 /** The cron tick's outcome summary (logged by the route; asserted by tests). */
@@ -197,15 +212,39 @@ export async function runDueScheduledAgents(
           firedAt: firedAt.toISOString(),
         },
       };
-      await deps.runEventAgent(event);
+      const runResult = await deps.runEventAgent(event);
       ran = true;
       result.fired += 1;
+      // Never-lies: a green "ok" badge must never sit next to a summary that
+      // says "...failed N" — an aggregate with ANY failures (even mixed with
+      // some successes) reports status "error"; the mixed counts stay
+      // visible in the summary text (no "partial" status exists).
+      await emitReceipt(deps, {
+        orgId: d.orgId,
+        deploymentId: d.deploymentId,
+        status: runResult.failed > 0 ? "error" : "ok",
+        sourceRef: firedAt.toISOString(),
+        summary: summarizeScheduleFireResult(runResult),
+      });
     } catch (err) {
       result.errors += 1;
       console.warn(
         `[schedule-agents] runEventAgent failed for deployment ${d.deploymentId}:`,
         err instanceof Error ? err.message : String(err),
       );
+      // Agent truth slice (Task 1) — scrub L-10 credential shapes out of the
+      // thrown error's message BEFORE it becomes a receipt summary (a
+      // thrown Error can echo back a connection string / key from a lower
+      // layer; the receipt is operator-facing and must never carry one).
+      await emitReceipt(deps, {
+        orgId: d.orgId,
+        deploymentId: d.deploymentId,
+        status: "error",
+        sourceRef: firedAt.toISOString(),
+        summary: `failed: ${
+          err instanceof Error ? scrubSecretShapes(err.message).slice(0, 120) : "unknown error"
+        }`,
+      });
       // Do NOT markFired on a hard failure — a transient error should be retried
       // next tick (the agent never ran). Continue to the next deployment.
       continue;
@@ -228,4 +267,45 @@ export async function runDueScheduledAgents(
   }
 
   return result;
+}
+
+/**
+ * Fold a RunEventAgentResult into a one-line receipt summary — this
+ * orchestration level has no per-tool detail (that's inside runEventAgent),
+ * so the receipt summarizes the aggregate counts instead. Pure.
+ */
+export function summarizeScheduleFireResult(result: RunEventAgentResult): string {
+  const parts: string[] = [`matched ${result.matched}`];
+  if (result.sent) parts.push(`sent ${result.sent}`);
+  if (result.actionOnly) parts.push(`action-only ${result.actionOnly}`);
+  if (result.scheduled) parts.push(`scheduled ${result.scheduled}`);
+  if (result.blocked) parts.push(`blocked ${result.blocked}`);
+  if (result.throttled) parts.push(`throttled ${result.throttled}`);
+  if (result.failed) parts.push(`failed ${result.failed}`);
+  if (result.skipped) parts.push(`skipped ${result.skipped}`);
+  return parts.join(", ");
+}
+
+/** Fire the optional writeReceipt DI hook — guarded so a throw from an
+ *  injected writer can never affect the cron loop (belt-and-suspenders on
+ *  top of writeRunReceipt's own fail-soft contract in prod). */
+async function emitReceipt(
+  deps: RunDueScheduledAgentsDeps,
+  args: {
+    orgId: string;
+    deploymentId: string;
+    status: "ok" | "error";
+    sourceRef: string;
+    summary: string;
+  },
+): Promise<void> {
+  if (!deps.writeReceipt) return;
+  try {
+    await deps.writeReceipt(args);
+  } catch (err) {
+    console.warn(
+      `[schedule-agents] writeReceipt failed for deployment ${args.deploymentId}:`,
+      err instanceof Error ? err.message : String(err),
+    );
+  }
 }

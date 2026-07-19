@@ -29,7 +29,7 @@ export default function DemoPage() {
 
         <div className="bg-[#111113] border border-white/5 rounded-[12px] aspect-video flex items-center justify-center mb-10">
           <div className="text-center px-8">
-            <div className="w-16 h-16 mx-auto mb-4 rounded-full bg-[#1FAE85]/10 flex items-center justify-center">
+            <div className="w-16 h-16 mx-auto mb-4 rounded-full bg-[#F6F2EA]/10 flex items-center justify-center">
               <span className="text-[28px]">🎬</span>
             </div>
             <p className="text-[15px] text-[#fafafa] font-semibold mb-1">Demo video coming soon</p>
@@ -39,7 +39,7 @@ export default function DemoPage() {
                 href="https://x.com/seldonframe"
                 target="_blank"
                 rel="noopener noreferrer"
-                className="text-[#1FAE85] hover:underline"
+                className="text-[#F6F2EA] hover:underline"
               >
                 𝕏
               </a>{" "}
@@ -48,7 +48,7 @@ export default function DemoPage() {
                 href="https://discord.gg/sbVUu976NW"
                 target="_blank"
                 rel="noopener noreferrer"
-                className="text-[#1FAE85] hover:underline"
+                className="text-[#F6F2EA] hover:underline"
               >
                 Discord
               </a>{" "}
@@ -67,7 +67,7 @@ export default function DemoPage() {
           </p>
           <ul className="space-y-2 text-[14px]">
             <li>
-              <a href="/docs/quickstart" className="text-[#1FAE85] hover:underline">
+              <a href="/docs/quickstart" className="text-[#F6F2EA] hover:underline">
                 Quickstart &rarr;
               </a>
               <span className="text-[#71717a]"> — three commands to run the same flow yourself</span>
@@ -77,7 +77,7 @@ export default function DemoPage() {
                 href="https://github.com/seldonframe/seldonframe/tree/main/tasks/launch-content"
                 target="_blank"
                 rel="noopener noreferrer"
-                className="text-[#1FAE85] hover:underline"
+                className="text-[#F6F2EA] hover:underline"
               >
                 Read the worked-example walkthrough &rarr;
               </a>

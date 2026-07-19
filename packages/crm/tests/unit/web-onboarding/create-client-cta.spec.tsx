@@ -1,12 +1,15 @@
 // packages/crm/tests/unit/web-onboarding/create-client-cta.spec.tsx
 //
-// Bootstrap: run with `node --import tsx --import ./tests/setup-dom.ts --test ...`
-// (see packages/crm/tests/setup-dom.ts) — jsdom is mounted before React imports.
+// Bootstrap: the setup-dom import below MUST stay first — it mounts jsdom
+// before React imports (the CI runner passes no --import flag, so the spec
+// pulls the bootstrap in itself).
 //
 // Query discipline: base-ui's Dialog and Tooltip mirror content into visible +
 // SR-only nodes, so plain `getByText` may match multiple elements. Prefer
 // `queryAllByText(...).length > 0` for presence checks and
 // `getByRole("button", ...)` for click targets.
+import "../../setup-dom";
+
 import { describe, test, afterEach } from "node:test";
 import assert from "node:assert/strict";
 import { render, screen, fireEvent, cleanup } from "@testing-library/react";
@@ -24,11 +27,13 @@ describe("CreateClientCta", () => {
 
   test("renders an anchor link to /clients/new when under the limit", () => {
     render(<CreateClientCta tier="growth" used={1} limit={3} />);
-    // base-ui's Button renders a <button>-styled element, but with
-    // `render={<Link href="..."/>} nativeButton={false}` the underlying
-    // tag is an <a> that carries role="button". Match on the role we
-    // know it gets and assert the href.
-    const trigger = screen.getByRole("button", { name: /add client workspace/i });
+    // 2026-05-17 fix (see create-client-cta.tsx): the under-limit CTA used
+    // to be a base-ui `Button render={<Link/>} nativeButton={false}`
+    // (role="button" on an <a>), but that render-prop pattern swallowed
+    // Next.js Link clicks — navigation never fired. It was replaced with a
+    // plain `<Link className={buttonVariants(...)}>`, which is a real
+    // anchor with role="link", not "button". Match on the real role.
+    const trigger = screen.getByRole("link", { name: /add client workspace/i });
     assert.equal(trigger.tagName.toLowerCase(), "a", "expected an anchor element");
     assert.equal(trigger.getAttribute("href"), "/clients/new");
   });
@@ -66,9 +71,10 @@ describe("CreateClientCta", () => {
       0,
       "Unexpected fraction rendered for unlimited tier",
     );
-    // Still resolves to the form route, not the modal — the trigger is
-    // a base-ui Button rendered as an <a> (role="button") with the href set.
-    const trigger = screen.getByRole("button", { name: /add client workspace/i });
+    // Still resolves to the form route, not the modal — the trigger is a
+    // plain <Link> (role="link", see 2026-05-17 fix note above) with the
+    // href set.
+    const trigger = screen.getByRole("link", { name: /add client workspace/i });
     assert.equal(trigger.tagName.toLowerCase(), "a");
     assert.equal(trigger.getAttribute("href"), "/clients/new");
   });

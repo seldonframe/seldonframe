@@ -156,9 +156,10 @@ function toSessionInfo(session: {
 }
 
 /**
- * List the catalog toolkits with their connection state for this workspace.
- * Filters Composio's full toolkit list down to the curated catalog. Returns []
- * when the workspace has no key.
+ * List the catalog toolkits (plus any `opts.extraToolkits` — a template's own
+ * non-catalog composio toolkits, composio live-tool-discovery slice
+ * 2026-07-11) with their connection state for this workspace. Returns [] when
+ * the workspace has no key.
  */
 export async function listConnections(
   orgId: string,
@@ -168,17 +169,30 @@ export async function listConnections(
     /** The Composio ENTITY (user_id) to scope to — the deployment id. When set,
      *  connections are listed under this id, bypassing the org-level cache. */
     entityUserId?: string | null;
+    /** Additional (non-catalog) toolkit slugs to request/report status for —
+     *  e.g. a youtube-only agent's required toolkit. Deduped onto the catalog
+     *  list for both the entity and org session-create paths, and admitted
+     *  into the mapped result alongside the catalog. */
+    extraToolkits?: string[];
   },
 ): Promise<ToolkitConnection[]> {
   const composio =
     opts?.client !== undefined ? opts.client : await composioForOrg(orgId);
   if (!composio) return [];
 
+  const extraToolkits = (opts?.extraToolkits ?? [])
+    .map((s) => s.trim().toLowerCase())
+    .filter((s) => s.length > 0);
+  const requestedToolkits = Array.from(
+    new Set([...COMPOSIO_TOOLKIT_SLUGS, ...extraToolkits]),
+  );
+  const extraAllowed = new Set(extraToolkits);
+
   let session: Awaited<ReturnType<Composio["create"]>>;
   if (opts?.entityUserId) {
     // Entity-scoped: always create fresh under the entity id, never the org
     // cache (the callback verifies against THIS deployment entity's accounts).
-    session = await composio.create(opts.entityUserId, { toolkits: [...COMPOSIO_TOOLKIT_SLUGS] });
+    session = await composio.create(opts.entityUserId, { toolkits: requestedToolkits });
   } else {
     const cachedId = await getSecretValue({
       workspaceId: orgId,
@@ -190,20 +204,23 @@ export async function listConnections(
       try {
         session = await composio.use(cachedId);
       } catch {
-        session = await composio.create(orgId, { toolkits: [...COMPOSIO_TOOLKIT_SLUGS] });
+        session = await composio.create(orgId, { toolkits: requestedToolkits });
         await persistSessionId(orgId, session.sessionId, opts?.actorUserId);
       }
     } else {
-      session = await composio.create(orgId, { toolkits: [...COMPOSIO_TOOLKIT_SLUGS] });
+      session = await composio.create(orgId, { toolkits: requestedToolkits });
       await persistSessionId(orgId, session.sessionId, opts?.actorUserId);
     }
   }
 
   const details = await session.toolkits();
-  return mapToolkitConnections(details.items ?? []);
+  return mapToolkitConnections(details.items ?? [], extraAllowed);
 }
 
-/** Pure mapping: Composio toolkit items → catalog-filtered ToolkitConnection[]. */
+/** Pure mapping: Composio toolkit items → catalog-filtered ToolkitConnection[].
+ *  `extraAllowed` (composio live-tool-discovery slice, 2026-07-11) admits
+ *  additional non-catalog slugs — a template's own required toolkits — so a
+ *  youtube-only agent's connection status is reported too. */
 export function mapToolkitConnections(
   items: Array<{
     slug: string;
@@ -214,9 +231,10 @@ export function mapToolkitConnections(
       connectedAccount?: { id: string } | null;
     } | null;
   }>,
+  extraAllowed?: ReadonlySet<string>,
 ): ToolkitConnection[] {
   return items
-    .filter((it) => isCatalogToolkit(it.slug))
+    .filter((it) => isCatalogToolkit(it.slug) || (extraAllowed?.has(it.slug.trim().toLowerCase()) ?? false))
     .map((it) => ({
       slug: it.slug,
       name: it.name,
@@ -243,7 +261,14 @@ export async function createConnectLink(
     entityUserId?: string | null;
   },
 ): Promise<{ redirectUrl: string | null }> {
-  const session = await ensureSession(orgId, [...COMPOSIO_TOOLKIT_SLUGS], opts);
+  // Include the requested toolkit in the session's toolkit list (deduped —
+  // harmless when it's already a catalog slug) so a non-catalog toolkit's
+  // consent (composio live-tool-discovery slice, 2026-07-11) lands under a
+  // session that actually knows about it.
+  const sessionToolkits = Array.from(
+    new Set([...COMPOSIO_TOOLKIT_SLUGS, toolkit.trim().toLowerCase()]),
+  );
+  const session = await ensureSession(orgId, sessionToolkits, opts);
   if (!session) return { redirectUrl: null };
 
   const composio =
@@ -271,21 +296,55 @@ export async function disconnect(
 /**
  * Register an inbound-event trigger for this workspace's user_id. The webhook
  * (Phase 4) routes the resulting events back into the archetype dispatcher.
+ *
+ * Agent receipts slice (Task 4) — `connectedAccountId` pins WHICH connected
+ * account the trigger (and the downstream tool calls it drives) reads from,
+ * when the workspace has more than one for the toolkit. Absent → the SDK's
+ * own default (the first connected account, emitting its "Multiple
+ * connected accounts found ... using the first one" warning) — today's
+ * behavior, unchanged for a caller that doesn't pass it.
  */
 export async function createTrigger(
   orgId: string,
   triggerSlug: string,
   triggerConfig?: Record<string, unknown>,
-  opts?: { client?: Composio | null },
+  opts?: { client?: Composio | null; connectedAccountId?: string | null },
 ): Promise<{ triggerId: string | null }> {
   const composio =
     opts?.client !== undefined ? opts.client : await composioForOrg(orgId);
   if (!composio) return { triggerId: null };
   const res = await composio.triggers.create(orgId, triggerSlug, {
     triggerConfig: triggerConfig ?? {},
+    ...(opts?.connectedAccountId ? { connectedAccountId: opts.connectedAccountId } : {}),
   });
   // The upsert response carries the trigger instance id under `triggerId`.
   const triggerId =
     (res as { triggerId?: string } | null | undefined)?.triggerId ?? null;
   return { triggerId };
+}
+
+/**
+ * List this workspace's connected-account ids for one toolkit (e.g.
+ * "gmail"), newest first per the API's default order. Agent receipts slice
+ * (Task 4) — the connected-account pin: when this returns >1 id, the caller
+ * (upgrade-inbox-trigger.ts's resolveConnectedAccountId) picks the first and
+ * persists the choice, so a later live run reads from the SAME account
+ * instead of the SDK silently picking one per-call. Returns [] when the
+ * workspace has no Composio key or no connections for the toolkit.
+ */
+export async function listConnectedAccountIds(
+  orgId: string,
+  toolkitSlug: string,
+  opts?: { client?: Composio | null },
+): Promise<string[]> {
+  const composio =
+    opts?.client !== undefined ? opts.client : await composioForOrg(orgId);
+  if (!composio) return [];
+  const res = await composio.connectedAccounts.list({
+    userIds: [orgId],
+    toolkitSlugs: [toolkitSlug],
+  });
+  return (res.items ?? [])
+    .map((item) => (item as { id?: string } | null | undefined)?.id)
+    .filter((id): id is string => typeof id === "string" && id.trim().length > 0);
 }

@@ -1,0 +1,62 @@
+<!doctype html>
+<html>
+<head>
+<meta charset="utf-8">
+<style>
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+  body { background: #333; }
+  .card {
+    position: absolute; top: 0; left: 0;
+    width: 1200px; height: 675px;
+    background: radial-gradient(1200px 900px at 20% 0%, #12121c 0%, #0a0a0f 60%);
+    color: #ececf1;
+    font-family: "Segoe UI", -apple-system, Inter, sans-serif;
+    padding: 72px 84px;
+    display: flex; flex-direction: column; justify-content: space-between;
+    overflow: hidden;
+  }
+  .card::after {
+    content: ""; position: absolute; inset: 0;
+    border: 1px solid rgba(255,255,255,0.07);
+  }
+  .kicker {
+    font-size: 22px; letter-spacing: 0.18em; text-transform: uppercase;
+    color: #8b8b9e; font-weight: 600;
+  }
+  .stat {
+    font-size: 118px; font-weight: 750; line-height: 1.04; letter-spacing: -0.02em;
+    color: #ffffff;
+  }
+  .stat .accent { color: #7c7cf3; }
+  .sub { font-size: 34px; color: #b9b9c7; font-weight: 400; margin-top: 18px; }
+  .loop {
+    display: flex; align-items: center; gap: 18px;
+    font-size: 26px; color: #8b8b9e; font-weight: 500;
+  }
+  .loop .step { color: #d6d6e0; }
+  .loop .arrow { color: #4a4a5c; }
+  .loop .live { color: #7c7cf3; }
+  .brand { font-size: 22px; color: #5c5c6e; font-weight: 600; letter-spacing: 0.02em; }
+  .foot { display: flex; justify-content: space-between; align-items: baseline; }
+</style>
+</head>
+<body>
+  <div class="card">
+    <div class="kicker">The bookmark vault · week 1</div>
+    <div>
+      <div class="stat">50 bookmarks<br>→ <span class="accent">11 patterns</span></div>
+      <div class="sub">my doomscrolling, distilled into a drafting engine</div>
+    </div>
+    <div class="foot">
+      <div class="loop">
+        <span class="step">bookmark</span><span class="arrow">→</span>
+        <span class="step">distill</span><span class="arrow">→</span>
+        <span class="step">draft</span><span class="arrow">→</span>
+        <span class="step">post</span><span class="arrow">→</span>
+        <span class="live">measure</span>
+      </div>
+      <div class="brand">@themaxthule</div>
+    </div>
+  </div>
+</body>
+</html>

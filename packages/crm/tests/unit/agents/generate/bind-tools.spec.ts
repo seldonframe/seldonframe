@@ -9,11 +9,23 @@
 //                          enabledTools:[] }  (matches bind.ts' provisional shape;
 //                          VETTED_CONNECTORS[id="postiz"].secretService = "postiz")
 //   • composio entries → { id:<toolkitSlug>, kind:"composio",
-//                          enabledToolkits:[toolkitSlug], enabledTools:[] }
+//                          enabledToolkits:[toolkitSlug], enabledTools:[the
+//                          toolkit's curated default tools] }
+//
+// T6 (2026-07-11, prod incident follow-up): `enabledTools` for a composio
+// binding used to be left EMPTY here (`[]`), on the assumption that a later
+// discovery/picker step (bind.ts buildConnectorBinding, when the operator
+// connects a live key) would fill it in. Prod data confirmed that assumption
+// is wrong for GENERATED agents — they get no such follow-up step, so every
+// generated starter's composio bindings resolved to ZERO real tools at
+// runtime. `enabledTools` is now seeded with `defaultToolsForToolkits`'s
+// curated default tool list for the toolkit; vetted (postiz) is unchanged —
+// there's no toolkit-default catalog for vetted connectors.
 //
 // These tests pin the contract:
 //   • a social-post sentence → a VALID vetted Postiz binding; warnings === [];
-//   • a "log to Notion" sentence → a composio binding enabling the notion toolkit;
+//   • a "log to Notion" sentence → a composio binding enabling the notion
+//     toolkit, seeded with its curated default tools;
 //   • a review-only sentence (no tool) → { connectors:[], warnings:[] };
 //   • two keywords for the same tool (Instagram + Facebook) → ONE Postiz binding;
 //   • every produced binding validates as a real ConnectorBinding (the Zod
@@ -24,12 +36,13 @@
 import { describe, test } from "node:test";
 import assert from "node:assert/strict";
 
-import { bindToolsForIntent } from "../../../../src/lib/agents/generate/bind-tools";
+import { bindToolsForIntent, bindToolIds } from "../../../../src/lib/agents/generate/bind-tools";
 import type { AgentIntent } from "../../../../src/lib/agents/generate/parse-intent";
 import {
   connectorBindingSchema,
   type ConnectorBinding,
 } from "../../../../src/lib/agents/mcp/connectors";
+import { defaultToolsForToolkits } from "../../../../src/lib/integrations/composio/catalog";
 
 /** A complete, valid AgentIntent with the given sentence as its promptHint. */
 function intentWith(promptHint: string | undefined): AgentIntent {
@@ -89,6 +102,40 @@ describe("bindToolsForIntent — vetted (Postiz)", () => {
   });
 });
 
+describe("bindToolsForIntent — vetted OAuth (Circle)", () => {
+  test("a Circle-mastermind pairing sentence yields a valid vetted Circle binding; warnings === []", () => {
+    const { connectors, warnings } = bindToolsForIntent(
+      intentWith("pair up active members of my Circle mastermind each month"),
+    );
+    assert.equal(warnings.length, 0, "pure layer never produces warnings");
+
+    const circle = connectors.find((c) => c.id === "circle");
+    assert.ok(circle, "should include a Circle binding");
+    assert.deepEqual(circle, {
+      id: "circle",
+      kind: "vetted",
+      serviceName: "circle",
+      enabledTools: [],
+    });
+    assertValidBinding(circle);
+  });
+
+  test("a figurative \"circle back\" sentence still matches (whole-word matcher, no semantic disambiguation) — accepted-suggestion noise, never an error", () => {
+    // findToolsByKeywords is a whole-word (not semantic) matcher — "circle" as a
+    // standalone word matches regardless of "circle back" idiom vs the Circle
+    // product. Per the design (§D), this is accepted suggestion noise (the
+    // operator can just not click bind it), never surfaced as an error/throw.
+    const { connectors, warnings } = bindToolsForIntent(
+      intentWith("let's circle back next week on the proposal"),
+    );
+    assert.equal(warnings.length, 0);
+    assert.ok(
+      connectors.some((c) => c.id === "circle"),
+      "the whole-word matcher is expected to match here too — documented tradeoff, not a bug",
+    );
+  });
+});
+
 describe("bindToolsForIntent — composio", () => {
   test("a 'log to Notion' intent yields a composio binding enabling the notion toolkit", () => {
     const { connectors, warnings } = bindToolsForIntent(
@@ -106,12 +153,13 @@ describe("bindToolsForIntent — composio", () => {
         id: "notion",
         kind: "composio",
         enabledToolkits: ["notion"],
-        enabledTools: [],
+        enabledTools: defaultToolsForToolkits(["notion"]),
       });
+      assert.notDeepEqual(parsed.enabledTools, []);
     }
   });
 
-  test("a 'log to a Google Sheet' intent binds the real googledrive toolkit slug", () => {
+  test("a 'log to a Google Sheet' intent binds the real googledrive toolkit slug, seeded with its curated default tools", () => {
     const { connectors } = bindToolsForIntent(
       intentWith("log every lead into a Google Sheet"),
     );
@@ -122,8 +170,26 @@ describe("bindToolsForIntent — composio", () => {
     const parsed = assertValidBinding(sheet);
     if (parsed.kind === "composio") {
       assert.deepEqual(parsed.enabledToolkits, ["googledrive"]);
-      assert.deepEqual(parsed.enabledTools, []);
+      assert.deepEqual(parsed.enabledTools, defaultToolsForToolkits(["googledrive"]));
     }
+  });
+});
+
+describe("bindToolIds — the explicit-id binder (T6 regression)", () => {
+  test("an explicit composio catalog id (gmail) is seeded with its curated default tools, never an empty allowlist", () => {
+    const connectors = bindToolIds(["gmail"]);
+    const gmail = connectors.find((c) => c.kind === "composio" && c.id === "gmail");
+    assert.ok(gmail, "should include a composio Gmail binding");
+    if (gmail!.kind === "composio") {
+      assert.deepEqual(gmail!.enabledTools, defaultToolsForToolkits(["gmail"]));
+    }
+  });
+
+  test("an explicit vetted catalog id (postiz) is unchanged — still an empty allowlist", () => {
+    const connectors = bindToolIds(["postiz"]);
+    const postiz = connectors.find((c) => c.kind === "vetted" && c.id === "postiz");
+    assert.ok(postiz, "should include a vetted Postiz binding");
+    assert.deepEqual((postiz as { enabledTools: string[] }).enabledTools, []);
   });
 });
 

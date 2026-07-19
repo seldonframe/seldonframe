@@ -27,7 +27,40 @@ export const DESIGNS: DesignTemplate[] = [
     niche: ["massage", "bodywork", "recovery"], swatch: ["#7c5440", "#ece3d6"] },
 ];
 
+// Archetype track — the 8 aesthetic archetypes offered to trades/generic
+// (non-health) workspaces. These re-skin the landing-r1 render (palette + font
+// + hero variant); switching is content-safe. No thumbnails yet — the picker's
+// <Thumb> degrades to a named placeholder, and the swatches carry the color
+// cue. Ids/labels/swatches mirror ARCHETYPES in
+// lib/workspace/aesthetic-archetypes.ts (kept as a static list so the client
+// bundle doesn't pull in the full archetype registry).
+// `thumb` = a real render of each archetype (screenshot of /landing-preview/<id>,
+// or a live workspace for midnight-craft). Same treatment as the health
+// templates' /landing-thumbs/tN.png. The <Thumb> component degrades to the
+// striped name placeholder if the image is missing, so this is safe even if a
+// capture is absent.
+export const ARCHETYPE_DESIGNS: DesignTemplate[] = [
+  { id: "bold-urgency", name: "Bold Urgency", thumb: "/landing-thumbs/a-bold-urgency.jpg",
+    niche: ["emergency HVAC", "plumbing", "electrical"], swatch: ["#cc2d2d", "#1a1a1a"] },
+  { id: "editorial-warm", name: "Editorial Warm", thumb: "/landing-thumbs/a-editorial-warm.jpg",
+    niche: ["craft trades", "family-owned"], swatch: ["#9c2b1d", "#ece5d8"] },
+  { id: "soft-residential", name: "Soft Residential", thumb: "/landing-thumbs/a-soft-residential.jpg",
+    niche: ["cleaning", "landscaping", "lawn"], swatch: ["#3d6e4f", "#f2efe8"] },
+  { id: "clinical-trust", name: "Clinical Trust", thumb: "/landing-thumbs/a-clinical-trust.jpg",
+    niche: ["medical", "dental", "legal"], swatch: ["#1e3a5f", "#eef2f6"] },
+  { id: "cinematic-aspirational", name: "Cinematic Luxe", thumb: "/landing-thumbs/a-cinematic-aspirational.jpg",
+    niche: ["medspa", "fitness", "wellness"], swatch: ["#a08562", "#1f1b16"] },
+  { id: "technical-restrained", name: "Technical", thumb: "/landing-thumbs/a-technical-restrained.jpg",
+    niche: ["agency", "B2B", "SaaS"], swatch: ["#2a2a2a", "#f4f4f5"] },
+  { id: "brutalist", name: "Brutalist", thumb: "/landing-thumbs/a-brutalist.jpg",
+    niche: ["creative studios", "concept-driven"], swatch: ["#0a0a0a", "#f5f5f5"] },
+  { id: "midnight-craft", name: "Midnight Craft", thumb: "/landing-thumbs/a-midnight-craft.jpg",
+    niche: ["premium dark trades", "design-build"], swatch: ["#34d399", "#0b0f0d"] },
+];
+
+const ALL_DESIGNS = [...DESIGNS, ...ARCHETYPE_DESIGNS];
+
 export function templateById(id: DesignId): AnyTemplate {
   if (!id || id === "auto") return AUTO;
-  return DESIGNS.find((d) => d.id === id) || AUTO;
+  return ALL_DESIGNS.find((d) => d.id === id) || AUTO;
 }

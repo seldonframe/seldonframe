@@ -59,7 +59,7 @@ export type BuildNavInput = {
   /** organizations.hiddenBlocks — block slugs the operator turned off
    *  in visibility settings. Filtered via hiddenSlugToHref below. */
   hiddenBlocks: string[];
-  /** SF_SUPERADMIN_EMAILS membership — surfaces the SF Admin entry. */
+  /** SF_SUPERADMIN_EMAILS membership — surfaces the Seldon Admin entry. */
   isSuperAdmin: boolean;
   /** The operator's PRIMARY org id (user.orgId). Used to build the
    *  "← Back to agency" switch link inside a client workspace. */
@@ -80,6 +80,12 @@ export type BuildNavInput = {
    *  Ignored when enabledModules is null/undefined (grandfathered / flag
    *  off — nothing is filtered either way). */
   smsLive?: boolean;
+  /** Never-fail-compile (2026-07-15) — SF_DRAFT_APPROVALS. This module is
+   *  framework-free (no env reads), so the flag arrives as an explicit
+   *  input, same pattern as isSuperAdmin: the caller (sidebar.tsx's server
+   *  layout) resolves it and threads it through. Surfaces the Approvals
+   *  nav entry when true; absent/false → today's nav, unchanged. */
+  draftApprovalsOn?: boolean;
 };
 
 // Block-slug → href map for visibility filtering. Lifted verbatim from
@@ -142,7 +148,7 @@ function applyModuleFilter(
     }
   }
   // Any href NOT present in MODULE_TO_HREFS at all (Settings, Back to
-  // agency, SF Admin) is never gated by a module and always stays.
+  // agency, Seldon Admin) is never gated by a module and always stays.
   const gatedHrefs = new Set(Object.values(MODULE_TO_HREFS).flat());
 
   const filtered = groups
@@ -171,15 +177,24 @@ function applyModuleFilter(
  * so the six-noun contract is unit-testable.
  */
 export function buildNavGroups(input: BuildNavInput): NavGroup[] {
-  const { sessionType, workspaceCount, hiddenBlocks, isSuperAdmin, primaryOrgId, labels, enabledModules, smsLive } =
-    input;
+  const {
+    sessionType,
+    workspaceCount,
+    hiddenBlocks,
+    isSuperAdmin,
+    primaryOrgId,
+    labels,
+    enabledModules,
+    smsLive,
+    draftApprovalsOn = false,
+  } = input;
 
   const hiddenHrefs = new Set(hiddenBlocks.map((slug) => hiddenSlugToHref[slug]).filter(Boolean));
 
   const filterHidden = (items: NavItem[]): NavItem[] => items.filter((item) => !hiddenHrefs.has(item.href));
 
   const superAdminItems: NavItem[] = isSuperAdmin
-    ? [{ href: "/super-admin", label: "SF Admin", icon: "Shield" }]
+    ? [{ href: "/super-admin", label: "Seldon Admin", icon: "Shield" }]
     : [];
 
   // -------------------------------------------------------------------
@@ -291,6 +306,11 @@ export function buildNavGroups(input: BuildNavInput): NavGroup[] {
         { href: "/dashboard", label: "Home", icon: "Home" },
         { href: "/studio/agents", label: "Agents", icon: "Bot" },
         { href: "/automations", label: "Automations", icon: "Zap", indent: true },
+        // Replay Ledger (2026-07-18) — the org-scoped receipts dashboard for
+        // deterministic replay (agent_workflow_traces + replay_skills).
+        // Indented under Agents like Automations: a reliability surface for
+        // the same agents, not a new top-level noun.
+        { href: "/replay", label: "Replay", icon: "BookOpen", indent: true },
       ]),
     },
     {
@@ -302,6 +322,13 @@ export function buildNavGroups(input: BuildNavInput): NavGroup[] {
         { href: "/contacts", label: labels.contact.plural, icon: "Users" },
         { href: "/bookings", label: "Bookings", icon: "Calendar", indent: true },
         { href: "/forms", label: labels.intakeForm.plural, icon: "FileText", indent: true },
+        // Never-fail-compile (SF_DRAFT_APPROVALS) — the drafts inbox for
+        // work a compiled agent prepared but can't execute itself. Count
+        // badge SKIPPED in v1 (no badge mechanism exists on NavItem today —
+        // see build-report for the conscious cut).
+        ...(draftApprovalsOn
+          ? [{ href: "/approvals", label: "Approvals", icon: "CheckSquare" }]
+          : []),
       ]),
     },
     {

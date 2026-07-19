@@ -62,7 +62,7 @@ export function ClaimBuildClient() {
   return (
     <div className="flex min-h-[70vh] items-center justify-center">
       <div className="text-center">
-        <div className="mx-auto mb-6 h-12 w-12 animate-spin rounded-full border-4 border-[#14b8a6] border-t-transparent" />
+        <div className="mx-auto mb-6 h-12 w-12 animate-spin rounded-full border-4 border-[#059669] border-t-transparent" />
         <p className="text-xl font-medium text-foreground">Attaching your workspace…</p>
       </div>
     </div>

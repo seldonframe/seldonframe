@@ -22,6 +22,8 @@ import assert from "node:assert/strict";
 
 import {
   runStatelessAgentTurn,
+  toolFailureGloss,
+  extractToolProof,
   type RunStatelessAgentTurnInput,
 } from "../../../src/lib/agents/stateless-turn";
 import type { AgentBlueprint } from "../../../src/db/schema/agents";
@@ -124,9 +126,16 @@ describe("runStatelessAgentTurn — tool allowlist", () => {
     const tools = fake.requests[0].tools as Array<{ name: string }>;
     const names = tools.map((t) => t.name);
     assert.deepEqual(names, ["look_up_availability"], "only the allowed tool is exposed");
-    // System prompt must be present (composeSystemPrompt was used).
-    assert.equal(typeof fake.requests[0].system, "string");
-    assert.ok((fake.requests[0].system as string).length > 0);
+    // System prompt must be present (composeSystemPrompt was used). Token
+    // economy (2026-07-16): it now ships as ONE cache-marked text block.
+    const systemBlocks = fake.requests[0].system as Array<{
+      type: string;
+      text: string;
+      cache_control?: { type: string };
+    }>;
+    assert.ok(Array.isArray(systemBlocks) && systemBlocks.length === 1);
+    assert.ok(systemBlocks[0].text.length > 0);
+    assert.deepEqual(systemBlocks[0].cache_control, { type: "ephemeral" });
   });
 
   test("system prompt is built from the blueprint (FAQ answer appears)", async () => {
@@ -134,7 +143,9 @@ describe("runStatelessAgentTurn — tool allowlist", () => {
       { content: [{ type: "text", text: "ok" }], stop_reason: "end_turn" },
     ]);
     await runStatelessAgentTurn(baseInput({ client: fake.client }));
-    const system = fake.requests[0].system as string;
+    const system = (fake.requests[0].system as Array<{ text: string }>)
+      .map((b) => b.text)
+      .join("\n");
     // The FAQ answer text from the blueprint must be embedded in the prompt.
     assert.match(system, /9 to 5, Mon–Fri\./);
     // Acme name is woven into the persona.
@@ -322,6 +333,197 @@ describe("runStatelessAgentTurn — tool-call loop in testMode", () => {
       | { content: string }
       | undefined;
     assert.ok(errBlock, "schema failure surfaces as an is_error tool_result");
+  });
+});
+
+// ─── 3b. onToolEvent DI hook (agent lifecycle slice, T5) ──────────────────────
+//
+// Supervised runs (lib/agents/lifecycle/supervised-run.ts) need a live action
+// log — this DI hook is the seam: an optional callback invoked at tool
+// call-start and again at its result, default no-op so every existing caller
+// (including every test above) is byte-for-byte unaffected.
+
+describe("runStatelessAgentTurn — onToolEvent DI hook", () => {
+  test("fires 'start' then 'result' (ok:true) for a successful tool call", async () => {
+    const fake = makeFakeClient([
+      {
+        content: [
+          {
+            type: "tool_use",
+            id: "tu_1",
+            name: "book_appointment",
+            input: {
+              fullName: "Jane Doe",
+              phone: "+15551234567",
+              slotIso: "2026-06-25T16:00:00Z",
+              confirmed: true,
+            },
+          },
+        ],
+        stop_reason: "tool_use",
+      },
+      { content: [{ type: "text", text: "You're all set." }], stop_reason: "end_turn" },
+    ]);
+
+    const events: Array<{ tool: string; phase: string; ok?: boolean; line: string }> = [];
+    const result = await runStatelessAgentTurn(
+      baseInput({
+        client: fake.client,
+        messages: [{ role: "user", content: "Book me for the 25th." }],
+        onToolEvent: (e) => events.push(e),
+      }),
+    );
+    assert.equal(result.ok, true);
+    assert.equal(events.length, 2);
+    assert.equal(events[0].tool, "book_appointment");
+    assert.equal(events[0].phase, "start");
+    assert.equal(events[1].tool, "book_appointment");
+    assert.equal(events[1].phase, "result");
+    assert.equal(events[1].ok, true);
+  });
+
+  test("fires 'result' with ok:false for an unknown tool", async () => {
+    const fake = makeFakeClient([
+      {
+        content: [{ type: "tool_use", id: "tu_x", name: "not_a_real_tool", input: {} }],
+        stop_reason: "tool_use",
+      },
+      { content: [{ type: "text", text: "hm" }], stop_reason: "end_turn" },
+    ]);
+    const events: Array<{ tool: string; phase: string; ok?: boolean }> = [];
+    await runStatelessAgentTurn(
+      baseInput({ client: fake.client, onToolEvent: (e) => events.push(e) }),
+    );
+    const resultEvent = events.find((e) => e.phase === "result");
+    assert.equal(resultEvent?.ok, false);
+  });
+
+  // F-F item 2 (evidence-first Run stage restructure) — the ACTION lane's
+  // lines get a target/proof suffix when the tool's result has a cheap id
+  // field (e.g. book_appointment's testMode synthetic bookingId), extracted
+  // right where the raw `output` is in scope (never a raw payload/body —
+  // just a short id string appended to the already-summarized line).
+  test("a successful tool call's result line includes a proof suffix when the output has an id-shaped field (bookingId)", async () => {
+    const fake = makeFakeClient([
+      {
+        content: [
+          {
+            type: "tool_use",
+            id: "tu_1",
+            name: "book_appointment",
+            input: {
+              fullName: "Jane Doe",
+              phone: "+15551234567",
+              slotIso: "2026-06-25T16:00:00Z",
+              confirmed: true,
+            },
+          },
+        ],
+        stop_reason: "tool_use",
+      },
+      { content: [{ type: "text", text: "You're all set." }], stop_reason: "end_turn" },
+    ]);
+    const events: Array<{ tool: string; phase: string; ok?: boolean; line: string }> = [];
+    await runStatelessAgentTurn(
+      baseInput({
+        client: fake.client,
+        messages: [{ role: "user", content: "Book me for the 25th." }],
+        onToolEvent: (e) => events.push(e),
+      }),
+    );
+    const resultEvent = events.find((e) => e.phase === "result");
+    // testMode's synthetic book_appointment result is { ok, testMode, bookingId: "test-<ms>" }.
+    assert.match(resultEvent!.line, /test-\d+/);
+  });
+
+  test("no onToolEvent provided → default no-op, behavior unchanged", async () => {
+    const fake = makeFakeClient([
+      {
+        content: [
+          {
+            type: "tool_use",
+            id: "tu_1",
+            name: "book_appointment",
+            input: {
+              fullName: "Jane Doe",
+              phone: "+15551234567",
+              slotIso: "2026-06-25T16:00:00Z",
+              confirmed: true,
+            },
+          },
+        ],
+        stop_reason: "tool_use",
+      },
+      { content: [{ type: "text", text: "ok" }], stop_reason: "end_turn" },
+    ]);
+    const result = await runStatelessAgentTurn(baseInput({ client: fake.client }));
+    assert.equal(result.ok, true);
+  });
+});
+
+// ─── 3c. toolFailureGloss (Wave 1 review, F3) ─────────────────────────────────
+//
+// The onToolEvent `line` for a THROWN tool-execution failure must be a
+// fixed, secret-safe gloss — never the raw Error.message, which a caller
+// (the supervised run's durable action_log) persists verbatim. The raw
+// message is only fed back to the LLM via the non-persisted tool_result
+// content, unaffected by this change.
+
+describe("toolFailureGloss", () => {
+  test("is a fixed gloss containing only the tool name — no raw error detail", () => {
+    assert.equal(toolFailureGloss("gmail__send"), "gmail__send failed");
+  });
+
+  test("never echoes secret-shaped detail even if a caller tried to pass it in", () => {
+    // The function's signature takes only a tool name — there is no
+    // parameter through which a raw message/secret could leak into the
+    // gloss. This test pins that contract so a future edit can't
+    // reintroduce a second (message) argument without this test failing.
+    assert.equal(toolFailureGloss.length, 1);
+  });
+});
+
+// ─── 3d. extractToolProof (F-F item 2, evidence-first Run stage) ─────────────
+//
+// A cheap, generic, shallow id-field extractor for the ACTION lane's proof
+// suffix — never a raw payload/body, just a short existing id string when
+// one is present at the TOP LEVEL of a tool's result. Composio result
+// shapes vary by toolkit/action and aren't generically introspectable
+// beyond common id-ish field names, so this is intentionally a best-effort
+// convenience, not a complete solution (documented limit).
+
+describe("extractToolProof", () => {
+  test("finds a top-level 'id' field", () => {
+    assert.equal(extractToolProof({ id: "msg_abc123" }), "msg_abc123");
+  });
+
+  test("finds common id-ish field names (messageId, threadId, bookingId, ...)", () => {
+    assert.equal(extractToolProof({ messageId: "m1" }), "m1");
+    assert.equal(extractToolProof({ threadId: "t1" }), "t1");
+    assert.equal(extractToolProof({ bookingId: "test-123" }), "test-123");
+    assert.equal(extractToolProof({ event_id: "e1" }), "e1");
+  });
+
+  test("no id-shaped field -> undefined", () => {
+    assert.equal(extractToolProof({ ok: true, count: 3 }), undefined);
+    assert.equal(extractToolProof({}), undefined);
+  });
+
+  test("never throws on null/undefined/non-object/array output", () => {
+    assert.equal(extractToolProof(null), undefined);
+    assert.equal(extractToolProof(undefined), undefined);
+    assert.equal(extractToolProof("a string"), undefined);
+    assert.equal(extractToolProof([{ id: "should-not-match" }]), undefined);
+  });
+
+  test("a huge string in an id-shaped field is not treated as a proof (guards against smuggling a body through an id field)", () => {
+    assert.equal(extractToolProof({ id: "x".repeat(200) }), undefined);
+  });
+
+  test("an email address or whitespace-bearing string in an id-shaped field is rejected (guards against PII/free-text smuggled through an id field)", () => {
+    assert.equal(extractToolProof({ id: "person@example.com" }), undefined);
+    assert.equal(extractToolProof({ messageId: "hello world" }), undefined);
+    assert.equal(extractToolProof({ record_id: "ok-123" }), "ok-123");
   });
 });
 

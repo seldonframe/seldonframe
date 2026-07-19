@@ -218,6 +218,12 @@ export type ExtractedBusinessFacts = {
   // only when the URL extraction found them on the original site. The
   // paste path always emits null/undefined for these. The R1 payload
   // generator prefers these over synthesis when present.
+
+  /** 2026-07-13 — the business's own logo, harvested from the source page
+   *  HTML (an <img> wordmark, else apple-touch-icon/favicon). URL path only;
+   *  the paste path leaves this undefined. Rendered in the R1 nav/footer. */
+  logo?: string | null;
+
   photos?: Array<{
     /** Absolute URL. */
     src: string;

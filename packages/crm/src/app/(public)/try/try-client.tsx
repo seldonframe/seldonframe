@@ -21,7 +21,7 @@
 //
 // No dashboard chrome, no auth imports — this must render for a fully
 // anonymous visitor. Palette matches marketing-hero.tsx's light/warm
-// tokens (#F6F2EA paper, #221D17 ink, #00897B green accent).
+// tokens (#F6F2EA paper, #221D17 ink, #1F2B24 green accent).
 "use client";
 
 import { useEffect, useRef, useState } from "react";
@@ -87,6 +87,18 @@ export function TryClient({ initialUrl }: { initialUrl: string }) {
   const [done, setDone] = useState<DoneData | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [rateLimited, setRateLimited] = useState(false);
+  // 2026-07-14 — extraction-failed honesty fix. extraction_failed is a
+  // PERMANENT condition for that URL (the site genuinely has no phone/name/
+  // location we could find) — "Try again" would just fail identically and
+  // burn the visitor's rate limit. See run-create-from-url.ts's step-5 catch
+  // for the server-side `message` this reads.
+  const [extractionFailed, setExtractionFailed] = useState(false);
+  // 2026-07-16 — credits_exhausted honesty fix. Out-of-credits on the
+  // Anthropic account funding the build is equally non-retryable from the
+  // visitor's side (Anthropic reports it as HTTP 400, mapped server-side in
+  // anthropic-error-map.ts) — a "Try again" button would be a lie. The
+  // server's `message` explains it; we just suppress the retry affordance.
+  const [creditsExhausted, setCreditsExhausted] = useState(false);
   const esRef = useRef<EventSource | null>(null);
   const autoSubmittedRef = useRef(false);
 
@@ -133,7 +145,7 @@ export function TryClient({ initialUrl }: { initialUrl: string }) {
 
     es.addEventListener("error", (raw) => {
       const payload = (raw as MessageEvent).data;
-      let data: { code?: string; message?: string } = {};
+      let data: { code?: string; reason?: string; message?: string } = {};
       try {
         if (typeof payload === "string" && payload.length > 0) {
           data = JSON.parse(payload);
@@ -143,8 +155,16 @@ export function TryClient({ initialUrl }: { initialUrl: string }) {
       }
       es.close();
       setEventSource(null);
+      const isExtractionFailed = data.reason === "extraction_failed";
       setRateLimited(data.code === "rate_limited");
-      setError(data.message ?? "Something broke on our end. Give it another try.");
+      setExtractionFailed(isExtractionFailed);
+      setCreditsExhausted(data.reason === "credits_exhausted");
+      setError(
+        data.message ??
+          (isExtractionFailed
+            ? "We read that site but couldn't find the basics we need — a business name, location, and phone number. Try a different URL, or describe your business instead."
+            : "Something broke on our end. Give it another try."),
+      );
       setPhase("error");
     });
   }
@@ -168,6 +188,8 @@ export function TryClient({ initialUrl }: { initialUrl: string }) {
     setDone(null);
     setError(null);
     setRateLimited(false);
+    setExtractionFailed(false);
+    setCreditsExhausted(false);
     setBuildInput(null);
   }
 
@@ -257,7 +279,7 @@ export function TryClient({ initialUrl }: { initialUrl: string }) {
              (dark) host values untouched. Values match the /try idle hero
              + reveal screen's existing light palette (marketing-hero.tsx
              tokens noted at the top of this file): #F6F2EA paper,
-             #221D17 ink, #00897B teal accent — not invented hexes. */
+             #221D17 ink, #1F2B24 teal accent — not invented hexes. */
           .sf-try-stage {
             --background: #f6f2ea;
             --foreground: #221d17;
@@ -265,7 +287,7 @@ export function TryClient({ initialUrl }: { initialUrl: string }) {
             --border: #e0d9cc;
             --muted: #efe9dd;
             --muted-foreground: #6e665a;
-            --primary: #00897b;
+            --primary: #1F2B24;
           }
           /* The archetype brand-preview cards (e.g. the red "Bold urgency"
              hero card) stay brand-colored by design — only two archetypes
@@ -297,7 +319,7 @@ export function TryClient({ initialUrl }: { initialUrl: string }) {
           <div className="flex flex-col items-center text-center">
             <p className="inline-flex items-center gap-2.5 font-sans text-[12.5px] tracking-[0.04em] text-[#6E665A]">
               <span className="inline-block h-px w-4 bg-[#9A9183]" aria-hidden />
-              <span className="inline-block size-1.5 rounded-full bg-[#00897B]" aria-hidden />
+              <span className="inline-block size-1.5 rounded-full bg-[#1F2B24]" aria-hidden />
               Watch it build — no signup required
             </p>
             <h1 className="mt-3 max-w-[20ch] text-balance font-sans text-[clamp(30px,4.4vw,48px)] font-[500] leading-[1.06] tracking-[-0.02em] text-[#221D17]">
@@ -317,15 +339,49 @@ export function TryClient({ initialUrl }: { initialUrl: string }) {
                 {rateLimited ? (
                   <a
                     href="/signup"
-                    className="mt-3 inline-flex items-center gap-1.5 rounded-full bg-[#00897B] px-4 py-2 text-[13.5px] font-[600] text-[#FFFDFA]"
+                    className="mt-3 inline-flex items-center gap-1.5 rounded-[11px] bg-[#1F2B24] px-4 py-2 text-[13.5px] font-[600] text-[#FFFDFA]"
                   >
                     Sign up to keep building
                   </a>
+                ) : extractionFailed ? (
+                  // extraction_failed is a permanent condition for this URL —
+                  // no "Try again" (it would just fail identically). Offer
+                  // the two honest paths instead: pick a different URL, or
+                  // sign up to describe the business instead (the anonymous
+                  // paste/describe path isn't public — see the file-header
+                  // deviation note).
+                  <div className="mt-3 flex flex-wrap items-center gap-3">
+                    <button
+                      type="button"
+                      onClick={reset}
+                      className="rounded-[11px] border border-[rgba(34,29,23,.16)] bg-[#FFFDFA] px-4 py-2 text-[13.5px] font-[500] text-[#221D17]"
+                    >
+                      Try a different URL
+                    </button>
+                    <a
+                      href="/signup"
+                      className="inline-flex items-center gap-1.5 rounded-[11px] bg-[#1F2B24] px-4 py-2 text-[13.5px] font-[600] text-[#FFFDFA]"
+                    >
+                      Describe your business instead
+                    </a>
+                  </div>
+                ) : creditsExhausted ? (
+                  // credits_exhausted is non-retryable until credits are
+                  // added upstream — no "Try again" (it would fail
+                  // identically). The server message explains; the only
+                  // honest affordance is starting over with the input.
+                  <button
+                    type="button"
+                    onClick={reset}
+                    className="mt-3 rounded-[11px] border border-[rgba(34,29,23,.16)] bg-[#FFFDFA] px-4 py-2 text-[13.5px] font-[500] text-[#221D17]"
+                  >
+                    Back
+                  </button>
                 ) : (
                   <button
                     type="button"
                     onClick={() => startBuild(url)}
-                    className="mt-3 rounded-full border border-[rgba(34,29,23,.16)] bg-[#FFFDFA] px-4 py-2 text-[13.5px] font-[500] text-[#221D17]"
+                    className="mt-3 rounded-[11px] border border-[rgba(34,29,23,.16)] bg-[#FFFDFA] px-4 py-2 text-[13.5px] font-[500] text-[#221D17]"
                   >
                     Try again
                   </button>
@@ -357,14 +413,14 @@ export function TryClient({ initialUrl }: { initialUrl: string }) {
                     spellCheck={false}
                     placeholder="https://your-business.com"
                     aria-label="Your website URL"
-                    className="h-14 w-full border-0 bg-transparent font-mono text-[15px] text-[#221D17] caret-[#00897B] outline-none placeholder:text-[#9A9183]"
+                    className="h-14 w-full border-0 bg-transparent font-mono text-[15px] text-[#221D17] caret-[#1F2B24] outline-none placeholder:text-[#9A9183]"
                   />
                 </div>
                 <div className="flex items-center justify-end gap-3 px-3.5 pb-3.5 pt-3">
                   <button
                     type="submit"
                     disabled={!url.trim()}
-                    className="inline-flex h-10 items-center justify-center gap-2 rounded-[10px] bg-[#00897B] px-4 text-[13.5px] font-[600] text-[#FFFDFA] shadow-[0_6px_20px_rgba(0,137,123,.28)] transition-all hover:-translate-y-px hover:bg-[#00796B] disabled:cursor-not-allowed disabled:opacity-50 disabled:shadow-none"
+                    className="inline-flex h-10 items-center justify-center gap-2 rounded-[10px] bg-[#1F2B24] px-4 text-[13.5px] font-[600] text-[#FFFDFA] shadow-[0_6px_20px_rgba(31, 43, 36,.28)] transition-all hover:-translate-y-px hover:bg-[#16201B] disabled:cursor-not-allowed disabled:opacity-50 disabled:shadow-none"
                   >
                     Build it
                   </button>
@@ -437,7 +493,7 @@ function RevealPanel({ done, onStartOver }: { done: DoneData; onStartOver: () =>
   return (
     <div className="flex flex-col items-center text-center">
       <p className="inline-flex items-center gap-2.5 font-sans text-[12.5px] tracking-[0.04em] text-[#6E665A]">
-        <span className="inline-block size-1.5 rounded-full bg-[#00897B]" aria-hidden />
+        <span className="inline-block size-1.5 rounded-full bg-[#1F2B24]" aria-hidden />
         It&apos;s live
       </p>
       {/* 2026-07-04 — Headline compressed one size down (was
@@ -456,9 +512,8 @@ function RevealPanel({ done, onStartOver }: { done: DoneData; onStartOver: () =>
 
       <a
         href={saveHref}
-        className="mt-5 inline-flex items-center gap-2.5 rounded-full bg-[#1F2B24] px-6 py-3.5 text-[15px] font-[500] text-[#F6F2EA] shadow-[0_1px_2px_rgba(34,29,23,.10),0_6px_16px_rgba(34,29,23,.10)] transition-all hover:-translate-y-[1.5px]"
+        className="mt-5 inline-flex items-center gap-2.5 rounded-[11px] bg-[#1F2B24] px-6 py-3.5 text-[15px] font-[500] text-[#F6F2EA] shadow-[0_1px_2px_rgba(34,29,23,.10),0_6px_16px_rgba(34,29,23,.10)] transition-all hover:-translate-y-[1.5px]"
       >
-        <span className="size-[7px] rounded-full bg-[#00897B]" aria-hidden />
         Save your workspace — it&apos;s free
       </a>
 
@@ -492,15 +547,14 @@ function RevealPanel({ done, onStartOver }: { done: DoneData; onStartOver: () =>
       <div className="mt-8 flex flex-wrap items-center justify-center gap-3">
         <a
           href={saveHref}
-          className="inline-flex items-center gap-2.5 rounded-full bg-[#1F2B24] px-6 py-3.5 text-[15px] font-[500] text-[#F6F2EA] shadow-[0_1px_2px_rgba(34,29,23,.10),0_6px_16px_rgba(34,29,23,.10)] transition-all hover:-translate-y-[1.5px]"
+          className="inline-flex items-center gap-2.5 rounded-[11px] bg-[#1F2B24] px-6 py-3.5 text-[15px] font-[500] text-[#F6F2EA] shadow-[0_1px_2px_rgba(34,29,23,.10),0_6px_16px_rgba(34,29,23,.10)] transition-all hover:-translate-y-[1.5px]"
         >
-          <span className="size-[7px] rounded-full bg-[#00897B]" aria-hidden />
           Save your workspace — it&apos;s free
         </a>
         <button
           type="button"
           onClick={onStartOver}
-          className="inline-flex items-center gap-2 rounded-full border border-[rgba(34,29,23,.16)] bg-[#FFFDFA] px-5 py-3.5 text-[15px] font-[500] text-[#221D17] transition-all hover:-translate-y-[1.5px]"
+          className="inline-flex items-center gap-2 rounded-[11px] border border-[rgba(34,29,23,.16)] bg-[#FFFDFA] px-5 py-3.5 text-[15px] font-[500] text-[#221D17] transition-all hover:-translate-y-[1.5px]"
         >
           Start over
         </button>

@@ -40,17 +40,31 @@ function readEnv(name: string, fallback = ""): string {
 // non-empty and checkout assembly doesn't crash pre-configuration;
 // they will NOT resolve at Stripe until the real ids are set.
 
-/** Builder $19/mo flat. Env: STRIPE_BUILDER_PRICE_ID. */
-export const BUILDER_PRICE_ID = readEnv(
-  "STRIPE_BUILDER_PRICE_ID",
-  "price_PLACEHOLDER_builder_19"
-);
-
 /** Workspace — $29/mo flat, SeldonFrame single plan. Env: STRIPE_WORKSPACE_PRICE_ID. */
 export const WORKSPACE_PRICE_ID = readEnv(
   "STRIPE_WORKSPACE_PRICE_ID",
   "price_PLACEHOLDER_workspace_49"
 );
+
+/** 2026-07-08 post-review fix wave (BLOCKING) — Builder $29/mo flat, the
+ *  new tier the LIVE single-card UI (pricing-shell.tsx) and the
+ *  flag-off upgrade-modal now target (repointed off the grandfathered,
+ *  no-longer-sellable "workspace" tier). Builder is DELIBERATELY wired
+ *  to the SAME configured price as WORKSPACE_PRICE_ID
+ *  (STRIPE_WORKSPACE_PRICE_ID) — NOT its own STRIPE_BUILDER_PRICE_ID
+ *  env var (which nobody has set; it would still be a placeholder,
+ *  turning the repoint into a tier_unavailable 409 instead of a
+ *  sellable-gate 409). One Stripe price id is now shared by two tier
+ *  ids: legacy "workspace" (existing subscribers, grandfathered,
+ *  frozen) and new "builder" (new checkout). See
+ *  webhooks/stripe-billing/handlers.ts for the metadata-first tier
+ *  resolution this requires (a shared price id is no longer
+ *  sufficient on its own to infer the tier on renewal/invoice
+ *  events — those events must read the STORED subscription tier, not
+ *  re-infer from price id). Once Max creates a real, distinct Builder
+ *  Stripe price, point this at STRIPE_BUILDER_PRICE_ID instead and
+ *  drop the shared-price-id webhook special-casing. */
+export const BUILDER_PRICE_ID = WORKSPACE_PRICE_ID;
 
 /** The single offered plan — $29/mo flat (unlimited workspaces). Env:
  *  STRIPE_AGENCY_BASE_PRICE_ID (var name reused; Max points it at the
@@ -58,6 +72,37 @@ export const WORKSPACE_PRICE_ID = readEnv(
 export const AGENCY_BASE_PRICE_ID = readEnv(
   "STRIPE_AGENCY_BASE_PRICE_ID",
   "price_PLACEHOLDER_flat_29"
+);
+
+// ─── 2026-07-08 pricing ladder: 4 new sellable tier price ids ────────
+//
+// Managed $49 / Agency Starter $99 / Agency Growth $199 / Agency Scale
+// $299. Same PLACEHOLDER-fallback pattern as above: checkout stays
+// money-safe (isPlaceholderPriceId) until Max creates the real Stripe
+// prices and sets the env vars (see spec §6).
+
+/** Managed $49/mo flat, SF-keys runtime, one workspace. Env: STRIPE_MANAGED_PRICE_ID. */
+export const MANAGED_PRICE_ID = readEnv(
+  "STRIPE_MANAGED_PRICE_ID",
+  "price_PLACEHOLDER_managed_49"
+);
+
+/** Agency Starter $99/mo — 10 sub-accounts, whitelabel. Env: STRIPE_AGENCY_STARTER_PRICE_ID. */
+export const AGENCY_STARTER_PRICE_ID = readEnv(
+  "STRIPE_AGENCY_STARTER_PRICE_ID",
+  "price_PLACEHOLDER_agency_starter_99"
+);
+
+/** Agency Growth $199/mo — 30 sub-accounts, whitelabel. Env: STRIPE_AGENCY_GROWTH_PRICE_ID. */
+export const AGENCY_GROWTH_PRICE_ID = readEnv(
+  "STRIPE_AGENCY_GROWTH_PRICE_ID",
+  "price_PLACEHOLDER_agency_growth_199"
+);
+
+/** Agency Scale $299/mo — unlimited sub-accounts, whitelabel. Env: STRIPE_AGENCY_SCALE_PRICE_ID. */
+export const AGENCY_SCALE_PRICE_ID = readEnv(
+  "STRIPE_AGENCY_SCALE_PRICE_ID",
+  "price_PLACEHOLDER_agency_scale_299"
 );
 
 /** Agency "Extra client workspace" $10/mo, usage type = licensed
@@ -145,6 +190,15 @@ const ALLOWED_PRICE_IDS = new Set<string>([
   // New tier base prices
   GROWTH_BASE_PRICE_ID,
   SCALE_BASE_PRICE_ID,
+  // 2026-07-08 pricing ladder — the 5 sellable tier base prices.
+  BUILDER_PRICE_ID,
+  MANAGED_PRICE_ID,
+  AGENCY_STARTER_PRICE_ID,
+  AGENCY_GROWTH_PRICE_ID,
+  AGENCY_SCALE_PRICE_ID,
+  // Grandfathered legacy tier base prices (existing subscribers only).
+  WORKSPACE_PRICE_ID,
+  AGENCY_BASE_PRICE_ID,
   // Metered overages (only allowlisted when set; falsy strings are
   // filtered below)
   GROWTH_CONTACTS_PRICE_ID,

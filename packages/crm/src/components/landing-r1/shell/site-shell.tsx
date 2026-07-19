@@ -21,8 +21,9 @@
 "use client";
 
 import type { CSSProperties, ReactNode } from "react";
-import { archetypeStyle, type AestheticArchetypeId } from "../archetypes";
+import { archetypeStyle, ARCHETYPES, type AestheticArchetypeId } from "../archetypes";
 import { PoweredByBadge } from "../powered-by-badge";
+import { googleFontUrl } from "@/lib/theme/apply-theme";
 import type { OrgTheme } from "@/lib/theme/types";
 
 export type ShellMode = "light" | "dark";
@@ -134,12 +135,29 @@ export type SiteShellProps = {
 };
 
 export function SiteShell({ archetype, mode = "light", workspaceId, orgTheme, children }: SiteShellProps) {
+  // Load the archetype's fonts. archetypeStyle() sets --font-headline/--font-body
+  // to family names like "Cabinet Grotesk" / "Satoshi", but nothing on the /w
+  // render path (and the /landing-preview route) ever LOADED them — so text fell
+  // back to system-ui. googleFontUrl() already emits the right CDN URL for both
+  // Google fonts (Outfit, Geist) and Fontshare fonts (Cabinet Grotesk, Satoshi).
+  // React hoists <link rel="stylesheet"> to <head> and dedupes by href. Geist is
+  // included even though next/font self-hosts it in the root layout, because the
+  // archetype CSS references the literal family name "Geist" which next/font's
+  // hashed family does not expose.
+  const fontsForArchetype = ARCHETYPES[archetype]?.fonts;
+  const fontFamilies = fontsForArchetype
+    ? Array.from(new Set([fontsForArchetype.headline, fontsForArchetype.body]))
+    : [];
+
   return (
     <div
       data-archetype={archetype}
       data-mode={mode}
       style={resolveShellStyle(archetype, mode, orgTheme)}
     >
+      {fontFamilies.map((family) => (
+        <link key={family} rel="stylesheet" href={googleFontUrl(family)} />
+      ))}
       {children}
       {workspaceId && <PoweredByBadge workspaceId={workspaceId} />}
       {/* Belt-and-suspenders: also clip at the html/body level so a child that

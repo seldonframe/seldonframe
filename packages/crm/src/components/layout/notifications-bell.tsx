@@ -16,6 +16,7 @@
 //     `notifications_read (user_id, last_seen_at)` and read it here.
 
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { createPortal } from "react-dom";
 import { Bell, CalendarDays, FileText, Inbox, AlertCircle } from "lucide-react";
 import type { NotificationItem } from "@/lib/notifications/feed";
 
@@ -39,6 +40,8 @@ export function NotificationsBell({
 }) {
   const [open, setOpen] = useState(false);
   const [lastSeen, setLastSeen] = useState<string | null>(null);
+  // Fixed-position anchor for the portaled popover (see the portal note below).
+  const [anchor, setAnchor] = useState<{ top: number; right: number } | null>(null);
   const popoverRef = useRef<HTMLDivElement>(null);
   const buttonRef = useRef<HTMLButtonElement>(null);
 
@@ -69,6 +72,34 @@ export function NotificationsBell({
     return () => document.removeEventListener("mousedown", handle);
   }, [open]);
 
+  // Position the portaled popover under the bell. The popover is portaled to
+  // <body> (not rendered inline) because the sticky topbar's z-index +
+  // backdrop-blur create a stacking context the dropdown can't escape — the
+  // sticky command bar below the topbar (z-20) otherwise paints OVER the
+  // dropdown (z-30 trapped inside the topbar's z-10 context). Portaling to the
+  // document root + fixed positioning lifts it above everything. The bell is
+  // sticky so its viewport position is stable on scroll; we still reposition on
+  // scroll/resize to be safe.
+  useEffect(() => {
+    if (!open) return;
+    const position = () => {
+      const btn = buttonRef.current;
+      if (!btn) return;
+      const rect = btn.getBoundingClientRect();
+      setAnchor({
+        top: rect.bottom + 8,
+        right: Math.max(8, window.innerWidth - rect.right),
+      });
+    };
+    position();
+    window.addEventListener("resize", position);
+    window.addEventListener("scroll", position, true);
+    return () => {
+      window.removeEventListener("resize", position);
+      window.removeEventListener("scroll", position, true);
+    };
+  }, [open]);
+
   const unreadCount = useMemo(() => {
     if (!lastSeen) return items.length;
     const lastSeenMs = Date.parse(lastSeen);
@@ -79,6 +110,18 @@ export function NotificationsBell({
   const handleToggle = useCallback(() => {
     setOpen((current) => {
       const next = !current;
+      if (next) {
+        // Anchor the portaled popover under the bell synchronously, so its
+        // first render is already positioned (no flash before the effect runs).
+        const btn = buttonRef.current;
+        if (btn) {
+          const rect = btn.getBoundingClientRect();
+          setAnchor({
+            top: rect.bottom + 8,
+            right: Math.max(8, window.innerWidth - rect.right),
+          });
+        }
+      }
       if (next && items.length > 0) {
         // Opening clears the unread badge. We mark "now" as the new
         // last_seen — anything that lands after will re-appear as
@@ -121,13 +164,15 @@ export function NotificationsBell({
         ) : null}
       </button>
 
-      {open ? (
-        <div
-          ref={popoverRef}
-          className="absolute right-0 z-30 mt-2 w-[360px] max-w-[calc(100vw-2rem)] rounded-2xl border border-border/80 bg-card/96 p-1 shadow-(--shadow-dropdown) backdrop-blur-xl"
-          role="dialog"
-          aria-label="Notifications"
-        >
+      {open && typeof document !== "undefined"
+        ? createPortal(
+            <div
+              ref={popoverRef}
+              style={{ position: "fixed", top: anchor?.top ?? 0, right: anchor?.right ?? 0 }}
+              className="z-[60] w-[360px] max-w-[calc(100vw-2rem)] rounded-2xl border border-border/80 bg-card/96 p-1 shadow-(--shadow-dropdown) backdrop-blur-xl"
+              role="dialog"
+              aria-label="Notifications"
+            >
           <div className="flex items-center justify-between px-3 py-2.5">
             <p className="text-sm font-semibold text-foreground">Notifications</p>
             <p className="text-[10px] uppercase tracking-[0.16em] text-muted-foreground/80">
@@ -172,8 +217,10 @@ export function NotificationsBell({
               })}
             </ul>
           )}
-        </div>
-      ) : null}
+            </div>,
+            document.body,
+          )
+        : null}
     </div>
   );
 }

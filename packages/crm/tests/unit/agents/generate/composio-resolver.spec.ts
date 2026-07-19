@@ -28,6 +28,7 @@ import {
   connectorBindingSchema,
   type ConnectorBinding,
 } from "../../../../src/lib/agents/mcp/connectors";
+import { defaultToolsForToolkits } from "../../../../src/lib/integrations/composio/catalog";
 
 /** A representative fake catalog: Google Business Profile (the GMB long-tail
  *  case), plus a spread of unrelated toolkits so the matcher has to discriminate. */
@@ -157,12 +158,46 @@ describe("bindComposioToolkits — binding shape", () => {
 
     const gb = bindings.find((b) => b.id === "googlebusiness");
     assert.ok(gb, "googlebusiness binding present");
+    // "googlebusiness" is a live-Composio-only, long-tail toolkit — NOT one
+    // of the 8 curated COMPOSIO_TOOLKITS (gmail, googlecalendar, googledrive,
+    // slack, notion, hubspot, quickbooks, outlook), so there's no curated
+    // default tool list to seed for it; it still resolves to [].
     assert.deepEqual(gb, {
       id: "googlebusiness",
       kind: "composio",
       enabledToolkits: ["googlebusiness"],
       enabledTools: [],
     });
+  });
+
+  // Folds two independently-authored tests for the same fix (T6 parity on the
+  // circle stack + F-C on main, both 2026-07-11): a curated-catalog slug is
+  // seeded with its EXACT curated defaults (never []); a non-catalog long-tail
+  // slug stays [] until the persist-time live-discovery fill (discover-tools.ts §2.2).
+  test("a catalog slug seeds its exact curated default tools; a non-catalog slug stays [] (widened later by live discovery at persist time)", () => {
+    const bindings = bindComposioToolkits(["notion", "googlebusiness"]);
+
+    const notion = bindings.find((b) => b.id === "notion");
+    assert.ok(notion, "notion binding present");
+    assert.ok(
+      notion!.enabledTools.length > 0,
+      "catalog toolkit seeds its curated default tools",
+    );
+    assert.deepEqual(
+      notion!.enabledTools,
+      defaultToolsForToolkits(["notion"]),
+      "seeded tools match the curated defaults exactly",
+    );
+    assertValidBinding(notion);
+
+    const gb = bindings.find((b) => b.id === "googlebusiness");
+    assert.ok(gb, "googlebusiness binding present");
+    assert.deepEqual(
+      gb!.enabledTools,
+      [],
+      "non-catalog toolkit stays [] until the persist-time live-discovery fill",
+    );
+    assertValidBinding(gb);
   });
 
   test("duplicate slugs collapse to one binding", () => {

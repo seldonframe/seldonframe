@@ -33,7 +33,13 @@ export type MarkdownSurface =
   | "index" // /index.md  (conventional root markdown → redirect)
   | "home" // /home.md  (marketing homepage as markdown)
   | "llms_txt" // /llms.txt  (the GEO map)
-  | "robots_txt"; // /robots.txt
+  | "robots_txt" // /robots.txt
+  | "alternative_page" // /alternative-to-<slug>.md  (competitor comparison twin)
+  | "compare_page" // /compare/<a>-vs-<b>.md  (head-to-head twin)
+  | "sf_vs_page" // /compare/seldonframe-vs-<slug>.md  (SeldonFrame head-to-head twin)
+  | "pricing_page" // /<slug>-pricing.md  (competitor pricing breakdown twin)
+  | "best_page" // /best/<category>-for-<audience>.md  (best-of listicle twin)
+  | "guide"; // /guides/<slug>.md  (long-form article twin)
 
 /**
  * How the Markdown was requested:

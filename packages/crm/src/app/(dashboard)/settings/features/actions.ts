@@ -22,10 +22,16 @@ export async function toggleModuleAction(formData: FormData): Promise<void> {
   await assertWritable();
 
   const orgId = await getOrgId();
-  if (!orgId) throw new Error("Unauthorized");
+  // Missing org = expired/absent session — the v1.7.3 bug class if thrown
+  // (cascades to "This page couldn't load"). Redirect like every dashboard page.
+  if (!orgId) redirect("/login");
 
   const parsedModuleId = moduleIdSchema.safeParse(formData.get("moduleId"));
   if (!parsedModuleId.success) {
+    // contract:throw-ok: tamper guard — the rendered form only ever submits
+    // ids from MODULE_IDS via a hidden input; this branch is unreachable
+    // without hand-crafting the POST, and a forged request deserves a loud
+    // failure, not a silent pass.
     throw new Error("Invalid module id");
   }
   const moduleId = parsedModuleId.data;

@@ -36,8 +36,8 @@ export function MarketingReplace() {
       <div className="mx-auto max-w-[1120px]">
         {/* Section head */}
         <div className="max-w-[600px]">
-          <div className="inline-flex items-center gap-2.5 text-[12px] font-[600] uppercase tracking-[0.09em] text-[#00897B]">
-            <span className="h-px w-4 bg-[#00897B] opacity-50" aria-hidden />
+          <div className="inline-flex items-center gap-2.5 text-[12px] font-[600] uppercase tracking-[0.09em] text-[#1F2B24]">
+            <span className="h-px w-4 bg-[#1F2B24] opacity-50" aria-hidden />
             Why not just…
           </div>
           <h2 className="mt-3.5 text-[clamp(27px,4.2vw,42px)] font-[500] leading-[1.08] tracking-[-0.025em] text-[#221D17]">
@@ -86,7 +86,7 @@ export function MarketingReplace() {
           {/* SeldonFrame — solid card */}
           <div className="rounded-[18px] border border-[rgba(34,29,23,.08)] bg-[#FFFDFA] p-6 shadow-[0_1px_2px_rgba(34,29,23,.05),0_10px_30px_rgba(34,29,23,.07)]">
             <div className="mb-5 flex items-center gap-2.5">
-              <span className="inline-flex size-7 items-center justify-center rounded-md bg-[rgba(0,137,123,.12)] text-[#00897B]">
+              <span className="inline-flex size-7 items-center justify-center rounded-md bg-[rgba(31, 43, 36,.12)] text-[#1F2B24]">
                 <Check size={14} aria-hidden />
               </span>
               <h3 className="m-0 text-[15px] font-[600] tracking-[-0.015em] text-[#221D17]">
@@ -104,9 +104,9 @@ export function MarketingReplace() {
                     i > 0 ? "border-t border-[rgba(34,29,23,.08)]" : ""
                   }`}
                 >
-                  <Check className="text-[#00897B]" size={15} strokeWidth={2.4} aria-hidden />
+                  <Check className="text-[#1F2B24]" size={15} strokeWidth={2.4} aria-hidden />
                   <span className="text-[13.5px] text-[#221D17]">{it.name}</span>
-                  <span className={`font-mono text-[11px] ${it.highlight ? "font-[600] text-[#00897B]" : "text-[#9A9183]"}`}>
+                  <span className={`font-mono text-[11px] ${it.highlight ? "font-[600] text-[#1F2B24]" : "text-[#9A9183]"}`}>
                     {it.meta}
                   </span>
                 </li>

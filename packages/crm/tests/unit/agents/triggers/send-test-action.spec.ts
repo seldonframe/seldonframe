@@ -137,7 +137,7 @@ describe("sendTestEventAgentAction", () => {
     assert.equal(smsCalls.length, 0);
   });
 
-  test("review agent with NO link → 'set the review link first', no send", async () => {
+  test("review agent with NO link → sends anyway using a placeholder link (never blocks)", async () => {
     const { deps, smsCalls } = makeDeps(reviewTemplate(/* no url */), {
       // Even the deployment customization has no link.
       loadCustomization: async () => ({ reviewUrl: null }),
@@ -146,10 +146,11 @@ describe("sendTestEventAgentAction", () => {
       { agentTemplateId: TEMPLATE_ID, toPhone: "+15551234567" },
       deps,
     );
-    assert.equal(res.ok, false);
-    if (res.ok) return;
-    assert.match(res.error, /review link/i);
-    assert.equal(smsCalls.length, 0);
+    assert.equal(res.ok, true);
+    if (!res.ok) return;
+    assert.equal(res.usedPlaceholder, true);
+    assert.equal(smsCalls.length, 1);
+    assert.ok(smsCalls[0].body.includes("g.page/r/your-google-review-link"));
   });
 
   test("review agent WITH a template link → sends once, tagged :test", async () => {

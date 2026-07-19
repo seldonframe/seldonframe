@@ -2,6 +2,7 @@ import Anthropic from "@anthropic-ai/sdk";
 import { eq } from "drizzle-orm";
 import { db } from "@/db";
 import { soulWiki } from "@/db/schema";
+import { DEFAULT_SONNET_MODEL } from "@/lib/ai/models";
 
 function getAnthropicClient() {
   const apiKey = process.env.ANTHROPIC_API_KEY?.trim();
@@ -36,7 +37,7 @@ export async function querySoulWiki(orgId: string, userPrompt: string, maxTokens
 
   try {
     const response = await client.messages.create({
-      model: "claude-sonnet-4-20250514",
+      model: DEFAULT_SONNET_MODEL,
       max_tokens: maxTokens,
       system:
         "You are a knowledge retriever. Given a user prompt and a wiki, extract ONLY the sections relevant to fulfilling the prompt. Return relevant content as-is, preserving wording. Do not summarize or paraphrase.",

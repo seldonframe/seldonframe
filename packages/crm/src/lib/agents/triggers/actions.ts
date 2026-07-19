@@ -17,9 +17,12 @@
 // fire, so it SKIPS the throttle (one-per-contact), the L3 guardrails (quiet
 // hours / daily cap / frequency cap), and the L2 verify gate. The operator asked
 // for this exact send to this exact number; the gates exist to protect customers
-// from runaway automation, not to block a deliberate self-test. The one guard we
-// KEEP is the review-link requirement: a review test with no link is worthless,
-// so we return a clear, actionable error ("set the review link first") instead.
+// from runaway automation, not to block a deliberate self-test. A review test
+// with no review link set is NOT blocked either: the template is a marketplace
+// product the builder is testing/publishing, and the Google review link is a
+// per-buyer, deploy-time customization (each client sets their own when they
+// deploy) — so the composer falls back to a clearly-fake placeholder link and
+// the result carries `usedPlaceholder:true` for the UI to note, non-blocking.
 //
 // "use server" — ONLY async function exports here. Types live in the imported
 // modules (run-event-agent.ts / test-message.ts); the skillForEventType +
@@ -54,7 +57,7 @@ export type SendTestEventAgentInput = {
 };
 
 export type SendTestEventAgentResult =
-  | { ok: true; to: string; preview: string }
+  | { ok: true; to: string; preview: string; usedPlaceholder?: boolean }
   | { ok: false; error: string };
 
 /** Minimal template shape the action needs (loaded + ownership-checked). */
@@ -277,13 +280,6 @@ export async function sendTestEventAgentAction(
     leadSummary: null,
   });
   if (!composed.ok) {
-    if (composed.error === "review_link_required") {
-      return {
-        ok: false,
-        error:
-          "Set the review link first — a review request needs a Google review URL to send.",
-      };
-    }
     return { ok: false, error: "Could not compose the test message." };
   }
 
@@ -306,7 +302,12 @@ export async function sendTestEventAgentAction(
           error: `That number is suppressed (${res.reason}) — pick another.`,
         };
       }
-      return { ok: true, to: toPhone, preview: previewOf(composed.body) };
+      return {
+        ok: true,
+        to: toPhone,
+        preview: previewOf(composed.body),
+        ...(composed.usedPlaceholder ? { usedPlaceholder: true } : {}),
+      };
     }
 
     const res = await deps.sendEmail({
@@ -322,7 +323,12 @@ export async function sendTestEventAgentAction(
         error: `That email is suppressed (${res.reason}) — pick another.`,
       };
     }
-    return { ok: true, to: toEmail, preview: previewOf(composed.body) };
+    return {
+      ok: true,
+      to: toEmail,
+      preview: previewOf(composed.body),
+      ...(composed.usedPlaceholder ? { usedPlaceholder: true } : {}),
+    };
   } catch (err) {
     // Surface a clean, actionable message — the common case is "Twilio/Resend
     // not configured for this workspace" (the seam throws that verbatim).

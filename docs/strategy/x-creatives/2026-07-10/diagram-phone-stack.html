@@ -1,0 +1,39 @@
+<!doctype html>
+<html><head><meta charset="utf-8"><style>
+  * { margin:0; padding:0; box-sizing:border-box; }
+  body { background:#333; }
+  .card { position:absolute; top:0; left:0; width:1500px; height:600px;
+    background:radial-gradient(1400px 900px at 18% 0%, #12121c 0%, #0a0a0f 60%);
+    color:#ececf1; font-family:"Segoe UI",-apple-system,sans-serif; padding:52px 70px;
+    display:flex; flex-direction:column; justify-content:space-between; overflow:hidden; }
+  .card::after { content:""; position:absolute; inset:0; border:1px solid rgba(255,255,255,0.07); }
+  .kicker { font-size:20px; letter-spacing:0.16em; text-transform:uppercase; color:#8b8b9e; font-weight:600; }
+  .flow { display:flex; align-items:center; gap:0; margin-top:10px; }
+  .node { background:#15151f; border:1px solid #2a2a3a; border-radius:14px; padding:22px 26px; }
+  .node .t { font-size:23px; font-weight:700; color:#fff; margin-bottom:8px; }
+  .node .d { font-size:16px; color:#9a9aac; line-height:1.45; font-family:ui-monospace,Consolas,monospace; }
+  .phone { width:270px; }
+  .tunnel { flex:1; text-align:center; position:relative; padding:0 8px; }
+  .tunnel .pipe { border-top:2px dashed #7c7cf3; position:relative; }
+  .tunnel .pipe::after { content:"▶"; position:absolute; right:-4px; top:-11px; color:#7c7cf3; font-size:15px; }
+  .tunnel .lbl { color:#a5a5f7; font-size:19px; font-weight:700; margin-bottom:10px; }
+  .tunnel .sub { color:#8b8b9e; font-size:16px; margin-top:10px; }
+  .box { width:560px; border-color:#7c7cf3; background:#16162a; }
+  .box .t { color:#a5a5f7; }
+  .inner { display:flex; gap:10px; margin-top:10px; }
+  .chip { background:#0f0f18; border:1px solid #2a2a3a; border-radius:8px; padding:10px 14px; font-size:15px; color:#d6d6e0; font-family:ui-monospace,Consolas,monospace; }
+  .foot { display:flex; justify-content:space-between; align-items:baseline; }
+  .note { font-size:18px; color:#8b8b9e; } .note b { color:#d6d6e0; }
+  .brand { font-size:20px; color:#5c5c6e; font-weight:600; }
+</style></head>
+<body><div class="card">
+  <div class="kicker">Ship from anywhere — the no-laptop stack</div>
+  <div class="flow">
+    <div class="node phone"><div class="t">my phone</div><div class="d">Termius (SSH)<br>types sentences,<br>not code</div></div>
+    <div class="tunnel"><div class="lbl">Tailscale mesh</div><div class="pipe"></div><div class="sub">private WireGuard tunnel · devices only, no passwords</div></div>
+    <div class="node box"><div class="t">Hetzner box — 0 open ports</div>
+      <div class="inner"><div class="chip">tmux<br>never sleeps</div><div class="chip">Claude Code<br>my subscription</div><div class="chip">the repo<br>only credential it has</div></div>
+    </div>
+  </div>
+  <div class="foot"><div class="note">Hetzner firewall: <b>empty</b>. Phone stolen? revoke the device, thief holds a brick. The laptop appears nowhere in this diagram.</div><div class="brand">@themaxthule</div></div>
+</div></body></html>

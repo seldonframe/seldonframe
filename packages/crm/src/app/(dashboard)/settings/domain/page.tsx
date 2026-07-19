@@ -250,9 +250,8 @@ function UpsellCard({
           Custom domains are part of a paid plan
         </h2>
         <p className="text-sm text-muted-foreground">
-          Connect your client&apos;s existing domain — or yours — so the
-          workspace lives at{" "}
-          <i className="text-foreground">roofs-by-shiloh.com</i> instead of a
+          Connect your own domain — so your site lives at{" "}
+          <i className="text-foreground">yourbusiness.com</i> instead of a
           SeldonFrame subdomain.
         </p>
       </div>

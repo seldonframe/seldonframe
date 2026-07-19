@@ -1,8 +1,9 @@
 import Anthropic from "@anthropic-ai/sdk";
 import { ZodError } from "zod";
 import { routingResultSchema, soulV4Schema, type RoutingResult, type SoulV4 } from "@/lib/soul-compiler/schema";
+import { DEFAULT_SONNET_MODEL } from "@/lib/ai/models";
 
-const DEFAULT_MODEL = process.env.SOUL_COMPILER_MODEL?.trim() || "claude-sonnet-4-20250514";
+const DEFAULT_MODEL = process.env.SOUL_COMPILER_MODEL?.trim() || DEFAULT_SONNET_MODEL;
 const ROUTING_MAX_TOKENS = 1200;
 const EXTRACTION_MAX_TOKENS = 6000;
 

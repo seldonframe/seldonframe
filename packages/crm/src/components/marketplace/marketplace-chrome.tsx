@@ -12,6 +12,24 @@ import type { ReactElement } from "react";
 import { MarketplaceIcon } from "./marketplace-icons";
 import { MKT } from "./marketplace-data";
 import { AGENT_JOBS } from "@/lib/seo/agent-pages";
+import { COMPETITORS } from "@/lib/seo/alternative-pages";
+
+/** Footer "Compare" links — every /alternative-to-<slug> page (from the
+ *  registry, so a renamed competitor can't leave a dead link), plus the hub
+ *  and the free tools. The PostPlanify-style internal-link block: these render
+ *  on EVERY page using this footer, which is what makes the comparison pages
+ *  crawlable from the whole surface. */
+function compareFooterItems(): { label: string; href: string }[] {
+  return [
+    { label: "All comparisons", href: "/alternatives" },
+    ...COMPETITORS.map((c) => ({
+      label: `SeldonFrame vs ${c.name}`,
+      href: `/compare/seldonframe-vs-${c.slug}`,
+    })),
+    { label: "Best-of guides", href: "/best" },
+    { label: "Free tools", href: "/tools" },
+  ];
+}
 
 /**
  * Footer "Browse" links into the /ai-agents directory. Each label maps to a REAL
@@ -74,7 +92,7 @@ export function MarketplaceNav({
   defaultQuery?: string;
 }): ReactElement {
   const navColor = (tab: NavTab) => (active === tab ? MKT.green : "rgba(34,29,23,0.62)");
-  const navBg = (tab: NavTab) => (active === tab ? "rgba(0,137,123,0.10)" : "transparent");
+  const navBg = (tab: NavTab) => (active === tab ? "rgba(31, 43, 36,0.10)" : "transparent");
 
   return (
     <header
@@ -189,22 +207,10 @@ export function MarketplaceNav({
         <Link
           href="/studio/agents"
           title="Your workspace"
-          style={{
-            width: 38,
-            height: 38,
-            borderRadius: 999,
-            background: MKT.dark,
-            color: MKT.paper,
-            display: "flex",
-            alignItems: "center",
-            justifyContent: "center",
-            fontWeight: 700,
-            fontSize: 14,
-            flex: "none",
-            textDecoration: "none",
-          }}
+          style={{ display: "flex", flex: "none", textDecoration: "none" }}
         >
-          SF
+          {/* eslint-disable-next-line @next/next/no-img-element -- static brand mark */}
+          <img src="/brand/seldon-mark.svg" alt="Seldon" width={38} height={38} style={{ borderRadius: 11 }} />
         </Link>
       </div>
     </header>
@@ -231,7 +237,7 @@ export function MarketplaceFooter(): ReactElement {
           margin: "0 auto",
           padding: "54px 32px 40px",
           display: "grid",
-          gridTemplateColumns: "1.4fr 1fr 1fr 1fr",
+          gridTemplateColumns: "1.4fr 1fr 1fr 1fr 1.1fr",
           gap: 32,
         }}
       >
@@ -257,6 +263,7 @@ export function MarketplaceFooter(): ReactElement {
           ]}
         />
         <FooterCol title="Company" items={["About", "Trust & safety", "Status", "Contact"]} />
+        <FooterCol title="Compare" items={compareFooterItems()} />
       </div>
       <div style={{ borderTop: "1px solid rgba(246,242,234,0.12)" }}>
         <div

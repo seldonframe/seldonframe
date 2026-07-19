@@ -1,0 +1,53 @@
+{
+  "name": "SeldonFrame — Speed-to-Lead SMS",
+  "nodes": [
+    {
+      "parameters": {
+        "httpMethod": "POST",
+        "path": "sf-speed-to-lead",
+        "responseMode": "onReceived",
+        "options": {}
+      },
+      "id": "a1b2c3d4-0001-4000-8000-000000000001",
+      "name": "Lead Webhook",
+      "type": "n8n-nodes-base.webhook",
+      "typeVersion": 2,
+      "position": [240, 300]
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "https://app.seldonframe.com/api/v1/sms",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            { "name": "x-org-id", "value": "={{ $env.SF_ORG_ID }}" },
+            { "name": "x-api-key", "value": "={{ $env.SF_API_KEY }}" },
+            { "name": "Content-Type", "value": "application/json" }
+          ]
+        },
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={\n  \"to\": \"{{ $json.body.phone }}\",\n  \"body\": \"Hi {{ $json.body.name }}, thanks for reaching out — we got your request and someone from our team will call you in the next few minutes. Reply here anytime.\"\n}"
+      },
+      "id": "a1b2c3d4-0002-4000-8000-000000000002",
+      "name": "SF Send Intro SMS",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [460, 300]
+    }
+  ],
+  "connections": {
+    "Lead Webhook": {
+      "main": [
+        [
+          { "node": "SF Send Intro SMS", "type": "main", "index": 0 }
+        ]
+      ]
+    }
+  },
+  "active": false,
+  "settings": { "executionOrder": "v1" },
+  "pinData": {},
+  "meta": { "templateCredsSetupCompleted": false }
+}

@@ -11,6 +11,14 @@ updates:
     schedule:
       interval: "weekly"
     open-pull-requests-limit: 5
+    # workflow 4.6.0 / @workflow/next 4.1.0 break the Vercel build: their
+    # step-route bundler inlines our "use server" action files into sync
+    # __esm() closures, which Turbopack rejects ("Server Actions must be
+    # async functions"). Held at 4.2.4 / 4.0.5 — see issue #135; drop these
+    # ignores once an upstream bundler fix ships.
+    ignore:
+      - dependency-name: "workflow"
+      - dependency-name: "@workflow/next"
     groups:
       minor-and-patch:
         update-types:

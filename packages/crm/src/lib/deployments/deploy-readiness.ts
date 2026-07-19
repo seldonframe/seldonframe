@@ -8,7 +8,7 @@
 //   telephonyNeeded  = deploymentNeedsNumber(blueprint.trigger, surfaceForType(type))
 //   telephonyConnected = the org has Twilio creds OR the deployment already has a number  [LIVE]
 //   tier0Available   = voiceManagedEnabled(env) && master creds present && wallet ≥
-//                      TIER0_READY_FLOOR_MICROS (Task 10 — SF's zero-connect
+//                      TIER0_READY_FLOOR_MICROS (Task 10 — Seldon's zero-connect
 //                      instant-number path; resolved upstream, this fn only ORs
 //                      it against telephonyConnected)
 //   progress         = the deployment's onboarding progress (business_info etc.)
@@ -34,18 +34,18 @@ export type DeployReadiness = {
 const CALENDAR_TOOLKITS = new Set<string>(["googlecalendar", "outlook"]);
 
 /** Shown as the telephony requirement's label whenever it's unmet — i.e.
- *  neither BYO Twilio nor SF's Tier-0 instant-number path can satisfy it
+ *  neither BYO Twilio nor Seldon's Tier-0 instant-number path can satisfy it
  *  (Task 10). Replaces the old static "Phone number" label so the operator
  *  sees BOTH ways to unblock it, not just "connect Twilio". */
 const TELEPHONY_UNMET_LABEL =
-  "Top up your wallet for an instant SF number, or connect your own Twilio.";
+  "Top up your wallet for an instant Seldon number, or connect your own Twilio.";
 
 export function computeDeployReadiness(input: {
   steps?: OnboardingStep[];
   toolStatuses?: ToolConnectionStatus[];
   telephonyNeeded?: boolean;
   telephonyConnected?: boolean;
-  /** SF's Tier-0 (zero-connect, wallet-funded) instant-number path is
+  /** Seldon's Tier-0 (zero-connect, wallet-funded) instant-number path is
    *  available (Task 10) — resolved upstream from voiceManagedEnabled(env) &&
    *  master Twilio creds && wallet balance ≥ TIER0_READY_FLOOR_MICROS.
    *  Absent/false ⇒ byte-identical prior behavior (telephony met solely by
@@ -76,7 +76,7 @@ export function computeDeployReadiness(input: {
   }
 
   // 3. Telephony — only when the agent needs a phone line. Met by BYO Twilio
-  //    OR SF's Tier-0 instant-number path (Task 10) — either unblocks deploy,
+  //    OR Seldon's Tier-0 instant-number path (Task 10) — either unblocks deploy,
   //    so this is a plain OR. The label communicates BOTH paths only when
   //    unmet (met:true never surfaces a label to the operator downstream).
   if (input.telephonyNeeded) {

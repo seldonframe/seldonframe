@@ -35,7 +35,7 @@ import {
   type AgentToolResult,
   type AgentValidatorResult,
 } from "@/db/schema";
-import { getAIClient } from "@/lib/ai/client";
+import { resolveRuntimeAiClient } from "@/lib/ai/client";
 import { composeSystemPrompt, applyDeploymentPersona } from "./prompt";
 import type { DeploymentPromptPersona } from "./prompt";
 import { runValidators } from "./validators";
@@ -46,16 +46,26 @@ import {
   type ToolExecuteContext,
 } from "./tools";
 import { resolveTurnModel } from "./runtime/turn-model";
+import { createTtlPromiseCache } from "./runtime/capped-reply-cache";
+import {
+  cachedSystemBlocks,
+  cachedToolParams,
+  withMovingCacheBreakpoint,
+  serializeToolResultCapped,
+  capErrorText,
+  type LooseMessage,
+} from "./turn-token-economy";
 import type { CalendarBinding } from "@/lib/agents/booking/calendar-backend";
 import type { BookingPolicy } from "@/lib/agents/booking/booking-policy";
 import { bindingToCtxBooking } from "@/lib/agents/booking/binding-ctx";
 import { captureLlmGeneration } from "@/lib/analytics/llm-capture";
+import { VOICE_PROFILE_NOTE_PATH } from "@/lib/agents/voice-profile/ingest-sent-mail";
 
 const MODEL = process.env.ANTHROPIC_AGENT_MODEL?.trim() || "claude-sonnet-4-5-20250929";
 const MAX_TURN_ITERATIONS = 6; // tool-call cap per single turn (catches loops)
-// v1.26.1 — these are SF's internal accounting markup for
+// v1.26.1 — these are Seldon's internal accounting markup for
 // billing-the-operator-for-agent-platform-usage. The OPERATOR pays
-// the LLM bill directly via their BYOK Anthropic key; SF makes money
+// the LLM bill directly via their BYOK Anthropic key; Seldon makes money
 // per agent turn (separate billing line). Numbers are deliberately
 // rough — the operator's exact LLM cost lives on their Anthropic
 // dashboard; ours is platform-usage metering.
@@ -156,7 +166,7 @@ export async function executeTurn(input: {
   }
 
   // v1.27.9 — daily token budget removed. Under BYOK the operator pays
-  // Anthropic directly; SF has no cost exposure to cap. Operators manage
+  // Anthropic directly; Seldon has no cost exposure to cap. Operators manage
   // spend in their own Anthropic billing dashboard. The artificial budget
   // halt was breaking valid conversations on busy days for no reason.
   // The agents.tokensUsedToday + dailyTokenBudget columns stay in the
@@ -191,7 +201,7 @@ export async function executeTurn(input: {
     .where(eq(agentTurns.conversationId, input.conversationId))
     .orderBy(asc(agentTurns.turnIndex));
 
-  // Convert SF turn shape → Anthropic Messages API shape.
+  // Convert Seldon turn shape → Anthropic Messages API shape.
   type AnthropicMessage = {
     role: "user" | "assistant";
     content:
@@ -218,7 +228,11 @@ export async function executeTurn(input: {
         }
       }
       messages.push({ role: "assistant", content: blocks });
-      // Tool results from previous turns ride as a user message.
+      // Tool results from previous turns ride as a user message. Capped at
+      // rebuild time (token economy, 2026-07-16): the FULL output is persisted
+      // on the turn row, but every later turn of the conversation re-sends
+      // this history — an unbounded historical payload would tax every turn
+      // that follows it, forever.
       if (turn.toolResults && turn.toolResults.length > 0) {
         messages.push({
           role: "user",
@@ -226,8 +240,8 @@ export async function executeTurn(input: {
             type: "tool_result" as const,
             tool_use_id: tr.toolCallId,
             content: tr.ok
-              ? JSON.stringify(tr.output ?? null)
-              : `Error: ${tr.error ?? "unknown"}`,
+              ? serializeToolResultCapped(tr.output)
+              : `Error: ${capErrorText(tr.error ?? "unknown")}`,
             is_error: !tr.ok,
           })),
         });
@@ -255,6 +269,30 @@ export async function executeTurn(input: {
     soul: baseSoul,
     persona: input.persona ?? null,
   });
+  // Email-agent slice (Part A2) — for an email-channel agent, read the
+  // operator's sent-mail voice profile by EXACT path (no widening of the
+  // generic brain-notes recall) and splice it as its own prompt section. A
+  // missing note (never ingested yet) or a read error is a no-op — this must
+  // never block a turn. One indexed readBrainNote call, only for email.
+  let voiceProfileNote: string | null = null;
+  if (agent.channel === "email") {
+    try {
+      const { readBrainNote } = await import("@/lib/brain/store");
+      const note = await readBrainNote({
+        orgId: agent.orgId,
+        scope: "workspace",
+        path: VOICE_PROFILE_NOTE_PATH,
+      });
+      voiceProfileNote = note?.body ?? null;
+    } catch (err) {
+      console.warn(
+        `[runtime] voice-profile note read failed for org ${agent.orgId}:`,
+        err instanceof Error ? err.message : String(err),
+      );
+      voiceProfileNote = null;
+    }
+  }
+
   const systemPrompt = await composeSystemPrompt({
     orgName: orgRow.name,
     soul: personaSoul,
@@ -268,6 +306,7 @@ export async function executeTurn(input: {
     timezone: orgRow.timezone ?? "UTC",
     // Per-deployment opener (P2) — null on the workspace path → no opener section.
     greetingPrefix,
+    voiceProfileNote,
   });
   // The seam: native (capability-filtered) tools PLUS any bound MCP connector
   // tools (blueprint.connectors), wrapped to look native. With no connectors
@@ -280,10 +319,67 @@ export async function executeTurn(input: {
 
   // v1.26.1 — BYOK. Resolve the LLM client from the workspace's
   // configured key (organizations.integrations.anthropic.apiKey,
-  // encrypted at rest). Operator pays Anthropic directly; SF charges
+  // encrypted at rest). Operator pays Anthropic directly; Seldon charges
   // separately per agent turn. If no BYOK key is set AND no platform
-  // key is available (e.g. SF env not configured), gracefully degrade.
-  const aiResolution = await getAIClient({ orgId: agent.orgId });
+  // key is available (e.g. Seldon env not configured), gracefully degrade.
+  // 2026-07-08 pricing ladder — agency key inheritance (flag
+  // SF_AGENCY_KEY_INHERIT): sub-account workspaces with no BYOK key of
+  // their own inherit the owning agency's key instead of silently
+  // falling to the platform key. Fail-soft wrapper — identical to
+  // getAIClient's behavior whenever the flag is off or any lookup
+  // fails, so this is a no-op today until Max flips the flag.
+  const aiResolution = await resolveRuntimeAiClient({ orgId: agent.orgId });
+
+  // Per-sub-account usage meter (2026-07-08) — Task 4: the "capped" branch
+  // (flag SF_USAGE_CAP_PAUSE, D5). An inherited-key sub-account whose agency
+  // set a breached "pause" cap gets ONE holding reply instead of an LLM
+  // call — persisted exactly like a normal assistant turn (never-lies: the
+  // customer's message is never silently dropped). Tokens/cost are zero
+  // (no LLM call was made), so this never counts against the cap it just
+  // triggered.
+  if (aiResolution.mode === "capped") {
+    const holdingReply = await resolveCappedUsageReply(agent.orgId);
+    const latencyMs = Date.now() - t0;
+
+    await db.insert(agentTurns).values({
+      conversationId: input.conversationId,
+      turnIndex: nextTurnIndex + 1,
+      role: "assistant",
+      content: holdingReply,
+      toolCalls: null,
+      toolResults: null,
+      validatorsPassed: [],
+      latencyMs,
+      tokensIn: 0,
+      tokensOut: 0,
+      model: "usage_capped",
+    });
+
+    await db
+      .update(agentConversations)
+      .set({ lastTurnAt: new Date(), turnCount: sql`${agentConversations.turnCount} + 2` })
+      .where(eq(agentConversations.id, input.conversationId));
+
+    console.warn(
+      `[agent-runtime] usage_capped agentId=${agent.id} convId=${conv.id} orgId=${agent.orgId}`,
+    );
+
+    if (nextTurnIndex === 0 && conv.status !== "test") {
+      await writeFirstTurnActivity(agent, orgRow.id, conv.id, input.userMessage);
+    }
+
+    return {
+      ok: true,
+      assistantMessage: holdingReply,
+      validators: [],
+      toolCalls: [],
+      toolResults: [],
+      tokensIn: 0,
+      tokensOut: 0,
+      latencyMs,
+    };
+  }
+
   if (!aiResolution.client) {
     return {
       ok: false,
@@ -328,16 +424,25 @@ export async function executeTurn(input: {
     let response: Anthropic.Messages.Message;
     const llmCallStartedAt = Date.now();
     try {
+      // Token economy (2026-07-16): system + tools are static across the loop
+      // AND across every turn of this conversation → one cache breakpoint
+      // each; the moving breakpoint on the last message block makes both the
+      // next loop iteration and the NEXT TURN's history rebuild a cache READ
+      // instead of full-price input. Three markers total (≤ the API's 4).
       response = await anthropic.messages.create({
         model: turnModel,
         max_tokens: 1024,
-        system: systemPrompt,
-        tools: tools.map((t) => ({
-          name: t.name,
-          description: t.description,
-          input_schema: t.jsonSchema as Anthropic.Messages.Tool.InputSchema,
-        })),
-        messages: messages as Anthropic.Messages.MessageParam[],
+        system: cachedSystemBlocks(systemPrompt) as Anthropic.Messages.MessageCreateParams["system"],
+        tools: cachedToolParams(
+          tools.map((t) => ({
+            name: t.name,
+            description: t.description,
+            input_schema: t.jsonSchema as Anthropic.Messages.Tool.InputSchema,
+          })),
+        ) as Anthropic.Messages.ToolUnion[],
+        messages: withMovingCacheBreakpoint(
+          messages as LooseMessage[],
+        ) as Anthropic.Messages.MessageParam[],
       });
     } catch (err) {
       const detail = err instanceof Error ? err.message : String(err);
@@ -348,7 +453,7 @@ export async function executeTurn(input: {
       return {
         ok: false,
         reason: errClass.reason,
-        // Test-mode = SF client testing in sandbox → return real diagnostic.
+        // Test-mode = Seldon client testing in sandbox → return real diagnostic.
         // Live/active = end customer talking to agent → return gentle fallback.
         fallbackMessage:
           conv.status === "test"
@@ -474,7 +579,11 @@ export async function executeTurn(input: {
         toolResultsForThisIter.push({
           type: "tool_result",
           tool_use_id: tu.id,
-          content: JSON.stringify(output ?? null),
+          // Hard-capped (token economy, 2026-07-16): an unbounded connector
+          // payload must never ride the loop at full size — it gets re-sent
+          // every remaining iteration AND every later turn's history rebuild.
+          // The FULL output still persists on the turn row (allToolResults).
+          content: serializeToolResultCapped(output),
         });
       } catch (err) {
         const result: AgentToolResult = {
@@ -486,7 +595,8 @@ export async function executeTurn(input: {
         toolResultsForThisIter.push({
           type: "tool_result",
           tool_use_id: tu.id,
-          content: `Error: ${err instanceof Error ? err.message : String(err)}`,
+          // Capped: connector errors can embed whole upstream response bodies.
+          content: `Error: ${capErrorText(err instanceof Error ? err.message : String(err))}`,
           is_error: true,
         });
       }
@@ -605,6 +715,10 @@ export async function executeTurn(input: {
       const regenResponse = await anthropic.messages.create({
         model: regenModel,
         max_tokens: 512,
+        // Deliberately UNCACHED (token economy): this call has no tools, so
+        // its prefix can never match the loop's cached [tools, system, …]
+        // prefix — a marker here would pay the cache-write premium with no
+        // possible reader (regen fires at most once per turn).
         system: systemPrompt,
         // No tools on regeneration — we want a clean text response, not
         // another tool-loop iteration. The original turn already
@@ -728,6 +842,25 @@ export async function executeTurn(input: {
 // ─── helpers ───────────────────────────────────────────────────────────────
 // v1.27.9 — isDailyBudgetExhausted removed; see note in step 2 above.
 
+// Short-lived memoization (plan Task 4): caches the resolved holding-reply
+// promise per orgId so a conversation with multiple capped turns (or a burst
+// of concurrent turns for the same capped org) doesn't re-query the cap +
+// re-fire the notify check repeatedly. The notify itself is idempotent
+// either way (lastNotifiedPeriod), but this avoids redundant DB round-trips.
+// Bounded (TTL + maxEntries — the map used to grow forever in a long-lived
+// process); the TTL also caps how long an operator's holdingReply edit takes
+// to reach customers. Business logic (load cap, evaluate breach, resolve
+// agency owner, send + mark notified) lives in
+// lib/billing/usage-cap.ts::resolveCappedTurnReply — this is just the
+// runtime-local memoization wrapper.
+const cappedHoldingReplyCache = createTtlPromiseCache<string>({ ttlMs: 60_000, maxEntries: 500 });
+
+async function resolveCappedUsageReply(orgId: string): Promise<string> {
+  return cappedHoldingReplyCache.getOrCreate(orgId, () =>
+    import("@/lib/billing/usage-cap").then((m) => m.resolveCappedTurnReply(orgId)),
+  );
+}
+
 function computeCostCents(tokensIn: number, tokensOut: number): number {
   const cents =
     (tokensIn / 1000) * COST_PER_1K_INPUT_CENTS +
@@ -776,7 +909,7 @@ async function writeFirstTurnActivity(
 //   - operatorHint (specific guidance shown in test-mode sandbox)
 //
 // In live/active conversations the gentle fallback fires regardless;
-// only the test-mode sandbox surfaces these hints to the SF client.
+// only the test-mode sandbox surfaces these hints to the Seldon client.
 
 type AnthropicErrorClass = {
   reason:
@@ -829,7 +962,7 @@ function classifyAnthropicError(detail: string): AnthropicErrorClass {
       reason: "llm_model_unavailable",
       operatorHint:
         "The configured Claude model isn't available on your account tier. " +
-        "Contact SF support if this persists (model is platform-controlled).",
+        "Contact Seldon support if this persists (model is platform-controlled).",
     };
   }
   if (lower.includes("overloaded_error") || lower.includes("529")) {

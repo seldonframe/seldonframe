@@ -81,7 +81,7 @@ export function SampleConversationClient({ agent }: { agent: StorefrontAgent }):
         }}
       >
         <div style={{ display: "flex", alignItems: "center", gap: 10, padding: "14px 18px", borderBottom: "1px solid rgba(34,29,23,0.08)", background: "rgba(34,29,23,0.015)" }}>
-          <span style={{ width: 30, height: 30, borderRadius: 9, background: "rgba(0,137,123,0.11)", color: MKT.green, display: "flex", alignItems: "center", justifyContent: "center", flex: "none" }}>
+          <span style={{ width: 30, height: 30, borderRadius: 9, background: "rgba(31, 43, 36,0.11)", color: MKT.green, display: "flex", alignItems: "center", justifyContent: "center", flex: "none" }}>
             <MarketplaceIcon name={agent.channelIcon} size={16} />
           </span>
           <span style={{ fontWeight: 650, fontSize: 14 }}>{agent.sampleTitle}</span>
@@ -113,7 +113,7 @@ export function SampleConversationClient({ agent }: { agent: StorefrontAgent }):
             );
           })}
           {typing ? (
-            <div style={{ alignSelf: "flex-start", background: "rgba(0,137,123,0.10)", padding: "12px 16px", borderRadius: "15px 15px 15px 4px" }}>
+            <div style={{ alignSelf: "flex-start", background: "rgba(31, 43, 36,0.10)", padding: "12px 16px", borderRadius: "15px 15px 15px 4px" }}>
               <TypingDots />
             </div>
           ) : null}

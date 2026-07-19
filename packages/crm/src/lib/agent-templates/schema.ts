@@ -35,6 +35,17 @@ export const TemplateBlueprintPatchSchema = z
     customSkillMd: z.string().max(8000).optional(),
     voice: z.enum(VOICE_OPTIONS).optional(),
     capabilities: z.array(z.string()).optional(),
+    // Never-fail-compile: honest autonomy math from the recording's coverage.
+    // Mirrors AgentBlueprint.autonomy (db/schema/agents.ts).
+    autonomy: z
+      .object({
+        green: z.number().int().min(0),
+        yellow: z.number().int().min(0),
+        red: z.number().int().min(0),
+        total: z.number().int().min(0),
+        autonomousPct: z.number().int().min(0).max(100),
+      })
+      .optional(),
     faq: z.array(FaqRow).optional(),
     // The operator-configured price ranges for the get_quote_range tool (voice
     // R1 quote guard). A service with no entry returns { hasRange:false } and
@@ -151,6 +162,24 @@ export const TemplateBlueprintPatchSchema = z
       })
       .strict()
       .nullable()
+      .optional(),
+    // 2026-07-16 (marketplace generalize) — the template's declared fill-in
+    // variables (see AgentBlueprint.templateVariables, db/schema/agents.ts).
+    // `name` must be the snake_case TOKEN_RE key the generalization pass writes
+    // into customSkillMd; capped at 12 so a template can't blow up the deploy
+    // form. LOOSE on description/example beyond a length cap — they're just UI
+    // copy, not executed.
+    templateVariables: z
+      .array(
+        z
+          .object({
+            name: z.string().regex(/^[a-z0-9_]{2,40}$/),
+            description: z.string().max(500),
+            example: z.string().max(500),
+          })
+          .strict(),
+      )
+      .max(12)
       .optional(),
   })
   .strict();

@@ -1,0 +1,45 @@
+"use client";
+
+// Agent lifecycle slice (T4, page restructure) — a tiny generic disclosure
+// used for the "Configure the agent" area folded inside the Learned stage.
+// Not the stage accordion itself (agent-lifecycle-accordion.tsx) — that one
+// enforces ONE stage open at a time; this is a plain independent toggle.
+
+import { useState, type ReactNode } from "react";
+import { ChevronDown } from "lucide-react";
+
+export function Collapsible({
+  label,
+  defaultOpen = false,
+  children,
+}: {
+  label: ReactNode;
+  defaultOpen?: boolean;
+  children: ReactNode;
+}) {
+  const [open, setOpen] = useState(defaultOpen);
+  return (
+    <div className="rounded-lg border border-[var(--lc-line)]">
+      <button
+        type="button"
+        onClick={() => setOpen((v) => !v)}
+        aria-expanded={open}
+        className="flex w-full items-center justify-between gap-2 px-3 py-2.5 text-left text-sm font-medium text-[var(--lc-ink)]"
+      >
+        <span>{label}</span>
+        <ChevronDown
+          aria-hidden
+          className={`size-4 shrink-0 text-[var(--lc-muted)] transition-transform ${open ? "rotate-180" : ""}`}
+        />
+      </button>
+      {/* F-A fix: ALWAYS mounted, visibility toggled with `hidden` — this
+          wraps AgentTemplateEditor, whose greeting/script/FAQ edits live in
+          local React state. Conditionally rendering `children` (the old
+          `{open ? <div>…</div> : null}`) unmounted that state on every
+          collapse, silently dropping unsaved edits. */}
+      <div className={`border-t border-[var(--lc-line)] p-3 ${open ? "" : "hidden"}`}>
+        {children}
+      </div>
+    </div>
+  );
+}

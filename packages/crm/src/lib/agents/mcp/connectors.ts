@@ -78,14 +78,24 @@ export type ConnectorBinding =
       discoveredAt?: string;
     };
 
-/** A vetted connector definition — the shipped catalog entry. */
+/** A user-pickable OAuth consent level (Circle's own "Read only / Full
+ *  access" split maps 1:1 to its `scopes_supported: ["read","write"]`). */
+export type VettedConnectorAccessLevel = { label: string; scopes: string[] };
+
+/** A vetted connector definition — the shipped catalog entry. `authType`
+ *  distinguishes the two credential rails: "bearer" (operator pastes a key,
+ *  e.g. Postiz/Rube) vs "oauth" (the connect flow discovers the auth server,
+ *  registers a DCR client, and runs the PKCE code flow — e.g. Circle). */
 export type VettedConnector = {
   id: string;
   label: string;
   endpoint: string;
-  authType: "bearer";
+  authType: "bearer" | "oauth";
   /** Default encrypted-secret service name for this connector. */
   secretService: string;
+  /** OAuth connectors only: user-pickable consent levels (default = first
+   *  entry, i.e. the least-privileged option). */
+  accessLevels?: VettedConnectorAccessLevel[];
 };
 
 /** The shipped, trusted connectors. Postiz (social) + Rube (Composio's
@@ -111,6 +121,22 @@ export const VETTED_CONNECTORS: readonly VettedConnector[] = [
     endpoint: "https://rube.app/mcp",
     authType: "bearer",
     secretService: "rube",
+  },
+  {
+    // Circle.so — official remote MCP (Streamable HTTP + OAuth; verified live
+    // 2026-07-13: RFC 8414 metadata at the issuer root, DCR at /oauth/register,
+    // PKCE S256, scopes read/write map to Circle's "Read only / Full access").
+    // NOTE: every tool call = 1 Circle Admin-API request against the
+    // community's monthly quota (5k/mo on Business) — keep agents read-lean.
+    id: "circle",
+    label: "Circle (community platform)",
+    endpoint: "https://app.circle.so/api/mcp",
+    authType: "oauth",
+    secretService: "circle",
+    accessLevels: [
+      { label: "Read only", scopes: ["read"] },
+      { label: "Full access", scopes: ["read", "write"] },
+    ],
   },
 ] as const;
 
@@ -189,6 +215,26 @@ const mcpToolSchemaSchema = z
     inputSchema: z.record(z.string(), z.unknown()),
   })
   .strict();
+
+/** Bounds mirrored 1:1 from `mcpToolSchemaSchema` above (name ≤128, desc
+ *  ≤4000). `lib/integrations/composio/discover-tools.ts` carries a
+ *  pre-existing local twin of this same clamp (`boundToolSchema`, kept there
+ *  deliberately per this slice's zero-edit constraint on that file — unify
+ *  post-merge). Clamp one MCP tool schema to the persistable bounds so a
+ *  discovered tool can never fail `connectorBindingSchema` at save time: an
+ *  oversized `name` can't be truncated without becoming a different, wrong
+ *  tool name, so it's dropped (`null`); an oversized `description` is
+ *  clamped (slice) since truncating prose loses nothing load-bearing. */
+export function boundMcpToolSchema(schema: McpToolSchema): McpToolSchema | null {
+  if (!schema || typeof schema.name !== "string") return null;
+  const name = schema.name.trim();
+  if (!name || name.length > 128) return null;
+  const description =
+    typeof schema.description === "string" && schema.description.length > 4000
+      ? schema.description.slice(0, 4000)
+      : schema.description;
+  return { ...schema, name, description };
+}
 
 /** A single connector binding. `.strict()` so unknown keys are rejected (no
  *  smuggling extra fields into the blueprint). BYO requires an HTTPS endpoint;

@@ -18,6 +18,7 @@ import type { ReactElement } from "react";
 import Link from "next/link";
 import { MarketplaceIcon } from "@/components/marketplace/marketplace-icons";
 import { MKT } from "@/components/marketplace/marketplace-data";
+import { ChatGptCtaButton } from "@/components/seo/chatgpt-cta";
 
 export type AgentPageCtaProps = {
   /** Display name of the agent (for the deploy headline). */
@@ -79,7 +80,7 @@ export function AgentPageCta({
         style={{
           position: "absolute",
           inset: 0,
-          background: "radial-gradient(circle at 50% 0%,rgba(0,137,123,0.22),transparent 60%)",
+          background: "radial-gradient(circle at 50% 0%,rgba(31, 43, 36,0.22),transparent 60%)",
           pointerEvents: "none",
         }}
       />
@@ -120,7 +121,7 @@ export function AgentPageCta({
               borderRadius: 14,
               cursor: "pointer",
               textDecoration: "none",
-              boxShadow: "0 10px 28px rgba(0,137,123,0.34)",
+              boxShadow: "0 10px 28px rgba(31, 43, 36,0.34)",
               display: "inline-flex",
               alignItems: "center",
               justifyContent: "center",
@@ -158,6 +159,8 @@ export function AgentPageCta({
             <MarketplaceIcon name="terminal" size={17} />
             Rent via MCP
           </button>
+
+          <ChatGptCtaButton dark />
         </div>
 
         {mcpOpen ? (

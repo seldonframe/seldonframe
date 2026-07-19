@@ -26,7 +26,7 @@ const STATUS_LABEL: Record<McpStatus, string> = {
 
 const STATUS_CLS: Record<McpStatus, string> = {
   verified:
-    "bg-[#1FAE85]/12 text-[#1FAE85] border-[#1FAE85]/30",
+    "bg-[#F6F2EA]/12 text-[#F6F2EA] border-[#F6F2EA]/30",
   community:
     "bg-[#a1a1aa]/10 text-[#d4d4d8] border-white/10",
   experimental:
@@ -48,7 +48,7 @@ const ServerCard = ({ server }: { server: McpServer }) => (
         href={server.repo}
         target="_blank"
         rel="noopener noreferrer"
-        className="text-[15px] font-semibold text-[#fafafa] hover:text-[#1FAE85] transition-colors"
+        className="text-[15px] font-semibold text-[#fafafa] hover:text-[#F6F2EA] transition-colors"
       >
         {server.name}
       </a>
@@ -56,7 +56,7 @@ const ServerCard = ({ server }: { server: McpServer }) => (
     </div>
     <p className="text-[13px] text-[#a1a1aa] leading-[1.6] mb-3">{server.description}</p>
     <p className="text-[13px] text-[#d4d4d8] leading-[1.65] mb-4">
-      <span className="text-[10px] font-mono uppercase tracking-[0.14em] text-[#1FAE85] block mb-1">
+      <span className="text-[10px] font-mono uppercase tracking-[0.14em] text-[#F6F2EA] block mb-1">
         Use case
       </span>
       {server.useCase}
@@ -103,7 +103,7 @@ export default function McpServersPage() {
               href="https://modelcontextprotocol.io"
               target="_blank"
               rel="noopener noreferrer"
-              className="text-[#1FAE85] hover:underline"
+              className="text-[#F6F2EA] hover:underline"
             >
               modelcontextprotocol.io
             </a>{" "}
@@ -167,7 +167,7 @@ export default function McpServersPage() {
           <h2 className="text-[16px] font-semibold mb-3 text-[#fafafa]">What&apos;s next</h2>
           <ul className="space-y-2 text-[14px]">
             <li>
-              <a href="/docs/quickstart" className="text-[#1FAE85] hover:underline">
+              <a href="/docs/quickstart" className="text-[#F6F2EA] hover:underline">
                 Install SeldonFrame &rarr;
               </a>
               <span className="text-[#71717a]">
@@ -176,7 +176,7 @@ export default function McpServersPage() {
               </span>
             </li>
             <li>
-              <a href="/docs" className="text-[#1FAE85] hover:underline">
+              <a href="/docs" className="text-[#F6F2EA] hover:underline">
                 Read the SeldonFrame docs &rarr;
               </a>
               <span className="text-[#71717a]">
@@ -189,7 +189,7 @@ export default function McpServersPage() {
                 href="https://github.com/seldonframe/seldonframe"
                 target="_blank"
                 rel="noopener noreferrer"
-                className="text-[#1FAE85] hover:underline"
+                className="text-[#F6F2EA] hover:underline"
               >
                 Star the repo &rarr;
               </a>

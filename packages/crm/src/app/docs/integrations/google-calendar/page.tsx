@@ -22,7 +22,7 @@ export default function Page() {
       <Step n={2} title="Pick which calendars to sync">
         Most people have several calendars (Personal, Work, Family).
         SeldonFrame asks which ones provide busy time and which one
-        receives new SF bookings. You can change this anytime.
+        receives new Seldon bookings. You can change this anytime.
       </Step>
 
       <h2>How sync works</h2>
@@ -47,8 +47,8 @@ export default function Page() {
       <Callout variant="info" title="Buffers and travel time">
         Buffer rules (e.g. "15 min between bookings") are SeldonFrame-side
         only. Google Calendar's "find a time" doesn't know about your
-        SF buffer rules — but the slots offered to your customers via
-        SF booking pages do respect them.
+        Seldon buffer rules — but the slots offered to your customers via
+        Seldon booking pages do respect them.
       </Callout>
 
       <h2>Multiple team calendars</h2>

@@ -45,6 +45,14 @@ export type AnthropicKeyFieldProps = {
    *  signup page's "What's an API key?" explainer). Settings page
    *  doesn't use this. */
   ariaDescribedBy?: string;
+  /** Optional controlled value + change handler — used by LlmKeyDialog,
+   *  which builds its own FormData on submit (rather than relying on a
+   *  <form action> the browser reads the input's DOM value from) so it can
+   *  disable its Save button until a value is present. Signup/settings
+   *  leave both undefined and keep the field uncontrolled inside their own
+   *  <form>. */
+  value?: string;
+  onValueChange?: (value: string) => void;
 };
 
 /** Anthropic API key input + helper line. Renders a label, password
@@ -55,6 +63,8 @@ export function AnthropicKeyField({
   name = "apiKey",
   placeholder = "sk-ant-...",
   ariaDescribedBy,
+  value,
+  onValueChange,
 }: AnthropicKeyFieldProps) {
   return (
     <div className="space-y-1">
@@ -71,6 +81,9 @@ export function AnthropicKeyField({
         placeholder={placeholder}
         required
         aria-describedby={ariaDescribedBy}
+        {...(onValueChange
+          ? { value: value ?? "", onChange: (e: React.ChangeEvent<HTMLInputElement>) => onValueChange(e.target.value) }
+          : {})}
       />
       <p className="text-xs text-muted-foreground">
         Get a key from{" "}
@@ -116,7 +129,7 @@ export function EncryptionNotice({ trailing, variant = "muted" }: EncryptionNoti
   if (variant === "footer-text") {
     return (
       <p className="text-xs text-muted-foreground">
-        Keys are encrypted with AES-256-GCM before storage. SF cannot read your
+        Keys are encrypted with AES-256-GCM before storage. Seldon cannot read your
         raw keys — they&apos;re only decrypted in memory at agent-turn time.
         {trailing ? <> {trailing}</> : null}
       </p>
@@ -125,7 +138,7 @@ export function EncryptionNotice({ trailing, variant = "muted" }: EncryptionNoti
 
   return (
     <div className="rounded-md border border-border bg-muted/20 px-3 py-2 text-xs text-muted-foreground">
-      Keys are encrypted with AES-256-GCM before storage. SF cannot read your
+      Keys are encrypted with AES-256-GCM before storage. Seldon cannot read your
       raw keys — they&apos;re only decrypted in memory at agent-turn time.
       {trailing ? <> {trailing}</> : null}
     </div>

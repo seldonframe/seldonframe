@@ -25,6 +25,20 @@ import {
   registerAgencySenderDomain,
   verifyAgencySenderDomain,
 } from "@/lib/partner-agencies/sender-domain";
+import { resolveSubAccountCapForBuilderOrg } from "@/lib/billing/subaccount-count";
+
+/** 2026-07-08 — sub-account limit at the handoff boundary. Delegates to
+ *  the shared resolveSubAccountCapForBuilderOrg (subaccount-count.ts —
+ *  also used by deployments/actions.ts's deploy-provisioning gate,
+ *  non-blocking item #5 removed the duplicated inline logic that used
+ *  to live in both places): resolves the bearer workspace's effective
+ *  tier (walking the agency chain) and the REFINED sub-account count
+ *  for its owner (excludes self-branding attachments — see
+ *  subaccount-count.ts). Wrapped BEFORE the attachWorkspaceToAgency
+ *  store call so the store itself stays pure. */
+async function enforceSubAccountLimitForUser(params: { bearerOrgId: string }) {
+  return resolveSubAccountCapForBuilderOrg(params.bearerOrgId);
+}
 
 type Body = {
   op?: unknown;
@@ -163,6 +177,29 @@ export async function POST(request: Request) {
         { status: 400 },
       );
     }
+    const limitDecision = await enforceSubAccountLimitForUser({ bearerOrgId: guard.orgId });
+    if (!limitDecision.ok) {
+      logEvent(
+        "v17_attach_workspace_to_agency_failed",
+        {
+          error: limitDecision.reason,
+          used: limitDecision.used,
+          limit: limitDecision.limit,
+        },
+        { request, orgId: guard.orgId, status: 402, severity: "warn" },
+      );
+      return NextResponse.json(
+        {
+          ok: false,
+          error: limitDecision.reason,
+          used: limitDecision.used,
+          limit: limitDecision.limit,
+          upgradeUrl: "/settings/billing",
+        },
+        { status: 402 },
+      );
+    }
+
     const result = await attachWorkspaceToAgency({
       workspaceId: body.workspace_id,
       agencyId: body.agency_id,

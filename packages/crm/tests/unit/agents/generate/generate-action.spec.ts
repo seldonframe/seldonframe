@@ -378,11 +378,12 @@ describe("runGenerateAgentDraft — judge wiring (un-fixable issue → warning)"
       result.warnings.includes(PROBLEM),
       `expected the un-fixable issue surfaced as a warning, got: ${JSON.stringify(result.warnings)}`,
     );
-    // an un-fixable issue must NOT mutate the persisted blueprint trigger
+    // an un-fixable issue must NOT mutate the persisted blueprint trigger.
+    // P2 day-one default: no explicit text/sms keyword in this sentence → email.
     assert.deepEqual(calls.create[0]!.blueprint.trigger, {
       kind: "event",
       event: "booking.completed",
-      channel: "sms",
+      channel: "email",
     });
   });
 });
@@ -460,11 +461,12 @@ describe("runGenerateAgentDraft — judge fails OPEN (never blocks)", () => {
 
     assert.equal(result.ok, true, "a throwing judge must not block generation");
     assert.equal(calls.create.length, 1, "the bundle is still persisted");
-    // the assembler's blueprint survives intact (the throw is swallowed open)
+    // the assembler's blueprint survives intact (the throw is swallowed open).
+    // P2 day-one default: no explicit text/sms keyword in this sentence → email.
     assert.deepEqual(calls.create[0]!.blueprint.trigger, {
       kind: "event",
       event: "booking.completed",
-      channel: "sms",
+      channel: "email",
     });
   });
 });

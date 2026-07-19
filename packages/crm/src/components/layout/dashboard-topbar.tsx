@@ -2,6 +2,7 @@
 
 import Link from "next/link";
 import { useEffect, useMemo, useRef, useState } from "react";
+import { createPortal } from "react-dom";
 import { Check, Command, ChevronsUpDown, Menu, Moon, Search, Sun } from "lucide-react";
 import { useTheme } from "next-themes";
 import { usePathname } from "next/navigation";
@@ -168,8 +169,18 @@ export function DashboardTopbar({
   const { theme, setTheme } = useTheme();
   const [menuOpen, setMenuOpen] = useState(false);
   const [workspaceMenuOpen, setWorkspaceMenuOpen] = useState(false);
+  // 2026-07-07 — fixed-position anchors for the portaled dropdowns below.
+  // See the portal note near their render sites: both popovers are
+  // portaled to document.body because the sticky topbar's z-index +
+  // backdrop-blur trap their z-30 panels inside a stacking context that
+  // the sticky command bar (z-20) paints over. Same fix as
+  // notifications-bell.tsx.
+  const [menuAnchor, setMenuAnchor] = useState<{ top: number; right: number } | null>(null);
+  const [workspaceMenuAnchor, setWorkspaceMenuAnchor] = useState<{ top: number; right: number } | null>(null);
   const menuRef = useRef<HTMLDivElement>(null);
+  const menuButtonRef = useRef<HTMLButtonElement>(null);
   const workspaceMenuRef = useRef<HTMLDivElement>(null);
+  const workspaceMenuButtonRef = useRef<HTMLButtonElement>(null);
   const workspaceIdBySlug = useMemo(() => {
     const map: Record<string, string> = {};
     for (const workspace of workspaceOptions) {
@@ -180,13 +191,13 @@ export function DashboardTopbar({
 
   useEffect(() => {
     function handleClickOutside(event: MouseEvent) {
-      if (!menuRef.current) {
-        return;
-      }
-
-      if (!menuRef.current.contains(event.target as Node)) {
-        setMenuOpen(false);
-      }
+      const target = event.target as Node;
+      // The popover is portaled to document.body, so menuRef (on the
+      // portaled panel) and menuButtonRef (on the trigger) must both be
+      // checked — neither is an ancestor of the other anymore.
+      if (menuRef.current?.contains(target)) return;
+      if (menuButtonRef.current?.contains(target)) return;
+      setMenuOpen(false);
     }
 
     if (menuOpen) {
@@ -200,13 +211,10 @@ export function DashboardTopbar({
 
   useEffect(() => {
     function handleClickOutside(event: MouseEvent) {
-      if (!workspaceMenuRef.current) {
-        return;
-      }
-
-      if (!workspaceMenuRef.current.contains(event.target as Node)) {
-        setWorkspaceMenuOpen(false);
-      }
+      const target = event.target as Node;
+      if (workspaceMenuRef.current?.contains(target)) return;
+      if (workspaceMenuButtonRef.current?.contains(target)) return;
+      setWorkspaceMenuOpen(false);
     }
 
     if (workspaceMenuOpen) {
@@ -215,6 +223,48 @@ export function DashboardTopbar({
 
     return () => {
       document.removeEventListener("mousedown", handleClickOutside);
+    };
+  }, [workspaceMenuOpen]);
+
+  // Reposition the portaled popovers under their triggers on
+  // scroll/resize, mirroring notifications-bell.tsx.
+  useEffect(() => {
+    if (!menuOpen) return;
+    const position = () => {
+      const btn = menuButtonRef.current;
+      if (!btn) return;
+      const rect = btn.getBoundingClientRect();
+      setMenuAnchor({
+        top: rect.bottom + 8,
+        right: Math.max(8, window.innerWidth - rect.right),
+      });
+    };
+    position();
+    window.addEventListener("resize", position);
+    window.addEventListener("scroll", position, true);
+    return () => {
+      window.removeEventListener("resize", position);
+      window.removeEventListener("scroll", position, true);
+    };
+  }, [menuOpen]);
+
+  useEffect(() => {
+    if (!workspaceMenuOpen) return;
+    const position = () => {
+      const btn = workspaceMenuButtonRef.current;
+      if (!btn) return;
+      const rect = btn.getBoundingClientRect();
+      setWorkspaceMenuAnchor({
+        top: rect.bottom + 8,
+        right: Math.max(8, window.innerWidth - rect.right),
+      });
+    };
+    position();
+    window.addEventListener("resize", position);
+    window.addEventListener("scroll", position, true);
+    return () => {
+      window.removeEventListener("resize", position);
+      window.removeEventListener("scroll", position, true);
     };
   }, [workspaceMenuOpen]);
 
@@ -235,10 +285,29 @@ export function DashboardTopbar({
         </div>
       </div>
 
-      <div className="relative hidden shrink-0 lg:block" ref={workspaceMenuRef}>
+      <div className="relative hidden shrink-0 lg:block">
         <button
+          ref={workspaceMenuButtonRef}
           type="button"
-          onClick={() => setWorkspaceMenuOpen((current) => !current)}
+          onClick={() => {
+            setWorkspaceMenuOpen((current) => {
+              const next = !current;
+              if (next) {
+                // Anchor synchronously so the portaled panel's first
+                // render is already positioned (no flash before the
+                // reposition effect runs).
+                const btn = workspaceMenuButtonRef.current;
+                if (btn) {
+                  const rect = btn.getBoundingClientRect();
+                  setWorkspaceMenuAnchor({
+                    top: rect.bottom + 8,
+                    right: Math.max(8, window.innerWidth - rect.right),
+                  });
+                }
+              }
+              return next;
+            });
+          }}
           className="flex h-10 min-w-[240px] items-center gap-3 rounded-xl border border-border/80 bg-background/80 px-3 text-left shadow-(--shadow-xs) transition-all hover:border-border hover:bg-background"
         >
           <div className="min-w-0 flex-1">
@@ -248,55 +317,66 @@ export function DashboardTopbar({
           <ChevronsUpDown className="size-4 text-muted-foreground" />
         </button>
 
-        {workspaceMenuOpen ? (
-          <div className="absolute right-0 z-30 mt-2 w-[320px] rounded-2xl border border-border/80 bg-card/96 p-2.5 shadow-(--shadow-dropdown) backdrop-blur-xl">
-            <p className="px-2 pb-1 text-[10px] font-semibold tracking-[0.16em] text-muted-foreground/80">YOUR WORKSPACES</p>
-            <div className="space-y-1">
-              {/* 2026-05-17 — see sidebar.tsx for the rationale on
-                  switching from <form action={switchWorkspaceAction}>
-                  to plain Links targeting /switch-workspace?to=…&next=…
-                  TL;DR: onClick closes the menu (popover unmounts)
-                  BEFORE the form's server action dispatch completes,
-                  so the switch silently never happened. */}
-              {workspaceOptions.map((workspace) => {
-                const isPrimaryAgencyOrg = workspace.id === primaryOrgId;
-                const nextPath = isPrimaryAgencyOrg
-                  ? "/dashboard"
-                  : `/clients/${workspace.slug}/ready`;
-                const href = `/switch-workspace?to=${encodeURIComponent(workspace.id)}&next=${encodeURIComponent(nextPath)}`;
-                return (
-                  // 2026-05-17 — plain <a> not <Link>: see sidebar.tsx
-                  // for the rationale. TL;DR — soft navigation keeps
-                  // the cached layout chrome so the new workspace name
-                  // doesn't appear in the sidebar/topbar until refresh.
-                  // <a> forces a hard navigation that re-renders the
-                  // layout with the new cookie applied.
-                  <a
-                    key={workspace.id}
-                    href={href}
-                    className="crm-pressable flex w-full items-start gap-2 rounded-xl px-2.5 py-2.5 text-left transition-[background-color,transform] duration-150 ease-out hover:bg-accent/60"
-                    onClick={() => setWorkspaceMenuOpen(false)}
-                  >
-                    <span className="mt-0.5 inline-flex size-4 items-center justify-center text-primary">
-                      {activeWorkspaceId === workspace.id ? <Check className="size-3.5" /> : null}
-                    </span>
-                    <span className="min-w-0 flex-1">
-                      <span className="block truncate text-sm font-medium text-foreground">
-                        {workspace.name}
-                        {isPrimaryAgencyOrg ? (
-                          <span className="ml-1.5 inline-flex items-center rounded-full border border-emerald-500/30 bg-emerald-500/10 px-1.5 py-0.5 align-middle text-[9px] font-semibold tracking-[0.08em] text-emerald-700 dark:text-emerald-300">
-                            YOUR AGENCY
+        {workspaceMenuOpen && typeof document !== "undefined"
+          ? createPortal(
+              <div
+                ref={workspaceMenuRef}
+                style={{
+                  position: "fixed",
+                  top: workspaceMenuAnchor?.top ?? 0,
+                  right: workspaceMenuAnchor?.right ?? 0,
+                }}
+                className="z-[60] w-[320px] rounded-2xl border border-border/80 bg-card/96 p-2.5 shadow-(--shadow-dropdown) backdrop-blur-xl"
+              >
+                <p className="px-2 pb-1 text-[10px] font-semibold tracking-[0.16em] text-muted-foreground/80">YOUR WORKSPACES</p>
+                <div className="space-y-1">
+                  {/* 2026-05-17 — see sidebar.tsx for the rationale on
+                      switching from <form action={switchWorkspaceAction}>
+                      to plain Links targeting /switch-workspace?to=…&next=…
+                      TL;DR: onClick closes the menu (popover unmounts)
+                      BEFORE the form's server action dispatch completes,
+                      so the switch silently never happened. */}
+                  {workspaceOptions.map((workspace) => {
+                    const isPrimaryAgencyOrg = workspace.id === primaryOrgId;
+                    const nextPath = isPrimaryAgencyOrg
+                      ? "/dashboard"
+                      : `/clients/${workspace.slug}/ready`;
+                    const href = `/switch-workspace?to=${encodeURIComponent(workspace.id)}&next=${encodeURIComponent(nextPath)}`;
+                    return (
+                      // 2026-05-17 — plain <a> not <Link>: see sidebar.tsx
+                      // for the rationale. TL;DR — soft navigation keeps
+                      // the cached layout chrome so the new workspace name
+                      // doesn't appear in the sidebar/topbar until refresh.
+                      // <a> forces a hard navigation that re-renders the
+                      // layout with the new cookie applied.
+                      <a
+                        key={workspace.id}
+                        href={href}
+                        className="crm-pressable flex w-full items-start gap-2 rounded-xl px-2.5 py-2.5 text-left transition-[background-color,transform] duration-150 ease-out hover:bg-accent/60"
+                        onClick={() => setWorkspaceMenuOpen(false)}
+                      >
+                        <span className="mt-0.5 inline-flex size-4 items-center justify-center text-primary">
+                          {activeWorkspaceId === workspace.id ? <Check className="size-3.5" /> : null}
+                        </span>
+                        <span className="min-w-0 flex-1">
+                          <span className="block truncate text-sm font-medium text-foreground">
+                            {workspace.name}
+                            {isPrimaryAgencyOrg ? (
+                              <span className="ml-1.5 inline-flex items-center rounded-full border border-emerald-500/30 bg-emerald-500/10 px-1.5 py-0.5 align-middle text-[9px] font-semibold tracking-[0.08em] text-emerald-700 dark:text-emerald-300">
+                                YOUR AGENCY
+                              </span>
+                            ) : null}
                           </span>
-                        ) : null}
-                      </span>
-                      <span className="block truncate text-xs text-muted-foreground">{workspace.contactCount.toLocaleString()} clients · {workspace.soulId ? workspace.soulId.charAt(0).toUpperCase() + workspace.soulId.slice(1) : "Custom"}</span>
-                    </span>
-                  </a>
-                );
-              })}
-            </div>
-          </div>
-        ) : null}
+                          <span className="block truncate text-xs text-muted-foreground">{workspace.contactCount.toLocaleString()} clients · {workspace.soulId ? workspace.soulId.charAt(0).toUpperCase() + workspace.soulId.slice(1) : "Custom"}</span>
+                        </span>
+                      </a>
+                    );
+                  })}
+                </div>
+              </div>,
+              document.body,
+            )
+          : null}
       </div>
 
       <div className="relative mx-auto hidden flex-1 md:block md:max-w-[320px]">
@@ -337,10 +417,28 @@ export function DashboardTopbar({
           workspaceIdBySlug={workspaceIdBySlug}
         />
 
-        <div className="relative" ref={menuRef}>
+        <div className="relative">
           <button
+            ref={menuButtonRef}
             type="button"
-            onClick={() => setMenuOpen((current) => !current)}
+            onClick={() => {
+              setMenuOpen((current) => {
+                const next = !current;
+                if (next) {
+                  // Anchor synchronously — see the workspace switcher
+                  // toggle above for the rationale.
+                  const btn = menuButtonRef.current;
+                  if (btn) {
+                    const rect = btn.getBoundingClientRect();
+                    setMenuAnchor({
+                      top: rect.bottom + 8,
+                      right: Math.max(8, window.innerWidth - rect.right),
+                    });
+                  }
+                }
+                return next;
+              });
+            }}
             className="crm-topbar-icon-btn h-9 w-9 text-xs font-semibold"
             aria-haspopup="menu"
             aria-expanded={menuOpen}
@@ -349,30 +447,38 @@ export function DashboardTopbar({
             {avatarFallback}
           </button>
 
-          {menuOpen ? (
-            <div className="absolute right-0 z-30 mt-2 w-56 rounded-2xl border border-border/80 bg-card/96 p-2 shadow-(--shadow-dropdown) backdrop-blur-xl sm:w-64" role="menu">
-              <div className="px-2 py-2">
-                <p className="truncate text-sm font-medium text-foreground">{userName}</p>
-                <p className="truncate text-xs text-muted-foreground">{userEmail}</p>
-              </div>
-              <div className="my-1 h-px bg-border" />
-              <Link
-                href="/settings"
-                className="block rounded-xl px-2.5 py-2 text-sm text-muted-foreground transition-colors hover:bg-accent/70 hover:text-foreground"
-                onClick={() => setMenuOpen(false)}
-              >
-                Settings
-              </Link>
-              <form action={signOutAllSessionsAction}>
-                <button
-                  type="submit"
-                  className="w-full rounded-xl px-2.5 py-2 text-left text-sm text-muted-foreground transition-colors hover:bg-accent/70 hover:text-foreground"
+          {menuOpen && typeof document !== "undefined"
+            ? createPortal(
+                <div
+                  ref={menuRef}
+                  style={{ position: "fixed", top: menuAnchor?.top ?? 0, right: menuAnchor?.right ?? 0 }}
+                  className="z-[60] w-56 rounded-2xl border border-border/80 bg-card/96 p-2 shadow-(--shadow-dropdown) backdrop-blur-xl sm:w-64"
+                  role="menu"
                 >
-                  Log out
-                </button>
-              </form>
-            </div>
-          ) : null}
+                  <div className="px-2 py-2">
+                    <p className="truncate text-sm font-medium text-foreground">{userName}</p>
+                    <p className="truncate text-xs text-muted-foreground">{userEmail}</p>
+                  </div>
+                  <div className="my-1 h-px bg-border" />
+                  <Link
+                    href="/settings"
+                    className="block rounded-xl px-2.5 py-2 text-sm text-muted-foreground transition-colors hover:bg-accent/70 hover:text-foreground"
+                    onClick={() => setMenuOpen(false)}
+                  >
+                    Settings
+                  </Link>
+                  <form action={signOutAllSessionsAction}>
+                    <button
+                      type="submit"
+                      className="w-full rounded-xl px-2.5 py-2 text-left text-sm text-muted-foreground transition-colors hover:bg-accent/70 hover:text-foreground"
+                    >
+                      Log out
+                    </button>
+                  </form>
+                </div>,
+                document.body,
+              )
+            : null}
         </div>
 
         <span className="hidden text-label text-foreground xl:inline">{userName}</span>

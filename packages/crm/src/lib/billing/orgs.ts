@@ -300,7 +300,11 @@ function buildMembershipOrgCondition(membershipOrgIds: string[]) {
  * Returns the list of workspace IDs to union into the main query via
  * an `inArray` condition. Empty array when the user owns no agencies.
  */
-async function fetchAgencyAttachedWorkspaceIds(userId: string): Promise<string[]> {
+/** 2026-07-08 — exported so lib/billing/limits.ts can count sub-account
+ *  attachments for enforceSubAccountLimitForUser (the handoff-boundary
+ *  gate). Same read the org list + billing rollup already used
+ *  internally; no new query shape. */
+export async function fetchAgencyAttachedWorkspaceIds(userId: string): Promise<string[]> {
   if (!isUuidShape(userId)) return [];
 
   // Find partner_agencies this user owns.

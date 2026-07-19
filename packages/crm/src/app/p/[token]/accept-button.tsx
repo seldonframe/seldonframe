@@ -33,7 +33,7 @@ export function AcceptButton({ token, brandColor }: { token: string; brandColor:
         onClick={handleClick}
         disabled={loading}
         style={{ backgroundColor: brandColor }}
-        className="px-8 py-4 rounded-full text-white font-semibold text-lg shadow-lg hover:shadow-xl transition-shadow disabled:opacity-50"
+        className="px-8 py-4 rounded-[11px] text-white font-semibold text-lg shadow-lg hover:shadow-xl transition-shadow disabled:opacity-50"
       >
         {loading ? "Opening Stripe…" : "Accept & start →"}
       </button>

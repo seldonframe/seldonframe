@@ -3,6 +3,10 @@ name: cinematic-landing
 version: 1.0.0
 description: Dark cinematic landing system — looping Pexels MP4 background + liquid-glass UI + Instrument Serif italic typography + Framer Motion choreography. Auto-applied to agency + cinematic-aspirational (coaching, medspa, wellness, luxury) archetypes during create_full_workspace. The marketplace-forkable "fat skill" that captures the entire Aura / Velorah / Aethera / Asme aesthetic family.
 surface: landing-aesthetic
+# Fat skill — an aesthetic layer, not a props-schema block. No flat props
+# to codegen (the v1.12 opt-out, same as composite); runtime primitives
+# live in components/landing/cinematic/.
+codegen: false
 applies_to:
   - hero
   # Phase 2 will extend to: about, services, testimonials, pricing, cta

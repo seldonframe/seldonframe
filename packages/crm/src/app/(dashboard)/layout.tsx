@@ -12,11 +12,13 @@ import { Sidebar } from "@/components/layout/sidebar";
 import { CommandPalette } from "@/components/layout/command-palette";
 import { DemoBanner } from "@/components/layout/demo-banner";
 import { TestModeBanner } from "@/components/layout/test-mode-banner";
+import { AgencyKeyBanner } from "@/components/dashboard/agency-key-banner";
 import { DashboardTopbar } from "@/components/layout/dashboard-topbar";
 import { HelpButton } from "@/components/layout/help-button";
 import { SeldonChat } from "@/components/seldon-chat";
 import { CommandBar } from "@/components/command-bar";
 import { isWinLadderOn, isSimpleHomeOn } from "@/lib/web-build/policy";
+import { isDraftApprovalsOn } from "@/lib/agent-drafts/policy";
 import { readEnabledModules } from "@/lib/workspace/surface";
 import { hasLiveSms } from "@/lib/telephony/config";
 import { buildWorkspaceUrls } from "@/lib/billing/anonymous-workspace";
@@ -26,12 +28,6 @@ import { canSeldonIt, resolvePlanFromPlanId } from "@/lib/billing/entitlements";
 import { listManagedOrganizations, setActiveOrgAction } from "@/lib/billing/orgs";
 import { getHiddenBlocks } from "@/lib/blocks/visibility-actions";
 import { getNotificationFeed } from "@/lib/notifications/feed";
-// 2026-05-17 — pulls the workspace's brand color / accent / radius
-// into the admin chrome so theme settings actually affect the
-// operator's own dashboard (not just public pages). Previously the
-// provider existed but wasn't mounted anywhere — saved themes only
-// applied to /l/, /book/, /forms/ surfaces.
-import { AdminThemeProvider } from "@/components/theme/admin-theme-provider";
 import { getThemeSettings } from "@/lib/theme/actions";
 import { db } from "@/db";
 import { activities, contacts, deals, landingPages, organizations, users } from "@/db/schema";
@@ -111,17 +107,17 @@ export default async function DashboardLayout({
     ? await getNotificationFeed(user.id, user.orgId ?? null)
     : [];
 
-  // 2026-05-17 — fetch the workspace theme so the AdminThemeProvider
-  // can override --primary / --ring / --accent / --radius in admin
-  // chrome. Best-effort: failures just skip the override (chrome falls
-  // back to default shadcn tokens).
+  // 2026-07-15 — the admin theme bridge is gone: the dashboard always
+  // wears the SF brand tokens from design-tokens.css. This fetch
+  // survives only for theme.logoUrl (workspace switcher tile below).
+  // Best-effort: failures just drop the logo.
   const adminThemeSettings = orgId
     ? await getThemeSettings().catch(() => null)
     : null;
 
   const [activeOrg, orgMemberCount, effectiveBranding] = orgId
     ? await Promise.all([
-        db.select({ id: organizations.id, name: organizations.name, testMode: organizations.testMode, slug: organizations.slug, settings: organizations.settings, integrations: organizations.integrations }).from(organizations).where(eq(organizations.id, orgId)).limit(1).then((rows) => rows[0] ?? null),
+        db.select({ id: organizations.id, name: organizations.name, testMode: organizations.testMode, slug: organizations.slug, settings: organizations.settings, integrations: organizations.integrations, parentAgencyId: organizations.parentAgencyId, createdAt: organizations.createdAt }).from(organizations).where(eq(organizations.id, orgId)).limit(1).then((rows) => rows[0] ?? null),
         db
           .select({ count: sql<number>`count(*)` })
           .from(users)
@@ -162,6 +158,25 @@ export default async function DashboardLayout({
   // which is voice-only) so this agrees with /conversations and /settings/features.
   // No extra DB round trip — activeOrg.integrations is already selected above.
   const smsLive = hasLiveSms(activeOrg?.integrations);
+
+  // Agency key inheritance advisory banner (2026-07-08 pricing ladder,
+  // Task 5, flag SF_AGENCY_KEY_INHERIT): shown when the ACTIVE org is a
+  // sub-account (parentAgencyId set), has no BYOK Anthropic key of its
+  // own, and is older than the 14-day soft launch window. No extra DB
+  // round trip — activeOrg.integrations/parentAgencyId/createdAt are
+  // already selected above. v1 is advisory-only (never blocks).
+  const agencyKeyInheritOn = process.env.SF_AGENCY_KEY_INHERIT?.trim() === "1";
+  const orgHasOwnAnthropicKey = Boolean(
+    (activeOrg?.integrations as { anthropic?: { apiKey?: string } } | undefined)?.anthropic?.apiKey,
+  );
+  const orgAgeMs = activeOrg?.createdAt ? Date.now() - new Date(activeOrg.createdAt).getTime() : 0;
+  const FOURTEEN_DAYS_MS = 14 * 24 * 60 * 60 * 1000;
+  const showAgencyKeyBanner = Boolean(
+    agencyKeyInheritOn &&
+      activeOrg?.parentAgencyId &&
+      !orgHasOwnAnthropicKey &&
+      orgAgeMs > FOURTEEN_DAYS_MS,
+  );
 
   // Command bar (Task 7): auto-open-once fires only the FIRST time a
   // simple-home org with a materialized module set (not grandfathered) has
@@ -266,7 +281,6 @@ export default async function DashboardLayout({
 
   return (
     <SoulProvider soul={soul} personality={personality}>
-      <AdminThemeProvider theme={adminThemeSettings?.theme ?? null}>
       <div className="min-h-screen w-full lg:p-3">
         <div className="flex min-h-screen w-full flex-col items-center justify-start bg-background/95 lg:rounded-2xl lg:border lg:border-border/80 lg:shadow-(--shadow-card)">
           <div className="animate-page-enter flex min-h-screen w-full flex-col md:flex-row">
@@ -275,7 +289,7 @@ export default async function DashboardLayout({
               canAccessSeldon={canAccessSeldon}
               hiddenBlocks={hiddenBlocks}
               workspaceName={activeOrg?.name || "SeldonFrame"}
-              // 2026-05-18 — workspace logo from /settings/theme. The
+              // 2026-05-18 — workspace logo from theme.logoUrl. The
               // workspace SWITCHER tile shows the client's own per-
               // workspace logo (theme.logoUrl) — falling back to the
               // agency logo when the workspace hasn't uploaded its own,
@@ -320,6 +334,7 @@ export default async function DashboardLayout({
               primaryOrgId={user?.orgId ?? null}
               enabledModules={enabledModules}
               smsLive={smsLive}
+              draftApprovalsOn={isDraftApprovalsOn({ SF_DRAFT_APPROVALS: process.env.SF_DRAFT_APPROVALS })}
             />
             {/* overflow-x-clip (not overflow-x-hidden): overflow-y-auto here
                 also computes overflow-x to `auto` per CSS's overflow
@@ -337,6 +352,7 @@ export default async function DashboardLayout({
             <div className="min-h-screen min-w-0 flex-1 overflow-y-auto overflow-x-clip px-4 py-4 sm:px-6 sm:py-6 lg:px-8 lg:py-8">
               <DemoBanner />
               <TestModeBanner testMode={activeOrg?.testMode ?? false} />
+              <AgencyKeyBanner show={showAgencyKeyBanner} />
               {isSwitchedOrg && activeOrg ? (
                 <div className="mb-5 rounded-2xl border border-border/80 bg-card/75 px-4 py-3 text-sm text-muted-foreground shadow-(--shadow-xs)">
                   <span className="font-medium text-foreground">{activeOrg.name}</span> active · {" "}
@@ -393,7 +409,6 @@ export default async function DashboardLayout({
           {!isOperatorSession ? <HelpButton /> : null}
         </div>
       </div>
-      </AdminThemeProvider>
     </SoulProvider>
   );
 }

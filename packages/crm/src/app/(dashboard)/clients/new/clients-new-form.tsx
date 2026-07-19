@@ -35,6 +35,12 @@ const COPY = {
     invalid_url: "That URL doesn't look right. Check for typos and try again.",
     extraction_failed:
       "We couldn't read that site. Try a different URL — a homepage works best.",
+    // 2026-07-16 — credits_exhausted honesty fix. Out-of-credits is NOT an
+    // unreadable site; the operator here may be on their own BYOK key, so
+    // point at adding Anthropic credits. Server-sent `message` wins; this
+    // line is the fallback when the payload carries none.
+    credits_exhausted:
+      "The Anthropic key powering this build is out of credits. Add credits to your Anthropic account, then try again.",
     workspace_limit_short:
       "You're at your workspace limit. Upgrade to add this client.",
     internal_error:
@@ -278,7 +284,7 @@ export function ClientsNewForm({
 
     es.addEventListener("error", (raw) => {
       const payload = (raw as MessageEvent).data;
-      let data: { code?: number; reason?: string } & Partial<LimitInfo> = {};
+      let data: { code?: number; reason?: string; message?: string } & Partial<LimitInfo> = {};
       try {
         if (typeof payload === "string" && payload.length > 0) {
           data = JSON.parse(payload);
@@ -308,7 +314,14 @@ export function ClientsNewForm({
         return;
       }
       if (data.code === 422) {
-        setErrorBanner(COPY.errors.extraction_failed);
+        // credits_exhausted is a key-funding problem, not a site-reading one —
+        // show the server's honest message (fallback to the dedicated copy)
+        // instead of sending the operator hunting for a "better" URL.
+        setErrorBanner(
+          data.reason === "credits_exhausted"
+            ? data.message || COPY.errors.credits_exhausted
+            : COPY.errors.extraction_failed,
+        );
         return;
       }
       setErrorBanner(COPY.errors.internal_error);
@@ -359,7 +372,7 @@ export function ClientsNewForm({
 
     es.addEventListener("error", (raw) => {
       const payload = (raw as MessageEvent).data;
-      let data: { code?: number; reason?: string } & Partial<LimitInfo> = {};
+      let data: { code?: number; reason?: string; message?: string } & Partial<LimitInfo> = {};
       try {
         if (typeof payload === "string" && payload.length > 0) {
           data = JSON.parse(payload);
@@ -389,7 +402,14 @@ export function ClientsNewForm({
         return;
       }
       if (data.code === 422) {
-        setErrorBanner(COPY.errors.extraction_failed);
+        // credits_exhausted is a key-funding problem, not a site-reading one —
+        // show the server's honest message (fallback to the dedicated copy)
+        // instead of sending the operator hunting for a "better" URL.
+        setErrorBanner(
+          data.reason === "credits_exhausted"
+            ? data.message || COPY.errors.credits_exhausted
+            : COPY.errors.extraction_failed,
+        );
         return;
       }
       setErrorBanner(COPY.errors.internal_error);

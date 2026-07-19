@@ -32,6 +32,8 @@ import {
   disconnectComposioToolkitAction,
   setComposioKeyAction,
   enableComposioTriggerAction,
+  connectMcpConnectorAction,
+  disconnectMcpConnectorAction,
 } from "./actions";
 
 /** A catalog toolkit descriptor passed from the server (serializable subset). */
@@ -50,6 +52,18 @@ export type ToolkitConnectionView = {
   connectedAccountId: string | null;
 };
 
+/** A vetted OAuth MCP connector's display status (server-computed via
+ *  describeMcpConnectorStatus — booleans/labels/counts only, never a secret). */
+export type McpConnectorView = {
+  id: string;
+  label: string;
+  /** The connector's user-pickable access-level labels (index 0 = default). */
+  accessLevels: string[];
+  connected: boolean;
+  levelLabel?: string;
+  toolCount?: number;
+};
+
 type Props = {
   catalog: CatalogToolkit[];
   initialConnections: ToolkitConnectionView[];
@@ -64,6 +78,11 @@ type Props = {
   /** ?connect=<value> — when "calendar", filter the grid to the calendar
    *  toolkits only (win-ladder deep link). Any other value is ignored. */
   connectFilter: string | null;
+  /** Vetted OAuth connectors (Circle et al.) — a separate section below the
+   *  Composio grid. */
+  mcpConnectors: McpConnectorView[];
+  /** ?error=mcp_oauth_<reason> from the OAuth callback, if any. */
+  mcpError: string | null;
 };
 
 /** Catalog slugs treated as "calendar" for the ?connect=calendar filter. */
@@ -82,6 +101,16 @@ export function IntegrationsClient(props: Props) {
   const [toast, setToast] = useState<Toast>(null);
   const [pendingSlug, setPendingSlug] = useState<string | null>(null);
   const [, startTransition] = useTransition();
+
+  // Vetted OAuth MCP connectors (Circle et al.) — seeded from the server;
+  // re-synced via router.refresh() after a successful connect/disconnect.
+  const [mcpConnectors, setMcpConnectors] = useState<McpConnectorView[]>(props.mcpConnectors);
+  const [mcpPendingId, setMcpPendingId] = useState<string | null>(null);
+  const [mcpAccessLevelIndex, setMcpAccessLevelIndex] = useState<Record<string, number>>({});
+
+  useEffect(() => {
+    setMcpConnectors(props.mcpConnectors);
+  }, [props.mcpConnectors]);
 
   // Hotfix H4a — the win-ladder deep link (?connect=calendar) narrows the
   // grid to calendar toolkits. "Show all integrations" clears it locally
@@ -113,8 +142,23 @@ export function IntegrationsClient(props: Props) {
         ? { kind: "error", message: `Couldn't connect ${props.returnedToolkit}.` }
         : { kind: "success", message: `${props.returnedToolkit} connected.` },
     );
-    void refetch();
+    // The MCP OAuth callback shares the same ?connected=<id> shape as
+    // Composio's; an MCP connector's fresh (server-computed) status needs a
+    // real server round-trip rather than the Composio-only refetch action.
+    const isMcpConnector = props.mcpConnectors.some((c) => c.id === props.returnedToolkit);
+    if (isMcpConnector) {
+      router.refresh();
+    } else {
+      void refetch();
+    }
     // Clean the URL so a refresh doesn't re-toast.
+    router.replace("/integrations");
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
+  useEffect(() => {
+    if (!props.mcpError) return;
+    setToast({ kind: "error", message: friendlyMcpError(props.mcpError) });
     router.replace("/integrations");
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
@@ -167,6 +211,41 @@ export function IntegrationsClient(props: Props) {
       }
       setToast({ kind: "success", message: "Disconnected." });
       await refetch();
+    });
+  }
+
+  function handleMcpConnect(connectorId: string) {
+    setToast(null);
+    setMcpPendingId(connectorId);
+    startTransition(async () => {
+      const res = await connectMcpConnectorAction({
+        connectorId,
+        accessLevelIndex: mcpAccessLevelIndex[connectorId] ?? 0,
+      });
+      if (!res.ok) {
+        setMcpPendingId(null);
+        setToast({ kind: "error", message: friendlyMcpError(res.error) });
+        return;
+      }
+      // Hand off to the connector's hosted OAuth consent screen.
+      window.location.href = res.url;
+    });
+  }
+
+  function handleMcpDisconnect(connectorId: string) {
+    setToast(null);
+    setMcpPendingId(connectorId);
+    startTransition(async () => {
+      const res = await disconnectMcpConnectorAction(connectorId);
+      setMcpPendingId(null);
+      if (!res.ok) {
+        setToast({ kind: "error", message: friendlyMcpError(res.error) });
+        return;
+      }
+      setMcpConnectors((prev) =>
+        prev.map((c) => (c.id === connectorId ? { ...c, connected: false, levelLabel: undefined, toolCount: undefined } : c)),
+      );
+      setToast({ kind: "success", message: "Disconnected." });
     });
   }
 
@@ -316,6 +395,94 @@ export function IntegrationsClient(props: Props) {
         </span>
         .
       </p>
+
+      {mcpConnectors.length > 0 && (
+        <div className="space-y-3">
+          <h2 className="text-card-title">MCP connectors</h2>
+          <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-3">
+            {mcpConnectors.map((c) => {
+              const busy = mcpPendingId === c.id;
+              const levelIndex = mcpAccessLevelIndex[c.id] ?? 0;
+              return (
+                <article key={c.id} className="flex flex-col rounded-xl border bg-card p-4">
+                  <div className="flex items-center gap-3">
+                    <span
+                      aria-hidden
+                      className="inline-flex size-9 shrink-0 items-center justify-center rounded-lg border bg-muted/40 text-sm font-semibold text-muted-foreground"
+                    >
+                      {c.label.charAt(0)}
+                    </span>
+                    <div className="min-w-0 flex-1">
+                      <h3 className="truncate text-sm font-semibold text-foreground">{c.label}</h3>
+                      <span
+                        className={`mt-0.5 inline-flex items-center gap-1 text-[11px] ${
+                          c.connected ? "text-positive" : "text-muted-foreground"
+                        }`}
+                      >
+                        {c.connected ? (
+                          <>
+                            <Check className="size-3" aria-hidden />
+                            Connected
+                            {c.levelLabel ? ` · ${c.levelLabel}` : ""}
+                            {typeof c.toolCount === "number" ? ` · ${c.toolCount} tools` : ""}
+                          </>
+                        ) : (
+                          "Not connected"
+                        )}
+                      </span>
+                    </div>
+                  </div>
+
+                  <div className="mt-4 flex flex-wrap items-center gap-2">
+                    {!c.connected && c.accessLevels.length > 0 && (
+                      <select
+                        value={levelIndex}
+                        disabled={busy}
+                        onChange={(e) =>
+                          setMcpAccessLevelIndex((prev) => ({ ...prev, [c.id]: Number(e.target.value) }))
+                        }
+                        className="crm-input h-8 px-2 text-xs"
+                      >
+                        {c.accessLevels.map((label, i) => (
+                          <option key={label} value={i}>
+                            {label}
+                          </option>
+                        ))}
+                      </select>
+                    )}
+
+                    {c.connected ? (
+                      <button
+                        type="button"
+                        onClick={() => handleMcpDisconnect(c.id)}
+                        disabled={busy}
+                        className="crm-button-secondary inline-flex h-8 items-center gap-1.5 px-3 text-xs disabled:opacity-60"
+                      >
+                        {busy ? <Loader2 className="size-3.5 animate-spin" aria-hidden /> : null}
+                        Disconnect
+                      </button>
+                    ) : (
+                      <button
+                        type="button"
+                        onClick={() => handleMcpConnect(c.id)}
+                        disabled={busy}
+                        className="crm-button-primary inline-flex h-8 items-center gap-1.5 px-3 text-xs disabled:opacity-60"
+                      >
+                        {busy ? (
+                          <Loader2 className="size-3.5 animate-spin" aria-hidden />
+                        ) : (
+                          <Plug className="size-3.5" aria-hidden />
+                        )}
+                        Connect
+                      </button>
+                    )}
+                  </div>
+                </article>
+              );
+            })}
+          </div>
+        </div>
+      )}
     </div>
   );
 }
@@ -427,6 +594,30 @@ function friendly(error: string): string {
       return "Nothing to disconnect.";
     case "no_primary_trigger":
       return "This app has no inbound trigger to enable.";
+    default:
+      return error;
+  }
+}
+
+/** Map an MCP OAuth connect/callback error code to friendly copy. */
+function friendlyMcpError(error: string): string {
+  switch (error) {
+    case "unauthorized":
+      return "You don't have access to this workspace.";
+    case "unknown_oauth_connector":
+      return "That connector isn't available.";
+    case "no_access_levels_configured":
+      return "This connector has no access levels configured.";
+    case "mcp_oauth_missing_params":
+      return "The connect flow was interrupted — try again.";
+    case "mcp_oauth_bad_state":
+      return "That connect link is invalid or already used — try again.";
+    case "mcp_oauth_expired":
+      return "That connect link expired — try again.";
+    case "mcp_oauth_org_mismatch":
+      return "That connect link belongs to a different workspace.";
+    case "mcp_oauth_exchange_failed":
+      return "Couldn't complete the connection — try again.";
     default:
       return error;
   }

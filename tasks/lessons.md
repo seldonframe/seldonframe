@@ -1941,3 +1941,478 @@ C4 close-out with empirical SLICE 11 data.
 ## 2026-07-04 — subagent commits sweep tracked build artifacts
 - Pattern: an implementer subagent committed 474 tracked .next/ churn files alongside 3 source files (git add -A style) after a prior task's pnpm build regenerated them.
 - Rule: every dispatch that ends in a commit must name the exact files to git add; the controller verifies `git show --stat` file count BEFORE generating the review package; restore packages/crm/.next to HEAD after any build gate so the churn can't be swept.
+
+## 2026-07-06 — right-size the TASK, not just the model + rules must live in the skill
+- **Right-size the task before you dispatch.** A `haiku` scout was told to "Read a 242k-token JSON log" and failed (no model should Read a file that big); I then sliced it with grep+node in 2 Bash calls for ~nothing. Rule: before ANY read-a-file / hand-a-file-to-a-subagent step, check the size (`wc -c`); if it's big, the task is "grep/jq/node the span", NEVER "read the whole file". Drop+retrieve at the task level — the controller holds the plan + conclusions, files/greps hold the bytes.
+- **A rule only fires if it's in the skill read at dispatch time (memory ≠ applied).** The "graders = Haiku" rule was already in memory (loops-working-style, 2026-07-01) yet I still ran 4 vision-graders on Sonnet this session (~218k tokens — the biggest single line item — for read-a-PNG→`{pass,gaps}` = pure haiku work). Memory is recalled as background; it doesn't reliably change behavior. Fix: LOCK the model-tier table into `.claude/skills/ship-feature` (commit `29cfad1c9`) — read at every dispatch. When a lesson governs an action, put it in the actionable skill, not only in memory. (Echoes L-20 "audit is authoritative, memory is not".)
+- **The locked tier v2 (canonical in ship-feature; SUPERSEDES the line below):** `haiku` = scout/grader (PINNED in vision-verify)/summarizer/transcription · `sonnet` = prose-brief makers + normal reviews · **`opus` = ALL top-tier reviews (hot-path + final whole-branch)** · **`fable` = novel/architectural GENERATION only** — an Opus-4.8 critique (2026-07-06, adopted by Max) showed Fable reads a diff no better for ~2.6× the price ($10/$50 + ~30%-heavier tokenizer vs $5/$25), and Fable's weekly cap makes it an unreliable default (it died mid-dispatch that same day). Always name the model on every dispatch; role-pins live IN the role's skill (a table enforced by memory isn't locked — the graders drifted to sonnet WITH the rule in memory).
+- ~~The locked tier v1: fable at the top for the two judgment roles, opus swappable.~~ (superseded above)
+- **⏰ 2026-08-25: re-audit the tier table** — Sonnet 5 steps from $2/$10 to $3/$15 on 2026-09-01 (gap to Haiku widens 2×→3×); push any borderline sonnet role to haiku before the step.
+- **Live-smoke is now verify-build check #6** (curl changed routes → 200 + DOM sentinel + clean logs) — promoted from the RSC-outage *lesson* to an enforced *gate*; static gates prove it compiles, only a live request proves it runs.
+
+---
+
+## L-XX — Copilot text/structure edit tools write the DEAD `slug='home'` model; live site is `slug='r1'` (never-lies violation)
+
+- **Trigger:** User told SeldonChat "change the headline for 'Max Electrical'". The
+  copilot called `update_section_field` (section=hero, field=headline), which
+  `mutateSectionField`+`renderBlueprint`'d the `slug='home'` general-service-v1
+  blueprint and returned `ok:true` → the model truthfully said "Done ✅". The LIVE
+  SRP site renders from `slug='r1'` (`blueprint_json.payload`, R1 React renderer),
+  so the page never changed. The shipped `vision_check` (reads the real r1 page)
+  correctly returned `pass:false` — surfaced as a contradictory "Heads up, not
+  visible" note AFTER the false "Done".
+- **Root cause:** `LANDING_SLUG = "home"` in `lib/agents/copilot/tools.ts:79`
+  drives `update_section_field` (and the `edit_site`/move/delete/add-section
+  family). Only the MEDIA tools were migrated to r1 (`setR1Media`/`loadR1Payload`,
+  `R1_SLUG='r1'`). This is the **THIRD instance** of the same class:
+  `applyHeroBackground` (slug='home' no-op) and `upload_workspace_image` were the
+  first two, both fixed by routing through `setR1Media`. The text/structure surface
+  was never migrated → every non-media copilot edit is a silent no-op on r1 orgs.
+- **Rule:** (1) The r1 payload (`slug='r1'`, `blueprint_json.payload`) is the ONE
+  authoritative live model. ANY copilot edit tool must read+write it (via the
+  `loadR1Payload`/`saveLandingPayload` seam that media tools use), mapping the r1
+  schema (hero headline == `hero.tagline`, there is NO `hero.headline`). Legacy
+  `slug='home'` writes are dead unless the org genuinely has no r1 page — fall back
+  only then. (2) A tool's `ok:true` must mean "the RENDERED surface changed," not
+  "a DB row was written" — tie success to a read-back/render assertion, and let the
+  `vision_check` GATE the "Done" claim, never trail it. (3) When you migrate a live
+  data model, grep EVERY writer of the old slug in one pass — piecemeal migration
+  (media-only) left a whole tool family lying. See memory [[seldonchat-media-editing]].
+
+---
+
+## L-XX — Sticky + backdrop-blur + z-index = a stacking-context TRAP; portal dropdowns to escape
+
+- **Trigger:** The dashboard notifications dropdown (`z-30`, inside the `DashboardTopbar`
+  which is `sticky top-0 z-10 backdrop-blur-xl`) rendered BEHIND the "Ask SeldonChat"
+  command bar (`sticky top-0 z-20 backdrop-blur-xl`), on both mobile and desktop. The
+  dropdown's `z-30` was higher than the bar's `z-20`, yet it lost.
+- **Root cause:** `position: sticky` + a `z-index` + `backdrop-filter` EACH create a new
+  stacking context. The topbar (z-10) and command-bar (z-20) are siblings, so the command
+  bar's ENTIRE context paints above the topbar's ENTIRE context. The dropdown's `z-30` is
+  only relative to the topbar's z-10 context — it can't escape to beat a sibling context.
+  `backdrop-filter` on the ancestor ALSO makes it the containing block for `position:fixed`
+  descendants, so switching the dropdown to `fixed` doesn't escape either.
+- **Rule:** A dropdown/popover/tooltip that must overlay siblings should **portal to
+  `document.body`** (`createPortal`) with `position: fixed` anchored to its trigger's
+  `getBoundingClientRect()` + a high z-index — so it renders outside every ancestor
+  stacking/filter trap. Don't try to win with a bigger `z-index` when the ancestor is
+  `sticky`/`fixed`/`transform`/`filter`/`will-change` — z-index only compares WITHIN a
+  context. (Anchor synchronously on open to avoid a position flash; reposition on
+  scroll/resize; theme CSS vars still work since it's the same document.) Pattern shipped in
+  `components/layout/notifications-bell.tsx`.
+
+- Research-agent briefs MUST forbid sub-delegation (one agent spawned ~10 children -> platform rate-limit storm killed the whole fleet, 2026-07-07); <10 web queries = run inline, no subagent. See docs/learnings/2026-07-07-research-fanout-rate-limit.md
+
+- Money-path UI tests must assert the ROUTE-LEVEL end state, not "the POST fired" against a mocked fetch (Optimistic Path, CLAUDE.md 3.1): the pricing-ladder branch shipped green tests while the live $29 checkout 409d. Pattern: extract the route gate to a pure fn (resolveCheckoutTierGate) and test THAT for every tier id the UI can POST. 2026-07-08.
+- Client-side-only conditional renders hide content from crawlers/LLMs: SSR both states and toggle visibility with CSS (pricing-shell audience rows). Curl the served HTML for sentinels of EVERY state before calling a marketing surface done. 2026-07-08.
+
+- L-09-style env traps from the 2026-07-08 GHL-SEO build (see docs/learnings/2026-07-08-parallel-seo-fanout.md): (1) origin/main can MOVE mid-session — before any `origin/main..HEAD` regression grep or diff-based verdict, re-check `git merge-base` and rebase; otherwise other people's shipped work reads as YOUR reversions. (2) PS5.1 `Set-Content`/`Out-File -Encoding utf8` writes a BOM and round-trips em-dashes into mojibake in generated source — write files with `[System.IO.File]::WriteAllText($p, $c, (New-Object System.Text.UTF8Encoding $false))` instead. (3) A scratch `.mts` importing repo `.ts` modules can false-alarm "does not provide an export named X" (Node ESM lexer vs CJS transpile) — scratch scripts must be `.ts`, same as the specs.
+- When a required verification command fails identically on the BASE commit (e.g. `next build` vs stale local node_modules missing markdown-to-jsx/posthog-js), run it on base AND branch and diff the failure fingerprints (`grep -o "Can't resolve '[^']*'" | sort -u` + error-class grep) — a clean delta is a valid pass, a raw exit code is not evidence (pipes/`; echo` mask it). See docs/learnings/2026-07-08-build-delta-fingerprint.md. 2026-07-08.
+- Concurrent-session repo: verify refs at USE time not plan time (fetch immediately before push; a surprise file in your diff = re-inspect the refs), keep work rebase-able as ONE commit, and never switch branches/build in a worktree a subagent is currently verifying in (tainted its run; had to message it to re-run). See docs/learnings/2026-07-08-shipping-to-a-moving-main.md. 2026-07-08.
+
+- **2026-07-09 — implementer must never delegate into a shared worktree.** An implementer spawned its own background child for the whole assignment, then reported "waiting" and stopped; resuming the parent created TWO agents editing the same worktree concurrently (races reconciled by luck + specs). Prevention: every implementer dispatch prompt now includes "do the work yourself; do not spawn sub-agents"; if an agent reports it is waiting on its own child, treat the report as invalid and resume with explicit do-it-yourself orders. Related: the run-agent.sh flock fix (same class — one working tree, one writer).
+
+---
+
+## L-31 — App Router route.ts files may export ONLY handlers + segment config; tsc passes, next build fails
+
+- **Trigger:** Record-to-agent Wave C exported pure authz helpers
+  (`resolveSessionCreateGate`, `authorizeRecordingSubmission`,
+  `resolveUploadGrant`) from route.ts files so specs could import them —
+  mirroring how lib modules do it. `tsc --noEmit` was clean; Next's
+  build-time route type validation ("X is not a valid Route export field")
+  would have failed the Vercel build. Zero route files on main had the
+  pattern — it was invented in-branch. Caught by the controller before
+  merge; same failure class as the RSC client-fn-from-server gotcha
+  (build/runtime-only, invisible to tsc).
+- **Rule:** a `route.ts` may export only HTTP-method handlers
+  (GET/POST/...) and segment config (`dynamic`, `runtime`, etc.). Every
+  pure helper a route and its spec share goes in a lib module (e.g.
+  `lib/recordings/route-guards.ts`) imported by both. Bonus: keeping the
+  lib module free of build-brittle imports (`@vercel/blob`,
+  `@anthropic-ai/sdk`) is what makes the helpers spec-testable under the
+  worktree junction at all. Add "grep `^export` on new route.ts files" to
+  any verify pass that includes new API routes.
+
+---
+
+## L-32 — /signup 307s an already-authed user to /dashboard, DROPPING callbackUrl — never route signed-in users through signup
+
+- **Trigger:** record-to-agent's claim CTA linked every user to
+  `/signup?callbackUrl=/record?claimed=1`. First live test: Max was already
+  signed in; /signup 307'd him straight to /dashboard, the callbackUrl was
+  discarded, compile-agent never ran, and he was stranded hunting for an
+  agent that didn't exist. Vercel logs made it obvious (GET /signup → 307 →
+  GET /dashboard, zero compile-agent calls).
+- **Rule:** any public funnel with a signup hop must branch on auth FIRST:
+  the page resolves `auth()` server-side (null-safe for anonymous — mirror
+  claim-build/page.tsx) and signed-in users take the direct action in place;
+  only anonymous users get the /signup?callbackUrl=… link. Corollary for
+  testing: the funnel's "new user" happy path and the "existing user" path
+  are DIFFERENT paths — smoke both before calling a claim flow done.
+
+## L-33 — A success verdict derived from "the turn completed" is a lie waiting to happen
+
+- **Trigger:** Prod supervised run 32a12952: agent replied "I can't actually execute
+  the workflow steps," action_log=[], status='succeeded' — verdict was `outcome.ok`
+  (LLM turn returned) not observable end state. Second incident same day (48e7fcc0):
+  the run DID act, but the result type never carried `actionLog` and the reducer
+  hardcoded `summary:null` — the UI showed "Succeeded — no summary" + zero log lines
+  while the DB row held 4 events. Max concluded (reasonably) nothing worked, twice.
+- **Rule:** (1) Any "succeeded" on an agent action surface must be COMPUTED from the
+  observable record (≥1 ok tool action; read-back where the effect is external),
+  never from "the code/turn ran" — same class as the SeldonChat vision_check rule.
+  (2) The UI renders EVIDENCE (plan → actions w/ proof ids → agent words, subordinate),
+  never a bare verdict badge; a verdict without its evidence pipe intact is
+  indistinguishable from a lie. Trace result types end-to-end: the durable row, the
+  action return, and the client props must carry the SAME evidence fields.
+  (3) Diagnose these with a direct prod-row read (Neon MCP on the run table) — the
+  DB told the truth both times when the UI didn't.
+
+## L-34 — Empty-allowlist authoring + tests that enshrine the bug
+
+- **Trigger:** Composio bindings authored with `enabledTools: []` resolve to ZERO
+  tools (resolver iterates only the allowlist; empty-means-disabled is load-bearing
+  for the editor toggle, so the resolver can't default). SEVEN authoring instances
+  existed (compile-agent, bind-tools, composio-resolver, agent-bundle + specs);
+  worse, the canonical tests/unit suite ASSERTED the empty allowlist as expected —
+  the green bar had locked the bug in.
+- **Rule:** (1) When a list field means "allowlist," empty-at-authoring is a silent
+  zero-capability bug — seed defaults at EVERY authoring site (never in the resolver
+  when empty-means-disabled is a real contract) and grep ALL writers of the shape in
+  one pass (the slug='home' lesson, third occurrence of the class). (2) When fixing
+  a bug class, audit the TESTS for assertions that encode the buggy behavior — flip
+  them with the fix or the next green bar re-certifies the lie. (3) Co-located spec
+  files vs the canonical tests/unit tree: check where the repo's suite actually
+  lives BEFORE writing the first test of a session.
+- 2026-07-12: A string COMPOSED by keyword-matching other strings can state the opposite of its source ("no free tier" matched /free/i → "(has a free plan)"). Render new composed surfaces and read them; shape tests cannot catch a lie — add an invariant test for the truth claim. (docs/learnings/2026-07-12-derived-string-negation-lie.md)
+
+---
+
+## L-35 — Fetch before you spec: stale origin/main makes you rebuild shipped work
+
+- **Trigger:** The email-agent slice (2026-07-12) was scoped from session memory
+  + scout reports as "build the inbox-watch trigger" — but the local
+  `origin/main` ref was days stale. A `git fetch` revealed fresh main already
+  shipped the inferred inbox-watch trigger, widened Gmail triage defaults, and
+  the Composio push bridge; ~80% of the assumed build existed. The real slice
+  was 2 gaps, not 2 subsystems.
+- **Rule:** Before writing any spec that claims "X doesn't exist," run
+  `git fetch origin main` and verify every load-bearing existence claim against
+  the FRESH base commit (`git show origin/main:<path>` / `git grep <pattern>
+  origin/main`). Session memory and subagent reports describe the repo as it
+  WAS. Full approach: docs/learnings/2026-07-12-competitor-teardown-to-gap-slice.md
+
+---
+
+## L-36 — A gate verdict must exist as a recorded artifact on the final sha
+
+- **Trigger:** Record v3 merge (2026-07-12). The controller's summary claimed
+  "/verify-build PASS", but the verify-runner had died with no completion
+  record, and its (never-recorded) run predated the final fix-wave commit. A
+  stale task-notification at merge time was the only tell. Re-ran the gate on
+  the final rebased sha before pushing to main.
+- **Rule:** Before any merge, enumerate the gates and confirm each has a
+  RECORDED verdict (agent result or report file) on the FINAL sha. "An agent
+  was dispatched" / "I remember it passed" is not a verdict. Verdicts carry
+  over a rebase only when the diff is provably identical (conflict-free, zero
+  file overlap); test gates re-run regardless because they exercise the
+  integrated tree. See docs/learnings/2026-07-12-verify-the-verdict-exists.md.
+
+## L-37 — A git worktree of a pnpm monorepo needs a real `pnpm install`, not a node_modules junction
+
+- **Trigger:** Re-ran /verify-build in a worktree after cleanup removed the
+  earlier node_modules setup. Recreated only `packages/crm/node_modules` as a
+  junction to the main repo; the runner failed with
+  `Cannot find package 'tsx'`. Adding a second junction for the root
+  `node_modules` made it WORSE (702/702 specs failed — every import broke),
+  because pnpm's per-package `node_modules` is a web of RELATIVE symlinks into
+  the workspace-root `.pnpm` virtual store, and a junction doesn't relocate
+  that store. tsx isn't a top-level package dir at all — it lives in
+  `node_modules/.pnpm/tsx@x.y.z` and is resolved through those symlinks.
+- **Rule:** For a pnpm-workspace worktree that needs to RUN tests/tsc, run a
+  real `pnpm install` in the worktree root (with a warm global store it's
+  mostly hardlinks — ~3-4 min, `reused N, downloaded 0`). Junctions are fine
+  for a quick `tsc` that only needs types resolvable, but NOT for the test
+  runner or anything that executes through tsx/.pnpm symlinks. Verify the
+  install left the tree clean (`git status --porcelain` — no lockfile drift)
+  before pushing. Supersedes the junction-only shortcut in
+  worktree-typecheck-method for any RUN (execute) step.
+
+---
+
+## L-38 — When grep disagrees with a fresh Read about COMMITTED state, trust `git show HEAD:` + a real test run, not the grep
+
+- **Trigger:** After a 51-commit merge, a single `grep` of a conflict-resolved
+  file (`lifecycle-connect-actions.ts`) returned ZERO hits for the widening
+  symbols (`requiredToolkitSlugs`/`isOwnToolkit`), which read as "the merge
+  silently dropped a reviewed feature." A harness "file modified by linter"
+  note reinforced it. I nearly re-applied a fix that wasn't needed. A fresh
+  `Read` then showed the widening WAS present; `git show HEAD:<file> | grep -c`
+  = 6, working tree clean, and the spec passed 11/11 including the widening
+  tests. The lone grep had caught a transient mid-write filesystem state (a
+  background agent / harness linter touching files).
+- **Rule:** Ground truth for "what is committed" is `git show HEAD:<path>` (and
+  for "does it work", a real test run), NOT a single working-tree grep — the
+  working tree can be mid-write when a background subagent or the harness's
+  linter is touching files. When a grep result would trigger a corrective
+  action (re-apply a fix, revert a merge, re-resolve a conflict), CONFIRM it
+  against `git show HEAD:` + a targeted test BEFORE acting. It was still right
+  to verify the reviewed feature survived the merge — silently dropping
+  reviewed code in a merge is a real failure mode — just verify with the
+  authoritative source, not the first signal.
+
+## L-39 — A non-empty response body is not success; detect service-error sentinels (Optimistic Path, tool edition)
+
+- **Trigger:** The new `scripts/youtube-transcript.mjs` fetched a transcript,
+  got HTTP 200 with 142 chars of text, and reported `ok:true` — but the body
+  was youtubetranscript.com's error message *"We're sorry, YouTube is currently
+  blocking us from fetching subtitles"*, not a transcript. The tool would have
+  fed a fabricated-looking "transcript" (actually a service error) into the
+  content loop. Classic §3.1 Optimistic Path: "the fetch returned data" ≠ "the
+  fetch returned the thing I asked for."
+- **Rule:** For any external-fetch helper whose output feeds a downstream
+  writer, success = the RIGHT content, not just a 2xx + non-empty body. Add an
+  `isReal…()` guard that (a) enforces a sane minimum length and (b) rejects
+  known service-error sentinel phrases, then falls through to the next
+  source / an honest failure. Especially in a never-lies content pipeline: a
+  helper that passes an error body downstream launders it into a fabricated
+  claim. Fail honestly (point to the manual route) rather than pass through.
+
+---
+
+## L-40 — "Full parity" between two surfaces means matching every structured-data TYPE, and mechanical gates won't catch a missing one
+
+- **Trigger:** Built a `/blog` engine required to have "full SEO/GEO parity"
+  with `/guides`. It emitted Article JSON-LD but MISSED FAQPage JSON-LD (guides
+  emit both). `blog.spec` 17/17, `guides.spec` 861/861, tsc clean, `pnpm build`
+  green — every mechanical gate passed. Only the opus review caught the gap.
+  Same class surfaced as nits: author name split ("Max Houle" vs the canonical
+  `AUTHOR.name` "Maxime Houle") desyncing JSON-LD from the Person `sameAs`.
+- **Rule:** When the requirement is *parity* with an existing surface, don't
+  trust green specs/tsc/build — they check the new surface in isolation, not
+  against the reference. Explicitly DIFF the reference component's
+  structured-data emission (every `@type`: Article, FAQPage, Person, …) against
+  the new one, and reconcile shared constants (`AUTHOR.name`, canonical host).
+  Add the parity items the reference has to the new surface's review checklist.
+  Divergence is fine WHEN principled (blog FAQ optional → FAQPage conditional;
+  `sourceVideo` optional → `isBasedOn` conditional) — but it must be a decision,
+  not an omission. Never emit structured data you can't substantiate (use
+  Article `isBasedOn` a real URL, not a `VideoObject` with fabricated fields).
+
+---
+
+- L-41 (2026-07-13): Subagent ran git in the WRONG checkout (bare `cd "<repo>"` → stale primary branch, not the feature worktree); pin dir hard + assert `rev-parse` before acting + run the covering test yourself — a cheap model's "done" is unverified. Also: `git stash drop` reads the SHARED repo-wide stack; list before dropping. See docs/learnings/2026-07-13-wrong-checkout-subagent.md
+
+---
+
+## L-41 — Smoke-verify (HTTP 200 + text present) is NOT vision-verify; render and LOOK before shipping any visual surface
+
+- **Trigger:** Shipped the new /blog article page and confirmed it with an
+  HTTP-200 + `grep`-the-text smoke check. It went to prod rendering **white
+  title text on the light parchment background** — unreadable. The page mirrored
+  the dark `why-mcp` post's `#fafafa` text but rendered on the light marketing
+  background (MarketingShell's `<main>` has no bg). Max caught it immediately;
+  the smoke check couldn't — a 200 with the right words says nothing about
+  contrast, layout, or whether an element is even visible.
+- **Rule:** For ANY change with a visual surface (a page, a component, a diagram,
+  a color/theme change), the acceptance gate is a REAL RENDER you look at, not a
+  status code. Minimum: (a) render the page (local `next start` + the browser
+  pane or Playwright, or a Vercel preview), (b) a computed-style / DOM assertion
+  on the thing that matters (`getComputedStyle(wrapper).backgroundColor` +
+  `h1.color` proves contrast far more precisely than a screenshot), and (c) a
+  screenshot when the tool cooperates. When the browser-pane screenshot hangs
+  (it does in this env), Playwright's `browser_take_screenshot` to a file +
+  `Read` the PNG is the reliable fallback; computed-style checks stand on their
+  own when neither works. Never claim a visual surface is done off a smoke check.
+  (This is the vision-verify gate the repo already has — USE it for content
+  surfaces, not just SeldonChat.)
+
+## L-42 — Horizontal `overflowX:auto` on content diagrams/tables is a left-right slider users hate; render sequences vertically
+
+- **Trigger:** The shared `guide-diagrams.tsx` FlowDiagram rendered its steps as
+  a horizontal card row inside `overflowX:auto` — on a narrow article column it
+  produced a left-right scrollbar. Max: "I hate the right-left slider … make sure
+  ALL articles, blog, guides, free tools don't have any right-left slider."
+- **Rule:** A linear sequence (a workflow/flow) belongs VERTICAL — full-width
+  cards stacked top→bottom joined by a down-connector — never a horizontal row
+  that overflows. Reserve `overflowX:auto` for genuinely wide data tables, and
+  even then prefer a mobile card-reflow. When touching a SHARED content component
+  (`GuideDiagramView` feeds guides + blog + tools), the fix lands everywhere at
+  once — audit `overflowX` across `components/seo/*` and kill the ones on
+  diagram/sequence wrappers. Keep the fix responsive (compare grids → 1 column
+  below ~520px) and reduced-motion aware.
+
+## L-43 — Never delta-check a baseline with `git checkout <ref> -- .` in the working repo; it STAGES the ref's content
+
+- **Trigger:** To prove 10 landing-spec failures were pre-existing, I ran
+  `git checkout origin/main -- .` → ran the specs → `git checkout -- .` →
+  `git stash pop`. Two traps fired at once: (1) `checkout <ref> -- <path>`
+  updates the INDEX as well as the worktree, so the follow-up `checkout -- .`
+  restored from the index (still main's content) and silently left the branch's
+  own commit reverted-but-staged; (2) the earlier `git stash` had nothing to
+  save (post-rebase tree was clean), so `stash pop` grabbed an UNRELATED
+  months-old stash entry. Recovery needed `git restore --source=HEAD --staged
+  --worktree .` plus verifying the old stash list was untouched.
+- **Rule:** For "does this test fail on main too?" use a THROWAWAY checkout —
+  `git worktree add <tmp> origin/main`, run the spec there, `git worktree
+  remove <tmp>` — never mutate the working repo's index. If you must stash,
+  first confirm `git stash` actually created an entry (clean trees make the
+  later `pop` land on someone else's stash). Cheapest of all when the specs
+  don't import your changed files: prove isolation by grepping the failing
+  specs' imports against your diff, and skip the baseline run entirely.
+
+- **2026-07-10 — read the error, not the test name, before "updating stale tests."** 16 of ~30 CI failures briefed as "stale UI expectations" were `document is not defined` — a DOM bootstrap (tests/setup-dom.ts) existed but was never wired into the CI runner, so the fix was `import "../../setup-dom"` first-line in the affected specs, not assertion rewrites. Classify by error type (ReferenceError/MODULE_NOT_FOUND = harness bug; AssertionError value-diff = candidate stale expectation, confirm intent via git/in-code comments first). See docs/learnings/2026-07-10-diagnose-before-updating-tests.md.
+- **2026-07-10 — an invariant captured after the event it guards cannot fail.** Snapshotting registry keys at module top to detect import-time leakage is tautological when the import happens above the snapshot; assert named absence (leak) + named presence (baselines) instead, and litmus-test every invariant with "what code change makes this fire?" See docs/learnings/2026-07-10-guard-assertions-that-cannot-fail.md.
+- **2026-07-15 — grep the target branch for the PR's load-bearing artifact before calling it superseded.** A memory note claimed PRs #49/#54's key fixes were "re-landed on main by other work"; four greps for the artifacts themselves (the `deps.now` seam, the matchMedia stub, the `contract:throw-ok` markers) showed none had landed — only a base file with the same NAME pre-existed. File existence and session notes both lie; rebase + generator-re-run + stash-delta decide what survives. See docs/learnings/2026-07-15-stale-pr-triage-grep-the-seam.md.
+- **2026-07-15 — commit before mutation-testing; `git checkout -- <file>` restores HEAD, not "one edit ago."** Used sed to point one OG-card accent back at the broken color to prove the new visibility invariant fails, then `git checkout -- <file>` to undo the mutation — which wiped ALL uncommitted fix edits in the file and forced a full re-apply. Either commit the fix first and mutate on top, or undo the mutation with the inverse sed. See docs/learnings/2026-07-15-og-card-green-on-dark-blanket-invariant.md.
+
+---
+
+## L-33 — Model-invoked filing/write tools need atomic idempotency + a volume cap AT SPEC TIME, and twin/SQL store pairs need ordering-pinning contract tests
+
+- **Trigger:** never-fail-compile slice (2026-07-15). The draft_for_approval
+  spec initially shipped without dedupe; Max's reflect loop caught it and
+  amended (pending-only unique partial index + per-conversation cap). Then
+  the Opus review caught the twin/SQL divergence the amendment created: the
+  memory store checked dedupe-before-cap, the drizzle store checked
+  cap-before-dedupe — so at the cap, a retry of an already-pending step got
+  told "failed" while the draft existed (exactly what the spec forbade). The
+  contract suite ran only against the twin, so nothing could catch it.
+- **Rule:** (1) Any tool a MODEL can invoke that writes rows (drafts, claims,
+  messages, tickets) specs its idempotency key (usually a pending-only
+  partial unique index) and a volume cap in the same section as the tool —
+  models retry, and a retry must be idempotent-success, never a duplicate
+  and never a false failure. (2) When a store ships as memory-twin + SQL
+  pair, every RESULT-ORDERING decision (which check wins when two conditions
+  are both true: dedupe vs cap, not-found vs conflict) gets a contract test
+  that encodes the winner — passing on the twin is NOT evidence the SQL
+  store agrees; the SQL path's branch order must be read side-by-side
+  against the twin's at review time.
+
+---
+
+## L-34 — Scouts dispatched into a worktree must echo `pwd` + `git rev-parse HEAD` first; cross-check one known fact before using any scout report
+
+- **Trigger:** Same slice. The plan-grounding scout was told to work in the
+  never-fail-compile worktree but read the stale primary checkout
+  (feat/guides-rewrite-all, which predates the record feature) and returned
+  five false claims — "recap-panel.tsx doesn't exist", "no gate.ts", "no
+  SF_RECORD_TO_AGENT flag", "compile route missing", journal idx 43 (real:
+  48). All five contradicted facts already verified firsthand, which is the
+  only reason the report was caught and discarded instead of encoded into
+  the plan (L-16's exact failure mode, worktree edition).
+- **Rule:** Every scout/subagent prompt that targets a worktree opens with a
+  mandatory first step: run `pwd` and `git rev-parse HEAD` and include both
+  in the report; the controller checks the sha against the intended branch
+  before reading further. Additionally, before USING any scout report, the
+  controller verifies ONE load-bearing claim it already knows the answer to
+  — a report that fails its canary is discarded wholesale, not partially
+  trusted.
+- 2026-07-15 — Pricing changes drift: when the pricing catalog (plans.ts) changes, grep the WHOLE content surface (lib/seo/**, marketing components, docs) for the OLD numbers and price+capability collocations — per-page review missed 41 stale claims. (docs/learnings/2026-07-15-pricing-claims-drift-audit.md)
+- 2026-07-15 — Route CTAs by their label's promise: 'Build it free' → the build surface, 'Start for free' → signup. A label that promises less friction than it delivers is a small lie. (docs/learnings/2026-07-15-route-by-promise-ctas.md)
+- 2026-07-15 — Never share one working tree between two active sessions: a concurrent session clobbered in-flight edits mid-stream. Branch work goes in a git worktree; commit early to pin.
+- 2026-07-15: NEVER run implementer agents in the main checkout — another live session may own it (branch switched mid-task, stashes interleaved). Worktree-first for every build; a stash found in a shared checkout is presumed someone else's work (verify diff shape against the task's known scope before applying).
+
+---
+
+## L-35 — Every page that participates in an auth round-trip must be in SAFE_REDIRECT_PREFIXES
+
+- **Trigger:** The /record claim loop (record → /signup?callbackUrl=/record?… →
+  return) silently collapsed to /dashboard for EVERY claimer since the feature
+  shipped, because /record was never added to the shared open-redirect
+  allowlist (lib/auth/signup-redirect.ts). Log-proven via Max's 401 +
+  dashboard-dump run, 2026-07-15.
+- **Rule:** Any new page whose flow passes through /signup or /login with a
+  callbackUrl MUST add its path to SAFE_REDIRECT_PREFIXES in the same PR, with
+  a dated comment, plus allowlist tests (accept the path + query; reject
+  lookalikes). Design-time checklist item for every claim-like flow. Related:
+  host-only cookies are the house pattern — pin pages to the app host via
+  lib/auth/app-host-redirect.ts, NEVER propose cookie-domain widening (two
+  documented prod incidents).
+
+---
+
+## L-36 — Vision gates must render the REAL page CSS context, and "readable" needs an invariant test, not a fixture pass
+
+- **Trigger:** The question-card slice passed its vision gate round 1 on a
+  fixture render; Max's real browser showed the Yes/No chips as blank cream
+  pills. Two stacked causes: (1) the maker had seen the invisible-text symptom
+  in its own fixture, "fixed" the fixture, and concluded artifact — a real
+  component bug explained away; (2) the actual mechanism (Tailwind Preflight
+  `appearance: button` + transparent background paints a native face on some
+  engines) only reproduces on some browser/OS combos, so a Chromium-only
+  fixture screenshot could never catch it.
+- **Rule:** (1) When a rendering artifact appears in a test fixture, the
+  DEFAULT assumption is component bug until proven otherwise — never "fix" the
+  fixture to make the symptom go away. (2) Vision-verify renders must load the
+  real page CSS chain (route-level imports included), not a bare component
+  shell. (3) Interactive elements on brand surfaces get a visibility invariant
+  test: explicit background AND text color present and differing (the OG-card
+  "test visibility not presence" lesson, generalized to buttons). (4) Buttons
+  styled with transparent backgrounds require `appearance-none` — Preflight
+  does not guarantee it.
+- 2026-07-16 — When rewriting a component, grep the test dir for the COMPONENT/MODULE NAME (marketing-faq) and run every spec that imports it — grepping for copy strings missed a stale spec that asserted concept regexes, not literals. The reviewer caught it; the grep should have.
+
+---
+
+## L-37 — Windows junction removal must be unlink-only; recursive deletes FOLLOW junctions into the target
+
+- **Trigger:** Share-card slice (2026-07-16). Cleaning up a node_modules test
+  junction with PowerShell `.Delete($true)` recursed THROUGH the junction and
+  wiped the guardian worktree's real packages/crm/node_modules (an unrelated
+  worktree). Restored via `pnpm install --filter ./packages/crm` (100%
+  store-reuse, 85s) + parity verification; no lasting damage, but only because
+  the pnpm store made restoration cheap.
+- **Rule:** Junctions/symlinks on Windows are removed with `cmd /c rmdir
+  <path>` (unlink-only — never deletes contents) — NEVER
+  `Remove-Item -Recurse`, PowerShell `.Delete($true)`, or `rm -rf`, all of
+  which traverse into the link target. Before ANY recursive delete of a path
+  under a worktree, check `(Get-Item $p).LinkType` (or `fsutil reparsepoint
+  query`) — reparse point ⇒ unlink-only. This is the destructive twin of the
+  worktree-junction setup memory: junctions are cheap to make and catastrophic
+  to delete wrong.
+
+## L-38 — never `git stash`/`git stash pop` in a worktree (shared .git stash stack)
+
+Worktrees share ONE stash stack with the main repo and every other worktree.
+`git stash` with no local tracked changes says "No local changes to save" and
+does nothing useful (untracked new files are never stashed by default) — but
+a subsequent `git stash pop` still pops whatever ELSE is sitting at
+`stash@{0}`, which may be a stale WIP from a totally unrelated branch/session
+(seen: a `feature/crm-engine` stash from 2026-07-08 landed a `packages/core`
++ `packages/payments` deletion and a CLAUDE.md edit into an unrelated
+`marketplace-generalize` worktree, with merge conflicts). Recovery: `git
+reset --hard HEAD` restores tracked files (leaves untracked files alone,
+including whatever you were mid-edit on) and the stray stash entry is simply
+left in the stack — never touch/drop a stash you didn't push yourself.
+Prevention: to diff/typecheck a "before my change" baseline in a worktree,
+use `git worktree add` against a specific commit, or `git show <sha>:<path>`,
+or just re-run the same check on the parent repo path — never stash.
+- 2026-07-16 — Quote disputes (reviewer vs implementer) are settled by re-fetching the SOURCE, never the plan doc both relied on: the 'misquote' block was a false positive — both quotes were verbatim substrings of different sentences. (docs/learnings/2026-07-16-adjudicate-at-the-source.md)
+- 2026-07-16 — verify-runner EDITED code to fix type errors it found (checker must never write): its uncommitted worktree edits were half-lost at commit time and the broken half shipped. Rule: gate agents report, orchestrator fixes; run `git status` before AND after any gate dispatch and treat unexpected dirt as a gate violation.
+- 2026-07-16 — 'First price the reader meets' includes META DESCRIPTION and JSON-LD, not just body copy — the smoke caught $29 at byte 2761 (the <meta>) after all body anchors were fixed. Band/truth sweeps must include heroSub/metadata fields and word-form prices ('29 dollars'), which dodge $-greps.
+- 2026-07-16 — Worktree creation is a 3-step ritual: add + BOTH node_modules junctions. Skipping junctions makes every spec fail with ERR_MODULE_NOT_FOUND 'tsx' — 18 phantom failures before the real one.
+- 2026-07-16 — Booking intake questions must classify from the SOUL (business vertical), never from theme.aestheticArchetype (a look pick): the design picker stamped B2B questions on an HVAC company. When a creation-time seed and a render-time lazy resolver must agree, they call ONE shared function — the first cut diverged and would have permanently seeded contractor fields on physios. (docs/learnings/2026-07-16-intake-semantics-from-soul-not-look.md)
+- 2026-07-16 — Anthropic's out-of-credits error is HTTP 400 invalid_request_error, NOT 402/429 — a status-only error mapping shipped a retryable "Something broke" lie for a non-retryable condition. Rule: never map provider errors by status alone; keep ONE shared mapper per provider (the copy-pasted catch block in paste-extractor is exactly how mappings drift) and give every non-retryable reason honest copy + suppressed retry affordance. (docs/learnings/2026-07-16-credits-exhausted-400-mapping.md)
+- 2026-07-16 — In an agentic loop, every byte entering the conversation is a RECURRING cost (re-billed each iteration + every later turn's history rebuild): cap tool results at the entry seam, cache-mark the static prefix (system + last tool + moving message breakpoint, ≤4 markers), and never cache-mark a call whose prefix has no possible reader (the no-tools regen call). Diagnosis method: bracket the spend window with your own ok/error receipts (first-ok→last-ok), not the provider dashboard. (docs/learnings/2026-07-16-llm-credit-drain-diagnosis-and-token-economy.md)
+
+## L-39 — Batched dep failures: bisect with one-variable branches on the failing CI itself; hold via bot config
+
+- **Trigger (2026-07-18):** dependabot's 37-bump group PR #123 failed Vercel with
+  "Server Actions must be async functions" in the GENERATED workflow step route.
+  Local builds are unreliable in worktrees, so the isolation ran as two pushed
+  branches with Vercel preview as the oracle: workflow-pair-only → FAIL (#133),
+  everything-else → GREEN (#134). Culprit = workflow 4.6.0/@workflow/next 4.1.0
+  bundling "use server" files into sync __esm() closures (vercel/workflow#817).
+- **Rules:** (a) when the failing gate is reachable, use IT as the test harness —
+  don't approximate it locally; (b) `@dependabot ignore` comment-commands do NOT
+  work on grouped PRs — encode holds as `ignore:` entries in dependabot.yml with
+  the tracking issue + removal condition; (c) a dependabot branch can be based on
+  stale main — rebuild splits from origin/main, never cherry-pick its tree;
+  (d) SDK bumps can't change wire-level API behavior (stop_reason values, usage
+  shape, provider error text) — compat-review only the SDK-owned surface (type
+  exports, deep import paths, error classes).
+- Full note: docs/learnings/2026-07-18-dependabot-batch-isolation-by-preview-build.md

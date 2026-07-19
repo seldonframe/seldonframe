@@ -99,8 +99,11 @@ export const COMPOSIO_TOOLKIT_SLUGS: readonly string[] = COMPOSIO_TOOLKITS.map(
  * runtime wraps EXACTLY the binding's `enabledTools` by name (no live discovery
  * in the binding path), so when a builder enables a toolkit in Studio we seed a
  * small, sensible set of the most useful actions for that app. This is
- * intentionally conservative (a handful per toolkit) and can be widened later by
- * live discovery; the operator can also trim it in the picker.
+ * intentionally conservative (a handful per toolkit); ANY other Composio
+ * toolkit (not in this curated list) is widened by live discovery instead —
+ * see lib/integrations/composio/discover-tools.ts (composio live-tool-
+ * discovery slice, 2026-07-11). The operator can also trim either source in
+ * the picker.
  *
  * Slugs are the well-known Composio action tools for each toolkit. Unknown/typo'd
  * slugs are simply inert at runtime (resolveComposioBinding wraps by name; a name
@@ -108,7 +111,19 @@ export const COMPOSIO_TOOLKIT_SLUGS: readonly string[] = COMPOSIO_TOOLKITS.map(
  * — so we keep this list to documented actions).
  */
 const DEFAULT_TOOLS_BY_TOOLKIT: Record<string, readonly string[]> = {
-  gmail: ["GMAIL_SEND_EMAIL", "GMAIL_FETCH_EMAILS", "GMAIL_CREATE_EMAIL_DRAFT"],
+  gmail: [
+    "GMAIL_SEND_EMAIL",
+    "GMAIL_FETCH_EMAILS",
+    "GMAIL_CREATE_EMAIL_DRAFT",
+    // Inbox triage (recorded /record flows: auto-label, archive, mark read,
+    // move). In Gmail these are all label modifications — archive = remove
+    // INBOX, mark read = remove UNREAD — so the add/remove-labels actions
+    // cover the whole set.
+    "GMAIL_ADD_LABEL_TO_EMAIL",
+    "GMAIL_MODIFY_THREAD_LABELS",
+    "GMAIL_LIST_LABELS",
+    "GMAIL_CREATE_LABEL",
+  ],
   googlecalendar: [
     "GOOGLECALENDAR_CREATE_EVENT",
     // Free/busy lookup for the pluggable booking backend (availability). The
@@ -141,6 +156,12 @@ const DEFAULT_TOOLS_BY_TOOLKIT: Record<string, readonly string[]> = {
     "OUTLOOK_CALENDAR_CREATE_EVENT",
     // Free/busy lookup (booking backend availability) — live-confirmed in T12.
     "OUTLOOK_CALENDAR_GET_SCHEDULE",
+    // Inbox triage (mirrors the gmail set): folder lookup, move (archive =
+    // move to the Archive folder; the batch action moves 1-20 messages and is
+    // the documented move slug), and per-message update (isRead, categories).
+    "OUTLOOK_LIST_MAIL_FOLDERS",
+    "OUTLOOK_BATCH_MOVE_MESSAGES",
+    "OUTLOOK_UPDATE_EMAIL_MESSAGE",
   ],
 };
 

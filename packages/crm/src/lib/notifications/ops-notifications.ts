@@ -64,6 +64,26 @@ export type PaidConversionAlertParams = {
   signupToPaidDays?: number;
 };
 
+export type UsageCapAlertParams = {
+  /** The AGENCY operator's own display context — which client breached. */
+  agencyName: string;
+  /** The client sub-account's name. */
+  clientName: string;
+  /** The client workspace slug, for a quick reference. */
+  clientOrgSlug: string;
+  /** Estimated spend this period, in cents. */
+  estCostCents: number;
+  /** The configured cap, in cents. */
+  capCents: number;
+  /** "notify" | "pause" — what happens as a result of this breach. */
+  mode: "notify" | "pause";
+  /** The recipient — the AGENCY OWNER's email (not the platform ops inbox).
+   *  Falls back to resolveOpsNotificationRecipient's default only when the
+   *  caller can't resolve an owner email (shouldn't happen in practice —
+   *  callers resolve this from partner_agencies before calling). */
+  toEmail: string;
+};
+
 export type NewLeadAlertParams = {
   /** The SMB the lead reached out to (workspace name). */
   businessName: string;
@@ -155,7 +175,13 @@ function resolveApiKey(
  * itself stays observable from Vercel function logs.
  */
 async function dispatch(params: {
-  event: "new_signup" | "paid_conversion" | "new_lead";
+  event:
+    | "new_signup"
+    | "paid_conversion"
+    | "new_lead"
+    | "usage_cap_breach"
+    | "retainer_payment_failed"
+    | "replay_heartbeat_silent";
   to: string;
   from: string;
   subject: string;
@@ -454,6 +480,280 @@ Follow up fast — speed-to-lead wins the job.`;
 
   await dispatch({
     event: "new_lead",
+    to,
+    from,
+    subject,
+    text,
+    html,
+    apiKey,
+    fetcher,
+  });
+}
+
+/**
+ * Send the "usage cap breach" alert to the AGENCY OWNER (not the platform ops
+ * inbox — `params.toEmail` is the agency owner's own email, resolved by the
+ * caller from partner_agencies). Fires once per period per sub-account (the
+ * once-per-period idempotency is enforced by the caller via
+ * evaluateUsageCap/lastNotifiedPeriod BEFORE calling this — this function
+ * always sends when called).
+ *
+ * Never throws — same fail-soft contract as every other function in this
+ * module: a Resend outage logs to stdout and the caller's flow continues
+ * (dashboard render / cron loop) uninterrupted.
+ */
+export async function sendUsageCapAlert(
+  params: UsageCapAlertParams,
+  deps: OpsNotificationDeps = {},
+): Promise<void> {
+  const env = deps.env ?? process.env;
+  const fetcher = deps.fetcher ?? globalThis.fetch;
+  const apiKey = resolveApiKey(deps.apiKey, env);
+  const from = resolveFromAddress(env);
+
+  const estDollars = (params.estCostCents / 100).toFixed(2);
+  const capDollars = (params.capCents / 100).toFixed(2);
+  const actionLine =
+    params.mode === "pause"
+      ? "The agent will send a holding reply and stop responding with AI until you raise the cap."
+      : "The agent keeps responding — this is a notify-only cap.";
+
+  const subject = `Usage cap reached — ${params.clientName} (~$${estDollars} of $${capDollars} estimated)`;
+
+  const text = `${params.clientName}'s estimated AI usage this month has crossed the cap you set.
+
+Client: ${params.clientName}
+Workspace: ${params.clientOrgSlug}
+Estimated cost: ~$${estDollars}
+Cap: $${capDollars}
+Mode: ${params.mode}
+
+${actionLine}
+
+Costs are estimated by SeldonFrame's internal price table — under BYOK the real bill is your provider's, billed at their rates.`;
+
+  const safeClientName = escapeHtml(params.clientName);
+  const safeSlug = escapeHtml(params.clientOrgSlug);
+  const safeAction = escapeHtml(actionLine);
+
+  const html = `<!doctype html>
+<html lang="en">
+<body style="margin:0;padding:0;background:#f5f5f7;font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,Helvetica,Arial,sans-serif;color:#111;">
+  <table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="background:#f5f5f7;padding:24px 12px;">
+    <tr><td align="center">
+      <table role="presentation" width="560" cellpadding="0" cellspacing="0" style="max-width:560px;width:100%;background:#ffffff;border-radius:12px;overflow:hidden;border:1px solid #e5e7eb;">
+        <tr><td style="background:#b45309;padding:20px 24px;color:#ffffff;">
+          <div style="font-size:12px;letter-spacing:0.08em;text-transform:uppercase;color:#fde68a;margin-bottom:6px;">Usage cap reached</div>
+          <div style="font-size:20px;font-weight:600;line-height:1.25;">${safeClientName} crossed its usage cap</div>
+        </td></tr>
+        <tr><td style="padding:20px 24px;font-size:14px;line-height:1.6;color:#1a1a1f;">
+          <table role="presentation" width="100%" cellpadding="0" cellspacing="0">
+            <tr><td style="padding:4px 0;color:#6b7280;width:130px;">Client</td><td style="padding:4px 0;font-weight:500;">${safeClientName}</td></tr>
+            <tr><td style="padding:4px 0;color:#6b7280;">Workspace</td><td style="padding:4px 0;font-family:monospace;font-size:13px;">${safeSlug}</td></tr>
+            <tr><td style="padding:4px 0;color:#6b7280;">Estimated cost</td><td style="padding:4px 0;font-weight:600;">~$${estDollars}</td></tr>
+            <tr><td style="padding:4px 0;color:#6b7280;">Cap</td><td style="padding:4px 0;">$${capDollars}</td></tr>
+            <tr><td style="padding:4px 0;color:#6b7280;">Mode</td><td style="padding:4px 0;text-transform:capitalize;">${params.mode}</td></tr>
+          </table>
+          <p style="margin:16px 0 0 0;font-size:13px;color:#6b7280;">${safeAction}</p>
+          <p style="margin:8px 0 0 0;font-size:12px;color:#9ca3af;">Estimated by SeldonFrame's internal price table — billed by your provider at their rates.</p>
+        </td></tr>
+      </table>
+    </td></tr>
+  </table>
+</body>
+</html>`;
+
+  await dispatch({
+    event: "usage_cap_breach",
+    to: params.toEmail,
+    from,
+    subject,
+    text,
+    html,
+    apiKey,
+    fetcher,
+  });
+}
+
+export type PaymentFailedAlertParams = {
+  /** The AGENCY owner's own display name. */
+  agencyName: string;
+  /** The AGENCY owner's own email — resolved by the caller (mirrors
+   *  sendUsageCapAlert's toEmail contract, NOT the platform ops inbox). */
+  toEmail: string;
+  amount: string;
+  currency: string;
+  /** Which dunning notice this is (1 = day-3 first notice, 2 = day-7 second
+   *  notice — Task 4's escalation stages). */
+  stage: number;
+};
+
+/**
+ * Sibling of sendUsageCapAlert — notifies the AGENCY OWNER that a client's
+ * retainer card was declined (Autopay console Task 4, dunning). Stripe's own
+ * smart retries handle re-charging the card; this is a notify-only alert.
+ * Never throws — same fail-soft contract as every other function here.
+ */
+export async function sendPaymentFailedAlert(
+  params: PaymentFailedAlertParams,
+  deps: OpsNotificationDeps = {},
+): Promise<void> {
+  const env = deps.env ?? process.env;
+  const fetcher = deps.fetcher ?? globalThis.fetch;
+  const apiKey = resolveApiKey(deps.apiKey, env);
+  const from = resolveFromAddress(env);
+
+  const amountDisplay = `$${Number(params.amount).toFixed(2)} ${params.currency}`;
+  const noticeLabel = params.stage >= 2 ? "Second notice" : "First notice";
+
+  const subject = `Retainer payment failed — ${amountDisplay} (${noticeLabel})`;
+
+  const text = `A client's retainer payment failed.
+
+Amount: ${amountDisplay}
+Notice: ${noticeLabel}
+
+Stripe is automatically retrying the charge on the card on file. The client has also been emailed a link to update their payment method or pay the outstanding invoice directly.`;
+
+  const safeAmount = escapeHtml(amountDisplay);
+  const safeNotice = escapeHtml(noticeLabel);
+
+  const html = `<!doctype html>
+<html lang="en">
+<body style="margin:0;padding:0;background:#f5f5f7;font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,Helvetica,Arial,sans-serif;color:#111;">
+  <table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="background:#f5f5f7;padding:24px 12px;">
+    <tr><td align="center">
+      <table role="presentation" width="560" cellpadding="0" cellspacing="0" style="max-width:560px;width:100%;background:#ffffff;border-radius:12px;overflow:hidden;border:1px solid #e5e7eb;">
+        <tr><td style="background:#b91c1c;padding:20px 24px;color:#ffffff;">
+          <div style="font-size:12px;letter-spacing:0.08em;text-transform:uppercase;color:#fecaca;margin-bottom:6px;">Retainer payment failed</div>
+          <div style="font-size:20px;font-weight:600;line-height:1.25;">${safeAmount} — ${safeNotice}</div>
+        </td></tr>
+        <tr><td style="padding:20px 24px;font-size:14px;line-height:1.6;color:#1a1a1f;">
+          <p style="margin:0;">Stripe is automatically retrying the charge on the card on file.</p>
+          <p style="margin:8px 0 0 0;color:#6b7280;font-size:13px;">The client has also been emailed a link to update their payment method or pay the outstanding invoice directly.</p>
+        </td></tr>
+      </table>
+    </td></tr>
+  </table>
+</body>
+</html>`;
+
+  await dispatch({
+    event: "retainer_payment_failed",
+    to: params.toEmail,
+    from,
+    subject,
+    text,
+    html,
+    apiKey,
+    fetcher,
+  });
+}
+
+export type HeartbeatSilentDeploymentRow = {
+  deploymentId: string;
+  clientName: string;
+  orgName: string | null;
+  orgId: string;
+  /** Hours since the deployment's last agent_workflow_traces row. Always a
+   *  number here (a 'silent' row always has a prior lastActivityAt — see
+   *  heartbeat.ts's computeHeartbeat; 'never' rows are never passed to this
+   *  function). */
+  hoursSinceActivity: number;
+};
+
+export type ReplayHeartbeatAlertParams = {
+  /** Only 'silent' deployments — the caller (the cron route) filters before
+   *  calling; this function sends unconditionally when invoked. */
+  silentDeployments: HeartbeatSilentDeploymentRow[];
+};
+
+/**
+ * Send the "replay heartbeat" alert — the inbound-chain dead-man's switch
+ * (roadmap #7). Fires from the replay-heartbeat cron ONLY when at least one
+ * ACTIVE email-surface deployment has gone silent (no agent_workflow_traces
+ * row) for more than 24h — the exact shape of the 2026-07-16 incident where
+ * the email-agent chain died silently for two days before anyone noticed.
+ *
+ * Platform-level send (one global recipient, no per-workspace Resend
+ * lookup) — mirrors sendNewSignupAlert/sendNewLeadAlert. Never throws — the
+ * cron route must always return 200 for the cron log even if Resend is down.
+ */
+export async function sendReplayHeartbeatAlert(
+  params: ReplayHeartbeatAlertParams,
+  deps: OpsNotificationDeps = {},
+): Promise<void> {
+  const env = deps.env ?? process.env;
+  const fetcher = deps.fetcher ?? globalThis.fetch;
+  const apiKey = resolveApiKey(deps.apiKey, env);
+  const to = resolveOpsNotificationRecipient(env);
+  const from = resolveFromAddress(env);
+
+  const n = params.silentDeployments.length;
+  const subject = `Replay heartbeat: ${n} deployment(s) silent >24h`;
+
+  const textRows = params.silentDeployments
+    .map(
+      (d) =>
+        `- ${d.clientName} (deployment ${d.deploymentId}) — org ${d.orgName ?? d.orgId} — last activity ${d.hoursSinceActivity.toFixed(1)}h ago`,
+    )
+    .join("\n");
+
+  const text = `${n} active email deployment(s) have had no activity in over 24 hours.
+
+${textRows}
+
+This is the daily inbound-chain heartbeat check — it catches a deployment going silent (e.g. a canceled upstream connection) before it goes unnoticed for days.`;
+
+  const htmlRows = params.silentDeployments
+    .map((d) => {
+      const safeName = escapeHtml(d.clientName);
+      const safeOrg = escapeHtml(d.orgName ?? d.orgId);
+      const safeDeploymentId = escapeHtml(d.deploymentId);
+      const hours = d.hoursSinceActivity.toFixed(1);
+      return `<tr>
+        <td style="padding:6px 8px;border-bottom:1px solid #e5e7eb;">${safeName}</td>
+        <td style="padding:6px 8px;border-bottom:1px solid #e5e7eb;font-family:monospace;font-size:12px;">${safeDeploymentId}</td>
+        <td style="padding:6px 8px;border-bottom:1px solid #e5e7eb;">${safeOrg}</td>
+        <td style="padding:6px 8px;border-bottom:1px solid #e5e7eb;">${hours}h ago</td>
+      </tr>`;
+    })
+    .join("\n");
+
+  const html = `<!doctype html>
+<html lang="en">
+<body style="margin:0;padding:0;background:#f5f5f7;font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,Helvetica,Arial,sans-serif;color:#111;">
+  <table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="background:#f5f5f7;padding:24px 12px;">
+    <tr><td align="center">
+      <table role="presentation" width="640" cellpadding="0" cellspacing="0" style="max-width:640px;width:100%;background:#ffffff;border-radius:12px;overflow:hidden;border:1px solid #e5e7eb;">
+        <tr><td style="background:#b91c1c;padding:20px 24px;color:#ffffff;">
+          <div style="font-size:12px;letter-spacing:0.08em;text-transform:uppercase;color:#fecaca;margin-bottom:6px;">Replay heartbeat</div>
+          <div style="font-size:20px;font-weight:600;line-height:1.25;">${n} deployment(s) silent &gt;24h</div>
+        </td></tr>
+        <tr><td style="padding:20px 24px;font-size:14px;line-height:1.6;color:#1a1a1f;">
+          <table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="border-collapse:collapse;">
+            <thead>
+              <tr>
+                <th align="left" style="padding:6px 8px;border-bottom:2px solid #e5e7eb;color:#6b7280;font-size:12px;text-transform:uppercase;">Deployment</th>
+                <th align="left" style="padding:6px 8px;border-bottom:2px solid #e5e7eb;color:#6b7280;font-size:12px;text-transform:uppercase;">ID</th>
+                <th align="left" style="padding:6px 8px;border-bottom:2px solid #e5e7eb;color:#6b7280;font-size:12px;text-transform:uppercase;">Org</th>
+                <th align="left" style="padding:6px 8px;border-bottom:2px solid #e5e7eb;color:#6b7280;font-size:12px;text-transform:uppercase;">Last activity</th>
+              </tr>
+            </thead>
+            <tbody>
+              ${htmlRows}
+            </tbody>
+          </table>
+          <p style="margin:16px 0 0 0;font-size:13px;color:#6b7280;">Daily inbound-chain heartbeat check — catches a canceled/broken email deployment before it goes unnoticed for days.</p>
+        </td></tr>
+      </table>
+    </td></tr>
+  </table>
+</body>
+</html>`;
+
+  await dispatch({
+    event: "replay_heartbeat_silent",
     to,
     from,
     subject,

@@ -16,7 +16,7 @@
 // rest of week-calendar.tsx uses (so timezone correctness is preserved).
 //
 // Styling matches the dashboard warm-paper surface (popover tokens) with the
-// #00897B accent for the selected day + today ring. We supply the full
+// #059669 accent for the selected day + today ring. We supply the full
 // `classNames` map (react-day-picker v9) rather than importing the library's
 // stylesheet, so the picker inherits no global rdp defaults and stays on-brand.
 
@@ -107,12 +107,12 @@ export function BookingDatePicker({
             week: "flex w-full",
             day: "p-0 text-center",
             day_button:
-              "inline-flex size-9 items-center justify-center rounded-md text-sm text-foreground transition-colors hover:bg-[color-mix(in_srgb,#00897B_12%,transparent)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#00897B]/40 motion-reduce:transition-none",
+              "inline-flex size-9 items-center justify-center rounded-md text-sm text-foreground transition-colors hover:bg-[color-mix(in_srgb,#059669_12%,transparent)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#059669]/40 motion-reduce:transition-none",
             // Selected wins over today: `!` guarantees the teal fill + white
             // text even when the selected day is also today.
             selected:
-              "[&_button]:!bg-[#00897B] [&_button]:!text-white [&_button]:font-semibold",
-            today: "[&_button]:text-[#00897B] [&_button]:font-semibold",
+              "[&_button]:!bg-[#059669] [&_button]:!text-white [&_button]:font-semibold",
+            today: "[&_button]:text-[#059669] [&_button]:font-semibold",
             outside: "[&_button]:text-muted-foreground/50",
             disabled: "[&_button]:text-muted-foreground/40",
           }}

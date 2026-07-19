@@ -20,14 +20,14 @@ import type { ListingTrustStats } from "@/db/schema/marketplace";
 export const MKT = {
   paper: "#F6F2EA",
   ink: "#221D17",
-  green: "#00897B",
-  greenLight: "#3DBFB0",
+  green: "#1F2B24",
+  greenLight: "#F6F2EA",
   dark: "#1F2B24",
   // common alpha-on-ink helpers used all over the design
   ink05: "rgba(34,29,23,0.05)",
   ink08: "rgba(34,29,23,0.08)",
   ink10: "rgba(34,29,23,0.10)",
-  green10: "rgba(0,137,123,0.10)",
+  green10: "rgba(31, 43, 36,0.10)",
   fontSans: "'Hanken Grotesk',system-ui,sans-serif",
   fontSerif: "'Newsreader',serif",
   fontMono: "'DM Mono',monospace",
@@ -96,7 +96,7 @@ export function agentTypeToSurfaces(agentType: string | null | undefined): Surfa
 }
 
 // Deterministic avatar background palette (the design's AV array).
-export const AVATAR_BG = ["#00897B", "#B5651D", "#3F6E54", "#7A3B69", "#2C5A8C", "#9A6A1F"];
+export const AVATAR_BG = ["#059669", "#B5651D", "#3F6E54", "#7A3B69", "#2C5A8C", "#9A6A1F"];
 
 // ─── the storefront view-model ───────────────────────────────────────────────
 
@@ -188,7 +188,7 @@ export function priceColor(priceCents: number): string {
 }
 
 export function priceBg(priceCents: number): string {
-  return priceCents <= 0 ? "rgba(0,137,123,0.10)" : "rgba(34,29,23,0.05)";
+  return priceCents <= 0 ? "rgba(5, 150, 105,0.10)" : "rgba(34,29,23,0.05)";
 }
 
 /**

@@ -31,6 +31,7 @@
 // nothing extra + the caller surfaces a warning). None of these functions throw.
 
 import type { ConnectorBinding } from "@/lib/agents/mcp/connectors";
+import { defaultToolsForToolkits } from "@/lib/integrations/composio/catalog";
 
 /** A live Composio toolkit, flattened to the fields the matcher needs. This is
  *  intentionally a self-contained shape (slug + name + optional description) —
@@ -268,10 +269,18 @@ export function resolveCapabilitiesToToolkits(
 
 /**
  * PURE. Map each toolkit slug onto a real composio `ConnectorBinding`
- * (`{ id, kind:"composio", enabledToolkits:[slug], enabledTools:[] }`) — the
+ * (`{ id, kind:"composio", enabledToolkits:[slug], enabledTools }`) — the
  * exact shape a hand-bound composio connector produces, so every binding parses
- * through `connectorBindingSchema`. De-duplicated by id, order-stable. Empty/
- * invalid slugs are dropped. Never throws.
+ * through `connectorBindingSchema`. `enabledTools` is SEEDED with the
+ * toolkit's curated catalog defaults (T6 parity / F-C — the same
+ * empty-allowlist bug class fixed in bind-tools.ts's bindingForEntry and
+ * compile-agent.ts's bindingForToolkit): a catalog slug (gmail, slack, …) gets
+ * its default tool list; a non-catalog slug (the long-tail case this module
+ * exists for — youtube, synthflow_ai) still yields `[]` here and stays `[]`
+ * until the persist-time live-discovery fill
+ * (lib/integrations/composio/discover-tools.ts, 2026-07-11 slice) widens it.
+ * De-duplicated by id, order-stable. Empty/invalid slugs are dropped. Never
+ * throws.
  */
 export function bindComposioToolkits(slugs: string[]): ConnectorBinding[] {
   if (!Array.isArray(slugs)) return [];
@@ -287,7 +296,7 @@ export function bindComposioToolkits(slugs: string[]): ConnectorBinding[] {
       id: slug,
       kind: "composio",
       enabledToolkits: [slug],
-      enabledTools: [],
+      enabledTools: defaultToolsForToolkits([slug]),
     });
   }
   return out;

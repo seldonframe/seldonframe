@@ -1,0 +1,62 @@
+/* packages/crm/src/components/landing/landing-theme.css
+   Landing-scoped theme tokens (spec §3.1). Light = warm parchment
+   (values copied from the shipped landing); dark = "parchment with the
+   lights off" under [data-mode="record"]. LANDING SURFACE ONLY —
+   never import outside components/landing/ or app/(public)/. */
+
+.lp-root {
+  --lp-bg: #F6F2EA;
+  --lp-card: #FFFDFA;
+  --lp-border: rgba(34, 29, 23, 0.14);
+  --lp-border-soft: rgba(34, 29, 23, 0.08);
+  --lp-ink: #221D17;
+  --lp-body: #6E665A;
+  --lp-muted: #6E665A;
+  --lp-faint: #9A9183;
+  --lp-accent: #1F2B24;
+  --lp-accent-strong: #14201A;
+  --lp-accent-soft: rgba(31, 43, 36, 0.09);
+  --lp-fg-color: #1F2B24;
+  --lp-on-accent: #FFFDFA;
+  --lp-cta-bg: #1F2B24;
+  --lp-cta-ink: #F6F2EA;
+  --lp-cta-slab: #1F2B24; /* final-CTA slab — deep green in BOTH modes (inverting --lp-cta-bg is for buttons) */
+  --lp-cta-slab-ink: #F6F2EA; /* final-CTA slab — deep green in BOTH modes (inverting --lp-cta-bg is for buttons) */
+  --lp-bg-alt: #EFE9DD; /* footer / alternate band background */
+  transition: background-color 0.4s ease, color 0.4s ease;
+}
+
+.lp-root[data-mode="record"] {
+  --lp-bg: #14110D;
+  --lp-card: #1F1A15;
+  --lp-border: rgba(246, 242, 234, 0.16);
+  --lp-border-soft: rgba(246, 242, 234, 0.10);
+  --lp-ink: #F6F2EA;
+  --lp-body: #C9C2B6;   /* ~9:1 on --lp-bg */
+  --lp-muted: #A39B8D;  /* ~6.5:1 — the contrast floor */
+  --lp-faint: #8A8275;  /* kbd hints only, ~4.9:1 */
+  --lp-accent: #F6F2EA;
+  --lp-accent-strong: #FFFFFF;
+  --lp-accent-soft: rgba(246, 242, 234, 0.16);
+  --lp-fg-color: #F6F2EA;
+  --lp-on-accent: #14110D;
+  --lp-cta-bg: #F6F2EA;
+  --lp-cta-ink: #1F2B24;
+  --lp-cta-slab: #1F2B24; /* final-CTA slab — deep green in BOTH modes (inverting --lp-cta-bg is for buttons) */
+  --lp-cta-slab-ink: #F6F2EA; /* final-CTA slab — deep green in BOTH modes (inverting --lp-cta-bg is for buttons) */
+  --lp-bg-alt: #191510; /* footer / alternate band background */
+}
+
+/* Mode-gated visibility for SERVER components (nav chip, footer line)
+   that cannot read the client context. */
+.lp-record-only { display: none; }
+.lp-root[data-mode="record"] .lp-record-only { display: inline-flex; }
+.lp-root[data-mode="record"] .lp-build-only { display: none; }
+
+/* Incoming stack crossfade on flip. */
+@keyframes lp-fade-in { from { opacity: 0; transform: translateY(4px); } to { opacity: 1; transform: none; } }
+.lp-stack { animation: lp-fade-in 0.35s ease; }
+@media (prefers-reduced-motion: reduce) {
+  .lp-root { transition: none; }
+  .lp-stack { animation: none; }
+}

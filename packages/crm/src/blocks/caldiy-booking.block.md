@@ -246,7 +246,8 @@ compose_with: [crm, formbricks-intake, email, sms, payments, automation, brain-v
             "scheduled",
             "completed",
             "cancelled",
-            "no_show"
+            "no_show",
+            "blocked"
           ]
         },
         "from": {
@@ -314,7 +315,8 @@ compose_with: [crm, formbricks-intake, email, sms, payments, automation, brain-v
                   "scheduled",
                   "completed",
                   "cancelled",
-                  "no_show"
+                  "no_show",
+                  "blocked"
                 ]
               },
               "startsAt": {
@@ -526,7 +528,8 @@ compose_with: [crm, formbricks-intake, email, sms, payments, automation, brain-v
                     "scheduled",
                     "completed",
                     "cancelled",
-                    "no_show"
+                    "no_show",
+                    "blocked"
                   ]
                 },
                 "startsAt": {
@@ -762,7 +765,8 @@ compose_with: [crm, formbricks-intake, email, sms, payments, automation, brain-v
                     "scheduled",
                     "completed",
                     "cancelled",
-                    "no_show"
+                    "no_show",
+                    "blocked"
                   ]
                 },
                 "startsAt": {
@@ -962,7 +966,8 @@ compose_with: [crm, formbricks-intake, email, sms, payments, automation, brain-v
                 "scheduled",
                 "completed",
                 "cancelled",
-                "no_show"
+                "no_show",
+                "blocked"
               ]
             },
             "startsAt": {
@@ -1179,7 +1184,8 @@ compose_with: [crm, formbricks-intake, email, sms, payments, automation, brain-v
                 "scheduled",
                 "completed",
                 "cancelled",
-                "no_show"
+                "no_show",
+                "blocked"
               ]
             },
             "startsAt": {

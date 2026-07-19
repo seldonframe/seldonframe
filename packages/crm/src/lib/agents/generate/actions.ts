@@ -42,6 +42,7 @@ import {
 import { recordGeneratorLesson } from "@/lib/agents/generate/generator-lessons";
 import { diffEditToLessons } from "@/lib/agents/generate/generator-edit-diff";
 import { makeBrainMemoryStoreForOrg } from "@/lib/agents/memory/brain-memory-store";
+import { fillBlueprintConnectorsForPersist } from "@/lib/integrations/composio/discover-tools";
 import {
   createAgentTemplate,
   updateAgentTemplate,
@@ -250,12 +251,20 @@ async function defaultCreate(input: {
       type: input.type,
     });
 
+    // Widen any never-discovered composio binding's enabledTools with real
+    // tools before the first persist — catalog defaults, then live discovery
+    // for non-catalog toolkits (youtube, synthflow_ai, …). Never throws.
+    const filledBlueprint = await fillBlueprintConnectorsForPersist(
+      input.builderOrgId,
+      input.blueprint,
+    );
+
     // Apply the full assembled blueprint. The bundle blueprint is a SUPERSET of
     // TemplateBlueprintPatch (it also carries verify/guardrails/reviewUrl); the
     // generic merge loop persists them all, so we widen the type deliberately.
     const saved = await updateAgentTemplate({
       id: template.id,
-      patch: input.blueprint as unknown as TemplateBlueprintPatch,
+      patch: filledBlueprint as unknown as TemplateBlueprintPatch,
     });
     if (!saved.ok) return { ok: false, error: saved.error };
 

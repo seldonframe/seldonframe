@@ -96,6 +96,11 @@ export default async function DeployTemplatePage({
             status: t.status,
             isReviewRequester:
               trigger.kind === "event" && trigger.event === "booking.completed",
+            // 2026-07-16 (marketplace generalize, Task 4) — the template's
+            // declared fill-in variables, so the stepper can require them
+            // before deploy fires. Absent/empty on every ungeneralized
+            // template (today's behavior, byte-for-byte).
+            templateVariables: t.blueprint?.templateVariables ?? [],
           };
         })}
         initialTemplateId={selected.id}

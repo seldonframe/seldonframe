@@ -42,7 +42,7 @@ export function EmergencyStripSection({
 
           <a
             href={telHref}
-            className="inline-flex items-center gap-2 rounded-full bg-primary-foreground text-primary px-5 py-3 font-semibold hover:opacity-90 transition-opacity whitespace-nowrap"
+            className="inline-flex items-center gap-2 rounded-[11px] bg-primary-foreground text-primary px-5 py-3 font-semibold hover:opacity-90 transition-opacity whitespace-nowrap"
           >
             <Phone className="h-4 w-4" />
             <span className="text-base">{phone}</span>

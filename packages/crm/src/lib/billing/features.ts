@@ -23,10 +23,21 @@ export { FEATURE_FLAGS, FEATURE_TIERS, tierMeetsMinimum } from "./feature-flags"
 // keep working; new keys (`maxLandingPages`, `crm`, `booking`,
 // `agents`, `includedWorkspaces`) drive the builder/workspace split.
 //
-//   inactive  — no active subscription: nothing unlocked.
-//   builder   — landing pages only (cap 10), own domain + branding.
-//   workspace — one full workspace, all modules, client portal.
-//   agency    — white-label, 10 included client workspaces, marketplace.
+// 2026-07-08 pricing ladder — 5 new sellable tiers layered on top.
+// "builder" and "agency" keys are REPURPOSED here to match the new
+// plans.ts catalog (builder = $29 unlimited-own-workspaces BYOK,
+// agency key stays as the grandfathered $29-flat legacy shape via
+// normalizeTierId's remap target). "workspace" is UNCHANGED
+// (grandfathered — existing subscribers keep it exactly).
+//
+//   inactive       — no active subscription: nothing unlocked.
+//   builder        — $29, unlimited own workspaces, full front office, BYOK.
+//   managed        — $49, one workspace, full front office, SF-keys runtime.
+//   agency_starter — $99, unlimited own + 10 sub-accounts, whitelabel.
+//   agency_growth  — $199, unlimited own + 30 sub-accounts, whitelabel.
+//   agency_scale   — $299, unlimited own + unlimited sub-accounts, whitelabel.
+//   workspace      — GRANDFATHERED: one full workspace, all modules, client portal.
+//   agency         — GRANDFATHERED: $29-flat, unlimited workspaces, white-label.
 export const TIER_FEATURES = {
   inactive: {
     maxWorkspaces: 0,
@@ -47,22 +58,91 @@ export const TIER_FEATURES = {
     maxAgentRunsPerMonth: 0,
   },
   builder: {
-    maxWorkspaces: 0,
-    maxLandingPages: 10,
-    includedWorkspaces: 0,
-    crm: false,
-    booking: false,
-    agents: false,
+    maxWorkspaces: -1,
+    maxLandingPages: -1,
+    includedWorkspaces: -1,
+    crm: true,
+    booking: true,
+    agents: true,
     seldonIt: "managed",
     customDomains: true,
     whiteLabel: false,
     clientPortal: false,
-    managedEmail: false,
-    marketplace: false,
+    managedEmail: true,
+    marketplace: true,
     support: "email",
-    maxContacts: 0,
-    maxAgentRunsPerMonth: 0,
+    maxContacts: -1,
+    maxAgentRunsPerMonth: -1,
   },
+  managed: {
+    maxWorkspaces: 1,
+    maxLandingPages: -1,
+    includedWorkspaces: 1,
+    crm: true,
+    booking: true,
+    agents: true,
+    seldonIt: "managed",
+    customDomains: true,
+    whiteLabel: false,
+    clientPortal: false,
+    managedEmail: true,
+    marketplace: true,
+    support: "email",
+    maxContacts: -1,
+    maxAgentRunsPerMonth: -1,
+  },
+  agency_starter: {
+    maxWorkspaces: -1,
+    maxLandingPages: -1,
+    includedWorkspaces: -1,
+    crm: true,
+    booking: true,
+    agents: true,
+    seldonIt: "managed",
+    customDomains: true,
+    whiteLabel: true,
+    clientPortal: true,
+    managedEmail: true,
+    marketplace: true,
+    support: "email",
+    maxContacts: -1,
+    maxAgentRunsPerMonth: -1,
+  },
+  agency_growth: {
+    maxWorkspaces: -1,
+    maxLandingPages: -1,
+    includedWorkspaces: -1,
+    crm: true,
+    booking: true,
+    agents: true,
+    seldonIt: "managed",
+    customDomains: true,
+    whiteLabel: true,
+    clientPortal: true,
+    managedEmail: true,
+    marketplace: true,
+    support: "priority",
+    maxContacts: -1,
+    maxAgentRunsPerMonth: -1,
+  },
+  agency_scale: {
+    maxWorkspaces: -1,
+    maxLandingPages: -1,
+    includedWorkspaces: -1,
+    crm: true,
+    booking: true,
+    agents: true,
+    seldonIt: "managed",
+    customDomains: true,
+    whiteLabel: true,
+    clientPortal: true,
+    managedEmail: true,
+    marketplace: true,
+    support: "priority",
+    maxContacts: -1,
+    maxAgentRunsPerMonth: -1,
+  },
+  // ── GRANDFATHERED legacy tiers — UNCHANGED shape (existing subscribers) ──
   workspace: {
     maxWorkspaces: 1,
     maxLandingPages: -1,
@@ -111,6 +191,10 @@ export function normalizeTierId(raw: string | null | undefined): BillingTier {
   if (!raw) return "inactive";
   const v = raw.trim().toLowerCase();
   if (v === "builder") return "builder";
+  if (v === "managed") return "managed";
+  if (v === "agency_starter") return "agency_starter";
+  if (v === "agency_growth") return "agency_growth";
+  if (v === "agency_scale") return "agency_scale";
   if (v === "workspace") return "workspace";
   if (v === "agency") return "agency";
   // Legacy growth-family ($29 Growth / Cloud Starter / Starter) →

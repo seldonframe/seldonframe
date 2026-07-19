@@ -7,6 +7,7 @@ import { demoApiBlockedResponse, isDemoReadonly } from "@/lib/demo/server";
 import { fetchPublicUrlSafe, SsrfBlockedError } from "@/lib/security/ssrf-guard";
 import { checkRateLimit } from "@/lib/utils/rate-limit";
 import { withUrlExtractionCache } from "@/lib/web-build/cached-extraction";
+import { DEFAULT_SONNET_MODEL } from "@/lib/ai/models";
 
 type DetectedTool = { name: string; slug: string; icon: string; autoConnect: boolean };
 
@@ -125,7 +126,7 @@ function extractPrimaryColor(html: string): string {
     return max - min > 40;
   });
 
-  return colorful[0] || "#14b8a6";
+  return colorful[0] || "#059669";
 }
 
 function detectTools(html: string): DetectedTool[] {
@@ -318,7 +319,7 @@ async function extractBusinessData(markdown: string, url: string): Promise<Extra
 
   try {
     const response = await anthropic.messages.create({
-      model: "claude-sonnet-4-20250514",
+      model: DEFAULT_SONNET_MODEL,
       max_tokens: 2048,
       system: [
         { type: "text", text: EXTRACTION_SYSTEM_STATIC, cache_control: { type: "ephemeral" } },

@@ -11,7 +11,6 @@ import { getSoul } from "@/lib/soul/server";
 import { getCustomDomainSettings } from "@/lib/domains/actions";
 import { listSavedFrameworkLibrary } from "@/lib/frameworks/actions";
 import { getBrandingSettings } from "@/lib/branding/actions";
-import { getThemeSettings } from "@/lib/theme/actions";
 import { checkPortalPlanGate } from "@/lib/portal/plan-gate";
 
 /*
@@ -39,15 +38,12 @@ export default async function SettingsPage() {
   const subscriptionPromise: Promise<OrganizationSubscription> = orgId
     ? getOrgSubscription(orgId).catch((): OrganizationSubscription => ({}))
     : Promise.resolve<OrganizationSubscription>({});
-  const themeSettingsPromise = getThemeSettings().catch(() => null);
-
-  const [labels, stripeStatus, domainSettings, savedFrameworks, brandingSettings, themeSettings, subscription, soul, portalGate] = await Promise.all([
+  const [labels, stripeStatus, domainSettings, savedFrameworks, brandingSettings, subscription, soul, portalGate] = await Promise.all([
     getLabels(),
     getStripeConnectionStatus(),
     getCustomDomainSettings(),
     listSavedFrameworkLibrary(),
     getBrandingSettings(),
-    themeSettingsPromise,
     subscriptionPromise,
     getSoul(),
     orgId
@@ -196,15 +192,10 @@ export default async function SettingsPage() {
           status: null,
         },
         {
-          href: "/settings/theme",
-          title: "Brand & Theme",
-          description: "Colors, fonts, logo for your public pages and chatbot",
-          status: (
-            <span className="inline-flex items-center gap-2 text-xs text-muted-foreground">
-              <span className="h-2.5 w-2.5 rounded-full border border-border" style={{ backgroundColor: themeSettings?.theme.primaryColor || "#14b8a6" }} />
-              {themeSettings?.theme.primaryColor || "Primary color"}
-            </span>
-          ),
+          href: "/settings/branding",
+          title: "Branding",
+          description: "Brand name and logo for your public pages — ask the copilot to change colors",
+          status: null,
         },
         {
           href: "/settings/team",
@@ -342,15 +333,10 @@ export default async function SettingsPage() {
       status: null,
     },
     {
-      href: "/settings/theme",
-      title: "Brand & Theme",
-      description: "Colors, fonts, logo for public pages and the chatbot",
-      status: (
-        <span className="inline-flex items-center gap-2 text-xs text-muted-foreground">
-          <span className="h-2.5 w-2.5 rounded-full border border-border" style={{ backgroundColor: themeSettings?.theme.primaryColor || "#14b8a6" }} />
-          {themeSettings?.theme.primaryColor || "Primary color"}
-        </span>
-      ),
+      href: "/settings/branding",
+      title: "Branding",
+      description: "Brand name and logo for your public pages — ask the copilot to change colors",
+      status: null,
     },
     {
       href: "/settings/pipeline",

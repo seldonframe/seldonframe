@@ -56,32 +56,38 @@ export function buildTierUpsell(args: {
         "AI chatbot scaffold (draft) — paste embed snippet onto client's website",
         "1 client workspace",
       ],
+      // "growth" key retained for backward compat with existing callers;
+      // copy now points at Agency Starter ($99/mo) — the live ladder's
+      // actual client-portal + white-label tier (plans.ts).
       growth: {
-        price: "$29/mo",
+        price: "$99/mo (Agency Starter)",
         unlocks: [
           `Client portal — your client logs into a private CRM at ${clientPortalUrl} (pipeline + bookings + messages)`,
-          "Up to 3 client workspaces",
+          "10 client sub-accounts",
+          "Full white-label — your agency's brand instead of SeldonFrame",
           "Custom domain (e.g. crm.youragency.com)",
           "Chatbot publish to live status (with eval gate)",
           "Email + SMS automations",
         ],
       },
+      // "scale" key retained for backward compat; copy now points at
+      // Agency Scale ($299/mo) — unlimited sub-accounts + API/MCP.
       scale: {
-        price: "$99/mo",
+        price: "$299/mo (Agency Scale)",
         unlocks: [
-          "Unlimited client workspaces",
-          "Full white-label chrome — your agency's brand instead of SeldonFrame",
-          "Hide 'Powered by SeldonFrame' badge",
+          "Unlimited client sub-accounts",
+          "API + MCP access",
+          "Rent your agents via the marketplace rail",
           "Reseller pricing — charge your clients whatever you want",
-          "Partner-agency multi-client dashboard",
+          "Dedicated onboarding",
         ],
       },
     },
     upsell_hint:
       currentTier === "free"
-        ? `Your free workspace includes CRM + booking + intake + chatbot. Upgrade to Growth ($29/mo) to unlock the client portal — your HVAC/plumbing/dental business client logs into ${clientPortalUrl} for their pipeline, bookings, and messages. Upgrade to Scale ($99/mo) for unlimited workspaces + full white-label.`
+        ? `Your free workspace includes CRM + booking + intake + chatbot. Upgrade to Agency Starter ($99/mo) to unlock the client portal — your HVAC/plumbing/dental business client logs into ${clientPortalUrl} for their pipeline, bookings, and messages, plus full white-label. Upgrade to Agency Scale ($299/mo) for unlimited client sub-accounts + API/MCP.`
         : currentTier === "growth"
-          ? "You're on Growth. Upgrade to Scale ($99/mo) for unlimited workspaces + full white-label."
-          : "You're on Scale — all features unlocked.",
+          ? "You're on Agency Starter. Upgrade to Agency Scale ($299/mo) for unlimited client sub-accounts + API/MCP."
+          : "You're on Agency Scale — all features unlocked.",
   };
 }

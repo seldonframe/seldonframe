@@ -77,13 +77,21 @@ describe("entitlements — white-label", () => {
   });
 });
 
-describe("entitlements — marketplace (blocks submit/sell) is agency-only", () => {
-  test("only agency can submit + sell blocks", () => {
-    assert.equal(canSubmitBlocks(builder), false);
+// 2026-07-08 pricing-ladder spec (docs/superpowers/specs/2026-07-08-pricing-ladder-design.md)
+// CHANGED this policy: marketplace sell/rent is available on EVERY
+// sellable tier (5% marketplace fee applies uniformly — see the spec's
+// model paragraph and the plan's Task 1 feature booleans). The
+// grandfathered "workspace" tier is the one exception — its
+// `limits.marketplace` was frozen false at its existing shape (spec
+// D1 one-way door: grandfathered tiers keep their CURRENT limits
+// untouched), so it still can't submit/sell.
+describe("entitlements — marketplace (blocks submit/sell) is available on every SELLABLE tier", () => {
+  test("builder + agency can submit + sell blocks; grandfathered workspace cannot", () => {
+    assert.equal(canSubmitBlocks(builder), true);
     assert.equal(canSubmitBlocks(workspace), false);
     assert.equal(canSubmitBlocks(agency), true);
 
-    assert.equal(canSellBlocks(builder), false);
+    assert.equal(canSellBlocks(builder), true);
     assert.equal(canSellBlocks(workspace), false);
     assert.equal(canSellBlocks(agency), true);
   });
@@ -95,9 +103,15 @@ describe("entitlements — marketplace (blocks submit/sell) is agency-only", () 
   });
 });
 
+// 2026-07-08 pricing-ladder spec (docs/superpowers/specs/2026-07-08-pricing-ladder-design.md,
+// decision D1): "builder" is repurposed from the dead $19
+// landing-pages-only tier (maxOrgs: 0) to the new $29 tier — unlimited
+// OWN workspaces, BYOK runtime (plans.ts sets limits.maxOrgs: -1,
+// which getMaxOrgs converts to the API's Infinity sentinel, same
+// convention as agency / self-hosted below).
 describe("entitlements — getMaxOrgs", () => {
-  test("builder = 0 full workspaces (landing pages only)", () => {
-    assert.equal(getMaxOrgs(builder), 0);
+  test("builder = unlimited own workspaces (Infinity sentinel)", () => {
+    assert.equal(getMaxOrgs(builder), Number.POSITIVE_INFINITY);
   });
 
   test("workspace = 1 full workspace", () => {

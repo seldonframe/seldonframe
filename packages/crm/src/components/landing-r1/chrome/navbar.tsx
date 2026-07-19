@@ -51,6 +51,25 @@ export function buildServiceNavLinks(
     .map((p) => ({ label: p.name, href: `${base}/services/${p.slug.trim()}` }));
 }
 
+/**
+ * Pure: the section anchors to render alongside the Services DROPDOWN. When
+ * the dropdown is present (the workspace has service pages), the plain
+ * "Services" anchor is redundant with it — drop it so the nav never shows
+ * "Services" twice. When there's no dropdown, sections pass through unchanged
+ * (the "Services" anchor is the only way to reach the section). Matches by
+ * href OR label so a custom `sections` prop is handled too. Exported for
+ * unit testing.
+ */
+export function sectionsForNav(
+  sections: { label: string; href: string }[],
+  hasServiceDropdown: boolean,
+): { label: string; href: string }[] {
+  if (!hasServiceDropdown) return sections;
+  return sections.filter(
+    (s) => s.href !== "#services" && s.label.trim().toLowerCase() !== "services",
+  );
+}
+
 export type NavbarProps = {
   archetype: AestheticArchetypeId;
   businessName: string;
@@ -69,6 +88,10 @@ export type NavbarProps = {
   /** Primary booking CTA rendered in the right actions area. When omitted (legacy
    *  payloads without nav.cta) the button is not rendered — no regression. */
   cta?: { label: string; href: string };
+  /** The client's own logo (captured from their site during URL onboarding).
+   *  When present, replaces the text wordmark in the brand slot. Omitted →
+   *  wordmark (unchanged legacy behavior). */
+  logoUrl?: string;
 };
 
 export function Navbar({
@@ -80,11 +103,16 @@ export function Navbar({
   servicePages,
   homeHref = "/",
   cta,
+  logoUrl,
 }: NavbarProps) {
   if (ARCHETYPES_WITHOUT_NAVBAR.includes(archetype)) return null;
 
   const arch = ARCHETYPES[archetype];
   const serviceLinks = buildServiceNavLinks(homeHref, servicePages ?? []);
+  // When the Services dropdown is shown, the plain "Services" anchor in
+  // `sections` duplicates it — drop it so the nav never shows "Services"
+  // twice (bug caught by vision-verify on a live r1 site, 2026-07-05).
+  const anchorSections = sectionsForNav(sections, serviceLinks.length > 0);
   const areaLine = serviceAreas && serviceAreas.length > 0
     ? serviceAreas.slice(0, 4).join(" · ")
     : null;
@@ -98,9 +126,16 @@ export function Navbar({
       <div className="sf-navbar-inner">
         {/* Left: wordmark + optional service-area tagline */}
         <div className="sf-navbar-brand">
-          <a className="sf-navbar-wordmark" href={homeHref} aria-label={`${businessName} — home`}>
-            {businessName.toUpperCase()}
-          </a>
+          {logoUrl ? (
+            <a className="sf-navbar-logo-link" href={homeHref} aria-label={`${businessName} — home`}>
+              {/* eslint-disable-next-line @next/next/no-img-element -- the client's own logo lives on an arbitrary operator CDN; next/image can't be pre-configured for every host. */}
+              <img className="sf-navbar-logo" src={logoUrl} alt={businessName} />
+            </a>
+          ) : (
+            <a className="sf-navbar-wordmark" href={homeHref} aria-label={`${businessName} — home`}>
+              {businessName.toUpperCase()}
+            </a>
+          )}
           {areaLine && (
             <span className="sf-navbar-area" aria-hidden>
               {areaLine}
@@ -129,7 +164,7 @@ export function Navbar({
               </div>
             </div>
           )}
-          {sections.map((s) => (
+          {anchorSections.map((s) => (
             <a key={s.href} className="sf-navbar-link" href={s.href}>
               {s.label}
             </a>
@@ -244,6 +279,21 @@ export function Navbar({
         }
         .sf-navbar-wordmark:hover {
           color: var(--primary);
+        }
+        .sf-navbar-logo-link {
+          display: inline-flex;
+          align-items: center;
+          text-decoration: none;
+        }
+        .sf-navbar-logo {
+          height: 30px;
+          width: auto;
+          max-width: 180px;
+          object-fit: contain;
+          display: block;
+        }
+        @media (min-width: 1024px) {
+          .sf-navbar-logo { height: 34px; }
         }
         .sf-navbar-area {
           font-family: var(--font-body);

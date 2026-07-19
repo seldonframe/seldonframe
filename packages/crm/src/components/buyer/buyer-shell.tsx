@@ -7,7 +7,7 @@
 //
 // Ports the header of the Claude Design onboarding export — but swaps that
 // export's placeholder 2×2 dot logo for the real `SeldonFrameMark`, and its
-// violet `--accent` for the brand teal `#00897B` (via `buyerCssVars`). Loads
+// violet `--accent` for the brand teal `#1F2B24` (via `buyerCssVars`). Loads
 // `MarketplaceStyles` so the marketplace fonts (incl. DM Mono for the numbers the
 // design sets in mono) and the `.sf-*` animation helpers are available, keeping
 // the buyer surface visually continuous with the storefront they came from.

@@ -318,6 +318,86 @@ describe("billing webhook — customer.subscription.updated", () => {
     );
     assert.equal(h.rows.get("org_1")!.subscription.layer2Enabled, true);
   });
+
+  // 2026-07-08 SECOND post-review fix wave (BLOCKING) — since
+  // BUILDER_PRICE_ID now equals WORKSPACE_PRICE_ID (both tiers share one
+  // Stripe price until Max creates a distinct Builder price),
+  // price-id-only inference can no longer tell a "builder" subscriber
+  // from a grandfathered "workspace" subscriber on a renewal-shaped
+  // customer.subscription.updated event. subscription.metadata.tier
+  // (embedded at checkout and carried on the subscription object for
+  // its whole lifetime) must be preferred over price-id inference so
+  // neither tier gets silently relabeled to the other.
+  describe("metadata-first tier resolution (shared BUILDER/WORKSPACE price id)", () => {
+    test("an existing GRANDFATHERED workspace subscriber's renewal does NOT relabel them to builder", async () => {
+      // Seed: org already has tier "workspace" persisted (as a real
+      // grandfathered subscriber would).
+      h.rows.set("org_1", { subscription: { ...SIBLINGS, tier: "workspace" } });
+      await handleBillingSubscriptionEvent(
+        subscriptionEvent({
+          type: "customer.subscription.updated",
+          // The Stripe subscription's own metadata — set at the ORIGINAL
+          // checkout, still carries tier:"workspace" for this subscriber.
+          metadata: { orgId: "org_1", tier: "workspace" },
+          priceIds: [WORKSPACE_PRICE_ID], // === BUILDER_PRICE_ID
+          status: "active",
+        }),
+        h.store,
+      );
+      assert.equal(
+        h.rows.get("org_1")!.subscription.tier,
+        "workspace",
+        "a renewal must not relabel an existing workspace subscriber to builder",
+      );
+    });
+
+    test("a NEW builder subscriber's renewal does NOT relabel them to workspace", async () => {
+      h.rows.set("org_1", { subscription: { ...SIBLINGS, tier: "builder" } });
+      await handleBillingSubscriptionEvent(
+        subscriptionEvent({
+          type: "customer.subscription.updated",
+          // The checkout embedded tier:"builder" in the subscription's
+          // own metadata (buildCheckoutSessionParams).
+          metadata: { orgId: "org_1", tier: "builder" },
+          priceIds: [BUILDER_PRICE_ID], // === WORKSPACE_PRICE_ID
+          status: "active",
+        }),
+        h.store,
+      );
+      assert.equal(
+        h.rows.get("org_1")!.subscription.tier,
+        "builder",
+        "a renewal must not relabel a builder subscriber to the grandfathered workspace tier",
+      );
+    });
+
+    test("without metadata.tier (pre-2026-06-18 rows), falls back to price-id inference (today's behavior, unchanged)", async () => {
+      await handleBillingSubscriptionEvent(
+        subscriptionEvent({
+          type: "customer.subscription.updated",
+          metadata: { orgId: "org_1" }, // no tier in metadata — legacy row
+          priceIds: [WORKSPACE_PRICE_ID],
+        }),
+        h.store,
+      );
+      // Price-id inference checks WORKSPACE_PRICE_ID before BUILDER_PRICE_ID
+      // (tier-resolve.ts's precedence) — this is the pre-existing fallback
+      // behavior, unchanged by this fix.
+      assert.equal(h.rows.get("org_1")!.subscription.tier, "workspace");
+    });
+
+    test("metadata.tier wins even when it disagrees with price-id inference (real-world: metadata is authoritative)", async () => {
+      await handleBillingSubscriptionEvent(
+        subscriptionEvent({
+          type: "customer.subscription.updated",
+          metadata: { orgId: "org_1", tier: "builder" },
+          priceIds: [AGENCY_BASE_PRICE_ID], // would infer "agency" without metadata
+        }),
+        h.store,
+      );
+      assert.equal(h.rows.get("org_1")!.subscription.tier, "builder");
+    });
+  });
 });
 
 describe("billing webhook — customer.subscription.deleted (cancel)", () => {
@@ -360,6 +440,34 @@ describe("billing webhook — invoice.paid / invoice.payment_failed", () => {
     const sub = h.rows.get("org_1")!.subscription;
     assert.equal(sub.status, "active");
     assert.equal(sub.tier, "workspace"); // tier untouched by invoice events
+  });
+
+  // 2026-07-08 SECOND post-review fix wave — explicitly pins the
+  // "renewal must not relabel" invariant this fix wave is about, in
+  // the invoice (the literal Stripe renewal-billing event) path. The
+  // invoice handler NEVER reads price ids at all (see the module
+  // comment: "the authoritative tier writer is customer.subscription.
+  // updated"), so an existing GRANDFATHERED workspace subscriber stays
+  // "workspace" through every renewal invoice regardless of the shared
+  // BUILDER/WORKSPACE price id — this was already correct before the
+  // fix wave; this test makes that guarantee explicit for the shared-
+  // price-id scenario the review flagged.
+  test("a renewal invoice for an existing GRANDFATHERED workspace subscriber does NOT relabel them (shared price id is never read here)", async () => {
+    h = makeStore({
+      org_1: {
+        ...SIBLINGS,
+        tier: "workspace",
+        status: "active",
+        stripeCustomerId: "cus_inv",
+        stripeSubscriptionId: "sub_inv",
+        stripePriceId: WORKSPACE_PRICE_ID, // === BUILDER_PRICE_ID now
+      },
+    });
+    await handleBillingSubscriptionEvent(
+      invoiceEvent({ type: "invoice.paid", subscriptionId: "sub_inv", customerId: "cus_inv" }),
+      h.store,
+    );
+    assert.equal(h.rows.get("org_1")!.subscription.tier, "workspace");
   });
 
   test("invoice.payment_failed flips status to past_due", async () => {

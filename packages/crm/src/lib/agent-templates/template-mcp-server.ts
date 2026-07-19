@@ -19,9 +19,10 @@
 
 import { getOrgId } from "@/lib/auth/helpers";
 import { assertWritable } from "@/lib/demo/server";
-import { storeSecret, getSecretValue, rotateSecret } from "@/lib/secrets";
+import { storeSecret, rotateSecret } from "@/lib/secrets";
 import { revalidatePath } from "next/cache";
 import { createMcpClient } from "@/lib/agents/mcp/client";
+import { resolveConnectorBearer } from "@/lib/agents/mcp/resolve-bearer";
 import type { BindConnectorInput } from "@/lib/agents/mcp/bind";
 import type { ConnectorBinding } from "@/lib/agents/mcp/connectors";
 import { isBindingConnectedForOrg } from "@/lib/agents/mcp/binding-connection";
@@ -77,7 +78,10 @@ function realTemplateConnectorDeps(args: {
       return createMcpClient({ endpoint, bearer }).listTools();
     },
     getSecret: async ({ workspaceId, serviceName }) => {
-      return getSecretValue({ workspaceId, serviceName, skipAccessCheck: true });
+      // Resolves through the OAuth-aware bearer resolver so a Circle-style
+      // OAuth token envelope refreshes transparently at refresh-time
+      // discovery; a plain vetted/byo bearer passes through unchanged.
+      return resolveConnectorBearer(workspaceId, serviceName);
     },
     removeSecret: async ({ workspaceId, serviceName }) => {
       // rotateSecret deletes the row (and mints a fresh capture link we ignore).

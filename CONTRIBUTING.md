@@ -72,7 +72,7 @@ Each recipe maps to a layer in the architecture. Pick whichever matches your int
    ```
 3. Register in `skills/registry.ts`: add `{ id, content, archetypes, renderVars }`.
 4. Add an eval scenario in the appropriate eval suite that exercises the new behavior.
-5. Run `pnpm test:eval` and verify the agent's pass rate stays ≥87.5%.
+5. Confirm the scenario passes — the agent eval gate must stay ≥87.5%.
 
 **The PR**: 1 markdown file, 1 registry entry, 1 eval scenario. ~30 lines total. Reviewer checks: does the prose teach behavior cleanly, does the eval catch regressions, does the skill respect the placeholder convention.
 
@@ -205,7 +205,7 @@ If you want the platform to make selling agents *easier* (better Studio ergonomi
 git clone https://github.com/seldonframe/seldonframe.git
 cd seldonframe
 pnpm install
-cp .env.example .env.local
+cp packages/crm/.env.example packages/crm/.env.local
 pnpm db:generate
 pnpm db:migrate
 pnpm dev:crm
@@ -215,7 +215,7 @@ Visit `http://localhost:3000`.
 
 **Prerequisites:**
 - Node.js 20+
-- pnpm 9+
+- pnpm 10+
 - A Postgres database (Neon, Supabase, or local)
 - Anthropic or OpenAI API key (set `ANTHROPIC_API_KEY` or `OPENAI_API_KEY` in `.env.local`)
 
@@ -228,7 +228,7 @@ Visit `http://localhost:3000`.
 3. Keep each PR scoped to one concern.
 4. Follow TDD where it applies — write a failing test before the production code.
 5. For agent-behavior changes, add eval scenarios. Pass rate must stay ≥87.5%.
-6. Run `pnpm lint`, `pnpm typecheck`, `pnpm test:unit`, and `pnpm check:syntax` before pushing.
+6. Run `pnpm lint`, `pnpm typecheck`, and `pnpm test:unit` before pushing.
 7. Update docs and `.env.example` if your change adds config.
 8. Open a PR using the [PR template](.github/PULL_REQUEST_TEMPLATE.md).
 
@@ -249,7 +249,7 @@ Visit `http://localhost:3000`.
 - Bypasses tenant scoping (`workspaceId` / `orgId`) — this is a hard invariant, never bypass
 
 **Reverted**:
-- Anything that breaks the eval gate (`pnpm test:eval` must stay green)
+- Anything that breaks the agent eval gate (it must stay green)
 - Schema changes without a migration script in `packages/crm/drizzle/`
 - Performance regressions on the public landing-page render path (we benchmark; PRs that slow it down >100ms get reverted)
 

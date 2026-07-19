@@ -2,6 +2,10 @@ import { test } from "node:test";
 import assert from "node:assert/strict";
 import {
   isWebUngatedBuildOn,
+  isAutopayConsoleOn,
+  isDeterministicReplayOn,
+  isReplayGateV2On,
+  shouldIndexWorkspace,
   WEB_BUILD_RATE_LIMIT,
   WEB_BUILD_RATE_WINDOW_MS,
   WEB_UNGATED_ORIGIN,
@@ -17,6 +21,42 @@ test("flag: on only for exact '1' (trimmed)", () => {
   assert.equal(isWebUngatedBuildOn({ SF_WEB_UNGATED_BUILD: "true" }), false);
   assert.equal(isWebUngatedBuildOn({ SF_WEB_UNGATED_BUILD: "0" }), false);
   assert.equal(isWebUngatedBuildOn({}), false);
+});
+
+test("flag: SF_AUTOPAY_CONSOLE — on only for exact '1' (trimmed); everything else keeps the console dark", () => {
+  assert.equal(isAutopayConsoleOn({ SF_AUTOPAY_CONSOLE: "1" }), true);
+  assert.equal(isAutopayConsoleOn({ SF_AUTOPAY_CONSOLE: " 1 " }), true);
+  assert.equal(isAutopayConsoleOn({ SF_AUTOPAY_CONSOLE: "true" }), false);
+  assert.equal(isAutopayConsoleOn({ SF_AUTOPAY_CONSOLE: "0" }), false);
+  assert.equal(isAutopayConsoleOn({}), false);
+});
+
+test("flag: SF_DETERMINISTIC_REPLAY — on only for exact '1' (trimmed); everything else keeps recording dark (default off)", () => {
+  assert.equal(isDeterministicReplayOn({ SF_DETERMINISTIC_REPLAY: "1" }), true);
+  assert.equal(isDeterministicReplayOn({ SF_DETERMINISTIC_REPLAY: " 1 " }), true);
+  assert.equal(isDeterministicReplayOn({ SF_DETERMINISTIC_REPLAY: "true" }), false);
+  assert.equal(isDeterministicReplayOn({ SF_DETERMINISTIC_REPLAY: "0" }), false);
+  assert.equal(isDeterministicReplayOn({}), false);
+});
+
+test("flag: SF_REPLAY_GATE_V2 — on only for exact '1' (trimmed); everything else keeps v2 dark (default off)", () => {
+  assert.equal(isReplayGateV2On({ SF_REPLAY_GATE_V2: "1" }), true);
+  assert.equal(isReplayGateV2On({ SF_REPLAY_GATE_V2: " 1 " }), true);
+  assert.equal(isReplayGateV2On({ SF_REPLAY_GATE_V2: "true" }), false);
+  assert.equal(isReplayGateV2On({ SF_REPLAY_GATE_V2: "0" }), false);
+  assert.equal(isReplayGateV2On({}), false);
+});
+
+test("shouldIndexWorkspace: noindex ONLY for unclaimed anonymous web builds (Task 8)", () => {
+  // The one noindex case: no owner AND web_ungated origin.
+  assert.equal(shouldIndexWorkspace(null, { origin: WEB_UNGATED_ORIGIN }), false);
+  // Claimed web-build workspace → indexable again.
+  assert.equal(shouldIndexWorkspace("user_123", { origin: WEB_UNGATED_ORIGIN }), true);
+  // Unowned but not a web build (e.g. MCP-created) → indexable.
+  assert.equal(shouldIndexWorkspace(null, {}), true);
+  assert.equal(shouldIndexWorkspace(null, { origin: "mcp" }), true);
+  // Fully ordinary workspace → indexable.
+  assert.equal(shouldIndexWorkspace("user_123", {}), true);
 });
 
 test("constants", () => {

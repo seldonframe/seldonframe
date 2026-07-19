@@ -19,9 +19,13 @@ import type { LandingSection } from "@/lib/landing/types";
 // sticky CTA). The fall-through keeps the OLD system intact for
 // workspaces that have no _r1 row (all existing production workspaces).
 import { loadLandingPayload } from "@/lib/landing/r1-save";
+import { shouldIndexWorkspace } from "@/lib/web-build/policy";
 import { rewriteR1Hrefs } from "@/lib/landing/r1-rewrite-hrefs";
 import { resolveMapQuery } from "@/lib/landing/map-embed";
 import { buildWorkspaceUrls } from "@/lib/billing/anonymous-workspace";
+import { getWorkspaceTemplateContext } from "@/lib/landing/public-workspace";
+import { submittedSoulToTemplateData } from "@/lib/landing/r1-payload-to-template";
+import { renderLandingTemplate } from "@/lib/landing/render-landing-template";
 import { Hero } from "@/components/landing-r1/sections/hero";
 import { ServicesGrid } from "@/components/landing-r1/sections/services-grid";
 import { Testimonials } from "@/components/landing-r1/sections/testimonials";
@@ -59,6 +63,9 @@ export async function generateMetadata({ params }: PageProps): Promise<Metadata>
     if (r1Data && page) {
       const businessName = r1Data.payload.footer.businessName;
       const title = `${page.name} — ${businessName}`;
+      // Task 8: unclaimed anonymous web-build workspaces stay noindexed on
+      // the subdomain too — same predicate as /w/[slug].
+      const indexable = shouldIndexWorkspace(r1Data.ownerId, r1Data.settings);
       return {
         title,
         description: page.summary,
@@ -68,7 +75,7 @@ export async function generateMetadata({ params }: PageProps): Promise<Metadata>
           ...(page.heroPhoto ? { images: [{ url: page.heroPhoto.src }] } : {}),
           type: "website",
         },
-        robots: { index: true, follow: true },
+        robots: { index: indexable, follow: indexable },
         // Canonical uses relative path style, matching the home-page metadata
         // above which uses `/w/${orgSlug}` (not an absolute subdomain URL).
         alternates: { canonical: `/w/${orgSlug}/services/${slug[1]}` },
@@ -82,6 +89,10 @@ export async function generateMetadata({ params }: PageProps): Promise<Metadata>
     const r1Data = await loadLandingPayload(orgSlug);
     if (r1Data) {
       const { seo, payload } = r1Data;
+      // Task 8: unclaimed anonymous web-build workspaces stay noindexed on
+      // the subdomain too — same predicate as /w/[slug]. Without this, a
+      // workspace noindexed on /w was still indexable on its subdomain.
+      const indexable = shouldIndexWorkspace(r1Data.ownerId, r1Data.settings);
       return {
         title: seo.title,
         description: seo.description,
@@ -91,7 +102,7 @@ export async function generateMetadata({ params }: PageProps): Promise<Metadata>
           ...(seo.ogImage ? { images: [{ url: seo.ogImage }] } : {}),
           type: "website",
         },
-        robots: { index: true, follow: true },
+        robots: { index: indexable, follow: indexable },
         // Canonical points to /w/[slug] — that is the authoritative URL
         // for the R-framework page; /s/[slug]/home is the proxy rewrite.
         alternates: { canonical: `/w/${orgSlug}` },
@@ -123,6 +134,29 @@ export async function generateMetadata({ params }: PageProps): Promise<Metadata>
               : {}),
           }),
         },
+      };
+    }
+
+    // No r1 payload — mirror /w/[slug]'s soul fallback (Task 3 metadata
+    // parity) so a soul-only template workspace still gets a basic,
+    // indexable title/description on its subdomain instead of {}.
+    const ctx = await getWorkspaceTemplateContext(orgSlug);
+    const soul = ctx ? submittedSoulToTemplateData(ctx.soul) : null;
+    if (soul && soul.business_name !== "Our Practice") {
+      const description = soul.soul_description ?? soul.tagline;
+      // ctx is non-null here (soul came from it above).
+      const indexable = shouldIndexWorkspace(ctx!.ownerId, ctx!.settings);
+      return {
+        title: soul.business_name,
+        ...(description ? { description } : {}),
+        openGraph: {
+          title: soul.business_name,
+          ...(description ? { description } : {}),
+          type: "website",
+        },
+        robots: { index: indexable, follow: indexable },
+        // Canonical points at /w/[slug] — that is the authoritative URL.
+        alternates: { canonical: `/w/${orgSlug}` },
       };
     }
   }
@@ -174,6 +208,7 @@ export default async function PublicSPage({ params }: PageProps) {
             servicePages={navServices}
             homeHref="/"
             cta={payload.nav?.cta}
+            logoUrl={payload.logo}
           />
           <ServicePageTemplate
             archetype={payload.hero.archetype}
@@ -201,6 +236,28 @@ export default async function PublicSPage({ params }: PageProps) {
   if (isHomePage(pageSlug)) {
     const r1Data = await loadLandingPayload(orgSlug);
     if (r1Data) {
+      // Health-templates parity (mirrors /w/[slug]): a workspace that picked a
+      // premium template renders it on its subdomain too — /w and the subdomain
+      // must never diverge. The template builds its own workspace-scoped CTAs,
+      // so it skips the r1 href-rewrite below.
+      const templatePage = renderLandingTemplate({
+        slug: orgSlug,
+        orgId: r1Data.orgId,
+        landingTemplate: r1Data.landingTemplate,
+        r1: { payload: r1Data.payload, archetype: r1Data.archetype },
+        soul: null,
+        themeArchetype: r1Data.theme?.aestheticArchetype,
+      });
+      if (templatePage) {
+        const embed = await getPublicChatbotEmbed(r1Data.orgId);
+        return (
+          <>
+            {templatePage}
+            {embed && <ChatbotEmbedScript embedUrl={embed.embedUrl} />}
+          </>
+        );
+      }
+
       // bisect 3/4: rewrite generic CTA hrefs to workspace-scoped URLs.
       const workspaceUrls = buildWorkspaceUrls(
         orgSlug,
@@ -234,6 +291,7 @@ export default async function PublicSPage({ params }: PageProps) {
             servicePages={navServices}
             homeHref="/"
             cta={payload.nav?.cta}
+            logoUrl={payload.logo}
           />
           {payload.emergency && <EmergencyStrip {...payload.emergency} />}
           <Hero {...payload.hero} orgSlug={orgSlug} leadForm={payload.leadForm} />
@@ -254,6 +312,32 @@ export default async function PublicSPage({ params }: PageProps) {
           {r1ChatbotEmbed && <ChatbotEmbedScript embedUrl={r1ChatbotEmbed.embedUrl} />}
         </SiteShell>
       );
+    } else {
+      // Soul-only template parity (mirrors /w/[slug]): no r1 payload, but the
+      // workspace may still have picked a premium template via
+      // theme.landingTemplate off the raw soul. Falls through to the legacy
+      // PageRenderer below when there's no workspace, no template, or the
+      // template dispatch returns null.
+      const ctx = await getWorkspaceTemplateContext(orgSlug);
+      if (ctx) {
+        const templatePage = renderLandingTemplate({
+          slug: orgSlug,
+          orgId: ctx.orgId,
+          landingTemplate: ctx.theme?.landingTemplate,
+          r1: null,
+          soul: ctx.soul,
+          themeArchetype: ctx.theme?.aestheticArchetype,
+        });
+        if (templatePage) {
+          const embed = await getPublicChatbotEmbed(ctx.orgId);
+          return (
+            <>
+              {templatePage}
+              {embed && <ChatbotEmbedScript embedUrl={embed.embedUrl} />}
+            </>
+          );
+        }
+      }
     }
   }
 

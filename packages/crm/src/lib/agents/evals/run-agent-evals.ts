@@ -8,10 +8,16 @@
 //      system prompt from the template's blueprint and exposes the blueprint's
 //      REAL tool allowlist, looping LLM↔tools to a final reply. Two deliberate
 //      properties make it safe to run as an eval:
-//        • testMode: true → every WRITE tool (book_appointment, escalate_to_human,
-//          take_message, …) short-circuits to a synthetic result and writes
-//          NOTHING (no bookings, no Twilio, no DB). Read-only tools still run, so
-//          the agent demonstrates realistic behaviour. MONEY-SAFE by construction.
+//        • testMode: true → every native WRITE tool (book_appointment,
+//          escalate_to_human, take_message, …) short-circuits to a synthetic
+//          result and writes NOTHING (no bookings, no Twilio, no DB). Read-only
+//          tools still run, so the agent demonstrates realistic behaviour.
+//        • sandboxConnectors: true (H1 hotfix, 2026-07-11) → testMode alone does
+//          NOT sandbox bound Composio/MCP connector tools (they execute for real
+//          regardless of testMode — supervised-run relies on that). This adapter
+//          additionally sets sandboxConnectors so a Gmail/etc.-bound TEMPLATE
+//          under eval can never send a real email or touch a real inbox.
+//          MONEY-SAFE by construction (both flags together).
 //        • identity-neutral → a TEMPLATE is a reusable product the builder sells to
 //          OTHER businesses, so (mirroring testAgentTemplateTurn) we pass soul:null
 //          and orgName:"your business" — the agent is driven purely by the
@@ -138,7 +144,12 @@ export function makeStatelessAgentReply(ctx: StatelessAgentReplyContext): AgentR
         timezone: ctx.timezone || "UTC",
         blueprint: ctx.blueprint,
         messages,
-        testMode: true, // sandbox EVERY write tool — money-safe.
+        testMode: true, // sandbox EVERY native write tool — money-safe.
+        // H1 hotfix (2026-07-11 prod incident) — connector (Composio/MCP)
+        // tools do NOT respect testMode (by design — supervised-run needs
+        // them to execute for real). Evals must never touch a real inbox,
+        // so this ADDITIONALLY sandboxes every connector tool call.
+        sandboxConnectors: true,
         client: ctx.client,
         ...(ctx.now ? { now: ctx.now } : {}),
       });

@@ -26,7 +26,9 @@ import { useState } from "react";
 import { Play } from "lucide-react";
 
 const VIDEO_SRC = "/marketing/walkthrough/spin-up-60-seconds.mp4";
-const POSTER_SRC = "/shots/rapid-rooter-plumbing-828a.jpg";
+// Poster = the first LIVE_DEMOS slug's screenshot (keep in sync with
+// marketing-demo-marquee.tsx's first entry).
+const POSTER_SRC = "/shots/j-marin-heating-air-conditioning-9599.jpg";
 
 export function HeroBuildProof({
   ungatedBuildEnabled = false,
@@ -80,7 +82,7 @@ export function HeroBuildProof({
 
       <a
         href={ungatedBuildEnabled ? "/try" : "/signup"}
-        className="text-[13.5px] font-[500] text-[#00897B] transition-colors hover:text-[#00796B]"
+        className="text-[13.5px] font-[500] text-[#1F2B24] transition-colors hover:text-[#16201B]"
       >
         Try it with your URL →
       </a>

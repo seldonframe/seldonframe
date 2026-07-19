@@ -3,6 +3,7 @@ import { fileURLToPath } from "node:url";
 import Anthropic from "@anthropic-ai/sdk";
 import { createByokAnthropicClient } from "./anthropic";
 import { readSkillPack } from "@/lib/skill-packs/reader";
+import { DEFAULT_SONNET_MODEL } from "@/lib/ai/models";
 import type { SoulV4 } from "./schema";
 
 const SKILL_PACK_PATH = path.join(
@@ -10,7 +11,7 @@ const SKILL_PACK_PATH = path.join(
   "skills/faq-synthesis.md"
 );
 
-const MODEL = process.env.SOUL_COMPILER_MODEL?.trim() || "claude-sonnet-4-20250514";
+const MODEL = process.env.SOUL_COMPILER_MODEL?.trim() || DEFAULT_SONNET_MODEL;
 const MAX_TOKENS = 4000;
 
 export type SynthesizedFaq = {

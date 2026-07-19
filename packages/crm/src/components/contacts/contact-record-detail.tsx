@@ -1124,7 +1124,7 @@ function ActivityComposer({
             type="button"
             onClick={() => setType(t.value)}
             className={
-              "h-7 rounded-full px-3 text-xs font-medium " +
+              "h-7 rounded-[11px] px-3 text-xs font-medium " +
               "transition-[background-color,color,box-shadow] duration-fast " +
               "focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring " +
               (type === t.value

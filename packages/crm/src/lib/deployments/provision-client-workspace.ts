@@ -19,6 +19,14 @@
 // a resolver/attach failure never fails provisioning — the workspace is still
 // created + linked, just unbranded/attachable later.
 //
+// 2026-07-08 post-review fix wave (spec invariant 5, BLOCKING) — the
+// sub-account CAP CHECK is the one exception to "best-effort": it runs
+// BEFORE createFullWorkspace and any other side effect, and a rejection
+// aborts the whole call with no half-provisioned state (this was
+// previously an ungated write — see git history for the original "Not
+// gated" comment on setOrgParentAgency in deployments/store.ts, which
+// is now stale; the gate lives here, upstream of that call).
+//
 // Every external effect (createFullWorkspace, agency resolve, parentAgency
 // update, deployment update) is injected via `deps` so this is unit-tested with
 // no DB / network. The default deps (wired in actions.ts at the activation seam)
@@ -34,6 +42,16 @@ import {
   buildClientWorkspaceInput,
   type BuildClientWorkspaceInputArgs,
 } from "./client-workspace-seed";
+
+/** 2026-07-08 post-review fix wave (spec invariant 5, BLOCKING) — the
+ *  sub-account cap decision this dep returns. Matches
+ *  lib/billing/limits.ts's SubAccountLimitDecision shape (duplicated
+ *  here rather than imported to keep this DI-only module free of a
+ *  DB-adjacent import chain; the real wiring in deployments/actions.ts
+ *  maps limits.ts's decision 1:1 onto this shape). */
+export type SubAccountCapDecision =
+  | { ok: true }
+  | { ok: false; reason: "subaccount_limit_reached"; used: number; limit: number };
 
 /** Injectable seams — DI so provisioning is unit-tested with no DB / network. */
 export type ProvisionClientWorkspaceDeps = {
@@ -62,11 +80,18 @@ export type ProvisionClientWorkspaceDeps = {
     agentTemplateId: string;
     clientOrgId: string;
   }) => Promise<void>;
+  /** 2026-07-08 post-review — GATE, not best-effort. Checked BEFORE any
+   *  provisioning side effect (createFullWorkspace, agency attach,
+   *  deployment update). This is the ONLY seam in this module that can
+   *  reject the whole call — deploy-to-client is a real handoff, unlike
+   *  the branding attach below, which stays best-effort. */
+  enforceSubAccountCap: (builderOrgId: string) => Promise<SubAccountCapDecision>;
 };
 
 export type ProvisionClientWorkspaceResult =
   | { ok: true; orgId: string; skipped?: true }
-  | { ok: false; error: "create_threw" | "create_failed" };
+  | { ok: false; error: "create_threw" | "create_failed" }
+  | { ok: false; error: "subaccount_limit_reached"; used: number; limit: number };
 
 /** The deployment fields provisioning reads. */
 type ProvisionableDeployment = Pick<
@@ -89,9 +114,28 @@ export async function provisionClientWorkspaceForDeployment(
   deps: ProvisionClientWorkspaceDeps,
   deployment: ProvisionableDeployment,
 ): Promise<ProvisionClientWorkspaceResult> {
-  // Idempotent guard — already provisioned → no-op.
+  // Idempotent guard — already provisioned → no-op. (Also skips the cap
+  // check below: re-activation of an already-provisioned deployment
+  // creates no NEW attachment, so there's nothing to gate.)
   if (deployment.clientOrgId) {
     return { ok: true, orgId: deployment.clientOrgId, skipped: true };
+  }
+
+  // 2026-07-08 post-review fix wave (spec invariant 5, BLOCKING) — the
+  // sub-account cap MUST be checked before any provisioning side effect
+  // (createFullWorkspace, agency attach, deployment update). Unlike the
+  // branding attach below, this is NOT best-effort: deploy-to-client is
+  // a real handoff, so an over-cap deployment must be rejected outright
+  // with no half-provisioned state (no workspace created, nothing
+  // persisted).
+  const capDecision = await deps.enforceSubAccountCap(deployment.builderOrgId);
+  if (!capDecision.ok) {
+    return {
+      ok: false,
+      error: "subaccount_limit_reached",
+      used: capDecision.used,
+      limit: capDecision.limit,
+    };
   }
 
   const buildInput = deps.buildInput ?? buildClientWorkspaceInput;

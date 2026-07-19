@@ -1,0 +1,30 @@
+// packages/crm/src/app/(public)/record/record-ui/tiers.ts
+//
+// Shared honest-badge color/label map for coverage tiers, bound to /record's
+// existing dark palette (green/yellow/red already used pre-redesign — kept
+// unchanged here, only relocated so both the recap panel and any future
+// per-step badge can share one source instead of drifting).
+
+import type { CoverageTier } from "@/lib/recordings/trace-schema";
+
+export const TIER_COLOR: Record<CoverageTier, string> = {
+  green: "#22C55E",
+  yellow: "#EAB308",
+  red: "#EF4444",
+};
+
+export const TIER_LABEL: Record<CoverageTier, string> = {
+  green: "Automatable",
+  yellow: "Needs approval",
+  red: "Stays with you",
+};
+
+/** Flag-on copy (SF_DRAFT_APPROVALS): red steps aren't "stays with you"
+ *  anymore — the agent drafts them. Same keys/colors; recap picks the map by
+ *  its draftApprovals prop. Kept as a SEPARATE map (not a mutation of
+ *  TIER_LABEL) so flag-off surfaces stay byte-stable. */
+export const TIER_LABEL_DRAFTS: Record<CoverageTier, string> = {
+  green: "Automatable",
+  yellow: "Needs approval",
+  red: "Drafted for you",
+};

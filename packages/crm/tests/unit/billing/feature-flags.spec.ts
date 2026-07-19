@@ -73,4 +73,21 @@ describe("tierMeetsMinimum", () => {
     assert.equal(tierMeetsMinimum(null, "workspace"), false);
     assert.equal(tierMeetsMinimum(undefined, "workspace"), false);
   });
+
+  // 2026-07-08 post-review fix wave (item #7) — the 5 new pricing-ladder
+  // tier ids must NOT silently rank at 0 (unlock nothing). Ranked by
+  // actual entitlement level (plans.ts Plan.limits), not by price.
+  test("managed ranks the same as builder (no client_portal/white_label)", () => {
+    assert.equal(tierMeetsMinimum("managed", "builder"), true);
+    assert.equal(tierMeetsMinimum("managed", "workspace"), false);
+    assert.equal(tierMeetsMinimum("managed", "agency"), false);
+  });
+
+  test("agency_starter/growth/scale all meet workspace + agency minimums", () => {
+    for (const tier of ["agency_starter", "agency_growth", "agency_scale"]) {
+      assert.equal(tierMeetsMinimum(tier, "builder"), true, `${tier} vs builder`);
+      assert.equal(tierMeetsMinimum(tier, "workspace"), true, `${tier} vs workspace`);
+      assert.equal(tierMeetsMinimum(tier, "agency"), true, `${tier} vs agency`);
+    }
+  });
 });

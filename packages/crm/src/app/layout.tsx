@@ -11,6 +11,7 @@ import {
   MarketingStructuredData,
   shouldRenderMarketingStructuredData,
 } from "@/components/analytics/structured-data";
+import StyledJsxRegistry from "./styled-jsx-registry";
 import "./globals.css";
 
 const geistSans = Geist({
@@ -44,10 +45,10 @@ const newsreader = Newsreader({
 // README). The legacy /logo.svg path is kept on disk for now (not
 // removed in this commit) but no longer referenced from layout meta.
 export const metadata: Metadata = {
-  metadataBase: new URL("https://seldonframe.com"),
+  metadataBase: new URL("https://www.seldonframe.com"),
   title: "SeldonFrame — Open-source alternative to GoHighLevel",
   description:
-    "A complete AI front office — website, booking, CRM, intake, and AI chatbot — wired together in minutes. For your business or your clients'. Plans from $19/mo. AGPL-3.0, no Zapier required.",
+    "A complete AI front office — website, booking, CRM, intake, and AI chatbot — wired together in minutes. For your business or your clients'. Plans from $29/mo. AGPL-3.0, no Zapier required.",
   manifest: "/brand/manifest.webmanifest",
   icons: {
     icon: [
@@ -101,13 +102,17 @@ export default async function RootLayout({
       <body
         className={`${geistSans.variable} ${geistMono.variable} ${hankenGrotesk.variable} ${newsreader.variable} antialiased`}
       >
-        {renderGA && measurementId ? (
-          <GoogleAnalytics measurementId={measurementId} />
-        ) : null}
-        {renderMarketingSchema ? <MarketingStructuredData /> : null}
-        <ThemeProvider>
-          <DemoToastProvider>{children}</DemoToastProvider>
-        </ThemeProvider>
+        {/* StyledJsxRegistry flushes styled-jsx rules into the SSR <head> so the
+            public landing-r1 surfaces paint fully styled (no FOUC). */}
+        <StyledJsxRegistry>
+          {renderGA && measurementId ? (
+            <GoogleAnalytics measurementId={measurementId} />
+          ) : null}
+          {renderMarketingSchema ? <MarketingStructuredData /> : null}
+          <ThemeProvider>
+            <DemoToastProvider>{children}</DemoToastProvider>
+          </ThemeProvider>
+        </StyledJsxRegistry>
       </body>
     </html>
   );

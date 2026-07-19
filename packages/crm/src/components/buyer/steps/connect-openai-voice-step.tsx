@@ -3,9 +3,9 @@
 // Marketplace buyer surface — the connect_openai_voice step (Tier 2 opt-in).
 //
 // Voice-only, SKIPPABLE, advanced screen: "bring your own OpenAI voice
-// project" for $0 SF fees on this agent's calls (spec 2026-07-01 §5, Task 9).
+// project" for $0 Seldon fees on this agent's calls (spec 2026-07-01 §5, Task 9).
 // Most buyers skip this — it's for a builder who already has (or wants) their
-// own OpenAI project and wants calls to run on THEIR key rather than SF's
+// own OpenAI project and wants calls to run on THEIR key rather than Seldon's
 // metered rate. Framed plainly as optional/advanced so it never reads as a
 // required setup step.
 //
@@ -95,7 +95,7 @@ export function ConnectOpenAiVoiceStep({
         </div>
         <h2 style={hHeading}>Your OpenAI voice project is connected</h2>
         <p style={hSub}>
-          {trunkNote ?? "Calls can now run on your own OpenAI project — $0 SF fees."}
+          {trunkNote ?? "Calls can now run on your own OpenAI project — $0 Seldon fees."}
         </p>
 
         <div style={{ ...footerRow, justifyContent: canGoBack ? "space-between" : "flex-end" }}>
@@ -121,7 +121,7 @@ export function ConnectOpenAiVoiceStep({
       <h2 style={hHeading}>Connect your OpenAI voice project</h2>
       <p style={hSub}>
         Optional, for advanced builders: bring your own OpenAI project and this
-        agent&rsquo;s calls run on YOUR key, at $0 SF fees. Most people skip this.
+        agent&rsquo;s calls run on YOUR key, at $0 Seldon fees. Most people skip this.
       </p>
 
       <div style={{ ...instructionsCard, textAlign: "left" }}>

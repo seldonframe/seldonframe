@@ -226,14 +226,14 @@ export function HeroSecurifyBold(props: HeroSectionContent) {
       >
         <Link
           href={props.ctaLink}
-          className="cin-liquid-glass rounded-full px-7 py-3 text-sm font-medium text-white transition-colors hover:bg-white/5"
+          className="cin-liquid-glass rounded-[11px] px-7 py-3 text-sm font-medium text-white transition-colors hover:bg-white/5"
         >
           {props.ctaText}
         </Link>
         {props.secondaryCta ? (
           <Link
             href={props.secondaryCta.link}
-            className="rounded-full bg-white px-7 py-3 text-sm font-medium text-black transition-colors hover:bg-white/90"
+            className="rounded-[11px] bg-white px-7 py-3 text-sm font-medium text-black transition-colors hover:bg-white/90"
           >
             {props.secondaryCta.text}
           </Link>

@@ -54,10 +54,10 @@ import { GenerateWebsiteButton } from "./generate-website-button";
 // the welcome email when the operator clicks "Maybe later" on step 3.
 import { dismissOnboardingAction } from "./actions";
 // 2026-06-03 — Health/wellness landing-design picker (ready-page swap).
-import { ReadyDesignPicker } from "./ready-design-picker";
-import { isLandingTemplateId } from "@/components/landing-templates/registry";
-import { isHealthVertical, resolveHealthTemplate } from "@/lib/landing/template-selection";
-import type { DesignId } from "@/components/clients/design-picker/types";
+// 2026-07-14 — moved to the shared design-picker folder so the claimed
+// dashboard can reuse it too; prop derivation lives in resolveDesignModuleProps.
+import { ReadyDesignPicker } from "@/components/clients/design-picker/ReadyDesignPicker";
+import { resolveDesignModuleProps } from "@/components/clients/design-picker/resolve-module-props";
 
 export const dynamic = "force-dynamic";
 
@@ -101,9 +101,11 @@ export default async function WorkspaceReadyPage({ params, searchParams }: Ready
       // they created via the v2 flow before the link step ran.
       parentUserId: organizations.parentUserId,
       // 2026-06-03 — theme (current landing template + choice) + soul
-      // (vertical) drive the health/wellness design picker below.
+      // (vertical) drive the design picker below. settings.crmPersonality
+      // is the fallback vertical source when archetype "auto" re-classifies.
       theme: organizations.theme,
       soul: organizations.soul,
+      settings: organizations.settings,
     })
     .from(organizations)
     .where(eq(organizations.slug, slug))
@@ -228,24 +230,27 @@ export default async function WorkspaceReadyPage({ params, searchParams }: Ready
   // R1 landing URL — public page at /w/[slug].
   const r1LandingUrl = hasR1Landing ? `${APP_BASE}/w/${workspace.slug}` : null;
 
-  // 2026-06-03 — Health/wellness landing-design picker. Only shown for
-  // workspaces in the health track (a premium template already applied, OR a
-  // recognized health vertical) — non-health workspaces keep the landing-r1
-  // render and see nothing here. `value` is the operator's intent ("auto" or a
-  // design id); `autoResolvedId` is what Auto maps to for this vertical.
-  const wsTheme =
-    (workspace.theme as unknown as { landingTemplate?: string; landingTemplateChoice?: string } | null) ?? null;
-  const wsVertical = ((workspace.soul as unknown as { industry?: string } | null)?.industry ?? "").toString();
-  const currentTemplateId = wsTheme?.landingTemplate;
-  const showDesignPicker =
-    isLandingTemplateId(currentTemplateId) || isHealthVertical(wsVertical);
-  const designChoice = (wsTheme?.landingTemplateChoice as DesignId | undefined) ?? "auto";
-  const designAutoResolved = isLandingTemplateId(currentTemplateId)
-    ? currentTemplateId
-    : resolveHealthTemplate(wsVertical);
-  const designAutoReason = wsVertical
-    ? `Auto-picked for ${wsVertical}`
-    : "Auto-picked for this business";
+  // 2026-07-13 — Landing-design picker, now shown for EVERY workspace on one of
+  // two tracks:
+  //   • health track   → the 5 premium landing templates (health verticals or a
+  //                       workspace that already has a premium template applied)
+  //   • archetype track → the 8 aesthetic archetypes (trades/generic verticals)
+  // The archetype track re-skins the landing-r1 render (palette/font/hero) — it
+  // was already switchable via the SeldonChat copilot; this surfaces the same
+  // capability as a click-to-apply picker. `value` is the operator's intent
+  // ("auto" or an id); `autoResolvedId` is what Auto maps to for this workspace.
+  const {
+    initialValue: designChoice,
+    autoResolvedId: designAutoResolved,
+    autoReason: designAutoReason,
+    designs: designOptions,
+    sectionLabel: designSectionLabel,
+    autoNote: designAutoNote,
+  } = resolveDesignModuleProps({
+    theme: workspace.theme,
+    soul: workspace.soul,
+    settings: workspace.settings,
+  });
 
   const publicBookingUrl = bookingTemplateRow
     ? `${APP_BASE}/book/${workspace.slug}/${bookingTemplateRow.slug}`
@@ -578,20 +583,22 @@ export default async function WorkspaceReadyPage({ params, searchParams }: Ready
         )}
 
         {/* ============== LANDING DESIGN PICKER ==============
-            2026-06-03 — Health/wellness workspaces can swap the public
-            landing design here. Shows the Auto-picked design + rationale;
-            "Change design" reopens the picker and re-renders /w/[slug].
-            Hidden entirely for non-health workspaces. */}
-        {showDesignPicker ? (
-          <section className="rounded-2xl border border-border/70 bg-card/40 p-5">
-            <ReadyDesignPicker
-              slug={workspace.slug}
-              initialValue={designChoice}
-              autoResolvedId={designAutoResolved}
-              autoReason={designAutoReason}
-            />
-          </section>
-        ) : null}
+            2026-07-13 — Every workspace can swap its public landing design
+            here. Health verticals pick among the 5 premium templates; every
+            other vertical (plumbing, HVAC, electrical, landscaping, …) picks
+            among the 8 aesthetic archetypes, which re-skin the landing-r1
+            render. "Change design" reopens the picker and re-renders /w/[slug]. */}
+        <section className="rounded-2xl border border-border/70 bg-card/40 p-5">
+          <ReadyDesignPicker
+            slug={workspace.slug}
+            initialValue={designChoice}
+            autoResolvedId={designAutoResolved}
+            autoReason={designAutoReason}
+            designs={designOptions}
+            sectionLabel={designSectionLabel}
+            autoNote={designAutoNote}
+          />
+        </section>
 
         {/* ============== AUDIENCE-SCOPED CARDS ==============
             Two-row layout: foundational surfaces (operator dashboard +
@@ -707,7 +714,7 @@ export default async function WorkspaceReadyPage({ params, searchParams }: Ready
               ) : (
                 <p className="text-sm text-muted-foreground">
                   Point your client&apos;s existing domain at this site so it
-                  lives at <span className="font-medium text-foreground">roofs-by-shiloh.com</span>{" "}
+                  lives at <span className="font-medium text-foreground">{workspace.slug}.com</span>{" "}
                   instead of{" "}
                   <code className="rounded bg-muted/50 px-1.5 py-0.5 text-xs font-mono text-foreground">
                     {workspace.slug}.{WORKSPACE_BASE_DOMAIN}

@@ -8,7 +8,7 @@
 // It deliberately REUSES the marketplace storefront palette (MKT) so the buyer
 // flow feels continuous with the marketplace they just bought from — same cream
 // paper, same ink, same mono for numbers — and pins the accent to the REAL
-// SeldonFrame brand teal-green `#00897B` (MKT.green), NOT the violet the Claude
+// SeldonFrame brand teal-green `#1F2B24` (MKT.green), NOT the violet the Claude
 // Design export used. Everything here is a plain string/const so it imports into
 // both server components and client islands.
 //
@@ -19,7 +19,7 @@ import { MKT } from "@/components/marketplace/marketplace-data";
 /** The buyer-surface accent — the SeldonFrame brand teal-green. Re-exported from
  *  the marketplace tokens so there is exactly ONE teal in the product. This is
  *  the `--accent` the shell sets and every step's primary action reads. */
-export const BUYER_ACCENT = MKT.green; // "#00897B"
+export const BUYER_ACCENT = MKT.green; // "#1F2B24"
 
 /** A darker press/hover shade of the accent (the Claude Design's `--accent-strong`). */
 export const BUYER_ACCENT_STRONG = "#00736A";
@@ -77,7 +77,7 @@ export const BUYER = {
   radiusLg: "22px",
   shadowSoft: "0 1px 2px rgba(34,29,23,.05), 0 8px 24px -16px rgba(34,29,23,.20)",
   shadowCard: "0 1px 2px rgba(34,29,23,.05), 0 22px 48px -26px rgba(34,29,23,.28)",
-  shadowAccent: "0 1px 2px rgba(0,137,123,.20), 0 14px 30px -14px rgba(0,137,123,.45)",
+  shadowAccent: "0 1px 2px rgba(31, 43, 36,.20), 0 14px 30px -14px rgba(31, 43, 36,.45)",
 } as const;
 
 /** The CSS custom properties the buyer shell publishes on its root so descendant

@@ -270,6 +270,10 @@
           "rawType": "string | null",
           "nullable": true
         },
+        "phone?": {
+          "rawType": "string",
+          "nullable": false
+        },
         "conversationId": {
           "rawType": "string | null",
           "nullable": true

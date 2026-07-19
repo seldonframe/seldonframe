@@ -1,19 +1,27 @@
 // packages/crm/src/components/landing/marketing-hero.tsx
 //
 // Redesign 2026-06-18 — warm light aesthetic (seldonstudio.com style).
-// Positioning v2 (2026-06-22): one promise, one CTA. Leads the service-business
-// owner (SMB); the builder/agency is the top rung of the same ladder, lower on
-// the page. Two CTAs:
-//   Primary: "Build it free →" → /signup (SMB self-serve; free ungated build,
-//   no trial countdown — the $29/mo charge only happens at the domain moment)
-//   Secondary: "For agencies →" → #agencies (white-label reseller pitch)
+// Shopify-homepage redesign (2026-07-06): one promise, ONE CTA — the
+// "For agencies →" secondary CTA is gone (that pitch now lives on
+// /agencies). The build-proof video panel (HeroBuildProof) is removed
+// entirely and the two-column split collapses to a single centered
+// column so the chatbox/form is the clear focal point.
+//   Primary: "Build it free →" → #hero-form (scroll + focus the chatbox;
+//   route-by-promise 2026-07-15 — the label promises a build, and the free
+//   ungated build IS the trial; no trial countdown, the $29/mo charge only
+//   happens at the domain moment)
+//
+// Agency repositioning (2026-07-15, Max's call): the homepage now speaks to
+// the AGENCY/builder persona (the SMB self-serve pitch lives on the SEO
+// pages). H1/subhead/eyebrow/placeholders are agency-voiced; the
+// "your-clients-*" URL examples below are deliberate, not drift.
 //
 // Design tokens used:
 //   --paper:    #F6F2EA  (warm off-white background)
 //   --ink:      #221D17  (warm near-black)
 //   --ink-soft: #6E665A  (softer body text)
 //   --green:    #1F2B24  (deep green — dark blocks, nav pill bg)
-//   --sf-green: #00897B  (SeldonFrame brand green — accent dots, CTAs)
+//   --sf-green: #1F2B24  (SeldonFrame brand green — accent dots, CTAs)
 //   Font: Hanken Grotesk (body/UI) + Newsreader italic (display accents)
 //
 // Functional input (URL/biz paste) is preserved — the hero's main job
@@ -27,8 +35,10 @@ import { useRouter } from "next/navigation";
 import { ArrowRight, FileText, Globe } from "lucide-react";
 
 import { MarketingDemoMarquee } from "@/components/landing/marketing-demo-marquee";
-import { HeroBuildProof } from "@/components/landing/hero-build-proof";
 import { heroSubmitTarget } from "@/components/landing/hero-submit-target";
+import { BorderBeam } from "@/components/ui/border-beam";
+import { Highlighter } from "@/components/ui/highlighter";
+import { AnimatedShinyText } from "@/components/ui/magic/animated-shiny-text";
 
 // Re-exported for callers that only need the pure routing decision (e.g.
 // tests) without pulling in this "use client" component.
@@ -53,6 +63,18 @@ type TabKind = "url" | "biz";
 function prefersReducedMotion(): boolean {
   if (typeof window === "undefined") return false;
   return window.matchMedia("(prefers-reduced-motion: reduce)").matches;
+}
+
+function useReducedMotion(): boolean {
+  const [reduced, setReduced] = useState(false);
+  useEffect(() => {
+    const mediaQuery = window.matchMedia("(prefers-reduced-motion: reduce)");
+    setReduced(mediaQuery.matches);
+    const handleChange = (e: MediaQueryListEvent) => setReduced(e.matches);
+    mediaQuery.addEventListener("change", handleChange);
+    return () => mediaQuery.removeEventListener("change", handleChange);
+  }, []);
+  return reduced;
 }
 
 function useTypewriterPlaceholder(
@@ -132,6 +154,7 @@ export function MarketingHero({
   const [urlValue, setUrlValue] = useState("");
   const [bizValue, setBizValue] = useState("");
   const [submitting, setSubmitting] = useState(false);
+  const reducedMotion = useReducedMotion();
 
   const urlRef = useRef<HTMLInputElement | null>(null);
   const bizRef = useRef<HTMLTextAreaElement | null>(null);
@@ -184,61 +207,115 @@ export function MarketingHero({
     return () => clearTimeout(t);
   }, []);
 
+  // "Build it free" pills across the page link to /#hero-form (route-by-
+  // promise, 2026-07-15). The browser handles the scroll; this focuses the
+  // active tab's input so the click ends in a ready-to-type chatbox instead
+  // of reading as a dead scroll-jump.
+  useEffect(() => {
+    const focusForm = () => {
+      if (window.location.hash !== "#hero-form") return;
+      (tab === "url" ? urlRef : bizRef).current?.focus({ preventScroll: true });
+    };
+    focusForm();
+    window.addEventListener("hashchange", focusForm);
+    return () => window.removeEventListener("hashchange", focusForm);
+  }, [tab]);
+
   return (
     <section
       id="top"
-      aria-label="SeldonFrame hero"
+      aria-label="Seldon hero"
       className="relative flex flex-col items-center justify-center overflow-hidden px-5 pb-24 pt-[100px] text-center md:px-8 md:pb-32 md:pt-[120px] lg:px-12"
     >
-      {/* Desktop: headline/CTA/form stack (~55%) + build-proof panel (~45%),
-          vertically centered. Below lg: single column, panel renders after
-          the form (see the lg:hidden instance below). */}
-      <div className="flex w-full max-w-[1180px] flex-col items-center lg:flex-row lg:items-center lg:justify-center lg:gap-12 lg:text-left">
-      <div className="flex w-full flex-col items-center text-center lg:basis-[55%] lg:items-start lg:text-left">
-      {/* Eyebrow — leads SMB, keeps the dual build-or-sell hint */}
+      {/* Backdrop grid now lives page-wide on the shell (landing-mode.tsx). */}
+
+      {/* Single centered column (video panel removed — the chatbox/form is
+          the focal point). */}
+      <div className="relative z-10 flex w-full max-w-[860px] flex-col items-center">
+      <div className="flex w-full flex-col items-center text-center">
+      {/* Momentum pill — the Postiz "NEW:" move; ships-fast signal + the
+          record on-ramp in one line. */}
+      <a
+        href="/record"
+        className="mb-4 inline-flex items-center gap-2 rounded-[11px] border border-[rgba(34,29,23,.12)] bg-[#FFFDFA] px-3.5 py-1.5 text-[12.5px] font-[500] text-[#221D17] shadow-[0_1px_2px_rgba(34,29,23,.06)] transition-colors hover:border-[#1F2B24]/40"
+      >
+        <span className="sf-rec-dot inline-block size-[7px] rounded-full bg-[#E5484D]" aria-hidden />
+        <strong className="font-[700]">NEW</strong>
+        <span className="text-[#6E665A]">
+          — turn a screen recording into a working agent →
+        </span>
+      </a>
+
+      {/* Eyebrow */}
       <p className="inline-flex items-center gap-2.5 font-sans text-[12.5px] tracking-[0.04em] text-[#6E665A]">
         <span className="inline-block h-px w-4 bg-[#9A9183]" aria-hidden />
-        <span className="sf-blink-dot inline-block size-1.5 rounded-full bg-[#00897B]" aria-hidden />
-        Run your service business — or build agents and sell them
+        <span className="sf-blink-dot inline-block size-1.5 rounded-full bg-[#1F2B24]" aria-hidden />
+        Each client built in 3 minutes — No coding
       </p>
 
-      {/* Headline */}
-      <h1 className="mt-3 max-w-[20ch] text-balance font-sans text-[clamp(34px,4.8vw,56px)] font-[500] leading-[1.04] tracking-[-0.025em] text-[#221D17]">
-        Your entire service business,{" "}
+      {/* Headline — outcome + mechanism (the Postiz formula) */}
+      <h1 className="mt-3 max-w-[22ch] text-balance font-sans text-[clamp(34px,4.8vw,56px)] font-[500] leading-[1.04] tracking-[-0.025em] text-[#221D17]">
+        Sell AI front offices that run{" "}
         <em className="font-[Newsreader,Georgia,serif] font-normal not-italic tracking-[-0.01em]">
-          live in 60 seconds.
+          on autopilot
         </em>
       </h1>
 
-      {/* Subhead */}
-      <p className="mx-auto mt-4 max-w-[62ch] text-pretty text-[clamp(15.5px,1.6vw,17.5px)] leading-[1.55] text-[#6E665A] lg:mx-0">
-        Paste your URL and watch it build — a multi-page{" "}
-        <strong className="font-[500] text-[#221D17]">website, booking page, intake form, and CRM</strong>, wired
-        together and ready for customers. Then add no-code AI agents — start from a template or build your own — to{" "}
-        <strong className="font-[500] text-[#221D17]">answer every call, request reviews, and handle your DMs and email.</strong>{" "}
-        The busywork, done for you.
+      {/* Subhead — what runs on autopilot, concretely, then the openness line */}
+      <p className="mx-auto mt-4 max-w-[68ch] text-pretty text-[clamp(15.5px,1.6vw,17.5px)] leading-[1.55] text-[#6E665A]">
+        <Highlighter repeat color="rgba(31, 43, 36,0.18)">
+          Every client gets an agent that answers every call, texts back every lead,
+          books the job, and asks for the review
+        </Highlighter>{" "}
+        — across{" "}
+        <strong className="font-[500] text-[#221D17]">
+          voice, SMS, email, and web chat
+        </strong>{" "}
+        — plus the website, bookings, and CRM in one dashboard. You charge the retainer,
+        on a platform you own.
       </p>
-
-      {/* Two CTAs */}
-      <div className="mt-7 flex flex-wrap items-center justify-center gap-3 lg:justify-start">
+      {/* Primary CTA — routes to the chatbox, not /signup: the label promises
+          a build, and the ungated build IS the trial (route-by-promise,
+          2026-07-15). Smooth-scrolls to the form and focuses the active tab's
+          input; href="#hero-form" is the no-JS fallback. */}
+      <div className="mt-7 flex flex-wrap items-center justify-center gap-3">
         <a
-          href="/signup"
-          className="inline-flex items-center gap-2.5 rounded-full bg-[#1F2B24] px-6 py-3.5 text-[15px] font-[500] text-[#F6F2EA] shadow-[0_1px_2px_rgba(34,29,23,.10),0_6px_16px_rgba(34,29,23,.10),0_18px_40px_rgba(34,29,23,.06),inset_0_1.5px_0_rgba(255,255,255,.12)] transition-all hover:-translate-y-[1.5px] hover:shadow-[0_2px_4px_rgba(34,29,23,.12),0_12px_26px_rgba(34,29,23,.14),inset_0_1.5px_0_rgba(255,255,255,.14)] active:translate-y-px"
+          href="#hero-form"
+          onClick={(e) => {
+            e.preventDefault();
+            formRef.current?.scrollIntoView({
+              behavior: reducedMotion ? "auto" : "smooth",
+              block: "center",
+            });
+            (tab === "url" ? urlRef : bizRef).current?.focus({ preventScroll: true });
+          }}
+          className="inline-flex items-center gap-2.5 rounded-[11px] bg-[#1F2B24] px-6 py-3.5 text-[15px] font-[500] text-[#F6F2EA] shadow-[0_1px_2px_rgba(34,29,23,.10),0_6px_16px_rgba(34,29,23,.10),0_18px_40px_rgba(34,29,23,.06),inset_0_1.5px_0_rgba(255,255,255,.12)] transition-all hover:-translate-y-[1.5px] hover:shadow-[0_2px_4px_rgba(34,29,23,.12),0_12px_26px_rgba(34,29,23,.14),inset_0_1.5px_0_rgba(255,255,255,.14)] active:translate-y-px"
         >
-          <span className="size-[7px] rounded-full bg-[#00897B] shadow-[0_0_0_4px_rgba(0,137,123,.22)]" aria-hidden />
           Build it free →
-        </a>
-        <a
-          href="#agencies"
-          className="inline-flex items-center gap-2 rounded-full border border-[rgba(34,29,23,.16)] bg-[#FFFDFA] px-5 py-3.5 text-[15px] font-[500] text-[#221D17] shadow-[0_0_0_.5px_rgba(34,29,23,.08),0_4px_20px_rgba(34,29,23,.06)] transition-all hover:-translate-y-[1.5px]"
-        >
-          For agencies →
         </a>
       </div>
 
-      {/* Trust line under the CTA — replaces the old "free" line */}
-      <p className="mt-4 max-w-[60ch] text-pretty text-[13.5px] leading-[1.5] text-[#6E665A]">
-        then $29/mo · unlimited workspaces · works with your ChatGPT, Claude, or Gemini key — we show you how
+      {/* Margin line — leads with the value (flat cost, zero markup, the
+          agency's margin), per §1b "BYOK is plumbing, never the front-door
+          ask". Model logos stay: they carry the never-goes-stale signal. */}
+      <p className="mt-4 inline-flex flex-wrap items-center justify-center gap-x-2 gap-y-1.5 text-[14px] leading-[1.5] text-[#221D17]">
+        <span className="inline-flex items-center gap-1" aria-hidden>
+          {[
+            { src: "/brand/models/anthropic.svg", alt: "Claude" },
+            { src: "/brand/models/openai.svg", alt: "ChatGPT" },
+            { src: "/brand/models/gemini.svg", alt: "Gemini" },
+          ].map((m) => (
+            <span
+              key={m.src}
+              className="flex size-[22px] items-center justify-center rounded-full border border-[rgba(34,29,23,.10)] bg-[#FFFDFA] shadow-[0_1px_2px_rgba(34,29,23,.05)]"
+            >
+              {/* eslint-disable-next-line @next/next/no-img-element -- static vendored SVG */}
+              <img src={m.src} alt={m.alt} width={12} height={12} className="block" />
+            </span>
+          ))}
+        </span>
+        Runs on Claude, ChatGPT, or Gemini —{" "}
+        <strong className="font-[600]">no token markups, no usage meters. Your margin stays yours.</strong>
       </p>
 
       {/* Input form */}
@@ -247,8 +324,19 @@ export function MarketingHero({
         id="hero-form"
         aria-label="Start a workspace"
         onSubmit={(e) => { e.preventDefault(); submit(); }}
-        className="sf-prompt relative mt-10 w-full max-w-[720px] overflow-hidden rounded-[18px] border border-[rgba(34,29,23,.14)] bg-[#FFFDFA] shadow-[0_1px_2px_rgba(34,29,23,.06),0_10px_30px_rgba(34,29,23,.08)] transition-[border-color,box-shadow] duration-200 focus-within:border-[#00897B]/50 focus-within:shadow-[0_1px_2px_rgba(34,29,23,.06),0_10px_30px_rgba(34,29,23,.08),0_0_0_3px_rgba(0,137,123,.12)]"
+        className="sf-prompt relative mt-10 w-full max-w-[720px] scroll-mt-[110px] overflow-hidden rounded-[18px] border border-[rgba(34,29,23,.14)] bg-[#FFFDFA] shadow-[0_1px_2px_rgba(34,29,23,.06),0_10px_30px_rgba(34,29,23,.08)] transition-[border-color,box-shadow] duration-200 focus-within:border-[#1F2B24]/50 focus-within:shadow-[0_1px_2px_rgba(34,29,23,.06),0_10px_30px_rgba(34,29,23,.08),0_0_0_3px_rgba(31, 43, 36,.12)]"
       >
+        {/* Task 13: Live-state accent BorderBeam. Only render when reduced-motion is off. */}
+        {!reducedMotion && (
+          <BorderBeam
+            size={40}
+            duration={6}
+            colorFrom="#1F2B24"
+            colorTo="#1F2B24"
+            delay={0}
+            borderWidth={1}
+          />
+        )}
         {/* Tabs */}
         <div
           role="tablist"
@@ -260,33 +348,34 @@ export function MarketingHero({
             role="tab"
             aria-selected={tab === "url"}
             onClick={() => handleTab("url")}
-            className={`inline-flex h-[34px] items-center justify-center gap-2 rounded-[7px] px-3 text-[13px] transition-colors ${
+            className={`inline-flex h-[34px] items-center justify-center gap-1.5 rounded-[7px] px-2 text-[12px] transition-colors sm:gap-2 sm:px-3 sm:text-[13px] ${
               tab === "url"
                 ? "bg-[#FFFDFA] font-[600] text-[#221D17] shadow-[0_1px_3px_rgba(34,29,23,.10)]"
                 : "font-[500] text-[#6E665A] hover:text-[#221D17]"
             }`}
           >
-            <Globe size={13} aria-hidden />
-            Paste website URL
+            <Globe size={13} className="shrink-0" aria-hidden />
+            Paste a URL
           </button>
           <button
             type="button"
             role="tab"
             aria-selected={tab === "biz"}
             onClick={() => handleTab("biz")}
-            className={`inline-flex h-[34px] items-center justify-center gap-2 rounded-[7px] px-3 text-[13px] transition-colors ${
+            className={`inline-flex h-[34px] items-center justify-center gap-1.5 rounded-[7px] px-2 text-[12px] transition-colors sm:gap-2 sm:px-3 sm:text-[13px] ${
               tab === "biz"
                 ? "bg-[#FFFDFA] font-[600] text-[#221D17] shadow-[0_1px_3px_rgba(34,29,23,.10)]"
                 : "font-[500] text-[#6E665A] hover:text-[#221D17]"
             }`}
           >
-            <FileText size={13} aria-hidden />
-            No website? Describe the business
+            <FileText size={13} className="shrink-0" aria-hidden />
+            Describe the business
           </button>
         </div>
 
-        {/* URL pane */}
-        <div className={`px-4 pt-3.5 ${tab === "url" ? "block" : "hidden"}`}>
+        {/* URL pane — terminal-style prompt prefix */}
+        <div className={`items-center gap-2.5 px-4 pt-3.5 ${tab === "url" ? "flex" : "hidden"}`}>
+          <span className="select-none font-mono text-[16px] font-[600] text-[#1F2B24]" aria-hidden>&gt;</span>
           <input
             ref={urlRef}
             type="text"
@@ -300,7 +389,7 @@ export function MarketingHero({
             spellCheck={false}
             placeholder="https://your-clients-hvac-company.com"
             aria-label="Paste your client's website URL"
-            className="h-14 w-full border-0 bg-transparent font-mono text-[15px] text-[#221D17] caret-[#00897B] outline-none placeholder:text-[#9A9183]"
+            className="h-14 w-full border-0 bg-transparent font-mono text-[15px] text-[#221D17] caret-[#1F2B24] outline-none placeholder:text-[#9A9183]"
           />
         </div>
 
@@ -314,8 +403,8 @@ export function MarketingHero({
             rows={4}
             spellCheck={false}
             placeholder="Family-owned HVAC in Stockton, CA. 24/7 emergency service. Licensed C-20, bonded, insured. 4.8 stars on Google with 412 reviews."
-            aria-label="Describe your client's business"
-            className="block max-h-60 min-h-[110px] w-full resize-none border-0 bg-transparent font-sans text-[15px] leading-[1.55] tracking-[-0.005em] text-[#221D17] caret-[#00897B] outline-none placeholder:text-[#9A9183]"
+            aria-label="Describe the business"
+            className="block max-h-60 min-h-[110px] w-full resize-none border-0 bg-transparent font-sans text-[15px] leading-[1.55] tracking-[-0.005em] text-[#221D17] caret-[#1F2B24] outline-none placeholder:text-[#9A9183]"
           />
         </div>
 
@@ -330,42 +419,42 @@ export function MarketingHero({
             type="submit"
             disabled={!canSubmit || submitting}
             aria-label="Build workspace"
-            className="group inline-flex h-10 items-center justify-center gap-2 rounded-[10px] bg-[#00897B] px-4 text-[13.5px] font-[600] text-[#FFFDFA] shadow-[0_6px_20px_rgba(0,137,123,.28)] transition-all hover:-translate-y-px hover:bg-[#00796B] hover:shadow-[0_8px_24px_rgba(0,137,123,.34)] active:translate-y-px disabled:cursor-not-allowed disabled:opacity-50 disabled:shadow-none focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[#00897B]"
+            className="group inline-flex h-10 items-center justify-center gap-2 rounded-[10px] bg-[#1F2B24] px-4 text-[13.5px] font-[600] text-[#FFFDFA] shadow-[0_6px_20px_rgba(31, 43, 36,.28)] transition-all hover:-translate-y-px hover:bg-[#16201B] hover:shadow-[0_8px_24px_rgba(31, 43, 36,.34)] active:translate-y-px disabled:cursor-not-allowed disabled:opacity-50 disabled:shadow-none focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[#1F2B24]"
           >
-            <span>Build workspace</span>
+            <AnimatedShinyText base="rgba(246,242,234,.82)" shine="#FFFFFF" shimmerWidth={90}>Build workspace</AnimatedShinyText>
             <ArrowRight size={14} className="transition-transform group-hover:translate-x-0.5" aria-hidden />
           </button>
         </div>
       </form>
 
-      {/* Build-proof panel — mobile/tablet position: after the form, before
-          the checklist. Hidden at lg (the two-column instance takes over). */}
-      <div className="mt-8 w-full lg:hidden">
-        <HeroBuildProof ungatedBuildEnabled={ungatedBuildEnabled} />
+      {/* The second on-ramp, at the point of action: record instead of describe. */}
+      <a
+        href="/record"
+        className="group mt-3.5 inline-flex items-center gap-2 text-[13.5px] font-[500] text-[#6E665A] transition-colors hover:text-[#1F2B24]"
+      >
+        <span className="size-[7px] rounded-full bg-[#E5484D]" aria-hidden />
+        or <span className="font-[600] text-[#221D17] group-hover:text-[#1F2B24]">record a workflow</span> you already do
+        <ArrowRight size={13} className="transition-transform group-hover:translate-x-0.5" aria-hidden />
+      </a>
       </div>
       </div>
 
-      {/* Build-proof panel — desktop position: right column, vertically
-          centered against the left stack. */}
-      <div className="hidden lg:flex lg:basis-[45%] lg:items-center lg:justify-center">
-        <HeroBuildProof ungatedBuildEnabled={ungatedBuildEnabled} />
-      </div>
+      {/* Rotating live-demo marquee — directly under the CTA/form on
+          purpose: real generated sites are stronger social proof than any
+          logo wall (anchor target for "#demos"). */}
+      <div id="demos" className="w-full scroll-mt-24">
+        <MarketingDemoMarquee />
       </div>
 
       {/* Proof checklist */}
       <ul className="mt-6 flex flex-wrap items-center justify-center gap-x-5 gap-y-2">
-        {["Build it free", "Live in 60 seconds", "$29/mo flat", "Cancel anytime"].map((item) => (
+        {["Start free", "Each client live in 3 minutes", "Yours to keep — open source"].map((item) => (
           <li key={item} className="flex items-center gap-2 text-[13.5px] text-[#6E665A]">
-            <span className="flex size-[17px] items-center justify-center rounded-full bg-[rgba(0,137,123,.12)] text-[10px] font-[700] text-[#00897B]" aria-hidden>✓</span>
+            <span className="flex size-[17px] items-center justify-center rounded-full bg-[rgba(31, 43, 36,.12)] text-[10px] font-[700] text-[#1F2B24]" aria-hidden>✓</span>
             {item}
           </li>
         ))}
       </ul>
-
-      {/* Rotating live-demo marquee (anchor target for "#demos") */}
-      <div id="demos" className="w-full scroll-mt-24">
-        <MarketingDemoMarquee />
-      </div>
 
       {/* Loading overlay */}
       {submitting ? (
@@ -373,7 +462,7 @@ export function MarketingHero({
           className="fixed inset-0 z-[60] flex flex-col items-center justify-center gap-4 bg-[#F6F2EA]/85 backdrop-blur-md"
           aria-live="polite"
         >
-          <div className="size-7 animate-spin rounded-full border-2 border-[#00897B]/20 border-t-[#00897B]" aria-hidden />
+          <div className="size-7 animate-spin rounded-full border-2 border-[#1F2B24]/20 border-t-[#1F2B24]" aria-hidden />
           <div className="font-sans text-xs uppercase tracking-[0.12em] text-[#6E665A]">
             Spinning up your workspace…
           </div>
@@ -382,7 +471,7 @@ export function MarketingHero({
 
       <style jsx>{`
         .sf-blink-dot {
-          box-shadow: 0 0 0 3px color-mix(in oklab, #00897B 22%, transparent);
+          box-shadow: 0 0 0 3px color-mix(in oklab, #1F2B24 22%, transparent);
           animation: sf-blink 2.4s ease-in-out infinite;
         }
         @media (prefers-reduced-motion: reduce) {
@@ -391,6 +480,17 @@ export function MarketingHero({
         @keyframes sf-blink {
           0%, 100% { opacity: 1; }
           50% { opacity: 0.4; }
+        }
+        .sf-rec-dot {
+          box-shadow: 0 0 0 3px color-mix(in oklab, #E5484D 22%, transparent);
+          animation: sf-rec-pulse 1.6s ease-in-out infinite;
+        }
+        @media (prefers-reduced-motion: reduce) {
+          .sf-rec-dot { animation: none; }
+        }
+        @keyframes sf-rec-pulse {
+          0%, 100% { opacity: 1; transform: scale(1); }
+          50% { opacity: 0.55; transform: scale(0.82); }
         }
       `}</style>
     </section>

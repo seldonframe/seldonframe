@@ -21,7 +21,7 @@ export function AppleButton({
     <Link
       href={href}
       className={
-        "group inline-flex items-center justify-center gap-2 rounded-full " +
+        "group inline-flex items-center justify-center gap-2 rounded-[11px] " +
         "bg-white text-black font-medium text-sm px-5 py-3 " +
         "transition-all hover:bg-white/90 active:scale-[0.98] " +
         (full ? "w-full " : "")

@@ -87,6 +87,10 @@ export function Sidebar(props: {
    *  when "inbox" isn't in enabledModules. See nav-config.ts's
    *  BuildNavInput.smsLive doc. */
   smsLive?: boolean;
+  /** Never-fail-compile (2026-07-15) — SF_DRAFT_APPROVALS, resolved
+   *  server-side by the dashboard layout. Surfaces the Approvals nav
+   *  entry. See nav-config.ts's BuildNavInput.draftApprovalsOn doc. */
+  draftApprovalsOn?: boolean;
 }) {
   const {
     hiddenBlocks = [],
@@ -106,6 +110,7 @@ export function Sidebar(props: {
     primaryOrgId = null,
     enabledModules = null,
     smsLive = false,
+    draftApprovalsOn = false,
   } = props;
   const labels = useLabels();
   const pathname = usePathname();
@@ -142,6 +147,7 @@ export function Sidebar(props: {
     },
     enabledModules,
     smsLive,
+    draftApprovalsOn,
   });
 
   const [mobileOpen, setMobileOpen] = useState(false);
@@ -224,7 +230,7 @@ export function Sidebar(props: {
               <div className="flex size-8 items-center justify-center overflow-hidden rounded-lg border border-border/70 bg-muted/30 shrink-0">
                 {/* 2026-05-18 — per-workspace logo (theme.logoUrl) now
                     wins over the default SeldonFrame icon. When the
-                    operator uploads a logo at /settings/theme, that
+                    operator uploads a logo (theme.logoUrl, set via /settings/branding or the copilot), that
                     image becomes the workspace's identity in the
                     sidebar tile (and emails / public pages already
                     consume it). Falls back to the SF icon when unset. */}

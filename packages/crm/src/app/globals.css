@@ -88,7 +88,13 @@
   from {
     transform: translateY(0);}
   to {
-    transform: translateY(calc(-100% - var(--gap)));}}}
+    transform: translateY(calc(-100% - var(--gap)));}}
+  --animate-shiny-text: shiny-text 5s cubic-bezier(0.5, 0.2, 0.3, 1) infinite;
+  @keyframes shiny-text {
+  0% {
+    background-position: 0% 0;}
+  55%, 100% {
+    background-position: -200% 0;}}}
 
 @layer base {
   * {

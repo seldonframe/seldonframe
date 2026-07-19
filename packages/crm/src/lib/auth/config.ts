@@ -68,7 +68,7 @@ function renderSeldonFrameSignInEmail({
   baseUrl: string;
 }): { subject: string; html: string; text: string } {
   const wordmark = `${baseUrl}/brand/seldonframe-wordmark.svg`;
-  const primary = "#14b8a6"; // matches --primary teal in the design system
+  const primary = "#059669"; // matches --primary teal in the design system
   const ink = "#0a0e1a";
   const bg = "#f6f7f9";
   const muted = "#6b7280";
@@ -194,6 +194,9 @@ if (resendApiKey) {
 
         if (!response.ok) {
           const detail = await response.text().catch(() => "<no-body>");
+          // contract:throw-ok: NextAuth catches provider errors and routes to
+          // its error page. Swallowing here would show "check your inbox" for
+          // an email that was never sent — the never-lies violation.
           throw new Error(
             `Failed to send sign-in email (${response.status}): ${detail.slice(0, 200)}`,
           );

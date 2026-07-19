@@ -798,7 +798,10 @@ export function relatedJobsForVertical(currentJobSlug: string, limit = 5): Agent
   return AGENT_JOBS.filter((j) => j.slug !== currentJobSlug).slice(0, limit);
 }
 
-/** Every (job, vertical) pair — the Tier-2 route param source. */
+/** Every (job, vertical) pair — the full matrix (160 pairs). Kept as the
+ *  inventory source (spec assertions, the markdown-resolution fallback); the
+ *  routes/sitemap use `KEPT_PAIRS` below to decide what actually gets a
+ *  standalone page. */
 export function allJobVerticalPairs(): { job: string; vertical: string }[] {
   const pairs: { job: string; vertical: string }[] = [];
   for (const job of AGENT_JOBS) {
@@ -807,6 +810,44 @@ export function allJobVerticalPairs(): { job: string; vertical: string }[] {
     }
   }
   return pairs;
+}
+
+// ─── indexation consolidation (2026-07-17) ────────────────────────────────────
+// See docs/strategy/seo/2026-07-17-indexation-consolidation-plan.md — of the 160
+// job×vertical pairs only ~71 ever got a search impression and ~10 got
+// meaningful ones, so Google was rationing crawl budget across mostly-empty
+// pages. These 16 are the ones with real organic traction (or, for
+// missed-call-text-back/for/barbers, real campaign traffic) and stay as
+// standalone pages; every other pair 301s to its job hub, which gains a
+// "by industry" section reusing the same vertical copy so nothing is lost.
+export const KEPT_PAIRS: { job: string; vertical: string }[] = [
+  { job: "google-review-agent", vertical: "real-estate" },
+  { job: "google-review-agent", vertical: "med-spas" },
+  { job: "google-review-agent", vertical: "roofers" },
+  { job: "google-review-agent", vertical: "barbers" },
+  { job: "google-review-agent", vertical: "auto-repair" },
+  { job: "google-review-agent", vertical: "cleaning" },
+  { job: "google-review-agent", vertical: "chiropractors" },
+  { job: "google-review-agent", vertical: "dentists" },
+  { job: "missed-call-text-back", vertical: "barbers" },
+  { job: "missed-call-text-back", vertical: "restaurants" },
+  { job: "missed-call-text-back", vertical: "dentists" },
+  { job: "missed-call-text-back", vertical: "roofers" },
+  { job: "missed-call-text-back", vertical: "med-spas" },
+  { job: "missed-call-text-back", vertical: "garage-door" },
+  { job: "ai-receptionist", vertical: "auto-repair" },
+  { job: "ai-receptionist", vertical: "real-estate" },
+];
+
+/** Whether a (job, vertical) pair keeps its standalone page. Pure — no DB. */
+export function isKeptPair(job: string, vertical: string): boolean {
+  return KEPT_PAIRS.some((p) => p.job === job && p.vertical === vertical);
+}
+
+/** The kept verticals for one job, in registry order — the sibling set a kept
+ *  Tier-2 page cross-links to (PR 2, Part 1c "review-agent cluster"). Pure. */
+export function keptVerticalsForJob(jobSlug: string): Vertical[] {
+  return KEPT_PAIRS.filter((p) => p.job === jobSlug).map((p) => getVertical(p.vertical));
 }
 
 // ─── copy composition (the GEO answer-page engine) ─────────────────────────────

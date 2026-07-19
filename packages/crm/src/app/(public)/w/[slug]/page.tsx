@@ -34,33 +34,13 @@ import { rewriteR1Hrefs } from "@/lib/landing/r1-rewrite-hrefs";
 import { getServicePages } from "@/lib/landing/r1-site-tree";
 import { buildWorkspaceUrls } from "@/lib/billing/anonymous-workspace";
 import { getPublicChatbotEmbed } from "@/lib/agents/public-embed";
-import {
-  LANDING_TEMPLATES,
-  isLandingTemplateId,
-} from "@/components/landing-templates/registry";
-import { withTemplateDefaults } from "@/components/landing-templates/default-photos";
-import {
-  r1PayloadToTemplateData,
-  submittedSoulToTemplateData,
-} from "@/lib/landing/r1-payload-to-template";
-import {
-  archetypeToSfTheme,
-  buildTemplateCtas,
-} from "@/lib/landing/template-adapters";
-import { ARCHETYPES, type AestheticArchetypeId } from "@/lib/workspace/aesthetic-archetypes";
-import { WEB_UNGATED_ORIGIN } from "@/lib/web-build/policy";
+import { submittedSoulToTemplateData } from "@/lib/landing/r1-payload-to-template";
+import { renderLandingTemplate } from "@/lib/landing/render-landing-template";
+import { shouldIndexWorkspace } from "@/lib/web-build/policy";
 
 type PageProps = {
   params: Promise<{ slug: string }>;
 };
-
-// Task 8: unclaimed anonymous web-build workspaces (created via the /try
-// paste-box flow, no owner attached yet) stay out of the search index until
-// claimed via signup. Claimed workspaces and every non-web-build workspace
-// keep the existing indexable behavior.
-function shouldIndexWorkspace(ownerId: string | null, settings: Record<string, unknown>): boolean {
-  return !(ownerId === null && settings["origin"] === WEB_UNGATED_ORIGIN);
-}
 
 export async function generateMetadata({ params }: PageProps): Promise<Metadata> {
   const { slug } = await params;
@@ -170,36 +150,26 @@ export default async function WorkspaceLandingPage({ params }: PageProps) {
 
   // Health-templates pilot: when the workspace has opted into a premium
   // full-page template (persisted at organizations.theme.landingTemplate),
-  // render it as an alternative renderer. Content comes from the r1 payload
-  // when present, otherwise from the raw organizations.soul jsonb so soul-only
-  // workspaces still render. The template builds its own workspace-scoped CTAs
-  // (book/intake/tel:), so it does NOT need the r1 href-rewrite. Workspaces
-  // without a registered template fall through to the landing-r1 path, which
-  // requires an r1 payload.
-  if (isLandingTemplateId(landingTemplate)) {
-    const Tpl = LANDING_TEMPLATES[landingTemplate];
-    // Fill any empty photo slots with the template's curated fixture imagery
-    // (Claude Design's hand-picked photos) so the page looks like the designed
-    // template even when extraction captured few/no photos. Real photos win.
-    const templateData = withTemplateDefaults(
-      r1 ? r1PayloadToTemplateData(r1.payload) : submittedSoulToTemplateData(ctx.soul),
-      landingTemplate,
-    );
-    // Re-skin via the archetype palette ONLY when one is explicitly set (on
-    // the r1 payload or the org theme). Otherwise pass undefined so the
-    // template renders in its own signature default palette — the designed look.
-    const explicitArchetype = r1?.archetype ?? ctx.theme?.aestheticArchetype;
-    const sfTheme =
-      explicitArchetype && explicitArchetype in ARCHETYPES
-        ? archetypeToSfTheme(explicitArchetype as AestheticArchetypeId)
-        : undefined;
+  // render it as an alternative renderer via the shared renderLandingTemplate
+  // (also used by the /s/[orgSlug] subdomain route so the two never diverge).
+  // Content comes from the r1 payload when present, otherwise from the raw
+  // organizations.soul jsonb so soul-only workspaces still render. The
+  // template builds its own workspace-scoped CTAs (book/intake/tel:), so it
+  // does NOT need the r1 href-rewrite. Workspaces without a registered
+  // template fall through to the landing-r1 path, which requires an r1
+  // payload.
+  const templatePage = renderLandingTemplate({
+    slug,
+    orgId: ctx.orgId,
+    landingTemplate,
+    r1: r1 ? { payload: r1.payload, archetype: r1.archetype } : null,
+    soul: ctx.soul,
+    themeArchetype: ctx.theme?.aestheticArchetype,
+  });
+  if (templatePage) {
     return (
       <>
-        <Tpl
-          data={templateData}
-          ctas={buildTemplateCtas(slug, ctx.orgId, templateData.phone)}
-          theme={sfTheme}
-        />
+        {templatePage}
         {chatbotEmbed && <ChatbotEmbedScript embedUrl={chatbotEmbed.embedUrl} />}
       </>
     );
@@ -224,6 +194,9 @@ export default async function WorkspaceLandingPage({ params }: PageProps) {
     home: workspaceUrls.home,
   });
 
+  // 2026-07-15 — live-archetype normalization moved into loadLandingPayload
+  // so ALL consumers + ALL payload sections re-skin — see apply-live-archetype.ts.
+
   const homeHref = `/w/${slug}`;
   const navServices = getServicePages(payload).map((p) => ({ slug: p.slug, name: p.name }));
   // Only link cards out to detail pages when this workspace actually has them.
@@ -232,7 +205,7 @@ export default async function WorkspaceLandingPage({ params }: PageProps) {
   return (
     <SiteShell
       archetype={payload.hero.archetype}
-      mode={payload.theme?.mode ?? "light"}
+      mode={r1.theme?.mode ?? payload.theme?.mode ?? "light"}
       workspaceId={ctx.orgId}
       orgTheme={r1.theme}
     >
@@ -245,6 +218,7 @@ export default async function WorkspaceLandingPage({ params }: PageProps) {
         servicePages={navServices}
         homeHref={homeHref}
         cta={payload.nav?.cta}
+        logoUrl={payload.logo}
       />
       {payload.emergency && <EmergencyStrip {...payload.emergency} />}
       <Hero {...payload.hero} orgSlug={slug} leadForm={payload.leadForm} />

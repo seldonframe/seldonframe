@@ -60,6 +60,8 @@ export type ToolCatalogEntry = {
 //
 // IMPORTANT — every entry is grounded in a REAL wired connector:
 //   • postiz       → VETTED_CONNECTORS[id="postiz"]  (kind "vetted")
+//   • circle       → VETTED_CONNECTORS[id="circle"]  (kind "vetted", OAuth —
+//     connect on the Integrations page; no operator-pasted key)
 //   • googlesheets → COMPOSIO_TOOLKITS does NOT list "googlesheets" as its own
 //     toolkit; Google Sheets actions live UNDER the googledrive toolkit's
 //     managed session in this curated catalog. So a "Google Sheet" sentence
@@ -101,6 +103,31 @@ export const TOOL_CATALOG: readonly ToolCatalogEntry[] = [
       "reels",
       "caption",
       "hashtag",
+    ],
+  },
+  {
+    // Vetted connector — VETTED_CONNECTORS[id="circle"] (OAuth; connect on the
+    // Integrations page). Binds as { kind:"vetted", id:"circle",
+    // serviceName:"circle", enabledTools:[…] }; tools fill via the vetted
+    // marker-guarded discovery once the workspace has connected Circle.
+    id: "circle",
+    connectorKind: "vetted",
+    label: "Circle (community platform)",
+    description:
+      "Read members, spaces, posts, and events in your Circle community — and with full access, create posts, message members, and manage tags. Note: every tool call counts against Circle's monthly Admin-API quota.",
+    keywords: [
+      "circle",
+      "circle.so",
+      "community",
+      "community platform",
+      "community member",
+      "community members",
+      "mastermind",
+      "cohort",
+      "membership site",
+      "membership community",
+      "space",
+      "spaces",
     ],
   },
   {

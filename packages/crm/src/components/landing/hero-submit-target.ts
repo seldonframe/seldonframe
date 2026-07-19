@@ -6,9 +6,12 @@
 //
 // Flag OFF (ungatedBuildEnabled=false): byte-identical to the pre-web-build
 // behavior — always routes to /signup?intent=build(&url=...).
-// Flag ON: routes to /try (Task 5's anonymous-build island), which reads
-// ?url= directly and falls back to the hero's localStorage seed for the
-// business-description tab.
+// Flag ON: the url tab routes to /try (the anonymous-build island, which is
+// URL-only — its GET .../build/stream takes no text/biz param). The biz tab
+// must NOT go to /try: it would dead-end on a read-only echo of the
+// description ("URL builds only for now"). It routes to /signup?intent=build,
+// where the hero's localStorage seed feeds the existing signup → /clients/new
+// description-build pipeline.
 
 export type HeroTabKind = "url" | "biz";
 
@@ -17,12 +20,9 @@ export function heroSubmitTarget(
   value: string,
   ungatedBuildEnabled: boolean,
 ): string {
-  if (ungatedBuildEnabled) {
-    if (tab === "url") {
-      const params = new URLSearchParams({ url: value });
-      return `/try?${params.toString()}`;
-    }
-    return "/try";
+  if (ungatedBuildEnabled && tab === "url") {
+    const params = new URLSearchParams({ url: value });
+    return `/try?${params.toString()}`;
   }
 
   const params = new URLSearchParams({ intent: "build" });

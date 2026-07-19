@@ -37,6 +37,7 @@ import {
   saveAgentTemplateBlueprintAction,
   generateAgentDraftAction,
 } from "@/lib/agent-templates/actions";
+import { LlmKeyDialog } from "@/components/integrations/llm-key-dialog";
 import { sendTestEventAgentAction } from "@/lib/agents/triggers/actions";
 import { recordGeneratorEditAction } from "@/lib/agents/generate/actions";
 import type { AgentBlueprint } from "@/db/schema/agents";
@@ -89,8 +90,16 @@ const REFINE_STATUS_INTERVAL_MS = 1500;
 type FaqRow = { q: string; a: string };
 type QuoteRange = { service: string; low: string; high: string };
 
-/** Minimal serializable vetted-connector descriptor passed from the server. */
-type VettedConnectorOption = { id: string; label: string; secretService: string };
+/** Minimal serializable vetted-connector descriptor passed from the server.
+ *  `authType:"oauth"` (Circle) renders a "Connect on the Integrations page"
+ *  link instead of the paste-a-bearer field — there's no operator-typed key
+ *  for an OAuth connector. */
+type VettedConnectorOption = {
+  id: string;
+  label: string;
+  secretService: string;
+  authType?: "bearer" | "oauth";
+};
 
 type Props = {
   templateId: string;
@@ -124,6 +133,13 @@ type Props = {
   allCapabilities: string[];
   /** The shipped vetted connectors (id + label + secret service) for the Add form. */
   vettedConnectors: VettedConnectorOption[];
+  /** T4 (page restructure) — when true, the script.md editor renders
+   *  COLLAPSED by default (a header row: name + char count + "Show full
+   *  script" expander) instead of the always-open textarea. Only the
+   *  lifecycle-ladder page (SF_AGENT_LIFECYCLE) passes this; the flag-off
+   *  editor page never sets it, so its render stays byte-for-byte identical
+   *  to before. */
+  collapsibleScript?: boolean;
 };
 
 // ─── trigger picker options (unified agent model P1) ────────────────────────
@@ -247,6 +263,10 @@ export function AgentTemplateEditor(props: Props) {
   const [customSkillMd, setCustomSkillMd] = useState(
     props.initialBlueprint.customSkillMd,
   );
+  // T4 — collapsed by default ONLY when the caller opts in (collapsibleScript);
+  // the flag-off editor page never passes it, so `scriptExpanded` starts (and
+  // stays, since nothing ever flips it) true there — same always-open render.
+  const [scriptExpanded, setScriptExpanded] = useState(!props.collapsibleScript);
   const [voice, setVoice] = useState(props.initialBlueprint.voice);
   const [capabilities, setCapabilities] = useState<string[]>(
     props.initialBlueprint.capabilities,
@@ -343,6 +363,10 @@ export function AgentTemplateEditor(props: Props) {
   const [isRefining, startRefine] = useTransition();
   const [refineError, setRefineError] = useState<React.ReactNode | null>(null);
   const [refined, setRefined] = useState(false);
+  // In-place BYOK modal (record-v3 S4a) — replaces the needs_byok Link to
+  // /settings/integrations/llm, which used to bounce the builder off this
+  // editor entirely. onSaved re-runs refine() with the same prompt.
+  const [keyDialogOpen, setKeyDialogOpen] = useState(false);
 
   // Rotating loader copy index for the Refine button. Resets to 0 when a
   // refinement starts, advances on an interval while pending, and clears the
@@ -454,12 +478,13 @@ export function AgentTemplateEditor(props: Props) {
             <span>
               {draft.message ??
                 "Add your Anthropic key to build + test agents — your first workspace stays free."}{" "}
-              <Link
-                href="/settings/integrations/llm"
+              <button
+                type="button"
+                onClick={() => setKeyDialogOpen(true)}
                 className="font-medium underline underline-offset-2 hover:opacity-80"
               >
                 Add your key &rarr;
-              </Link>
+              </button>
             </span>,
           );
         } else if (draft.error === "generation_failed") {
@@ -496,6 +521,52 @@ export function AgentTemplateEditor(props: Props) {
     );
   };
 
+  // The script textarea + its Refine footer — factored out so the
+  // collapsibleScript branch below can wrap it in a visibility-toggling
+  // <div> without duplicating the JSX (F-A/F-B fix).
+  const scriptBody = (
+    <>
+      <textarea
+        id="agent-script"
+        value={customSkillMd}
+        onChange={(e) => setCustomSkillMd(e.target.value)}
+        spellCheck={false}
+        rows={16}
+        className="block min-h-[300px] w-full resize-y border-0 bg-muted/20 px-5 py-4 font-mono text-[13px] leading-7 text-foreground focus:outline-none"
+        placeholder={c.scriptPlaceholder}
+      />
+      {/* Refine footer — AI-assisted iteration over the whole config. */}
+      <div className="flex items-center gap-2.5 border-t border-border/70 bg-card px-3 py-2.5">
+        <span
+          className="inline-flex size-8 shrink-0 items-center justify-center rounded-lg bg-primary/10 text-primary"
+          aria-hidden
+        >
+          <Sparkles className="size-4" />
+        </span>
+        <input
+          type="text"
+          value={refinePrompt}
+          onChange={(e) => setRefinePrompt(e.target.value)}
+          onKeyDown={(e) => {
+            if (e.key === "Enter" && !isRefining) refine();
+          }}
+          disabled={isRefining}
+          placeholder="Refine in plain language — e.g. add an FAQ about emergency service"
+          className="h-9 min-w-0 flex-1 border-0 bg-transparent px-1 text-sm text-foreground focus:outline-none disabled:opacity-60"
+        />
+        <button
+          type="button"
+          onClick={refine}
+          disabled={isRefining}
+          className="crm-button-secondary inline-flex h-9 shrink-0 items-center gap-1.5 px-4 text-sm"
+        >
+          <Sparkles className={`size-4 ${isRefining ? "animate-pulse" : ""}`} />
+          {isRefining ? REFINE_STATUS_MESSAGES[refineStatusIdx] : "Refine"}
+        </button>
+      </div>
+    </>
+  );
+
   return (
     <div>
       {/* ── 01 · When it runs ─────────────────────────────────────────────
@@ -523,9 +594,13 @@ export function AgentTemplateEditor(props: Props) {
         {/* Send test — outbound (event) agents only. Fire a REAL "[TEST] "
             review/speed-to-lead message to your own number/email NOW, no booking
             or lead required. Bypasses the throttle/guardrails/verify gates (it's an
-            explicit operator action); a review test still requires a review link.
-            Shown for kind=event; uses the CURRENTLY-SELECTED channel — save first
-            if you just switched channels so the test matches what you'll deploy. */}
+            explicit operator action). A review test never blocks on a missing
+            review link — the Google review link is a per-buyer, deploy-time
+            customization (each client sets their own when they deploy this
+            template), so the test falls back to a placeholder link and the UI
+            notes it. Shown for kind=event; uses the CURRENTLY-SELECTED channel —
+            save first if you just switched channels so the test matches what
+            you'll deploy. */}
         {triggerKind === "event" && (
           <SendTestCard templateId={props.templateId} channel={triggerChannel} />
         )}
@@ -571,7 +646,8 @@ export function AgentTemplateEditor(props: Props) {
           </label>
           <p className="mb-3 text-xs text-muted-foreground">{c.scriptHelp}</p>
           <div className="overflow-hidden rounded-xl border bg-card shadow-(--shadow-xs)">
-            {/* chrome bar */}
+            {/* chrome bar — always visible; doubles as the collapsed header
+                row (name + char count + expander) when collapsibleScript. */}
             <div className="flex items-center gap-2.5 border-b border-border/70 bg-muted/40 px-3.5 py-2.5">
               <FileCode2
                 className="size-3.5 text-muted-foreground"
@@ -586,47 +662,30 @@ export function AgentTemplateEditor(props: Props) {
               <span className="ml-auto font-mono text-[11px] text-muted-foreground">
                 {customSkillMd.length.toLocaleString()} chars
               </span>
+              {props.collapsibleScript ? (
+                <button
+                  type="button"
+                  onClick={() => setScriptExpanded((v) => !v)}
+                  className="crm-button-secondary h-6 shrink-0 px-2 text-[11px]"
+                >
+                  {scriptExpanded ? "Hide script" : "Show full script"}
+                </button>
+              ) : null}
             </div>
-            <textarea
-              id="agent-script"
-              value={customSkillMd}
-              onChange={(e) => setCustomSkillMd(e.target.value)}
-              spellCheck={false}
-              rows={16}
-              className="block min-h-[300px] w-full resize-y border-0 bg-muted/20 px-5 py-4 font-mono text-[13px] leading-7 text-foreground focus:outline-none"
-              placeholder={c.scriptPlaceholder}
-            />
-            {/* Refine footer — AI-assisted iteration over the whole config. */}
-            <div className="flex items-center gap-2.5 border-t border-border/70 bg-card px-3 py-2.5">
-              <span
-                className="inline-flex size-8 shrink-0 items-center justify-center rounded-lg bg-primary/10 text-primary"
-                aria-hidden
-              >
-                <Sparkles className="size-4" />
-              </span>
-              <input
-                type="text"
-                value={refinePrompt}
-                onChange={(e) => setRefinePrompt(e.target.value)}
-                onKeyDown={(e) => {
-                  if (e.key === "Enter" && !isRefining) refine();
-                }}
-                disabled={isRefining}
-                placeholder="Refine in plain language — e.g. add an FAQ about emergency service"
-                className="h-9 min-w-0 flex-1 border-0 bg-transparent px-1 text-sm text-foreground focus:outline-none disabled:opacity-60"
-              />
-              <button
-                type="button"
-                onClick={refine}
-                disabled={isRefining}
-                className="crm-button-secondary inline-flex h-9 shrink-0 items-center gap-1.5 px-4 text-sm"
-              >
-                <Sparkles
-                  className={`size-4 ${isRefining ? "animate-pulse" : ""}`}
-                />
-                {isRefining ? REFINE_STATUS_MESSAGES[refineStatusIdx] : "Refine"}
-              </button>
-            </div>
+            {/* F-A/F-B fix: ALWAYS mounted (never conditionally rendered
+                null) — the label above (htmlFor="agent-script") must always
+                point at a present element; pointing at an unmounted
+                textarea while collapsed is a broken a11y association.
+                Visibility toggles via `hidden` instead. Only wrapped in the
+                extra toggle <div> when collapsibleScript is actually in
+                play (collapsibleScript=false ⇒ scriptExpanded is always
+                true and never flips), so the flag-off editor page's DOM
+                stays byte-for-byte what it was — no extra wrapper node. */}
+            {props.collapsibleScript ? (
+              <div className={scriptExpanded ? "" : "hidden"}>{scriptBody}</div>
+            ) : (
+              scriptBody
+            )}
           </div>
           {refined && (
             <p className="mt-2 text-xs text-emerald-700 dark:text-emerald-400">
@@ -638,6 +697,15 @@ export function AgentTemplateEditor(props: Props) {
               {refineError}
             </p>
           )}
+          <LlmKeyDialog
+            open={keyDialogOpen}
+            onOpenChange={setKeyDialogOpen}
+            onSaved={() => {
+              // Re-run the same refinement now that a key exists — matches
+              // the plan's "re-trigger the blocked call" contract.
+              refine();
+            }}
+          />
         </div>
 
         {/* TTS voice — voice templates only (chat has no TTS) */}
@@ -1050,9 +1118,12 @@ function TriggerCard({
 // number (SMS) or address (email) the operator types — typically their own — via
 // sendTestEventAgentAction. No booking/lead is needed: it's the "make my phone
 // fire a review request" affordance. The action bypasses the throttle/guardrails/
-// verify gates (explicit operator action) but still requires a review link for a
-// review test, surfacing a clear error if it's missing. The input shown matches
-// the agent's current channel (phone vs email).
+// verify gates (explicit operator action). A review test never blocks on a
+// missing review link: the link is a per-buyer, deploy-time customization (each
+// client sets their own when they deploy this template), so the test falls back
+// to a placeholder link — `result.usedPlaceholder` flags that so we can show a
+// non-blocking note instead of an error. The input shown matches the agent's
+// current channel (phone vs email).
 function SendTestCard({
   templateId,
   channel,
@@ -1064,10 +1135,12 @@ function SendTestCard({
   const [to, setTo] = useState("");
   const [isSending, startSend] = useTransition();
   const [okMsg, setOkMsg] = useState<string | null>(null);
+  const [placeholderNote, setPlaceholderNote] = useState(false);
   const [errMsg, setErrMsg] = useState<string | null>(null);
 
   const send = () => {
     setOkMsg(null);
+    setPlaceholderNote(false);
     setErrMsg(null);
     const dest = to.trim();
     if (!dest) {
@@ -1081,6 +1154,7 @@ function SendTestCard({
       });
       if (result.ok) {
         setOkMsg(`Sent to ${result.to}: ${result.preview}`);
+        setPlaceholderNote(Boolean(result.usedPlaceholder));
       } else {
         setErrMsg(result.error);
       }
@@ -1106,7 +1180,7 @@ function SendTestCard({
             of this agent&apos;s message to {isEmail ? "an address" : "a number"}{" "}
             you choose — no booking or lead needed. The message is prefixed with{" "}
             <code className="font-mono text-[11px]">[TEST]</code>. Save first if
-            you just changed the channel or review link.
+            you just changed the channel.
           </p>
         </div>
       </div>
@@ -1136,6 +1210,12 @@ function SendTestCard({
       {okMsg && (
         <p className="mt-2 text-xs text-emerald-700 dark:text-emerald-400">
           ✓ {okMsg}
+        </p>
+      )}
+      {placeholderNote && (
+        <p className="mt-1 text-xs text-muted-foreground">
+          The Google review link is set by each client when they deploy this
+          template — your test uses a placeholder link.
         </p>
       )}
       {errMsg && (
@@ -1519,6 +1599,10 @@ function ConnectorsCard({
   const [bindError, setBindError] = useState<string | null>(null);
 
   const isByo = choice === "byo";
+  const selectedVetted = !isByo ? vettedConnectors.find((c) => c.id === choice) : undefined;
+  // An OAuth vetted connector (Circle) has no operator-typed key — it's
+  // connected on the Integrations page, not through this form's apiKey field.
+  const isOauthVetted = selectedVetted?.authType === "oauth";
   const byoValid = (() => {
     const v = byoEndpoint.trim();
     if (!v) return false;
@@ -1529,7 +1613,7 @@ function ConnectorsCard({
     }
   })();
   const canConnect =
-    apiKey.trim().length > 0 && (!isByo || byoValid) && !isBinding;
+    !isOauthVetted && apiKey.trim().length > 0 && (!isByo || byoValid) && !isBinding;
 
   const connect = () => {
     setBindError(null);
@@ -1708,21 +1792,35 @@ function ConnectorsCard({
               </div>
             )}
 
-            <div className="space-y-1.5">
-              <span className="text-xs font-medium text-foreground">API key</span>
-              <input
-                type="password"
-                autoComplete="off"
-                value={apiKey}
-                onChange={(e) => setApiKey(e.target.value)}
-                disabled={isBinding}
-                placeholder="Paste the connector's API key"
-                className="w-full rounded-md border bg-background px-3 py-2 text-sm focus:border-primary focus:outline-none disabled:opacity-60"
-              />
-              <p className="text-[11px] text-muted-foreground">
-                Stored encrypted. We never show it again after you connect.
-              </p>
-            </div>
+            {isOauthVetted ? (
+              <div className="space-y-1.5 rounded-md border border-dashed bg-muted/30 px-3 py-2">
+                <p className="text-xs text-muted-foreground">
+                  {selectedVetted?.label} connects via OAuth, not a pasted key.
+                </p>
+                <Link
+                  href="/integrations"
+                  className="text-xs font-medium text-primary underline underline-offset-4"
+                >
+                  Connect on the Integrations page
+                </Link>
+              </div>
+            ) : (
+              <div className="space-y-1.5">
+                <span className="text-xs font-medium text-foreground">API key</span>
+                <input
+                  type="password"
+                  autoComplete="off"
+                  value={apiKey}
+                  onChange={(e) => setApiKey(e.target.value)}
+                  disabled={isBinding}
+                  placeholder="Paste the connector's API key"
+                  className="w-full rounded-md border bg-background px-3 py-2 text-sm focus:border-primary focus:outline-none disabled:opacity-60"
+                />
+                <p className="text-[11px] text-muted-foreground">
+                  Stored encrypted. We never show it again after you connect.
+                </p>
+              </div>
+            )}
 
             {bindError && (
               <p className="text-xs text-rose-600 dark:text-rose-400">
@@ -1731,15 +1829,17 @@ function ConnectorsCard({
             )}
 
             <div className="flex flex-wrap items-center gap-2">
-              <button
-                type="button"
-                onClick={connect}
-                disabled={!canConnect}
-                className="crm-button-primary inline-flex h-9 items-center gap-1.5 px-4 text-sm"
-              >
-                <Plug className={`size-4 ${isBinding ? "animate-pulse" : ""}`} />
-                {isBinding ? "Connecting…" : "Connect"}
-              </button>
+              {!isOauthVetted && (
+                <button
+                  type="button"
+                  onClick={connect}
+                  disabled={!canConnect}
+                  className="crm-button-primary inline-flex h-9 items-center gap-1.5 px-4 text-sm"
+                >
+                  <Plug className={`size-4 ${isBinding ? "animate-pulse" : ""}`} />
+                  {isBinding ? "Connecting…" : "Connect"}
+                </button>
+              )}
               <button
                 type="button"
                 onClick={() => {
@@ -1827,7 +1927,7 @@ function ConnectToolsBanner({
               <li key={t.key}>
                 <Link
                   href="/integrations"
-                  className="inline-flex items-center gap-1.5 rounded-full border border-amber-500/40 bg-background px-3 py-1 text-xs font-medium text-amber-800 transition-colors hover:bg-amber-500/10 dark:text-amber-300"
+                  className="inline-flex items-center gap-1.5 rounded-[11px] border border-amber-500/40 bg-background px-3 py-1 text-xs font-medium text-amber-800 transition-colors hover:bg-amber-500/10 dark:text-amber-300"
                 >
                   Connect {t.label} in Integrations
                   <ArrowRight className="size-3.5" aria-hidden />
@@ -2028,7 +2128,7 @@ function AppToolChip({
       onClick={onClick}
       disabled={disabled}
       aria-pressed={on}
-      className={`inline-flex items-center gap-1.5 rounded-full border px-3 py-1.5 text-xs font-medium transition-colors disabled:opacity-60 ${
+      className={`inline-flex items-center gap-1.5 rounded-[11px] border px-3 py-1.5 text-xs font-medium transition-colors disabled:opacity-60 ${
         on
           ? "border-indigo-500/40 bg-indigo-500/10 text-indigo-600 dark:text-indigo-300"
           : "bg-background text-muted-foreground hover:bg-muted/50"

@@ -259,4 +259,50 @@ describe("forkListingIntoNewWorkspace — happy path", () => {
     const result = await forkListingIntoNewWorkspace({ slug: FREE_LISTING.slug, ip: "1.2.3.4" }, h.deps);
     assert.equal(result.ok, false);
   });
+
+  // 2026-07-16 (marketplace generalize, Task 4) — the forked/installed
+  // template must carry the listing's declared `templateVariables`
+  // (AgentBlueprint.templateVariables, Task 1) so the installer hits the SAME
+  // deploy-time TemplateVariablesForm as the original author. No code change
+  // was needed for this: `structuredClone(listing.agentBlueprint)` already
+  // deep-copies every field, templateVariables included — this test PROVES
+  // that by construction rather than assuming it.
+  test("a generalized listing's templateVariables survive the fork clone verbatim", async () => {
+    const GENERALIZED_LISTING: AgentListingForFork = {
+      ...FREE_LISTING,
+      slug: "generalized-listing",
+      agentBlueprint: {
+        greeting: "Hi!",
+        customSkillMd: "Forward replies to {contact_email}.",
+        templateVariables: [
+          { name: "contact_email", description: "Where replies go", example: "hi@acme.test" },
+        ],
+      } as unknown as AgentListingForFork["agentBlueprint"],
+    };
+
+    let capturedBlueprint: unknown;
+    const h = makeHarness({
+      resolvePublishedAgentListing: async (slug: string) =>
+        slug === GENERALIZED_LISTING.slug ? GENERALIZED_LISTING : null,
+      insertAgentTemplate: async (values: { blueprint: unknown }) => {
+        capturedBlueprint = values.blueprint;
+        return { id: "template-new-1" };
+      },
+    });
+
+    const result = await forkListingIntoNewWorkspace(
+      { slug: GENERALIZED_LISTING.slug, ip: "1.2.3.4" },
+      h.deps,
+    );
+
+    assert.equal(result.ok, true);
+    assert.deepEqual(
+      (capturedBlueprint as { templateVariables?: unknown })?.templateVariables,
+      GENERALIZED_LISTING.agentBlueprint?.templateVariables,
+    );
+    // Defensive-copy guarantee (existing invariant, re-asserted here): the
+    // installed template's blueprint is NOT the same object reference as the
+    // listing's — editing one must never reach back into the other.
+    assert.notEqual(capturedBlueprint, GENERALIZED_LISTING.agentBlueprint);
+  });
 });

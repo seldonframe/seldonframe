@@ -7,6 +7,406 @@ with a checkable plan, gets ticked off as it ships, and ends with a review block
 
 ## In flight
 
+### Task — cursor.directory security-scan fixes: @seldonframe/mcp (2026-07-17, worktree vibrant-hamilton-3697cd)
+
+Scan flagged 4 findings; plugin hidden pending review. Ground truth established before coding:
+published npm 1.60.0 src is byte-identical to this worktree — findings 1 (env-key consent gate),
+3 (SSRF guard), 4 (SKILL.md masked-flow claim) were ALREADY fixed in `5efcc90f1` (v1.59.2) and are
+live on npm; the cursor.directory submission predates that commit, so resubmission clears them.
+Finding 2 is REAL: `upload_workspace_image.local_file_path` accepts any absolute path (only
+image-sniffing guards it — real images anywhere on disk remain exfiltratable). Version drift:
+package.json=1.60.0 but server.json/manifest.json/welcome.js VERSION=1.59.2.
+
+- [ ] 1. Finding 2: `assertLocalPathAllowed` helper in src/security.js — realpath containment
+      under process.cwd() or `SELDONFRAME_UPLOAD_ROOTS` (path-delimited opt-in env var);
+      win32 case-insensitive; symlink-escape safe; explicit remediation error.
+- [ ] 2. Wire into upload_workspace_image local_file_path branch (before readFileSync) +
+      update tool description.
+- [ ] 3. Unit tests in tests/security.test.mjs (inside-cwd OK · outside rejected · extra root
+      opt-in · symlink escape · relative resolved against cwd).
+- [ ] 4. Version bump 1.61.0 everywhere: package.json, server.json (×2), manifest.json,
+      welcome.js VERSION (also settles the pending "server.json sync").
+- [ ] 5. Gates: node --test mcp tests · scripts/run-unit-tests.js (delta-judged) · verify-build.
+- [ ] 6. Commit + PR.
+- [ ] 7. npm publish 1.61.0 (explicitly instructed; may stop at OTP → Max).
+- [ ] 8. Max: cursor.directory Edit-plugin → resubmit re-scan; then ClawHub + Smithery.
+
+Constitution check: progressive key disclosure preserved — consent gate fires only when an env
+key exists AND would be transmitted; no-key platform-fallback first-run untouched.
+
+### Task — Booking intake fields: soul-first classification (2026-07-16, worktree youthful-panini-ffb749)
+
+Live-confirmed bug (flow-tech-air-conditioning): an explicit AESTHETIC pick ("technical-restrained"
+look via design picker) drove B2B booking questions onto an HVAC company whose soul/settings said
+`vertical=hvac` + `emergency_service=true`. Design picker = SURFACE, not build. Generalizes the
+existing step-0 health override in resolveIntakeFieldsFromSoul.
+
+- [x] 1. Move `classifyArchetypeFromSoul` from apply-archetype-theme.ts (db-bound) to
+      aesthetic-archetypes.ts (pure); re-export from the old location for existing importers.
+- [x] 2. Slice A — extract `resolveIntakeFieldsFromSoul` out of lib/bookings/actions.ts
+      ("use server", untestable) into new pure module lib/bookings/resolve-intake-fields.ts:
+      NEW soul-vertical step between the health override and the theme-archetype lookup
+      (soul.personality_vertical ?? settings.crmPersonality.vertical → classifyArchetypeFromSoul);
+      feed the vertical into the blended hints so the step-0 health override sees it too.
+- [x] 3. Wire actions.ts to the new module; pass org.settings.
+- [x] 4. Slice B — pure DI seeder lib/workspace/seed-booking-intake-fields.ts (classify →
+      getBookingIntakeFieldsForArchetype → write intakeFields on template rows lacking them).
+- [x] 5. Call the seeder from createFullWorkspace (create-full.ts, after step 12.6) — covers the
+      /try URL flow AND the paste flow (both funnel through createFullWorkspace).
+- [x] 6. Unit tests (11 new, all green): HVAC soul + technical-restrained theme → bold-urgency ·
+      agency soul on bold-urgency look → B2B (cuts both ways) · empty soul + explicit archetype →
+      archetype fields (back-compat) · health override still wins incl. vertical-only-in-settings ·
+      seeder seeds/skips/preserves-metadata. Related suites 202/202. Committed ea7442b21.
+- [x] 7a. tsc: 1 error, pre-existing (copilot/turn route TS2353) — delta 0. Full runner hits the
+      known Windows ENAMETOOLONG; targeted batches used instead.
+- [x] 7b. verify-build gate #1: PASS on ea7442b21 (tests · tsc-delta-0 · use-server · journal ·
+      regression-grep; smoke deferred post-merge).
+- [x] 8. Reviewer (maker≠checker): SHIP-WITH-FIXES — both findings fixed in e096d4462:
+      (1) BLOCKER seeder skipped the health override → physio ("general" vertical) would get
+      contractor fields PERMANENTLY seeded; (2) "general" default vertical short-circuited
+      theme + name/title hints (Roofs-by-Shiloh regression). Fix = ONE shared
+      classifyIntakeArchetypeFromBusinessSignals used by resolver AND seeder (+
+      extractArchetypeSignalsFromSoul split). 4 new regression tests; suites 206/206; tsc delta 0.
+      Accepted nit: type-only import of BookingIntakeField from actions.ts (harmless, erased).
+- [x] 9. verify-build gate #2 on e096d4462: PASS (15 tests · tsc delta 0 · use-server ·
+      no migrations · regression grep clean · smoke N/A pre-merge).
+
+**Review:** Two commits (ea7442b21 fix + e096d4462 reviewer fixes). The maker≠checker loop earned
+its keep: the reviewer caught that the first-cut seeder skipped the health override — physio
+(vertical "general") would have had contractor fields PERMANENTLY seeded (stored fields win, so
+the render-time override could never repair it) — and that the truthy-but-meaningless "general"
+vertical defeated the Roofs-by-Shiloh name-hints fix. Both fixed by ONE shared
+classifyIntakeArchetypeFromBusinessSignals used by resolver + seeder. 15 new tests; related
+suites 206/206; learnings note docs/learnings/2026-07-16-intake-semantics-from-soul-not-look.md.
+⏳ post-merge: create a FRESH /try workspace (not Flow-Tech — hand-patched) with an HVAC prompt,
+pick the "Technical" look, confirm /book still shows dispatch questions + intakeFields present on
+the template row. Max's merge gate: PR opened from claude/youthful-panini-ffb749.
+
+### Task — credits_exhausted honesty on /clients/new (2026-07-16, branch claude/zen-sutherland-c96203, extends PR #112)
+
+Problem: clients-new-form.tsx maps EVERY 422 to the extraction_failed copy ("We couldn't
+read that site…") in both SSE error listeners. Since #112 the server emits
+`reason: "credits_exhausted"` + honest `message` on the URL path; the paste path
+(run-create-from-paste.ts:119) still emits bare `{reason}`. Merged #112's branch
+(`claude/intelligent-nightingale-771275`, fast-forward to 59bfa0dee) as the base.
+
+- [x] RED: extend clients-new-form.spec.tsx — (a) 422 credits_exhausted + message shows
+      server message; (b) no message → dedicated fallback copy mentioning adding credits
+      to their Anthropic key; (c) paste path shows server message too (all 3 watched fail)
+- [x] RED: new run-create-from-paste.spec.ts — credits_exhausted 422 carries honest
+      `message` (watched fail); other reasons stay bare (guard, green by design)
+- [x] GREEN: CREDITS_EXHAUSTED_UI_MESSAGE exported from anthropic-error-map.ts (single
+      source, both run-* files use it) + COPY.errors.credits_exhausted + both listeners
+      — 46/46 across the 7 affected suites
+- [x] verify-build gate: PASS via verify-runner (web-onboarding 95/95, tsc delta 0,
+      use-server clean, no migrations, regression grep empty; smoke = post-deploy)
+- [x] Commit fe18a8a68 + PR #113 (stacked on #112 — merge #112 first)
+
+Review: shipped as spec'd; only deviation from minimal-diff was hoisting the message
+string into anthropic-error-map.ts (prevents the exact drift class that caused #112).
+Learnings appended to docs/learnings/2026-07-16-credits-exhausted-400-mapping.md
+(corollary: sweep ALL consumer surfaces of an error payload). ⏳ Max: merge #112 → #113.
+
+### Task — Token-smart agent runtime (2026-07-16, worktree hungry-jang)
+
+Context: Max's $20 Anthropic top-up burned in 34 min by 3 duplicate Gmail push agents
+(untruncated GMAIL_FETCH_EMAILS JSON re-sent every loop iteration, uncached, always-premium
+Sonnet). Prod deployments canceled directly (ed050e3a, a37115e4, 2e14ba00 → status=canceled).
+This slice = make the runtime cheap by construction. Max's explicit ask: caching + tool-result
+cap + duplicate-deployment guard.
+
+- [x] 1. Shared helpers in `lib/agents/turn-token-economy.ts` + 15-test spec (cap 20k chars
+      w/ explicit truncation marker; error cap 2k; cache helpers; moving breakpoint).
+- [x] 2. Cap applied in BOTH tool loops + runtime.ts HISTORY REBUILD (historical tool
+      outputs re-tax every later turn — capped at read time; full output still persisted).
+- [x] 3. Prompt caching in both loops: system + last-tool + moving message breakpoint
+      (3 markers ≤ API's 4). Regen call deliberately UNCACHED (no-tools prefix ≠ loop
+      prefix → marker would be pure write premium).
+- [x] 4. Duplicate guard: createDeployment rejects same builder+template+surface+client
+      (non-canceled) w/ duplicate_deployment + duplicateOfDeploymentId; allowDuplicate
+      escape hatch; deploy-to-self → already_deployed; wizard shows honest copy.
+      Both real incidents (Zen Flow ×3, J. Marin ×2) share template id → key catches them.
+- [x] 5. Unit: 60/60 deployments + 56/56 loop specs + 15/15 helpers; tsc delta = 0 new
+      (baseline = 1 pre-existing copilot 'persist' error, present on clean tree too).
+      verify-runner gate DISPATCHED (commit 89ca653d8).
+- [ ] 6. Push + PR after gate PASS (Max merges).
+
+
+### Task — Agency repositioning of homepage (2026-07-15, branch feat/agency-homepage-positioning)
+
+Max's direction: keep marketing-page structure, reword for AGENCIES; everything true per §1b
+(Builder $29 / Managed $49 / Agency $99·$199·$299; 2% GMV solo-only when SF is channel; 0% agency;
+white-label + sub-accounts + portal start at $99). Plus CTA anchor fix + agency-content pricing audit.
+NOTE: another session shares this working tree (clobbered hero edits once + this todo section) —
+edits re-applied and committed promptly to pin them.
+
+- [x] Reword 5 sections (hero · build-steps · modules · smb-cta · pricing) + final-cta + footer
+      (commit 4a5ae1656)
+- [x] CTA route-by-promise: all "Build it free" pills + footer "Start building" → /#hero-form
+      (scroll + focus); nav "Start for free" + FAQ "Start free" stay /signup (label promises signup)
+- [x] BYOK hero line demoted to value framing (§1b)
+- [x] Targeted specs green (landing-mode-shell · marketing-pricing · render-home-markdown = 19/19)
+- [x] /agencies metadata pricing-truth fix (commit d8e8cc7f0)
+- [x] Audit: 41 false/misleading claims found (Explore agent) → fixed by 3 parallel implementers
+      (alternative-pages ×29 · guides ×12 files incl. 2 whole-guide recasts · agency-math/sell/
+      docs-pricing/tier-upsell) — commit 79418533c; seo 1474/1474 + guides 861/861 green
+- [x] Reviewer (maker≠checker): SHIP-WITH-FIXES, 0 blockers — all 5 fixes applied (metadata
+      adjacency · card framing · GMV line gated behind tierLadderOn · pronoun · /home.md re-voice)
+- [x] verify-build gate: PASS (touched suites 14/14 · tsc 0 new · use-server clean · no migrations ·
+      regression grep empty) → pushed, PR #100 open (Max's merge gate)
+
+**Review:** Shipped in one pass: 3 commits (homepage repositioning · /agencies metadata · 41-claim
+sweep). The audit was the sleeper — the retired pricing era ($29 white-label, 5→3→2 GMV ladder,
+$297 docs tier) survived in ~20 files/41 claims of ranked SEO content long after plans.ts moved on.
+Route-by-promise resolved the CTA question cleanly: labels promising a BUILD → chatbox; labels
+promising SIGNUP → /signup. ⏳ post-merge: live smoke /, /agencies, /sell, /docs/billing/pricing +
+Max eyeballs the CTA scroll-focus. Lesson candidates: pricing-claims drift needs a grep gate tied
+to plans.ts changes; two sessions must not share one working tree.
+
+### Task — /reflect decision loop (2026-07-15, branch feat/reflect-decision-loop)
+
+Compact ~24 FS.blog/Bezos decision articles into `.claude/skills/reflect/` (core loop +
+per-lens reference files) + `docs/decisions/LOG.md` calibration log.
+Spec (approved in chat): docs/superpowers/specs/2026-07-15-reflect-decision-loop-design.md
+
+- [x] Design approved by Max (8 decisions locked via Q&A)
+- [x] Spec written + self-reviewed
+- [x] Worktree off origin/main
+- [x] 7 fetch agents dispatched (24 URLs → 23 reference files)
+- [x] SKILL.md (the loop) + references/00-index.md + docs/decisions/LOG.md written
+- [x] All reference files landed (agents 7/7, all 24 URLs fetched live, 0 fallbacks)
+- [x] Review pass: structural check 23/23 green + spot-read (bezos, break-the-chain) — 2 fidelity
+      corrections applied (break-the-chain = obligation chains, not mistake cascades;
+      algorithms-bias = bias-in-algorithms framing, not Meehl)
+- [x] End-to-end verify: reflect ran on "wire reflect into ship-feature?" — quick-pass routing,
+      output shape, and LOG.md write all confirmed (first real entry logged)
+- [x] Commit → push → PR #84 to main
+
+**Review:** Shipped in one pass. 7 parallel fetch agents, 24/24 URLs fetched live (no
+paywalls, no fallbacks). Two fidelity catches from fetching the real articles instead of
+trusting title-based assumptions: break-the-chain is about obligation/dependency chains
+(not mistake cascades) and algorithms-bias is Fry-style bias-in-algorithms (not Meehl) —
+SKILL.md + index corrected to match. Loop verified end-to-end with a real logged decision.
+Lesson: when compacting external sources, fetch before framing — 2 of 24 titles lied.
+
+### Task — Green-main slices 2+3: stale UI expectations + archetype invariant (2026-07-10, branch fix/ci-stale-test-expectations)
+
+Baseline: main run 29097414557 — 107 unique failing spec names (0 new failures allowed; judge by delta).
+Slice 1 (~50 DB-bound E2E, Neon ECONNREFUSED) is GATED on Max's decision (CI database vs
+skip-if-no-DATABASE_URL contract) — untouched here. PR #49 (booking fixtures + emit gates) is
+OPEN and owns booking-policy-tools + blocks/emit failures — untouched here.
+
+Verified root causes (from CI log run 29097414557 + local repro):
+- 16 failures = `document is not defined`: upgrade-modal / clients-new-form / create-client-cta
+  specs use @testing-library/react render() with no DOM in node:test. Harness gap, NOT stale
+  assertions. Fix: tests/unit/helpers/dom.ts (jsdom, already a devDep) imported first.
+- Stale-but-intentional drift: hero-cta (role="img" mockup → real <img>), how-it-works (step
+  screenshot count), render-home-markdown (trial removed), theme specs ×3 (DEFAULT_ORG_THEME
+  flipped v1.40.0: #14b8a6/Inter → #1f2421/#3d6e4f/Geist — documented in src/lib/theme/types.ts).
+- 7 archetype failures: registry now has 7 (missed-call-text-back added); 4 hvac specs hardcode
+  count===6. Fix: import-time key snapshot (rot-proof isolation invariant).
+
+- [x] Baseline captured (scratchpad/baseline-failing.txt)
+- [x] Root causes verified per class (CI log + local repro + git history for intent)
+- [x] Implementer A: DOM harness + 3 web-onboarding specs green locally
+- [x] Implementer B: hero/how-it-works/markdown/theme/archetype specs green locally
+- [x] Full local unit run: stash-delta vs main state = **0 new, 38 fixed** (8297 tests, 63
+      remaining pre-existing fails = DB-bound slice-1 + PR #49 scope + env-dependent)
+- [x] Reviewer pass on diff — no blockers; both should-fixes applied (tautological archetype
+      snapshot → named-presence; phase-0 assertion → real phase-transition proof), plus
+      consolidation: duplicate jsdom helper deleted, existing tests/setup-dom.ts reused
+      (matchMedia stub folded in) — it existed all along but was never wired into the CI runner
+- [x] tsc: 0 errors in touched files (35 pre-existing worktree phantoms in src/**)
+- [x] Learnings notes written (docs/learnings/2026-07-10-diagnose-before-updating-tests.md,
+      -guard-assertions-that-cannot-fail.md) + tasks/lessons.md appended
+- [x] Commit + push + PR to main
+- [ ] Post-merge: confirm next main run drops ~38 failing names; then slice 1 (Max decision:
+      CI database vs skip-if-no-DATABASE_URL contract — recommendation: skip-contract +
+      scheduled DB job, reversible, no secret provisioning)
+
+#### Review
+Tests-only diff (13 specs + tests/setup-dom.ts + docs). The briefing's "stale assertions"
+diagnosis was wrong for 16/38: those specs crashed on `document is not defined` (harness gap,
+not drift). Genuine drift was all intentional-and-documented product movement: marketing hero
+real <img>, /marketing/ screenshot paths, no-trial pricing copy, v1.40.0 default-theme flip
+(#1f2421/#3d6e4f/Geist), archetype registry growth to 7. Theme specs now derive expected
+values from DEFAULT_ORG_THEME (var-name contract stays hardcoded); archetype invariants are
+named-presence + named-absence (rot-proof, still catch leaks).
+
+### Task — Supply-side content Wave 1: marketplace offer side (2026-07-10, branch feat/seo-supply-wave-1)
+
+Seed the builder/seller ("offer side") SEO/GEO cluster so /marketplace and /build rank for
+builder-intent queries ("sell AI agents", "AI automation agency", "AI agent marketplace").
+Reuses the /guides content engine (registry + md twin + spec gate). Approved by Max in chat.
+
+- [x] Branch `feat/seo-supply-wave-1` off origin/main
+- [x] Add `sell-agents` cluster to guides types.ts + CLUSTER_LABELS
+- [x] Draft 6 Wave-1 guides (subagents, one per article, never-lies sources verified):
+      how-to-make-money-selling-ai-agents (pillar) · how-much-to-charge-for-an-ai-agent ·
+      ai-agent-business-ideas · how-to-start-an-ai-automation-agency ·
+      best-ai-agent-marketplaces · what-is-an-mcp-marketplace
+- [x] Wire index.ts imports + GUIDES entries + 6 `.md` twin routes
+- [x] Strategy doc docs/strategy/2026-07-10-marketplace-supply-content.md (best practices + full 40-article queue + waves)
+- [x] Queue Wave-2 commissions in docs/ops/agents/content-queue.md (entries 3+4, behind is-geo-legit)
+- [x] Adversarial quality-gate review (reviewer subagent): 6/6 SHIP, 0 blocking; 2 source-URL
+      nits fixed (GHL /pricing · canonical Anthropic pricing path). Unverifiable stats were
+      dropped by writers at draft time (BLS 403 · Upwork/Fiverr fee pages 403 · HBR paywalled
+      multipliers · OpenAI payout %s — all stated qualitatively or hedged instead).
+- [x] Gate: guides.spec.ts 402/402 green · typecheck 434 errors = env baseline (zod/@testing-library
+      resolution), zero in touched files
+- [x] Commit, push, open PR (human merge gate — Max merges): PR #47
+      (github.com/seldonframe/seldonframe/pull/47); after merge: IndexNow ping the 6 /guides URLs
+
+### Task — Supply-side content Waves 2-7 + publish-all (2026-07-10, Max-directed, branch feat/seo-supply-waves-2-7)
+
+Max: "do all the waves and merge to main and publish them all". Wave 1 (PR #47) MERGED. Honesty
+carve-outs held: Wave 8 case studies NOT written (gated on real closed clients); Wave 7 reduced to
+the primary-source-only stats page (survey-based pricing-data page needs data collection first).
+
+- [x] Merge PR #47 (CI failures verified pre-existing on main — same booking-availability tests;
+      spawned a fix-main-CI background task chip)
+- [x] Draft 26 articles via parallel writer subagents (all sources WebFetch-verified; re-cuts:
+      smma-to-ai-agency · what-is-byok-ai · voice-ai-reseller-programs · client-portals slug)
+- [x] Wire registry (26 imports + entries) + 26 .md twin routes + flip 2 queue commissions to shipped
+- [x] guides.spec.ts 558/558 green · typecheck 434 = baseline, 0 in touched files
+- [x] 3 parallel reviewer subagents: 23/26 SHIP, 3 fixes applied, 0 kills; 2 of 3 "blocking"
+      flags disproven by my own re-verification (BrightLocal 97%/85%/2026 literal on page;
+      "AppExchange is now AgentExchange" is Salesforce's own banner) — verify the reviewer too
+- [x] PR #48 opened + MERGED (CI failure set diffed identical to main's pre-existing red);
+      IndexNow pinged all 32 URLs (HTTP 200)
+- [x] Post-deploy live smoke: SMOKE PASS 9/9 routes (deployed sha 3c980ac63, hub cluster label,
+      sitemap entries, md twin content-type, FAQPage JSON-LD)
+- [x] Memory + strategy-doc updates
+
+**Review:** All waves 1-7 live (32 guides). Wave 8 + survey-stats page correctly withheld
+(never-lies gates). Follow-ups queued in the strategy doc: /sell hub · marketplace-listing
+JSON-LD hardening · demand→supply cross-links · vendor-rate quarterly refresh.
+
+### Task — Supply-side follow-up slices (2026-07-10, Max-directed, branch feat/supply-follow-ups)
+
+Max: "do this" on the 4 queued slices + fix the discoverability gap (cluster not in footer/nav).
+
+- [x] /sell hub page (kw "sell ai agents") + sitemap + llms.txt + footer links (Sell AI agents → /sell, Guides → /guides)
+- [x] Marketplace listing hardening: BreadcrumbList JSON-LD + guides block + "Sell yours" CTA (live+seed safe)
+- [x] Demand→supply cross-link: gohighlevel-cluster-gated block in guide-page.tsx + /agencies guides row
+- [x] Quarterly vendor-rate-refresh: docs/ops/agents/vendor-rate-refresh.md + scheduled task (1st of Jan/Apr/Jul/Oct 09:30, next Oct 1)
+- [x] Gate: reviewer SHIP 0-blocking (2 nits applied: GMV taper wording → canonical · agencies anchors → next/link) ·
+      guides.spec 558/558 · tsc 0 in touched (51 = baseline) · PR #52 MERGED (CI failure set = main's, diffed) ·
+      SMOKE PASS 8/8 incl. negative cluster-gating check · IndexNow pinged /sell + hubs
+
+**Review:** discoverability gap closed — the cluster is now reachable via footer (Sell AI agents · Guides),
+/sell hub, /agencies, and every marketplace listing. Deeper Zapier-play remainder (per-listing keyword slugs +
+listing FAQ fields = data-model change) left as its own slice.
+
+### Task — Guides visual + readability engine (2026-07-10, Max-directed, branch feat/guides-visual-engine)
+
+Max: guides are walls of text → add SVG diagrams/animations, real vendor logos, bold/italic,
+short paragraphs, 16-year-old reading level with "kind of like…" analogies — SEO/GEO preserved,
+world-class standalone value. Architecture: engine upgrade (markdown-lite + typed diagram
+primitives + callouts + favicon logos) then batch rewrite of all 74 guides. Facts frozen.
+
+- [x] PR A (#55, MERGED): engine — markdown-lite React-node parser (guide-inline.ts pure module) ·
+      guide-diagrams.tsx (5 SVG primitives, CSS-animated, reduced-motion safe) · callout boxes ·
+      sources-row favicons · JSON-LD/meta strip · twin degradation · spec 834 tests · 2 exemplars ·
+      style contract in content-loop.md. Reviewer SHIP + 4 hardening fixes applied.
+- [x] PR B (#56, MERGED): ALL 90 remaining guides rewritten by parallel subagents (92 total incl.
+      exemplars). 3 fact-drift reviewers (numeric-fingerprint multisets + close reads): 90/90
+      sources byte-identical, 0 magnitude drift, 0 hedge drops; 1 blocking fixed (self-contradicting
+      seat-fee chart → consistent $97 series) + nested-markup + invented-quantity NITs fixed.
+- [x] Gates: guides.spec 834/834 · tsc 51=baseline · CI failure-diff = main's pre-existing red ·
+      live verify: <strong>/callouts/flow-SVGs/favicons confirmed in production HTML · vision pass
+      on full-page desktop+mobile captures (typography/diagrams/callouts/mobile all clean; smoke
+      agent's "no <strong>" claim disproven by direct curl — it grepped the RSC payload)
+
+**Review:** whole guide estate (92 pages) now renders diagrams, analogies, short readable prose;
+GEO surface (md twins) degrades everything to text; facts provably frozen. Future guides inherit
+the style via the content-loop contract.
+
+### Task — Retainer sibling-recovery period narrowing (2026-07-08, money-review follow-up, worktree hungry-jang-c20e73)
+
+Fix from the autopay-console money review: `findOutstandingFailedForSubscriptionReal` matched ANY
+outstanding failed retainer row on the subscription, so a month-2 invoice.paid stamped
+`resolvedByLaterPayment` on a genuinely-unpaid month-1 failed row — silently killing its dunning
+signal. Notify-only impact, but the agency loses "month 1 was never collected".
+
+- [x] Merge `feature/autopay-console` into the worktree branch (was not on main)
+- [x] RED: 7 new tests in `connect-webhook-cycles.spec.ts` (periods on the decision · period stamp in
+      metadata at write time · next-period paid must NOT stamp prior-period failed · same-period
+      sibling still does · legacy row w/o period stamp fails open · same-period picked over prior)
+- [x] GREEN: decision carries `periodStart/periodEnd` (invoice.period_start/end) · apply stamps them
+      into row metadata · dep returns ALL candidates (array) and the apply layer picks the first
+      same-or-newer-period one via `siblingCoversSameOrNewerPeriod` (prior = periodEnd <= paidStart;
+      contiguous months → `<=`) · same-invoice-id recovery path untouched
+- [x] Gate: payments specs 71/71 ✓ · tsc 9 = baseline ✓ · wide sweep 7992 tests / 84 fails, ALL in
+      the 10 known env-dependent spec files (activation·analytics·build-mcp·chatgpt·marketplace-mcp·
+      seldon-chat·web-build-stream), zero in payments — none attributable
+- [x] Independent reviewer (subagent): verdict SHIP, 0 blocking; its one actionable nit (no pin on
+      the incoming-invoice-missing-period fail-open branch) added as a 24th test
+
+**Review:** Fix is 2 files. `decideRetainerCycleFromInvoiceEvent` carries `periodStart/periodEnd`;
+`applyRetainerInvoiceCycle` stamps them into metadata at write time and the sibling recovery only
+resolves same-or-newer-period failed rows (`siblingCoversSameOrNewerPeriod`: prior =
+`periodEnd <= paidPeriodStart`, contiguous-month boundary correct). The dep seam now returns ALL
+candidates so the apply layer owns the money semantics (query stays a dumb fetch) — this also makes
+"pick the same-period sibling over the prior-period one" work when both are outstanding. Fail-open
+on missing period info (legacy/degenerate) is deliberate: notify-only blast radius, and the worse
+failure is dunning a paid client. Same-invoice-id recovery untouched per the review directive.
+NOTE: `feature/autopay-console` reached main mid-session (another session merged
+`2a5360cbb..d645afea6`); origin/main was merged back into `claude/hungry-jang-c20e73`, so the
+branch is now exactly main + this fix (71/71 + tsc-baseline re-verified post-merge). Merge to
+main is Max's gate.
+
+### Task — GHL-intercept SEO/GEO engine (2026-07-08, branch feature/ghl-seo-engine)
+
+Design: docs/superpowers/specs/2026-07-08-ghl-seo-engine-design.md
+
+- [x] A. Registry content: 10 new competitors in `alternative-pages.ts` + `alternative-pages-extras.ts` (+10 gohighlevel-vs-X VS_PAIRS)
+- [x] B. Route folders: 10 `/alternative-to-<slug>` pages + 10 `.md` twins + 10 `compare/gohighlevel-vs-<slug>.md` twins
+- [x] C. `/best` engine: `lib/seo/best-pages.ts` + spec (51 tests), `components/seo/best-page.tsx`, `best/[slug]` + hub, 37 combos, `.md` twins via `renderBestMarkdown`
+- [x] D. Free tools: review-link-generator, ai-receptionist-cost-calculator, a2p-10dlc-checker, review-response-generator
+- [x] E. Integration: sitemap.ts, llms.txt, tools hub TOOLS array, alternatives hub description, `best_page` md-analytics surface
+- [x] F. Verify: 159/159 seo specs ✓ · tsc-delta 0 (436→436, none in our files) ✓ · use-server clean ✓ · regression grep clean after rebase onto 231653b7e ✓ · opus reviewer verdict SHIP (0 blocking; mojibake + llms casing fixed in b4663b702) · local `next build` NOT runnable in this env (pre-existing `workflow/next` missing locally — Vercel installs it; the pushed branch's Vercel preview is the real build gate)
+- [x] G. Review section + memory update
+
+Wave 4 (2026-07-08, DONE, merged `bb9b39ed1..4c773a9b1` + follow-up `587cc7922`; 4th opus review READY; live smoke 14/14 PASS on prod sha): #1 25 /[slug]-pricing pages (competitor-pricing.ts registry, "what stacks on top" section, facts pack w/ confidence tags) · #2 10 big third-party pairs (VS_PAIRS now 30) · #3 pricingSourceUrl + sources rows everywhere + Goodcall reprice fix · #4 /api/og thumbnail endpoint (5 kinds, live-eyeballed: sf-vs + best cards render thumbnail-grade; pill copy fixed "Top 7") · #5 lite-youtube + videoId seam (inert until Max's videos publish) · #6 shareable calculator results (URL-state permalinks + 1280×720 canvas cards) · #7 monthly seo-price-refresh scheduled task · #8 BuildWidget on the 3 money templates (heroSubmitTarget; lights fully when SF_WEB_UNGATED_BUILD=1). GSC sitemap submitted by Max.
+
+Wave 3 (2026-07-08, DONE): visuals + 12-year-old readability across all SEO surfaces —
+- [x] G. Templates: TldrBox ("The short version" bullets) + FrontOfficeFlow diagram + emphasize()/emphasizeMd() auto-bolding into the 4 templates + 3 markdown twins (+20-test spec)
+- [x] H. Tools: per-tool point-making visual (money-leak funnel · savings bars · 3-step strips · A2P compliance ladder colored from quiz answers) + grade-6 copy pass (A2P legal disclaimer untouched)
+- [x] I. alternative-pages{,-extras}.ts prose simplified — dollar-token multisets verified IDENTICAL (221+49); all hedges survived (reviewer-audited)
+- [x] J. best-pages.ts prose simplified, same freeze (51/51)
+- [x] K. Gate: 231/231 seo specs · tsc delta 0 (436) · 3rd opus review READY 0-blocking (4 nits fixed: percent-range bolding, study hedge restored, literal-FAQ invariant comments, funnel proxy footnote) · pushed
+
+Wave 2 (Max's correction, same day): first-person /compare/seldonframe-vs-<slug> for all
+25 competitors (flagship template + 25 .md twins + composed non-duplicate intros), footer
+Compare/Free-tools mesh on marketing + marketplace footers, /alternatives hub chip row,
+third-party vs-page FAQ/JSON-LD enrichment. 211 seo tests green; 2nd opus review READY
+0-blocking; pushed through 84d34f34e.
+
+Review (2026-07-08): SHIPPED to origin/feature/ghl-seo-engine (567873f4c..b4663b702,
+rebased onto 231653b7e). 94 files, ~5k lines, all additive static SEO surface:
+11 gohighlevel-vs-X head-to-heads (10 new competitors in the registries),
+21 new /alternative-to-* page+md routes, /best engine (37 listicles + hub + md
+twins + 51-test spec), 4 free tools (/tools now 5). CODE-CORRECT + spec-verified;
+NOT live-smoked (needs merge + deploy). Human gates left for Max: (1) check the
+Vercel preview build passes + eyeball /best/crm-for-small-business +
+/compare/gohighlevel-vs-hubspot + the 4 tools, (2) merge to main, (3) quarterly
+pricing-fact refresh now covers 25 competitors + /best contender price lines.
+
+### Task — build-pipeline upgrade: mechanical tier pins + wedge strategy (2026-07-07) — DONE
+
+Trigger: reflection on the Managed Agents multi-agent API vs our pipeline. Findings: the ship-feature tier table was already the "plan big, execute small" pattern, but the agent definitions contradicted it (scout pinned opus, implementer pinned fable) — the exact "locked by memory isn't locked" drift the skill itself warns about.
+
+- [x] `.claude/agents/` roster added to the REPO (travels to cloud/scheduled agents): scout (haiku) · implementer (sonnet, fable-by-override) · reviewer (opus, sonnet-by-override) · vision-grader (haiku, pinned) · verify-runner (haiku) · smoke-runner (haiku). User-level `~/.claude/agents` pins corrected to match.
+- [x] ship-feature: enforcement bullet now points at the roster (dispatch by `subagent_type`, never name a model unless escalating); verify step names verify-runner/vision-grader/smoke-runner.
+- [x] vision-verify step 3: dispatch `subagent_type: vision-grader` (pin lives in the agent definition).
+- [x] `docs/strategy/2026-07-07-wedge-to-1m-arr.md` — PROPOSAL: agency-channel AI-receptionist wedge, ICP/offer/pricing, probability table, 90-day ladder, 4 explicit Max decision points.
+- [x] `docs/strategy/2026-07-07-managed-agents-runtime-spike.md` — SPIKE: sessions/threads/vaults ↔ deployment/conversation/per-client-creds mapping, BYOK story, AgentRuntime seam (native | managed-agents, fail-soft), 2-3 day spike plan + decision gates.
+- [ ] Scheduled cloud green-main guardian (daily verify-build sweep) — created via /schedule this session; first run pending.
+
+Review: docs + agent-config only, zero app-code impact; no migration; verify = files present + skills reference resolvable agent names.
+
+
 ### Task 10 — deploy-verb Tier-0 payoff + stripeMode threading (spec 2026-07-01-voice-deploy-metered-billing) — DONE
 
 Worktree `icp3-wedge/packages/crm` (this repo, HEAD 24c70133). Brief: `.superpowers/sdd/task-10-brief.md`. CONTRACT RULE: `runDeploy`'s DeployResult JSON stays byte-for-byte; new failure reason `"insufficient_balance"` rides the existing `{ok:false,reason}` catch-all (CLI's `DeployResult` type already has `{ok:false;reason:string}` — zero CLI type change needed).
@@ -400,3 +800,73 @@ Package the build → test → deploy → sell → get-paid loop as a distributi
 - [x] Commit on branch; review block below
 
 **Review:** Pack lives at `skills/seldonframe-agent-business/{SKILL.md,README.md,SUBMISSION-KIT.md}` on `feature/agent-business-skill-pack`. Grounding: all 25 MCP tool names in the SKILL.md verified present in `skills/mcp-server/src/tools.js`; sell/get-paid documented as what they really are (Studio listing panel [human] + `set_usage_price`/`list_my_listings` ops on `/api/v1/build/listings` + `/api/v1/build/payout` [API/CLI]) since no MCP listing/payout tools exist. RED baseline (haiku, no skill): invented add_agent_tools/configure_voice_channel/configure_payment_receiver, misused submit_soul/create_subscription/send_sms, skipped evals → fed the grounding table. GREEN (haiku, skill only): correct 11-step loop with surfaces labeled, refused force:true, refused real-message testing, correct payout statuses, verbatim wizardUrl relay, no-key-upfront. Two tester-reported wording gaps patched post-GREEN (queued archetypes not creatable via create_agent; blueprint patchable-field list) — informational, sourced from tools.js. NOT submitted anywhere — SUBMISSION-KIT.md has Max's ordered checklist (merge→republish 1.57→topics→smoke→3 PRs; Aradotso is auto-ingest).
+
+## 2026-07-11 — Agent-lifecycle slice (Learn→Verify→Connect→Run→Sell) + Hermes bet specs
+
+- [x] Spec grounded in 3-scout recon + L-16 source verification (`docs/superpowers/specs/2026-07-11-agent-lifecycle-design.md`)
+- [x] Plan: 11 TDD tasks, two waves (`docs/superpowers/plans/2026-07-11-agent-lifecycle.md`)
+- [x] Wave 1 (T1–T5 pipeline/backend): flag + migration 0068 + inbox-watch trigger + interview decomposition + continue-interview-recompile + supervised-run backend + marketplace gate — 163/163 tests
+- [x] Wave 2 (T6–T11 UI): token-swap CSS + 5-stage ladder + all stages + deployToSelf — 197/197 tests, flag-off byte-identical
+- [x] Independent reviews: Wave 1 (opus) APPROVE + Wave 2 APPROVE — 8 non-blocking findings ALL fixed (F1–F8, incl. migration 0069 partial-unique running-run index)
+- [x] verify-build gate (independent runner): **PASS** — 0 new test failures of 9,496, tsc delta 0, journal +2 clean, regression greps empty; live smoke DEFERRED-TO-DEPLOY
+- [x] Hermes strategy doc + 4 Max-approved bet specs committed (`71f55cee6`)
+- [ ] **Max: merge call** (24 commits on feature/record-to-agent; migrations auto-run on deploy)
+- [ ] Post-deploy: flag `SF_AGENT_LIFECYCLE=1` → live smoke + vision gate on the ladder + supervised-run real-key smoke
+
+**Review:** All production code was either independently reviewed (waves) or is a tested remediation of a reviewer finding (fix wave); verify-runner was maker-independent. Known deferred: live render smoke of flag-on ladder (no local next build possible), Connected-stage per-step "why" line (needs binding→step mapping persisted — follow-up), toolkit logos unrendered.
+
+---
+
+## 2026-07-13 — Circle MCP connector (feature/circle-mcp-connector, stacked on composio-live-discovery)
+
+Spec: docs/superpowers/specs/2026-07-13-circle-mcp-connector-design.md
+Plan: docs/superpowers/plans/2026-07-13-circle-mcp-connector.md
+
+- [x] Task 1: OAuth protocol module (discovery/DCR/PKCE/exchange/refresh/envelope) — 23/23 tests
+- [x] Task 2: OAuth-aware bearer resolver + runtime/bind-time wiring — 9/9 new + 49/49 regression
+- [x] Task 3: Registry — authType widening + circle entry + shared clamp — 21/21 tests
+- [x] Task 4: Vetted discovery fill + fillAllBindingTools at all persist seams — 9/9 new + 36/36 regression
+- [x] Task 5: Connect/disconnect actions + signed-state cookie + callback route — 18/18 tests
+- [x] Task 6: tool-catalog circle entry (findability) — new tests pass; 2 PRE-EXISTING failures in bind-tools.spec.ts (log-to-Notion/Sheet composio defaults) confirmed unrelated, reproduced against the parent commit
+- [x] Task 7: /integrations card + editor OAuth branch — 6/6 new tests
+- [x] Task 8: Close-out — leak greps clean, full sweep zero-delta
+
+**Review:**
+- Baseline (pre-Task-1, this worktree): 9531 tests / 9440 pass / 78 fail.
+- Final (post-Task-8): 9606 tests / 9515 pass / 78 fail. Delta: +75 tests, +75 pass, fail count UNCHANGED (78 pre-existing DB-connection failures, judged by delta per L-06).
+- `tsc --noEmit`: one pre-existing, unrelated error in `src/app/api/copilot/turn/route.ts:315` (present before this branch's first commit; not touched by this slice).
+- `pnpm check:use-server`: PASS ("All 'use server' files export only async functions / types").
+- Leak greps: `access_token` never appears in a log/console/logger call; `client_secret` appears once in new code (`integrations/actions.ts`, feeding the SIGNED httpOnly state cookie payload per design — never returned to the client or logged) plus unrelated pre-existing Stripe `client_secret` code.
+- No DB migrations. No new npm dependencies.
+- Divergences from the plan (all documented in per-task commit messages and the implementer report): the bind-time bearer swap landed in `template-mcp-server.ts` (not `mcp-actions.ts`, which only holds the deps type); `page.tsx`'s undiscovered-composio guard was widened (not just swapped) to also catch an undiscovered vetted-OAuth binding; `fillBlueprintConnectorsForPersist`'s internal swap uses a dynamic import to avoid a circular static import.
+- Full report: `reports/2026-07-13-circle-implementer-report.md`.
+
+---
+
+## 2026-07-18 — Dependabot #123 split: workflow bundler "use server" incompatibility (worktree zen-sutherland)
+
+Evidence (Phase 1 complete):
+- Vercel build of PR #123 fails: Turbopack, 3× "Server Actions must be async functions" in the
+  generated `.well-known/workflow/v1/step/route.js` — the workflow bundler wraps `"use server"`
+  modules (payments/bookings/emails actions.ts) into sync `__esm({...})` closures, leaving the
+  directive inside a non-async function.
+- Our own `check-use-server` gate PASSES on the same build — source files are clean; the
+  generated bundle is what's invalid. Known upstream pattern: vercel/workflow#817.
+- Dependabot branch is STALE (based before #132 — its diff vs main deletes replay files/specs).
+
+Plan:
+- [x] Root-cause investigation (Vercel log, changelogs, upstream issue #817)
+- [x] Exp A: PR #133 `test/workflow-46-isolation` — ONLY workflow ^4.6.0 + @workflow/next ^4.1.0, next stays 16.2.1 → expect Vercel FAIL
+- [x] Exp B: PR #134 `chore/deps-minor-patch-split` — the other 35 bumps, workflow held at 4.2.4/4.0.5 → expect Vercel GREEN (deliverable)
+- [x] Vercel verdicts: #133 FAIL (identical 3 errors, next pinned 16.2.1 → workflow pair alone reproduces) · #134 GREEN
+- [x] @anthropic-ai/sdk 0.80→0.112.3 compat review → comment on #134 (low risk; deep import verified in 0.112.3; wire-level surfaces unaffected by SDK bump)
+- [x] unit-tests delta vs main: identical 70 failing names (DB-bound baseline) → zero regressions
+- [x] Issue #135 filed (root cause + isolation table + unblock options); #133 closed+branch deleted; #123 commented + closed (superseded)
+- [x] dependabot.yml `ignore:` for workflow/@workflow/next added to #134 (comment-command ignores don't work on grouped PRs)
+- [x] Review section + L-39 + learnings note (docs/learnings/2026-07-18-dependabot-batch-isolation-by-preview-build.md) + memory
+
+**Review (2026-07-18):**
+- Deliverable = split PRs + issue, as specified: **PR #134 OPEN, Vercel preview GREEN, awaiting Max's merge** (human merge gate per CLAUDE.md). Contains: 35 bumps (next 16.2.10, @anthropic-ai/sdk 0.112.3, react 19.2.7, zod 4.4.3, grapesjs 0.23, turbo 2.10, …), workflow held at 4.2.4/4.0.5, dependabot ignores, learnings note.
+- Rebuilt on current main (dependabot branch was stale, based before #132) — lockfile regenerated via `pnpm install --lockfile-only`, no local install churn.
+- Verification: Vercel preview build (the exact failing gate) green on #134; red-CI judged by failing-test-name delta (70 = 70, zero new); #133 negative control failed exactly as predicted.
+- Known-accepted: grapesjs-* plugins peer-warn against grapesjs 0.23 (same combination dependabot shipped; warning only).

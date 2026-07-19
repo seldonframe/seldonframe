@@ -6,7 +6,8 @@
 // 2026-05-20 — Extended: optional one-time setup fee (Phase A).
 
 import type Stripe from "stripe";
-import { GMV_FEE_PERCENT } from "@/lib/billing/gmv";
+import { gmvFeePercentForTier } from "@/lib/billing/gmv";
+import type { BillingTier } from "@/lib/billing/features";
 
 export type BuildCheckoutSessionParamsInput = {
   proposalId: string;
@@ -17,11 +18,20 @@ export type BuildCheckoutSessionParamsInput = {
   setupFeeCents?: number;
   signedToken: string;
   baseUrl: string;
+  /**
+   * 2026-07-10 — the SELLING (agency) org's resolved subscription tier.
+   * Pure input so this function stays DB-free; callers resolve the tier
+   * via the existing billing subscription helper before calling. Omitted
+   * (undefined) callers get the pre-solo default (2%) from
+   * `gmvFeePercentForTier` — see lib/billing/gmv.ts for the tier→fee table.
+   */
+  sellerTier?: BillingTier | null;
 };
 
 export function buildCheckoutSessionParams(
   input: BuildCheckoutSessionParamsInput,
 ): Stripe.Checkout.SessionCreateParams {
+  const feePercent = gmvFeePercentForTier(input.sellerTier);
   const lineItems: Stripe.Checkout.SessionCreateParams.LineItem[] = [];
 
   if (input.setupFeeCents && input.setupFeeCents > 0) {
@@ -64,11 +74,15 @@ export function buildCheckoutSessionParams(
       signed_token: input.signedToken,
     },
     subscription_data: {
-      // 2026-06-22 — 2% GMV application fee on the SMB's OWN sale. This
+      // 2026-06-22 — GMV application fee on the SMB's OWN sale. This
       // checkout is a DIRECT charge on the agency's connected account
       // (the accept route passes { stripeAccount }), so the fee is the
       // platform's cut of the SMB's revenue — NOT the platform $29.
-      application_fee_percent: GMV_FEE_PERCENT,
+      // 2026-07-10 — tier-scoped: 0% on agency tiers ($99+), 2% on solo
+      // tiers (builder/managed) — see gmvFeePercentForTier. Stripe
+      // rejects application_fee_percent: 0 on some account types, so the
+      // field is OMITTED entirely (not set to 0) when the fee is waived.
+      ...(feePercent > 0 ? { application_fee_percent: feePercent } : {}),
       metadata: {
         proposal_id: input.proposalId,
         preview_workspace_id: input.previewWorkspaceId ?? "",

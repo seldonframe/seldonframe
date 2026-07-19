@@ -28,6 +28,11 @@ import { getOrgId } from "@/lib/auth/helpers";
 import { assertWritable } from "@/lib/demo/server";
 import { createAgent } from "@/lib/agents/store";
 import { getAgentTemplate } from "@/lib/agent-templates/store";
+import type { AgentBlueprint } from "@/db/schema/agents";
+import {
+  hasDeclaredTemplateVariables,
+  TEMPLATE_VARIABLES_DEPLOY_GUARD_MESSAGE,
+} from "@/lib/agent-templates/generalize";
 import {
   resolveBuilderAgency,
   listClientOrgsForAgency,
@@ -54,7 +59,8 @@ export type DeployAgentTemplateToClientsResult =
         | "no_agency"
         | "no_client_workspaces"
         | "no_valid_targets";
-    };
+    }
+  | { ok: false; error: "template_variables_unfilled"; message: string };
 
 /**
  * Deploy one of the agency's agent templates to a chosen set of its EXISTING
@@ -80,6 +86,20 @@ export async function deployAgentTemplateToClientsAction(input: {
   const template = await getAgentTemplate(input.templateId);
   if (!template || template.builderOrgId !== agencyOrgId) {
     return { ok: false, error: "template_not_found" };
+  }
+
+  // Review fix (2026-07-16) — this bulk path writes `agents`-table rows
+  // directly via createAgent; it never calls resolveDeploymentPersona, so a
+  // template's declared tokens would ship raw/unresolved or be lost entirely
+  // to every client it's deployed to. No fill form exists on this surface
+  // (that lives on the single-client studio/agents/[id]/deploy wizard) —
+  // reject rather than build a second one here.
+  if (hasDeclaredTemplateVariables(template.blueprint as AgentBlueprint | null)) {
+    return {
+      ok: false,
+      error: "template_variables_unfilled",
+      message: TEMPLATE_VARIABLES_DEPLOY_GUARD_MESSAGE,
+    };
   }
 
   // Resolve the partner agency this builder org owns. No agency → this org has

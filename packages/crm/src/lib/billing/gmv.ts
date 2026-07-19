@@ -28,6 +28,24 @@ export const GMV_FEE_PERCENT = 2;
 export const MARKETPLACE_FEE_PERCENT = 5;
 
 /**
+ * 2026-07-10 — Max's tier-scoped GMV decision: the flat 2% GMV fee applies
+ * ONLY on solo tiers (builder $29 / managed $49) — agency tiers ($99+, incl.
+ * the legacy grandfathered "agency") pay 0%, because the 2% is an UPGRADE
+ * ESCALATOR (crossover ~$3.5k/mo GMV means the agency tier already saves
+ * money), not a tax on agencies who are already paying for whitelabel.
+ * `null`/`undefined`/`inactive` (pre-solo, no subscription yet) still pay 2%
+ * when SF is the sales channel.
+ */
+export function gmvFeePercentForTier(
+  tier: import("./features").BillingTier | null | undefined
+): number {
+  if (tier === "agency_starter" || tier === "agency_growth" || tier === "agency_scale" || tier === "agency") {
+    return 0;
+  }
+  return GMV_FEE_PERCENT;
+}
+
+/**
  * Compute the Stripe `application_fee_amount` (in cents) for an invoice
  * whose item total is `totalCents`. Returns 0 for non-positive / non-
  * finite input — and callers MUST omit the field entirely when this is 0

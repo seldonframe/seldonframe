@@ -19,7 +19,7 @@
 // via the pure renderers. 404 when the job (or named vertical) doesn't resolve,
 // mirroring the HTML page's notFound().
 
-import { getJob, getVertical } from "@/lib/seo/agent-pages";
+import { getJob, getVertical, isKeptPair } from "@/lib/seo/agent-pages";
 import {
   renderAiAgentJobMarkdown,
   renderAiAgentJobVerticalMarkdown,
@@ -46,6 +46,11 @@ export function GET(req: Request): Response {
       vertical = getVertical(verticalSlug);
     } catch {
       return notFoundMd(`/ai-agents/${jobSlug}/for/${verticalSlug}`);
+    }
+    // Folded pair (indexation consolidation, 2026-07-17) — 301 the Markdown
+    // twin to the job hub's, mirroring the HTML page's permanentRedirect.
+    if (!isKeptPair(job.slug, vertical.slug)) {
+      return Response.redirect(new URL(`/ai-agents/${job.slug}.md`, req.url), 308);
     }
   }
 

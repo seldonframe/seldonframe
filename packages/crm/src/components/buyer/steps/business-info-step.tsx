@@ -7,7 +7,7 @@
 // what-you-do, a repeatable services+prices list, and a single open/close hours
 // window. Ported STRUCTURE from the Claude Design onboarding export's "About your
 // business" screen (label stack, accent-soft hours pill, "Add a service"), but
-// re-skinned to the real brand via the BUYER tokens (teal `#00897B`, cream paper,
+// re-skinned to the real brand via the BUYER tokens (teal `#1F2B24`, cream paper,
 // DM Mono for the price + time fields) — none of the export's violet.
 //
 // On save it calls the buyer `saveBusinessInfoAction`, which validates via the

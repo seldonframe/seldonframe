@@ -101,7 +101,7 @@ function AutomationCard({
         <button
           type="button"
           onClick={onToggle}
-          className={`shrink-0 inline-flex items-center gap-1.5 h-7 px-2.5 rounded-full text-xs font-medium transition-colors ${
+          className={`shrink-0 inline-flex items-center gap-1.5 h-7 px-2.5 rounded-[11px] text-xs font-medium transition-colors ${
             active
               ? "bg-primary text-primary-foreground hover:bg-primary/90"
               : "bg-muted text-muted-foreground hover:bg-accent"

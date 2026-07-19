@@ -22,7 +22,7 @@ function Thumb({ src, name }: { src?: string; name: string }) {
  * The public page re-renders on the server; this module just reflects the new
  * `value` your handler persists to theme.landingTemplate.
  */
-export function ReadyDesignModule({ value, autoResolvedId, autoReason, onChange, mobile }: ReadyDesignModuleProps) {
+export function ReadyDesignModule({ value, autoResolvedId, autoReason, onChange, mobile, designs, sectionLabel, autoNote }: ReadyDesignModuleProps) {
   const [open, setOpen] = useState(false);
   const [swapping, setSwapping] = useState(false);
   const [toast, setToast] = useState(false);
@@ -60,10 +60,10 @@ export function ReadyDesignModule({ value, autoResolvedId, autoReason, onChange,
           </div>
         </div>
         <span className="pk-anchor">
-          <button className="rdm-change" aria-expanded={open} aria-haspopup="dialog" onClick={() => setOpen((o) => !o)}>
+          <button type="button" className="rdm-change" aria-expanded={open} aria-haspopup="dialog" onClick={() => setOpen((o) => !o)}>
             Change design <Icon.chevron />
           </button>
-          <DesignPicker open={open} mobile={mobile} placement="bottom-end" value={value} onPick={pick} onClose={() => setOpen(false)} title="Change landing design" />
+          <DesignPicker open={open} mobile={mobile} placement="bottom-end" value={value} onPick={pick} onClose={() => setOpen(false)} title="Change landing design" designs={designs} sectionLabel={sectionLabel} autoNote={autoNote} />
         </span>
       </div>
       <div className={"pk-toast" + (toast ? " show" : "")} role="status">

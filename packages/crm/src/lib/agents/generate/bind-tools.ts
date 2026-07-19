@@ -14,14 +14,20 @@
 //                          binding; serviceName = VETTED_CONNECTORS[id].secretService
 //                          (= "postiz" for Postiz).
 //   • composio entries → { id:<toolkitSlug>, kind:"composio",
-//                          enabledToolkits:[toolkitSlug], enabledTools:[] }. The
-//                          id + toolkit are the REAL Composio slug (catalog.ts) —
-//                          e.g. a "Google Sheet" sentence binds "googledrive".
+//                          enabledToolkits:[toolkitSlug], enabledTools:[the
+//                          toolkit's curated default tools] }. The id + toolkit
+//                          are the REAL Composio slug (catalog.ts) — e.g. a
+//                          "Google Sheet" sentence binds "googledrive".
 //
-// `enabledTools` is left EMPTY here (no live tools/list at generate time): the
-// bind action discovers + caches the per-tool allowlist when the operator
-// actually connects the key (bind.ts buildConnectorBinding). An empty allowlist
-// is the same valid resting state a connector sits in before its first discovery.
+// `enabledTools` is SEEDED with the toolkit's curated default tool list (T6,
+// 2026-07-11): a generated agent gets no later discovery/picker step that
+// would otherwise fill this in — the bind action's discovery (bind.ts
+// buildConnectorBinding) only runs for a HAND-bound connector, when the
+// operator supplies a live key through the Studio editor. Leaving it empty
+// here left every generated agent's composio bindings resolving to zero real
+// tools at runtime (prod-confirmed across orgs for googlecalendar/slack/gmail
+// starters) — the same bug class fixed in compile-agent.ts's
+// bindingForToolkit for from-recording agents.
 //
 // WARNINGS are intentionally always `[]` in this PURE layer. The useful warning
 // ("connect Notion to enable this") needs to know which toolkits the WORKSPACE
@@ -41,6 +47,7 @@ import {
   type ToolCatalogEntry,
 } from "@/lib/agents/generate/tool-catalog";
 import type { ConnectorBinding } from "@/lib/agents/mcp/connectors";
+import { defaultToolsForToolkits } from "@/lib/integrations/composio/catalog";
 
 /** What bindToolsForIntent returns. `connectors` are ready to merge onto
  *  blueprint.connectors; `warnings` is reserved for the action layer (always
@@ -59,7 +66,19 @@ export type BoundTools = {
  *   • vetted   → the hand-bound provisional shape (id + serviceName + empty
  *                allowlist). serviceName === the catalog id for the shipped
  *                vetted entry (Postiz), which is exactly its `secretService`.
- *   • composio → id + enabledToolkits = [the real slug], empty allowlist.
+ *   • composio → id + enabledToolkits = [the real slug], SEEDED with the
+ *                curated default tool list for that toolkit (T6, same class
+ *                of bug as compile-agent.ts's bindingForToolkit): a
+ *                generated agent has no later discovery/picker step that
+ *                fills `enabledTools` in — this binding IS the resting run
+ *                state the agent ships with, so an empty allowlist here
+ *                means zero real tools no matter what the operator connects
+ *                (prod-confirmed: every generated starter's
+ *                googlecalendar/slack/gmail bindings shipped with
+ *                enabledTools:[]). resolveComposioBinding's own empty-means-
+ *                disabled contract is intentionally left unchanged — the
+ *                Studio editor's per-tool disable checkboxes depend on it —
+ *                so the default is applied here, at construction, not there.
  */
 function bindingForEntry(entry: ToolCatalogEntry): ConnectorBinding | null {
   if (entry.connectorKind === "vetted") {
@@ -80,7 +99,7 @@ function bindingForEntry(entry: ToolCatalogEntry): ConnectorBinding | null {
       id: slug,
       kind: "composio",
       enabledToolkits: [slug],
-      enabledTools: [],
+      enabledTools: defaultToolsForToolkits([slug]),
     };
   }
   // Unknown connector kind — not bindable from this pure layer.

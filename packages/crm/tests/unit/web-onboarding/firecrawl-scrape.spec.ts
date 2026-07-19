@@ -62,11 +62,36 @@ describe("firecrawlScrape", () => {
       assert.equal(result.finalUrl, "https://acme-plumbing.com/");
       assert.equal(result.title, "Acme Plumbing | Phoenix, AZ");
     }
-    // Confirm we asked for markdown format + kept onlyMainContent off.
+    // Confirm we asked for markdown + html formats and kept onlyMainContent off.
     assert.equal(calls.length, 1);
     const opts = calls[0]?.opts as { formats?: string[]; onlyMainContent?: boolean } | undefined;
-    assert.deepEqual(opts?.formats, ["markdown"]);
+    assert.deepEqual(opts?.formats, ["markdown", "html"]);
     assert.equal(opts?.onlyMainContent, false);
+  });
+
+  test("surfaces html + og:image + favicon for the image harvester", async () => {
+    const { client } = makeFakeClient(async () => ({
+      markdown: SAMPLE_MARKDOWN,
+      html: '<html><body><img src="/hero.jpg" alt="hero"></body></html>',
+      metadata: {
+        sourceURL: "https://acme-plumbing.com/",
+        title: "Acme",
+        statusCode: 200,
+        ogImage: "https://cdn.acme.com/og.jpg",
+        favicon: "https://acme-plumbing.com/favicon.ico",
+      },
+    }));
+
+    const result = await firecrawlScrape("https://acme-plumbing.com", {
+      firecrawlClient: client,
+    });
+
+    assert.equal(result.ok, true);
+    if (result.ok) {
+      assert.match(result.html ?? "", /hero\.jpg/);
+      assert.equal(result.ogImage, "https://cdn.acme.com/og.jpg");
+      assert.equal(result.favicon, "https://acme-plumbing.com/favicon.ico");
+    }
   });
 
   test("SDK throws -> reason: fetch_failed with detail from error message", async () => {

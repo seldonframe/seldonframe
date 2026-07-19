@@ -1,20 +1,38 @@
 // packages/crm/src/app/pricing/pricing-shell.tsx
 //
-// Interactive /pricing layout: hero + trust signals on the LEFT, plan
-// panel on the RIGHT, sticky CTA at the BOTTOM.
+// Interactive /pricing layout (SF_TIER_LADDER FLAG-OFF path — the
+// legacy dark dashboard-chrome single-card view): hero + trust signals
+// on the LEFT, plan panel on the RIGHT, sticky CTA at the BOTTOM.
+//
+// 2026-07-08 second marketing-branding fix wave — the SF_TIER_LADDER
+// flag-ON rendering was extracted OUT of this file into
+// pricing-shell-marketing.tsx (a light, homepage-branded rebuild; see
+// that file's header for the design). This component (PricingShell)
+// is now the FLAG-OFF path ONLY — page.tsx branches between the two at
+// the top. Kept byte-identical to its pre-branding-fix shape (tests
+// pin it) except for the wave-3 tier:"builder" fix below, which
+// predates and is unrelated to this branding change.
 //
 // 2026-07-04 /pricing truth pass (Task 11): the platform sells exactly
-// ONE plan — $29/mo flat, unlimited workspaces, cancel anytime. The
-// old Builder $19 / Workspace $49 / Agency $297 ladder never shipped to
-// checkout truthfully and is gone. The single card POSTs
-// `{ tier: "workspace" }` to /api/stripe/checkout — that's the
-// allowlisted server-side path that resolves to GROWTH_BASE_PRICE_ID
-// (see route.ts). 2026-07-05: the free ungated build→claim→use
-// experience already IS the trial, so this checkout charges
-// immediately (no trial_period_days) — cancel anytime from Settings.
-// No price id lives in the client. Included-features copy is pulled
-// verbatim from components/landing/marketing-pricing-section.tsx so the
-// authed page and the marketing page never drift.
+// ONE plan — $29/mo flat, unlimited workspaces, cancel anytime.
+// 2026-07-05: the free ungated build→claim→use experience already IS
+// the trial, so this checkout charges immediately (no
+// trial_period_days) — cancel anytime from Settings. No price id lives
+// in the client. Included-features copy is pulled verbatim from
+// components/landing/marketing-pricing-section.tsx so the authed page
+// and the marketing page never drift.
+//
+// 2026-07-08 post-review fix wave (BLOCKING) — the single card now
+// POSTs `{ tier: "builder" }`, NOT `{ tier: "workspace" }`. Task 1's
+// catalog made "workspace" a GRANDFATHERED tier (sellable: false,
+// frozen for existing subscribers only); Task 3's checkout route gates
+// on Plan.sellable flag-INDEPENDENTLY, so a "workspace" POST 409s
+// tier_unavailable for every new visitor regardless of SF_TIER_LADDER.
+// "builder" is the new tier this live card actually represents (spec
+// D1) and is wired to the SAME configured Stripe price
+// (BUILDER_PRICE_ID === WORKSPACE_PRICE_ID as of price-ids.ts, until
+// Max creates a distinct Builder price) — so this is a pure relabel,
+// not a new checkout path or a new Stripe price.
 //
 // Buyer-facing copy rule: never mention GMV / marketplace fees here —
 // that's backend economics, not a buyer-facing plan detail.
@@ -25,7 +43,7 @@ import { useState } from "react";
 import Link from "next/link";
 import { Check } from "lucide-react";
 
-type TierId = "workspace";
+type TierId = "builder";
 
 type Tier = {
   id: TierId;
@@ -39,7 +57,7 @@ type Tier = {
 // Verbatim from marketing-pricing-section.tsx's INCLUDED list — keep in
 // sync if that copy changes.
 const PLAN: Tier = {
-  id: "workspace",
+  id: "builder",
   name: "SeldonFrame",
   price: "$29",
   cadence: "/ mo",

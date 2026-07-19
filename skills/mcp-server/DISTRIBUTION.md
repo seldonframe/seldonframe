@@ -132,10 +132,10 @@ in the HTML so I can't quote it here verbatim)*
 >   library (speed-to-lead, win-back, review-requester,
 >   missed-call-text-back, etc.) ships event-triggered automations
 >   on a typed SeldonEvent bus.
-> - **Live demo:** https://phoenix-ac-air-conditioning-heating-inc
->   .app.seldonframe.com — generated 2026-05-10 from a single
->   Google Maps paste. The chatbot bottom-right books real
->   appointments in `America/Phoenix` time.
+> - **Live demo:** https://j-marin-heating-air-conditioning-9599
+>   .app.seldonframe.com — a live generated workspace.
+>   The chatbot bottom-right books real
+>   appointments against the workspace calendar.
 > - **Pricing:** Free tier (no credit card), $29/$99 paid plans,
 >   AGPL-3.0 self-host.
 >

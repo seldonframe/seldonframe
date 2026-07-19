@@ -1,12 +1,14 @@
 // packages/crm/tests/unit/web-onboarding/clients-new-form.spec.tsx
 //
-// Bootstrap: run with `node --import tsx --import ./tests/setup-dom.ts --test ...`
-// (see packages/crm/tests/setup-dom.ts). jsdom mounts before React imports so
-// the form's Input/Button primitives and the UpgradeModal Dialog have a real DOM.
+// Bootstrap: the setup-dom import below MUST stay first — it mounts jsdom
+// before React imports so the form's Input/Button primitives and the
+// UpgradeModal Dialog have a real DOM (the CI runner passes no --import flag).
 //
 // Query discipline: base-ui mirrors some content into SR-only nodes. Use
 // queryAllByText for presence-only checks and getByRole / getByPlaceholderText
 // for click/change targets (same pattern as upgrade-modal.spec.tsx).
+import "../../setup-dom";
+
 import { describe, test, beforeEach, afterEach } from "node:test";
 import assert from "node:assert/strict";
 import { render, screen, fireEvent, act, cleanup } from "@testing-library/react";
@@ -30,6 +32,11 @@ class FakeEventSource {
   }
   addEventListener(event: string, fn: Listener) {
     (this.listeners[event] ??= []).push(fn);
+  }
+  removeEventListener(event: string, fn: Listener) {
+    const list = this.listeners[event];
+    if (!list) return;
+    this.listeners[event] = list.filter((l) => l !== fn);
   }
   close() {
     this.closed = true;
@@ -66,7 +73,15 @@ describe("ClientsNewForm", () => {
     cleanup();
   });
 
-  test("submits, opens EventSource, renders progress checkmarks as events arrive", async () => {
+  // The build-stage-v2.tsx header comment documents that v2 deliberately
+  // replaced the v1 per-event checkmark list ("Per-phase fixed sprite
+  // frames (the v1 pattern) — v2 is a single archetype-aware canvas") with
+  // a 6-phase canvas driven by EVENT_TO_MIN_PHASE. `fetching`/`extracting`
+  // both map to phase 0 (SCAN), and `soul_built` advances to phase 1
+  // (IDENTITY) — there is no `data-testid="progress-*"` markup left to
+  // query. This test was rewritten to assert against the live signal: the
+  // active phase panel's `data-phase` index via its `is-active` class.
+  test("submits, opens EventSource, advances the phase panel as events arrive", async () => {
     render(<ClientsNewForm />);
     fireEvent.change(screen.getByPlaceholderText(/https:\/\//i), {
       target: { value: "https://acme.com" },
@@ -81,15 +96,28 @@ describe("ClientsNewForm", () => {
     );
 
     act(() => es!.fire("fetching", { url: "https://acme.com" }));
-    assert.equal(
-      screen.getByTestId("progress-fetching").getAttribute("data-state"),
-      "done",
+    act(() => es!.fire("extracting", {}));
+    const scanPanel = document.querySelector('[data-phase="0"]');
+    assert.ok(scanPanel, "SCAN phase panel (data-phase=0) not rendered");
+    assert.ok(
+      scanPanel!.className.includes("is-active"),
+      "SCAN phase should be active after fetching/extracting events",
+    );
+    // Phase 0 is active at mount too (phaseIndex starts at 0), so the real
+    // event-driven proof is the phase-1 transition: NOT active before
+    // soul_built, active after.
+    const identityPanel = document.querySelector('[data-phase="1"]');
+    assert.ok(identityPanel, "IDENTITY phase panel (data-phase=1) not rendered");
+    assert.ok(
+      !identityPanel!.className.includes("is-active"),
+      "IDENTITY phase must not be active before soul_built",
     );
 
-    act(() => es!.fire("extracting", {}));
-    assert.equal(
-      screen.getByTestId("progress-extracting").getAttribute("data-state"),
-      "done",
+    act(() => es!.fire("soul_built", { workspaceId: "ws_test" }));
+    const identityPanelAfter = document.querySelector('[data-phase="1"]');
+    assert.ok(
+      identityPanelAfter!.className.includes("is-active"),
+      "IDENTITY phase should become active after soul_built",
     );
   });
 
@@ -148,5 +176,98 @@ describe("ClientsNewForm", () => {
 
     assert.ok(screen.getByRole("alert"), "Error banner rendered with role=alert");
     assert.equal(input.value, "https://acme.com", "URL preserved on error");
+  });
+
+  // 2026-07-16 — credits_exhausted honesty fix (same class as the /try fix in
+  // PR #112). Out-of-credits is NOT an unreadable site: showing "We couldn't
+  // read that site. Try a different URL" sends the operator hunting for a
+  // better homepage when the real fix is adding credits to the Anthropic key.
+  // The server's 422 payload carries an honest `message` — show it verbatim.
+  test("on 422 credits_exhausted the banner shows the server's honest message, not the extraction copy", async () => {
+    render(<ClientsNewForm />);
+    fireEvent.change(screen.getByPlaceholderText(/https:\/\//i), {
+      target: { value: "https://acme.com" },
+    });
+    fireEvent.click(screen.getByRole("button", { name: /build workspace/i }));
+
+    const serverMessage =
+      "The AI account powering this build is out of credits, so retrying won't help right now.";
+    const es = FakeEventSource.last;
+    act(() =>
+      es!.fire("error", {
+        code: 422,
+        reason: "credits_exhausted",
+        message: serverMessage,
+      }),
+    );
+
+    const banner = screen.getByRole("alert");
+    assert.ok(
+      banner.textContent!.includes(serverMessage),
+      `banner must show the server message; got: ${banner.textContent}`,
+    );
+    assert.ok(
+      !banner.textContent!.includes("couldn't read that site"),
+      "the extraction_failed copy must NOT appear for credits_exhausted",
+    );
+  });
+
+  test("on 422 credits_exhausted WITHOUT a message the banner falls back to dedicated credits copy", async () => {
+    render(<ClientsNewForm />);
+    fireEvent.change(screen.getByPlaceholderText(/https:\/\//i), {
+      target: { value: "https://acme.com" },
+    });
+    fireEvent.click(screen.getByRole("button", { name: /build workspace/i }));
+
+    const es = FakeEventSource.last;
+    act(() => es!.fire("error", { code: 422, reason: "credits_exhausted" }));
+
+    const banner = screen.getByRole("alert");
+    // The operator here may be on their own BYOK key — the fallback copy must
+    // point at adding credits to their Anthropic key, not at trying a new URL.
+    assert.match(
+      banner.textContent!,
+      /credits/i,
+      "fallback copy must mention credits",
+    );
+    assert.match(
+      banner.textContent!,
+      /anthropic/i,
+      "fallback copy must point at the Anthropic key",
+    );
+    assert.ok(
+      !banner.textContent!.includes("couldn't read that site"),
+      "the extraction_failed copy must NOT appear for credits_exhausted",
+    );
+  });
+
+  test("paste path: on 422 credits_exhausted the banner shows the server's honest message", async () => {
+    render(<ClientsNewForm />);
+    // Switch to the paste tab and submit ≥20 chars (idle-scene's biz minimum).
+    fireEvent.click(screen.getByRole("tab", { name: /no website/i }));
+    fireEvent.change(screen.getByLabelText(/business information/i), {
+      target: { value: "Acme Plumbing in Phoenix, AZ. Drain cleaning. (602) 555-0100." },
+    });
+    fireEvent.click(screen.getByRole("button", { name: /build workspace/i }));
+
+    const es = FakeEventSource.last;
+    assert.ok(es, "EventSource was constructed");
+    assert.match(es!.url, /\/api\/v1\/web\/workspaces\/create-from-paste\?/);
+
+    const serverMessage =
+      "The AI account powering this build is out of credits, so retrying won't help right now.";
+    act(() =>
+      es!.fire("error", {
+        code: 422,
+        reason: "credits_exhausted",
+        message: serverMessage,
+      }),
+    );
+
+    const banner = screen.getByRole("alert");
+    assert.ok(
+      banner.textContent!.includes(serverMessage),
+      `paste-path banner must show the server message; got: ${banner.textContent}`,
+    );
   });
 });

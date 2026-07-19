@@ -24,6 +24,8 @@ import type { AestheticArchetypeId } from "@/lib/workspace/aesthetic-archetypes"
 import type { R1LandingPayload } from "./r1-payload-prompt";
 import { normalizeTheme } from "@/lib/theme/normalize-theme";
 import type { OrgTheme } from "@/lib/theme/types";
+import { ARCHETYPES } from "@/lib/workspace/aesthetic-archetypes";
+import { applyLiveArchetype } from "./apply-live-archetype";
 
 const R1_SLUG = "r1";
 const R1_STATUS = "published"; // public immediately, no gate
@@ -166,10 +168,33 @@ export async function loadLandingPayload(workspaceSlug: string): Promise<{
   const bjson = row.blueprintJson as Record<string, unknown>;
   if (bjson["_r1"] !== true) return null;
 
-  const payload = bjson["payload"] as R1LandingPayload | undefined;
-  const archetype = bjson["archetype"] as AestheticArchetypeId | undefined;
+  const payloadRaw = bjson["payload"] as R1LandingPayload | undefined;
+  const archetypeRaw = bjson["archetype"] as AestheticArchetypeId | undefined;
 
-  if (!payload || !archetype) return null;
+  if (!payloadRaw || !archetypeRaw) return null;
+
+  // 2026-07-15 — LIVE ARCHETYPE AT THE SOURCE: the payload freezes the
+  // archetype into many fields at generation time (top-level + per-section),
+  // but the design picker / SeldonChat's update_design only ever write
+  // theme.aestheticArchetype. Normalize here, once, so EVERY consumer of
+  // loadLandingPayload (both public routes, and any future one) re-skins
+  // uniformly instead of relying on each render site to override its own
+  // field (that per-route drift was the bug — see
+  // docs/superpowers/specs/2026-07-15-live-archetype-at-source-design.md).
+  // The frozen payload value remains the fallback when the org theme has no
+  // archetype yet (pre-1.54 workspaces) or already matches — no-op either way.
+  const liveArchetype = theme.aestheticArchetype;
+  const hasLiveOverride =
+    typeof liveArchetype === "string" &&
+    liveArchetype in ARCHETYPES &&
+    liveArchetype !== archetypeRaw;
+
+  const payload = hasLiveOverride
+    ? applyLiveArchetype(payloadRaw, liveArchetype)
+    : payloadRaw;
+  const archetype = hasLiveOverride
+    ? (liveArchetype as AestheticArchetypeId)
+    : archetypeRaw;
 
   const seoRaw = (row.seo ?? {}) as Record<string, unknown>;
   return {

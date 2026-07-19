@@ -16,6 +16,10 @@
       "schedule": "0 4 * * *"
     },
     {
+      "path": "/api/cron/gc-seldonchat-blobs",
+      "schedule": "30 4 * * *"
+    },
+    {
       "path": "/api/cron/workflow-tick",
       "schedule": "* * * * *"
     },
@@ -50,6 +54,22 @@
     {
       "path": "/api/cron/voice-rent",
       "schedule": "0 6 1 * *"
+    },
+    {
+      "path": "/api/cron/usage-caps",
+      "schedule": "0 7 * * *"
+    },
+    {
+      "path": "/api/cron/replay-heartbeat",
+      "schedule": "30 7 * * *"
+    },
+    {
+      "path": "/api/cron/payment-dunning",
+      "schedule": "0 8 * * *"
+    },
+    {
+      "path": "/api/cron/indexnow",
+      "schedule": "0 8 * * 1"
     }
   ]
 }

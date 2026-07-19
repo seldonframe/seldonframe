@@ -9,10 +9,12 @@
 
 import { useMemo, useState } from "react";
 
-// Flat platform price (finalized 2026-06-21): $29/mo, unlimited workspaces.
-// The GMV fee only applies when SeldonFrame is the sales channel — reselling
-// to your own clients goes through your brand, so it isn't taxed here.
-const SF_PLAN_COST = 29; // $29/mo flat
+// Agency pitch prices from Agency Starter (2026-07-10 GMV restructure):
+// $99/mo — white-label, branded client portal, 10 client sub-accounts
+// ($199 for 30, $299 unlimited). Agency-tier plans pay 0% GMV — the 2%
+// solo-tier fee only applies when SeldonFrame is the sales channel on
+// Builder/Managed, so it never taxes agency resale here.
+const SF_PLAN_COST = 99; // Agency Starter, $99/mo flat
 
 function fmtUsd(n: number): string {
   return "$" + Math.round(n).toLocaleString();
@@ -41,20 +43,20 @@ export function MarketingAgencyMath() {
       <div className="mx-auto max-w-[1120px]">
         {/* Audience divider — the supply-side / builder rung (where "agencies" live). */}
         <div className="mb-12 border-b border-[rgba(255,255,255,.12)] pb-8 text-center md:mb-14">
-          <span className="inline-flex items-center gap-2.5 rounded-full border border-[rgba(111,194,143,.30)] bg-[rgba(111,194,143,.10)] px-4 py-1.5 text-[11.5px] font-[700] uppercase tracking-[0.14em] text-[#6fc28f]">
-            <span className="size-1.5 rounded-full bg-[#6fc28f]" aria-hidden />
+          <span className="inline-flex items-center gap-2.5 rounded-full border border-[rgba(246, 242, 234,.30)] bg-[rgba(246, 242, 234,.10)] px-4 py-1.5 text-[11.5px] font-[700] uppercase tracking-[0.14em] text-[#F6F2EA]">
+            <span className="size-1.5 rounded-full bg-[#F6F2EA]" aria-hidden />
             For builders &amp; agencies
           </span>
           <p className="mx-auto mt-4 max-w-[48ch] font-[Newsreader,Georgia,serif] text-[clamp(18px,2.4vw,24px)] italic leading-[1.35] text-[rgba(246,242,234,.82)]">
-            Build agents for a living? List them — or run unlimited client workspaces under your own brand.
+            Build agents for a living? List them — or run client workspaces under your own brand on the Agency plan.
           </p>
         </div>
 
         {/* Section head */}
         <div className="grid grid-cols-1 items-start gap-10 min-[900px]:grid-cols-[1.1fr_.9fr] min-[900px]:gap-14">
           <div>
-            <div className="inline-flex items-center gap-2.5 text-[12px] font-[600] uppercase tracking-[0.09em] text-[rgba(111,194,143,.9)]">
-              <span className="h-px w-4 bg-[rgba(111,194,143,.5)]" aria-hidden />
+            <div className="inline-flex items-center gap-2.5 text-[12px] font-[600] uppercase tracking-[0.09em] text-[rgba(246, 242, 234,.9)]">
+              <span className="h-px w-4 bg-[rgba(246, 242, 234,.5)]" aria-hidden />
               Build &amp; sell
             </div>
             <h2 className="mt-3.5 text-[clamp(27px,4.2vw,40px)] font-[500] leading-[1.08] tracking-[-0.025em] text-[#F6F2EA]">
@@ -65,9 +67,10 @@ export function MarketingAgencyMath() {
             </h2>
             <p className="mt-4 max-w-[50ch] text-[15.5px] leading-[1.55] text-[rgba(246,242,234,.74)]">
               Build an AI agent for your business — then list it so other businesses can install it.
-              The marketplace puts it in front of them; you earn without marketing it. Run unlimited
-              client workspaces under your brand for one flat{" "}
-              <strong className="font-[600] text-[#F6F2EA]">$29/mo</strong>.
+              The marketplace puts it in front of them; you earn without marketing it. On the Agency
+              plan (from{" "}
+              <strong className="font-[600] text-[#F6F2EA]">$99/mo</strong>), run client workspaces
+              under your own brand — white-label, branded client portal, 10 sub-accounts included.
             </p>
 
             {/* Builder perks list */}
@@ -75,14 +78,14 @@ export function MarketingAgencyMath() {
               {[
                 "List your agent on the marketplace — earn without marketing it",
                 "Build any agent in the Studio, in plain English — voice, SMS, chat & email",
-                "Your brand on the entire platform — clients never see SeldonFrame",
+                "From $99/mo: your brand on the entire platform — clients never see SeldonFrame",
                 "Set your own per-client pricing and keep the spread",
-                "Unlimited client workspaces on the flat $29/mo — no per-seat tax",
-                "Onboard a new client in 60 seconds from a URL",
+                "10 client sub-accounts on Agency Starter ($99/mo) — 30 on Growth, unlimited on Scale",
+                "Onboard a new client in 3 minutes from a URL",
               ].map((item) => (
                 <li key={item} className="flex items-start gap-3 text-[14px] leading-[1.5] text-[rgba(246,242,234,.82)]">
-                  <span className="mt-0.5 flex size-[18px] shrink-0 items-center justify-center rounded-full bg-[#1F2B24] border border-[rgba(111,194,143,.35)]">
-                    <span className="text-[10px] font-[700] text-[#6fc28f]">✓</span>
+                  <span className="mt-0.5 flex size-[18px] shrink-0 items-center justify-center rounded-full bg-[#1F2B24] border border-[rgba(246, 242, 234,.35)]">
+                    <span className="text-[10px] font-[700] text-[#F6F2EA]">✓</span>
                   </span>
                   {item}
                 </li>
@@ -90,17 +93,16 @@ export function MarketingAgencyMath() {
             </ul>
 
             <a
-              href="/signup?plan=agency"
-              className="mt-8 inline-flex items-center gap-2.5 rounded-full bg-[#F6F2EA] px-6 py-3.5 text-[15px] font-[500] text-[#1F2B24] shadow-[0_1px_2px_rgba(0,0,0,.2),0_12px_30px_rgba(0,0,0,.25),inset_0_1.5px_0_rgba(255,255,255,.6)] transition-all hover:-translate-y-[1.5px]"
+              href="/pricing"
+              className="mt-8 inline-flex items-center gap-2.5 rounded-[11px] bg-[#F6F2EA] px-6 py-3.5 text-[15px] font-[500] text-[#1F2B24] shadow-[0_1px_2px_rgba(0,0,0,.2),0_12px_30px_rgba(0,0,0,.25),inset_0_1.5px_0_rgba(255,255,255,.6)] transition-all hover:-translate-y-[1.5px]"
             >
-              <span className="size-[7px] rounded-full bg-[#00897B]" aria-hidden />
-              Start the Agency plan
+              See agency plans &rarr;
             </a>
           </div>
 
           {/* Calculator */}
           <div className="rounded-[24px] border border-[rgba(255,255,255,.08)] bg-[rgba(255,255,255,.05)] p-6 shadow-[0_24px_60px_rgba(0,0,0,.25)]">
-            <p className="m-0 font-sans text-[11px] font-[600] uppercase tracking-[0.12em] text-[rgba(111,194,143,.8)]">
+            <p className="m-0 font-sans text-[11px] font-[600] uppercase tracking-[0.12em] text-[rgba(246, 242, 234,.8)]">
               The agency math
             </p>
             <p className="mt-1 text-[13px] text-[rgba(246,242,234,.55)]">
@@ -141,7 +143,7 @@ export function MarketingAgencyMath() {
               <ResultCell label="Monthly recurring" value={fmtUsd(results.mrr)} sub={`${fmtUsd(results.mrr * 12)} / year`} />
               <ResultCell label="Setup pool" value={fmtUsd(results.setupPool)} sub="One-time" />
               <ResultCell label="Year-1 total" value={fmtUsd(results.year1)} sub="MRR × 12 + setup" positive />
-              <ResultCell label="Gross margin" value={`${Math.round(results.margin * 100)}%`} sub={`after $${SF_PLAN_COST}/mo + 2% on SeldonFrame sales`} positive />
+              <ResultCell label="Gross margin" value={`${Math.round(results.margin * 100)}%`} sub={`after $${SF_PLAN_COST}/mo — agency plans pay 0% GMV`} positive />
             </div>
 
             <p className="mt-3 text-[11.5px] leading-[1.5] text-[rgba(246,242,234,.35)]">
@@ -168,16 +170,16 @@ export function MarketingAgencyMath() {
           appearance: none;
           width: 22px;
           height: 22px;
-          background: #00897B;
+          background: #1F2B24;
           border: 3px solid #1F2B24;
           border-radius: 50%;
           cursor: pointer;
-          box-shadow: 0 4px 14px rgba(0,137,123,.4);
+          box-shadow: 0 4px 14px rgba(31, 43, 36,.4);
         }
         .roi-slider::-moz-range-thumb {
           width: 22px;
           height: 22px;
-          background: #00897B;
+          background: #1F2B24;
           border: 3px solid #1F2B24;
           border-radius: 50%;
           cursor: pointer;
@@ -240,7 +242,7 @@ function ResultCell({
       <span className="font-sans text-[10px] font-[500] uppercase tracking-[0.08em] text-[rgba(246,242,234,.45)]">
         {label}
       </span>
-      <span className={`font-sans text-[clamp(22px,3vw,28px)] font-[600] leading-none tracking-[-0.02em] tabular-nums ${positive ? "text-[#6fc28f]" : "text-[#FFFDFA]"}`}>
+      <span className={`font-sans text-[clamp(22px,3vw,28px)] font-[600] leading-none tracking-[-0.02em] tabular-nums ${positive ? "text-[#F6F2EA]" : "text-[#FFFDFA]"}`}>
         {value}
       </span>
       <span className="font-sans text-[11px] text-[rgba(246,242,234,.40)]">{sub}</span>
