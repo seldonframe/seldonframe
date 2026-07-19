@@ -406,6 +406,17 @@ export function MarketingHero({
             aria-label="Describe the business"
             className="block max-h-60 min-h-[110px] w-full resize-none border-0 bg-transparent font-sans text-[15px] leading-[1.55] tracking-[-0.005em] text-[#221D17] caret-[#1F2B24] outline-none placeholder:text-[#9A9183]"
           />
+          {/* Persona-loop 2026-07-19: the URL tab gets an instant, no-signup
+              build via /try (heroSubmitTarget), but this tab always routes to
+              /signup — a business with no real website (the common case this
+              tab exists for) hit an unadvertised signup wall after describing
+              their business, right after the page promised "Build it free".
+              Say so up front instead of surprising them at submit time. */}
+          {ungatedBuildEnabled ? (
+            <p className="pb-1 pt-1.5 text-[12px] leading-[1.4] text-[#9A9183]">
+              We&apos;ll email you a magic link to start the build — no password, takes 10 seconds.
+            </p>
+          ) : null}
         </div>
 
         {/* Bottom action row */}
