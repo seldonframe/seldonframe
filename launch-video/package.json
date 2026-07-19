@@ -1,0 +1,24 @@
+{
+  "name": "seldonframe-launch-video",
+  "version": "1.0.0",
+  "private": true,
+  "description": "Remotion launch video for SeldonFrame — renders MP4s, no editor needed",
+  "scripts": {
+    "studio": "remotion studio",
+    "render": "remotion render Master out/master-16x9.mp4",
+    "render:vertical": "remotion render MasterVertical out/master-9x16.mp4",
+    "render:reelier": "remotion render ReelierExplainer out/reelier-explainer.mp4",
+    "still": "remotion still"
+  },
+  "dependencies": {
+    "@remotion/cli": "4.0.257",
+    "@remotion/google-fonts": "4.0.257",
+    "react": "18.3.1",
+    "react-dom": "18.3.1",
+    "remotion": "4.0.257"
+  },
+  "devDependencies": {
+    "@types/react": "18.3.12",
+    "typescript": "5.6.3"
+  }
+}
