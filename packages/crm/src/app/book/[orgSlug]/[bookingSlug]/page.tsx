@@ -1,5 +1,6 @@
 import { and, eq, or } from "drizzle-orm";
 import { notFound } from "next/navigation";
+import type { Metadata } from "next";
 import { PoweredByBadge } from "@seldonframe/core/virality";
 import { db } from "@/db";
 import { bookings, landingPages, organizations } from "@/db/schema";
@@ -90,6 +91,40 @@ function extractBusinessPhone(soul: unknown): string | null {
     if (typeof c === "string" && c.trim().length > 0) return c.trim();
   }
   return null;
+}
+
+// persona-loop finding (2026-07-20): this route had no generateMetadata
+// export, so Next.js fell back to the root layout's <title>/OG tags —
+// SeldonFrame's own marketing copy ("Open-source alternative to
+// GoHighLevel", $29/mo pricing) — on the client's own public booking page.
+// A plumber sharing their booking link would have their customers see
+// SeldonFrame's branding in the browser tab and link preview instead of
+// their own business name. Mirrors the working pattern in
+// app/(public)/s/[orgSlug]/[...slug]/page.tsx.
+export async function generateMetadata({
+  params,
+}: {
+  params: Promise<{ orgSlug: string; bookingSlug: string }>;
+}): Promise<Metadata> {
+  const { orgSlug, bookingSlug } = await params;
+  const bookingContext = await getPublicBookingContext(orgSlug, bookingSlug);
+  if (!bookingContext) return {};
+
+  const [orgRow] = await db
+    .select({ name: organizations.name })
+    .from(organizations)
+    .where(eq(organizations.id, bookingContext.orgId))
+    .limit(1);
+  const businessName = orgRow?.name ?? "Schedule";
+  const title = `Book ${bookingContext.appointmentName} — ${businessName}`;
+  const description =
+    bookingContext.appointmentDescription || `Schedule an appointment with ${businessName}.`;
+
+  return {
+    title,
+    description,
+    openGraph: { title, description, type: "website" },
+  };
 }
 
 export default async function PublicBookingPage({
