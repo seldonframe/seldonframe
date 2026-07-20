@@ -44,18 +44,18 @@ export const R1Hook: React.FC = () => {
           style={{
             fontFamily: R_FONT_SANS,
             fontWeight: 600,
-            fontSize: 52,
+            fontSize: 74,
             letterSpacing: '-0.01em',
-            lineHeight: 1.2,
+            lineHeight: 1.22,
             color: R.text,
             textAlign: 'center',
-            maxWidth: 1100,
+            maxWidth: 1400,
             opacity: rFade(frame, 48, 14),
           }}
         >
-          Your agent forgets everything.
+          <span style={{color: R.muted}}>Agents make claims.</span>
           <br />
-          <span style={{color: R.muted}}>Every run.</span>
+          Reelier writes receipts.
         </div>
       </div>
     </RStage>

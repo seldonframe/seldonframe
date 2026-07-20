@@ -134,7 +134,7 @@ export const RCard: React.FC<{width: number; height?: number; title?: string; st
           style={{
             marginLeft: 8,
             fontFamily: R_FONT_MONO,
-            fontSize: 15,
+            fontSize: 20,
             color: R.faint,
           }}
         >
@@ -160,13 +160,13 @@ export const RChip: React.FC<{outcome: 'passed' | 'unchecked' | 'failed'; childr
       style={{
         display: 'inline-flex',
         alignItems: 'center',
-        gap: 10,
-        padding: '8px 16px',
+        gap: 12,
+        padding: '12px 22px',
         borderRadius: 4,
         border: `1px solid ${color}`,
         background: tint,
         fontFamily: R_FONT_MONO,
-        fontSize: 22,
+        fontSize: 30,
         color: R.text,
         ...style,
       }}
@@ -193,7 +193,7 @@ export const RCaption: React.FC<{at: number; children: React.ReactNode}> = ({at,
       style={{
         display: 'inline-block',
         fontFamily: R_FONT_SANS,
-        fontSize: 34,
+        fontSize: 46,
         fontWeight: 600,
         letterSpacing: '-0.01em',
         color: R.text,

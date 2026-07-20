@@ -34,13 +34,15 @@ export const R = {
 
 export const R_FPS = 30;
 
-// Scene durations in frames @ 30fps. Sum = 660f = 22.0s (within the 18-22s brief).
+// Scene durations in frames @ 30fps. Sum = 660f = 22.0s exactly — the
+// landing's "Watch it work · 22s" label and modal title depend on it.
+// Story = the landing triad: record → replay → diff, receipts throughout.
 export const R_SCENES = {
-  hook: 90, // 0-3s
-  record: 150, // 3-8s
-  compile: 120, // 8-12s
-  replay: 120, // 12-16s
-  proof: 180, // 16-22s (numbers + end card)
+  hook: 100, // 0-3.3s — H1: agents make claims / reelier writes receipts
+  record: 145, // 3.3-8.2s — reelier init records the run that worked
+  replay: 165, // 8.2-13.7s — 0 tokens, byte-identical, receipt per step
+  diff: 145, // 13.7-18.5s — SAME / DRIFTED per step, exit 1 on drift
+  proof: 105, // 18.5-22s — $0.019 vs $0.95 + end card
 } as const;
 
 export const R_TOTAL_FRAMES = Object.values(R_SCENES).reduce((a, v) => a + v, 0);
