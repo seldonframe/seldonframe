@@ -6,7 +6,7 @@ Strategic commissions the weekly content-loop must publish ahead of its research
 
 ## 2. Is GEO legit? (the practitioner's answer)
 
-- **status:** queued
+- **status:** shipped: 2026-07-15 is-geo-legit
 - **commissioned:** 2026-07-09 (by Max)
 - **slug:** `is-geo-legit`
 - **working title:** "Is GEO (Generative Engine Optimization) Legit, or Just SEO Rebranded? A Practitioner's Answer"
