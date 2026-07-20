@@ -406,6 +406,12 @@ export function MarketingHero({
             aria-label="Describe the business"
             className="block max-h-60 min-h-[110px] w-full resize-none border-0 bg-transparent font-sans text-[15px] leading-[1.55] tracking-[-0.005em] text-[#221D17] caret-[#1F2B24] outline-none placeholder:text-[#9A9183]"
           />
+          {ungatedBuildEnabled ? (
+            <p className="pb-1 text-[12px] leading-[1.4] text-[#9A9183]">
+              Free account, no card — the URL tab builds instantly; this one asks for a quick
+              signup first, then you&apos;ll watch it build.
+            </p>
+          ) : null}
         </div>
 
         {/* Bottom action row */}
