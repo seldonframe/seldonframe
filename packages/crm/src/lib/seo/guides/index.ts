@@ -42,6 +42,7 @@ import { guide as howToShowUpInAiSearch } from "./how-to-show-up-in-ai-search";
 import { guide as localSeoVsGeo } from "./local-seo-vs-geo";
 import { guide as whatIsAnswerEngineOptimization } from "./what-is-answer-engine-optimization";
 import { guide as whatIsGenerativeEngineOptimization } from "./what-is-generative-engine-optimization";
+import { guide as isGeoLegit } from "./is-geo-legit";
 import { guide as isYourWebsiteLosingYouJobs } from "./is-your-website-losing-you-jobs";
 import { guide as howToMakeAWebsiteForAServiceBusiness } from "./how-to-make-a-website-for-a-service-business";
 import { guide as onlineBookingOptionsForServiceBusinesses } from "./online-booking-options-for-service-businesses";
@@ -156,6 +157,7 @@ export const GUIDES: Guide[] = [
   localSeoVsGeo,
   whatIsAnswerEngineOptimization,
   whatIsGenerativeEngineOptimization,
+  isGeoLegit,
   isYourWebsiteLosingYouJobs,
   howToMakeAWebsiteForAServiceBusiness,
   onlineBookingOptionsForServiceBusinesses,
