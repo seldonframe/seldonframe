@@ -1,0 +1,43 @@
+<!doctype html>
+<html><head><meta charset="utf-8"><style>
+  * { margin:0; padding:0; box-sizing:border-box; }
+  body { background:#333; }
+  .card { position:absolute; top:0; left:0; width:1500px; height:600px;
+    background:radial-gradient(1400px 900px at 18% 0%, #12121c 0%, #0a0a0f 60%);
+    color:#ececf1; font-family:"Segoe UI",-apple-system,sans-serif; padding:46px 68px;
+    display:flex; flex-direction:column; justify-content:space-between; overflow:hidden; }
+  .card::after { content:""; position:absolute; inset:0; border:1px solid rgba(255,255,255,0.07); }
+  .kicker { font-size:19px; letter-spacing:0.16em; text-transform:uppercase; color:#8b8b9e; font-weight:600; }
+  .flow { display:flex; align-items:stretch; gap:11px; margin-top:8px; }
+  .node { background:#15151f; border:1px solid #2a2a3a; border-radius:12px; padding:14px 15px; flex:1; position:relative; }
+  .node .who { font-size:12px; letter-spacing:0.08em; text-transform:uppercase; font-weight:700; margin-bottom:6px; color:#7c7cf3; }
+  .node .t { font-size:18px; font-weight:700; color:#fff; margin-bottom:5px; }
+  .node .d { font-size:13px; color:#9a9aac; line-height:1.38; }
+  .arr { display:flex; align-items:center; font-size:20px; color:#4a4a5c; }
+  .safety { margin-top:14px; display:flex; align-items:center; gap:14px; }
+  .safetybox { border:1px dashed #e8b04b; border-radius:10px; padding:11px 16px; color:#e8b04b; font-size:15px; font-weight:600; flex:1; }
+  .safetybox b { color:#f5d090; }
+  .safetybox span { display:block; color:#9a9aac; font-weight:400; font-size:13px; margin-top:3px; }
+  .foot { display:flex; justify-content:space-between; align-items:baseline; }
+  .note { font-size:16px; color:#8b8b9e; } .note b { color:#d6d6e0; }
+  .brand { font-size:19px; color:#5c5c6e; font-weight:600; }
+</style></head>
+<body><div class="card">
+  <div class="kicker">Reelier — 9 PRs, 2 days, so my agent stops re-deciding</div>
+  <div>
+    <div class="flow">
+      <div class="node"><div class="who">#128</div><div class="t">observe</div><div class="d">record every real agent<br>run as a trace</div></div>
+      <div class="arr">→</div>
+      <div class="node"><div class="who">#129</div><div class="t">compile</div><div class="d">traces → skills, L0<br>replay-before-LLM</div></div>
+      <div class="arr">→</div>
+      <div class="node"><div class="who">#132 #136</div><div class="t">classify</div><div class="d">tool-effect allowlist,<br>MCP-prefix fix, redaction</div></div>
+      <div class="arr">→</div>
+      <div class="node"><div class="who">#140</div><div class="t">trigger vars</div><div class="d">last slice before<br>first prod replay</div></div>
+    </div>
+    <div class="safety">
+      <div class="safetybox"><b>#144 gate v2 — claim ledger</b><span>a Postgres UNIQUE-violation IS the lock. redelivered send converges, never doubles.</span></div>
+      <div class="safetybox"><b>#143 /replay · #145 heartbeat</b><span>a dashboard to see it, a cron to page me if it goes silent >24h</span></div>
+    </div>
+  </div>
+  <div class="foot"><div class="note">both flags still off in prod. <b>the safety net had to ship before the switch.</b></div><div class="brand">@themaxthule</div></div>
+</div></body></html>
