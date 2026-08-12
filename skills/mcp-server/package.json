@@ -23,7 +23,7 @@
     "build:mcpb": "npm ci --omit=dev && npx @anthropic-ai/mcpb pack . seldonframe.mcpb"
   },
   "dependencies": {
-    "@modelcontextprotocol/sdk": "^1.0.4"
+    "@modelcontextprotocol/sdk": "^1.30.0"
   },
   "keywords": [
     "mcp",
