@@ -63,6 +63,41 @@ describe("TryClient — SSE error honesty", () => {
     cleanup();
   });
 
+  // 2026-08-08 — persona-loop fix. "Describe your business instead" used to
+  // send visitors to bare /signup with no seed, so /clients/new's IdleScene
+  // opened on its URL tab (the exact input that just failed them) instead of
+  // the description tab the CTA promised. Reusing the SAME 'sf-workspace-seed'
+  // localStorage bridge the marketing hero already writes lets /clients/new's
+  // existing hydration effect open straight to the biz tab.
+  test("extraction_failed CTA seeds the biz-tab localStorage with the failed URL before navigating", async () => {
+    window.localStorage.removeItem("sf-workspace-seed");
+    render(<TryClient initialUrl="" />);
+    await act(async () => {
+      submitUrl("https://mikes-electric-stockton.com");
+    });
+
+    await act(async () => {
+      FakeEventSource.last!.fire("error", {
+        code: 422,
+        reason: "extraction_failed",
+        message: "We read that site but couldn't find the basics we need.",
+      });
+    });
+
+    const cta = screen.getByText("Describe your business instead");
+    fireEvent.click(cta);
+
+    const stored = window.localStorage.getItem("sf-workspace-seed");
+    assert.ok(stored, "clicking the CTA must write the biz seed before navigating");
+    const seed = JSON.parse(stored!);
+    assert.equal(seed.kind, "biz", "seed must target the biz tab, not the url tab");
+    assert.equal(
+      seed.value,
+      "https://mikes-electric-stockton.com",
+      "seed carries forward the URL the visitor already gave us",
+    );
+  });
+
   test("credits_exhausted error shows the server message and NO 'Try again' button", async () => {
     render(<TryClient initialUrl="" />);
     await act(async () => {

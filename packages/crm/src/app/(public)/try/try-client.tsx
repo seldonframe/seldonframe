@@ -78,6 +78,36 @@ function clearStoredSeed(): void {
   }
 }
 
+// 2026-08-08 — persona-loop fix. "Describe your business instead" (the
+// extraction_failed CTA below) sent visitors to bare /signup, which DOES
+// land a new account on /clients/new (buildSignupNextPath's default), but
+// that page's IdleScene defaults to its URL tab unless the marketing-hero
+// seed carries kind:"biz" (see clients-new-form.tsx's initialTab + mount-
+// effect hydration). Without this, a visitor whose URL just failed to
+// extract would land back on an empty URL box — the exact input that just
+// failed them — never seeing the description tab the CTA promised.
+//
+// Fix stays inside this file only (no auth/signup-redirect changes, per
+// CLAUDE.md's security-sensitive-code rule): write the SAME
+// 'sf-workspace-seed' localStorage seed the marketing hero already writes
+// for its biz tab, seeded with the URL the visitor already gave us (real
+// data, not fabricated copy) so /clients/new's EXISTING hydration effect
+// picks it up unchanged and opens straight to the biz tab, pre-filled with
+// something to build the description from instead of a blank box.
+function storeBizSeedFromFailedUrl(failedUrl: string): void {
+  if (typeof window === "undefined") return;
+  const value = failedUrl.trim();
+  if (value.length < 3) return;
+  try {
+    window.localStorage.setItem(
+      STORAGE_KEY,
+      JSON.stringify({ kind: "biz", value, at: Date.now() } satisfies StoredSeed),
+    );
+  } catch {
+    // Quota/permission errors — non-fatal, visitor just lands on the URL tab.
+  }
+}
+
 export function TryClient({ initialUrl }: { initialUrl: string }) {
   const [url, setUrl] = useState(initialUrl);
   const [descriptionSeed, setDescriptionSeed] = useState<string | null>(null);
@@ -360,6 +390,7 @@ export function TryClient({ initialUrl }: { initialUrl: string }) {
                     </button>
                     <a
                       href="/signup"
+                      onClick={() => storeBizSeedFromFailedUrl(url)}
                       className="inline-flex items-center gap-1.5 rounded-[11px] bg-[#1F2B24] px-4 py-2 text-[13.5px] font-[600] text-[#FFFDFA]"
                     >
                       Describe your business instead
