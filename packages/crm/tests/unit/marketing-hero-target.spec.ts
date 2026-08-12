@@ -8,7 +8,10 @@
 
 import { test } from "node:test";
 import assert from "node:assert/strict";
-import { heroSubmitTarget } from "../../src/components/landing/hero-submit-target";
+import {
+  heroSubmitLoadingMessage,
+  heroSubmitTarget,
+} from "../../src/components/landing/hero-submit-target";
 
 test("flag off → byte-identical current behavior", () => {
   assert.equal(
@@ -24,4 +27,23 @@ test("flag on → /try carries the url; biz tab routes to signup (description bu
     "/try?url=https%3A%2F%2Facme.com",
   );
   assert.equal(heroSubmitTarget("biz", "Family plumbing in Reno", true), "/signup?intent=build");
+});
+
+// Persona-loop finding (2026-07-26): the loading-overlay copy must never
+// claim a workspace is spinning up when heroSubmitTarget is actually about
+// to redirect to the signup wall — every non-"/try" destination is a
+// signup redirect, so the message has to say so.
+test("loading message matches heroSubmitTarget's destination for every tab/flag combination", () => {
+  for (const tab of ["url", "biz"] as const) {
+    for (const ungatedBuildEnabled of [true, false]) {
+      const destination = heroSubmitTarget(tab, "https://acme.com", ungatedBuildEnabled);
+      const message = heroSubmitLoadingMessage(tab, ungatedBuildEnabled);
+      if (destination.startsWith("/try")) {
+        assert.equal(message, "Spinning up your workspace…");
+      } else {
+        assert.equal(destination.startsWith("/signup"), true);
+        assert.equal(message, "Taking you to sign up…");
+      }
+    }
+  }
 });

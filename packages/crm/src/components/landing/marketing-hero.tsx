@@ -35,7 +35,7 @@ import { useRouter } from "next/navigation";
 import { ArrowRight, FileText, Globe } from "lucide-react";
 
 import { MarketingDemoMarquee } from "@/components/landing/marketing-demo-marquee";
-import { heroSubmitTarget } from "@/components/landing/hero-submit-target";
+import { heroSubmitLoadingMessage, heroSubmitTarget } from "@/components/landing/hero-submit-target";
 import { BorderBeam } from "@/components/ui/border-beam";
 import { Highlighter } from "@/components/ui/highlighter";
 import { AnimatedShinyText } from "@/components/ui/magic/animated-shiny-text";
@@ -459,7 +459,7 @@ export function MarketingHero({
         >
           <div className="size-7 animate-spin rounded-full border-2 border-[#1F2B24]/20 border-t-[#1F2B24]" aria-hidden />
           <div className="font-sans text-xs uppercase tracking-[0.12em] text-[#6E665A]">
-            Spinning up your workspace…
+            {heroSubmitLoadingMessage(tab, ungatedBuildEnabled)}
           </div>
         </div>
       ) : null}

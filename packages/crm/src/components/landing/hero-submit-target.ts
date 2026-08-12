@@ -29,3 +29,21 @@ export function heroSubmitTarget(
   if (tab === "url") params.set("url", value);
   return `/signup?${params.toString()}`;
 }
+
+// Persona-loop finding (2026-07-26): the hero's transitional loading overlay
+// said "Spinning up your workspace…" for EVERY submission, but per
+// heroSubmitTarget above the biz tab (and the url tab with the flag off)
+// never spins up a workspace at all — they redirect straight to a Google-
+// OAuth signup wall with no build, no preview. A visitor who described their
+// business (the natural choice for someone with no real website — a common
+// case for a solo small-business owner) watched a fake "building" animation
+// that lied about what was about to happen. This mirrors heroSubmitTarget's
+// own branch so the two can never drift out of sync.
+export function heroSubmitLoadingMessage(
+  tab: HeroTabKind,
+  ungatedBuildEnabled: boolean,
+): string {
+  return ungatedBuildEnabled && tab === "url"
+    ? "Spinning up your workspace…"
+    : "Taking you to sign up…";
+}
