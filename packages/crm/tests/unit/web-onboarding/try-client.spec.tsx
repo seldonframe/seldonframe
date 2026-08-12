@@ -87,6 +87,32 @@ describe("TryClient — SSE error honesty", () => {
     );
   });
 
+  test("extraction_failed CTA honestly discloses signup (persona-loop 2026-07-31)", async () => {
+    render(<TryClient initialUrl="" />);
+    await act(async () => {
+      submitUrl("https://www.facebook.com/somedentaloffice");
+    });
+
+    await act(async () => {
+      FakeEventSource.last!.fire("error", {
+        code: 422,
+        reason: "extraction_failed",
+        message:
+          "We read that site but couldn't find the basics we need — a business name, location, and phone number. Try a different URL, or describe your business instead.",
+      });
+    });
+
+    assert.ok(
+      screen.queryAllByText("Sign up to describe your business instead").length > 0,
+      "the /signup CTA must say 'sign up' — this page promises 'no signup required' up top, so the fallback link must not imply it's a second free path",
+    );
+    assert.equal(
+      screen.queryAllByText("Describe your business instead").length,
+      0,
+      "the old undisclosed-signup label must be gone",
+    );
+  });
+
   test("internal_error still shows the generic copy WITH a 'Try again' button", async () => {
     render(<TryClient initialUrl="" />);
     await act(async () => {

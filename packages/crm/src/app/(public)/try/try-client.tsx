@@ -350,6 +350,16 @@ export function TryClient({ initialUrl }: { initialUrl: string }) {
                   // sign up to describe the business instead (the anonymous
                   // paste/describe path isn't public — see the file-header
                   // deviation note).
+                  //
+                  // 2026-07-31 — signup-honesty fix (persona-loop finding).
+                  // This page's own hero copy promises "no signup required" /
+                  // "nothing to sign up for yet". The old label here — "Describe
+                  // your business instead" — pointed at the same /signup href as
+                  // the rate-limited branch above but, unlike that branch, never
+                  // said "sign up", so it read as a second free path when it
+                  // wasn't one. Businesses with no scrapable website (e.g. a
+                  // Facebook-only page, which reliably 422s here) hit this exact
+                  // state. Match the rate-limited branch's honesty pattern.
                   <div className="mt-3 flex flex-wrap items-center gap-3">
                     <button
                       type="button"
@@ -362,7 +372,7 @@ export function TryClient({ initialUrl }: { initialUrl: string }) {
                       href="/signup"
                       className="inline-flex items-center gap-1.5 rounded-[11px] bg-[#1F2B24] px-4 py-2 text-[13.5px] font-[600] text-[#FFFDFA]"
                     >
-                      Describe your business instead
+                      Sign up to describe your business instead
                     </a>
                   </div>
                 ) : creditsExhausted ? (
