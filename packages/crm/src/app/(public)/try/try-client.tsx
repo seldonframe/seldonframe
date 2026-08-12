@@ -99,6 +99,19 @@ export function TryClient({ initialUrl }: { initialUrl: string }) {
   // anthropic-error-map.ts) — a "Try again" button would be a lie. The
   // server's `message` explains it; we just suppress the retry affordance.
   const [creditsExhausted, setCreditsExhausted] = useState(false);
+  // 2026-08-06 — invalid_url honesty fix (persona-loop finding). A visitor
+  // who types something that isn't a URL (their business name, a phone
+  // number, free text) into the URL-only /try box gets route.ts's
+  // `invalid_url` error deterministically for that exact input — the
+  // client-side parse will fail identically on every retry. Before this
+  // fix invalid_url fell through to the generic "Try again" branch, which
+  // calls startBuild(url) directly with the SAME unmodified value and no
+  // way to edit it (the input box only remounts via reset()/phase="idle").
+  // That's an infinite dead-end loop for exactly the non-technical visitor
+  // this box is supposed to serve — and every "Try again" click re-hits
+  // the SSE route, which spends one of the 3 free builds/24h on the same
+  // guaranteed failure (route.ts's rate gate runs before URL validation).
+  const [invalidUrl, setInvalidUrl] = useState(false);
   const esRef = useRef<EventSource | null>(null);
   const autoSubmittedRef = useRef(false);
 
@@ -159,6 +172,7 @@ export function TryClient({ initialUrl }: { initialUrl: string }) {
       setRateLimited(data.code === "rate_limited");
       setExtractionFailed(isExtractionFailed);
       setCreditsExhausted(data.reason === "credits_exhausted");
+      setInvalidUrl(data.code === "invalid_url");
       setError(
         data.message ??
           (isExtractionFailed
@@ -190,6 +204,7 @@ export function TryClient({ initialUrl }: { initialUrl: string }) {
     setRateLimited(false);
     setExtractionFailed(false);
     setCreditsExhausted(false);
+    setInvalidUrl(false);
     setBuildInput(null);
   }
 
@@ -365,6 +380,18 @@ export function TryClient({ initialUrl }: { initialUrl: string }) {
                       Describe your business instead
                     </a>
                   </div>
+                ) : invalidUrl ? (
+                  // invalid_url is deterministic for this exact input — a
+                  // blind "Try again" would resubmit the same unparseable
+                  // value and fail identically while burning the visitor's
+                  // rate limit. reset() re-shows the editable input instead.
+                  <button
+                    type="button"
+                    onClick={reset}
+                    className="mt-3 rounded-[11px] border border-[rgba(34,29,23,.16)] bg-[#FFFDFA] px-4 py-2 text-[13.5px] font-[500] text-[#221D17]"
+                  >
+                    Edit your URL
+                  </button>
                 ) : creditsExhausted ? (
                   // credits_exhausted is non-retryable until credits are
                   // added upstream — no "Try again" (it would fail

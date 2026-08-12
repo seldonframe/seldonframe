@@ -87,6 +87,39 @@ describe("TryClient — SSE error honesty", () => {
     );
   });
 
+  test("invalid_url error shows an 'Edit your URL' button, NOT a blind 'Try again'", async () => {
+    render(<TryClient initialUrl="" />);
+    await act(async () => {
+      submitUrl("Mikes Landscaping Stockton CA");
+    });
+
+    const message = "That URL can't be reached — double-check it and try again.";
+    await act(async () => {
+      FakeEventSource.last!.fire("error", { code: "invalid_url", message });
+    });
+
+    assert.ok(screen.queryAllByText(message).length > 0, "server message must be shown");
+    assert.equal(
+      screen.queryAllByText("Try again").length,
+      0,
+      "invalid_url is deterministic for this input — no blind Try again button",
+    );
+    assert.ok(
+      screen.queryAllByText("Edit your URL").length > 0,
+      "must offer a way back to the editable input instead of re-submitting the same bad value",
+    );
+
+    // Clicking through must actually restore the editable input (reset()),
+    // not just remove the button.
+    await act(async () => {
+      fireEvent.click(screen.getByText("Edit your URL"));
+    });
+    assert.ok(
+      screen.queryAllByLabelText("Your website URL").length > 0,
+      "the input box must be editable again after invalid_url",
+    );
+  });
+
   test("internal_error still shows the generic copy WITH a 'Try again' button", async () => {
     render(<TryClient initialUrl="" />);
     await act(async () => {
