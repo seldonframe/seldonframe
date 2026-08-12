@@ -185,7 +185,7 @@ export async function createLiveSellCheckoutAction(
 
   const embeddedParams = {
     ...restParams,
-    ui_mode: "embedded" as const,
+    ui_mode: "embedded_page" as const,
     return_url: `${baseUrl}/start/return?session_id={CHECKOUT_SESSION_ID}`,
     billing_address_collection: "required" as const,
   };

@@ -579,7 +579,7 @@ async function createProposalRowReal(
 function getStripeClientReal(): Stripe | null {
   const secretKey = process.env.STRIPE_SECRET_KEY?.trim();
   if (!secretKey) return null;
-  return new StripeClient(secretKey, { apiVersion: "2025-08-27.basil" });
+  return new StripeClient(secretKey, { apiVersion: "2026-06-24.dahlia" });
 }
 
 async function resolveSellerTierReal(builderOrgId: string): Promise<BillingTier> {

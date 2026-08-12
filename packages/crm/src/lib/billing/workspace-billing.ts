@@ -120,7 +120,7 @@ export function getBillingStripeClient(): Stripe | null {
   if (cachedStripe) return cachedStripe;
   const secretKey = process.env.STRIPE_SECRET_KEY?.trim();
   if (!secretKey) return null;
-  cachedStripe = new Stripe(secretKey, { apiVersion: "2025-08-27.basil" });
+  cachedStripe = new Stripe(secretKey, { apiVersion: "2026-06-24.dahlia" });
   return cachedStripe;
 }
 

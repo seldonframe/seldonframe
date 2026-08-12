@@ -26,7 +26,7 @@ import { resolveRetainerLinkForClientOrg, defaultRetainerLinkDeps } from "@/lib/
 function getStripeClient(): RetainerBillingPortalSeam | null {
   const secretKey = process.env.STRIPE_SECRET_KEY?.trim();
   if (!secretKey) return null;
-  return new StripeClient(secretKey, { apiVersion: "2025-08-27.basil" });
+  return new StripeClient(secretKey, { apiVersion: "2026-06-24.dahlia" });
 }
 
 export type UpdateCardActionResult = { ok: true; url: string } | { ok: false; reason: string };

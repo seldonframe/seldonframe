@@ -33,7 +33,7 @@ function getStripeClient() {
   if (!client) {
     const secretKey = process.env.STRIPE_SECRET_KEY?.trim();
     if (!secretKey) return null;
-    client = new Stripe(secretKey, { apiVersion: "2025-08-27.basil" });
+    client = new Stripe(secretKey, { apiVersion: "2026-06-24.dahlia" });
   }
   return client;
 }
@@ -317,7 +317,7 @@ export const stripeProvider: PaymentProvider = {
     // immediate=false schedules cancellation at period end (the common
     // case for "cancel at renewal"). immediate=true terminates now.
     if (input.immediate) {
-      const subscription = await stripe.subscriptions.cancel(input.externalSubscriptionId, {
+      const subscription = await stripe.subscriptions.cancel(input.externalSubscriptionId, {}, {
         stripeAccount,
       });
       return {

@@ -48,5 +48,5 @@ export function getStripeClient(): Stripe | null {
   if (!secretKey) return null;
   // eslint-disable-next-line @typescript-eslint/no-require-imports
   const StripeCtor = require("stripe") as typeof Stripe;
-  return new StripeCtor(secretKey, { apiVersion: "2025-08-27.basil" });
+  return new StripeCtor(secretKey, { apiVersion: "2026-06-24.dahlia" });
 }

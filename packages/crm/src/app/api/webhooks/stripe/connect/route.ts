@@ -37,7 +37,7 @@ export const runtime = "nodejs";
 function getStripeClient() {
   const secretKey = process.env.STRIPE_SECRET_KEY?.trim();
   if (!secretKey) return null;
-  return new Stripe(secretKey, { apiVersion: "2025-08-27.basil" });
+  return new Stripe(secretKey, { apiVersion: "2026-06-24.dahlia" });
 }
 
 async function resolveOrgByAccount(stripeAccountId: string) {
@@ -619,7 +619,7 @@ export async function POST(request: Request) {
               : null;
 
           if (pmId) {
-            const pm = await stripe.paymentMethods.retrieve(pmId, { stripeAccount });
+            const pm = await stripe.paymentMethods.retrieve(pmId, {}, { stripeAccount });
             const card = pm.card ?? null;
             if (card) {
               billingInfo.card = {

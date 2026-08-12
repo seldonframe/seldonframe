@@ -127,8 +127,8 @@ async function reportUsageLive(
   if (!meterId || !subscriptionId) {
     throw new Error("metered subscription item missing meter or subscription");
   }
-  const meter = await stripe.billing.meters.retrieve(meterId, onAccount);
-  const subscription = await stripe.subscriptions.retrieve(subscriptionId, onAccount);
+  const meter = await stripe.billing.meters.retrieve(meterId, {}, onAccount);
+  const subscription = await stripe.subscriptions.retrieve(subscriptionId, {}, onAccount);
   const customerId =
     typeof subscription.customer === "string" ? subscription.customer : subscription.customer?.id;
   if (!customerId) throw new Error("metered subscription missing customer");
@@ -239,7 +239,7 @@ export async function resolveRenterMeteredSubscriptionItemId(input: {
     const stripe = getStripeClient();
     if (!stripe) return null;
 
-    const subscription = await stripe.subscriptions.retrieve(subscriptionId, {
+    const subscription = await stripe.subscriptions.retrieve(subscriptionId, {}, {
       stripeAccount: connectAccountId,
     });
     const item = subscription.items?.data?.[0];

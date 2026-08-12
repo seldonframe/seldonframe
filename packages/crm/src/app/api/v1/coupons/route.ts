@@ -42,7 +42,7 @@ type CreateCouponBody = {
 function getStripeClient() {
   const secretKey = process.env.STRIPE_SECRET_KEY?.trim();
   if (!secretKey) return null;
-  return new Stripe(secretKey, { apiVersion: "2025-08-27.basil" });
+  return new Stripe(secretKey, { apiVersion: "2026-06-24.dahlia" });
 }
 
 export async function POST(request: Request) {
@@ -123,7 +123,7 @@ export async function POST(request: Request) {
     const coupon = await stripe.coupons.create(couponParams, { stripeAccount: connection.stripeAccountId });
 
     const promoParams: Stripe.PromotionCodeCreateParams = {
-      coupon: coupon.id,
+      promotion: { type: "coupon", coupon: coupon.id },
       max_redemptions: maxRedemptions,
     };
     if (providedCode) promoParams.code = providedCode;
