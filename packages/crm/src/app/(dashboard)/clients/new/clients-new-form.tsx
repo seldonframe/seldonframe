@@ -35,6 +35,12 @@ const COPY = {
     invalid_url: "That URL doesn't look right. Check for typos and try again.",
     extraction_failed:
       "We couldn't read that site. Try a different URL — a homepage works best.",
+    // 2026-08-01 — site_unreachable honesty fix (persona-loop finding). The
+    // site was never actually fetched (network error, timeout, or a rate
+    // limit) — distinct from extraction_failed, where we read the page and
+    // found nothing usable. Server-sent `message` wins; this is the fallback.
+    site_unreachable:
+      "We couldn't reach that site — it may be down, blocking automated visits, or timed out. Try again in a bit.",
     // 2026-07-16 — credits_exhausted honesty fix. Out-of-credits is NOT an
     // unreadable site; the operator here may be on their own BYOK key, so
     // point at adding Anthropic credits. Server-sent `message` wins; this
@@ -314,13 +320,16 @@ export function ClientsNewForm({
         return;
       }
       if (data.code === 422) {
-        // credits_exhausted is a key-funding problem, not a site-reading one —
-        // show the server's honest message (fallback to the dedicated copy)
-        // instead of sending the operator hunting for a "better" URL.
+        // credits_exhausted and site_unreachable are NOT "we read the site
+        // and it lacked the basics" — show the server's honest message
+        // (fallback to the dedicated copy) instead of the extraction_failed
+        // copy, which would wrongly claim we read a site we never reached.
         setErrorBanner(
           data.reason === "credits_exhausted"
             ? data.message || COPY.errors.credits_exhausted
-            : COPY.errors.extraction_failed,
+            : data.reason === "site_unreachable"
+              ? data.message || COPY.errors.site_unreachable
+              : COPY.errors.extraction_failed,
         );
         return;
       }
@@ -402,13 +411,16 @@ export function ClientsNewForm({
         return;
       }
       if (data.code === 422) {
-        // credits_exhausted is a key-funding problem, not a site-reading one —
-        // show the server's honest message (fallback to the dedicated copy)
-        // instead of sending the operator hunting for a "better" URL.
+        // credits_exhausted and site_unreachable are NOT "we read the site
+        // and it lacked the basics" — show the server's honest message
+        // (fallback to the dedicated copy) instead of the extraction_failed
+        // copy, which would wrongly claim we read a site we never reached.
         setErrorBanner(
           data.reason === "credits_exhausted"
             ? data.message || COPY.errors.credits_exhausted
-            : COPY.errors.extraction_failed,
+            : data.reason === "site_unreachable"
+              ? data.message || COPY.errors.site_unreachable
+              : COPY.errors.extraction_failed,
         );
         return;
       }

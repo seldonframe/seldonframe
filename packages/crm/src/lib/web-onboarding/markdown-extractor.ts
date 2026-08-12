@@ -236,8 +236,15 @@ export async function extractBusinessFactsFromUrl(params: {
         "FIRECRAWL_API_KEY not set on this deployment",
       );
     }
+    // "extraction_failed" means the page WAS read and simply lacked the
+    // facts we need (empty_content: <200 chars of real content) — that's
+    // a permanent condition for that URL. fetch_failed/timeout/rate_limited
+    // mean the page was NEVER read at all, so the honesty fix in
+    // run-create-from-url.ts ("We read that site but couldn't find...")
+    // would be a lie for those three. Give them their own reason so the
+    // caller can tell a visitor the truth: we couldn't reach their site.
     throw new WebFetchError(
-      "extraction_failed",
+      scrape.reason === "empty_content" ? "extraction_failed" : "site_unreachable",
       `Firecrawl fetch failed: ${scrape.reason}${
         scrape.detail ? `: ${scrape.detail}` : ""
       }`,

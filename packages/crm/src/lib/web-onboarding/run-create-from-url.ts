@@ -282,6 +282,14 @@ export async function runCreateFromUrl(input: RunInput): Promise<RunResult> {
         // succeed until credits are added. Remaining reasons
         // (anthropic_unauthorized, internal_error) are untouched — those ARE
         // sometimes transient.
+        // 2026-08-01 — site_unreachable honesty fix. markdown-extractor.ts
+        // now splits the old catch-all extraction_failed bucket: a site
+        // that returned a fetch error, timed out, or hit a rate limit was
+        // NEVER actually read, so the "We read that site..." copy above was
+        // false for those cases (persona-loop finding). Unlike
+        // extraction_failed, this IS often transient (timeout, rate limit,
+        // a momentary block) — leave `message` unset here so the UI's
+        // default "Try again" affordance still applies.
         sse.error(
           422,
           reason === "extraction_failed"
@@ -292,7 +300,13 @@ export async function runCreateFromUrl(input: RunInput): Promise<RunResult> {
               }
             : reason === "credits_exhausted"
               ? { reason, message: CREDITS_EXHAUSTED_UI_MESSAGE }
-              : { reason },
+              : reason === "site_unreachable"
+                ? {
+                    reason,
+                    message:
+                      "We couldn't reach that site — it may be down, blocking automated visits, or timed out. Try again in a bit, or describe your business instead.",
+                  }
+                : { reason },
         );
         sse.close();
         return;

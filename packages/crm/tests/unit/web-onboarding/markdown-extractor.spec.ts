@@ -108,7 +108,10 @@ describe("extractBusinessFactsFromUrl (markdown-extractor)", () => {
     assert.ok(userMsg.includes("URL: https://acme.com"), "URL in user message");
   });
 
-  test("Firecrawl throws -> WebFetchError(extraction_failed) with 'Firecrawl fetch failed' prefix", async () => {
+  test("Firecrawl throws -> WebFetchError(site_unreachable) with 'Firecrawl fetch failed' prefix", async () => {
+    // The site was never actually read (network error / bot block), so this
+    // must NOT be "extraction_failed" — that reason tells the visitor "we
+    // read your site but found nothing," which would be false here.
     const firecrawl = makeFakeFirecrawl(async () => {
       throw new Error("Cloudflare challenge: status 403");
     });
@@ -123,7 +126,7 @@ describe("extractBusinessFactsFromUrl (markdown-extractor)", () => {
         }),
       (err: unknown) =>
         err instanceof WebFetchError &&
-        err.reason === "extraction_failed" &&
+        err.reason === "site_unreachable" &&
         err.message.includes("Firecrawl fetch failed: fetch_failed"),
     );
   });
