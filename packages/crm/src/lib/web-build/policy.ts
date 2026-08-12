@@ -4,6 +4,20 @@
 
 export const WEB_BUILD_RATE_LIMIT = 3;
 export const WEB_BUILD_RATE_WINDOW_MS = 24 * 60 * 60 * 1000;
+
+/**
+ * 2026-07-18 — honesty fix: the gate this message is shown from
+ * (resolveWebBuildGate in build/stream/route.ts) counts every GET against
+ * the per-IP cap, including ones that end in extraction_failed/invalid_url/
+ * credits_exhausted — the counter increments before the build's outcome is
+ * known. A visitor whose site fails extraction on every attempt (e.g. a
+ * Facebook-only business page with no phone number in the text) never
+ * builds a workspace, so copy claiming they "built a few workspaces today"
+ * was false for that visitor. Exported so the exact copy is unit-tested
+ * (same pattern as CREDITS_EXHAUSTED_UI_MESSAGE in anthropic-error-map.ts).
+ */
+export const WEB_BUILD_RATE_LIMITED_MESSAGE =
+  "You've used today's free build tries — sign up to keep going.";
 /** organizations.settings.origin marker for anonymous web builds (no schema column). */
 export const WEB_UNGATED_ORIGIN = "web_ungated";
 
