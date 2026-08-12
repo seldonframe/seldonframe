@@ -236,8 +236,18 @@ export async function extractBusinessFactsFromUrl(params: {
         "FIRECRAWL_API_KEY not set on this deployment",
       );
     }
+    // 2026-08-05 — persona-loop honesty fix. "timeout"/"rate_limited"/
+    // "fetch_failed" all mean we never actually read the page (Firecrawl
+    // couldn't reach it, or hit its own rate limit) — an infra hiccup, not a
+    // verdict on the business's site. Collapsing them into extraction_failed
+    // made /try's honesty-fix copy ("We read that site but couldn't find the
+    // basics we need...") lie to the visitor and denied them a retry on a
+    // plainly transient failure (both /try's and clients-new-form's UIs treat
+    // extraction_failed as permanent/no-retry). Only "empty_content" (page
+    // loaded, near-nothing came back) is close enough to "couldn't find the
+    // basics" to keep that reason.
     throw new WebFetchError(
-      "extraction_failed",
+      scrape.reason === "empty_content" ? "extraction_failed" : "internal_error",
       `Firecrawl fetch failed: ${scrape.reason}${
         scrape.detail ? `: ${scrape.detail}` : ""
       }`,

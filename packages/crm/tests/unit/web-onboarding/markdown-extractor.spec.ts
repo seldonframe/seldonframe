@@ -108,7 +108,13 @@ describe("extractBusinessFactsFromUrl (markdown-extractor)", () => {
     assert.ok(userMsg.includes("URL: https://acme.com"), "URL in user message");
   });
 
-  test("Firecrawl throws -> WebFetchError(extraction_failed) with 'Firecrawl fetch failed' prefix", async () => {
+  // 2026-08-05 — persona-loop honesty fix. A raw Firecrawl throw (network
+  // error, anti-bot block, DNS failure) means we never read the page at all
+  // — that's an infra hiccup, not "we read your site and it's missing a
+  // phone number." It must map to internal_error (retryable, honest "give it
+  // another go" copy in both /try and clients-new-form), NOT extraction_failed
+  // (which both UIs treat as permanent with no retry affordance).
+  test("Firecrawl throws (fetch_failed) -> WebFetchError(internal_error) with 'Firecrawl fetch failed' prefix", async () => {
     const firecrawl = makeFakeFirecrawl(async () => {
       throw new Error("Cloudflare challenge: status 403");
     });
@@ -123,8 +129,32 @@ describe("extractBusinessFactsFromUrl (markdown-extractor)", () => {
         }),
       (err: unknown) =>
         err instanceof WebFetchError &&
-        err.reason === "extraction_failed" &&
+        err.reason === "internal_error" &&
         err.message.includes("Firecrawl fetch failed: fetch_failed"),
+    );
+  });
+
+  // A Firecrawl timeout is the clearest case: the visitor's site may be
+  // perfectly fine and simply slow to respond once. Retrying is often all
+  // that's needed, so this must never fall into the no-retry extraction_failed
+  // bucket.
+  test("Firecrawl times out -> WebFetchError(internal_error), not extraction_failed", async () => {
+    const firecrawl = makeFakeFirecrawl(async () => {
+      throw new Error("Request timed out after 45000ms");
+    });
+    const { client } = makeFakeAnthropic({ content: [{ type: "text", text: "{}" }] });
+    await assert.rejects(
+      () =>
+        extractBusinessFactsFromUrl({
+          url: "https://acme.com/slow",
+          byokKey: "sk-ant-test",
+          firecrawlClient: firecrawl,
+          anthropicClient: client,
+        }),
+      (err: unknown) =>
+        err instanceof WebFetchError &&
+        err.reason === "internal_error" &&
+        err.message.includes("Firecrawl fetch failed: timeout"),
     );
   });
 
