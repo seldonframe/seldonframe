@@ -155,7 +155,12 @@ export function TryClient({ initialUrl }: { initialUrl: string }) {
       }
       es.close();
       setEventSource(null);
-      const isExtractionFailed = data.reason === "extraction_failed";
+      // site_unreachable (bot-blocked/timed out/empty — the page was never
+      // actually read) shares the same "no blind retry, offer alternatives"
+      // UI as extraction_failed (page was read, required fields missing):
+      // retrying the identical URL would just fail the same way again.
+      const isExtractionFailed =
+        data.reason === "extraction_failed" || data.reason === "site_unreachable";
       setRateLimited(data.code === "rate_limited");
       setExtractionFailed(isExtractionFailed);
       setCreditsExhausted(data.reason === "credits_exhausted");

@@ -108,7 +108,10 @@ describe("extractBusinessFactsFromUrl (markdown-extractor)", () => {
     assert.ok(userMsg.includes("URL: https://acme.com"), "URL in user message");
   });
 
-  test("Firecrawl throws -> WebFetchError(extraction_failed) with 'Firecrawl fetch failed' prefix", async () => {
+  test("Firecrawl throws -> WebFetchError(site_unreachable) with 'Firecrawl fetch failed' prefix", async () => {
+    // Scrape-layer failure (never got readable content) is a distinct
+    // reason from extraction_failed (content WAS read, fields missing) —
+    // see markdown-extractor.ts's 2026-07-25 honesty fix.
     const firecrawl = makeFakeFirecrawl(async () => {
       throw new Error("Cloudflare challenge: status 403");
     });
@@ -123,14 +126,16 @@ describe("extractBusinessFactsFromUrl (markdown-extractor)", () => {
         }),
       (err: unknown) =>
         err instanceof WebFetchError &&
-        err.reason === "extraction_failed" &&
+        err.reason === "site_unreachable" &&
         err.message.includes("Firecrawl fetch failed: fetch_failed"),
     );
   });
 
-  test("near-empty markdown (< 200 chars) -> WebFetchError(extraction_failed)", async () => {
+  test("near-empty markdown (< 200 chars) -> WebFetchError(site_unreachable)", async () => {
     // JS-only SPA shell / anti-bot challenge / blank doc — Firecrawl
-    // returns markdown but well below the MIN_MARKDOWN_CHARS floor.
+    // returns markdown but well below the MIN_MARKDOWN_CHARS floor. The
+    // page was never actually read, so this is site_unreachable, not
+    // extraction_failed (which implies we DID read it).
     const firecrawl = makeFakeFirecrawl(async () => ({
       markdown: "# Loading\n\nEnable JavaScript.",
       metadata: { sourceURL: "https://spa.example/", statusCode: 200 },
@@ -146,7 +151,7 @@ describe("extractBusinessFactsFromUrl (markdown-extractor)", () => {
         }),
       (err: unknown) =>
         err instanceof WebFetchError &&
-        err.reason === "extraction_failed" &&
+        err.reason === "site_unreachable" &&
         err.message.includes("empty_content"),
     );
   });

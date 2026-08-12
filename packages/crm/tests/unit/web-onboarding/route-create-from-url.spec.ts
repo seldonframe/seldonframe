@@ -228,6 +228,18 @@ describe("runCreateFromUrl", () => {
     assert.match(text, /out of credits/i, "the message must say credits ran out, not a generic failure");
   });
 
+  // 2026-07-25 — site_unreachable honesty fix. Distinct from
+  // extraction_failed: the scrape never produced readable content (bot-
+  // blocked, timed out, rate-limited, or empty — e.g. a Facebook page),
+  // so the message must NOT claim the site was read.
+  test("site_unreachable 422 carries an honest message and does not claim the site was read", async () => {
+    const deps = { ...baseDeps(), extractBusinessFactsFromUrl: async () => { const e = new Error("Firecrawl fetch failed: fetch_failed"); (e as any).reason = "site_unreachable"; (e as any).name = "WebFetchError"; throw e; } };
+    const sse = await runCreateFromUrl({ deps, body: { url: "https://facebook.com/x" }, sessionUser: { id: "u1", primaryOrgId: "o1" } });
+    const text = await readAll(sse.stream);
+    assert.match(text, /event: error\n.*"code":422.*"reason":"site_unreachable".*"message":"/);
+    assert.ok(!text.includes("We read that site"), "must not claim the site was read when it never loaded");
+  });
+
   test("a different reason (e.g. anthropic_unauthorized) carries no `message`", async () => {
     const deps = { ...baseDeps(), extractBusinessFactsFromUrl: async () => { const e = new Error("bad key"); (e as any).reason = "anthropic_unauthorized"; (e as any).name = "WebFetchError"; throw e; } };
     const sse = await runCreateFromUrl({ deps, body: { url: "https://x.com" }, sessionUser: { id: "u1", primaryOrgId: "o1" } });

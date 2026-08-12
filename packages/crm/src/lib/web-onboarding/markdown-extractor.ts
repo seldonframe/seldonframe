@@ -236,8 +236,15 @@ export async function extractBusinessFactsFromUrl(params: {
         "FIRECRAWL_API_KEY not set on this deployment",
       );
     }
+    // The scrape itself never produced readable content (blocked, timed
+    // out, rate-limited, or came back empty) — distinct from
+    // "extraction_failed" below, which means we DID read the page and the
+    // LLM couldn't find the required fields in it. Conflating the two used
+    // to tell visitors "we read that site but couldn't find the basics"
+    // even when the site was never actually read (e.g. Facebook/Instagram
+    // pages routinely bot-block Firecrawl) — a false claim.
     throw new WebFetchError(
-      "extraction_failed",
+      "site_unreachable",
       `Firecrawl fetch failed: ${scrape.reason}${
         scrape.detail ? `: ${scrape.detail}` : ""
       }`,

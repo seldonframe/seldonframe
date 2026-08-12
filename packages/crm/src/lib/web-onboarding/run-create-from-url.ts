@@ -271,17 +271,27 @@ export async function runCreateFromUrl(input: RunInput): Promise<RunResult> {
       } catch (err: unknown) {
         const reason = (err as { reason?: string }).reason ?? "extraction_failed";
         // 2026-07-14 — extraction-failed honesty fix. extraction_failed is a
-        // PERMANENT condition for that URL (no phone/name/location found
-        // anywhere on the site) — retrying can never succeed. Without a
-        // `message`, the UI falls back to "Something broke on our end. Give
-        // it another try." and shows a Try again button, which burns the
-        // visitor's rate limit on a build that will fail identically every
-        // time.
+        // PERMANENT condition for that URL (we DID read the page, but no
+        // phone/name/location was found anywhere on it) — retrying can
+        // never succeed. Without a `message`, the UI falls back to
+        // "Something broke on our end. Give it another try." and shows a
+        // Try again button, which burns the visitor's rate limit on a build
+        // that will fail identically every time.
         // 2026-07-16 — same honesty rule for credits_exhausted: the Anthropic
         // account funding the extraction is out of credits, so no retry can
         // succeed until credits are added. Remaining reasons
         // (anthropic_unauthorized, internal_error) are untouched — those ARE
         // sometimes transient.
+        // 2026-07-25 — site_unreachable honesty fix. The two reasons above
+        // both used to collapse into "extraction_failed" and its "We read
+        // that site but couldn't find the basics" message, which is a false
+        // claim when the page was never actually read (bot-blocked, timed
+        // out, rate-limited, or came back empty) — e.g. every Facebook or
+        // Instagram business page, which is often the ONLY web presence a
+        // solo tradesperson has. site_unreachable is retryable in spirit
+        // (a different, scrapeable URL might work), so it points the
+        // visitor at alternatives instead of implying their site is
+        // incomplete.
         sse.error(
           422,
           reason === "extraction_failed"
@@ -290,9 +300,15 @@ export async function runCreateFromUrl(input: RunInput): Promise<RunResult> {
                 message:
                   "We read that site but couldn't find the basics we need — a business name, location, and phone number. Try a different URL, or describe your business instead.",
               }
-            : reason === "credits_exhausted"
-              ? { reason, message: CREDITS_EXHAUSTED_UI_MESSAGE }
-              : { reason },
+            : reason === "site_unreachable"
+              ? {
+                  reason,
+                  message:
+                    "We couldn't load that page — some sites (like Facebook and Instagram) block automated visits, or it took too long to respond. Try your business's own website, or describe your business instead.",
+                }
+              : reason === "credits_exhausted"
+                ? { reason, message: CREDITS_EXHAUSTED_UI_MESSAGE }
+                : { reason },
         );
         sse.close();
         return;

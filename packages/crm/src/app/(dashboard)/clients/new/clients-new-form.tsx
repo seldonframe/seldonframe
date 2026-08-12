@@ -35,6 +35,13 @@ const COPY = {
     invalid_url: "That URL doesn't look right. Check for typos and try again.",
     extraction_failed:
       "We couldn't read that site. Try a different URL — a homepage works best.",
+    // 2026-07-25 — site_unreachable honesty fix. Distinct from
+    // extraction_failed: the page itself was never readable (bot-blocked,
+    // timed out, or came back empty) rather than read-but-missing-fields —
+    // most commonly a Facebook/Instagram page. Server always sends a
+    // `message` for this reason; this is only the fallback.
+    site_unreachable:
+      "We couldn't load that page. Try your business's own website instead of a social media page.",
     // 2026-07-16 — credits_exhausted honesty fix. Out-of-credits is NOT an
     // unreadable site; the operator here may be on their own BYOK key, so
     // point at adding Anthropic credits. Server-sent `message` wins; this
@@ -317,10 +324,16 @@ export function ClientsNewForm({
         // credits_exhausted is a key-funding problem, not a site-reading one —
         // show the server's honest message (fallback to the dedicated copy)
         // instead of sending the operator hunting for a "better" URL.
+        // site_unreachable (page never actually read — bot-blocked/timed
+        // out/empty) gets the same server-message-first treatment so the
+        // operator isn't told "couldn't find the basics" for a site we
+        // never read at all.
         setErrorBanner(
           data.reason === "credits_exhausted"
             ? data.message || COPY.errors.credits_exhausted
-            : COPY.errors.extraction_failed,
+            : data.reason === "site_unreachable"
+              ? data.message || COPY.errors.site_unreachable
+              : COPY.errors.extraction_failed,
         );
         return;
       }
@@ -405,10 +418,16 @@ export function ClientsNewForm({
         // credits_exhausted is a key-funding problem, not a site-reading one —
         // show the server's honest message (fallback to the dedicated copy)
         // instead of sending the operator hunting for a "better" URL.
+        // site_unreachable (page never actually read — bot-blocked/timed
+        // out/empty) gets the same server-message-first treatment so the
+        // operator isn't told "couldn't find the basics" for a site we
+        // never read at all.
         setErrorBanner(
           data.reason === "credits_exhausted"
             ? data.message || COPY.errors.credits_exhausted
-            : COPY.errors.extraction_failed,
+            : data.reason === "site_unreachable"
+              ? data.message || COPY.errors.site_unreachable
+              : COPY.errors.extraction_failed,
         );
         return;
       }
