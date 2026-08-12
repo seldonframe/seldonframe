@@ -108,7 +108,11 @@ describe("extractBusinessFactsFromUrl (markdown-extractor)", () => {
     assert.ok(userMsg.includes("URL: https://acme.com"), "URL in user message");
   });
 
-  test("Firecrawl throws -> WebFetchError(extraction_failed) with 'Firecrawl fetch failed' prefix", async () => {
+  test("Firecrawl throws -> WebFetchError(site_unreachable) with 'Firecrawl fetch failed' prefix", async () => {
+    // 2026-07-30 — persona-loop fix: a scrape-layer failure (the page was
+    // never actually read) is a distinct, often-transient reason from
+    // extraction_failed (the page WAS read but lacked required fields) — see
+    // markdown-extractor.ts's extractBusinessFactsFromUrl.
     const firecrawl = makeFakeFirecrawl(async () => {
       throw new Error("Cloudflare challenge: status 403");
     });
@@ -123,14 +127,16 @@ describe("extractBusinessFactsFromUrl (markdown-extractor)", () => {
         }),
       (err: unknown) =>
         err instanceof WebFetchError &&
-        err.reason === "extraction_failed" &&
+        err.reason === "site_unreachable" &&
         err.message.includes("Firecrawl fetch failed: fetch_failed"),
     );
   });
 
-  test("near-empty markdown (< 200 chars) -> WebFetchError(extraction_failed)", async () => {
+  test("near-empty markdown (< 200 chars) -> WebFetchError(site_unreachable)", async () => {
     // JS-only SPA shell / anti-bot challenge / blank doc — Firecrawl
-    // returns markdown but well below the MIN_MARKDOWN_CHARS floor.
+    // returns markdown but well below the MIN_MARKDOWN_CHARS floor. The
+    // page was never really read, so this is site_unreachable, not
+    // extraction_failed (see the 2026-07-30 note above).
     const firecrawl = makeFakeFirecrawl(async () => ({
       markdown: "# Loading\n\nEnable JavaScript.",
       metadata: { sourceURL: "https://spa.example/", statusCode: 200 },
@@ -146,7 +152,7 @@ describe("extractBusinessFactsFromUrl (markdown-extractor)", () => {
         }),
       (err: unknown) =>
         err instanceof WebFetchError &&
-        err.reason === "extraction_failed" &&
+        err.reason === "site_unreachable" &&
         err.message.includes("empty_content"),
     );
   });

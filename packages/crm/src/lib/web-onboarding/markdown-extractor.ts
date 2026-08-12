@@ -236,8 +236,16 @@ export async function extractBusinessFactsFromUrl(params: {
         "FIRECRAWL_API_KEY not set on this deployment",
       );
     }
+    // scrape.reason here is fetch_failed / timeout / rate_limited /
+    // empty_content — the page was never actually read, so this is NOT the
+    // same condition as "we read the site but it has no phone/name/location"
+    // (extraction_failed below). Often transient (a slow site, an anti-bot
+    // challenge, Firecrawl's own rate limit) — keep it a distinct reason so
+    // the UI doesn't tell the visitor "we read that site" when we didn't,
+    // and doesn't permanently block retrying a URL that may work seconds
+    // later.
     throw new WebFetchError(
-      "extraction_failed",
+      "site_unreachable",
       `Firecrawl fetch failed: ${scrape.reason}${
         scrape.detail ? `: ${scrape.detail}` : ""
       }`,

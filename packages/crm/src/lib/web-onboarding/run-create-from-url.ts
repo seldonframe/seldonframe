@@ -271,17 +271,25 @@ export async function runCreateFromUrl(input: RunInput): Promise<RunResult> {
       } catch (err: unknown) {
         const reason = (err as { reason?: string }).reason ?? "extraction_failed";
         // 2026-07-14 — extraction-failed honesty fix. extraction_failed is a
-        // PERMANENT condition for that URL (no phone/name/location found
-        // anywhere on the site) — retrying can never succeed. Without a
-        // `message`, the UI falls back to "Something broke on our end. Give
-        // it another try." and shows a Try again button, which burns the
-        // visitor's rate limit on a build that will fail identically every
-        // time.
+        // PERMANENT condition for that URL (we DID read the site — the LLM
+        // extractor just found no phone/name/location on it, even after the
+        // contact-page fallback retry) — retrying can never succeed. Without
+        // a `message`, the UI falls back to "Something broke on our end.
+        // Give it another try." and shows a Try again button, which burns
+        // the visitor's rate limit on a build that will fail identically
+        // every time.
         // 2026-07-16 — same honesty rule for credits_exhausted: the Anthropic
         // account funding the extraction is out of credits, so no retry can
-        // succeed until credits are added. Remaining reasons
-        // (anthropic_unauthorized, internal_error) are untouched — those ARE
-        // sometimes transient.
+        // succeed until credits are added.
+        // 2026-07-30 — persona-loop finding: site_unreachable is the OPPOSITE
+        // case — the scrape itself never succeeded (timeout, anti-bot block,
+        // Firecrawl's own rate limit, empty/JS-shell page), so we never read
+        // the site at all. That's often transient and has nothing to do with
+        // the site's content, so unlike extraction_failed it gets an honest,
+        // RETRYABLE message instead of "We read that site...". Remaining
+        // reasons (anthropic_unauthorized, internal_error) are untouched —
+        // those ARE sometimes transient too and already fall through to the
+        // default retryable path.
         sse.error(
           422,
           reason === "extraction_failed"
@@ -290,9 +298,15 @@ export async function runCreateFromUrl(input: RunInput): Promise<RunResult> {
                 message:
                   "We read that site but couldn't find the basics we need — a business name, location, and phone number. Try a different URL, or describe your business instead.",
               }
-            : reason === "credits_exhausted"
-              ? { reason, message: CREDITS_EXHAUSTED_UI_MESSAGE }
-              : { reason },
+            : reason === "site_unreachable"
+              ? {
+                  reason,
+                  message:
+                    "We couldn't load that site just now — it may be temporarily down, blocking automated visits, or slow to respond. Try again in a moment.",
+                }
+              : reason === "credits_exhausted"
+                ? { reason, message: CREDITS_EXHAUSTED_UI_MESSAGE }
+                : { reason },
         );
         sse.close();
         return;
