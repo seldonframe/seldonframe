@@ -51,6 +51,7 @@ export function BuildWidget({
 
   return (
     <section
+      id="build-widget"
       aria-label="Build your own workspace"
       style={{
         marginTop: 36,

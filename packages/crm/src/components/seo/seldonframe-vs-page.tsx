@@ -41,9 +41,18 @@ import {
   SF_PROS,
   SF_CONS,
   SWITCH_STEPS,
-  START_HREF,
   DEMO_HREF,
 } from "@/lib/seo/alternative-pages-extras";
+
+// The "Start for free" CTAs on this page sit alongside the on-page
+// BuildWidget (the actual working self-serve build flow — see
+// build-widget.tsx). They used to point at the shared START_HREF
+// ("/#hero-form"), which navigates away to the agency-voiced homepage hero
+// instead of the widget already on THIS page — a visitor who read "paste a
+// business's website, free before signup" copy would land on "Sell AI
+// front offices" / "paste your client's URL" copy instead. Anchoring to the
+// widget keeps the promise the page just made. (persona-loop finding, 2026-08-12)
+const BUILD_WIDGET_HREF = "#build-widget";
 
 /** Distinct intro paragraphs for the vs family — composed from registry facts,
  *  NOT c.intro (the /alternative-to page owns those verbatim), so the two
@@ -438,7 +447,7 @@ export function SeldonFrameVsPage({ competitor }: { competitor: Competitor }): R
                 : "$29/mo flat for unlimited workspaces."}
           </p>
           <div style={{ display: "flex", flexWrap: "wrap", gap: 12, justifyContent: "center", marginTop: 22 }}>
-            <a href={START_HREF} style={{ background: MKT.green, color: "#fff", padding: "13px 26px", borderRadius: 12, fontWeight: 700, fontSize: 15.5, textDecoration: "none" }}>
+            <a href={BUILD_WIDGET_HREF} style={{ background: MKT.green, color: "#fff", padding: "13px 26px", borderRadius: 12, fontWeight: 700, fontSize: 15.5, textDecoration: "none" }}>
               Start for free
             </a>
             <a href={DEMO_HREF} style={{ border: "1.5px solid rgba(246,242,234,0.3)", color: MKT.paper, padding: "12px 24px", borderRadius: 12, fontWeight: 700, fontSize: 15.5, textDecoration: "none" }}>
@@ -504,7 +513,7 @@ export function SeldonFrameVsPage({ competitor }: { competitor: Competitor }): R
 function CtaRow(): ReactElement {
   return (
     <div style={{ display: "flex", flexWrap: "wrap", gap: 12, justifyContent: "center", marginTop: 28 }}>
-      <a href={START_HREF} style={{ background: MKT.ink, color: MKT.paper, padding: "13px 26px", borderRadius: 12, fontWeight: 700, fontSize: 15.5, textDecoration: "none" }}>
+      <a href={BUILD_WIDGET_HREF} style={{ background: MKT.ink, color: MKT.paper, padding: "13px 26px", borderRadius: 12, fontWeight: 700, fontSize: 15.5, textDecoration: "none" }}>
         Start for free
       </a>
       <a href={DEMO_HREF} style={{ border: `1.5px solid ${MKT.ink10}`, color: MKT.ink, padding: "12px 24px", borderRadius: 12, fontWeight: 700, fontSize: 15.5, textDecoration: "none", background: "rgba(255,255,255,0.5)" }}>
