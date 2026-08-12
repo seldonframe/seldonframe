@@ -69,22 +69,37 @@ export const runtime = "nodejs";
 
 export type WebBuildGateResult =
   | { kind: "not_found" }
+  | { kind: "invalid_url" }
   | { kind: "rate_limited" }
   | { kind: "ok" };
 
 /**
  * Pure gate helper — flag check first (unconditional 404 when the surface
- * is off, regardless of rate), THEN the rate check. Exported so the unit
- * test can pin all three outcomes without touching the DB/Redis-backed
- * checkRateLimit or a real request.
+ * is off, regardless of rate or URL), THEN URL validation, THEN the rate
+ * check. Exported so the unit test can pin all outcomes without touching
+ * the DB/Redis-backed checkRateLimit, DNS, or a real request.
+ *
+ * 2026-07-29 persona-loop fix: `validateUrl` moved ahead of `rateCheck`.
+ * Previously the per-IP daily build counter (3/24h, the "build it free — no
+ * signup" allowance) was consumed BEFORE the pasted URL was known to be
+ * fetchable at all, so a typo'd domain or an SSRF-blocked host silently
+ * burned one of the visitor's 3 free attempts for zero delivered value.
+ * `validateUrl` must not have side effects visible to the caller when it
+ * returns false other than reporting invalid — it should not touch the
+ * rate-limit counter.
  */
 export async function resolveWebBuildGate(
   env: { SF_WEB_UNGATED_BUILD?: string | undefined },
   ip: string,
+  validateUrl: () => Promise<boolean>,
   rateCheck: () => Promise<boolean>,
 ): Promise<WebBuildGateResult> {
   if (!isWebUngatedBuildOn(env)) {
     return { kind: "not_found" };
+  }
+  const urlOk = await validateUrl();
+  if (!urlOk) {
+    return { kind: "invalid_url" };
   }
   const allowed = await rateCheck();
   if (!allowed) {
@@ -195,28 +210,6 @@ export async function GET(request: Request): Promise<Response> {
   const url = new URL(request.url).searchParams.get("url");
   const ip = getClientIp(request);
 
-  const gate = await resolveWebBuildGate({ SF_WEB_UNGATED_BUILD: process.env.SF_WEB_UNGATED_BUILD }, ip, () =>
-    checkRateLimit(
-      `web-build:${ip}`,
-      resolveWebBuildRateLimit({ SF_WEB_BUILD_RATE_LIMIT: process.env.SF_WEB_BUILD_RATE_LIMIT }),
-      WEB_BUILD_RATE_WINDOW_MS,
-    ),
-  );
-
-  if (gate.kind === "not_found") {
-    return new Response(null, { status: 404 });
-  }
-
-  if (gate.kind === "rate_limited") {
-    const sse = createSseStream();
-    sse.emit("error", {
-      code: "rate_limited",
-      message: "You've built a few workspaces today — sign up to keep building.",
-    });
-    sse.close();
-    return new Response(sse.stream, { headers: SSE_RESPONSE_HEADERS });
-  }
-
   // SSRF hardening on the now-public path (final review 2026-07-04): resolve +
   // vet the pasted URL before any pipeline work. The actual scrape runs on
   // Firecrawl's hosted infra, so this is defense-in-depth, not a live hole.
@@ -228,22 +221,57 @@ export async function GET(request: Request): Promise<Response> {
   // rejects it (generic "Something broke" for any schemeless direct paste on
   // /try — the hero always passed full https URLs, masking it). The build must
   // receive the SAME normalized URL we vetted.
+  //
+  // Run inside resolveWebBuildGate's validateUrl step, BEFORE the rate-limit
+  // check below — a typo'd/unreachable URL must not consume one of the
+  // visitor's 3 free daily builds (2026-07-29 persona-loop fix; see that
+  // function's doc comment).
   let buildUrl = url;
-  if (url) {
-    const trimmed = url.trim();
-    const candidate = /^[a-z][a-z0-9+.-]*:\/\//i.test(trimmed) ? trimmed : `https://${trimmed}`;
-    try {
-      await assertPublicHttpUrl(candidate);
-    } catch {
-      const sse = createSseStream();
-      sse.emit("error", {
-        code: "invalid_url",
-        message: "That URL can't be reached — double-check it and try again.",
-      });
-      sse.close();
-      return new Response(sse.stream, { headers: SSE_RESPONSE_HEADERS });
-    }
-    buildUrl = candidate;
+  const gate = await resolveWebBuildGate(
+    { SF_WEB_UNGATED_BUILD: process.env.SF_WEB_UNGATED_BUILD },
+    ip,
+    async () => {
+      if (!url) return true;
+      const trimmed = url.trim();
+      const candidate = /^[a-z][a-z0-9+.-]*:\/\//i.test(trimmed) ? trimmed : `https://${trimmed}`;
+      try {
+        await assertPublicHttpUrl(candidate);
+      } catch {
+        return false;
+      }
+      buildUrl = candidate;
+      return true;
+    },
+    () =>
+      checkRateLimit(
+        `web-build:${ip}`,
+        resolveWebBuildRateLimit({ SF_WEB_BUILD_RATE_LIMIT: process.env.SF_WEB_BUILD_RATE_LIMIT }),
+        WEB_BUILD_RATE_WINDOW_MS,
+      ),
+  );
+
+  if (gate.kind === "not_found") {
+    return new Response(null, { status: 404 });
+  }
+
+  if (gate.kind === "invalid_url") {
+    const sse = createSseStream();
+    sse.emit("error", {
+      code: "invalid_url",
+      message: "That URL can't be reached — double-check it and try again.",
+    });
+    sse.close();
+    return new Response(sse.stream, { headers: SSE_RESPONSE_HEADERS });
+  }
+
+  if (gate.kind === "rate_limited") {
+    const sse = createSseStream();
+    sse.emit("error", {
+      code: "rate_limited",
+      message: "You've built a few workspaces today — sign up to keep building.",
+    });
+    sse.close();
+    return new Response(sse.stream, { headers: SSE_RESPONSE_HEADERS });
   }
 
   return runAnonymousBuild(buildUrl);
