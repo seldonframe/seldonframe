@@ -282,13 +282,29 @@ export async function runCreateFromUrl(input: RunInput): Promise<RunResult> {
         // succeed until credits are added. Remaining reasons
         // (anthropic_unauthorized, internal_error) are untouched — those ARE
         // sometimes transient.
+        //
+        // 2026-07-28 — persona-loop honesty fix. "or describe your business
+        // instead" is only a truthful next step for an AUTHENTICATED caller
+        // (clients-new-form.tsx's biz tab really does build immediately, no
+        // signup). On the anonymous /try surface (includeClaimGrant: true),
+        // the marketing hero's "Describe the business" tab routes to
+        // /signup?intent=build — see hero-submit-target.ts and try-client.tsx's
+        // own top-of-file deviation note ("Wiring a description mode here
+        // would require a second public anonymous route this task doesn't
+        // create"). Telling a visitor whose site failed extraction to
+        // "describe your business instead" sends them straight into a
+        // sign-up wall the moment they take the error message's own advice —
+        // exactly the kind of broken promise the honesty fixes above exist to
+        // prevent. Point anonymous visitors at another URL for the SAME
+        // business instead of a suggestion that secretly gates them.
         sse.error(
           422,
           reason === "extraction_failed"
             ? {
                 reason,
-                message:
-                  "We read that site but couldn't find the basics we need — a business name, location, and phone number. Try a different URL, or describe your business instead.",
+                message: input.includeClaimGrant
+                  ? "We read that site but couldn't find the basics we need — a business name, location, and phone number. Try a different page for the business — their Google Business or Facebook listing often has what a bare site is missing."
+                  : "We read that site but couldn't find the basics we need — a business name, location, and phone number. Try a different URL, or describe your business instead.",
               }
             : reason === "credits_exhausted"
               ? { reason, message: CREDITS_EXHAUSTED_UI_MESSAGE }

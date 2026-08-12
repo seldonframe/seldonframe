@@ -162,7 +162,10 @@ export function TryClient({ initialUrl }: { initialUrl: string }) {
       setError(
         data.message ??
           (isExtractionFailed
-            ? "We read that site but couldn't find the basics we need — a business name, location, and phone number. Try a different URL, or describe your business instead."
+            ? // This client is the anonymous /try surface only — "describe your
+              // business instead" would send the visitor into the /signup wall
+              // (see run-create-from-url.ts's 2026-07-28 persona-loop honesty fix).
+              "We read that site but couldn't find the basics we need — a business name, location, and phone number. Try a different page for the business — their Google Business or Facebook listing often has what a bare site is missing."
             : "Something broke on our end. Give it another try."),
       );
       setPhase("error");

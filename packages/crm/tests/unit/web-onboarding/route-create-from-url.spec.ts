@@ -228,6 +228,31 @@ describe("runCreateFromUrl", () => {
     assert.match(text, /out of credits/i, "the message must say credits ran out, not a generic failure");
   });
 
+  // 2026-07-28 — persona-loop honesty fix. The anonymous /try surface sets
+  // includeClaimGrant: true. Its marketing hero offers a "Describe the
+  // business" tab, but that tab actually routes to /signup?intent=build (see
+  // hero-submit-target.ts) — there is no anonymous description-build route.
+  // So telling an anonymous visitor to "describe your business instead"
+  // sends them straight into a signup wall the moment they follow the
+  // error's own advice. The authenticated path (includeClaimGrant unset)
+  // keeps the original suggestion because its biz tab really does build
+  // immediately, no signup (clients-new-form.tsx's startBizInfoStream).
+  test("extraction_failed message does not suggest signup-gated 'describe your business' on the anonymous claim-grant path", async () => {
+    const deps = { ...baseDeps(), extractBusinessFactsFromUrl: async () => { const e = new Error("bad output"); (e as any).reason = "extraction_failed"; (e as any).name = "WebFetchError"; throw e; } };
+    const sse = await runCreateFromUrl({ deps, body: { url: "https://x.com" }, sessionUser: null, includeClaimGrant: true });
+    const text = await readAll(sse.stream);
+    assert.match(text, /event: error\n.*"code":422.*"reason":"extraction_failed"/);
+    assert.ok(!text.includes("describe your business instead"), "anonymous visitors must not be pointed at the signup-gated biz tab");
+    assert.match(text, /Google Business or Facebook listing/, "anonymous message should suggest another URL for the same business instead");
+  });
+
+  test("extraction_failed message still suggests 'describe your business' for the authenticated in-app path", async () => {
+    const deps = { ...baseDeps(), extractBusinessFactsFromUrl: async () => { const e = new Error("bad output"); (e as any).reason = "extraction_failed"; (e as any).name = "WebFetchError"; throw e; } };
+    const sse = await runCreateFromUrl({ deps, body: { url: "https://x.com" }, sessionUser: { id: "u1", primaryOrgId: "o1" } });
+    const text = await readAll(sse.stream);
+    assert.match(text, /describe your business instead/, "authenticated visitors CAN switch to the biz tab in-app, no signup needed");
+  });
+
   test("a different reason (e.g. anthropic_unauthorized) carries no `message`", async () => {
     const deps = { ...baseDeps(), extractBusinessFactsFromUrl: async () => { const e = new Error("bad key"); (e as any).reason = "anthropic_unauthorized"; (e as any).name = "WebFetchError"; throw e; } };
     const sse = await runCreateFromUrl({ deps, body: { url: "https://x.com" }, sessionUser: { id: "u1", primaryOrgId: "o1" } });
