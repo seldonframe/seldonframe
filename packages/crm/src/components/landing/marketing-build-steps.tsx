@@ -22,6 +22,7 @@ import { useEffect, useRef, useState, type ReactNode } from "react";
 import { motion, useInView, useReducedMotion } from "framer-motion";
 
 import { IntegrationBeam } from "@/components/landing/integration-beam";
+import { describeItStep1 } from "@/components/landing/describe-it-step-copy";
 
 // Shared spring-ish ease used everywhere (the brief's cubic-bezier).
 const EASE = [0.22, 1, 0.36, 1] as const;
@@ -37,36 +38,42 @@ type Path = {
   figure?: ReactNode;
 };
 
-const PATHS: readonly Path[] = [
-  {
-    kicker: "Describe it",
-    arrow: "we generate it",
-    title: (
-      <>
-        You know what the client needs.{" "}
-        <em className="font-[Newsreader,Georgia,serif] font-normal not-italic">Describe it.</em>
-      </>
-    ),
-    steps: ["Paste your client's URL or describe their business", "Brand the site, booking, CRM, and agent", "Run evals, publish, and hand it off"],
-    mock: <ScanMock />,
-    figure: <IntegrationBeam />,
-  },
-  {
-    kicker: "Record it",
-    arrow: "we compile it",
-    title: (
-      <>
-        You already do it for clients.{" "}
-        <em className="font-[Newsreader,Georgia,serif] font-normal not-italic">Record it.</em>
-      </>
-    ),
-    steps: ["Screen-record the workflow — on desktop or mobile", "Answer what the recording didn't show", "Get a tested agent you can switch on — for any client"],
-    mock: <RecordMock />,
-    figure: <RecordFigure />,
-  },
-];
+/** step[0] of the "Describe it" path depends on ungatedBuildEnabled (see
+ *  describe-it-step-copy.ts) — everything else is static, so this stays a
+ *  function of that one flag rather than a top-level const. */
+function getPaths(ungatedBuildEnabled: boolean): readonly Path[] {
+  return [
+    {
+      kicker: "Describe it",
+      arrow: "we generate it",
+      title: (
+        <>
+          You know what the client needs.{" "}
+          <em className="font-[Newsreader,Georgia,serif] font-normal not-italic">Describe it.</em>
+        </>
+      ),
+      steps: [describeItStep1(ungatedBuildEnabled), "Brand the site, booking, CRM, and agent", "Run evals, publish, and hand it off"],
+      mock: <ScanMock />,
+      figure: <IntegrationBeam />,
+    },
+    {
+      kicker: "Record it",
+      arrow: "we compile it",
+      title: (
+        <>
+          You already do it for clients.{" "}
+          <em className="font-[Newsreader,Georgia,serif] font-normal not-italic">Record it.</em>
+        </>
+      ),
+      steps: ["Screen-record the workflow — on desktop or mobile", "Answer what the recording didn't show", "Get a tested agent you can switch on — for any client"],
+      mock: <RecordMock />,
+      figure: <RecordFigure />,
+    },
+  ];
+}
 
-export function MarketingBuildSteps() {
+export function MarketingBuildSteps({ ungatedBuildEnabled }: { ungatedBuildEnabled: boolean }) {
+  const paths = getPaths(ungatedBuildEnabled);
   return (
     <section
       id="build"
@@ -90,7 +97,7 @@ export function MarketingBuildSteps() {
 
         {/* Two path cards */}
         <div className="mt-12 grid grid-cols-1 gap-5 min-[900px]:grid-cols-2">
-          {PATHS.map((path) => (
+          {paths.map((path) => (
             <div
               key={path.kicker}
               className="relative flex flex-col gap-4 overflow-hidden rounded-[20px] border border-[rgba(34,29,23,.08)] bg-[#FFFDFA] p-7 shadow-[0_1px_2px_rgba(34,29,23,.05),0_10px_30px_rgba(34,29,23,.07)]"
