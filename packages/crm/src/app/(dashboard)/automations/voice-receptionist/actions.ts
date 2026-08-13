@@ -144,7 +144,7 @@ export async function assignVoiceNumberAction(input: {
     .limit(1);
   if (!org) return { ok: false, error: "org_not_found" };
 
-  const integrations = ((org.integrations ?? {}) as OrganizationIntegrations) ?? {};
+  const integrations = (org.integrations ?? {}) as OrganizationIntegrations;
   const existingTwilio = integrations.twilio ?? {
     accountSid: "",
     authToken: "",
