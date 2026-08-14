@@ -401,6 +401,20 @@ export function MarketingHero({
             aria-label="Describe the business"
             className="block max-h-60 min-h-[110px] w-full resize-none border-0 bg-transparent font-sans text-[15px] leading-[1.55] tracking-[-0.005em] text-[#221D17] caret-[#1F2B24] outline-none placeholder:text-[#9A9183]"
           />
+          {/* persona-loop 2026-08-14: heroSubmitTarget always routes "biz" to
+              /signup (there's no public anonymous describe-build route — see
+              that file's header), while "url" gets the ungated /try build
+              when the flag is on. Same tab bar, same "Build workspace"
+              button, same "Spinning up your workspace…" overlay for both —
+              nothing disclosed this asymmetry before submit, so a visitor
+              who types a paragraph here hits a signup wall the URL path
+              never shows. */}
+          {ungatedBuildEnabled ? (
+            <p className="pb-1 text-left text-[12px] text-[#9A9183]">
+              Free account required for description-based builds — paste a URL instead for an
+              instant, no-signup build.
+            </p>
+          ) : null}
         </div>
 
         {/* Bottom action row */}
