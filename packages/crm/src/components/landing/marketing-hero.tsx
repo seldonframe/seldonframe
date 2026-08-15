@@ -401,6 +401,24 @@ export function MarketingHero({
             aria-label="Describe the business"
             className="block max-h-60 min-h-[110px] w-full resize-none border-0 bg-transparent font-sans text-[15px] leading-[1.55] tracking-[-0.005em] text-[#221D17] caret-[#1F2B24] outline-none placeholder:text-[#9A9183]"
           />
+          {/* Persona-loop honesty fix (2026-08-15): the URL tab builds
+              instantly with no signup (ungatedBuildEnabled routes it to
+              /try), but this tab always routes to /signup — heroSubmitTarget
+              can't send a description to the anonymous build route (URL-only,
+              see hero-submit-target.ts). Without warning, a visitor who picks
+              this identically-styled tab types a whole description expecting
+              the same live build, then gets silently redirected to signup.
+              Same pattern as the extraction_failed/credits_exhausted honesty
+              fixes in try-client.tsx: tell them up front instead of letting
+              them find out after typing. Only shown when the URL tab is
+              actually the free path — when the flag is off both tabs go to
+              signup, so there is no discrepancy to flag. */}
+          {ungatedBuildEnabled ? (
+            <p className="pb-1 pt-2 text-left text-[12px] leading-[1.5] text-[#9A9183]">
+              Building from a description needs a free account — paste your website URL above to
+              build instantly with no signup.
+            </p>
+          ) : null}
         </div>
 
         {/* Bottom action row */}
