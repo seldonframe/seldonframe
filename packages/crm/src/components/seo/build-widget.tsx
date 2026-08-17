@@ -63,7 +63,8 @@ export function BuildWidget({
       <h2 style={{ margin: 0, fontSize: 22, fontWeight: 800, letterSpacing: "-0.02em", color: INK }}>{heading}</h2>
       <p style={{ margin: "8px 0 14px", fontSize: 14.5, lineHeight: 1.55, color: "rgba(34,29,23,0.7)", maxWidth: 620 }}>
         Don't take the table's word for it. Paste your website and get <strong>your own</strong> site, booking calendar,
-        CRM and AI receptionist built in about <strong>3 minutes</strong> — free, before you ever sign up.
+        CRM and AI receptionist built in about <strong>3 minutes</strong>{" "}
+        {ungatedBuildEnabled ? "— free, before you ever sign up." : "— free, right after a quick sign-up."}
       </p>
       <form
         onSubmit={(e) => {
