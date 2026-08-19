@@ -1,5 +1,6 @@
 import { and, eq } from "drizzle-orm";
 import { notFound } from "next/navigation";
+import type { Metadata } from "next";
 import { db } from "@/db";
 import { intakeForms, organizations } from "@/db/schema";
 import { PublicForm } from "@/components/forms/public-form";
@@ -14,6 +15,45 @@ import { getPublicOrgThemeBySlug } from "@/lib/theme/actions";
 // Shiloh"), not the agency name ("Max agency"). Operator dogfood
 // feedback: customer received an intake form with the agency logo at
 // the top instead of the actual roofing company, which was confusing.
+
+// persona-loop finding (2026-08-19): this route had no generateMetadata
+// export, so Next.js fell back to the root layout's <title>/OG tags —
+// SeldonFrame's own marketing copy ("Sell AI front offices. Deploy them
+// in minutes.") — on the client's own public intake form. A med-spa
+// customer opening their intake link would see SeldonFrame's agency
+// pitch in the browser tab and link preview instead of the med spa's
+// name. Same root cause already fixed for the booking page in
+// app/book/[orgSlug]/[bookingSlug]/page.tsx — mirrored here.
+export async function generateMetadata({
+  params,
+}: {
+  params: Promise<{ id: string; formSlug: string }>;
+}): Promise<Metadata> {
+  const { id: orgSlug, formSlug } = await params;
+
+  const [org] = await db
+    .select({ id: organizations.id, name: organizations.name })
+    .from(organizations)
+    .where(eq(organizations.slug, orgSlug))
+    .limit(1);
+  if (!org) return {};
+
+  const [form] = await db
+    .select({ name: intakeForms.name })
+    .from(intakeForms)
+    .where(and(eq(intakeForms.orgId, org.id), eq(intakeForms.slug, formSlug)))
+    .limit(1);
+  if (!form) return {};
+
+  const title = `${form.name} — ${org.name}`;
+  const description = `Fill out ${form.name} for ${org.name}.`;
+
+  return {
+    title,
+    description,
+    openGraph: { title, description, type: "website" },
+  };
+}
 
 export default async function PublicIntakePage({
   params,
