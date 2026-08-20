@@ -87,6 +87,29 @@ describe("TryClient — SSE error honesty", () => {
     );
   });
 
+  test("invalid_url error shows the server message and NO 'Try again' button", async () => {
+    render(<TryClient initialUrl="" />);
+    await act(async () => {
+      submitUrl("Green Thumb Landscaping Sacramento");
+    });
+
+    const message = "That URL can't be reached — double-check it and try again.";
+    await act(async () => {
+      FakeEventSource.last!.fire("error", { code: "invalid_url", message });
+    });
+
+    assert.ok(screen.queryAllByText(message).length > 0, "honest server message must be shown");
+    assert.equal(
+      screen.queryAllByText("Try again").length,
+      0,
+      "invalid_url is deterministic for the same string — no Try again button",
+    );
+    assert.ok(
+      screen.queryAllByText("Edit and try again").length > 0,
+      "must offer a way back to the editable input instead",
+    );
+  });
+
   test("internal_error still shows the generic copy WITH a 'Try again' button", async () => {
     render(<TryClient initialUrl="" />);
     await act(async () => {

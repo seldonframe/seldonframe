@@ -99,6 +99,26 @@ export function TryClient({ initialUrl }: { initialUrl: string }) {
   // anthropic-error-map.ts) — a "Try again" button would be a lie. The
   // server's `message` explains it; we just suppress the retry affordance.
   const [creditsExhausted, setCreditsExhausted] = useState(false);
+  // 2026-08-20 — invalid_url honesty fix (persona-loop finding). This route
+  // is URL-only (no signup, no "describe your business" tab — see the
+  // file-header deviation note), so a first-time visitor who doesn't
+  // realize this box wants a URL specifically (they land straight on /try,
+  // or the input reads like a chat box) commonly types their business name
+  // or something else that isn't a URL. That hits the SAME invalid_url
+  // response every time for the identical string (route.ts's
+  // assertPublicHttpUrl check is deterministic on its input) — exactly the
+  // "would just fail identically" condition that extraction_failed and
+  // credits_exhausted were already special-cased for above. Before this
+  // fix the default branch rendered a "Try again" button that resubmitted
+  // the exact same invalid string via startBuild(url), which (a) always
+  // fails again and (b) burns one more of the visitor's 3 free
+  // builds/24h — checkRateLimit's Redis INCR happens before the URL-shape
+  // check runs, so even a doomed request counts against the cap. The fix
+  // is to route this into the same "Back" pattern as credits_exhausted:
+  // reset() returns to the idle form with their typed text still in the
+  // box (not cleared) so they can actually edit it, instead of blindly
+  // resubmitting.
+  const [invalidUrl, setInvalidUrl] = useState(false);
   const esRef = useRef<EventSource | null>(null);
   const autoSubmittedRef = useRef(false);
 
@@ -159,6 +179,7 @@ export function TryClient({ initialUrl }: { initialUrl: string }) {
       setRateLimited(data.code === "rate_limited");
       setExtractionFailed(isExtractionFailed);
       setCreditsExhausted(data.reason === "credits_exhausted");
+      setInvalidUrl(data.code === "invalid_url");
       setError(
         data.message ??
           (isExtractionFailed
@@ -190,6 +211,7 @@ export function TryClient({ initialUrl }: { initialUrl: string }) {
     setRateLimited(false);
     setExtractionFailed(false);
     setCreditsExhausted(false);
+    setInvalidUrl(false);
     setBuildInput(null);
   }
 
@@ -377,6 +399,21 @@ export function TryClient({ initialUrl }: { initialUrl: string }) {
                   >
                     Back
                   </button>
+                ) : invalidUrl ? (
+                  // invalid_url is deterministic for the exact string
+                  // submitted — a "Try again" that resubmits the same text
+                  // would fail identically (and burn another of the 3
+                  // free builds/24h). Send them back to the editable input
+                  // (their text is preserved, not cleared) instead.
+                  <div className="mt-3 flex flex-wrap items-center gap-3">
+                    <button
+                      type="button"
+                      onClick={reset}
+                      className="rounded-[11px] bg-[#1F2B24] px-4 py-2 text-[13.5px] font-[600] text-[#FFFDFA]"
+                    >
+                      Edit and try again
+                    </button>
+                  </div>
                 ) : (
                   <button
                     type="button"
