@@ -50,6 +50,7 @@ const STUB_ROUTER = {
   push: () => {},
   replace: () => {},
   prefetch: () => {},
+  bfcacheId: "",
 };
 
 function renderUnifiedLanding(opts: {

@@ -30,7 +30,7 @@
     "e2e:smoke": "pnpm --filter @seldonframe/crm exec playwright test e2e/funnel-smoke.spec.ts"
   },
   "devDependencies": {
-    "turbo": "^2.10.5"
+    "turbo": "^2.10.10"
   },
   "packageManager": "pnpm@10.18.1"
 }
