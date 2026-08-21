@@ -118,8 +118,18 @@ export function BuildWidget({
           {error}
         </p>
       ) : (
+        // 2026-08-21 — persona-loop finding: this reassurance used to add
+        // "Your data exports as JSON if you leave." This widget routes an
+        // anonymous visitor (no signup yet — see heroSubmitTarget) into the
+        // build flow; the only export capability in the app is
+        // exportSoulAction (lib/soul/export-actions.ts), which calls
+        // getOrgId() and throws "Unauthorized" without a session. A visitor
+        // who builds here and never signs up has no session and no way to
+        // export anything — the claim was false for the exact audience this
+        // widget targets. Dropped rather than reworded to avoid promising a
+        // pre-signup export path that doesn't exist.
         <p style={{ margin: "8px 0 0", fontSize: 12.5, color: "rgba(34,29,23,0.5)" }}>
-          No card. No call. Your data exports as JSON if you leave.
+          No card. No call.
         </p>
       )}
     </section>
