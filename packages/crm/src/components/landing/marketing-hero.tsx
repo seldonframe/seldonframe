@@ -169,6 +169,11 @@ export function MarketingHero({
 
   const activeValue = tab === "url" ? urlValue : bizValue;
   const canSubmit = activeValue.trim().length >= 3;
+  // The "biz" tab (and the "url" tab when the ungated-build flag is off)
+  // isn't wired to the free anonymous build — it routes to /signup?intent=
+  // build (see hero-submit-target.ts). Label the button honestly instead
+  // of promising an instant build the click won't deliver.
+  const willRequireAccount = tab === "biz" || !ungatedBuildEnabled;
 
   const handleTab = useCallback((next: TabKind) => {
     setTab(next);
@@ -413,10 +418,12 @@ export function MarketingHero({
           <button
             type="submit"
             disabled={!canSubmit || submitting}
-            aria-label="Build workspace"
+            aria-label={willRequireAccount ? "Create free account to build" : "Build workspace"}
             className="group inline-flex h-10 items-center justify-center gap-2 rounded-[10px] bg-[#1F2B24] px-4 text-[13.5px] font-[600] text-[#FFFDFA] shadow-[0_6px_20px_rgba(31, 43, 36,.28)] transition-all hover:-translate-y-px hover:bg-[#16201B] hover:shadow-[0_8px_24px_rgba(31, 43, 36,.34)] active:translate-y-px disabled:cursor-not-allowed disabled:opacity-50 disabled:shadow-none focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[#1F2B24]"
           >
-            <AnimatedShinyText base="rgba(246,242,234,.82)" shine="#FFFFFF" shimmerWidth={90}>Build workspace</AnimatedShinyText>
+            <AnimatedShinyText base="rgba(246,242,234,.82)" shine="#FFFFFF" shimmerWidth={90}>
+              {willRequireAccount ? "Create free account to build" : "Build workspace"}
+            </AnimatedShinyText>
             <ArrowRight size={14} className="transition-transform group-hover:translate-x-0.5" aria-hidden />
           </button>
         </div>
