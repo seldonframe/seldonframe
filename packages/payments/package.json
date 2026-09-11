@@ -14,7 +14,7 @@
   "dependencies": {
     "drizzle-orm": "^0.45.2",
     "stripe": "^18.4.0",
-    "zod": "^4.4.3"
+    "zod": "^4.5.4"
   },
   "devDependencies": {
     "@types/node": "^20",
